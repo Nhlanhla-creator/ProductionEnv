@@ -19,9 +19,9 @@ import {
   Tooltip,
   Legend,
 } from "chart.js"
+import ChartDataLabels from 'chartjs-plugin-datalabels';
 
-
-// Register ChartJS components
+// Register ChartJS components and datalabels plugin
 ChartJS.register(
   CategoryScale,
   LinearScale,
@@ -32,33 +32,28 @@ ChartJS.register(
   Title,
   Tooltip,
   Legend,
-
+  ChartDataLabels
 )
 
 // Helper function to get months array based on financial year
 const getMonthsForYear = (financialYearEnd) => {
-  // Determine financial year start (yearEnd - 1, month 03 (April))
   const currentDate = new Date()
   const currentYear = currentDate.getFullYear()
   const currentMonth = currentDate.getMonth()
   
-  // Parse financial year end (e.g., "2026-03" for March 2026)
   let yearEnd = financialYearEnd || "2026-03"
   let endYear = parseInt(yearEnd.split('-')[0])
-  let endMonth = parseInt(yearEnd.split('-')[1]) - 1 // Convert to 0-based month
+  let endMonth = parseInt(yearEnd.split('-')[1]) - 1
   
-  // Financial year starts 12 months before end date
   let startYear = endYear - 1
-  let startMonth = endMonth + 1 // Month after end month
+  let startMonth = endMonth + 1
   
-  // Generate months from start date to current date only
   const months = []
   const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
   
   let year = startYear
   let month = startMonth
   
-  // Stop at current date
   while (year < currentYear || (year === currentYear && month <= currentMonth)) {
     months.push(`${monthNames[month]}(${year})`)
     
@@ -68,11 +63,30 @@ const getMonthsForYear = (financialYearEnd) => {
       year++
     }
     
-    // Safety break
     if (year > currentYear + 1) break
   }
   
   return months
+}
+
+// Format currency helper
+const formatCurrency = (value) => {
+  if (!value) return "R 0"
+  if (typeof value === 'string') {
+    const numericValue = value.replace(/[^\d]/g, '')
+    if (!numericValue) return "R 0"
+    return `R ${parseInt(numericValue).toLocaleString()}`
+  }
+  return `R ${value.toLocaleString()}`
+}
+
+// Parse currency from string
+const parseCurrency = (value) => {
+  if (!value) return 0
+  if (typeof value === 'string') {
+    return parseInt(value.replace(/[^\d]/g, '')) || 0
+  }
+  return value
 }
 
 // Key Question Component with See More button under heading
@@ -163,7 +177,6 @@ const DataEntryModal = ({ isOpen, onClose, section, onSave, currentData, financi
 
   const handleSubmit = (e) => {
     e.preventDefault()
-    // Add month/year to the data being saved
     const dataWithPeriod = {
       ...formData,
       dataMonth: selectedMonth,
@@ -198,14 +211,7 @@ const DataEntryModal = ({ isOpen, onClose, section, onSave, currentData, financi
         return (
           <>
             <div style={{ marginBottom: "15px" }}>
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: "10px",
-                  color: "#5d4037",
-                  fontWeight: "600",
-                }}
-              >
+              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
                 Environmental Exposure Type:
               </label>
               <select
@@ -226,14 +232,7 @@ const DataEntryModal = ({ isOpen, onClose, section, onSave, currentData, financi
             </div>
 
             <div style={{ marginBottom: "15px" }}>
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: "10px",
-                  color: "#5d4037",
-                  fontWeight: "600",
-                }}
-              >
+              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
                 Environmental Compliance Required:
               </label>
               <select
@@ -253,14 +252,7 @@ const DataEntryModal = ({ isOpen, onClose, section, onSave, currentData, financi
             </div>
 
             <div style={{ marginBottom: "15px" }}>
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: "10px",
-                  color: "#5d4037",
-                  fontWeight: "600",
-                }}
-              >
+              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
                 Environmental Permits in Place:
               </label>
               <select
@@ -281,14 +273,7 @@ const DataEntryModal = ({ isOpen, onClose, section, onSave, currentData, financi
             </div>
 
             <div style={{ marginBottom: "15px" }}>
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: "10px",
-                  color: "#5d4037",
-                  fontWeight: "600",
-                }}
-              >
+              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
                 Environmental Incidents:
               </label>
               <select
@@ -309,14 +294,7 @@ const DataEntryModal = ({ isOpen, onClose, section, onSave, currentData, financi
             </div>
 
             <div style={{ marginBottom: "15px" }}>
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: "10px",
-                  color: "#5d4037",
-                  fontWeight: "600",
-                }}
-              >
+              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
                 Environmental Controls:
               </label>
               <select
@@ -342,14 +320,7 @@ const DataEntryModal = ({ isOpen, onClose, section, onSave, currentData, financi
         return (
           <>
             <div style={{ marginBottom: "15px" }}>
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: "10px",
-                  color: "#5d4037",
-                  fontWeight: "600",
-                }}
-              >
+              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
                 Locality (%):
               </label>
               <input
@@ -368,14 +339,7 @@ const DataEntryModal = ({ isOpen, onClose, section, onSave, currentData, financi
             </div>
 
             <div style={{ marginBottom: "15px" }}>
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: "10px",
-                  color: "#5d4037",
-                  fontWeight: "600",
-                }}
-              >
+              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
                 Gender (%):
               </label>
               <input
@@ -394,14 +358,7 @@ const DataEntryModal = ({ isOpen, onClose, section, onSave, currentData, financi
             </div>
 
             <div style={{ marginBottom: "15px" }}>
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: "10px",
-                  color: "#5d4037",
-                  fontWeight: "600",
-                }}
-              >
+              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
                 EAP (%):
               </label>
               <input
@@ -420,14 +377,7 @@ const DataEntryModal = ({ isOpen, onClose, section, onSave, currentData, financi
             </div>
 
             <div style={{ marginBottom: "15px" }}>
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: "10px",
-                  color: "#5d4037",
-                  fontWeight: "600",
-                }}
-              >
+              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
                 Female Leadership (%):
               </label>
               <input
@@ -446,14 +396,7 @@ const DataEntryModal = ({ isOpen, onClose, section, onSave, currentData, financi
             </div>
 
             <div style={{ marginBottom: "15px" }}>
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: "10px",
-                  color: "#5d4037",
-                  fontWeight: "600",
-                }}
-              >
+              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
                 Youth Leadership (%):
               </label>
               <input
@@ -472,14 +415,7 @@ const DataEntryModal = ({ isOpen, onClose, section, onSave, currentData, financi
             </div>
 
             <div style={{ marginBottom: "15px" }}>
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: "10px",
-                  color: "#5d4037",
-                  fontWeight: "600",
-                }}
-              >
+              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
                 B-BBEE Level:
               </label>
               <select
@@ -506,14 +442,7 @@ const DataEntryModal = ({ isOpen, onClose, section, onSave, currentData, financi
             </div>
 
             <div style={{ marginBottom: "15px" }}>
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: "10px",
-                  color: "#5d4037",
-                  fontWeight: "600",
-                }}
-              >
+              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
                 Jobs Created (Net):
               </label>
               <input
@@ -537,14 +466,7 @@ const DataEntryModal = ({ isOpen, onClose, section, onSave, currentData, financi
         return (
           <>
             <div style={{ marginBottom: "15px" }}>
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: "10px",
-                  color: "#5d4037",
-                  fontWeight: "600",
-                }}
-              >
+              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
                 HDI Ownership (%):
               </label>
               <input
@@ -563,14 +485,7 @@ const DataEntryModal = ({ isOpen, onClose, section, onSave, currentData, financi
             </div>
 
             <div style={{ marginBottom: "15px" }}>
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: "10px",
-                  color: "#5d4037",
-                  fontWeight: "600",
-                }}
-              >
+              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
                 Shareholder Gender - Male (%):
               </label>
               <input
@@ -589,14 +504,7 @@ const DataEntryModal = ({ isOpen, onClose, section, onSave, currentData, financi
             </div>
 
             <div style={{ marginBottom: "15px" }}>
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: "10px",
-                  color: "#5d4037",
-                  fontWeight: "600",
-                }}
-              >
+              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
                 Shareholder Gender - Female (%):
               </label>
               <input
@@ -615,14 +523,7 @@ const DataEntryModal = ({ isOpen, onClose, section, onSave, currentData, financi
             </div>
 
             <div style={{ marginBottom: "15px" }}>
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: "10px",
-                  color: "#5d4037",
-                  fontWeight: "600",
-                }}
-              >
+              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
                 Black Shareholders (%):
               </label>
               <input
@@ -641,14 +542,7 @@ const DataEntryModal = ({ isOpen, onClose, section, onSave, currentData, financi
             </div>
 
             <div style={{ marginBottom: "15px" }}>
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: "10px",
-                  color: "#5d4037",
-                  fontWeight: "600",
-                }}
-              >
+              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
                 Permanent Jobs:
               </label>
               <input
@@ -667,14 +561,7 @@ const DataEntryModal = ({ isOpen, onClose, section, onSave, currentData, financi
             </div>
 
             <div style={{ marginBottom: "15px" }}>
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: "10px",
-                  color: "#5d4037",
-                  fontWeight: "600",
-                }}
-              >
+              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
                 Contract Jobs:
               </label>
               <input
@@ -698,21 +585,14 @@ const DataEntryModal = ({ isOpen, onClose, section, onSave, currentData, financi
         return (
           <>
             <div style={{ marginBottom: "15px" }}>
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: "10px",
-                  color: "#5d4037",
-                  fontWeight: "600",
-                }}
-              >
+              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
                 CSI/CSR Spend (R):
               </label>
               <input
-                type="number"
+                type="text"
                 value={formData.csiSpend || ""}
-                onChange={(e) => setFormData({ ...formData, csiSpend: Number.parseFloat(e.target.value) || 0 })}
-                placeholder="Annual CSI Spend"
+                onChange={(e) => setFormData({ ...formData, csiSpend: e.target.value })}
+                placeholder="R 0"
                 style={{
                   width: "100%",
                   padding: "10px",
@@ -724,14 +604,7 @@ const DataEntryModal = ({ isOpen, onClose, section, onSave, currentData, financi
             </div>
 
             <div style={{ marginBottom: "15px" }}>
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: "10px",
-                  color: "#5d4037",
-                  fontWeight: "600",
-                }}
-              >
+              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
                 CSI Spend as % of Revenue:
               </label>
               <input
@@ -750,21 +623,14 @@ const DataEntryModal = ({ isOpen, onClose, section, onSave, currentData, financi
             </div>
 
             <div style={{ marginBottom: "15px" }}>
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: "10px",
-                  color: "#5d4037",
-                  fontWeight: "600",
-                }}
-              >
+              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
                 HDI Vendor Spend (R):
               </label>
               <input
-                type="number"
+                type="text"
                 value={formData.hdiVendorSpend || ""}
-                onChange={(e) => setFormData({ ...formData, hdiVendorSpend: Number.parseFloat(e.target.value) || 0 })}
-                placeholder="HDI Vendor Spend"
+                onChange={(e) => setFormData({ ...formData, hdiVendorSpend: e.target.value })}
+                placeholder="R 0"
                 style={{
                   width: "100%",
                   padding: "10px",
@@ -776,21 +642,14 @@ const DataEntryModal = ({ isOpen, onClose, section, onSave, currentData, financi
             </div>
 
             <div style={{ marginBottom: "15px" }}>
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: "10px",
-                  color: "#5d4037",
-                  fontWeight: "600",
-                }}
-              >
+              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
                 Total Procurement Spend (R):
               </label>
               <input
-                type="number"
+                type="text"
                 value={formData.totalProcurementSpend || ""}
-                onChange={(e) => setFormData({ ...formData, totalProcurementSpend: Number.parseFloat(e.target.value) || 0 })}
-                placeholder="Total Procurement Spend"
+                onChange={(e) => setFormData({ ...formData, totalProcurementSpend: e.target.value })}
+                placeholder="R 0"
                 style={{
                   width: "100%",
                   padding: "10px",
@@ -802,14 +661,7 @@ const DataEntryModal = ({ isOpen, onClose, section, onSave, currentData, financi
             </div>
 
             <div style={{ marginBottom: "15px" }}>
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: "10px",
-                  color: "#5d4037",
-                  fontWeight: "600",
-                }}
-              >
+              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
                 Procurement % to HDI:
               </label>
               <input
@@ -833,14 +685,7 @@ const DataEntryModal = ({ isOpen, onClose, section, onSave, currentData, financi
         return (
           <>
             <div style={{ marginBottom: "15px" }}>
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: "10px",
-                  color: "#5d4037",
-                  fontWeight: "600",
-                }}
-              >
+              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
                 Core Governance Policies in Place:
               </label>
               <select
@@ -861,14 +706,7 @@ const DataEntryModal = ({ isOpen, onClose, section, onSave, currentData, financi
             </div>
 
             <div style={{ marginBottom: "15px" }}>
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: "10px",
-                  color: "#5d4037",
-                  fontWeight: "600",
-                }}
-              >
+              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
                 Critical SOPs Documented:
               </label>
               <select
@@ -888,14 +726,7 @@ const DataEntryModal = ({ isOpen, onClose, section, onSave, currentData, financi
             </div>
 
             <div style={{ marginBottom: "15px" }}>
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: "10px",
-                  color: "#5d4037",
-                  fontWeight: "600",
-                }}
-              >
+              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
                 Policy / SOP Owner Assigned:
               </label>
               <select
@@ -915,14 +746,7 @@ const DataEntryModal = ({ isOpen, onClose, section, onSave, currentData, financi
             </div>
 
             <div style={{ marginBottom: "15px" }}>
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: "10px",
-                  color: "#5d4037",
-                  fontWeight: "600",
-                }}
-              >
+              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
                 Review Cycle Defined:
               </label>
               <select
@@ -947,14 +771,7 @@ const DataEntryModal = ({ isOpen, onClose, section, onSave, currentData, financi
         return (
           <>
             <div style={{ marginBottom: "15px" }}>
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: "10px",
-                  color: "#5d4037",
-                  fontWeight: "600",
-                }}
-              >
+              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
                 Risk Register Maintained:
               </label>
               <select
@@ -974,14 +791,7 @@ const DataEntryModal = ({ isOpen, onClose, section, onSave, currentData, financi
             </div>
 
             <div style={{ marginBottom: "15px" }}>
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: "10px",
-                  color: "#5d4037",
-                  fontWeight: "600",
-                }}
-              >
+              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
                 Reporting Responsibility Assigned:
               </label>
               <select
@@ -1006,14 +816,7 @@ const DataEntryModal = ({ isOpen, onClose, section, onSave, currentData, financi
         return (
           <>
             <div style={{ marginBottom: "15px" }}>
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: "10px",
-                  color: "#5d4037",
-                  fontWeight: "600",
-                }}
-              >
+              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
                 Shareholder Register Maintained:
               </label>
               <select
@@ -1033,14 +836,7 @@ const DataEntryModal = ({ isOpen, onClose, section, onSave, currentData, financi
             </div>
 
             <div style={{ marginBottom: "15px" }}>
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: "10px",
-                  color: "#5d4037",
-                  fontWeight: "600",
-                }}
-              >
+              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
                 Voting Rights Documented:
               </label>
               <select
@@ -1065,14 +861,7 @@ const DataEntryModal = ({ isOpen, onClose, section, onSave, currentData, financi
         return (
           <>
             <div style={{ marginBottom: "15px" }}>
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: "10px",
-                  color: "#5d4037",
-                  fontWeight: "600",
-                }}
-              >
+              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
                 Oversight Structure:
               </label>
               <select
@@ -1094,14 +883,7 @@ const DataEntryModal = ({ isOpen, onClose, section, onSave, currentData, financi
             </div>
 
             <div style={{ marginBottom: "15px" }}>
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: "10px",
-                  color: "#5d4037",
-                  fontWeight: "600",
-                }}
-              >
+              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
                 Independent Oversight:
               </label>
               <select
@@ -1121,14 +903,7 @@ const DataEntryModal = ({ isOpen, onClose, section, onSave, currentData, financi
             </div>
 
             <div style={{ marginBottom: "15px" }}>
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: "10px",
-                  color: "#5d4037",
-                  fontWeight: "600",
-                }}
-              >
+              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
                 Meeting Cadence:
               </label>
               <select
@@ -1150,14 +925,7 @@ const DataEntryModal = ({ isOpen, onClose, section, onSave, currentData, financi
             </div>
 
             <div style={{ marginBottom: "15px" }}>
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: "10px",
-                  color: "#5d4037",
-                  fontWeight: "600",
-                }}
-              >
+              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
                 Female Directors:
               </label>
               <input
@@ -1176,14 +944,7 @@ const DataEntryModal = ({ isOpen, onClose, section, onSave, currentData, financi
             </div>
 
             <div style={{ marginBottom: "15px" }}>
-              <label
-                style={{
-                  display: "block",
-                  marginBottom: "10px",
-                  color: "#5d4037",
-                  fontWeight: "600",
-                }}
-              >
+              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
                 Male Directors:
               </label>
               <input
@@ -1474,9 +1235,62 @@ const ESGChartCard = ({ title, chartType, data, options, kpiKey, unit = "", onAd
   )
 }
 
-// Policies Table Component
+// Policies Table Component - FIXED with full CRUD functionality
 const PoliciesTable = ({ policies, onUpdate, isInvestorView }) => {
   const [showTable, setShowTable] = useState(false)
+  const [localPolicies, setLocalPolicies] = useState(policies || [])
+  const [showAddModal, setShowAddModal] = useState(false)
+  const [editingPolicy, setEditingPolicy] = useState(null)
+  const [formData, setFormData] = useState({
+    name: "",
+    type: "Policy",
+    owner: "",
+    reviewDate: ""
+  })
+
+  useEffect(() => {
+    setLocalPolicies(policies || [])
+  }, [policies])
+
+  const handleAddPolicy = () => {
+    const newPolicy = {
+      id: Date.now().toString(),
+      ...formData
+    }
+    const updatedPolicies = [...localPolicies, newPolicy]
+    setLocalPolicies(updatedPolicies)
+    onUpdate(updatedPolicies)
+    setShowAddModal(false)
+    setFormData({ name: "", type: "Policy", owner: "", reviewDate: "" })
+  }
+
+  const handleEditPolicy = (policy) => {
+    setEditingPolicy(policy)
+    setFormData({
+      name: policy.name,
+      type: policy.type,
+      owner: policy.owner,
+      reviewDate: policy.reviewDate
+    })
+    setShowAddModal(true)
+  }
+
+  const handleUpdatePolicy = () => {
+    const updatedPolicies = localPolicies.map(p => 
+      p.id === editingPolicy.id ? { ...p, ...formData } : p
+    )
+    setLocalPolicies(updatedPolicies)
+    onUpdate(updatedPolicies)
+    setShowAddModal(false)
+    setEditingPolicy(null)
+    setFormData({ name: "", type: "Policy", owner: "", reviewDate: "" })
+  }
+
+  const handleDeletePolicy = (id) => {
+    const updatedPolicies = localPolicies.filter(p => p.id !== id)
+    setLocalPolicies(updatedPolicies)
+    onUpdate(updatedPolicies)
+  }
 
   if (!showTable && !isInvestorView) {
     return (
@@ -1504,20 +1318,22 @@ const PoliciesTable = ({ policies, onUpdate, isInvestorView }) => {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
         <h4 style={{ color: "#5d4037", fontSize: "16px", margin: 0 }}>Policies & SOPs Register</h4>
         {!isInvestorView && (
-          <button
-            onClick={() => setShowTable(false)}
-            style={{
-              background: "none",
-              border: "none",
-              color: "#5d4037",
-              cursor: "pointer",
-              fontWeight: "600",
-              fontSize: "13px",
-              textDecoration: "underline",
-            }}
-          >
-            Hide Table
-          </button>
+          <div style={{ display: "flex", gap: "10px" }}>
+            <button
+              onClick={() => setShowTable(false)}
+              style={{
+                background: "none",
+                border: "none",
+                color: "#5d4037",
+                cursor: "pointer",
+                fontWeight: "600",
+                fontSize: "13px",
+                textDecoration: "underline",
+              }}
+            >
+              Hide Table
+            </button>
+          </div>
         )}
       </div>
       <div
@@ -1535,26 +1351,58 @@ const PoliciesTable = ({ policies, onUpdate, isInvestorView }) => {
               <th style={{ padding: "12px", textAlign: "left", color: "#5d4037", fontSize: "14px" }}>Type</th>
               <th style={{ padding: "12px", textAlign: "left", color: "#5d4037", fontSize: "14px" }}>Owner</th>
               <th style={{ padding: "12px", textAlign: "left", color: "#5d4037", fontSize: "14px" }}>Review Date</th>
-              <th style={{ padding: "12px", textAlign: "center", color: "#5d4037", fontSize: "14px" }}>Actions</th>
+              {!isInvestorView && (
+                <th style={{ padding: "12px", textAlign: "center", color: "#5d4037", fontSize: "14px" }}>Actions</th>
+              )}
             </tr>
           </thead>
           <tbody>
-            {policies && policies.length > 0 ? (
-              policies.map((policy, index) => (
-                <tr key={index} style={{ borderBottom: "1px solid #e8ddd4" }}>
+            {localPolicies && localPolicies.length > 0 ? (
+              localPolicies.map((policy) => (
+                <tr key={policy.id} style={{ borderBottom: "1px solid #e8ddd4" }}>
                   <td style={{ padding: "12px", color: "#5d4037", fontSize: "14px" }}>{policy.name}</td>
                   <td style={{ padding: "12px", color: "#5d4037", fontSize: "14px" }}>{policy.type}</td>
                   <td style={{ padding: "12px", color: "#5d4037", fontSize: "14px" }}>{policy.owner}</td>
                   <td style={{ padding: "12px", color: "#5d4037", fontSize: "14px" }}>{policy.reviewDate}</td>
-                  <td style={{ padding: "12px", textAlign: "center", color: "#5d4037", fontSize: "14px" }}>
-                    <button style={{ background: "none", border: "none", color: "#5d4037", cursor: "pointer", margin: "0 5px" }}>Edit</button>
-                    <button style={{ background: "none", border: "none", color: "#5d4037", cursor: "pointer", margin: "0 5px" }}>Delete</button>
-                  </td>
+                  {!isInvestorView && (
+                    <td style={{ padding: "12px", textAlign: "center", color: "#5d4037", fontSize: "14px" }}>
+                      <button 
+                        onClick={() => handleEditPolicy(policy)}
+                        style={{ 
+                          background: "none", 
+                          border: "none", 
+                          color: "#5d4037", 
+                          cursor: "pointer", 
+                          margin: "0 5px",
+                          padding: "5px 10px",
+                          borderRadius: "4px",
+                          backgroundColor: "#e8ddd4"
+                        }}
+                      >
+                        Edit
+                      </button>
+                      <button 
+                        onClick={() => handleDeletePolicy(policy.id)}
+                        style={{ 
+                          background: "none", 
+                          border: "none", 
+                          color: "#c62828", 
+                          cursor: "pointer", 
+                          margin: "0 5px",
+                          padding: "5px 10px",
+                          borderRadius: "4px",
+                          backgroundColor: "#ffebee"
+                        }}
+                      >
+                        Delete
+                      </button>
+                    </td>
+                  )}
                 </tr>
               ))
             ) : (
               <tr>
-                <td colSpan="5" style={{ padding: "20px", textAlign: "center", color: "#8d6e63", fontSize: "14px" }}>
+                <td colSpan={!isInvestorView ? "5" : "4"} style={{ padding: "20px", textAlign: "center", color: "#8d6e63", fontSize: "14px" }}>
                   No policies added yet. Click "Add Policy" to create one.
                 </td>
               </tr>
@@ -1564,6 +1412,11 @@ const PoliciesTable = ({ policies, onUpdate, isInvestorView }) => {
         {!isInvestorView && (
           <div style={{ marginTop: "15px", textAlign: "right" }}>
             <button
+              onClick={() => {
+                setEditingPolicy(null)
+                setFormData({ name: "", type: "Policy", owner: "", reviewDate: "" })
+                setShowAddModal(true)
+              }}
               style={{
                 padding: "8px 16px",
                 backgroundColor: "#5d4037",
@@ -1580,13 +1433,212 @@ const PoliciesTable = ({ policies, onUpdate, isInvestorView }) => {
           </div>
         )}
       </div>
+
+      {/* Add/Edit Policy Modal */}
+      {showAddModal && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0,0,0,0.5)",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 2000,
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: "#fdfcfb",
+              padding: "30px",
+              borderRadius: "8px",
+              maxWidth: "500px",
+              width: "90%",
+            }}
+          >
+            <h3 style={{ color: "#5d4037", marginBottom: "20px" }}>
+              {editingPolicy ? "Edit Policy/SOP" : "Add New Policy/SOP"}
+            </h3>
+            
+            <div style={{ marginBottom: "15px" }}>
+              <label style={{ display: "block", marginBottom: "5px", color: "#5d4037", fontWeight: "600" }}>
+                Policy/SOP Name
+              </label>
+              <input
+                type="text"
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                  fontSize: "14px",
+                }}
+              />
+            </div>
+
+            <div style={{ marginBottom: "15px" }}>
+              <label style={{ display: "block", marginBottom: "5px", color: "#5d4037", fontWeight: "600" }}>
+                Type
+              </label>
+              <select
+                value={formData.type}
+                onChange={(e) => setFormData({ ...formData, type: e.target.value })}
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                  fontSize: "14px",
+                }}
+              >
+                <option value="Policy">Policy</option>
+                <option value="SOP">SOP</option>
+                <option value="Procedure">Procedure</option>
+                <option value="Guideline">Guideline</option>
+              </select>
+            </div>
+
+            <div style={{ marginBottom: "15px" }}>
+              <label style={{ display: "block", marginBottom: "5px", color: "#5d4037", fontWeight: "600" }}>
+                Owner
+              </label>
+              <input
+                type="text"
+                value={formData.owner}
+                onChange={(e) => setFormData({ ...formData, owner: e.target.value })}
+                placeholder="e.g., CEO, HR Manager"
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                  fontSize: "14px",
+                }}
+              />
+            </div>
+
+            <div style={{ marginBottom: "20px" }}>
+              <label style={{ display: "block", marginBottom: "5px", color: "#5d4037", fontWeight: "600" }}>
+                Review Date
+              </label>
+              <input
+                type="date"
+                value={formData.reviewDate}
+                onChange={(e) => setFormData({ ...formData, reviewDate: e.target.value })}
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                  fontSize: "14px",
+                }}
+              />
+            </div>
+
+            <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
+              <button
+                onClick={() => {
+                  setShowAddModal(false)
+                  setEditingPolicy(null)
+                  setFormData({ name: "", type: "Policy", owner: "", reviewDate: "" })
+                }}
+                style={{
+                  padding: "10px 20px",
+                  backgroundColor: "#e8ddd4",
+                  color: "#5d4037",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  fontWeight: "600",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={editingPolicy ? handleUpdatePolicy : handleAddPolicy}
+                style={{
+                  padding: "10px 20px",
+                  backgroundColor: "#5d4037",
+                  color: "#fdfcfb",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  fontWeight: "600",
+                }}
+              >
+                {editingPolicy ? "Update" : "Add"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
 
-// Risk Register Table Component
+// Risk Register Table Component - FIXED with full CRUD functionality
 const RiskTable = ({ risks, onUpdate, isInvestorView }) => {
   const [showTable, setShowTable] = useState(false)
+  const [localRisks, setLocalRisks] = useState(risks || [])
+  const [showAddModal, setShowAddModal] = useState(false)
+  const [editingRisk, setEditingRisk] = useState(null)
+  const [formData, setFormData] = useState({
+    category: "",
+    description: "",
+    likelihood: "Medium",
+    impact: "Medium",
+    mitigation: ""
+  })
+
+  useEffect(() => {
+    setLocalRisks(risks || [])
+  }, [risks])
+
+  const handleAddRisk = () => {
+    const newRisk = {
+      id: Date.now().toString(),
+      ...formData
+    }
+    const updatedRisks = [...localRisks, newRisk]
+    setLocalRisks(updatedRisks)
+    onUpdate(updatedRisks)
+    setShowAddModal(false)
+    setFormData({ category: "", description: "", likelihood: "Medium", impact: "Medium", mitigation: "" })
+  }
+
+  const handleEditRisk = (risk) => {
+    setEditingRisk(risk)
+    setFormData({
+      category: risk.category,
+      description: risk.description,
+      likelihood: risk.likelihood,
+      impact: risk.impact,
+      mitigation: risk.mitigation
+    })
+    setShowAddModal(true)
+  }
+
+  const handleUpdateRisk = () => {
+    const updatedRisks = localRisks.map(r => 
+      r.id === editingRisk.id ? { ...r, ...formData } : r
+    )
+    setLocalRisks(updatedRisks)
+    onUpdate(updatedRisks)
+    setShowAddModal(false)
+    setEditingRisk(null)
+    setFormData({ category: "", description: "", likelihood: "Medium", impact: "Medium", mitigation: "" })
+  }
+
+  const handleDeleteRisk = (id) => {
+    const updatedRisks = localRisks.filter(r => r.id !== id)
+    setLocalRisks(updatedRisks)
+    onUpdate(updatedRisks)
+  }
 
   if (!showTable && !isInvestorView) {
     return (
@@ -1614,20 +1666,22 @@ const RiskTable = ({ risks, onUpdate, isInvestorView }) => {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
         <h4 style={{ color: "#5d4037", fontSize: "16px", margin: 0 }}>Risk Register</h4>
         {!isInvestorView && (
-          <button
-            onClick={() => setShowTable(false)}
-            style={{
-              background: "none",
-              border: "none",
-              color: "#5d4037",
-              cursor: "pointer",
-              fontWeight: "600",
-              fontSize: "13px",
-              textDecoration: "underline",
-            }}
-          >
-            Hide Table
-          </button>
+          <div style={{ display: "flex", gap: "10px" }}>
+            <button
+              onClick={() => setShowTable(false)}
+              style={{
+                background: "none",
+                border: "none",
+                color: "#5d4037",
+                cursor: "pointer",
+                fontWeight: "600",
+                fontSize: "13px",
+                textDecoration: "underline",
+              }}
+            >
+              Hide Table
+            </button>
+          </div>
         )}
       </div>
       <div
@@ -1646,27 +1700,59 @@ const RiskTable = ({ risks, onUpdate, isInvestorView }) => {
               <th style={{ padding: "12px", textAlign: "left", color: "#5d4037", fontSize: "14px" }}>Likelihood</th>
               <th style={{ padding: "12px", textAlign: "left", color: "#5d4037", fontSize: "14px" }}>Impact</th>
               <th style={{ padding: "12px", textAlign: "left", color: "#5d4037", fontSize: "14px" }}>Mitigation</th>
-              <th style={{ padding: "12px", textAlign: "center", color: "#5d4037", fontSize: "14px" }}>Actions</th>
+              {!isInvestorView && (
+                <th style={{ padding: "12px", textAlign: "center", color: "#5d4037", fontSize: "14px" }}>Actions</th>
+              )}
             </tr>
           </thead>
           <tbody>
-            {risks && risks.length > 0 ? (
-              risks.map((risk, index) => (
-                <tr key={index} style={{ borderBottom: "1px solid #e8ddd4" }}>
+            {localRisks && localRisks.length > 0 ? (
+              localRisks.map((risk) => (
+                <tr key={risk.id} style={{ borderBottom: "1px solid #e8ddd4" }}>
                   <td style={{ padding: "12px", color: "#5d4037", fontSize: "14px" }}>{risk.category}</td>
                   <td style={{ padding: "12px", color: "#5d4037", fontSize: "14px" }}>{risk.description}</td>
                   <td style={{ padding: "12px", color: "#5d4037", fontSize: "14px" }}>{risk.likelihood}</td>
                   <td style={{ padding: "12px", color: "#5d4037", fontSize: "14px" }}>{risk.impact}</td>
                   <td style={{ padding: "12px", color: "#5d4037", fontSize: "14px" }}>{risk.mitigation}</td>
-                  <td style={{ padding: "12px", textAlign: "center", color: "#5d4037", fontSize: "14px" }}>
-                    <button style={{ background: "none", border: "none", color: "#5d4037", cursor: "pointer", margin: "0 5px" }}>Edit</button>
-                    <button style={{ background: "none", border: "none", color: "#5d4037", cursor: "pointer", margin: "0 5px" }}>Delete</button>
-                  </td>
+                  {!isInvestorView && (
+                    <td style={{ padding: "12px", textAlign: "center", color: "#5d4037", fontSize: "14px" }}>
+                      <button 
+                        onClick={() => handleEditRisk(risk)}
+                        style={{ 
+                          background: "none", 
+                          border: "none", 
+                          color: "#5d4037", 
+                          cursor: "pointer", 
+                          margin: "0 5px",
+                          padding: "5px 10px",
+                          borderRadius: "4px",
+                          backgroundColor: "#e8ddd4"
+                        }}
+                      >
+                        Edit
+                      </button>
+                      <button 
+                        onClick={() => handleDeleteRisk(risk.id)}
+                        style={{ 
+                          background: "none", 
+                          border: "none", 
+                          color: "#c62828", 
+                          cursor: "pointer", 
+                          margin: "0 5px",
+                          padding: "5px 10px",
+                          borderRadius: "4px",
+                          backgroundColor: "#ffebee"
+                        }}
+                      >
+                        Delete
+                      </button>
+                    </td>
+                  )}
                 </tr>
               ))
             ) : (
               <tr>
-                <td colSpan="6" style={{ padding: "20px", textAlign: "center", color: "#8d6e63", fontSize: "14px" }}>
+                <td colSpan={!isInvestorView ? "6" : "5"} style={{ padding: "20px", textAlign: "center", color: "#8d6e63", fontSize: "14px" }}>
                   No risks added yet. Click "Add Risk" to create one.
                 </td>
               </tr>
@@ -1676,6 +1762,11 @@ const RiskTable = ({ risks, onUpdate, isInvestorView }) => {
         {!isInvestorView && (
           <div style={{ marginTop: "15px", textAlign: "right" }}>
             <button
+              onClick={() => {
+                setEditingRisk(null)
+                setFormData({ category: "", description: "", likelihood: "Medium", impact: "Medium", mitigation: "" })
+                setShowAddModal(true)
+              }}
               style={{
                 padding: "8px 16px",
                 backgroundColor: "#5d4037",
@@ -1692,15 +1783,269 @@ const RiskTable = ({ risks, onUpdate, isInvestorView }) => {
           </div>
         )}
       </div>
+
+      {/* Add/Edit Risk Modal */}
+      {showAddModal && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0,0,0,0.5)",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 2000,
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: "#fdfcfb",
+              padding: "30px",
+              borderRadius: "8px",
+              maxWidth: "500px",
+              width: "90%",
+            }}
+          >
+            <h3 style={{ color: "#5d4037", marginBottom: "20px" }}>
+              {editingRisk ? "Edit Risk" : "Add New Risk"}
+            </h3>
+            
+            <div style={{ marginBottom: "15px" }}>
+              <label style={{ display: "block", marginBottom: "5px", color: "#5d4037", fontWeight: "600" }}>
+                Risk Category
+              </label>
+              <select
+                value={formData.category}
+                onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                  fontSize: "14px",
+                }}
+              >
+                <option value="">Select Category</option>
+                <option value="Financial">Financial</option>
+                <option value="Operational">Operational</option>
+                <option value="Strategic">Strategic</option>
+                <option value="Compliance">Compliance</option>
+                <option value="Reputational">Reputational</option>
+                <option value="Environmental">Environmental</option>
+                <option value="Social">Social</option>
+                <option value="Governance">Governance</option>
+              </select>
+            </div>
+
+            <div style={{ marginBottom: "15px" }}>
+              <label style={{ display: "block", marginBottom: "5px", color: "#5d4037", fontWeight: "600" }}>
+                Risk Description
+              </label>
+              <textarea
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                placeholder="Describe the risk..."
+                rows={3}
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                  fontSize: "14px",
+                }}
+              />
+            </div>
+
+            <div style={{ marginBottom: "15px" }}>
+              <label style={{ display: "block", marginBottom: "5px", color: "#5d4037", fontWeight: "600" }}>
+                Likelihood
+              </label>
+              <select
+                value={formData.likelihood}
+                onChange={(e) => setFormData({ ...formData, likelihood: e.target.value })}
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                  fontSize: "14px",
+                }}
+              >
+                <option value="Low">Low</option>
+                <option value="Medium">Medium</option>
+                <option value="High">High</option>
+                <option value="Critical">Critical</option>
+              </select>
+            </div>
+
+            <div style={{ marginBottom: "15px" }}>
+              <label style={{ display: "block", marginBottom: "5px", color: "#5d4037", fontWeight: "600" }}>
+                Impact
+              </label>
+              <select
+                value={formData.impact}
+                onChange={(e) => setFormData({ ...formData, impact: e.target.value })}
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                  fontSize: "14px",
+                }}
+              >
+                <option value="Low">Low</option>
+                <option value="Medium">Medium</option>
+                <option value="High">High</option>
+                <option value="Critical">Critical</option>
+              </select>
+            </div>
+
+            <div style={{ marginBottom: "20px" }}>
+              <label style={{ display: "block", marginBottom: "5px", color: "#5d4037", fontWeight: "600" }}>
+                Mitigation Strategy
+              </label>
+              <textarea
+                value={formData.mitigation}
+                onChange={(e) => setFormData({ ...formData, mitigation: e.target.value })}
+                placeholder="Describe how this risk is mitigated..."
+                rows={3}
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                  fontSize: "14px",
+                }}
+              />
+            </div>
+
+            <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
+              <button
+                onClick={() => {
+                  setShowAddModal(false)
+                  setEditingRisk(null)
+                  setFormData({ category: "", description: "", likelihood: "Medium", impact: "Medium", mitigation: "" })
+                }}
+                style={{
+                  padding: "10px 20px",
+                  backgroundColor: "#e8ddd4",
+                  color: "#5d4037",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  fontWeight: "600",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={editingRisk ? handleUpdateRisk : handleAddRisk}
+                style={{
+                  padding: "10px 20px",
+                  backgroundColor: "#5d4037",
+                  color: "#fdfcfb",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  fontWeight: "600",
+                }}
+              >
+                {editingRisk ? "Update" : "Add"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
 
-// Board Table Component (based on oversight structure)
+// Board Table Component - FIXED with full CRUD functionality
 const BoardTable = ({ boardData, oversightStructure, onUpdate, isInvestorView }) => {
   const [showTable, setShowTable] = useState(false)
+  const [localBoardData, setLocalBoardData] = useState(boardData || { directors: [], advisors: [] })
+  const [showAddModal, setShowAddModal] = useState(false)
+  const [editingMember, setEditingMember] = useState(null)
+  const [formData, setFormData] = useState({
+    name: "",
+    role: "",
+    gender: "Male",
+    independent: false,
+    appointedDate: "",
+    expertise: ""
+  })
 
-  if (!boardData) return null
+  useEffect(() => {
+    setLocalBoardData(boardData || { directors: [], advisors: [] })
+  }, [boardData])
+
+  if (!localBoardData) return null
+
+  const handleAddMember = () => {
+    const newMember = {
+      id: Date.now().toString(),
+      ...formData
+    }
+    
+    const updatedBoardData = { ...localBoardData }
+    if (oversightStructure === "formal-board") {
+      updatedBoardData.directors = [...(updatedBoardData.directors || []), newMember]
+    } else if (oversightStructure === "advisory-board") {
+      updatedBoardData.advisors = [...(updatedBoardData.advisors || []), newMember]
+    }
+    
+    setLocalBoardData(updatedBoardData)
+    onUpdate(updatedBoardData)
+    setShowAddModal(false)
+    setFormData({ name: "", role: "", gender: "Male", independent: false, appointedDate: "", expertise: "" })
+  }
+
+  const handleEditMember = (member) => {
+    setEditingMember(member)
+    setFormData({
+      name: member.name,
+      role: member.role || "",
+      gender: member.gender || "Male",
+      independent: member.independent || false,
+      appointedDate: member.appointedDate || "",
+      expertise: member.expertise || ""
+    })
+    setShowAddModal(true)
+  }
+
+  const handleUpdateMember = () => {
+    const updatedBoardData = { ...localBoardData }
+    if (oversightStructure === "formal-board") {
+      updatedBoardData.directors = updatedBoardData.directors.map(d => 
+        d.id === editingMember.id ? { ...d, ...formData } : d
+      )
+    } else if (oversightStructure === "advisory-board") {
+      updatedBoardData.advisors = updatedBoardData.advisors.map(a => 
+        a.id === editingMember.id ? { ...a, ...formData } : a
+      )
+    }
+    
+    setLocalBoardData(updatedBoardData)
+    onUpdate(updatedBoardData)
+    setShowAddModal(false)
+    setEditingMember(null)
+    setFormData({ name: "", role: "", gender: "Male", independent: false, appointedDate: "", expertise: "" })
+  }
+
+  const handleDeleteMember = (id) => {
+    const updatedBoardData = { ...localBoardData }
+    if (oversightStructure === "formal-board") {
+      updatedBoardData.directors = updatedBoardData.directors.filter(d => d.id !== id)
+    } else if (oversightStructure === "advisory-board") {
+      updatedBoardData.advisors = updatedBoardData.advisors.filter(a => a.id !== id)
+    }
+    
+    setLocalBoardData(updatedBoardData)
+    onUpdate(updatedBoardData)
+  }
 
   if (!showTable && !isInvestorView) {
     return (
@@ -1737,20 +2082,22 @@ const BoardTable = ({ boardData, oversightStructure, onUpdate, isInvestorView })
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
         <h4 style={{ color: "#5d4037", fontSize: "16px", margin: 0 }}>{getTableTitle()}</h4>
         {!isInvestorView && (
-          <button
-            onClick={() => setShowTable(false)}
-            style={{
-              background: "none",
-              border: "none",
-              color: "#5d4037",
-              cursor: "pointer",
-              fontWeight: "600",
-              fontSize: "13px",
-              textDecoration: "underline",
-            }}
-          >
-            Hide Table
-          </button>
+          <div style={{ display: "flex", gap: "10px" }}>
+            <button
+              onClick={() => setShowTable(false)}
+              style={{
+                background: "none",
+                border: "none",
+                color: "#5d4037",
+                cursor: "pointer",
+                fontWeight: "600",
+                fontSize: "13px",
+                textDecoration: "underline",
+              }}
+            >
+              Hide Table
+            </button>
+          </div>
         )}
       </div>
       <div
@@ -1770,27 +2117,59 @@ const BoardTable = ({ boardData, oversightStructure, onUpdate, isInvestorView })
                 <th style={{ padding: "12px", textAlign: "left", color: "#5d4037", fontSize: "14px" }}>Gender</th>
                 <th style={{ padding: "12px", textAlign: "left", color: "#5d4037", fontSize: "14px" }}>Independent</th>
                 <th style={{ padding: "12px", textAlign: "left", color: "#5d4037", fontSize: "14px" }}>Appointed Date</th>
-                <th style={{ padding: "12px", textAlign: "center", color: "#5d4037", fontSize: "14px" }}>Actions</th>
+                {!isInvestorView && (
+                  <th style={{ padding: "12px", textAlign: "center", color: "#5d4037", fontSize: "14px" }}>Actions</th>
+                )}
               </tr>
             </thead>
             <tbody>
-              {boardData.directors && boardData.directors.length > 0 ? (
-                boardData.directors.map((director, index) => (
-                  <tr key={index} style={{ borderBottom: "1px solid #e8ddd4" }}>
+              {localBoardData.directors && localBoardData.directors.length > 0 ? (
+                localBoardData.directors.map((director) => (
+                  <tr key={director.id} style={{ borderBottom: "1px solid #e8ddd4" }}>
                     <td style={{ padding: "12px", color: "#5d4037", fontSize: "14px" }}>{director.name}</td>
                     <td style={{ padding: "12px", color: "#5d4037", fontSize: "14px" }}>{director.role}</td>
                     <td style={{ padding: "12px", color: "#5d4037", fontSize: "14px" }}>{director.gender}</td>
                     <td style={{ padding: "12px", color: "#5d4037", fontSize: "14px" }}>{director.independent ? "Yes" : "No"}</td>
                     <td style={{ padding: "12px", color: "#5d4037", fontSize: "14px" }}>{director.appointedDate}</td>
-                    <td style={{ padding: "12px", textAlign: "center", color: "#5d4037", fontSize: "14px" }}>
-                      <button style={{ background: "none", border: "none", color: "#5d4037", cursor: "pointer", margin: "0 5px" }}>Edit</button>
-                      <button style={{ background: "none", border: "none", color: "#5d4037", cursor: "pointer", margin: "0 5px" }}>Delete</button>
-                    </td>
+                    {!isInvestorView && (
+                      <td style={{ padding: "12px", textAlign: "center", color: "#5d4037", fontSize: "14px" }}>
+                        <button 
+                          onClick={() => handleEditMember(director)}
+                          style={{ 
+                            background: "none", 
+                            border: "none", 
+                            color: "#5d4037", 
+                            cursor: "pointer", 
+                            margin: "0 5px",
+                            padding: "5px 10px",
+                            borderRadius: "4px",
+                            backgroundColor: "#e8ddd4"
+                          }}
+                        >
+                          Edit
+                        </button>
+                        <button 
+                          onClick={() => handleDeleteMember(director.id)}
+                          style={{ 
+                            background: "none", 
+                            border: "none", 
+                            color: "#c62828", 
+                            cursor: "pointer", 
+                            margin: "0 5px",
+                            padding: "5px 10px",
+                            borderRadius: "4px",
+                            backgroundColor: "#ffebee"
+                          }}
+                        >
+                          Delete
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan="6" style={{ padding: "20px", textAlign: "center", color: "#8d6e63", fontSize: "14px" }}>
+                  <td colSpan={!isInvestorView ? "6" : "5"} style={{ padding: "20px", textAlign: "center", color: "#8d6e63", fontSize: "14px" }}>
                     No directors added yet.
                   </td>
                 </tr>
@@ -1806,25 +2185,57 @@ const BoardTable = ({ boardData, oversightStructure, onUpdate, isInvestorView })
                 <th style={{ padding: "12px", textAlign: "left", color: "#5d4037", fontSize: "14px" }}>Name</th>
                 <th style={{ padding: "12px", textAlign: "left", color: "#5d4037", fontSize: "14px" }}>Expertise</th>
                 <th style={{ padding: "12px", textAlign: "left", color: "#5d4037", fontSize: "14px" }}>Appointed Date</th>
-                <th style={{ padding: "12px", textAlign: "center", color: "#5d4037", fontSize: "14px" }}>Actions</th>
+                {!isInvestorView && (
+                  <th style={{ padding: "12px", textAlign: "center", color: "#5d4037", fontSize: "14px" }}>Actions</th>
+                )}
               </tr>
             </thead>
             <tbody>
-              {boardData.advisors && boardData.advisors.length > 0 ? (
-                boardData.advisors.map((advisor, index) => (
-                  <tr key={index} style={{ borderBottom: "1px solid #e8ddd4" }}>
+              {localBoardData.advisors && localBoardData.advisors.length > 0 ? (
+                localBoardData.advisors.map((advisor) => (
+                  <tr key={advisor.id} style={{ borderBottom: "1px solid #e8ddd4" }}>
                     <td style={{ padding: "12px", color: "#5d4037", fontSize: "14px" }}>{advisor.name}</td>
                     <td style={{ padding: "12px", color: "#5d4037", fontSize: "14px" }}>{advisor.expertise}</td>
                     <td style={{ padding: "12px", color: "#5d4037", fontSize: "14px" }}>{advisor.appointedDate}</td>
-                    <td style={{ padding: "12px", textAlign: "center", color: "#5d4037", fontSize: "14px" }}>
-                      <button style={{ background: "none", border: "none", color: "#5d4037", cursor: "pointer", margin: "0 5px" }}>Edit</button>
-                      <button style={{ background: "none", border: "none", color: "#5d4037", cursor: "pointer", margin: "0 5px" }}>Delete</button>
-                    </td>
+                    {!isInvestorView && (
+                      <td style={{ padding: "12px", textAlign: "center", color: "#5d4037", fontSize: "14px" }}>
+                        <button 
+                          onClick={() => handleEditMember(advisor)}
+                          style={{ 
+                            background: "none", 
+                            border: "none", 
+                            color: "#5d4037", 
+                            cursor: "pointer", 
+                            margin: "0 5px",
+                            padding: "5px 10px",
+                            borderRadius: "4px",
+                            backgroundColor: "#e8ddd4"
+                          }}
+                        >
+                          Edit
+                        </button>
+                        <button 
+                          onClick={() => handleDeleteMember(advisor.id)}
+                          style={{ 
+                            background: "none", 
+                            border: "none", 
+                            color: "#c62828", 
+                            cursor: "pointer", 
+                            margin: "0 5px",
+                            padding: "5px 10px",
+                            borderRadius: "4px",
+                            backgroundColor: "#ffebee"
+                          }}
+                        >
+                          Delete
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan="4" style={{ padding: "20px", textAlign: "center", color: "#8d6e63", fontSize: "14px" }}>
+                  <td colSpan={!isInvestorView ? "4" : "3"} style={{ padding: "20px", textAlign: "center", color: "#8d6e63", fontSize: "14px" }}>
                     No advisors added yet.
                   </td>
                 </tr>
@@ -1843,6 +2254,11 @@ const BoardTable = ({ boardData, oversightStructure, onUpdate, isInvestorView })
         {!isInvestorView && oversightStructure !== "none" && oversightStructure !== "founder-only" && (
           <div style={{ marginTop: "15px", textAlign: "right" }}>
             <button
+              onClick={() => {
+                setEditingMember(null)
+                setFormData({ name: "", role: "", gender: "Male", independent: false, appointedDate: "", expertise: "" })
+                setShowAddModal(true)
+              }}
               style={{
                 padding: "8px 16px",
                 backgroundColor: "#5d4037",
@@ -1859,6 +2275,184 @@ const BoardTable = ({ boardData, oversightStructure, onUpdate, isInvestorView })
           </div>
         )}
       </div>
+
+      {/* Add/Edit Board Member Modal */}
+      {showAddModal && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: "rgba(0,0,0,0.5)",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 2000,
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: "#fdfcfb",
+              padding: "30px",
+              borderRadius: "8px",
+              maxWidth: "500px",
+              width: "90%",
+            }}
+          >
+            <h3 style={{ color: "#5d4037", marginBottom: "20px" }}>
+              {editingMember ? "Edit" : "Add"} {oversightStructure === "formal-board" ? "Director" : "Advisor"}
+            </h3>
+            
+            <div style={{ marginBottom: "15px" }}>
+              <label style={{ display: "block", marginBottom: "5px", color: "#5d4037", fontWeight: "600" }}>
+                Name
+              </label>
+              <input
+                type="text"
+                value={formData.name}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                  fontSize: "14px",
+                }}
+              />
+            </div>
+
+            {oversightStructure === "formal-board" ? (
+              <>
+                <div style={{ marginBottom: "15px" }}>
+                  <label style={{ display: "block", marginBottom: "5px", color: "#5d4037", fontWeight: "600" }}>
+                    Role
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.role}
+                    onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                    placeholder="e.g., Chairperson, Non-Executive Director"
+                    style={{
+                      width: "100%",
+                      padding: "10px",
+                      borderRadius: "4px",
+                      border: "1px solid #e8ddd4",
+                      fontSize: "14px",
+                    }}
+                  />
+                </div>
+
+                <div style={{ marginBottom: "15px" }}>
+                  <label style={{ display: "block", marginBottom: "5px", color: "#5d4037", fontWeight: "600" }}>
+                    Gender
+                  </label>
+                  <select
+                    value={formData.gender}
+                    onChange={(e) => setFormData({ ...formData, gender: e.target.value })}
+                    style={{
+                      width: "100%",
+                      padding: "10px",
+                      borderRadius: "4px",
+                      border: "1px solid #e8ddd4",
+                      fontSize: "14px",
+                    }}
+                  >
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+
+                <div style={{ marginBottom: "15px" }}>
+                  <label style={{ display: "block", marginBottom: "5px", color: "#5d4037", fontWeight: "600" }}>
+                    <input
+                      type="checkbox"
+                      checked={formData.independent}
+                      onChange={(e) => setFormData({ ...formData, independent: e.target.checked })}
+                      style={{ marginRight: "8px" }}
+                    />
+                    Independent Director
+                  </label>
+                </div>
+              </>
+            ) : (
+              <div style={{ marginBottom: "15px" }}>
+                <label style={{ display: "block", marginBottom: "5px", color: "#5d4037", fontWeight: "600" }}>
+                  Expertise
+                </label>
+                <input
+                  type="text"
+                  value={formData.expertise}
+                  onChange={(e) => setFormData({ ...formData, expertise: e.target.value })}
+                  placeholder="e.g., Finance, Strategy, Marketing"
+                  style={{
+                    width: "100%",
+                    padding: "10px",
+                    borderRadius: "4px",
+                    border: "1px solid #e8ddd4",
+                    fontSize: "14px",
+                  }}
+                />
+              </div>
+            )}
+
+            <div style={{ marginBottom: "20px" }}>
+              <label style={{ display: "block", marginBottom: "5px", color: "#5d4037", fontWeight: "600" }}>
+                Appointed Date
+              </label>
+              <input
+                type="date"
+                value={formData.appointedDate}
+                onChange={(e) => setFormData({ ...formData, appointedDate: e.target.value })}
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                  fontSize: "14px",
+                }}
+              />
+            </div>
+
+            <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
+              <button
+                onClick={() => {
+                  setShowAddModal(false)
+                  setEditingMember(null)
+                  setFormData({ name: "", role: "", gender: "Male", independent: false, appointedDate: "", expertise: "" })
+                }}
+                style={{
+                  padding: "10px 20px",
+                  backgroundColor: "#e8ddd4",
+                  color: "#5d4037",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  fontWeight: "600",
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={editingMember ? handleUpdateMember : handleAddMember}
+                style={{
+                  padding: "10px 20px",
+                  backgroundColor: "#5d4037",
+                  color: "#fdfcfb",
+                  border: "none",
+                  borderRadius: "4px",
+                  cursor: "pointer",
+                  fontWeight: "600",
+                }}
+              >
+                {editingMember ? "Update" : "Add"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -2107,13 +2701,66 @@ const EnvironmentalTab = ({ userData, onSave, isInvestorView }) => {
   )
 }
 
-// Social Tab Component
-const SocialTab = ({ activeSubTab, setActiveSubTab, userData, onSave, isInvestorView }) => {
+// Social Tab Component - UPDATED with proper data pulling
+const SocialTab = ({ activeSubTab, setActiveSubTab, userData, onSave, isInvestorView, fundingAppData, financialData }) => {
   const [activeSpendTab, setActiveSpendTab] = useState("csi") // "csi" or "hdi"
   const [activeProcurementTab, setActiveProcurementTab] = useState("amount") // "amount" or "percentage"
   const [financialYearEnd, setFinancialYearEnd] = useState("2026-03")
+  const [localUserData, setLocalUserData] = useState(userData || {})
 
-  // Chart options for pie/doughnut charts with values on top
+  useEffect(() => {
+    // Merge funding application data with existing userData
+    if (fundingAppData) {
+      const mergedData = {
+        ...localUserData,
+        // Map Funding Application fields to ESG fields
+        jobsCreated: fundingAppData.jobsToCreate || localUserData?.jobsCreated || 0,
+        shareholderRaceBlack: fundingAppData.blackOwnership || localUserData?.shareholderRaceBlack || 0,
+        shareholderGenderFemale: fundingAppData.womenOwnership || localUserData?.shareholderGenderFemale || 0,
+        youthLeadership: fundingAppData.youthOwnership || localUserData?.youthLeadership || 0,
+        eap: fundingAppData.disabledOwnership || localUserData?.eap || 0, // Map disabled to EAP
+        // CSI/CSR data
+        csiSpend: parseCurrency(fundingAppData.csiCsrSpend) || localUserData?.csiSpend || 500000,
+        // Local procurement data
+        hdiVendorSpend: parseCurrency(fundingAppData.localProcurementSpend) || localUserData?.hdiVendorSpend || 750000,
+        // Beneficiaries
+        numberOfBeneficiaries: fundingAppData.numberOfBeneficiaries || localUserData?.numberOfBeneficiaries || 1000,
+        // Environmental impact text
+        environmentalImpact: fundingAppData.environmentalImpact || localUserData?.environmentalImpact || "",
+        // SDG alignment
+        sdgAlignment: fundingAppData.sdgAlignment || localUserData?.sdgAlignment || "",
+      }
+      
+      setLocalUserData(mergedData)
+      
+      // Save to parent if needed
+      if (JSON.stringify(mergedData) !== JSON.stringify(userData)) {
+        onSave(mergedData)
+      }
+    }
+
+    // Merge financial data for HDI/CSI metrics
+    if (financialData) {
+      const mergedData = {
+        ...localUserData,
+        // From financial data - balance sheet additional metrics
+        hdiSpent: financialData?.balanceSheetData?.assets?.additionalMetrics?.hdiSpent?.[0] || localUserData?.hdiVendorSpend || 750000,
+        trainingSpend: financialData?.balanceSheetData?.assets?.additionalMetrics?.trainingSpend?.[0] || localUserData?.trainingSpend || 250000,
+        labourCost: financialData?.balanceSheetData?.assets?.additionalMetrics?.labourCost?.[0] || localUserData?.labourCost || 2000000,
+        numberOfEmployees: financialData?.balanceSheetData?.assets?.additionalMetrics?.numberOfEmployees?.[0] || localUserData?.numberOfEmployees || 50,
+        revenuePerEmployee: financialData?.balanceSheetData?.assets?.additionalMetrics?.revenuePerEmployee?.[0] || localUserData?.revenuePerEmployee || 500000,
+      }
+      
+      setLocalUserData(mergedData)
+      
+      // Save to parent if needed
+      if (JSON.stringify(mergedData) !== JSON.stringify(userData)) {
+        onSave(mergedData)
+      }
+    }
+  }, [fundingAppData, financialData])
+
+  // Chart options for pie/doughnut charts with values INSIDE (white text)
   const getPieChartOptions = (title, showLegend = true) => ({
     responsive: true,
     maintainAspectRatio: false,
@@ -2128,7 +2775,7 @@ const SocialTab = ({ activeSubTab, setActiveSubTab, userData, onSave, isInvestor
         }
       },
       tooltip: {
-        enabled: false // Disable hover tooltip
+        enabled: true
       },
       datalabels: {
         color: "#ffffff",
@@ -2138,27 +2785,31 @@ const SocialTab = ({ activeSubTab, setActiveSubTab, userData, onSave, isInvestor
         },
         formatter: (value, context) => {
           return value + '%';
-        }
+        },
+        anchor: 'center',
+        align: 'center',
+        offset: 0
       }
     }
   })
 
   // Handle dropdown changes for social data
   const handleDropdownChange = (field, value) => {
-    const updatedData = { ...userData, [field]: value };
+    const updatedData = { ...localUserData, [field]: value };
+    setLocalUserData(updatedData)
     onSave(updatedData);
   };
 
   const renderWorkforceDemographics = () => {
-    // Data from userData with fallbacks
+    // Data from funding application + userData
     const workforceData = {
-      locality: userData?.locality || 65,
-      gender: userData?.gender || 45,
-      eap: userData?.eap || 70,
-      femaleLeadership: userData?.femaleLeadership || 35,
-      youthLeadership: userData?.youthLeadership || 25,
-      bbbeeLevel: userData?.bbbeeLevel || 4,
-      jobsCreated: userData?.jobsCreated || 150,
+      locality: localUserData?.locality || 65,
+      gender: localUserData?.gender || 45,
+      eap: localUserData?.eap || 70, // From disabled ownership
+      femaleLeadership: localUserData?.femaleLeadership || 35,
+      youthLeadership: localUserData?.youthLeadership || 25, // From youth ownership
+      bbbeeLevel: localUserData?.bbbeeLevel || 4,
+      jobsCreated: localUserData?.jobsCreated || 150, // From jobsToCreate
     }
 
     return (
@@ -2236,9 +2887,9 @@ const SocialTab = ({ activeSubTab, setActiveSubTab, userData, onSave, isInvestor
               isInvestorView={isInvestorView}
             />
 
-            {/* EAP Chart */}
+            {/* EAP Chart (Disabled) */}
             <ESGChartCard
-              title="EAP"
+              title="EAP (Disabled)"
               chartType="doughnut"
               data={{
                 labels: ["EAP", "Non-EAP"],
@@ -2305,15 +2956,15 @@ const SocialTab = ({ activeSubTab, setActiveSubTab, userData, onSave, isInvestor
   }
 
   const renderOwnershipInclusion = () => {
-    // Data from userData with fallbacks
+    // Data from funding application + userData
     const ownershipData = {
-      hdiOwnership: userData?.hdiOwnership || 65,
-      shareholderGenderMale: userData?.shareholderGenderMale || 60,
-      shareholderGenderFemale: userData?.shareholderGenderFemale || 35,
-      shareholderRaceBlack: userData?.shareholderRaceBlack || 40,
-      permanentJobs: userData?.permanentJobs || 120,
-      contractJobs: userData?.contractJobs || 80,
-      bbbeeLevel: userData?.bbbeeLevel || 4,
+      hdiOwnership: localUserData?.hdiOwnership || 65,
+      shareholderGenderMale: localUserData?.shareholderGenderMale || 60,
+      shareholderGenderFemale: localUserData?.shareholderGenderFemale || 35, // From women ownership
+      shareholderRaceBlack: localUserData?.shareholderRaceBlack || 40, // From black ownership
+      permanentJobs: localUserData?.permanentJobs || 120,
+      contractJobs: localUserData?.contractJobs || 80,
+      bbbeeLevel: localUserData?.bbbeeLevel || 4,
     }
 
     return (
@@ -2518,23 +3169,32 @@ const renderCommunityESD = () => {
     // Get months based on financial year end
     const months = getMonthsForYear(financialYearEnd)
     
-    // Data from userData with fallbacks (using actual data instead of random)
+    // Get REAL data from actual sources
     const csiData = {
-      csiSpend: userData?.csiSpend || 500000,
-      csiPercentage: userData?.csiPercentage || 2.5,
-      hdiVendorSpend: userData?.hdiVendorSpend || 750000,
-      hdiPercentage: userData?.hdiPercentage || 35,
-      totalProcurementSpend: userData?.totalProcurementSpend || 2000000,
-      procurementPercentage: userData?.procurementPercentage || 65,
+      // CSI/CSR from funding application (monthly now)
+      csiSpend: parseCurrency(localUserData?.csiSpend) || 0,
+      csiPercentage: localUserData?.csiPercentage || 0,
+      hasMonthlyCsiData: financialData?.balanceSheetData?.assets?.additionalMetrics?.csiSpent ? true : false,
+      monthlyCsiData: financialData?.balanceSheetData?.assets?.additionalMetrics?.csiSpent || [],
+      
+      // HDI Spend from financial data
+      hdiVendorSpend: localUserData?.hdiSpent || localUserData?.hdiVendorSpend || 0,
+      hdiPercentage: localUserData?.hdiPercentage || 0,
+      hasMonthlyHdiData: financialData?.balanceSheetData?.assets?.additionalMetrics?.hdiSpent ? true : false,
+      monthlyHdiData: financialData?.balanceSheetData?.assets?.additionalMetrics?.hdiSpent || [],
+      
+      // Procurement from financial data
+      totalProcurementSpend: localUserData?.totalProcurementSpend || 0,
+      procurementPercentage: localUserData?.procurementPercentage || 0,
+      hasMonthlyProcurementData: financialData?.balanceSheetData?.assets?.additionalMetrics?.totalProcurementSpend ? true : false,
+      monthlyProcurementData: financialData?.balanceSheetData?.assets?.additionalMetrics?.totalProcurementSpend || [],
     }
 
-    // Create monthly data arrays (spread the annual values across months)
-    const monthlyCsiSpend = months.map(() => csiData.csiSpend / months.length)
-    const monthlyCsiPercentage = months.map(() => csiData.csiPercentage)
-    const monthlyHdiSpend = months.map(() => csiData.hdiVendorSpend / months.length)
-    const monthlyHdiPercentage = months.map(() => csiData.hdiPercentage)
-    const monthlyProcurementSpend = months.map(() => csiData.totalProcurementSpend / months.length)
-    const monthlyProcurementPercentage = months.map(() => csiData.procurementPercentage)
+    // Log the data to debug
+    console.log('Monthly CSI Data:', csiData.monthlyCsiData);
+    console.log('Monthly HDI Data:', csiData.monthlyHdiData);
+    console.log('Monthly Procurement Data:', csiData.monthlyProcurementData);
+    console.log('Months:', months);
 
     return (
       <div>
@@ -2567,6 +3227,23 @@ const renderCommunityESD = () => {
           >
             Community & ESD Participation
           </h3>
+
+          {/* Data Source Indicator - Simplified */}
+          <div style={{ 
+            marginBottom: "20px", 
+            padding: "10px", 
+            backgroundColor: "#fff3e0", 
+            borderRadius: "4px",
+            fontSize: "13px",
+            color: "#5d4037",
+            borderLeft: "4px solid #ff9800"
+          }}>
+            <strong>📊 Monthly Data Available:</strong>{' '}
+            {csiData.hasMonthlyCsiData && 'CSI ✓ '}
+            {csiData.hasMonthlyHdiData && 'HDI ✓ '}
+            {csiData.hasMonthlyProcurementData && 'Procurement ✓ '}
+            {!csiData.hasMonthlyCsiData && !csiData.hasMonthlyHdiData && !csiData.hasMonthlyProcurementData && 'Annual only'}
+          </div>
 
           {/* CSI/HDI Spend Selection */}
           <div style={{ marginBottom: "20px" }}>
@@ -2616,93 +3293,213 @@ const renderCommunityESD = () => {
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "20px" }}>
-            {/* CSI/CSR Spend OR HDI Spend Chart */}
-            <ESGChartCard
-              title={activeSpendTab === "csi" ? "CSI/CSR Spend (R)" : "HDI Spend (R)"}
-              chartType="bar"
-              data={{
-                labels: months,
-                datasets: [
-                  {
-                    label: activeSpendTab === "csi" ? "CSI Spend" : "HDI Spend",
-                    data: activeSpendTab === "csi" ? monthlyCsiSpend : monthlyHdiSpend,
-                    backgroundColor: activeSpendTab === "csi" ? "#5d4037" : "#8d6e63",
-                    borderColor: activeSpendTab === "csi" ? "#5d4037" : "#8d6e63",
-                    borderWidth: 2,
-                  },
-                ],
-              }}
-              options={{
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                  y: {
-                    beginAtZero: true,
-                    title: {
-                      display: true,
-                      text: "Amount (R)",
+            {/* CSI/CSR Spend Chart - Monthly if available */}
+            {activeSpendTab === "csi" && (
+              <ESGChartCard
+                title={csiData.hasMonthlyCsiData ? "CSI/CSR Spend (Monthly)" : "CSI/CSR Spend (Annual)"}
+                chartType="bar"
+                data={{
+                  labels: csiData.hasMonthlyCsiData ? months : ["Annual Total"],
+                  datasets: [
+                    {
+                      label: "CSI Spend",
+                      data: csiData.hasMonthlyCsiData 
+                        ? csiData.monthlyCsiData.map(v => v / 1000000)
+                        : [csiData.csiSpend / 1000000],
+                      backgroundColor: "#5d4037",
+                      borderColor: "#5d4037",
+                      borderWidth: 2,
+                    },
+                  ],
+                }}
+                options={{
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  scales: {
+                    y: {
+                      beginAtZero: true,
+                      title: {
+                        display: true,
+                        text: "Amount (R millions)",
+                      },
                     },
                   },
-                },
-                plugins: {
-                  tooltip: {
-                    enabled: true
-                  },
-                  datalabels: {
-                    display: false
+                  plugins: {
+                    tooltip: {
+                      enabled: true,
+                      callbacks: {
+                        label: (context) => {
+                          return `CSI Spend: R ${(context.raw * 1000000).toLocaleString()}`;
+                        }
+                      }
+                    },
+                    datalabels: {
+                      display: false
+                    }
                   }
-                }
-              }}
-              kpiKey={activeSpendTab === "csi" ? "csiSpend" : "hdiVendorSpend"}
-              unit="R"
-              isInvestorView={isInvestorView}
-            />
+                }}
+                kpiKey="csiSpend"
+                unit="R"
+                isInvestorView={isInvestorView}
+              />
+            )}
 
-            {/* CSI/CSR Spend % OR HDI Spend % Chart */}
-            <ESGChartCard
-              title={activeSpendTab === "csi" ? "CSI Spend as % of Revenue" : "HDI Spend as % of Revenue"}
-              chartType="line"
-              data={{
-                labels: months,
-                datasets: [
-                  {
-                    label: activeSpendTab === "csi" ? "CSI %" : "HDI %",
-                    data: activeSpendTab === "csi" ? monthlyCsiPercentage : monthlyHdiPercentage,
-                    borderColor: activeSpendTab === "csi" ? "#5d4037" : "#8d6e63",
-                    backgroundColor: activeSpendTab === "csi" ? "rgba(93, 64, 55, 0.1)" : "rgba(141, 110, 99, 0.1)",
-                    borderWidth: 2,
-                    tension: 0.1,
-                    fill: true,
-                  },
-                ],
-              }}
-              options={{
-                responsive: true,
-                maintainAspectRatio: false,
-                scales: {
-                  y: {
-                    beginAtZero: true,
-                    title: {
-                      display: true,
-                      text: "Percentage (%)",
+            {/* HDI Spend Chart - Monthly if available */}
+            {activeSpendTab === "hdi" && (
+              <ESGChartCard
+                title={csiData.hasMonthlyHdiData ? "HDI Spend (Monthly)" : "HDI Spend (Annual)"}
+                chartType="bar"
+                data={{
+                  labels: csiData.hasMonthlyHdiData ? months : ["Annual Total"],
+                  datasets: [
+                    {
+                      label: "HDI Spend",
+                      data: csiData.hasMonthlyHdiData 
+                        ? csiData.monthlyHdiData.map(v => v / 1000000)
+                        : [csiData.hdiVendorSpend / 1000000],
+                      backgroundColor: "#8d6e63",
+                      borderColor: "#8d6e63",
+                      borderWidth: 2,
+                    },
+                  ],
+                }}
+                options={{
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  scales: {
+                    y: {
+                      beginAtZero: true,
+                      title: {
+                        display: true,
+                        text: "Amount (R millions)",
+                      },
                     },
                   },
-                },
-                plugins: {
-                  tooltip: {
-                    enabled: true
-                  },
-                  datalabels: {
-                    display: false
+                  plugins: {
+                    tooltip: {
+                      enabled: true,
+                      callbacks: {
+                        label: (context) => {
+                          return `HDI Spend: R ${(context.raw * 1000000).toLocaleString()}`;
+                        }
+                      }
+                    },
+                    datalabels: {
+                      display: false
+                    }
                   }
-                }
-              }}
-              kpiKey={activeSpendTab === "csi" ? "csiPercentage" : "hdiPercentage"}
-              unit="%"
-              isInvestorView={isInvestorView}
-            />
+                }}
+                kpiKey="hdiVendorSpend"
+                unit="R"
+                isInvestorView={isInvestorView}
+              />
+            )}
 
-            {/* Procurement Spend - FIXED: Now independent from CSI/HDI */}
+            {/* CSI/CSR % - Monthly if data available */}
+            {activeSpendTab === "csi" && (
+              <ESGChartCard
+                title={csiData.hasMonthlyCsiData ? "CSI Spend as % of Revenue (Monthly)" : "CSI Spend as % of Revenue (Annual)"}
+                chartType="bar"
+                data={{
+                  labels: csiData.hasMonthlyCsiData ? months : ["Annual"],
+                  datasets: [
+                    {
+                      label: "CSI %",
+                      data: csiData.hasMonthlyCsiData 
+                        ? months.map(() => csiData.csiPercentage)
+                        : [csiData.csiPercentage],
+                      backgroundColor: "#5d4037",
+                      borderColor: "#5d4037",
+                      borderWidth: 2,
+                    },
+                  ],
+                }}
+                options={{
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  scales: {
+                    y: {
+                      beginAtZero: true,
+                      max: 100,
+                      title: {
+                        display: true,
+                        text: "Percentage (%)",
+                      },
+                    },
+                  },
+                  plugins: {
+                    tooltip: {
+                      enabled: true,
+                      callbacks: {
+                        label: (context) => {
+                          return `CSI % of Revenue: ${context.raw.toFixed(2)}%`;
+                        }
+                      }
+                    },
+                    datalabels: {
+                      display: false
+                    }
+                  }
+                }}
+                kpiKey="csiPercentage"
+                unit="%"
+                isInvestorView={isInvestorView}
+              />
+            )}
+
+            {/* HDI % - Monthly if data available */}
+            {activeSpendTab === "hdi" && (
+              <ESGChartCard
+                title={csiData.hasMonthlyHdiData ? "HDI Spend as % of Revenue (Monthly)" : "HDI Spend as % of Revenue (Annual)"}
+                chartType="bar"
+                data={{
+                  labels: csiData.hasMonthlyHdiData ? months : ["Annual"],
+                  datasets: [
+                    {
+                      label: "HDI %",
+                      data: csiData.hasMonthlyHdiData 
+                        ? months.map(() => csiData.hdiPercentage)
+                        : [csiData.hdiPercentage],
+                      backgroundColor: "#8d6e63",
+                      borderColor: "#8d6e63",
+                      borderWidth: 2,
+                    },
+                  ],
+                }}
+                options={{
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  scales: {
+                    y: {
+                      beginAtZero: true,
+                      max: 100,
+                      title: {
+                        display: true,
+                        text: "Percentage (%)",
+                      },
+                    },
+                  },
+                  plugins: {
+                    tooltip: {
+                      enabled: true,
+                      callbacks: {
+                        label: (context) => {
+                          return `HDI % of Revenue: ${context.raw.toFixed(2)}%`;
+                        }
+                      }
+                    },
+                    datalabels: {
+                      display: false
+                    }
+                  }
+                }}
+                kpiKey="hdiPercentage"
+                unit="%"
+                isInvestorView={isInvestorView}
+              />
+            )}
+
+            {/* Procurement Spend */}
             <div>
               {/* Procurement Tabs */}
               <div style={{ 
@@ -2746,20 +3543,30 @@ const renderCommunityESD = () => {
                 </button>
               </div>
 
-              {/* Total Procurement Spend Chart - Independent data */}
+              {/* Procurement Chart */}
               <ESGChartCard
-                title="Procurement Spend"
-                chartType={activeProcurementTab === "amount" ? "bar" : "line"}
+                title={activeProcurementTab === "amount" 
+                  ? (csiData.hasMonthlyProcurementData ? "Procurement Spend (Monthly)" : "Procurement Spend (Annual)")
+                  : (csiData.hasMonthlyProcurementData ? "Procurement % to HDI (Monthly)" : "Procurement % to HDI (Annual)")}
+                chartType="bar"
                 data={{
-                  labels: months,
+                  labels: (activeProcurementTab === "amount" && csiData.hasMonthlyProcurementData) || 
+                         (activeProcurementTab === "percentage" && csiData.hasMonthlyProcurementData) 
+                         ? months 
+                         : ["Annual Total"],
                   datasets: [
                     {
                       label: activeProcurementTab === "amount" ? "Procurement Spend" : "Procurement % to HDI",
-                      data: activeProcurementTab === "amount" ? monthlyProcurementSpend : monthlyProcurementPercentage,
-                      backgroundColor: activeProcurementTab === "amount" ? "#3e2723" : "rgba(62, 39, 35, 0.1)",
+                      data: activeProcurementTab === "amount"
+                        ? (csiData.hasMonthlyProcurementData 
+                            ? csiData.monthlyProcurementData.map(v => v / 1000000)
+                            : [csiData.totalProcurementSpend / 1000000])
+                        : (csiData.hasMonthlyProcurementData
+                            ? months.map(() => csiData.procurementPercentage)
+                            : [csiData.procurementPercentage]),
+                      backgroundColor: "#3e2723",
                       borderColor: "#3e2723",
                       borderWidth: 2,
-                      fill: activeProcurementTab === "percentage",
                     },
                   ],
                 }}
@@ -2771,13 +3578,22 @@ const renderCommunityESD = () => {
                       beginAtZero: true,
                       title: {
                         display: true,
-                        text: activeProcurementTab === "amount" ? "Amount (R)" : "Percentage (%)",
+                        text: activeProcurementTab === "amount" ? "Amount (R millions)" : "Percentage (%)",
                       },
                     },
                   },
                   plugins: {
                     tooltip: {
-                      enabled: true
+                      enabled: true,
+                      callbacks: {
+                        label: (context) => {
+                          if (activeProcurementTab === "amount") {
+                            return `Procurement Spend: R ${(context.raw * 1000000).toLocaleString()}`;
+                          } else {
+                            return `Procurement % to HDI: ${context.raw.toFixed(2)}%`;
+                          }
+                        }
+                      }
                     },
                     datalabels: {
                       display: false
@@ -2795,20 +3611,25 @@ const renderCommunityESD = () => {
           <div style={{ marginTop: "30px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
               <h4 style={{ color: "#5d4037", fontSize: "16px" }}>CSI/CSR Projects</h4>
-              <button
-                style={{
-                  padding: "8px 16px",
-                  backgroundColor: "#5d4037",
-                  color: "#fdfcfb",
-                  border: "none",
-                  borderRadius: "6px",
-                  cursor: "pointer",
-                  fontWeight: "600",
-                  fontSize: "13px",
-                }}
-              >
-                + Add Project
-              </button>
+              {!isInvestorView && (
+                <button
+                  onClick={() => {
+                    alert("Add project functionality coming soon")
+                  }}
+                  style={{
+                    padding: "8px 16px",
+                    backgroundColor: "#5d4037",
+                    color: "#fdfcfb",
+                    border: "none",
+                    borderRadius: "6px",
+                    cursor: "pointer",
+                    fontWeight: "600",
+                    fontSize: "13px",
+                  }}
+                >
+                  + Add Project
+                </button>
+              )}
             </div>
             <div
               style={{
@@ -2844,16 +3665,6 @@ const renderCommunityESD = () => {
                     <td style={{ padding: "12px", color: "#5d4037", fontSize: "14px" }}>Healthcare</td>
                     <td style={{ padding: "12px", textAlign: "right", color: "#5d4037", fontSize: "14px" }}>150,000</td>
                     <td style={{ padding: "12px", color: "#5d4037", fontSize: "14px" }}>Planning</td>
-                    <td style={{ padding: "12px", textAlign: "center", color: "#5d4037", fontSize: "14px" }}>
-                      <button style={{ background: "none", border: "none", color: "#5d4037", cursor: "pointer", margin: "0 5px" }}>Edit</button>
-                      <button style={{ background: "none", border: "none", color: "#5d4037", cursor: "pointer", margin: "0 5px" }}>Delete</button>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td style={{ padding: "12px", color: "#5d4037", fontSize: "14px" }}>Environmental Cleanup</td>
-                    <td style={{ padding: "12px", color: "#5d4037", fontSize: "14px" }}>Environment</td>
-                    <td style={{ padding: "12px", textAlign: "right", color: "#5d4037", fontSize: "14px" }}>75,000</td>
-                    <td style={{ padding: "12px", color: "#5d4037", fontSize: "14px" }}>Completed</td>
                     <td style={{ padding: "12px", textAlign: "center", color: "#5d4037", fontSize: "14px" }}>
                       <button style={{ background: "none", border: "none", color: "#5d4037", cursor: "pointer", margin: "0 5px" }}>Edit</button>
                       <button style={{ background: "none", border: "none", color: "#5d4037", cursor: "pointer", margin: "0 5px" }}>Delete</button>
@@ -2917,7 +3728,7 @@ const renderCommunityESD = () => {
   )
 }
 
-// Governance Tab Component - REDESIGNED WITH TABLES
+// Governance Tab Component - REDESIGNED WITH TABLES (fixed editing)
 const GovernanceTab = ({ userData, onSave, isInvestorView }) => {
   const [policies, setPolicies] = useState(userData?.policies || [])
   const [risks, setRisks] = useState(userData?.risks || [])
@@ -3434,6 +4245,8 @@ const ESG = () => {
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [modalSection, setModalSection] = useState("")
   const [userData, setUserData] = useState({})
+  const [fundingAppData, setFundingAppData] = useState(null)
+  const [financialData, setFinancialData] = useState(null)
   const [financialYearEnd, setFinancialYearEnd] = useState("2026-03")
 
   useEffect(() => {
@@ -3459,10 +4272,14 @@ const ESG = () => {
       if (isInvestorView && viewingSMEId) {
         setCurrentUser({ uid: viewingSMEId })
         fetchUserData(viewingSMEId)
+        fetchFundingAppData(viewingSMEId)
+        fetchFinancialData(viewingSMEId)
       } else {
         setCurrentUser(user)
         if (user) {
           fetchUserData(user.uid)
+          fetchFundingAppData(user.uid)
+          fetchFinancialData(user.uid)
         }
       }
     })
@@ -3494,6 +4311,30 @@ const ESG = () => {
       }
     } catch (error) {
       console.error("Error loading ESG data:", error)
+    }
+  }
+
+  const fetchFundingAppData = async (userId) => {
+    try {
+      const userDoc = await getDoc(doc(db, "universalProfiles", userId))
+      if (userDoc.exists()) {
+        const data = userDoc.data()
+        setFundingAppData(data.socialImpact || {})
+      }
+    } catch (error) {
+      console.error("Error loading funding application data:", error)
+    }
+  }
+
+  const fetchFinancialData = async (userId) => {
+    try {
+      // Fetch capital structure data
+      const capitalDoc = await getDoc(doc(db, "financialData", `${userId}_capitalStructure`))
+      if (capitalDoc.exists()) {
+        setFinancialData(capitalDoc.data())
+      }
+    } catch (error) {
+      console.error("Error loading financial data:", error)
     }
   }
 
@@ -3750,6 +4591,8 @@ const ESG = () => {
       userData={userData}
       onSave={handleSaveData}
       isInvestorView={isInvestorView}
+      fundingAppData={fundingAppData}
+      financialData={financialData}
     />
   )}
 

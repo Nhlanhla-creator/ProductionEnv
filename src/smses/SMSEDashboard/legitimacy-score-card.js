@@ -18,7 +18,7 @@ export function LegitimacyScoreCard({ styles, profileData, onScoreUpdate, apiKey
   const [showScoreBreakdown, setShowScoreBreakdown] = useState(false)
   const [showDetailedAnalysis, setShowDetailedAnalysis] = useState(false)
   const [triggeredByAuto, setTriggeredByAuto] = useState(false)
-
+ 
   useEffect(() => {
     document.body.style.overflow = showModal ? "hidden" : ""
     return () => (document.body.style.overflow = "")
