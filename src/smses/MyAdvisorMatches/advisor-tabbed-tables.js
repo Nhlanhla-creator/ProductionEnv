@@ -1314,7 +1314,7 @@ const SuccessfulAdvisorDealsTable = ({ successfulDeals = [] }) => {
         </div>
       )}
 
-      <style jsx>{`
+      <style>{`
         @keyframes fadeIn {
           from { opacity: 0; }
           to { opacity: 1; }
@@ -1537,7 +1537,7 @@ const AdvisorTabbedTables = ({
       </div>
 
       {/* Enhanced styling for tab transitions */}
-      <style jsx>{`
+      <style>{`
         @keyframes fadeIn {
           from { 
             opacity: 0; 

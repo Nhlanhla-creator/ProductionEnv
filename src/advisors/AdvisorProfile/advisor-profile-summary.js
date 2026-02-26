@@ -740,7 +740,7 @@ export default function AdvisorProfileSummary({ data, onEdit }) {
 
   return (
     <>
-      <style jsx>{`
+      <style>{`
         @keyframes fadeIn {
           from { opacity: 0; }
           to { opacity: 1; }

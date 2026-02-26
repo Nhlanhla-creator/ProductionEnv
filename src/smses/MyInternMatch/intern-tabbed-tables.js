@@ -896,7 +896,7 @@ const SuccessfulInternDealsTable = () => {
         </div>
       )}
 
-      <style jsx>{`
+      <style>{`
         @keyframes fadeIn {
           from { opacity: 0; }
           to { opacity: 1; }
@@ -1140,7 +1140,7 @@ const InternTabbedTables = ({
       </div>
 
       {/* Enhanced styling for tab transitions */}
-      <style jsx>{`
+      <style>{`
         @keyframes fadeIn {
           from { 
             opacity: 0; 

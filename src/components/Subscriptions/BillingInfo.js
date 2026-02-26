@@ -266,7 +266,7 @@ const BillingInfo = ({
             </h2>
           </div>
         </div>
-        <style jsx>{`
+        <style>{`
           @keyframes spin {
             0% {
               transform: rotate(0deg);
@@ -346,7 +346,7 @@ const BillingInfo = ({
           </button>
         </div>
 
-        <style jsx>{`
+        <style>{`
           @keyframes spin {
             0% {
               transform: rotate(0deg);

@@ -1232,7 +1232,7 @@ ${evaluationData}`
         </div>
       )}
 
-      <style jsx>{`
+      <style>{`
         .spin {
           animation: spin 1s linear infinite;
         }

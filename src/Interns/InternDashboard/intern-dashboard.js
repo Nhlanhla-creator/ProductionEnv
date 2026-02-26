@@ -99,7 +99,7 @@ export default function InternDashboard() {
           <p style={{ color: '#5D4037', fontSize: '18px' }}>Loading your dashboard...</p>
         </div>
 
-        <style jsx>{`
+        <style>{`
           @keyframes spin {
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
@@ -317,7 +317,7 @@ export default function InternDashboard() {
 
      
       {/* Responsive Styles */}
-      <style jsx>{`
+      <style>{`
         @media (max-width: 1400px) {
           .dashboard-container {
             margin-left: ${isSidebarCollapsed ? '80px' : '200px'};

@@ -291,7 +291,7 @@ export const renderGuarantees = (data = {}, updateFormData) => {
         </div>
       </div>
 
-      <style jsx>{`
+      <style>{`
         .guarantee-section {
           margin-bottom: 2rem;
           border: 1px solid #d7ccc8;

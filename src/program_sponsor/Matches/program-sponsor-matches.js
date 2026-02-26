@@ -148,7 +148,7 @@ export default function ProgramSponsorMatchesPage() {
       style={getContainerStyles()}
       className={styles.pageContainer}
     >
-      <style jsx>{`
+      <style>{`
         :global(.${styles.sectionCard} h1),
         :global(.${styles.sectionCard} h2),
         :global(.${styles.sectionCard} h3),

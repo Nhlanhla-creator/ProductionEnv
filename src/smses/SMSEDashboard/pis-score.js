@@ -911,7 +911,7 @@ ${evaluationData}`;
         </div>
 
         {/* CSS Animations */}
-        <style jsx>{`
+        <style>{`
           @keyframes pulse {
             0% {
               transform: scale(1);
@@ -1490,7 +1490,7 @@ ${evaluationData}`;
           </div>
         </div>
       )}
-      <style jsx>{`
+      <style>{`
         .spin {
           animation: spin 1s linear infinite;
         }

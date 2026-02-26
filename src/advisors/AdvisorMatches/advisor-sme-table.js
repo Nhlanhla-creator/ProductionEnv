@@ -2811,7 +2811,7 @@ export function AdvisorTable({ filters, stageFilter, onMatchesCountChange }) {
         </div>
       )}
 
-      <style jsx>{`
+      <style>{`
         @keyframes fadeIn {
           from { opacity: 0; }
           to { opacity: 1; }

@@ -816,7 +816,7 @@ const SuccessfulAdvisorDealsTable = ({ onDealsCountChange }) => {
         </div>
       )}
 
-      <style jsx>{`
+      <style>{`
         @keyframes fadeIn {
           from { opacity: 0; }
           to { opacity: 1; }
@@ -983,7 +983,7 @@ const AdvisorTabbedTables = ({ filters, stageFilter, loading }) => {
       </div>
 
       {/* Enhanced styling for tab transitions */}
-      <style jsx>{`
+      <style>{`
         @keyframes fadeIn {
           from { 
             opacity: 0; 
