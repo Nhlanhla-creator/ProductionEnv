@@ -281,17 +281,6 @@ export const renderSocialImpact = (data, updateFormData) => {
           ></textarea>
         </FormField>
       </div>
-
-      {/* <div className="section-divider">
-        <h3>Required Documents</h3>
-
-        <FileUpload
-          label="Optional Impact Statement (free-text or upload)"
-          accept=".pdf,.doc,.docx"
-          onChange={(files) => handleFileChange("impactStatement", files)}
-          value={data.impactStatement || []}
-        />
-      </div> */}
     </>
   );
 };

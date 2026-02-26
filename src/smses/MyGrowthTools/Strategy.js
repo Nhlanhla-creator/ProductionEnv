@@ -4,13 +4,14 @@ import { useState, useEffect } from "react"
 import { Bar, Scatter } from "react-chartjs-2"
 import Sidebar from "smses/Sidebar/Sidebar"
 import Header from "../DashboardHeader/DashboardHeader"
-import { db, auth } from "../../firebaseConfig"
+import { db, auth, storage } from "../../firebaseConfig"
 import { onAuthStateChanged } from "firebase/auth"
-import { FaChevronDown, FaChevronUp, FaRobot, FaSpinner } from "react-icons/fa"
+import { FaChevronDown, FaChevronUp, FaRobot, FaSpinner, FaDownload } from "react-icons/fa"
 import { 
   collection, addDoc, getDocs, updateDoc, deleteDoc, doc, query, where, 
   onSnapshot, setDoc, getDoc 
 } from "firebase/firestore"
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage"
 import { getFunctions, httpsCallable } from "firebase/functions"
 import {
   Chart as ChartJS,
@@ -55,7 +56,6 @@ const SECTION_DATA = {
       "Strategic Horizon (timeframe selector 12-36 months)",
     ],
   },
-  // Add the missing operating-model section
   "operating-model": {
     name: "Operating Model",
     keyQuestion: "Is the operating model aligned with the current business strategy and stage?",
@@ -107,6 +107,18 @@ const SECTION_DATA = {
       "Strategy adjustments",
     ],
   },
+}
+
+// RISK COLORS for scatter plot - each category gets a distinct color
+// RISK COLORS for scatter plot - each category gets a distinct color
+const RISK_COLORS = {
+  "financial-risk": "#4CAF50", // Green
+  "market-risk": "#2196F3", // Blue
+  "operational-risk": "#FF9800", // Orange
+  "reputational-risk": "#9C27B0", // Purple
+  "compliance-risk": "#F44336", // Red
+  "technology-risk": "#FF69B4", // Hot Pink - distinct from market risk
+  "business-risk": "#7d5a50", // Brown for "All" view
 }
 
 // Helper function to get months array based on year
@@ -2656,12 +2668,33 @@ const StrategicGoals = ({ activeSection, milestoneData, setMilestoneData, curren
     return Math.round(totalPercentage / relevantMilestones.length)
   }
 
+  // Store all milestone descriptions by goal for tooltips
+  const getAllMilestoneDescriptions = (growthStage) => {
+    const descriptionsByGoal = {};
+    
+    milestoneData
+      .filter(m => m.growthStage === growthStage)
+      .forEach(milestone => {
+        if (!descriptionsByGoal[milestone.goal]) {
+          descriptionsByGoal[milestone.goal] = [];
+        }
+        if (milestone.milestoneDescription) {
+          descriptionsByGoal[milestone.goal].push(milestone);
+        }
+      });
+    
+    return descriptionsByGoal;
+  };
+
   const createChartData = (growthStage, color) => {
     const goals = ["Goal 1", "Goal 2", "Goal 3", "Goal 4"]
     const completionData = goals.map((_, index) => calculateGoalCompletion(index + 1, growthStage))
 
     const goalsWithData = []
     const dataWithValues = []
+    
+    // Get ALL milestone descriptions for this growth stage
+    const allDescriptions = getAllMilestoneDescriptions(growthStage);
 
     goals.forEach((goal, index) => {
       const completion = completionData[index]
@@ -2675,21 +2708,6 @@ const StrategicGoals = ({ activeSection, milestoneData, setMilestoneData, curren
       }
     })
 
-    if (goalsWithData.length === 0) {
-      return {
-        labels: [],
-        datasets: [
-          {
-            label: "% Completion",
-            data: [],
-            backgroundColor: color,
-            borderColor: "#7d5a50",
-            borderWidth: 1,
-          },
-        ],
-      }
-    }
-
     return {
       labels: goalsWithData,
       datasets: [
@@ -2699,15 +2717,21 @@ const StrategicGoals = ({ activeSection, milestoneData, setMilestoneData, curren
           backgroundColor: color,
           borderColor: "#7d5a50",
           borderWidth: 1,
+          // Store descriptions directly in the dataset for tooltip access
+          milestoneDescriptions: allDescriptions,
         },
       ],
     }
   }
 
+  // UPDATED chartOptions to show milestone descriptions on hover
   const chartOptions = {
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
+      datalabels: {
+        display: false
+      },
       legend: {
         display: false,
       },
@@ -2716,21 +2740,54 @@ const StrategicGoals = ({ activeSection, milestoneData, setMilestoneData, curren
       },
       tooltip: {
         callbacks: {
-          afterLabel: (context) => {
-            const goalNumber = context.dataIndex + 1
-            const growthStage = context.chart.canvas.dataset.growthStage
-
+          // Show the goal name
+          title: (context) => {
+            return context[0].label;
+          },
+          // Show the completion percentage
+          label: (context) => {
+            return `Completion: ${context.raw}%`;
+          },
+          // Show all milestone descriptions for this goal
+          afterBody: (context) => {
+            const dataPoint = context[0];
+            const goalName = dataPoint.label;
+            const dataset = dataPoint.dataset;
+            
+            // Get the growth stage from the chart's data-growth-stage attribute
+            const chartElement = dataPoint.chart.canvas;
+            const growthStage = chartElement?.getAttribute('data-growth-stage');
+            
+            if (!growthStage) return [];
+            
+            // Get all milestones for this goal and growth stage
             const relevantMilestones = milestoneData.filter(
-              (milestone) => milestone.goal === `Goal ${goalNumber}` && milestone.growthStage === growthStage,
-            )
-
-            if (relevantMilestones.length > 0 && relevantMilestones[0].goalDescription) {
-              return relevantMilestones[0].goalDescription
+              m => m.growthStage === growthStage && 
+                   m.goal === goalName && 
+                   m.milestoneDescription
+            );
+            
+            if (relevantMilestones.length === 0) {
+              return ['No milestone descriptions available'];
             }
-
-            return "No description available"
+            
+            // Format each milestone with description, status, and completion
+            const milestoneLines = ['Milestones:'];
+            relevantMilestones.forEach((m, index) => {
+              milestoneLines.push(
+                `  ${index + 1}. ${m.milestoneDescription}`
+              );
+              milestoneLines.push(
+                `     Status: ${m.status} (${m.percentageCompletion}%)`
+              );
+            });
+            
+            return milestoneLines;
           },
         },
+        // Make tooltip multiline
+        bodySpacing: 5,
+        padding: 10,
       },
     },
     scales: {
@@ -3222,6 +3279,9 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
     }
   }
 
+  const currentYear = new Date().getFullYear()
+  const years = Array.from({ length: 5 }, (_, i) => currentYear + i)
+
   return (
     <div
       style={{
@@ -3293,7 +3353,11 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                 >
                   <h4 style={{ color: "#4a352f", marginBottom: "15px", fontSize: "15px" }}>{category.name}</h4>
                   <div style={{ height: "250px" }}>
-                    <Bar data={chartData} options={chartOptions} data-growth-stage={category.key} />
+                    <Bar 
+                      data={chartData} 
+                      options={chartOptions} 
+                      data-growth-stage={category.key} 
+                    />
                   </div>
                 </div>
               )
@@ -3322,11 +3386,13 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
         </div>
       )}
 
-      <div style={{ marginBottom: "20px", display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
-        <label style={{ color: "#4a352f", fontWeight: "500" }}>Filter by:</label>
+      {/* Month/Year Filter - ADDED BACK like Risk Management */}
+      <div style={{ display: "flex", gap: "10px", marginBottom: "20px", alignItems: "center", flexWrap: "wrap" }}>
+        <label style={{ color: "#4a352f", fontWeight: "500" }}>Filter by Target Date:</label>
+        
         <select
-          value={filterBy}
-          onChange={(e) => setFilterBy(e.target.value)}
+          value={selectedMonth}
+          onChange={(e) => setSelectedMonth(e.target.value)}
           style={{
             padding: "8px 12px",
             border: "2px solid #e8ddd4",
@@ -3337,39 +3403,56 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
             fontSize: "14px",
           }}
         >
-          <option value="all">All Milestones</option>
-          <optgroup label="Goal Domain">
-            {goalDomains
-              .filter((d) => d !== "Other (Specify)")
-              .map((domain) => (
-                <option key={domain} value={domain}>
-                  {domain}
-                </option>
-              ))}
-          </optgroup>
-          <optgroup label="Status">
-            {statuses.map((status) => (
-              <option key={status} value={status}>
-                {status}
-              </option>
-            ))}
-          </optgroup>
-          <optgroup label="Owner">
-            {owners.map((owner) => (
-              <option key={owner} value={owner}>
-                {owner}
-              </option>
-            ))}
-          </optgroup>
-          <optgroup label="Goal">
-            {goals.map((goal) => (
-              <option key={goal} value={goal}>
-                {goal}
-              </option>
-            ))}
-          </optgroup>
+          <option value="">All Months</option>
+          {Array.from({ length: 12 }, (_, i) => (
+            <option key={i + 1} value={i + 1}>
+              {new Date(2024, i, 1).toLocaleString('default', { month: 'long' })}
+            </option>
+          ))}
         </select>
+        
+        <select
+          value={selectedYearFilter}
+          onChange={(e) => setSelectedYearFilter(e.target.value)}
+          style={{
+            padding: "8px 12px",
+            border: "2px solid #e8ddd4",
+            borderRadius: "4px",
+            backgroundColor: "white",
+            color: "#4a352f",
+            cursor: "pointer",
+            fontSize: "14px",
+          }}
+        >
+          <option value="">All Years</option>
+          {years.map((year) => (
+            <option key={year} value={year}>
+              {year}
+            </option>
+          ))}
+        </select>
+        
+        {(selectedMonth || selectedYearFilter) && (
+          <button
+            onClick={() => {
+              setSelectedMonth("")
+              setSelectedYearFilter("")
+            }}
+            style={{
+              padding: "8px 12px",
+              backgroundColor: "#e6d7c3",
+              color: "#4a352f",
+              border: "none",
+              borderRadius: "4px",
+              cursor: "pointer",
+              fontSize: "12px",
+            }}
+          >
+            Clear Filter
+          </button>
+        )}
 
+        {/* Add Milestone button */}
         {!isInvestorView && (
           <button
             onClick={handleAddMilestone}
@@ -3394,9 +3477,14 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
       <div style={{ overflowX: "auto", backgroundColor: "#fdfcfb", borderRadius: "6px", padding: "20px" }}>
         {filteredMilestones.length === 0 ? (
           <div style={{ textAlign: "center", padding: "40px", color: "#7d5a50" }}>
-            {filterBy === "all"
+            {milestoneData.length === 0 
               ? `No milestones added yet. ${!isInvestorView ? 'Click "Add Milestone" to get started.' : ""}`
-              : `No milestones found for the selected filter.`}
+              : `No milestones found for the selected filters.`}
+            {(selectedMonth || selectedYearFilter) && milestoneData.length > 0 && (
+              <p style={{ marginTop: "10px", fontSize: "13px" }}>
+                Try clearing the date filters to see all milestones.
+              </p>
+            )}
           </div>
         ) : (
           <table
@@ -4013,14 +4101,25 @@ const RiskManagement = ({ activeSection, currentUser, isInvestorView }) => {
   const [analysisError, setAnalysisError] = useState("")
   const [savedAnalysis, setSavedAnalysis] = useState("")
 
+  // UPDATED RISK COLORS - Technology risk changed to pink
+  const RISK_COLORS = {
+    "financial-risk": "#4CAF50", // Green
+    "market-risk": "#2196F3", // Blue
+    "operational-risk": "#FF9800", // Orange
+    "reputational-risk": "#9C27B0", // Purple
+    "compliance-risk": "#F44336", // Red
+    "technology-risk": "#FF69B4", // Hot Pink - distinct from market risk
+    "business-risk": "#7d5a50", // Brown for "All" view
+  }
+
   const riskCategories = [
     { id: "business-risk", name: "Business Risk (All)", color: "#7d5a50" },
-    { id: "financial-risk", name: "Financial Risk", color: "#a67c52" },
-    { id: "market-risk", name: "Market Risk", color: "#c8b6a6" },
-    { id: "operational-risk", name: "Operational Risk", color: "#d4c4b0" },
-    { id: "reputational-risk", name: "Reputational Risk", color: "#b8a491" },
-    { id: "compliance-risk", name: "Compliance Risk", color: "#9d8573" },
-    { id: "technology-risk", name: "Technology Risk", color: "#8b7355" },
+    { id: "financial-risk", name: "Financial Risk", color: RISK_COLORS["financial-risk"] },
+    { id: "market-risk", name: "Market Risk", color: RISK_COLORS["market-risk"] },
+    { id: "operational-risk", name: "Operational Risk", color: RISK_COLORS["operational-risk"] },
+    { id: "reputational-risk", name: "Reputational Risk", color: RISK_COLORS["reputational-risk"] },
+    { id: "compliance-risk", name: "Compliance Risk", color: RISK_COLORS["compliance-risk"] },
+    { id: "technology-risk", name: "Technology Risk", color: RISK_COLORS["technology-risk"] },
   ]
 
   // NEW: Function to clean up the AI response
@@ -4190,27 +4289,72 @@ const RiskManagement = ({ activeSection, currentUser, isInvestorView }) => {
     }
   }
 
-  const createScatterChartData = (category, color) => {
-    const data = category === "business-risk" ? Object.values(riskData).flat() : riskData[category] || []
+  // UPDATED: Filter function for both table and scatter plot
+  const filteredData = (data) => {
+    return data.filter((item) => {
+      if (!selectedMonth && !selectedYear) return true
+      
+      if (!item.actionDate) return true
+      
+      const actionDate = new Date(item.actionDate)
+      const monthMatch = !selectedMonth || (actionDate.getMonth() + 1) === parseInt(selectedMonth)
+      const yearMatch = !selectedYear || actionDate.getFullYear() === parseInt(selectedYear)
+      
+      return monthMatch && yearMatch
+    })
+  }
 
-    return {
-      datasets: [
-        {
-          label: "Risks",
-          data: data.map((item) => ({
-            x: item.likelihood,
-            y: item.severity,
-            label: item.risk || "Unnamed Risk",
-            riskLevel: item.likelihood * item.severity,
-            status: item.mitigationStatus,
-          })),
-          backgroundColor: color,
-          borderColor: "#5d4037",
-          borderWidth: 2,
-          pointRadius: 8,
-          pointHoverRadius: 10,
-        },
-      ],
+  // UPDATED: Create scatter chart data with filtered data
+  const createScatterChartData = (category) => {
+    if (category === "business-risk") {
+      // For "All" view, use different colors for each risk category with filtered data
+      const datasets = []
+      
+      Object.keys(riskData).forEach((catKey) => {
+        const data = filteredData(riskData[catKey] || []) // Apply filter here
+        if (data.length > 0) {
+          datasets.push({
+            label: riskCategories.find(c => c.id === catKey)?.name || catKey,
+            data: data.map((item) => ({
+              x: item.likelihood,
+              y: item.severity,
+              label: item.risk || "Unnamed Risk",
+              riskLevel: item.likelihood * item.severity,
+              status: item.mitigationStatus,
+              category: catKey,
+            })),
+            backgroundColor: RISK_COLORS[catKey] || "#7d5a50",
+            borderColor: "#5d4037",
+            borderWidth: 2,
+            pointRadius: 8,
+            pointHoverRadius: 10,
+          })
+        }
+      })
+      
+      return { datasets }
+    } else {
+      // For single category view with filtered data
+      const data = filteredData(riskData[category] || []) // Apply filter here
+      return {
+        datasets: [
+          {
+            label: riskCategories.find(c => c.id === category)?.name || "Risks",
+            data: data.map((item) => ({
+              x: item.likelihood,
+              y: item.severity,
+              label: item.risk || "Unnamed Risk",
+              riskLevel: item.likelihood * item.severity,
+              status: item.mitigationStatus,
+            })),
+            backgroundColor: RISK_COLORS[category] || "#7d5a50",
+            borderColor: "#5d4037",
+            borderWidth: 2,
+            pointRadius: 8,
+            pointHoverRadius: 10,
+          },
+        ],
+      }
     }
   }
 
@@ -4218,13 +4362,25 @@ const RiskManagement = ({ activeSection, currentUser, isInvestorView }) => {
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
+      datalabels: {
+        display: false
+      },
       legend: {
-        display: false,
+        display: true,
+        position: 'top',
+        labels: {
+          color: "#4a352f",
+          font: {
+            size: 12
+          }
+        }
       },
       tooltip: {
         callbacks: {
           label: (context) => {
-            return context.raw.label || "Risk"
+            const datasetLabel = context.dataset.label || "Risk"
+            const pointLabel = context.raw.label || "Risk"
+            return `${datasetLabel}: ${pointLabel}`
           },
           afterLabel: (context) => {
             const riskLevel = context.raw.x * context.raw.y
@@ -4275,20 +4431,6 @@ const RiskManagement = ({ activeSection, currentUser, isInvestorView }) => {
         },
       },
     },
-  }
-
-  const filteredData = (data) => {
-    return data.filter((item) => {
-      if (!selectedMonth && !selectedYear) return true
-      
-      if (!item.actionDate) return true
-      
-      const actionDate = new Date(item.actionDate)
-      const monthMatch = !selectedMonth || (actionDate.getMonth() + 1) === parseInt(selectedMonth)
-      const yearMatch = !selectedYear || actionDate.getFullYear() === parseInt(selectedYear)
-      
-      return monthMatch && yearMatch
-    })
   }
 
   // AI Analysis Functions
@@ -4590,7 +4732,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
 
       <h3 style={{ color: "#4a352f", marginBottom: "20px" }}>Risk Register</h3>
 
-      {/* Risk Category Tabs with hover tooltips */}
+      {/* Risk Category Tabs with hover tooltips - Technology Risk now pink */}
       <div
         style={{
           display: "flex",
@@ -4662,6 +4804,72 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
         ))}
       </div>
 
+      {/* Month/Year Filter - Now affects BOTH table and scatter plot */}
+      <div style={{ display: "flex", gap: "10px", marginBottom: "20px", alignItems: "center" }}>
+        <label style={{ color: "#4a352f", fontWeight: "500" }}>Filter by Action Date:</label>
+        <select
+          value={selectedMonth}
+          onChange={(e) => setSelectedMonth(e.target.value)}
+          style={{
+            padding: "8px 12px",
+            border: "2px solid #e8ddd4",
+            borderRadius: "4px",
+            backgroundColor: "white",
+            color: "#4a352f",
+            cursor: "pointer",
+            fontSize: "14px",
+          }}
+        >
+          <option value="">All Months</option>
+          {Array.from({ length: 12 }, (_, i) => (
+            <option key={i + 1} value={i + 1}>
+              {new Date(2024, i, 1).toLocaleString('default', { month: 'long' })}
+            </option>
+          ))}
+        </select>
+        
+        <select
+          value={selectedYear}
+          onChange={(e) => setSelectedYear(e.target.value)}
+          style={{
+            padding: "8px 12px",
+            border: "2px solid #e8ddd4",
+            borderRadius: "4px",
+            backgroundColor: "white",
+            color: "#4a352f",
+            cursor: "pointer",
+            fontSize: "14px",
+          }}
+        >
+          <option value="">All Years</option>
+          {years.map((year) => (
+            <option key={year} value={year}>
+              {year}
+            </option>
+          ))}
+        </select>
+        
+        {(selectedMonth || selectedYear) && (
+          <button
+            onClick={() => {
+              setSelectedMonth("")
+              setSelectedYear("")
+            }}
+            style={{
+              padding: "8px 12px",
+              backgroundColor: "#e6d7c3",
+              color: "#4a352f",
+              border: "none",
+              borderRadius: "4px",
+              cursor: "pointer",
+              fontSize: "12px",
+            }}
+          >
+            Clear Filter
+          </button>
+        )}
+      </div>
+
       {/* Risk Category Content */}
       {riskCategories.map((category) => {
         if (riskSection !== category.id) return null
@@ -4671,7 +4879,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
 
         return (
           <div key={category.id}>
-            {/* Scatter Chart */}
+            {/* Scatter Chart - Now uses filtered data */}
             <div
               style={{
                 backgroundColor: "#fdfcfb",
@@ -4684,13 +4892,18 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
               <h4 style={{ color: "#4a352f", marginBottom: "15px" }}>
                 {category.name} Matrix
                 {category.id === "business-risk" && " (All Risks)"}
+                {(selectedMonth || selectedYear) && (
+                  <span style={{ fontSize: "12px", marginLeft: "10px", color: "#8d6e63" }}>
+                    (Filtered by date)
+                  </span>
+                )}
               </h4>
               <div style={{ height: "300px" }}>
-                <Scatter data={createScatterChartData(category.id, category.color)} options={scatterOptions} />
+                <Scatter data={createScatterChartData(category.id)} options={scatterOptions} />
               </div>
             </div>
 
-            {/* Risk Assessment Table */}
+            {/* Risk Assessment Table - Uses filtered data */}
             <div
               style={{
                 backgroundColor: "#fdfcfb",
@@ -4710,6 +4923,11 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                 <h4 style={{ color: "#4a352f", margin: 0 }}>
                   Risk Assessment Table
                   {category.id === "business-risk" && " (All Risks)"}
+                  {(selectedMonth || selectedYear) && (
+                    <span style={{ fontSize: "12px", marginLeft: "10px", color: "#8d6e63" }}>
+                      (Filtered by date)
+                    </span>
+                  )}
                 </h4>
                 {!isInvestorView && category.id !== "business-risk" && (
                   <button
@@ -4735,6 +4953,11 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                   {category.id === "business-risk"
                     ? "No risk items added yet in any category."
                     : `No risk items added yet. ${!isInvestorView ? 'Click "Add Risk Item" to get started.' : ""}`}
+                  {(selectedMonth || selectedYear) && (
+                    <p style={{ marginTop: "10px", fontSize: "13px" }}>
+                      Try clearing the date filters to see all items.
+                    </p>
+                  )}
                 </div>
               ) : (
                 <div style={{ overflowX: "auto" }}>
@@ -5249,24 +5472,28 @@ const ChangeAdaptability = ({ activeSection, currentUser, isInvestorView }) => {
   const [showReviewModal, setShowReviewModal] = useState(false)
   const [showAdjustmentModal, setShowAdjustmentModal] = useState(false)
   const [showPivotModal, setShowPivotModal] = useState(false)
+  const [editingReview, setEditingReview] = useState(null)
+  const [editingAdjustment, setEditingAdjustment] = useState(null)
+  const [editingPivot, setEditingPivot] = useState(null)
   const [newReview, setNewReview] = useState({ date: "", topic: "", status: "Not Done", notes: "" })
   const [newAdjustment, setNewAdjustment] = useState({ 
     date: "", 
     description: "", 
     reason: "",
-    document: null,
-    documentName: ""
+    file: null,
+    fileName: ""
   })
   const [newPivot, setNewPivot] = useState({ 
     date: "", 
     from: "", 
     to: "", 
     reason: "",
-    document: null,
-    documentName: ""
+    file: null,
+    fileName: ""
   })
   const [selectedMonth, setSelectedMonth] = useState("")
   const [selectedYear, setSelectedYear] = useState("")
+  const [uploading, setUploading] = useState(false)
   
   // AI Analysis States
   const [showAIAnalysis, setShowAIAnalysis] = useState(false)
@@ -5373,11 +5600,56 @@ const ChangeAdaptability = ({ activeSection, currentUser, isInvestorView }) => {
       setReviewData((prev) => [...prev, { id: docRef.id, ...reviewWithUser }])
       setShowReviewModal(false)
       setNewReview({ date: "", topic: "", status: "Not Done", notes: "" })
-      // Clear saved analysis when data changes
       setSavedAnalysis("")
     } catch (error) {
       console.error("Error adding review:", error)
       alert("Error adding review. Please try again.")
+    }
+  }
+
+  const handleEditReview = (review) => {
+    if (isInvestorView) {
+      alert("You are in view-only mode and cannot make changes.")
+      return
+    }
+    setEditingReview(review)
+    setNewReview({
+      date: review.date || "",
+      topic: review.topic || "",
+      status: review.status || "Not Done",
+      notes: review.notes || ""
+    })
+    setShowReviewModal(true)
+  }
+
+  const handleUpdateReview = async () => {
+    if (isInvestorView) {
+      alert("You are in view-only mode and cannot make changes.")
+      return
+    }
+
+    if (!currentUser || !editingReview) return
+
+    try {
+      const reviewRef = doc(db, "strategyReviews", editingReview.id)
+      const updatedReview = {
+        ...newReview,
+        updatedAt: new Date().toISOString()
+      }
+      
+      await updateDoc(reviewRef, updatedReview)
+      
+      setReviewData((prev) =>
+        prev.map((r) => (r.id === editingReview.id ? { ...r, ...updatedReview } : r))
+      )
+      
+      setShowReviewModal(false)
+      setEditingReview(null)
+      setNewReview({ date: "", topic: "", status: "Not Done", notes: "" })
+      setSavedAnalysis("")
+    } catch (error) {
+      console.error("Error updating review:", error)
+      alert("Error updating review. Please try again.")
     }
   }
 
@@ -5387,11 +5659,40 @@ const ChangeAdaptability = ({ activeSection, currentUser, isInvestorView }) => {
       try {
         await deleteDoc(doc(db, "strategyReviews", id))
         setReviewData((prev) => prev.filter((r) => r.id !== id))
-        // Clear saved analysis when data changes
         setSavedAnalysis("")
       } catch (error) {
         console.error("Error deleting review:", error)
       }
+    }
+  }
+
+  const handleFileUpload = async (file, type) => {
+    if (!file) return null
+    
+    setUploading(true)
+    try {
+      // Create a unique file name
+      const timestamp = Date.now()
+      const fileName = `${timestamp}_${file.name}`
+      const storageRef = ref(storage, `change-documents/${currentUser.uid}/${type}/${fileName}`)
+      
+      // Upload file to Firebase Storage
+      await uploadBytes(storageRef, file)
+      
+      // Get download URL
+      const downloadUrl = await getDownloadURL(storageRef)
+      
+      setUploading(false)
+      return {
+        fileName: file.name,
+        fileUrl: downloadUrl,
+        storagePath: `change-documents/${currentUser.uid}/${type}/${fileName}`
+      }
+    } catch (error) {
+      console.error("Error uploading file:", error)
+      setUploading(false)
+      alert("Error uploading file. Please try again.")
+      return null
     }
   }
 
@@ -5406,15 +5707,25 @@ const ChangeAdaptability = ({ activeSection, currentUser, isInvestorView }) => {
       return
     }
 
+    setUploading(true)
+
     try {
+      let fileData = null
+      if (newAdjustment.file) {
+        fileData = await handleFileUpload(newAdjustment.file, 'adjustments')
+      }
+
       const adjustmentWithUser = {
         date: newAdjustment.date,
         description: newAdjustment.description,
         reason: newAdjustment.reason,
-        documentName: newAdjustment.documentName,
+        fileName: fileData?.fileName || newAdjustment.fileName,
+        fileUrl: fileData?.fileUrl || "",
+        storagePath: fileData?.storagePath || "",
         userId: currentUser.uid,
         createdAt: new Date().toISOString(),
       }
+
       const docRef = await addDoc(collection(db, "adjustments"), adjustmentWithUser)
       setAdjustments((prev) => [...prev, { id: docRef.id, ...adjustmentWithUser }])
       setShowAdjustmentModal(false)
@@ -5422,14 +5733,76 @@ const ChangeAdaptability = ({ activeSection, currentUser, isInvestorView }) => {
         date: "", 
         description: "", 
         reason: "",
-        document: null,
-        documentName: ""
+        file: null,
+        fileName: ""
       })
-      // Clear saved analysis when data changes
       setSavedAnalysis("")
+      setUploading(false)
     } catch (error) {
       console.error("Error adding adjustment:", error)
       alert("Error adding adjustment. Please try again.")
+      setUploading(false)
+    }
+  }
+
+  const handleEditAdjustment = (adjustment) => {
+    if (isInvestorView) {
+      alert("You are in view-only mode and cannot make changes.")
+      return
+    }
+    setEditingAdjustment(adjustment)
+    setNewAdjustment({
+      date: adjustment.date || "",
+      description: adjustment.description || "",
+      reason: adjustment.reason || "",
+      file: null,
+      fileName: adjustment.fileName || ""
+    })
+    setShowAdjustmentModal(true)
+  }
+
+  const handleUpdateAdjustment = async () => {
+    if (isInvestorView) {
+      alert("You are in view-only mode and cannot make changes.")
+      return
+    }
+
+    if (!currentUser || !editingAdjustment) return
+
+    setUploading(true)
+
+    try {
+      let fileData = null
+      if (newAdjustment.file) {
+        fileData = await handleFileUpload(newAdjustment.file, 'adjustments')
+      }
+
+      const adjustmentRef = doc(db, "adjustments", editingAdjustment.id)
+      const updatedAdjustment = {
+        date: newAdjustment.date,
+        description: newAdjustment.description,
+        reason: newAdjustment.reason,
+        fileName: fileData?.fileName || newAdjustment.fileName,
+        fileUrl: fileData?.fileUrl || editingAdjustment.fileUrl || "",
+        storagePath: fileData?.storagePath || editingAdjustment.storagePath || "",
+        updatedAt: new Date().toISOString()
+      }
+      
+      await updateDoc(adjustmentRef, updatedAdjustment)
+      
+      setAdjustments((prev) =>
+        prev.map((a) => (a.id === editingAdjustment.id ? { ...a, ...updatedAdjustment } : a))
+      )
+      
+      setShowAdjustmentModal(false)
+      setEditingAdjustment(null)
+      setNewAdjustment({ date: "", description: "", reason: "", file: null, fileName: "" })
+      setSavedAnalysis("")
+      setUploading(false)
+    } catch (error) {
+      console.error("Error updating adjustment:", error)
+      alert("Error updating adjustment. Please try again.")
+      setUploading(false)
     }
   }
 
@@ -5439,7 +5812,6 @@ const ChangeAdaptability = ({ activeSection, currentUser, isInvestorView }) => {
       try {
         await deleteDoc(doc(db, "adjustments", id))
         setAdjustments((prev) => prev.filter((a) => a.id !== id))
-        // Clear saved analysis when data changes
         setSavedAnalysis("")
       } catch (error) {
         console.error("Error deleting adjustment:", error)
@@ -5458,16 +5830,26 @@ const ChangeAdaptability = ({ activeSection, currentUser, isInvestorView }) => {
       return
     }
 
+    setUploading(true)
+
     try {
+      let fileData = null
+      if (newPivot.file) {
+        fileData = await handleFileUpload(newPivot.file, 'pivots')
+      }
+
       const pivotWithUser = {
         date: newPivot.date,
         from: newPivot.from,
         to: newPivot.to,
         reason: newPivot.reason,
-        documentName: newPivot.documentName,
+        fileName: fileData?.fileName || newPivot.fileName,
+        fileUrl: fileData?.fileUrl || "",
+        storagePath: fileData?.storagePath || "",
         userId: currentUser.uid,
         createdAt: new Date().toISOString(),
       }
+
       const docRef = await addDoc(collection(db, "pivots"), pivotWithUser)
       setPivots((prev) => [...prev, { id: docRef.id, ...pivotWithUser }])
       setShowPivotModal(false)
@@ -5476,14 +5858,78 @@ const ChangeAdaptability = ({ activeSection, currentUser, isInvestorView }) => {
         from: "", 
         to: "", 
         reason: "",
-        document: null,
-        documentName: ""
+        file: null,
+        fileName: ""
       })
-      // Clear saved analysis when data changes
       setSavedAnalysis("")
+      setUploading(false)
     } catch (error) {
       console.error("Error adding pivot:", error)
       alert("Error adding pivot. Please try again.")
+      setUploading(false)
+    }
+  }
+
+  const handleEditPivot = (pivot) => {
+    if (isInvestorView) {
+      alert("You are in view-only mode and cannot make changes.")
+      return
+    }
+    setEditingPivot(pivot)
+    setNewPivot({
+      date: pivot.date || "",
+      from: pivot.from || "",
+      to: pivot.to || "",
+      reason: pivot.reason || "",
+      file: null,
+      fileName: pivot.fileName || ""
+    })
+    setShowPivotModal(true)
+  }
+
+  const handleUpdatePivot = async () => {
+    if (isInvestorView) {
+      alert("You are in view-only mode and cannot make changes.")
+      return
+    }
+
+    if (!currentUser || !editingPivot) return
+
+    setUploading(true)
+
+    try {
+      let fileData = null
+      if (newPivot.file) {
+        fileData = await handleFileUpload(newPivot.file, 'pivots')
+      }
+
+      const pivotRef = doc(db, "pivots", editingPivot.id)
+      const updatedPivot = {
+        date: newPivot.date,
+        from: newPivot.from,
+        to: newPivot.to,
+        reason: newPivot.reason,
+        fileName: fileData?.fileName || newPivot.fileName,
+        fileUrl: fileData?.fileUrl || editingPivot.fileUrl || "",
+        storagePath: fileData?.storagePath || editingPivot.storagePath || "",
+        updatedAt: new Date().toISOString()
+      }
+      
+      await updateDoc(pivotRef, updatedPivot)
+      
+      setPivots((prev) =>
+        prev.map((p) => (p.id === editingPivot.id ? { ...p, ...updatedPivot } : p))
+      )
+      
+      setShowPivotModal(false)
+      setEditingPivot(null)
+      setNewPivot({ date: "", from: "", to: "", reason: "", file: null, fileName: "" })
+      setSavedAnalysis("")
+      setUploading(false)
+    } catch (error) {
+      console.error("Error updating pivot:", error)
+      alert("Error updating pivot. Please try again.")
+      setUploading(false)
     }
   }
 
@@ -5493,7 +5939,6 @@ const ChangeAdaptability = ({ activeSection, currentUser, isInvestorView }) => {
       try {
         await deleteDoc(doc(db, "pivots", id))
         setPivots((prev) => prev.filter((p) => p.id !== id))
-        // Clear saved analysis when data changes
         setSavedAnalysis("")
       } catch (error) {
         console.error("Error deleting pivot:", error)
@@ -5501,20 +5946,20 @@ const ChangeAdaptability = ({ activeSection, currentUser, isInvestorView }) => {
     }
   }
 
-  const handleFileUpload = (e, type) => {
+  const handleFileSelect = (e, type) => {
     const file = e.target.files[0]
     if (file) {
       if (type === 'adjustment') {
         setNewAdjustment(prev => ({
           ...prev,
-          document: file,
-          documentName: file.name
+          file: file,
+          fileName: file.name
         }))
       } else if (type === 'pivot') {
         setNewPivot(prev => ({
           ...prev,
-          document: file,
-          documentName: file.name
+          file: file,
+          fileName: file.name
         }))
       }
     }
@@ -5541,12 +5986,12 @@ const ChangeAdaptability = ({ activeSection, currentUser, isInvestorView }) => {
 
     // Calculate adjustment metrics
     const totalAdjustments = adjustments.length
-    const adjustmentsWithDocs = adjustments.filter(a => a.documentName).length
+    const adjustmentsWithDocs = adjustments.filter(a => a.fileUrl).length
     const adjustmentsWithReason = adjustments.filter(a => a.reason && a.reason.trim() !== "").length
     
     // Calculate pivot metrics
     const totalPivots = pivots.length
-    const pivotsWithDocs = pivots.filter(p => p.documentName).length
+    const pivotsWithDocs = pivots.filter(p => p.fileUrl).length
     const pivotsWithReason = pivots.filter(p => p.reason && p.reason.trim() !== "").length
     
     // Calculate adaptation velocity (adjustments + pivots per month)
@@ -5907,7 +6352,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
       />
 
       {/* Month/Year Filter */}
-      <div style={{ display: "flex", gap: "10px", marginBottom: "20px", alignItems: "center" }}>
+      <div style={{ display: "flex", gap: "10px", marginBottom: "20px", alignItems: "center", flexWrap: "wrap" }}>
         <label style={{ color: "#4a352f", fontWeight: "500" }}>Filter by:</label>
         <select
           value={selectedMonth}
@@ -5992,7 +6437,11 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
           <h3 style={{ color: "#5d4037", margin: 0 }}>Strategy Review Calendar</h3>
           {!isInvestorView && (
             <button
-              onClick={() => setShowReviewModal(true)}
+              onClick={() => {
+                setEditingReview(null)
+                setNewReview({ date: "", topic: "", status: "Not Done", notes: "" })
+                setShowReviewModal(true)
+              }}
               style={{
                 padding: "8px 16px",
                 backgroundColor: "#7d5a50",
@@ -6029,7 +6478,15 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
               </tr>
             </thead>
             <tbody>
-              {reviewData.map((review) => (
+              {reviewData
+                .filter(review => {
+                  if (!selectedMonth && !selectedYear) return true
+                  const reviewDate = new Date(review.date)
+                  const monthMatch = !selectedMonth || (reviewDate.getMonth() + 1) === parseInt(selectedMonth)
+                  const yearMatch = !selectedYear || reviewDate.getFullYear() === parseInt(selectedYear)
+                  return monthMatch && yearMatch
+                })
+                .map((review) => (
                 <tr key={review.id} style={{ borderBottom: "1px solid #e6d7c3" }}>
                   <td style={{ padding: "12px" }}>{review.date}</td>
                   <td style={{ padding: "12px" }}>{review.topic}</td>
@@ -6049,6 +6506,21 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                   <td style={{ padding: "12px", maxWidth: "300px" }}>{review.notes}</td>
                   {!isInvestorView && (
                     <td style={{ padding: "12px", display: "flex", gap: "5px" }}>
+                      <button
+                        onClick={() => handleEditReview(review)}
+                        style={{
+                          padding: "6px",
+                          backgroundColor: "transparent",
+                          color: "#7d5a50",
+                          border: "none",
+                          borderRadius: "4px",
+                          cursor: "pointer",
+                          fontSize: "16px",
+                        }}
+                        title="Edit"
+                      >
+                        ✏️
+                      </button>
                       <button
                         onClick={() => handleDeleteReview(review.id)}
                         style={{
@@ -6093,19 +6565,24 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
           <h3 style={{ color: "#5d4037", margin: 0 }}>Adjustments Documented</h3>
           {!isInvestorView && (
             <button
-              onClick={() => setShowAdjustmentModal(true)}
+              onClick={() => {
+                setEditingAdjustment(null)
+                setNewAdjustment({ date: "", description: "", reason: "", file: null, fileName: "" })
+                setShowAdjustmentModal(true)
+              }}
+              disabled={uploading}
               style={{
                 padding: "8px 16px",
-                backgroundColor: "#7d5a50",
+                backgroundColor: uploading ? "#a1887f" : "#7d5a50",
                 color: "white",
                 border: "none",
                 borderRadius: "4px",
-                cursor: "pointer",
+                cursor: uploading ? "not-allowed" : "pointer",
                 fontWeight: "500",
                 fontSize: "12px",
               }}
             >
-              Add Adjustment
+              {uploading ? "Uploading..." : "Add Adjustment"}
             </button>
           )}
         </div>
@@ -6138,24 +6615,43 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                     <td style={{ padding: "12px", maxWidth: "300px" }}>{adjustment.description}</td>
                     <td style={{ padding: "12px", maxWidth: "300px" }}>{adjustment.reason}</td>
                     <td style={{ padding: "12px" }}>
-                      {adjustment.documentName && (
+                      {adjustment.fileUrl ? (
                         <a
-                          href="#"
-                          onClick={(e) => {
-                            e.preventDefault()
-                            alert(`Downloading: ${adjustment.documentName}`)
-                          }}
+                          href={adjustment.fileUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
                           style={{
                             color: "#7d5a50",
                             textDecoration: "underline",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "5px",
                           }}
                         >
-                          📄 {adjustment.documentName}
+                          <FaDownload size={12} />
+                          {adjustment.fileName || "Download"}
                         </a>
-                      )}
+                      ) : adjustment.fileName ? (
+                        <span style={{ color: "#8d6e63" }}>📄 {adjustment.fileName}</span>
+                      ) : null}
                     </td>
                     {!isInvestorView && (
                       <td style={{ padding: "12px", display: "flex", gap: "5px" }}>
+                        <button
+                          onClick={() => handleEditAdjustment(adjustment)}
+                          style={{
+                            padding: "6px",
+                            backgroundColor: "transparent",
+                            color: "#7d5a50",
+                            border: "none",
+                            borderRadius: "4px",
+                            cursor: "pointer",
+                            fontSize: "16px",
+                          }}
+                          title="Edit"
+                        >
+                          ✏️
+                        </button>
                         <button
                           onClick={() => handleDeleteAdjustment(adjustment.id)}
                           style={{
@@ -6201,19 +6697,24 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
           <h3 style={{ color: "#5d4037", margin: 0 }}>Pivot History Documented</h3>
           {!isInvestorView && (
             <button
-              onClick={() => setShowPivotModal(true)}
+              onClick={() => {
+                setEditingPivot(null)
+                setNewPivot({ date: "", from: "", to: "", reason: "", file: null, fileName: "" })
+                setShowPivotModal(true)
+              }}
+              disabled={uploading}
               style={{
                 padding: "8px 16px",
-                backgroundColor: "#7d5a50",
+                backgroundColor: uploading ? "#a1887f" : "#7d5a50",
                 color: "white",
                 border: "none",
                 borderRadius: "4px",
-                cursor: "pointer",
+                cursor: uploading ? "not-allowed" : "pointer",
                 fontWeight: "500",
                 fontSize: "12px",
               }}
             >
-              Add Pivot
+              {uploading ? "Uploading..." : "Add Pivot"}
             </button>
           )}
         </div>
@@ -6248,24 +6749,43 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                     <td style={{ padding: "12px", maxWidth: "200px" }}>{pivot.to}</td>
                     <td style={{ padding: "12px", maxWidth: "300px" }}>{pivot.reason}</td>
                     <td style={{ padding: "12px" }}>
-                      {pivot.documentName && (
+                      {pivot.fileUrl ? (
                         <a
-                          href="#"
-                          onClick={(e) => {
-                            e.preventDefault()
-                            alert(`Downloading: ${pivot.documentName}`)
-                          }}
+                          href={pivot.fileUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
                           style={{
                             color: "#7d5a50",
                             textDecoration: "underline",
+                            display: "flex",
+                            alignItems: "center",
+                            gap: "5px",
                           }}
                         >
-                          📄 {pivot.documentName}
+                          <FaDownload size={12} />
+                          {pivot.fileName || "Download"}
                         </a>
-                      )}
+                      ) : pivot.fileName ? (
+                        <span style={{ color: "#8d6e63" }}>📄 {pivot.fileName}</span>
+                      ) : null}
                     </td>
                     {!isInvestorView && (
                       <td style={{ padding: "12px", display: "flex", gap: "5px" }}>
+                        <button
+                          onClick={() => handleEditPivot(pivot)}
+                          style={{
+                            padding: "6px",
+                            backgroundColor: "transparent",
+                            color: "#7d5a50",
+                            border: "none",
+                            borderRadius: "4px",
+                            cursor: "pointer",
+                            fontSize: "16px",
+                          }}
+                          title="Edit"
+                        >
+                          ✏️
+                        </button>
                         <button
                           onClick={() => handleDeletePivot(pivot.id)}
                           style={{
@@ -6488,7 +7008,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
         )}
       </div>
 
-      {/* Modals */}
+      {/* Review Modal */}
       {showReviewModal && !isInvestorView && (
         <div
           style={{
@@ -6513,7 +7033,9 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
               maxWidth: "500px",
             }}
           >
-            <h3 style={{ color: "#5d4037", marginTop: 0 }}>Add Strategy Review</h3>
+            <h3 style={{ color: "#5d4037", marginTop: 0 }}>
+              {editingReview ? "Edit Strategy Review" : "Add Strategy Review"}
+            </h3>
             <input
               type="date"
               value={newReview.date}
@@ -6576,7 +7098,11 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
             />
             <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
               <button
-                onClick={() => setShowReviewModal(false)}
+                onClick={() => {
+                  setShowReviewModal(false)
+                  setEditingReview(null)
+                  setNewReview({ date: "", topic: "", status: "Not Done", notes: "" })
+                }}
                 style={{
                   padding: "10px 20px",
                   backgroundColor: "#e6d7c3",
@@ -6590,7 +7116,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                 Cancel
               </button>
               <button
-                onClick={handleAddReview}
+                onClick={editingReview ? handleUpdateReview : handleAddReview}
                 style={{
                   padding: "10px 20px",
                   backgroundColor: "#7d5a50",
@@ -6601,13 +7127,14 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                   fontWeight: "500",
                 }}
               >
-                Add Review
+                {editingReview ? "Update Review" : "Add Review"}
               </button>
             </div>
           </div>
         </div>
       )}
 
+      {/* Adjustment Modal */}
       {showAdjustmentModal && !isInvestorView && (
         <div
           style={{
@@ -6632,7 +7159,9 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
               maxWidth: "500px",
             }}
           >
-            <h3 style={{ color: "#5d4037", marginTop: 0 }}>Add Adjustment</h3>
+            <h3 style={{ color: "#5d4037", marginTop: 0 }}>
+              {editingAdjustment ? "Edit Adjustment" : "Add Adjustment"}
+            </h3>
             <input
               type="date"
               value={newAdjustment.date}
@@ -6685,7 +7214,8 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
               </label>
               <input
                 type="file"
-                onChange={(e) => handleFileUpload(e, 'adjustment')}
+                onChange={(e) => handleFileSelect(e, 'adjustment')}
+                disabled={uploading}
                 style={{
                   width: "100%",
                   padding: "10px",
@@ -6694,15 +7224,19 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                   fontSize: "14px",
                 }}
               />
-              {newAdjustment.documentName && (
+              {newAdjustment.fileName && (
                 <p style={{ color: "#7d5a50", fontSize: "12px", marginTop: "5px" }}>
-                  Selected: {newAdjustment.documentName}
+                  Selected: {newAdjustment.fileName}
                 </p>
               )}
             </div>
             <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
               <button
-                onClick={() => setShowAdjustmentModal(false)}
+                onClick={() => {
+                  setShowAdjustmentModal(false)
+                  setEditingAdjustment(null)
+                  setNewAdjustment({ date: "", description: "", reason: "", file: null, fileName: "" })
+                }}
                 style={{
                   padding: "10px 20px",
                   backgroundColor: "#e6d7c3",
@@ -6716,24 +7250,26 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                 Cancel
               </button>
               <button
-                onClick={handleAddAdjustment}
+                onClick={editingAdjustment ? handleUpdateAdjustment : handleAddAdjustment}
+                disabled={uploading}
                 style={{
                   padding: "10px 20px",
-                  backgroundColor: "#7d5a50",
+                  backgroundColor: uploading ? "#a1887f" : "#7d5a50",
                   color: "white",
                   border: "none",
                   borderRadius: "4px",
-                  cursor: "pointer",
+                  cursor: uploading ? "not-allowed" : "pointer",
                   fontWeight: "500",
                 }}
               >
-                Add Adjustment
+                {uploading ? "Uploading..." : (editingAdjustment ? "Update Adjustment" : "Add Adjustment")}
               </button>
             </div>
           </div>
         </div>
       )}
 
+      {/* Pivot Modal */}
       {showPivotModal && !isInvestorView && (
         <div
           style={{
@@ -6758,7 +7294,9 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
               maxWidth: "500px",
             }}
           >
-            <h3 style={{ color: "#5d4037", marginTop: 0 }}>Add Pivot</h3>
+            <h3 style={{ color: "#5d4037", marginTop: 0 }}>
+              {editingPivot ? "Edit Pivot" : "Add Pivot"}
+            </h3>
             <input
               type="date"
               value={newPivot.date}
@@ -6827,7 +7365,8 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
               </label>
               <input
                 type="file"
-                onChange={(e) => handleFileUpload(e, 'pivot')}
+                onChange={(e) => handleFileSelect(e, 'pivot')}
+                disabled={uploading}
                 style={{
                   width: "100%",
                   padding: "10px",
@@ -6836,15 +7375,19 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                   fontSize: "14px",
                 }}
               />
-              {newPivot.documentName && (
+              {newPivot.fileName && (
                 <p style={{ color: "#7d5a50", fontSize: "12px", marginTop: "5px" }}>
-                  Selected: {newPivot.documentName}
+                  Selected: {newPivot.fileName}
                 </p>
               )}
             </div>
             <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
               <button
-                onClick={() => setShowPivotModal(false)}
+                onClick={() => {
+                  setShowPivotModal(false)
+                  setEditingPivot(null)
+                  setNewPivot({ date: "", from: "", to: "", reason: "", file: null, fileName: "" })
+                }}
                 style={{
                   padding: "10px 20px",
                   backgroundColor: "#e6d7c3",
@@ -6858,18 +7401,19 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                 Cancel
               </button>
               <button
-                onClick={handleAddPivot}
+                onClick={editingPivot ? handleUpdatePivot : handleAddPivot}
+                disabled={uploading}
                 style={{
                   padding: "10px 20px",
-                  backgroundColor: "#7d5a50",
+                  backgroundColor: uploading ? "#a1887f" : "#7d5a50",
                   color: "white",
                   border: "none",
                   borderRadius: "4px",
-                  cursor: "pointer",
+                  cursor: uploading ? "not-allowed" : "pointer",
                   fontWeight: "500",
                 }}
               >
-                Add Pivot
+                {uploading ? "Uploading..." : (editingPivot ? "Update Pivot" : "Add Pivot")}
               </button>
             </div>
           </div>
@@ -7138,6 +7682,5 @@ const Strategy = () => {
     </div>
   )
 }
-
 
 export default Strategy
