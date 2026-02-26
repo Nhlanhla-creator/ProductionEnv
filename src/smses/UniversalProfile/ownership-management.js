@@ -291,11 +291,8 @@ const handleDeleteCV = async (type, index) => {
       return;
     }
 
-    // Get registered name for validation
-    const registeredName = await getRegisteredName();
-
-    // ✅ RUN AI VALIDATION
-    const validationResult = await validateDocument('CV', file, registeredName);
+    // ✅ RUN AI VALIDATION - NO COMPANY NAME CHECK FOR CVs
+    const validationResult = await validateDocument('CV', file, ""); // Pass empty string for registered name
     
     if (!validationResult.isValid) {
       alert(`Validation failed: ${validationResult.message}`);
@@ -402,11 +399,10 @@ const handleExecutiveCVUpload = async (index, file) => {
       return;
     }
 
-    // Get registered name for validation
-    const registeredName = await getRegisteredName();
+ 
 
     // ✅ RUN AI VALIDATION
-    const validationResult = await validateDocument('CV', file, registeredName);
+    const validationResult = await validateDocument('CV', file);
     
     if (!validationResult.isValid) {
       alert(`Validation failed: ${validationResult.message}`);
@@ -496,30 +492,6 @@ const handleExecutiveCVUpload = async (index, file) => {
   }
 };
 
-const getRegisteredName = async () => {
-  const user = auth.currentUser;
-  
-  if (!user) {
-    console.log("❌ No user found");
-    return "";
-  }
-
-  try {
-    const profileRef = doc(db, "universalProfiles", user.uid);
-    const profileSnap = await getDoc(profileRef);
-    
-    if (profileSnap.exists()) {
-      const data = profileSnap.data();
-      const registeredName = data.entityOverview?.registeredName;
-      return registeredName || "";
-    } else {
-      return "";
-    }
-  } catch (error) {
-    console.error("❌ Error fetching registeredName:", error);
-    return "";
-  }
-};
 
   // Data loading
   useEffect(() => {

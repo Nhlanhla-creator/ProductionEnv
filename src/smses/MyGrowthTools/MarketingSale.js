@@ -358,6 +358,9 @@ const TrendModal = ({ isOpen, onClose, title, data, labels, isPercentage }) => {
               responsive: true,
               maintainAspectRatio: false,
               plugins: {
+                 datalabels: {
+      display: false // This disables datalabels for this specific chart
+    },
                 legend: { 
                   display: true,
                   position: "top",
@@ -3056,6 +3059,9 @@ const RevenueConcentration = ({ activeSection, currentUser, isInvestorView, onAd
               responsive: true,
               maintainAspectRatio: false,
               plugins: {
+                 datalabels: {
+      display: false // This disables datalabels for this specific chart
+    },
                 legend: { display: chartType === "channel" },
                 tooltip: {
                   callbacks: {
@@ -3671,6 +3677,9 @@ const DemandSustainability = ({ activeSection, currentUser, isInvestorView, onAd
               responsive: true,
               maintainAspectRatio: false,
               plugins: {
+                 datalabels: {
+      display: false // This disables datalabels for this specific chart
+    },
                 legend: { display: false },
                 tooltip: {
                   callbacks: {
