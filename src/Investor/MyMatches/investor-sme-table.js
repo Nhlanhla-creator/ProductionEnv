@@ -5581,7 +5581,7 @@ const handleNextStageChange = (sme) => {
         />
       )}
 
-      <style jsx>{`
+      <style>{`
         @keyframes fadeIn {
           from {
             opacity: 0;

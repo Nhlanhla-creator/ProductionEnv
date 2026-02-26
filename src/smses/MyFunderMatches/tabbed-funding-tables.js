@@ -859,7 +859,7 @@ const TabbedFundingTables = ({
       </div>
 
       {/* Enhanced styling for tab transitions */}
-      <style jsx>{`
+      <style>{`
         @keyframes fadeIn {
           from { 
             opacity: 0; 

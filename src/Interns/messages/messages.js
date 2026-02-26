@@ -578,7 +578,7 @@ const Messages = () => {
         </div>
       </div>
 
-      <style jsx>{`
+      <style>{`
         .messages-page {
           transition: margin-left 0.3s ease;
         }

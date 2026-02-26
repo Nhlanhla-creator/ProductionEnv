@@ -407,7 +407,7 @@ const Header = ({ onLoginClick }) => {
       </div>
 
       {/* Enhanced CSS Styles */}
-      <style jsx>{`
+      <style>{`
         .nav-button {
           background-color: #5D432C;
           color: white;

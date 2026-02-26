@@ -1409,7 +1409,7 @@ const SuccessfulInternshipsTable = ({ refreshCount }) => {
       onClose={() => setShowSmsRatingModal(false)}
     />
 
-      <style jsx>{`
+      <style>{`
         @keyframes fadeIn {
           from { opacity: 0; }
           to { opacity: 1; }
@@ -1592,7 +1592,7 @@ const InternTabbedTables = ({ filters, stageFilter, loading, matchesCount }) => 
       </div>
 
       {/* Enhanced styling for tab transitions */}
-      <style jsx>{`
+      <style>{`
         @keyframes fadeIn {
           from { 
             opacity: 0; 

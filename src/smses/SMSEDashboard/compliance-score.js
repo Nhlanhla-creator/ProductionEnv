@@ -505,7 +505,7 @@ export function ComplianceScoreCard({ styles, profileData, onScoreUpdate }) {
         </div>
 
         {/* CSS Animations */}
-        <style jsx>{`
+        <style>{`
           @keyframes pulse {
             0% {
               transform: scale(1);

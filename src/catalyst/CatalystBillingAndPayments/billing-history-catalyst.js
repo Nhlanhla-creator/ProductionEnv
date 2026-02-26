@@ -870,7 +870,7 @@ const BillingHistoryCatalyst = ({
 
   return (
     <div style={{ minHeight: "100vh", backgroundColor: colors.offWhite }}>
-      <style jsx>{`
+      <style>{`
         @keyframes spin {
           0% {
             transform: rotate(0deg);

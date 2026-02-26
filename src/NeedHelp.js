@@ -422,7 +422,7 @@ const NeedHelp = ({ disabled }) => {
       )}
 
       {/* CSS for spinner animation */}
-      <style jsx>{`
+      <style>{`
         @keyframes spin {
           to { transform: rotate(360deg); }
         }

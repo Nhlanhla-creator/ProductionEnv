@@ -1939,7 +1939,7 @@ useEffect(() => {
       </div>
 
       {/* Additional CSS for responsive design - UPDATED for 5 cards */}
-      <style jsx>{`
+      <style>{`
         /* Prevent body scroll when modal is open */
         body.modal-open {
           overflow: hidden;

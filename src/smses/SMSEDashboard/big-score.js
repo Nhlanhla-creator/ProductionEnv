@@ -579,7 +579,7 @@ useEffect(() => {
           </div>
         </div>
 
-        <style jsx>{`
+        <style>{`
           @keyframes pulse {
             0% {
               transform: scale(1);
@@ -1686,7 +1686,7 @@ useEffect(() => {
   </div>
 )}
 
-      <style jsx>{`
+      <style>{`
         @keyframes spin {
           to {
             transform: rotate(360deg);

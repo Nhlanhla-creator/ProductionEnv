@@ -1054,7 +1054,7 @@ const SupplierTabbedTables = ({
         {activeTab === "successful-deals" && <SuccessfulSupplierDealsTable acceptedSuppliers={acceptedSuppliers} />}
       </div>
 
-      <style jsx>{`
+      <style>{`
         @keyframes fadeIn {
           from { 
             opacity: 0; 

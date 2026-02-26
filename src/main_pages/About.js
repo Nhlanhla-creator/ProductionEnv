@@ -104,7 +104,7 @@ const AboutPage = () => {
       <Footer />
 
       {/* CSS Styles */}
-      <style jsx>{`
+      <style>{`
         .about-page {
           display: flex;
           flex-direction: column;

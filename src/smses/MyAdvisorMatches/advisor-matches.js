@@ -377,7 +377,7 @@ export default function SupportProgramsPage() {
   return (
     <div style={getContainerStyles()} className={styles.pageContainer}>
       {/* Global styles for consistent headers and animations */}
-      <style jsx>{`
+      <style>{`
         :global(.${styles.sectionCard} h1),
         :global(.${styles.sectionCard} h2),
         :global(.${styles.sectionCard} h3),

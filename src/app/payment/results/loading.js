@@ -51,7 +51,7 @@ export default function Loading() {
         <p style={{ color: "#6b7280" }}>Please wait while we process your payment result.</p>
       </div>
 
-      <style jsx>{`
+      <style>{`
         @keyframes spin {
           0% { transform: rotate(0deg); }
           100% { transform: rotate(360deg); }

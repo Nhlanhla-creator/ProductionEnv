@@ -523,7 +523,7 @@ const GrowthToolsAdmin = () => {
       <div className="growth-tools-loading">
         <div className="spinner"></div>
         <p>Loading purchases...</p>
-        <style jsx>{`
+        <style>{`
           .growth-tools-loading {
             padding: 2rem;
             width: 100%;

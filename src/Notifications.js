@@ -231,7 +231,7 @@ const Notifications = () => {
         </div>
       )}
 
-      <style jsx>{`
+      <style>{`
         .notifications-container {
           position: relative;
           display: inline-block;
