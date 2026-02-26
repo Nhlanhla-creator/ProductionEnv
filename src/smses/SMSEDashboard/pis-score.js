@@ -178,12 +178,13 @@ export function PISScoreCard({ styles, profileData, onScoreUpdate, apiKey }) {
 
     // --- Governance Score ---
     let govScore = 0;
-    const govRegexes = [
-      /(?:Overall\s*)?Governance\s*Score\s*[:\-–—]?\s*([\d.]+)\s*%/i,
-      /Governance\s*:\s*([\d.]+)\s*%/i,
-      /Overall Score = .*?([\d.]+)%/i,
-      /Governance Score:.*?([\d.]+)%/i, // Added this pattern
-    ];
+  const govRegexes = [
+  /Overall Governance Score\s*=.*?=\s*([\d.]+)\s*%/i,   
+  /(?:Overall\s*)?Governance\s*Score\s*[:\-–—]?\s*([\d.]+)\s*%/i,
+  /Governance\s*:\s*([\d.]+)\s*%/i,
+  /Overall Score = .*?([\d.]+)%/i,
+  /Governance Score:.*?([\d.]+)%/i,
+];
     for (const rx of govRegexes) {
       const m = cleaned.match(rx);
       if (m) {
@@ -326,7 +327,7 @@ export function PISScoreCard({ styles, profileData, onScoreUpdate, apiKey }) {
 
     return {
       pis,
-      govScore: govScore || 50, // Default to 50 if no score found
+      govScore: govScore || 0, // Default to 50 if no score found
       stage: stage || "Advisors Stage",
       recommendation: recommendation || "Advisors sufficient",
       breakdown,
