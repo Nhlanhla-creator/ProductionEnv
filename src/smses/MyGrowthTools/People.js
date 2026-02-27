@@ -244,17 +244,33 @@ const KeyQuestionBox = ({ question, signals, decisions, section }) => {
 
 // ==================== TREND MODAL COMPONENT ====================
 
-const TrendModal = ({ isOpen, onClose, item, currencyUnit, generateLabels, aggregateDataForView, formatValue }) => {
+const TrendModal = ({ isOpen, onClose, item, currencyUnit, formatValue }) => {
   if (!isOpen || !item) return null
 
-  const labels = generateLabels()
+  // Generate labels with month and year (last 11 months + current month)
+  const currentDate = new Date()
+  const currentMonth = currentDate.getMonth()
+  const currentYear = currentDate.getFullYear()
   
+  const labels = []
+  for (let i = 11; i >= 0; i--) {
+    const date = new Date(currentYear, currentMonth - i, 1)
+    const month = date.toLocaleString('default', { month: 'short' })
+    const year = date.getFullYear()
+    labels.push(`${month} ${year}`)
+  }
+
+  // Ensure we have 12 data points (fill with zeros if needed)
+  const actualData = [...(item.actual || [])]
+  while (actualData.length < 12) actualData.unshift(0)
+  const last12Months = actualData.slice(-12)
+
   const chartData = {
     labels,
     datasets: [
       {
         label: `${item.name} - Actual`,
-        data: aggregateDataForView ? aggregateDataForView(item.actual) : item.actual,
+        data: last12Months,
         borderColor: "#5d4037",
         backgroundColor: "rgba(93, 64, 55, 0.1)",
         borderWidth: 3,
@@ -263,27 +279,15 @@ const TrendModal = ({ isOpen, onClose, item, currencyUnit, generateLabels, aggre
       },
     ]
   }
-  
-  if (item.budget && Array.isArray(item.budget) && item.budget.some(v => parseFloat(v) !== 0)) {
-    chartData.datasets.push({
-      label: `${item.name} - Budget`,
-      data: aggregateDataForView ? aggregateDataForView(item.budget) : item.budget,
-      borderColor: "#f9a825",
-      backgroundColor: "rgba(249, 168, 37, 0.1)",
-      borderWidth: 2,
-      borderDash: [5, 5],
-      fill: false,
-      tension: 0.3,
-    })
-  }
 
   // Calculate statistics
-  const actualData = item.actual || []
-  const validActualData = actualData.filter(v => !isNaN(parseFloat(v)) && parseFloat(v) !== 0)
+  const validActualData = last12Months.filter(v => !isNaN(parseFloat(v)) && parseFloat(v) !== 0)
   const currentValue = validActualData.length > 0 ? validActualData[validActualData.length - 1] : 0
   const averageValue = validActualData.length > 0 
     ? validActualData.reduce((a, b) => a + parseFloat(b), 0) / validActualData.length 
     : 0
+  const minValue = validActualData.length > 0 ? Math.min(...validActualData) : 0
+  const maxValue = validActualData.length > 0 ? Math.max(...validActualData) : 0
   
   let trend = "N/A"
   if (validActualData.length >= 2) {
@@ -321,7 +325,7 @@ const TrendModal = ({ isOpen, onClose, item, currencyUnit, generateLabels, aggre
         }}
       >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-          <h3 style={{ color: "#5d4037", margin: 0 }}>{item.name} - Trend Analysis</h3>
+          <h3 style={{ color: "#5d4037", margin: 0 }}>{item.name} - Trend Analysis (Last 12 Months)</h3>
           <button
             onClick={onClose}
             style={{
@@ -345,9 +349,9 @@ const TrendModal = ({ isOpen, onClose, item, currencyUnit, generateLabels, aggre
               responsive: true,
               maintainAspectRatio: false,
               plugins: {
-                 datalabels: {
-      display: false // This disables datalabels for this specific chart
-    },
+                datalabels: {
+                  display: false
+                },
                 legend: { 
                   display: true,
                   position: "top",
@@ -404,7 +408,7 @@ const TrendModal = ({ isOpen, onClose, item, currencyUnit, generateLabels, aggre
               </div>
             </div>
             <div>
-              <div style={{ fontSize: "12px", color: "#8d6e63", marginBottom: "5px" }}>Average</div>
+              <div style={{ fontSize: "12px", color: "#8d6e63", marginBottom: "5px" }}>Average (12 Months)</div>
               <div style={{ fontSize: "16px", fontWeight: "600", color: "#5d4037" }}>
                 {item.isPercentage
                   ? `${parseFloat(averageValue).toFixed(1)}%`
@@ -413,15 +417,18 @@ const TrendModal = ({ isOpen, onClose, item, currencyUnit, generateLabels, aggre
               </div>
             </div>
             <div>
-              <div style={{ fontSize: "12px", color: "#8d6e63", marginBottom: "5px" }}>Trend</div>
-              <div style={{ fontSize: "16px", fontWeight: "600", color: "#5d4037" }}>
-                {trend}
+              <div style={{ fontSize: "12px", color: "#8d6e63", marginBottom: "5px" }}>Min / Max</div>
+              <div style={{ fontSize: "14px", fontWeight: "600", color: "#5d4037" }}>
+                {item.isPercentage
+                  ? `${parseFloat(minValue).toFixed(1)}% / ${parseFloat(maxValue).toFixed(1)}%`
+                  : `${formatValue ? formatValue(minValue, currencyUnit) : minValue} / ${formatValue ? formatValue(maxValue, currencyUnit) : maxValue}`
+                }
               </div>
             </div>
             <div>
-              <div style={{ fontSize: "12px", color: "#8d6e63", marginBottom: "5px" }}>Data Points</div>
+              <div style={{ fontSize: "12px", color: "#8d6e63", marginBottom: "5px" }}>Trend</div>
               <div style={{ fontSize: "16px", fontWeight: "600", color: "#5d4037" }}>
-                {validActualData.length}
+                {trend}
               </div>
             </div>
           </div>
@@ -533,18 +540,12 @@ const UnifiedDataEntryModal = ({
     customReason: "",
     count: ""
   })
-  const [employeeData, setEmployeeData] = useState({
-    gender: { male: 60, female: 35, other: 5 },
-    race: { african: 40, white: 30, colored: 15, indian: 10, other: 5 },
-    age: { under25: 15, "25-34": 30, "35-44": 25, "45-54": 20, "55+": 10 },
-    tenure: { under1: 20, "1-3": 35, "3-5": 25, "5-10": 15, "10+": 5 },
-    education: { highSchool: 20, diploma: 25, degree: 40, postgraduate: 15 },
-  })
-  const [financialData, setFinancialData] = useState({
-    revenue: Array(12).fill(0),
-    laborCost: Array(12).fill(0),
-    employeeCount: Array(12).fill(0),
-    trainingSpend: Array(12).fill(0)
+  const [newHireEntries, setNewHireEntries] = useState([])
+  const [newHireForm, setNewHireForm] = useState({
+    name: "",
+    dateStarted: "",
+    contractType: "Permanent",
+    endDate: ""
   })
 
   const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
@@ -553,14 +554,17 @@ const UnifiedDataEntryModal = ({
 
   // Predefined reasons for terminations
   const predefinedReasons = ["Performance", "Resignation", "Redundancy", "Misconduct", "Retirement", "Other"]
+  
+  // Contract types for new hires
+  const contractTypes = ["Permanent", "Contract", "Internship"]
 
   // Tab structure for the modal
   const modalTabs = [
-    { id: "execution-capacity", label: "Execution Capacity & Scalability" },
+    { id: "employee-composition", label: "Employee Composition" },
+    { id: "execution-capacity", label: "Execution Capacity" },
     { id: "productivity", label: "Productivity" },
     { id: "capability-training", label: "Capability & Training" },
     { id: "stability-continuity", label: "Stability & Continuity" },
-    { id: "employee-composition", label: "Employee Composition" },
   ]
 
   // Fields for each tab
@@ -654,43 +658,8 @@ const UnifiedDataEntryModal = ({
     if (isOpen && user) {
       setActiveModalTab(currentTab)
       loadDataForTab(currentTab)
-      loadFinancialData()
     }
   }, [isOpen, currentTab, user])
-
-  const loadFinancialData = async () => {
-    if (!user) return
-    const data = await pullFinancialData(user.uid)
-    setFinancialData(data)
-    
-    // Auto-calculate derived metrics from financial data
-    if (activeModalTab === "productivity") {
-      // Calculate revenue per employee from financial data
-      const revenuePerEmployee = data.revenue.map((rev, i) => {
-        const empCount = data.employeeCount[i] || 1
-        return rev / empCount
-      })
-      
-      setLocalData(prev => ({
-        ...prev,
-        revenuePerEmployee: revenuePerEmployee.map(v => v.toString())
-      }))
-    }
-    
-    if (activeModalTab === "capability-training") {
-      // Calculate training spend % from financial data
-      const trainingSpendPercentage = data.trainingSpend.map((spend, i) => {
-        const laborCost = data.laborCost[i] || 1
-        return (spend / laborCost) * 100
-      })
-      
-      setCapabilityTrainingData(prev => ({
-        ...prev,
-        trainingSpendAmount: data.trainingSpend.map(v => v.toString()),
-        trainingSpendPercentage: trainingSpendPercentage.map(v => v.toFixed(2).toString())
-      }))
-    }
-  }
 
   const loadDataForTab = async (tabId) => {
     if (!user) return
@@ -736,12 +705,20 @@ const UnifiedDataEntryModal = ({
             const data = termDoc.data()
             if (data.entries) setTerminationEntries(data.entries)
           }
+          
+          const hireDoc = await getDoc(doc(db, "peopleData", `${user.uid}_newHireData`))
+          if (hireDoc.exists()) {
+            const data = hireDoc.data()
+            if (data.entries) setNewHireEntries(data.entries)
+          }
           break
         case "employee-composition":
           const compDoc = await getDoc(doc(db, "peopleData", `${user.uid}_employeeComposition`))
           if (compDoc.exists()) {
             const data = compDoc.data()
-            if (data.employeeData) setEmployeeData(data.employeeData)
+            if (data.employeeData) {
+              setLocalData(data.employeeData)
+            }
           }
           break
       }
@@ -799,11 +776,17 @@ const UnifiedDataEntryModal = ({
             entries: terminationEntries,
             lastUpdated: new Date().toISOString(),
           })
+          
+          await setDoc(doc(db, "peopleData", `${user.uid}_newHireData`), {
+            userId: user.uid,
+            entries: newHireEntries,
+            lastUpdated: new Date().toISOString(),
+          })
           break
         case "employee-composition":
           await setDoc(doc(db, "peopleData", `${user.uid}_employeeComposition`), {
             userId: user.uid,
-            employeeData: employeeData,
+            employeeData: localData,
             lastUpdated: new Date().toISOString(),
           })
           break
@@ -852,6 +835,36 @@ const UnifiedDataEntryModal = ({
 
   const removeTerminationEntry = (id) => {
     setTerminationEntries(terminationEntries.filter(entry => entry.id !== id))
+  }
+
+  const addNewHireEntry = () => {
+    if (!newHireForm.name || !newHireForm.dateStarted || !newHireForm.contractType) {
+      alert("Please enter name, start date, and contract type")
+      return
+    }
+
+    const newEntry = {
+      id: Date.now(),
+      name: newHireForm.name,
+      dateStarted: newHireForm.dateStarted,
+      contractType: newHireForm.contractType,
+      endDate: newHireForm.endDate || null,
+      dateAdded: new Date().toISOString()
+    }
+
+    setNewHireEntries([...newHireEntries, newEntry])
+    
+    // Reset form
+    setNewHireForm({
+      name: "",
+      dateStarted: "",
+      contractType: "Permanent",
+      endDate: ""
+    })
+  }
+
+  const removeNewHireEntry = (id) => {
+    setNewHireEntries(newHireEntries.filter(entry => entry.id !== id))
   }
 
   const addEmployeeTrackingEntry = () => {
@@ -965,30 +978,218 @@ const UnifiedDataEntryModal = ({
               ))}
             </select>
           </div>
-          
-          {/* Show Financial Data Source Notice */}
-          {["productivity", "capability-training"].includes(activeModalTab) && (
-            <div style={{ 
-              padding: "8px 16px", 
-              backgroundColor: "#e8f5e9", 
-              borderRadius: "4px",
-              color: "#2e7d32",
-              fontSize: "13px",
-              display: "flex",
-              alignItems: "center",
-              gap: "8px"
-            }}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#2e7d32" strokeWidth="2">
-                <circle cx="12" cy="12" r="10"></circle>
-                <path d="M12 16v-4M12 8h.01"></path>
-              </svg>
-              Some metrics are automatically pulled from Financial Performance
-            </div>
-          )}
         </div>
 
         {/* Tab Content */}
         <div style={{ marginBottom: "30px" }}>
+          {/* Employee Composition Tab */}
+          {activeModalTab === "employee-composition" && (
+            <div style={{ marginBottom: "30px" }}>
+              <div style={{ marginBottom: "20px", padding: "15px", backgroundColor: "#f5f0eb", borderRadius: "8px" }}>
+                <h4 style={{ color: "#5d4037", marginBottom: "15px" }}>Head Count</h4>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
+                  <div>
+                    <label style={{ display: "block", color: "#5d4037", marginBottom: "5px", fontSize: "13px" }}>
+                      Current Head Count:
+                    </label>
+                    <input
+                      type="number"
+                      value={localData.headCount || 0}
+                      onChange={(e) => setLocalData({...localData, headCount: Number.parseInt(e.target.value) || 0})}
+                      style={{
+                        width: "100%",
+                        padding: "8px",
+                        borderRadius: "4px",
+                        border: "1px solid #e8ddd4",
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: "block", color: "#5d4037", marginBottom: "5px", fontSize: "13px" }}>
+                      Target Head Count:
+                    </label>
+                    <input
+                      type="number"
+                      value={localData.targetHeadCount || 0}
+                      onChange={(e) => setLocalData({...localData, targetHeadCount: Number.parseInt(e.target.value) || 0})}
+                      style={{
+                        width: "100%",
+                        padding: "8px",
+                        borderRadius: "4px",
+                        border: "1px solid #e8ddd4",
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ marginBottom: "20px", padding: "15px", backgroundColor: "#f5f0eb", borderRadius: "8px" }}>
+                <h4 style={{ color: "#5d4037", marginBottom: "15px" }}>Contract Type Distribution</h4>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "20px" }}>
+                  <div>
+                    <label style={{ display: "block", color: "#5d4037", marginBottom: "5px", fontSize: "13px" }}>
+                      Permanent:
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={localData.permanent || 0}
+                      onChange={(e) => setLocalData({...localData, permanent: Number.parseInt(e.target.value) || 0})}
+                      style={{
+                        width: "100%",
+                        padding: "8px",
+                        borderRadius: "4px",
+                        border: "1px solid #e8ddd4",
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: "block", color: "#5d4037", marginBottom: "5px", fontSize: "13px" }}>
+                      Contract:
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={localData.contract || 0}
+                      onChange={(e) => setLocalData({...localData, contract: Number.parseInt(e.target.value) || 0})}
+                      style={{
+                        width: "100%",
+                        padding: "8px",
+                        borderRadius: "4px",
+                        border: "1px solid #e8ddd4",
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: "block", color: "#5d4037", marginBottom: "5px", fontSize: "13px" }}>
+                      Internship:
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={localData.internship || 0}
+                      onChange={(e) => setLocalData({...localData, internship: Number.parseInt(e.target.value) || 0})}
+                      style={{
+                        width: "100%",
+                        padding: "8px",
+                        borderRadius: "4px",
+                        border: "1px solid #e8ddd4",
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ marginBottom: "20px", padding: "15px", backgroundColor: "#f5f0eb", borderRadius: "8px" }}>
+                <h4 style={{ color: "#5d4037", marginBottom: "15px" }}>Occupational Levels</h4>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "20px" }}>
+                  <div>
+                    <label style={{ display: "block", color: "#5d4037", marginBottom: "5px", fontSize: "13px" }}>
+                      Unskilled:
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={localData.unskilled || 0}
+                      onChange={(e) => setLocalData({...localData, unskilled: Number.parseInt(e.target.value) || 0})}
+                      style={{
+                        width: "100%",
+                        padding: "8px",
+                        borderRadius: "4px",
+                        border: "1px solid #e8ddd4",
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: "block", color: "#5d4037", marginBottom: "5px", fontSize: "13px" }}>
+                      Semi-Skilled:
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={localData.semiSkilled || 0}
+                      onChange={(e) => setLocalData({...localData, semiSkilled: Number.parseInt(e.target.value) || 0})}
+                      style={{
+                        width: "100%",
+                        padding: "8px",
+                        borderRadius: "4px",
+                        border: "1px solid #e8ddd4",
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: "block", color: "#5d4037", marginBottom: "5px", fontSize: "13px" }}>
+                      Skilled Jnr:
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={localData.skilledJnr || 0}
+                      onChange={(e) => setLocalData({...localData, skilledJnr: Number.parseInt(e.target.value) || 0})}
+                      style={{
+                        width: "100%",
+                        padding: "8px",
+                        borderRadius: "4px",
+                        border: "1px solid #e8ddd4",
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: "block", color: "#5d4037", marginBottom: "5px", fontSize: "13px" }}>
+                      Prof Mid:
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={localData.profMid || 0}
+                      onChange={(e) => setLocalData({...localData, profMid: Number.parseInt(e.target.value) || 0})}
+                      style={{
+                        width: "100%",
+                        padding: "8px",
+                        borderRadius: "4px",
+                        border: "1px solid #e8ddd4",
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: "block", color: "#5d4037", marginBottom: "5px", fontSize: "13px" }}>
+                      Snr Mgt:
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={localData.snrMgt || 0}
+                      onChange={(e) => setLocalData({...localData, snrMgt: Number.parseInt(e.target.value) || 0})}
+                      style={{
+                        width: "100%",
+                        padding: "8px",
+                        borderRadius: "4px",
+                        border: "1px solid #e8ddd4",
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label style={{ display: "block", color: "#5d4037", marginBottom: "5px", fontSize: "13px" }}>
+                      Top Mgt:
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={localData.topMgt || 0}
+                      onChange={(e) => setLocalData({...localData, topMgt: Number.parseInt(e.target.value) || 0})}
+                      style={{
+                        width: "100%",
+                        padding: "8px",
+                        borderRadius: "4px",
+                        border: "1px solid #e8ddd4",
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Execution Capacity & Productivity Tabs */}
           {["execution-capacity", "productivity", "stability-continuity"].includes(activeModalTab) && tabFields[activeModalTab] && (
             <div style={{ marginBottom: "30px", padding: "15px", backgroundColor: "#f5f0eb", borderRadius: "8px" }}>
@@ -1062,42 +1263,6 @@ const UnifiedDataEntryModal = ({
                   </div>
                 </div>
               ))}
-              
-              {/* Auto-calculated metrics from Financial Data - Read Only */}
-              {activeModalTab === "productivity" && (
-                <div style={{ marginTop: "20px", padding: "15px", backgroundColor: "#e8f5e9", borderRadius: "6px" }}>
-                  <h5 style={{ color: "#2e7d32", marginBottom: "10px", fontSize: "14px" }}>
-                    Auto-calculated from Financial Performance
-                  </h5>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(12, 1fr)", gap: "5px", marginBottom: "10px" }}>
-                    {months.map((month, idx) => (
-                      <div key={month}>
-                        <label style={{ fontSize: "10px", color: "#2e7d32", display: "block", marginBottom: "2px" }}>
-                          {month}
-                        </label>
-                        <input
-                          type="number"
-                          value={localData.revenuePerEmployee?.[idx] || (financialData.revenue && financialData.employeeCount ? 
-                            (financialData.revenue[idx] / (financialData.employeeCount[idx] || 1)).toFixed(2) : "")}
-                          readOnly
-                          style={{
-                            width: "100%",
-                            padding: "6px",
-                            borderRadius: "4px",
-                            border: "1px solid #a5d6a7",
-                            fontSize: "12px",
-                            backgroundColor: "#f1f8e9",
-                            color: "#1e5a1e",
-                          }}
-                        />
-                      </div>
-                    ))}
-                  </div>
-                  <div style={{ fontSize: "12px", color: "#2e7d32" }}>
-                    Revenue per Employee = Revenue ÷ Number of Employees
-                  </div>
-                </div>
-              )}
             </div>
           )}
 
@@ -1108,7 +1273,7 @@ const UnifiedDataEntryModal = ({
               <div style={{ marginBottom: "30px", padding: "15px", backgroundColor: "#f5f0eb", borderRadius: "8px" }}>
                 <h4 style={{ color: "#5d4037", marginBottom: "15px" }}>Training Data - Monthly Values</h4>
                 
-                {/* Training Spend Amount - Auto-populated from Financial */}
+                {/* Training Spend Amount */}
                 <div style={{ marginBottom: "15px" }}>
                   <label
                     style={{
@@ -1119,7 +1284,7 @@ const UnifiedDataEntryModal = ({
                       fontSize: "13px",
                     }}
                   >
-                    Training Spend (R) - From Financial Performance
+                    Training Spend (R)
                   </label>
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(12, 1fr)", gap: "5px" }}>
                     {months.map((month, idx) => (
@@ -1130,7 +1295,7 @@ const UnifiedDataEntryModal = ({
                         <input
                           type="number"
                           step="0.01"
-                          value={capabilityTrainingData.trainingSpendAmount?.[idx] || financialData.trainingSpend?.[idx]?.toString() || ""}
+                          value={capabilityTrainingData.trainingSpendAmount?.[idx] || ""}
                           onChange={(e) => {
                             const newData = { ...capabilityTrainingData }
                             if (!newData.trainingSpendAmount) newData.trainingSpendAmount = Array(12).fill("")
@@ -1147,50 +1312,6 @@ const UnifiedDataEntryModal = ({
                         />
                       </div>
                     ))}
-                  </div>
-                </div>
-                
-                {/* Training Spend Percentage - Auto-calculated */}
-                <div style={{ marginBottom: "15px" }}>
-                  <label
-                    style={{
-                      display: "block",
-                      color: "#5d4037",
-                      fontWeight: "600",
-                      marginBottom: "8px",
-                      fontSize: "13px",
-                    }}
-                  >
-                    Training Spend (% of payroll) - Auto-calculated
-                  </label>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(12, 1fr)", gap: "5px" }}>
-                    {months.map((month, idx) => {
-                      const spend = parseFloat(capabilityTrainingData.trainingSpendAmount?.[idx] || financialData.trainingSpend?.[idx] || 0)
-                      const labor = parseFloat(financialData.laborCost?.[idx] || 1)
-                      const percentage = labor > 0 ? (spend / labor) * 100 : 0
-                      
-                      return (
-                        <div key={month}>
-                          <label style={{ fontSize: "10px", color: "#8d6e63", display: "block", marginBottom: "2px" }}>
-                            {month}
-                          </label>
-                          <input
-                            type="number"
-                            value={percentage.toFixed(2)}
-                            readOnly
-                            style={{
-                              width: "100%",
-                              padding: "6px",
-                              borderRadius: "4px",
-                              border: "1px solid #a5d6a7",
-                              fontSize: "12px",
-                              backgroundColor: "#f1f8e9",
-                              color: "#1e5a1e",
-                            }}
-                          />
-                        </div>
-                      )
-                    })}
                   </div>
                 </div>
                 
@@ -1351,14 +1472,14 @@ const UnifiedDataEntryModal = ({
                             onClick={() => {
                               const newData = [...employeeTrackingData]
                               if (!newData[index].skillsGap) newData[index].skillsGap = {}
-                              newData[index].skillsGap.status = "Yes"
+                              newData[index].skillsGap.status = "Done"
                               setEmployeeTrackingData(newData)
                             }}
                             style={{
                               flex: "1",
                               padding: "8px",
-                              backgroundColor: employee.skillsGap?.status === "Yes" ? "#4caf50" : "#e8e8e8",
-                              color: employee.skillsGap?.status === "Yes" ? "#fff" : "#5d4037",
+                              backgroundColor: employee.skillsGap?.status === "Done" ? "#4caf50" : "#e8e8e8",
+                              color: employee.skillsGap?.status === "Done" ? "#fff" : "#5d4037",
                               border: "none",
                               borderRadius: "4px",
                               cursor: "pointer",
@@ -1366,20 +1487,20 @@ const UnifiedDataEntryModal = ({
                               fontSize: "12px",
                             }}
                           >
-                            Yes
+                            Done
                           </button>
                           <button
                             onClick={() => {
                               const newData = [...employeeTrackingData]
                               if (!newData[index].skillsGap) newData[index].skillsGap = {}
-                              newData[index].skillsGap.status = "No"
+                              newData[index].skillsGap.status = "Not Done"
                               setEmployeeTrackingData(newData)
                             }}
                             style={{
                               flex: "1",
                               padding: "8px",
-                              backgroundColor: employee.skillsGap?.status === "No" ? "#f44336" : "#e8e8e8",
-                              color: employee.skillsGap?.status === "No" ? "#fff" : "#5d4037",
+                              backgroundColor: employee.skillsGap?.status === "Not Done" ? "#f44336" : "#e8e8e8",
+                              color: employee.skillsGap?.status === "Not Done" ? "#fff" : "#5d4037",
                               border: "none",
                               borderRadius: "4px",
                               cursor: "pointer",
@@ -1387,7 +1508,7 @@ const UnifiedDataEntryModal = ({
                               fontSize: "12px",
                             }}
                           >
-                            No
+                            Not Done
                           </button>
                         </div>
                       </div>
@@ -1417,14 +1538,14 @@ const UnifiedDataEntryModal = ({
                             onClick={() => {
                               const newData = [...employeeTrackingData]
                               if (!newData[index].idp) newData[index].idp = {}
-                              newData[index].idp.status = "Yes"
+                              newData[index].idp.status = "Done"
                               setEmployeeTrackingData(newData)
                             }}
                             style={{
                               flex: "1",
                               padding: "8px",
-                              backgroundColor: employee.idp?.status === "Yes" ? "#4caf50" : "#e8e8e8",
-                              color: employee.idp?.status === "Yes" ? "#fff" : "#5d4037",
+                              backgroundColor: employee.idp?.status === "Done" ? "#4caf50" : "#e8e8e8",
+                              color: employee.idp?.status === "Done" ? "#fff" : "#5d4037",
                               border: "none",
                               borderRadius: "4px",
                               cursor: "pointer",
@@ -1432,20 +1553,20 @@ const UnifiedDataEntryModal = ({
                               fontSize: "12px",
                             }}
                           >
-                            Yes
+                            Done
                           </button>
                           <button
                             onClick={() => {
                               const newData = [...employeeTrackingData]
                               if (!newData[index].idp) newData[index].idp = {}
-                              newData[index].idp.status = "No"
+                              newData[index].idp.status = "Not Done"
                               setEmployeeTrackingData(newData)
                             }}
                             style={{
                               flex: "1",
                               padding: "8px",
-                              backgroundColor: employee.idp?.status === "No" ? "#f44336" : "#e8e8e8",
-                              color: employee.idp?.status === "No" ? "#fff" : "#5d4037",
+                              backgroundColor: employee.idp?.status === "Not Done" ? "#f44336" : "#e8e8e8",
+                              color: employee.idp?.status === "Not Done" ? "#fff" : "#5d4037",
                               border: "none",
                               borderRadius: "4px",
                               cursor: "pointer",
@@ -1453,7 +1574,7 @@ const UnifiedDataEntryModal = ({
                               fontSize: "12px",
                             }}
                           >
-                            No
+                            Not Done
                           </button>
                         </div>
                       </div>
@@ -1483,14 +1604,14 @@ const UnifiedDataEntryModal = ({
                             onClick={() => {
                               const newData = [...employeeTrackingData]
                               if (!newData[index].midTermReview) newData[index].midTermReview = {}
-                              newData[index].midTermReview.status = "Yes"
+                              newData[index].midTermReview.status = "Done"
                               setEmployeeTrackingData(newData)
                             }}
                             style={{
                               flex: "1",
                               padding: "8px",
-                              backgroundColor: employee.midTermReview?.status === "Yes" ? "#4caf50" : "#e8e8e8",
-                              color: employee.midTermReview?.status === "Yes" ? "#fff" : "#5d4037",
+                              backgroundColor: employee.midTermReview?.status === "Done" ? "#4caf50" : "#e8e8e8",
+                              color: employee.midTermReview?.status === "Done" ? "#fff" : "#5d4037",
                               border: "none",
                               borderRadius: "4px",
                               cursor: "pointer",
@@ -1498,20 +1619,20 @@ const UnifiedDataEntryModal = ({
                               fontSize: "12px",
                             }}
                           >
-                            Yes
+                            Done
                           </button>
                           <button
                             onClick={() => {
                               const newData = [...employeeTrackingData]
                               if (!newData[index].midTermReview) newData[index].midTermReview = {}
-                              newData[index].midTermReview.status = "No"
+                              newData[index].midTermReview.status = "Not Done"
                               setEmployeeTrackingData(newData)
                             }}
                             style={{
                               flex: "1",
                               padding: "8px",
-                              backgroundColor: employee.midTermReview?.status === "No" ? "#f44336" : "#e8e8e8",
-                              color: employee.midTermReview?.status === "No" ? "#fff" : "#5d4037",
+                              backgroundColor: employee.midTermReview?.status === "Not Done" ? "#f44336" : "#e8e8e8",
+                              color: employee.midTermReview?.status === "Not Done" ? "#fff" : "#5d4037",
                               border: "none",
                               borderRadius: "4px",
                               cursor: "pointer",
@@ -1519,7 +1640,7 @@ const UnifiedDataEntryModal = ({
                               fontSize: "12px",
                             }}
                           >
-                            No
+                            Not Done
                           </button>
                         </div>
                       </div>
@@ -1549,14 +1670,14 @@ const UnifiedDataEntryModal = ({
                             onClick={() => {
                               const newData = [...employeeTrackingData]
                               if (!newData[index].annualReview) newData[index].annualReview = {}
-                              newData[index].annualReview.status = "Yes"
+                              newData[index].annualReview.status = "Done"
                               setEmployeeTrackingData(newData)
                             }}
                             style={{
                               flex: "1",
                               padding: "8px",
-                              backgroundColor: employee.annualReview?.status === "Yes" ? "#4caf50" : "#e8e8e8",
-                              color: employee.annualReview?.status === "Yes" ? "#fff" : "#5d4037",
+                              backgroundColor: employee.annualReview?.status === "Done" ? "#4caf50" : "#e8e8e8",
+                              color: employee.annualReview?.status === "Done" ? "#fff" : "#5d4037",
                               border: "none",
                               borderRadius: "4px",
                               cursor: "pointer",
@@ -1564,20 +1685,20 @@ const UnifiedDataEntryModal = ({
                               fontSize: "12px",
                             }}
                           >
-                            Yes
+                            Done
                           </button>
                           <button
                             onClick={() => {
                               const newData = [...employeeTrackingData]
                               if (!newData[index].annualReview) newData[index].annualReview = {}
-                              newData[index].annualReview.status = "No"
+                              newData[index].annualReview.status = "Not Done"
                               setEmployeeTrackingData(newData)
                             }}
                             style={{
                               flex: "1",
                               padding: "8px",
-                              backgroundColor: employee.annualReview?.status === "No" ? "#f44336" : "#e8e8e8",
-                              color: employee.annualReview?.status === "No" ? "#fff" : "#5d4037",
+                              backgroundColor: employee.annualReview?.status === "Not Done" ? "#f44336" : "#e8e8e8",
+                              color: employee.annualReview?.status === "Not Done" ? "#fff" : "#5d4037",
                               border: "none",
                               borderRadius: "4px",
                               cursor: "pointer",
@@ -1585,7 +1706,7 @@ const UnifiedDataEntryModal = ({
                               fontSize: "12px",
                             }}
                           >
-                            No
+                            Not Done
                           </button>
                         </div>
                       </div>
@@ -1596,218 +1717,366 @@ const UnifiedDataEntryModal = ({
             </>
           )}
 
-          {/* Termination Data for Stability & Continuity */}
+          {/* Termination and New Hire Data for Stability & Continuity */}
           {activeModalTab === "stability-continuity" && (
-            <div style={{ marginBottom: "30px", padding: "15px", backgroundColor: "#f5f0eb", borderRadius: "8px" }}>
-              <h4 style={{ color: "#5d4037", marginBottom: "15px" }}>Termination Records</h4>
-              
-              {/* Add New Termination Form */}
-              <div style={{ marginBottom: "20px", padding: "15px", backgroundColor: "#fff", borderRadius: "6px", border: "1px solid #e8ddd4" }}>
-                <h5 style={{ color: "#5d4037", marginBottom: "15px" }}>Add New Termination Record</h5>
+            <>
+              {/* Termination Records */}
+              <div style={{ marginBottom: "30px", padding: "15px", backgroundColor: "#f5f0eb", borderRadius: "8px" }}>
+                <h4 style={{ color: "#5d4037", marginBottom: "15px" }}>Termination Records</h4>
                 
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "15px", marginBottom: "15px" }}>
-                  {/* Month Selection */}
-                  <div>
-                    <label style={{ display: "block", color: "#5d4037", marginBottom: "5px", fontSize: "13px", fontWeight: "600" }}>
-                      Month
-                    </label>
-                    <select
-                      value={newTermination.month}
-                      onChange={(e) => setNewTermination({...newTermination, month: e.target.value})}
-                      style={{
-                        width: "100%",
-                        padding: "10px",
-                        borderRadius: "4px",
-                        border: "1px solid #e8ddd4",
-                        fontSize: "13px",
-                        color: "#5d4037",
-                      }}
-                    >
-                      {months.map(month => (
-                        <option key={month} value={month}>{month}</option>
-                      ))}
-                    </select>
-                  </div>
+                {/* Add New Termination Form */}
+                <div style={{ marginBottom: "20px", padding: "15px", backgroundColor: "#fff", borderRadius: "6px", border: "1px solid #e8ddd4" }}>
+                  <h5 style={{ color: "#5d4037", marginBottom: "15px" }}>Add New Termination Record</h5>
+                  
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "15px", marginBottom: "15px" }}>
+                    {/* Month Selection */}
+                    <div>
+                      <label style={{ display: "block", color: "#5d4037", marginBottom: "5px", fontSize: "13px", fontWeight: "600" }}>
+                        Month
+                      </label>
+                      <select
+                        value={newTermination.month}
+                        onChange={(e) => setNewTermination({...newTermination, month: e.target.value})}
+                        style={{
+                          width: "100%",
+                          padding: "10px",
+                          borderRadius: "4px",
+                          border: "1px solid #e8ddd4",
+                          fontSize: "13px",
+                          color: "#5d4037",
+                        }}
+                      >
+                        {months.map(month => (
+                          <option key={month} value={month}>{month}</option>
+                        ))}
+                      </select>
+                    </div>
 
-                  {/* Reason Selection */}
-                  <div>
-                    <label style={{ display: "block", color: "#5d4037", marginBottom: "5px", fontSize: "13px", fontWeight: "600" }}>
-                      Reason
-                    </label>
-                    <select
-                      value={newTermination.reason}
-                      onChange={(e) => setNewTermination({...newTermination, reason: e.target.value})}
-                      style={{
-                        width: "100%",
-                        padding: "10px",
-                        borderRadius: "4px",
-                        border: "1px solid #e8ddd4",
-                        fontSize: "13px",
-                        color: "#5d4037",
-                      }}
-                    >
-                      <option value="">Select a reason</option>
-                      {predefinedReasons.map(reason => (
-                        <option key={reason} value={reason}>{reason}</option>
-                      ))}
-                    </select>
-                  </div>
+                    {/* Reason Selection */}
+                    <div>
+                      <label style={{ display: "block", color: "#5d4037", marginBottom: "5px", fontSize: "13px", fontWeight: "600" }}>
+                        Reason
+                      </label>
+                      <select
+                        value={newTermination.reason}
+                        onChange={(e) => setNewTermination({...newTermination, reason: e.target.value})}
+                        style={{
+                          width: "100%",
+                          padding: "10px",
+                          borderRadius: "4px",
+                          border: "1px solid #e8ddd4",
+                          fontSize: "13px",
+                          color: "#5d4037",
+                        }}
+                      >
+                        <option value="">Select a reason</option>
+                        {predefinedReasons.map(reason => (
+                          <option key={reason} value={reason}>{reason}</option>
+                        ))}
+                      </select>
+                    </div>
 
-                  {/* Count Input */}
-                  <div>
-                    <label style={{ display: "block", color: "#5d4037", marginBottom: "5px", fontSize: "13px", fontWeight: "600" }}>
-                      Number of People
-                    </label>
-                    <input
-                      type="number"
-                      min="1"
-                      value={newTermination.count}
-                      onChange={(e) => setNewTermination({...newTermination, count: e.target.value})}
-                      placeholder="0"
-                      style={{
-                        width: "100%",
-                        padding: "10px",
-                        borderRadius: "4px",
-                        border: "1px solid #e8ddd4",
-                        fontSize: "13px",
-                        color: "#5d4037",
-                      }}
-                    />
-                  </div>
-                </div>
-
-                {/* Custom Reason (if Other is selected) */}
-                {newTermination.reason === "Other" && (
-                  <div style={{ marginBottom: "15px" }}>
-                    <label style={{ display: "block", color: "#5d4037", marginBottom: "5px", fontSize: "13px", fontWeight: "600" }}>
-                      Specify Reason
-                    </label>
-                    <input
-                      type="text"
-                      value={newTermination.customReason}
-                      onChange={(e) => setNewTermination({...newTermination, customReason: e.target.value})}
-                      placeholder="Enter custom reason..."
-                      style={{
-                        width: "100%",
-                        padding: "10px",
-                        borderRadius: "4px",
-                        border: "1px solid #e8ddd4",
-                        fontSize: "13px",
-                        color: "#5d4037",
-                      }}
-                    />
-                  </div>
-                )}
-
-                <button
-                  onClick={addTerminationEntry}
-                  style={{
-                    padding: "10px 20px",
-                    backgroundColor: "#5d4037",
-                    color: "#fdfcfb",
-                    border: "none",
-                    borderRadius: "6px",
-                    cursor: "pointer",
-                    fontWeight: "600",
-                    fontSize: "14px",
-                  }}
-                >
-                  + Add Termination Record
-                </button>
-              </div>
-
-              {/* Current Termination Entries */}
-              <div>
-                <h5 style={{ color: "#5d4037", marginBottom: "15px" }}>Current Termination Records ({terminationEntries.length})</h5>
-                
-                {terminationEntries.length > 0 ? (
-                  <div style={{ maxHeight: "200px", overflowY: "auto" }}>
-                    {terminationEntries.map((entry, index) => (
-                      <div key={entry.id} style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        padding: "12px",
-                        marginBottom: "8px",
-                        backgroundColor: index % 2 === 0 ? "#fdfcfb" : "#f5f0eb",
-                        borderRadius: "6px",
-                        border: "1px solid #e8ddd4"
-                      }}>
-                        <div>
-                          <span style={{ color: "#5d4037", fontWeight: "600", marginRight: "10px" }}>{entry.month}</span>
-                          <span style={{ color: "#5d4037", marginRight: "10px" }}>{entry.reason}</span>
-                          <span style={{
-                            padding: "2px 6px",
-                            backgroundColor: "#e3f2fd",
-                            color: "#1565c0",
-                            borderRadius: "12px",
-                            fontSize: "11px",
-                            fontWeight: "600"
-                          }}>
-                            {entry.count} person{entry.count !== 1 ? 's' : ''}
-                          </span>
-                        </div>
-                        <button
-                          onClick={() => removeTerminationEntry(entry.id)}
-                          style={{
-                            padding: "4px 8px",
-                            backgroundColor: "#f44336",
-                            color: "#fff",
-                            border: "none",
-                            borderRadius: "4px",
-                            cursor: "pointer",
-                            fontSize: "11px",
-                          }}
-                        >
-                          Remove
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div style={{ padding: "20px", textAlign: "center", color: "#8d6e63", backgroundColor: "#fff", borderRadius: "6px" }}>
-                    No termination records added yet.
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Employee Composition Tab */}
-          {activeModalTab === "employee-composition" && (
-            <div style={{ marginBottom: "30px" }}>
-              {Object.keys(employeeData).map((category) => (
-                <div key={category} style={{ marginBottom: "20px", padding: "15px", backgroundColor: "#f5f0eb", borderRadius: "8px" }}>
-                  <h4 style={{ color: "#5d4037", marginBottom: "10px" }}>
-                    {category.charAt(0).toUpperCase() + category.slice(1)} Distribution (%)
-                  </h4>
-                  {Object.keys(employeeData[category]).map((item) => (
-                    <div key={item} style={{ marginBottom: "10px" }}>
-                      <label style={{ display: "block", color: "#5d4037", marginBottom: "5px", fontSize: "13px" }}>
-                        {item}:
+                    {/* Count Input */}
+                    <div>
+                      <label style={{ display: "block", color: "#5d4037", marginBottom: "5px", fontSize: "13px", fontWeight: "600" }}>
+                        Number of People
                       </label>
                       <input
                         type="number"
-                        min="0"
-                        max="100"
-                        value={employeeData[category][item]}
-                        onChange={(e) => {
-                          const newData = { ...employeeData }
-                          newData[category][item] = Number.parseFloat(e.target.value) || 0
-                          setEmployeeData(newData)
-                        }}
+                        min="1"
+                        value={newTermination.count}
+                        onChange={(e) => setNewTermination({...newTermination, count: e.target.value})}
+                        placeholder="0"
                         style={{
                           width: "100%",
-                          padding: "8px",
+                          padding: "10px",
                           borderRadius: "4px",
                           border: "1px solid #e8ddd4",
+                          fontSize: "13px",
+                          color: "#5d4037",
                         }}
                       />
                     </div>
-                  ))}
+                  </div>
+
+                  {/* Custom Reason (if Other is selected) */}
+                  {newTermination.reason === "Other" && (
+                    <div style={{ marginBottom: "15px" }}>
+                      <label style={{ display: "block", color: "#5d4037", marginBottom: "5px", fontSize: "13px", fontWeight: "600" }}>
+                        Specify Reason
+                      </label>
+                      <input
+                        type="text"
+                        value={newTermination.customReason}
+                        onChange={(e) => setNewTermination({...newTermination, customReason: e.target.value})}
+                        placeholder="Enter custom reason..."
+                        style={{
+                          width: "100%",
+                          padding: "10px",
+                          borderRadius: "4px",
+                          border: "1px solid #e8ddd4",
+                          fontSize: "13px",
+                          color: "#5d4037",
+                        }}
+                      />
+                    </div>
+                  )}
+
+                  <button
+                    onClick={addTerminationEntry}
+                    style={{
+                      padding: "10px 20px",
+                      backgroundColor: "#5d4037",
+                      color: "#fdfcfb",
+                      border: "none",
+                      borderRadius: "6px",
+                      cursor: "pointer",
+                      fontWeight: "600",
+                      fontSize: "14px",
+                    }}
+                  >
+                    + Add Termination Record
+                  </button>
                 </div>
-              ))}
-            </div>
+
+                {/* Current Termination Entries */}
+                <div>
+                  <h5 style={{ color: "#5d4037", marginBottom: "15px" }}>Current Termination Records ({terminationEntries.length})</h5>
+                  
+                  {terminationEntries.length > 0 ? (
+                    <div style={{ maxHeight: "200px", overflowY: "auto" }}>
+                      {terminationEntries.map((entry, index) => (
+                        <div key={entry.id} style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          padding: "12px",
+                          marginBottom: "8px",
+                          backgroundColor: index % 2 === 0 ? "#fdfcfb" : "#f5f0eb",
+                          borderRadius: "6px",
+                          border: "1px solid #e8ddd4"
+                        }}>
+                          <div>
+                            <span style={{ color: "#5d4037", fontWeight: "600", marginRight: "10px" }}>{entry.month}</span>
+                            <span style={{ color: "#5d4037", marginRight: "10px" }}>{entry.reason}</span>
+                            <span style={{
+                              padding: "2px 6px",
+                              backgroundColor: "#e3f2fd",
+                              color: "#1565c0",
+                              borderRadius: "12px",
+                              fontSize: "11px",
+                              fontWeight: "600"
+                            }}>
+                              {entry.count} person{entry.count !== 1 ? 's' : ''}
+                            </span>
+                          </div>
+                          <button
+                            onClick={() => removeTerminationEntry(entry.id)}
+                            style={{
+                              padding: "4px 8px",
+                              backgroundColor: "#f44336",
+                              color: "#fff",
+                              border: "none",
+                              borderRadius: "4px",
+                              cursor: "pointer",
+                              fontSize: "11px",
+                            }}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div style={{ padding: "20px", textAlign: "center", color: "#8d6e63", backgroundColor: "#fff", borderRadius: "6px" }}>
+                      No termination records added yet.
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* New Hire Records */}
+              <div style={{ marginBottom: "30px", padding: "15px", backgroundColor: "#f5f0eb", borderRadius: "8px" }}>
+                <h4 style={{ color: "#5d4037", marginBottom: "15px" }}>New Hire Records</h4>
+                
+                {/* Add New Hire Form */}
+                <div style={{ marginBottom: "20px", padding: "15px", backgroundColor: "#fff", borderRadius: "6px", border: "1px solid #e8ddd4" }}>
+                  <h5 style={{ color: "#5d4037", marginBottom: "15px" }}>Add New Hire</h5>
+                  
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "15px", marginBottom: "15px" }}>
+                    {/* Name */}
+                    <div>
+                      <label style={{ display: "block", color: "#5d4037", marginBottom: "5px", fontSize: "13px", fontWeight: "600" }}>
+                        Employee Name
+                      </label>
+                      <input
+                        type="text"
+                        value={newHireForm.name}
+                        onChange={(e) => setNewHireForm({...newHireForm, name: e.target.value})}
+                        placeholder="John Doe"
+                        style={{
+                          width: "100%",
+                          padding: "10px",
+                          borderRadius: "4px",
+                          border: "1px solid #e8ddd4",
+                          fontSize: "13px",
+                          color: "#5d4037",
+                        }}
+                      />
+                    </div>
+
+                    {/* Date Started */}
+                    <div>
+                      <label style={{ display: "block", color: "#5d4037", marginBottom: "5px", fontSize: "13px", fontWeight: "600" }}>
+                        Date Started
+                      </label>
+                      <input
+                        type="date"
+                        value={newHireForm.dateStarted}
+                        onChange={(e) => setNewHireForm({...newHireForm, dateStarted: e.target.value})}
+                        style={{
+                          width: "100%",
+                          padding: "10px",
+                          borderRadius: "4px",
+                          border: "1px solid #e8ddd4",
+                          fontSize: "13px",
+                          color: "#5d4037",
+                        }}
+                      />
+                    </div>
+
+                    {/* Contract Type */}
+                    <div>
+                      <label style={{ display: "block", color: "#5d4037", marginBottom: "5px", fontSize: "13px", fontWeight: "600" }}>
+                        Contract Type
+                      </label>
+                      <select
+                        value={newHireForm.contractType}
+                        onChange={(e) => setNewHireForm({...newHireForm, contractType: e.target.value})}
+                        style={{
+                          width: "100%",
+                          padding: "10px",
+                          borderRadius: "4px",
+                          border: "1px solid #e8ddd4",
+                          fontSize: "13px",
+                          color: "#5d4037",
+                        }}
+                      >
+                        {contractTypes.map(type => (
+                          <option key={type} value={type}>{type}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  {/* End Date (for non-permanent contracts) */}
+                  {newHireForm.contractType !== "Permanent" && (
+                    <div style={{ marginBottom: "15px" }}>
+                      <label style={{ display: "block", color: "#5d4037", marginBottom: "5px", fontSize: "13px", fontWeight: "600" }}>
+                        End Date (if applicable)
+                      </label>
+                      <input
+                        type="date"
+                        value={newHireForm.endDate}
+                        onChange={(e) => setNewHireForm({...newHireForm, endDate: e.target.value})}
+                        style={{
+                          width: "100%",
+                          padding: "10px",
+                          borderRadius: "4px",
+                          border: "1px solid #e8ddd4",
+                          fontSize: "13px",
+                          color: "#5d4037",
+                        }}
+                      />
+                    </div>
+                  )}
+
+                  <button
+                    onClick={addNewHireEntry}
+                    style={{
+                      padding: "10px 20px",
+                      backgroundColor: "#5d4037",
+                      color: "#fdfcfb",
+                      border: "none",
+                      borderRadius: "6px",
+                      cursor: "pointer",
+                      fontWeight: "600",
+                      fontSize: "14px",
+                    }}
+                  >
+                    + Add New Hire
+                  </button>
+                </div>
+
+                {/* Current New Hire Entries */}
+                <div>
+                  <h5 style={{ color: "#5d4037", marginBottom: "15px" }}>Current New Hire Records ({newHireEntries.length})</h5>
+                  
+                  {newHireEntries.length > 0 ? (
+                    <div style={{ maxHeight: "200px", overflowY: "auto" }}>
+                      {newHireEntries.map((entry, index) => (
+                        <div key={entry.id} style={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center",
+                          padding: "12px",
+                          marginBottom: "8px",
+                          backgroundColor: index % 2 === 0 ? "#fdfcfb" : "#f5f0eb",
+                          borderRadius: "6px",
+                          border: "1px solid #e8ddd4"
+                        }}>
+                          <div>
+                            <span style={{ color: "#5d4037", fontWeight: "600", marginRight: "10px" }}>{entry.name}</span>
+                            <span style={{ color: "#5d4037", marginRight: "10px" }}>Started: {entry.dateStarted}</span>
+                            <span style={{
+                              padding: "2px 6px",
+                              backgroundColor: "#e8f5e9",
+                              color: "#2e7d32",
+                              borderRadius: "12px",
+                              fontSize: "11px",
+                              fontWeight: "600",
+                              marginRight: "5px"
+                            }}>
+                              {entry.contractType}
+                            </span>
+                            {entry.endDate && (
+                              <span style={{
+                                padding: "2px 6px",
+                                backgroundColor: "#fff3e0",
+                                color: "#f57c00",
+                                borderRadius: "12px",
+                                fontSize: "11px",
+                                fontWeight: "600"
+                              }}>
+                                Ends: {entry.endDate}
+                              </span>
+                            )}
+                          </div>
+                          <button
+                            onClick={() => removeNewHireEntry(entry.id)}
+                            style={{
+                              padding: "4px 8px",
+                              backgroundColor: "#f44336",
+                              color: "#fff",
+                              border: "none",
+                              borderRadius: "4px",
+                              cursor: "pointer",
+                              fontSize: "11px",
+                            }}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div style={{ padding: "20px", textAlign: "center", color: "#8d6e63", backgroundColor: "#fff", borderRadius: "6px" }}>
+                      No new hire records added yet.
+                    </div>
+                  )}
+                </div>
+              </div>
+            </>
           )}
         </div>
 
@@ -1846,13 +2115,347 @@ const UnifiedDataEntryModal = ({
   )
 }
 
+// ==================== EMPLOYEE COMPOSITION COMPONENT ====================
+
+const DARK_BROWN_COLORS = {
+  primary: "#3E2723",
+  secondary: "#5D4037",
+  tertiary: "#795548",
+  accent1: "#8D6E63",
+  accent2: "#A1887F",
+  accent3: "#BCAAA4",
+  accent4: "#D7CCC8",
+  accent5: "#EFEBE9",
+  warning: "#F9A825",
+  success: "#2E7D32",
+  error: "#C62828",
+}
+
+const EmployeeComposition = ({ activeSection, userData, onOpenModal }) => {
+  if (activeSection !== "employee-composition") return null
+
+  const defaultData = {
+    headCount: 0,
+    targetHeadCount: 0,
+    permanent: 0,
+    contract: 0,
+    internship: 0,
+    unskilled: 0,
+    semiSkilled: 0,
+    skilledJnr: 0,
+    profMid: 0,
+    snrMgt: 0,
+    topMgt: 0,
+    femalePercent: 0,
+    malePercent: 0,
+    otherPercent: 0,
+    femaleLeadershipPercent: 0,
+    youthLeadershipPercent: 0,
+    hdiOwnershipPercent: 0,
+  }
+
+  const data = { ...defaultData, ...userData }
+  const vacancies = Math.max(0, data.targetHeadCount - data.headCount)
+
+  // Calculate totals for percentages
+  const totalContract = (data.permanent || 0) + (data.contract || 0) + (data.internship || 0)
+  const totalOccupational = (data.unskilled || 0) + (data.semiSkilled || 0) + (data.skilledJnr || 0) + 
+                           (data.profMid || 0) + (data.snrMgt || 0) + (data.topMgt || 0)
+
+  // Contract type data
+  const contractData = {
+    labels: ["Permanent", "Contract", "Internship"],
+    datasets: [
+      {
+        data: [
+          data.permanent || 0,
+          data.contract || 0,
+          data.internship || 0
+        ],
+        backgroundColor: [
+          DARK_BROWN_COLORS.primary,
+          DARK_BROWN_COLORS.accent1,
+          DARK_BROWN_COLORS.accent3,
+        ],
+        borderColor: DARK_BROWN_COLORS.primary,
+        borderWidth: 2,
+      },
+    ],
+  }
+
+  // Occupational levels data
+  const occupationalData = {
+    labels: ["Unskilled", "Semi-skilled", "Skilled Jnr", "Prof Mid", "Snr Mgt", "Top Mgt"],
+    datasets: [
+      {
+        label: "Count",
+        data: [
+          data.unskilled || 0,
+          data.semiSkilled || 0,
+          data.skilledJnr || 0,
+          data.profMid || 0,
+          data.snrMgt || 0,
+          data.topMgt || 0
+        ],
+        backgroundColor: [
+          DARK_BROWN_COLORS.primary,
+          DARK_BROWN_COLORS.secondary,
+          DARK_BROWN_COLORS.tertiary,
+          DARK_BROWN_COLORS.accent1,
+          DARK_BROWN_COLORS.accent2,
+          DARK_BROWN_COLORS.accent3,
+        ],
+        borderColor: DARK_BROWN_COLORS.primary,
+        borderWidth: 2,
+      },
+    ],
+  }
+
+  return (
+    <div
+      style={{
+        backgroundColor: "#fdfcfb",
+        padding: "25px",
+        margin: "20px 0",
+        borderRadius: "12px",
+        boxShadow: `0 4px 12px rgba(62, 39, 35, 0.15)`,
+        border: `1px solid ${DARK_BROWN_COLORS.accent4}`,
+      }}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+        <h2 style={{ color: DARK_BROWN_COLORS.secondary, margin: 0, fontSize: "28px" }}>Employee Composition</h2>
+        <button
+          onClick={() => onOpenModal("employee-composition")}
+          style={{
+            padding: "12px 20px",
+            backgroundColor: DARK_BROWN_COLORS.secondary,
+            color: "#fdfcfb",
+            border: "none",
+            borderRadius: "8px",
+            cursor: "pointer",
+            fontWeight: "bold",
+            fontSize: "14px",
+            boxShadow: "0 2px 4px rgba(0,0,0,0.2)",
+          }}
+        >
+         Add Data
+        </button>
+      </div>
+
+      {/* Top Row - Head Count, Contract Type, Occupational Levels */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(3, 1fr)",
+          gap: "20px",
+          marginBottom: "40px",
+        }}
+      >
+        {/* Head Count with Target and Vacancies */}
+        <div
+          style={{
+            backgroundColor: "#f7f3f0",
+            padding: "20px",
+            borderRadius: "12px",
+            textAlign: "center",
+            border: `2px solid ${DARK_BROWN_COLORS.accent4}`,
+          }}
+        >
+          <h3 style={{ color: DARK_BROWN_COLORS.tertiary, margin: "0 0 15px 0", fontSize: "16px" }}>Head Count</h3>
+          <div
+            style={{
+              width: "100px",
+              height: "100px",
+              borderRadius: "50%",
+              background: `linear-gradient(135deg, ${DARK_BROWN_COLORS.secondary}, ${DARK_BROWN_COLORS.tertiary})`,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              margin: "0 auto 15px auto",
+              color: "#fdfcfb",
+              fontSize: "28px",
+              fontWeight: "bold",
+              boxShadow: "0 4px 8px rgba(62, 39, 35, 0.3)",
+            }}
+          >
+            {data.headCount}
+          </div>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: "10px",
+              marginTop: "10px",
+            }}
+          >
+            <div
+              style={{
+                backgroundColor: "#fff",
+                padding: "8px",
+                borderRadius: "6px",
+                border: `1px solid ${DARK_BROWN_COLORS.accent3}`,
+              }}
+            >
+              <div style={{ fontSize: "11px", color: DARK_BROWN_COLORS.tertiary, marginBottom: "3px" }}>Target</div>
+              <div style={{ fontSize: "18px", fontWeight: "bold", color: DARK_BROWN_COLORS.secondary }}>
+                {data.targetHeadCount}
+              </div>
+            </div>
+            <div
+              style={{
+                backgroundColor: "#fff",
+                padding: "8px",
+                borderRadius: "6px",
+                border: `1px solid ${DARK_BROWN_COLORS.accent3}`,
+              }}
+            >
+              <div style={{ fontSize: "11px", color: DARK_BROWN_COLORS.tertiary, marginBottom: "3px" }}>Vacancies</div>
+              <div
+                style={{
+                  fontSize: "18px",
+                  fontWeight: "bold",
+                  color: vacancies > 0 ? DARK_BROWN_COLORS.warning : DARK_BROWN_COLORS.success,
+                }}
+              >
+                {vacancies}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Contract Type */}
+        <div
+          style={{
+            backgroundColor: "#f7f3f0",
+            padding: "20px",
+            borderRadius: "12px",
+            textAlign: "center",
+            border: `2px solid ${DARK_BROWN_COLORS.accent4}`,
+          }}
+        >
+          <h3 style={{ color: DARK_BROWN_COLORS.tertiary, margin: "0 0 15px 0", fontSize: "16px" }}>Contract Type</h3>
+          <div style={{ height: "150px" }}>
+            <Pie
+              data={contractData}
+              options={{
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                  legend: {
+                    position: "bottom",
+                    labels: {
+                      color: DARK_BROWN_COLORS.secondary,
+                      font: {
+                        size: 10,
+                        weight: "bold",
+                      },
+                    },
+                  },
+                  tooltip: {
+                    callbacks: {
+                      label: (context) => {
+                        const label = context.label || '';
+                        const value = context.raw || 0;
+                        const percentage = totalContract > 0 ? ((value / totalContract) * 100).toFixed(1) : 0;
+                        return `${label}: ${value} (${percentage}%)`;
+                      }
+                    }
+                  },
+                },
+              }}
+            />
+          </div>
+        </div>
+
+        {/* Occupational Levels */}
+        <div
+          style={{
+            backgroundColor: "#f7f3f0",
+            padding: "20px",
+            borderRadius: "12px",
+            textAlign: "center",
+            border: `2px solid ${DARK_BROWN_COLORS.accent4}`,
+          }}
+        >
+          <h3 style={{ color: DARK_BROWN_COLORS.tertiary, margin: "0 0 15px 0", fontSize: "16px" }}>Occupational Levels</h3>
+          <div style={{ height: "150px" }}>
+            <Bar
+              data={occupationalData}
+              options={{
+                indexAxis: "y",
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                  legend: {
+                    display: false,
+                  },
+                  tooltip: {
+                    callbacks: {
+                      label: (context) => {
+                        const value = context.raw || 0;
+                        const percentage = totalOccupational > 0 ? ((value / totalOccupational) * 100).toFixed(1) : 0;
+                        return `Count: ${value} (${percentage}%)`;
+                      }
+                    }
+                  },
+                },
+                scales: {
+                  x: {
+                    beginAtZero: true,
+                    grid: {
+                      color: DARK_BROWN_COLORS.accent4,
+                      drawBorder: false,
+                    },
+                    ticks: {
+                      color: DARK_BROWN_COLORS.secondary,
+                      font: {
+                        size: 10,
+                      },
+                    },
+                  },
+                  y: {
+                    grid: {
+                      display: false,
+                    },
+                    ticks: {
+                      color: DARK_BROWN_COLORS.secondary,
+                      font: {
+                        size: 10,
+                        weight: "bold",
+                      },
+                    },
+                  },
+                },
+              }}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Second Row - Leadership & Ownership Metrics */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(3, 1fr)",
+          gap: "20px",
+          marginBottom: "20px",
+        }}
+      >
+       
+
+      
+      
+      </div>
+    </div>
+  )
+}
+
 // ==================== EXECUTION CAPACITY COMPONENT ====================
 
 const ExecutionCapacity = ({ activeSection, user, isInvestorView }) => {
   const [showModal, setShowModal] = useState(false)
   const [loading, setLoading] = useState(false)
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
-  const [selectedViewMode, setSelectedViewMode] = useState("month")
   const [expandedNotes, setExpandedNotes] = useState({})
   const [kpiNotes, setKpiNotes] = useState({})
   const [kpiAnalysis, setKpiAnalysis] = useState({})
@@ -1897,34 +2500,6 @@ const ExecutionCapacity = ({ activeSection, user, isInvestorView }) => {
   }
 
   // Helper functions
-  const generateLabels = () => {
-    if (selectedViewMode === "month") {
-      return months
-    } else if (selectedViewMode === "quarter") {
-      return ["Q1", "Q2", "Q3", "Q4"]
-    } else {
-      return [selectedYear.toString()]
-    }
-  }
-
-  const aggregateDataForView = (data) => {
-    if (!data) return []
-    
-    if (selectedViewMode === "month") {
-      return data.map(val => Number.parseFloat(val) || 0)
-    } else if (selectedViewMode === "quarter") {
-      const quarters = []
-      for (let i = 0; i < 4; i++) {
-        const sum = data.slice(i * 3, i * 3 + 3).reduce((acc, val) => acc + (Number.parseFloat(val) || 0), 0)
-        quarters.push(sum / 3) // Average for quarter
-      }
-      return quarters
-    } else {
-      const yearlyAvg = data.reduce((acc, val) => acc + (Number.parseFloat(val) || 0), 0) / data.length
-      return [yearlyAvg]
-    }
-  }
-
   const formatValue = (value) => {
     const num = Number.parseFloat(value) || 0
     return num.toFixed(1)
@@ -1987,7 +2562,7 @@ const ExecutionCapacity = ({ activeSection, user, isInvestorView }) => {
   }
 
   const renderKPICard = (title, data, kpiKey, unit = "", isPercentage = false, calculation = "") => {
-    const monthIndex = months.indexOf(selectedViewMode === "month" ? selectedViewMode : "Jan")
+    const monthIndex = 11 // Use last month
     const currentValue = Number.parseFloat(data[monthIndex >= 0 ? monthIndex : 0]) || 0
     const status = getStatus(currentValue.toString(), kpiKey)
     
@@ -2351,76 +2926,26 @@ const ExecutionCapacity = ({ activeSection, user, isInvestorView }) => {
         <h2 style={{ color: "#5d4037", fontSize: "24px", fontWeight: "700" }}>Execution Capacity & Scalability</h2>
 
         <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
-          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-            <div style={{ display: "flex", gap: "5px", alignItems: "center" }}>
-              <span style={{ color: "#5d4037", fontSize: "14px" }}>Year:</span>
-              <select
-                value={selectedYear}
-                onChange={(e) => setSelectedYear(Number.parseInt(e.target.value))}
-                style={{
-                  padding: "8px 12px",
-                  borderRadius: "4px",
-                  border: "1px solid #e8ddd4",
-                  fontSize: "14px",
-                  color: "#5d4037",
-                  minWidth: "100px",
-                }}
-              >
-                {years.map((year) => (
-                  <option key={year} value={year}>
-                    {year}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-          
-          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-            <button
-              onClick={() => setSelectedViewMode("month")}
+          <div style={{ display: "flex", gap: "5px", alignItems: "center" }}>
+            <span style={{ color: "#5d4037", fontSize: "14px" }}>Year:</span>
+            <select
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(Number.parseInt(e.target.value))}
               style={{
-                padding: "8px 16px",
-                backgroundColor: selectedViewMode === "month" ? "#5d4037" : "#e8ddd4",
-                color: selectedViewMode === "month" ? "#fdfcfb" : "#5d4037",
-                border: "none",
+                padding: "8px 12px",
                 borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: "500",
+                border: "1px solid #e8ddd4",
                 fontSize: "14px",
+                color: "#5d4037",
+                minWidth: "100px",
               }}
             >
-              Monthly
-            </button>
-            <button
-              onClick={() => setSelectedViewMode("quarter")}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: selectedViewMode === "quarter" ? "#5d4037" : "#e8ddd4",
-                color: selectedViewMode === "quarter" ? "#fdfcfb" : "#5d4037",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: "500",
-                fontSize: "14px",
-              }}
-            >
-              Quarterly
-            </button>
-            <button
-              onClick={() => setSelectedViewMode("year")}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: selectedViewMode === "year" ? "#5d4037" : "#e8ddd4",
-                color: selectedViewMode === "year" ? "#fdfcfb" : "#5d4037",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: "500",
-                fontSize: "14px",
-              }}
-            >
-              Yearly
-            </button>
+              {years.map((year) => (
+                <option key={year} value={year}>
+                  {year}
+                </option>
+              ))}
+            </select>
           </div>
           
           {!isInvestorView && (
@@ -2501,8 +3026,6 @@ const ExecutionCapacity = ({ activeSection, user, isInvestorView }) => {
           onClose={() => setShowTrendModal(false)}
           item={selectedTrendItem}
           currencyUnit="zar"
-          generateLabels={generateLabels}
-          aggregateDataForView={aggregateDataForView}
           formatValue={formatValue}
         />
       )}
@@ -2516,7 +3039,6 @@ const Productivity = ({ activeSection, user, isInvestorView }) => {
   const [showModal, setShowModal] = useState(false)
   const [loading, setLoading] = useState(false)
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
-  const [selectedViewMode, setSelectedViewMode] = useState("month")
   const [expandedNotes, setExpandedNotes] = useState({})
   const [kpiNotes, setKpiNotes] = useState({})
   const [kpiAnalysis, setKpiAnalysis] = useState({})
@@ -2591,34 +3113,6 @@ const Productivity = ({ activeSection, user, isInvestorView }) => {
       revenuePerEmployee: revenuePerEmployee.map(v => v.toString()),
       laborCostPercentage: laborCostPercentage.map(v => v.toFixed(2).toString())
     }))
-  }
-
-  const generateLabels = () => {
-    if (selectedViewMode === "month") {
-      return months
-    } else if (selectedViewMode === "quarter") {
-      return ["Q1", "Q2", "Q3", "Q4"]
-    } else {
-      return [selectedYear.toString()]
-    }
-  }
-
-  const aggregateDataForView = (data) => {
-    if (!data) return []
-    
-    if (selectedViewMode === "month") {
-      return data.map(val => Number.parseFloat(val) || 0)
-    } else if (selectedViewMode === "quarter") {
-      const quarters = []
-      for (let i = 0; i < 4; i++) {
-        const sum = data.slice(i * 3, i * 3 + 3).reduce((acc, val) => acc + (Number.parseFloat(val) || 0), 0)
-        quarters.push(sum / 3)
-      }
-      return quarters
-    } else {
-      const yearlyAvg = data.reduce((acc, val) => acc + (Number.parseFloat(val) || 0), 0) / data.length
-      return [yearlyAvg]
-    }
   }
 
   const formatValue = (value, unit = currencyUnit) => {
@@ -2717,16 +3211,6 @@ const Productivity = ({ activeSection, user, isInvestorView }) => {
           </div>
           <div style={{ flex: 1 }}>
             <h4 style={{ color: "#5d4037", marginBottom: "5px", fontSize: "16px" }}>{title}</h4>
-            {dataKey === "revenuePerEmployee" && (
-              <div style={{ fontSize: "12px", color: "#2e7d32", backgroundColor: "#e8f5e9", padding: "4px 8px", borderRadius: "4px", display: "inline-block" }}>
-                From Financial Performance
-              </div>
-            )}
-            {dataKey === "laborCostPercentage" && (
-              <div style={{ fontSize: "12px", color: "#2e7d32", backgroundColor: "#e8f5e9", padding: "4px 8px", borderRadius: "4px", display: "inline-block" }}>
-                Auto-calculated from Financials
-              </div>
-            )}
           </div>
         </div>
 
@@ -2873,97 +3357,26 @@ const Productivity = ({ activeSection, user, isInvestorView }) => {
         <h2 style={{ color: "#5d4037", fontSize: "24px", fontWeight: "700" }}>Productivity</h2>
 
         <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
-          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-            <div style={{ display: "flex", gap: "5px", alignItems: "center" }}>
-              <span style={{ color: "#5d4037", fontSize: "14px" }}>Year:</span>
-              <select
-                value={selectedYear}
-                onChange={(e) => setSelectedYear(Number.parseInt(e.target.value))}
-                style={{
-                  padding: "8px 12px",
-                  borderRadius: "4px",
-                  border: "1px solid #e8ddd4",
-                  fontSize: "14px",
-                  color: "#5d4037",
-                  minWidth: "100px",
-                }}
-              >
-                {years.map((year) => (
-                  <option key={year} value={year}>
-                    {year}
-                  </option>
-                ))}
-              </select>
-            </div>
-            
-            {/* <div style={{ display: "flex", gap: "5px", alignItems: "center" }}>
-              <span style={{ color: "#5d4037", fontSize: "14px" }}>Units:</span>
-              <select
-                value={currencyUnit}
-                onChange={(e) => setCurrencyUnit(e.target.value)}
-                style={{
-                  padding: "8px 12px",
-                  borderRadius: "4px",
-                  border: "1px solid #e8ddd4",
-                  fontSize: "14px",
-                  color: "#5d4037",
-                  minWidth: "100px",
-                }}
-              >
-                <option value="zar">ZAR</option>
-                <option value="zar_thousand">R K</option>
-                <option value="zar_million">R m</option>
-                <option value="zar_billion">R bn</option>
-              </select>
-            </div> */}
-          </div>
-          
-          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-            <button
-              onClick={() => setSelectedViewMode("month")}
+          <div style={{ display: "flex", gap: "5px", alignItems: "center" }}>
+            <span style={{ color: "#5d4037", fontSize: "14px" }}>Year:</span>
+            <select
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(Number.parseInt(e.target.value))}
               style={{
-                padding: "8px 16px",
-                backgroundColor: selectedViewMode === "month" ? "#5d4037" : "#e8ddd4",
-                color: selectedViewMode === "month" ? "#fdfcfb" : "#5d4037",
-                border: "none",
+                padding: "8px 12px",
                 borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: "500",
+                border: "1px solid #e8ddd4",
                 fontSize: "14px",
+                color: "#5d4037",
+                minWidth: "100px",
               }}
             >
-              Monthly
-            </button>
-            <button
-              onClick={() => setSelectedViewMode("quarter")}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: selectedViewMode === "quarter" ? "#5d4037" : "#e8ddd4",
-                color: selectedViewMode === "quarter" ? "#fdfcfb" : "#5d4037",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: "500",
-                fontSize: "14px",
-              }}
-            >
-              Quarterly
-            </button>
-            <button
-              onClick={() => setSelectedViewMode("year")}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: selectedViewMode === "year" ? "#5d4037" : "#e8ddd4",
-                color: selectedViewMode === "year" ? "#fdfcfb" : "#5d4037",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: "500",
-                fontSize: "14px",
-              }}
-            >
-              Yearly
-            </button>
+              {years.map((year) => (
+                <option key={year} value={year}>
+                  {year}
+                </option>
+              ))}
+            </select>
           </div>
           
           {!isInvestorView && (
@@ -3076,8 +3489,6 @@ const Productivity = ({ activeSection, user, isInvestorView }) => {
           onClose={() => setShowTrendModal(false)}
           item={selectedTrendItem}
           currencyUnit={currencyUnit}
-          generateLabels={generateLabels}
-          aggregateDataForView={aggregateDataForView}
           formatValue={formatValue}
         />
       )}
@@ -3091,7 +3502,6 @@ const CapabilityTraining = ({ activeSection, user, isInvestorView }) => {
   const [showModal, setShowModal] = useState(false)
   const [loading, setLoading] = useState(false)
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
-  const [selectedViewMode, setSelectedViewMode] = useState("month")
   const [expandedNotes, setExpandedNotes] = useState({})
   const [kpiNotes, setKpiNotes] = useState({})
   const [kpiAnalysis, setKpiAnalysis] = useState({})
@@ -3180,34 +3590,6 @@ const CapabilityTraining = ({ activeSection, user, isInvestorView }) => {
     }))
   }
 
-  const generateLabels = () => {
-    if (selectedViewMode === "month") {
-      return months
-    } else if (selectedViewMode === "quarter") {
-      return ["Q1", "Q2", "Q3", "Q4"]
-    } else {
-      return [selectedYear.toString()]
-    }
-  }
-
-  const aggregateDataForView = (data) => {
-    if (!data) return []
-    
-    if (selectedViewMode === "month") {
-      return data.map(val => Number.parseFloat(val) || 0)
-    } else if (selectedViewMode === "quarter") {
-      const quarters = []
-      for (let i = 0; i < 4; i++) {
-        const sum = data.slice(i * 3, i * 3 + 3).reduce((acc, val) => acc + (Number.parseFloat(val) || 0), 0)
-        quarters.push(sum / 3)
-      }
-      return quarters
-    } else {
-      const yearlyAvg = data.reduce((acc, val) => acc + (Number.parseFloat(val) || 0), 0) / data.length
-      return [yearlyAvg]
-    }
-  }
-
   const formatValue = (value, unit = currencyUnit) => {
     const num = Number.parseFloat(value) || 0
     switch(unit) {
@@ -3247,10 +3629,10 @@ const CapabilityTraining = ({ activeSection, user, isInvestorView }) => {
   const renderEmployeeTrackingTable = () => {
     // Calculate summary statistics
     const totalEmployees = employeeTrackingData.length
-    const skillsGapDone = employeeTrackingData.filter(e => e.skillsGap?.status === "Yes").length
-    const idpDone = employeeTrackingData.filter(e => e.idp?.status === "Yes").length
-    const midTermReviewDone = employeeTrackingData.filter(e => e.midTermReview?.status === "Yes").length
-    const annualReviewDone = employeeTrackingData.filter(e => e.annualReview?.status === "Yes").length
+    const skillsGapDone = employeeTrackingData.filter(e => e.skillsGap?.status === "Done").length
+    const idpDone = employeeTrackingData.filter(e => e.idp?.status === "Done").length
+    const midTermReviewDone = employeeTrackingData.filter(e => e.midTermReview?.status === "Done").length
+    const annualReviewDone = employeeTrackingData.filter(e => e.annualReview?.status === "Done").length
 
     return (
       <div
@@ -3376,10 +3758,10 @@ const CapabilityTraining = ({ activeSection, user, isInvestorView }) => {
                         borderRadius: "12px",
                         fontSize: "11px",
                         fontWeight: "600",
-                        backgroundColor: employee.skillsGap?.status === "Yes" ? "#4caf50" : "#f44336",
+                        backgroundColor: employee.skillsGap?.status === "Done" ? "#4caf50" : "#f44336",
                         color: "#fff"
                       }}>
-                        {employee.skillsGap?.status === "Yes" ? "Yes" : "No"}
+                        {employee.skillsGap?.status === "Done" ? "Done" : "Not Done"}
                       </span>
                     </td>
                     
@@ -3393,10 +3775,10 @@ const CapabilityTraining = ({ activeSection, user, isInvestorView }) => {
                         borderRadius: "12px",
                         fontSize: "11px",
                         fontWeight: "600",
-                        backgroundColor: employee.idp?.status === "Yes" ? "#4caf50" : "#f44336",
+                        backgroundColor: employee.idp?.status === "Done" ? "#4caf50" : "#f44336",
                         color: "#fff"
                       }}>
-                        {employee.idp?.status === "Yes" ? "Yes" : "No"}
+                        {employee.idp?.status === "Done" ? "Done" : "Not Done"}
                       </span>
                     </td>
                     
@@ -3410,10 +3792,10 @@ const CapabilityTraining = ({ activeSection, user, isInvestorView }) => {
                         borderRadius: "12px",
                         fontSize: "11px",
                         fontWeight: "600",
-                        backgroundColor: employee.midTermReview?.status === "Yes" ? "#4caf50" : "#f44336",
+                        backgroundColor: employee.midTermReview?.status === "Done" ? "#4caf50" : "#f44336",
                         color: "#fff"
                       }}>
-                        {employee.midTermReview?.status === "Yes" ? "Yes" : "No"}
+                        {employee.midTermReview?.status === "Done" ? "Done" : "Not Done"}
                       </span>
                     </td>
                     
@@ -3427,10 +3809,10 @@ const CapabilityTraining = ({ activeSection, user, isInvestorView }) => {
                         borderRadius: "12px",
                         fontSize: "11px",
                         fontWeight: "600",
-                        backgroundColor: employee.annualReview?.status === "Yes" ? "#4caf50" : "#f44336",
+                        backgroundColor: employee.annualReview?.status === "Done" ? "#4caf50" : "#f44336",
                         color: "#fff"
                       }}>
-                        {employee.annualReview?.status === "Yes" ? "Yes" : "No"}
+                        {employee.annualReview?.status === "Done" ? "Done" : "Not Done"}
                       </span>
                     </td>
                   </tr>
@@ -3512,16 +3894,6 @@ const CapabilityTraining = ({ activeSection, user, isInvestorView }) => {
           </div>
           <div style={{ flex: 1 }}>
             <h4 style={{ color: "#5d4037", marginBottom: "5px", fontSize: "16px" }}>{title}</h4>
-            {dataKey === "trainingSpendAmount" && (
-              <div style={{ fontSize: "12px", color: "#2e7d32", backgroundColor: "#e8f5e9", padding: "4px 8px", borderRadius: "4px", display: "inline-block" }}>
-                From Financial Performance
-              </div>
-            )}
-            {dataKey === "trainingSpendPercentage" && (
-              <div style={{ fontSize: "12px", color: "#2e7d32", backgroundColor: "#e8f5e9", padding: "4px 8px", borderRadius: "4px", display: "inline-block" }}>
-                Auto-calculated from Financials
-              </div>
-            )}
           </div>
         </div>
 
@@ -3676,97 +4048,26 @@ const CapabilityTraining = ({ activeSection, user, isInvestorView }) => {
         <h2 style={{ color: "#5d4037", fontSize: "24px", fontWeight: "700" }}>Capability & Training</h2>
 
         <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
-          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-            <div style={{ display: "flex", gap: "5px", alignItems: "center" }}>
-              <span style={{ color: "#5d4037", fontSize: "14px" }}>Year:</span>
-              <select
-                value={selectedYear}
-                onChange={(e) => setSelectedYear(Number.parseInt(e.target.value))}
-                style={{
-                  padding: "8px 12px",
-                  borderRadius: "4px",
-                  border: "1px solid #e8ddd4",
-                  fontSize: "14px",
-                  color: "#5d4037",
-                  minWidth: "100px",
-                }}
-              >
-                {years.map((year) => (
-                  <option key={year} value={year}>
-                    {year}
-                  </option>
-                ))}
-              </select>
-            </div>
-            
-            {/* <div style={{ display: "flex", gap: "5px", alignItems: "center" }}>
-              <span style={{ color: "#5d4037", fontSize: "14px" }}>Units:</span>
-              <select
-                value={currencyUnit}
-                onChange={(e) => setCurrencyUnit(e.target.value)}
-                style={{
-                  padding: "8px 12px",
-                  borderRadius: "4px",
-                  border: "1px solid #e8ddd4",
-                  fontSize: "14px",
-                  color: "#5d4037",
-                  minWidth: "100px",
-                }}
-              >
-                <option value="zar">ZAR</option>
-                <option value="zar_thousand">R K</option>
-                <option value="zar_million">R m</option>
-                <option value="zar_billion">R bn</option>
-              </select>
-            </div> */}
-          </div>
-          
-          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-            <button
-              onClick={() => setSelectedViewMode("month")}
+          <div style={{ display: "flex", gap: "5px", alignItems: "center" }}>
+            <span style={{ color: "#5d4037", fontSize: "14px" }}>Year:</span>
+            <select
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(Number.parseInt(e.target.value))}
               style={{
-                padding: "8px 16px",
-                backgroundColor: selectedViewMode === "month" ? "#5d4037" : "#e8ddd4",
-                color: selectedViewMode === "month" ? "#fdfcfb" : "#5d4037",
-                border: "none",
+                padding: "8px 12px",
                 borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: "500",
+                border: "1px solid #e8ddd4",
                 fontSize: "14px",
+                color: "#5d4037",
+                minWidth: "100px",
               }}
             >
-              Monthly
-            </button>
-            <button
-              onClick={() => setSelectedViewMode("quarter")}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: selectedViewMode === "quarter" ? "#5d4037" : "#e8ddd4",
-                color: selectedViewMode === "quarter" ? "#fdfcfb" : "#5d4037",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: "500",
-                fontSize: "14px",
-              }}
-            >
-              Quarterly
-            </button>
-            <button
-              onClick={() => setSelectedViewMode("year")}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: selectedViewMode === "year" ? "#5d4037" : "#e8ddd4",
-                color: selectedViewMode === "year" ? "#fdfcfb" : "#5d4037",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: "500",
-                fontSize: "14px",
-              }}
-            >
-              Yearly
-            </button>
+              {years.map((year) => (
+                <option key={year} value={year}>
+                  {year}
+                </option>
+              ))}
+            </select>
           </div>
           
           {!isInvestorView && (
@@ -3876,8 +4177,6 @@ const CapabilityTraining = ({ activeSection, user, isInvestorView }) => {
           onClose={() => setShowTrendModal(false)}
           item={selectedTrendItem}
           currencyUnit={currencyUnit}
-          generateLabels={generateLabels}
-          aggregateDataForView={aggregateDataForView}
           formatValue={formatValue}
         />
       )}
@@ -3891,7 +4190,6 @@ const StabilityContinuity = ({ activeSection, user, isInvestorView }) => {
   const [showModal, setShowModal] = useState(false)
   const [loading, setLoading] = useState(false)
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
-  const [selectedViewMode, setSelectedViewMode] = useState("month")
   const [expandedNotes, setExpandedNotes] = useState({})
   const [kpiNotes, setKpiNotes] = useState({})
   const [kpiAnalysis, setKpiAnalysis] = useState({})
@@ -3908,17 +4206,20 @@ const StabilityContinuity = ({ activeSection, user, isInvestorView }) => {
     contractorDependence: Array(12).fill(""),
   })
 
-  // Data structure for termination entries
+  // Data structure for termination and new hire entries
   const [terminationEntries, setTerminationEntries] = useState([])
+  const [newHireEntries, setNewHireEntries] = useState([])
 
   const months = getMonthsForYear(selectedYear, "month")
   const years = Array.from({ length: 5 }, (_, i) => selectedYear - 2 + i)
   const monthOptions = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+  const contractTypes = ["Permanent", "Contract", "Internship"]
 
   useEffect(() => {
     if (user) {
       loadStabilityData()
       loadTerminationData()
+      loadNewHireData()
     }
   }, [user])
 
@@ -3953,6 +4254,19 @@ const StabilityContinuity = ({ activeSection, user, isInvestorView }) => {
     }
   }
 
+  const loadNewHireData = async () => {
+    if (!user) return
+    try {
+      const hireDoc = await getDoc(doc(db, "peopleData", `${user.uid}_newHireData`))
+      if (hireDoc.exists()) {
+        const data = hireDoc.data()
+        if (data.entries) setNewHireEntries(data.entries)
+      }
+    } catch (error) {
+      console.error("Error loading new hire data:", error)
+    }
+  }
+
   // Calculate summary statistics
   const calculateTerminationSummary = () => {
     const summary = {
@@ -3970,32 +4284,24 @@ const StabilityContinuity = ({ activeSection, user, isInvestorView }) => {
     return summary
   }
 
-  const generateLabels = () => {
-    if (selectedViewMode === "month") {
-      return months
-    } else if (selectedViewMode === "quarter") {
-      return ["Q1", "Q2", "Q3", "Q4"]
-    } else {
-      return [selectedYear.toString()]
+  const calculateNewHireSummary = () => {
+    const summary = {
+      total: newHireEntries.length,
+      byType: {
+        Permanent: newHireEntries.filter(e => e.contractType === "Permanent").length,
+        Contract: newHireEntries.filter(e => e.contractType === "Contract").length,
+        Internship: newHireEntries.filter(e => e.contractType === "Internship").length
+      },
+      byMonth: {}
     }
-  }
 
-  const aggregateDataForView = (data) => {
-    if (!data) return []
-    
-    if (selectedViewMode === "month") {
-      return data.map(val => Number.parseFloat(val) || 0)
-    } else if (selectedViewMode === "quarter") {
-      const quarters = []
-      for (let i = 0; i < 4; i++) {
-        const sum = data.slice(i * 3, i * 3 + 3).reduce((acc, val) => acc + (Number.parseFloat(val) || 0), 0)
-        quarters.push(sum / 3)
-      }
-      return quarters
-    } else {
-      const yearlyAvg = data.reduce((acc, val) => acc + (Number.parseFloat(val) || 0), 0) / data.length
-      return [yearlyAvg]
-    }
+    newHireEntries.forEach(entry => {
+      const date = new Date(entry.dateStarted)
+      const month = date.toLocaleString('default', { month: 'short' })
+      summary.byMonth[month] = (summary.byMonth[month] || 0) + 1
+    })
+
+    return summary
   }
 
   const formatValue = (value) => {
@@ -4030,9 +4336,8 @@ const StabilityContinuity = ({ activeSection, user, isInvestorView }) => {
     setShowTrendModal(true)
   }
 
-  const renderTerminationReasonsTable = () => {
+  const renderTerminationTable = () => {
     const summary = calculateTerminationSummary()
-    const uniqueReasons = [...new Set(terminationEntries.map(e => e.reason))]
 
     return (
       <div
@@ -4041,11 +4346,10 @@ const StabilityContinuity = ({ activeSection, user, isInvestorView }) => {
           padding: "20px",
           borderRadius: "8px",
           boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-          marginBottom: "20px",
         }}
       >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
-          <h4 style={{ color: "#5d4037", marginBottom: "5px", fontSize: "16px" }}>Reasons for Terminations</h4>
+          <h4 style={{ color: "#5d4037", marginBottom: "5px", fontSize: "16px" }}>Termination Records</h4>
           <EyeIcon 
             onClick={() => handleCalculationClick(
               "Termination Analysis", 
@@ -4068,7 +4372,7 @@ const StabilityContinuity = ({ activeSection, user, isInvestorView }) => {
         {/* Summary Statistics */}
         <div style={{ 
           display: "grid", 
-          gridTemplateColumns: "repeat(4, 1fr)", 
+          gridTemplateColumns: "repeat(3, 1fr)", 
           gap: "15px", 
           marginBottom: "20px",
           padding: "15px",
@@ -4081,145 +4385,299 @@ const StabilityContinuity = ({ activeSection, user, isInvestorView }) => {
           </div>
           <div style={{ textAlign: "center" }}>
             <div style={{ fontSize: "24px", fontWeight: "700", color: "#5d4037" }}>{terminationEntries.length}</div>
-            <div style={{ fontSize: "12px", color: "#8d6e63" }}>Termination Records</div>
+            <div style={{ fontSize: "12px", color: "#8d6e63" }}>Records</div>
           </div>
           <div style={{ textAlign: "center" }}>
             <div style={{ fontSize: "24px", fontWeight: "700", color: "#5d4037" }}>
-              {Object.keys(summary.byMonth).length}
-            </div>
-            <div style={{ fontSize: "12px", color: "#8d6e63" }}>Months with Data</div>
-          </div>
-          <div style={{ textAlign: "center" }}>
-            <div style={{ fontSize: "24px", fontWeight: "700", color: "#5d4037" }}>
-              {uniqueReasons.length}
+              {Object.keys(summary.byReason).length}
             </div>
             <div style={{ fontSize: "12px", color: "#8d6e63" }}>Unique Reasons</div>
           </div>
         </div>
         
-        {/* Termination Entries Table */}
         <div style={{ overflowX: "auto" }}>
-          {terminationEntries.length > 0 ? (
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
-              <thead>
-                <tr style={{ backgroundColor: "#e8ddd4" }}>
-                  <th style={{ padding: "12px", textAlign: "left", color: "#5d4037", borderBottom: "2px solid #5d4037" }}>
-                    Month
-                  </th>
-                  {uniqueReasons.map(reason => (
-                    <th key={reason} style={{ padding: "12px", textAlign: "center", color: "#5d4037", borderBottom: "2px solid #5d4037" }}>
-                      {reason}
-                    </th>
-                  ))}
-                  <th style={{ padding: "12px", textAlign: "center", color: "#5d4037", borderBottom: "2px solid #5d4037", backgroundColor: "#d7ccc8" }}>
-                    Monthly Total
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {monthOptions.map(month => {
-                  const monthEntries = terminationEntries.filter(entry => entry.month === month)
-                  if (monthEntries.length === 0) return null
-                  
-                  const monthTotal = monthEntries.reduce((sum, entry) => sum + entry.count, 0)
-                  
-                  return (
-                    <tr key={month} style={{ borderBottom: "1px solid #e8ddd4" }}>
-                      <td style={{ padding: "12px", color: "#5d4037", fontWeight: "600" }}>
-                        {month}
-                      </td>
-                      {uniqueReasons.map(reason => {
-                        const entry = monthEntries.find(e => e.reason === reason)
-                        return (
-                          <td key={`${month}-${reason}`} style={{ padding: "12px", textAlign: "center", color: "#5d4037" }}>
-                            {entry ? (
-                              <span style={{
-                                padding: "4px 8px",
-                                backgroundColor: "#ffebee",
-                                color: "#c62828",
-                                borderRadius: "12px",
-                                fontSize: "12px",
-                                fontWeight: "600"
-                              }}>
-                                {entry.count}
-                              </span>
-                            ) : "-"}
-                          </td>
-                        )
-                      })}
-                      <td style={{ 
-                        padding: "12px", 
-                        textAlign: "center", 
-                        color: "#5d4037",
-                        fontWeight: "700",
-                        backgroundColor: "#f5f0eb"
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
+            <thead>
+              <tr style={{ backgroundColor: "#e8ddd4" }}>
+                <th style={{ padding: "12px", textAlign: "left", color: "#5d4037" }}>Employee Name</th>
+                <th style={{ padding: "12px", textAlign: "left", color: "#5d4037" }}>Date Started</th>
+                <th style={{ padding: "12px", textAlign: "left", color: "#5d4037" }}>Date Ended</th>
+                <th style={{ padding: "12px", textAlign: "left", color: "#5d4037" }}>Reason</th>
+              </tr>
+            </thead>
+            <tbody>
+              {terminationEntries.length > 0 ? (
+                terminationEntries.map((entry, index) => (
+                  <tr key={entry.id || index} style={{ borderBottom: "1px solid #e8ddd4" }}>
+                    <td style={{ padding: "12px", color: "#5d4037" }}>{entry.name || "-"}</td>
+                    <td style={{ padding: "12px", color: "#5d4037" }}>{entry.dateStarted || "-"}</td>
+                    <td style={{ padding: "12px", color: "#5d4037" }}>{entry.dateEnded || "-"}</td>
+                    <td style={{ padding: "12px", color: "#5d4037" }}>
+                      <span style={{
+                        padding: "4px 8px",
+                        backgroundColor: "#ffebee",
+                        color: "#c62828",
+                        borderRadius: "12px",
+                        fontSize: "11px",
+                        fontWeight: "600"
                       }}>
-                        {monthTotal}
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-              <tfoot>
-                <tr style={{ backgroundColor: "#d7ccc8", fontWeight: "700" }}>
-                  <td style={{ padding: "12px", color: "#5d4037" }}>
-                    Reason Total:
-                  </td>
-                  {uniqueReasons.map(reason => {
-                    const reasonTotal = terminationEntries
-                      .filter(entry => entry.reason === reason)
-                      .reduce((sum, entry) => sum + entry.count, 0)
-                    return (
-                      <td key={`total-${reason}`} style={{ 
-                        padding: "12px", 
-                        textAlign: "center", 
-                        color: "#5d4037",
-                        backgroundColor: "#e8ddd4"
-                      }}>
-                        {reasonTotal}
-                      </td>
-                    )
-                  })}
-                  <td style={{ 
-                    padding: "12px", 
-                    textAlign: "center", 
-                    color: "#5d4037",
-                    backgroundColor: "#c8b7a8",
-                    fontSize: "14px"
-                  }}>
-                    {summary.total}
+                        {entry.reason}
+                      </span>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan="4" style={{ padding: "20px", textAlign: "center", color: "#8d6e63" }}>
+                    No termination records found.
                   </td>
                 </tr>
-              </tfoot>
-            </table>
-          ) : (
-            <div style={{ padding: "40px", textAlign: "center", color: "#8d6e63" }}>
-              <p style={{ marginBottom: "10px" }}>No termination data recorded yet.</p>
-              {!isInvestorView && (
-                <button
-                  onClick={() => setShowModal(true)}
-                  style={{
-                    padding: "8px 16px",
-                    backgroundColor: "#5d4037",
-                    color: "#fdfcfb",
-                    border: "none",
-                    borderRadius: "4px",
-                    cursor: "pointer",
-                    fontWeight: "600",
-                    fontSize: "13px",
-                  }}
-                >
-                  Add Termination Data
-                </button>
               )}
-            </div>
-          )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    )
+  }
+
+  const renderNewHireTable = () => {
+    const summary = calculateNewHireSummary()
+
+    return (
+      <div
+        style={{
+          backgroundColor: "#fdfcfb",
+          padding: "20px",
+          borderRadius: "8px",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+        }}
+      >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
+          <h4 style={{ color: "#5d4037", marginBottom: "5px", fontSize: "16px" }}>New Hire Records</h4>
+          <EyeIcon 
+            onClick={() => handleCalculationClick(
+              "New Hire Analysis", 
+              "New Hire Analysis tracks new employee additions by type and date.\n\n" +
+              "Contract types and implications:\n\n" +
+              "• Permanent: Core team members, long-term investment\n" +
+              "• Contract: Project-based or temporary, flexible capacity\n" +
+              "• Internship: Pipeline for future talent, development opportunity\n\n" +
+              "Key metrics:\n" +
+              "• Total new hires: Monitor growth rate\n" +
+              "• Contract type mix: Indicates workforce strategy\n" +
+              "• Seasonal patterns: Plan recruitment cycles\n\n" +
+              "Track against termination data to understand net headcount growth."
+            )} 
+          />
         </div>
         
-        <div style={{ marginTop: "15px", color: "#8d6e63", fontSize: "12px" }}>
-          <strong>Annual turnover rate calculation:</strong> (Total terminations ÷ Average headcount) × 100%
-          <br />
-          <strong>Target:</strong> &lt;15% voluntary turnover, &lt;5% involuntary turnover
+        {/* Summary Statistics */}
+        <div style={{ 
+          display: "grid", 
+          gridTemplateColumns: "repeat(4, 1fr)", 
+          gap: "15px", 
+          marginBottom: "20px",
+          padding: "15px",
+          backgroundColor: "#f5f0eb",
+          borderRadius: "6px"
+        }}>
+          <div style={{ textAlign: "center" }}>
+            <div style={{ fontSize: "24px", fontWeight: "700", color: "#5d4037" }}>{summary.total}</div>
+            <div style={{ fontSize: "12px", color: "#8d6e63" }}>Total New Hires</div>
+          </div>
+          <div style={{ textAlign: "center" }}>
+            <div style={{ fontSize: "20px", fontWeight: "700", color: "#2e7d32" }}>{summary.byType.Permanent}</div>
+            <div style={{ fontSize: "11px", color: "#8d6e63" }}>Permanent</div>
+          </div>
+          <div style={{ textAlign: "center" }}>
+            <div style={{ fontSize: "20px", fontWeight: "700", color: "#f57c00" }}>{summary.byType.Contract}</div>
+            <div style={{ fontSize: "11px", color: "#8d6e63" }}>Contract</div>
+          </div>
+          <div style={{ textAlign: "center" }}>
+            <div style={{ fontSize: "20px", fontWeight: "700", color: "#7b1fa2" }}>{summary.byType.Internship}</div>
+            <div style={{ fontSize: "11px", color: "#8d6e63" }}>Internship</div>
+          </div>
+        </div>
+        
+        <div style={{ overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
+            <thead>
+              <tr style={{ backgroundColor: "#e8ddd4" }}>
+                <th style={{ padding: "12px", textAlign: "left", color: "#5d4037" }}>Employee Name</th>
+                <th style={{ padding: "12px", textAlign: "left", color: "#5d4037" }}>Date Started</th>
+                <th style={{ padding: "12px", textAlign: "left", color: "#5d4037" }}>Contract Type</th>
+                <th style={{ padding: "12px", textAlign: "left", color: "#5d4037" }}>End Date</th>
+              </tr>
+            </thead>
+            <tbody>
+              {newHireEntries.length > 0 ? (
+                newHireEntries.map((entry, index) => (
+                  <tr key={entry.id || index} style={{ borderBottom: "1px solid #e8ddd4" }}>
+                    <td style={{ padding: "12px", color: "#5d4037" }}>{entry.name}</td>
+                    <td style={{ padding: "12px", color: "#5d4037" }}>{entry.dateStarted}</td>
+                    <td style={{ padding: "12px", color: "#5d4037" }}>
+                      <span style={{
+                        padding: "4px 8px",
+                        backgroundColor: 
+                          entry.contractType === "Permanent" ? "#e8f5e9" :
+                          entry.contractType === "Contract" ? "#fff3e0" : "#f3e5f5",
+                        color: 
+                          entry.contractType === "Permanent" ? "#2e7d32" :
+                          entry.contractType === "Contract" ? "#f57c00" : "#7b1fa2",
+                        borderRadius: "12px",
+                        fontSize: "11px",
+                        fontWeight: "600"
+                      }}>
+                        {entry.contractType}
+                      </span>
+                    </td>
+                    <td style={{ padding: "12px", color: "#5d4037" }}>{entry.endDate || "-"}</td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan="4" style={{ padding: "20px", textAlign: "center", color: "#8d6e63" }}>
+                    No new hire records found.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    )
+  }
+
+  const renderTerminationPieChart = () => {
+    const summary = calculateTerminationSummary()
+    const reasons = Object.keys(summary.byReason)
+    const values = reasons.map(r => summary.byReason[r])
+
+    if (reasons.length === 0) return null
+
+    const colors = ["#3E2723", "#5D4037", "#795548", "#8D6E63", "#A1887F", "#BCAAA4"]
+
+    const data = {
+      labels: reasons,
+      datasets: [
+        {
+          data: values,
+          backgroundColor: colors.slice(0, reasons.length),
+          borderColor: "#ffffff",
+          borderWidth: 2,
+        },
+      ],
+    }
+
+    return (
+      <div
+        style={{
+          backgroundColor: "#fdfcfb",
+          padding: "20px",
+          borderRadius: "8px",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+        }}
+      >
+        <h4 style={{ color: "#5d4037", marginBottom: "15px", fontSize: "16px", textAlign: "center" }}>
+          Reasons for Termination
+        </h4>
+        <div style={{ height: "250px" }}>
+          <Pie
+            data={data}
+            options={{
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: {
+                legend: {
+                  position: "bottom",
+                  labels: {
+                    color: "#5d4037",
+                    font: {
+                      size: 11,
+                    },
+                  },
+                },
+                tooltip: {
+                  callbacks: {
+                    label: (context) => {
+                      const label = context.label || '';
+                      const value = context.raw || 0;
+                      const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                      const percentage = ((value / total) * 100).toFixed(1);
+                      return `${label}: ${value} (${percentage}%)`;
+                    }
+                  }
+                },
+              },
+            }}
+          />
+        </div>
+      </div>
+    )
+  }
+
+  const renderNewHirePieChart = () => {
+    const summary = calculateNewHireSummary()
+    const types = Object.keys(summary.byType)
+    const values = types.map(t => summary.byType[t])
+
+    if (types.length === 0 || summary.total === 0) return null
+
+    const colors = ["#2e7d32", "#f57c00", "#7b1fa2"]
+
+    const data = {
+      labels: types,
+      datasets: [
+        {
+          data: values,
+          backgroundColor: colors,
+          borderColor: "#ffffff",
+          borderWidth: 2,
+        },
+      ],
+    }
+
+    return (
+      <div
+        style={{
+          backgroundColor: "#fdfcfb",
+          padding: "20px",
+          borderRadius: "8px",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+        }}
+      >
+        <h4 style={{ color: "#5d4037", marginBottom: "15px", fontSize: "16px", textAlign: "center" }}>
+          New Hires by Contract Type
+        </h4>
+        <div style={{ height: "250px" }}>
+          <Pie
+            data={data}
+            options={{
+              responsive: true,
+              maintainAspectRatio: false,
+              plugins: {
+                legend: {
+                  position: "bottom",
+                  labels: {
+                    color: "#5d4037",
+                    font: {
+                      size: 11,
+                    },
+                  },
+                },
+                tooltip: {
+                  callbacks: {
+                    label: (context) => {
+                      const label = context.label || '';
+                      const value = context.raw || 0;
+                      const percentage = ((value / summary.total) * 100).toFixed(1);
+                      return `${label}: ${value} (${percentage}%)`;
+                    }
+                  }
+                },
+              },
+            }}
+          />
         </div>
       </div>
     )
@@ -4440,478 +4898,8 @@ const StabilityContinuity = ({ activeSection, user, isInvestorView }) => {
         <h2 style={{ color: "#5d4037", fontSize: "24px", fontWeight: "700" }}>Stability & Continuity</h2>
 
         <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
-          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-            <div style={{ display: "flex", gap: "5px", alignItems: "center" }}>
-              <span style={{ color: "#5d4037", fontSize: "14px" }}>Year:</span>
-              <select
-                value={selectedYear}
-                onChange={(e) => setSelectedYear(Number.parseInt(e.target.value))}
-                style={{
-                  padding: "8px 12px",
-                  borderRadius: "4px",
-                  border: "1px solid #e8ddd4",
-                  fontSize: "14px",
-                  color: "#5d4037",
-                  minWidth: "100px",
-                }}
-              >
-                {years.map((year) => (
-                  <option key={year} value={year}>
-                    {year}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-          
-          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-            <button
-              onClick={() => setSelectedViewMode("month")}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: selectedViewMode === "month" ? "#5d4037" : "#e8ddd4",
-                color: selectedViewMode === "month" ? "#fdfcfb" : "#5d4037",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: "500",
-                fontSize: "14px",
-              }}
-            >
-              Monthly
-            </button>
-            <button
-              onClick={() => setSelectedViewMode("quarter")}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: selectedViewMode === "quarter" ? "#5d4037" : "#e8ddd4",
-                color: selectedViewMode === "quarter" ? "#fdfcfb" : "#5d4037",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: "500",
-                fontSize: "14px",
-              }}
-            >
-              Quarterly
-            </button>
-            <button
-              onClick={() => setSelectedViewMode("year")}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: selectedViewMode === "year" ? "#5d4037" : "#e8ddd4",
-                color: selectedViewMode === "year" ? "#fdfcfb" : "#5d4037",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: "500",
-                fontSize: "14px",
-              }}
-            >
-              Yearly
-            </button>
-          </div>
-          
-          {!isInvestorView && (
-            <button
-              onClick={() => setShowModal(true)}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#5d4037",
-                color: "#fdfcfb",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: "600",
-                fontSize: "13px",
-                whiteSpace: "nowrap",
-              }}
-            >
-              Add Data
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Termination Reasons Table */}
-      {renderTerminationReasonsTable()}
-
-      {/* KPI Cards - 2 per row */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "20px", marginBottom: "30px" }}>
-        {renderKPICard(
-          "Overall Turnover (% Annually)", 
-          "overallTurnover", 
-          true,
-          "Overall Turnover measures the percentage of employees who leave the organization annually.\n\n" +
-          "Calculation: (Total terminations ÷ Average headcount) × 100%\n\n" +
-          "Industry benchmarks:\n" +
-          "• Overall average: 15-20%\n" +
-          "• High-performing companies: <10%\n" +
-          "• High-turnover industries: >30%\n\n" +
-          "Components:\n" +
-          "• Voluntary turnover (employee-initiated)\n" +
-          "• Involuntary turnover (employer-initiated)\n\n" +
-          "Cost of turnover: 50-200% of annual salary per role\n\n" +
-          "Target: <15% overall, <10% voluntary"
-        )}
-        {renderKPICard(
-          "Workforce Movements", 
-          "workforceMovements", 
-          false,
-          "Workforce Movements tracks net headcount change through hires and terminations.\n\n" +
-          "Calculation: New hires - Terminations\n\n" +
-          "Positive value = Net growth\n" +
-          "Negative value = Net reduction\n" +
-          "Zero = Stable headcount\n\n" +
-          "Analyze in context of:\n" +
-          "• Business growth phase\n" +
-          "• Seasonal patterns\n" +
-          "• Budget constraints\n\n" +
-          "Rapid changes (positive or negative) can indicate:\n" +
-          "• Aggressive expansion\n" +
-          "• Downsizing/restructuring\n" +
-          "• Instability in workforce planning"
-        )}
-        {renderKPICard(
-          "Critical Role Turnover", 
-          "criticalRoleTurnover", 
-          true,
-          "Critical Role Turnover measures turnover specifically in roles that are essential to business operations.\n\n" +
-          "Critical roles are those that:\n" +
-          "• Are difficult to replace (specialized skills)\n" +
-          "• Have significant impact on revenue/operations\n" +
-          "• Take >3 months to recruit and onboard\n" +
-          "• Represent key intellectual property holders\n\n" +
-          "Calculation: (Critical role terminations ÷ Total critical roles) × 100%\n\n" +
-          "Target: <10% annually\n\n" +
-          "High critical role turnover indicates:\n" +
-          "• Succession planning gaps\n" +
-          "• Competitive compensation issues\n" +
-          "• Leadership or culture problems"
-        )}
-        {renderKPICard(
-          "Contractor Dependence", 
-          "contractorDependence", 
-          true,
-          "Contractor Dependence measures the percentage of the workforce that are contractors/freelancers.\n\n" +
-          "Calculation: (Contractor headcount ÷ Total workforce) × 100%\n\n" +
-          "Benefits of contractors:\n" +
-          "• Flexibility for variable workload\n" +
-          "• Access to specialized skills\n" +
-          "• Lower fixed costs\n\n" +
-          "Risks of high contractor dependence:\n" +
-          "• Knowledge retention\n" +
-          "• Cultural integration\n" +
-          "• IP protection\n" +
-          "• Continuity risk\n\n" +
-          "Target ranges:\n" +
-          "• Stable operations: 10-20%\n" +
-          "• Project-based: 20-30%\n" +
-          "• High dependence: >30% - review conversion strategy"
-        )}
-      </div>
-
-      {/* Unified Data Entry Modal */}
-      <UnifiedDataEntryModal
-        isOpen={showModal}
-        onClose={() => setShowModal(false)}
-        currentTab="stability-continuity"
-        user={user}
-        onSave={() => {
-          loadStabilityData()
-          loadTerminationData()
-        }}
-        loading={loading}
-      />
-
-      {/* Calculation Modal */}
-      <CalculationModal
-        isOpen={showCalculationModal}
-        onClose={() => setShowCalculationModal(false)}
-        title={selectedCalculation.title}
-        calculation={selectedCalculation.calculation}
-      />
-
-      {/* Trend Modal */}
-      {showTrendModal && (
-        <TrendModal
-          isOpen={showTrendModal}
-          onClose={() => setShowTrendModal(false)}
-          item={selectedTrendItem}
-          currencyUnit="zar"
-          generateLabels={generateLabels}
-          aggregateDataForView={aggregateDataForView}
-          formatValue={formatValue}
-        />
-      )}
-    </div>
-  )
-}
-
-// ==================== EMPLOYEE COMPOSITION COMPONENT ====================
-// FIXED: Pie chart labels are now white
-
-const EmployeeCompositionTab = ({ activeSection, user, isInvestorView }) => {
-  const [showModal, setShowModal] = useState(false)
-  const [loading, setLoading] = useState(false)
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
-  const [showCalculationModal, setShowCalculationModal] = useState(false)
-  const [selectedCalculation, setSelectedCalculation] = useState({ title: "", calculation: "" })
-  const [employeeData, setEmployeeData] = useState(null)
-
-  const years = Array.from({ length: 5 }, (_, i) => selectedYear - 2 + i)
-
-  useEffect(() => {
-    if (user) {
-      loadEmployeeData()
-    }
-  }, [user])
-
-  const loadEmployeeData = async () => {
-    if (!user) return
-    setLoading(true)
-    try {
-      const employeeDoc = await getDoc(doc(db, "peopleData", `${user.uid}_employeeComposition`))
-      if (employeeDoc.exists()) {
-        const data = employeeDoc.data()
-        if (data.employeeData) setEmployeeData(data.employeeData)
-      } else {
-        setEmployeeData(null)
-      }
-    } catch (error) {
-      console.error("Error loading employee composition data:", error)
-      setEmployeeData(null)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const createPieChartData = (data, colors, categoryLabels) => {
-    if (!data) return null
-    
-    const labels = categoryLabels || Object.keys(data).map(key => 
-      key.charAt(0).toUpperCase() + key.slice(1).replace(/([A-Z])/g, ' $1')
-    )
-    const values = Object.values(data)
-    
-    return {
-      labels,
-      datasets: [
-        {
-          data: values,
-          backgroundColor: colors,
-          borderColor: "#ffffff",
-          borderWidth: 2,
-        },
-      ],
-    }
-  }
-
-  // Updated pie chart options with white numbers inside and black labels outside
-  const pieChartOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: {
-        display: false, // Hide legend since we have outside labels
-      },
-      tooltip: {
-        backgroundColor: "rgba(93, 64, 55, 0.9)",
-        titleColor: "#fff",
-        bodyColor: "#fff",
-        borderColor: "#5d4037",
-        borderWidth: 1,
-        callbacks: {
-          label: function(context) {
-            const label = context.label || '';
-            const value = context.raw || 0;
-            const total = context.dataset.data.reduce((a, b) => a + b, 0);
-            const percentage = ((value / total) * 100).toFixed(1);
-            return `${label}: ${value} (${percentage}%)`;
-          }
-        }
-      },
-      datalabels: {
-        // White numbers inside the pie slices
-        color: '#FFFFFF',
-        font: {
-          weight: 'bold',
-          size: 14
-        },
-        formatter: function(value, context) {
-          const total = context.dataset.data.reduce(function(a, b) { return a + b; }, 0);
-          const percentage = ((value / total) * 100).toFixed(1);
-          return percentage + '%'; // Show only percentage inside
-        },
-        anchor: 'center',
-        align: 'center',
-        offset: 0
-      },
-    },
-    // Add a custom plugin to draw labels outside
-    layout: {
-      padding: {
-        top: 30,
-        bottom: 30,
-        left: 30,
-        right: 30
-      }
-    }
-  }
-
-  // Custom plugin to draw category labels outside the pie
-  const outsideLabelsPlugin = {
-    id: 'outsideLabels',
-    afterDatasetsDraw(chart) {
-      const { ctx, data, chartArea: { width, height } } = chart;
-      
-      ctx.save();
-      ctx.font = 'bold 11px Arial';
-      ctx.fillStyle = '#000000';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      
-      const meta = chart.getDatasetMeta(0);
-      const total = data.datasets[0].data.reduce((a, b) => a + b, 0);
-      
-      data.labels.forEach((label, index) => {
-        const element = meta.data[index];
-        if (element) {
-          const angle = (element.startAngle + element.endAngle) / 2;
-          const radius = element.outerRadius + 20; // Position outside the pie
-          
-          const x = width / 2 + Math.cos(angle) * radius;
-          const y = height / 2 + Math.sin(angle) * radius;
-          
-          // Draw label text
-          ctx.fillText(label, x, y);
-        }
-      });
-      
-      ctx.restore();
-    }
-  };
-
-  const handleCalculationClick = (title, calculation) => {
-    setSelectedCalculation({ title, calculation })
-    setShowCalculationModal(true)
-  }
-
-  const renderPieChart = (title, data, colors, calculation = "", categoryLabels = null) => {
-    if (!data) return null
-
-    const chartData = createPieChartData(data, colors, categoryLabels)
-    if (!chartData) return null
-
-    return (
-      <div
-        style={{
-          backgroundColor: "#fdfcfb",
-          padding: "20px",
-          borderRadius: "8px",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-          position: "relative",
-        }}
-      >
-        <EyeIcon 
-          onClick={() => handleCalculationClick(title, calculation)} 
-        />
-        <h4 style={{ color: "#5d4037", marginBottom: "15px", fontSize: "16px", textAlign: "center" }}>
-          {title}
-        </h4>
-        <div style={{ height: "350px", position: "relative" }}>
-          <Pie
-            data={chartData}
-            options={pieChartOptions}
-            plugins={[outsideLabelsPlugin]}
-          />
-        </div>
-        {/* Simple reference guide */}
-        <div style={{ 
-          marginTop: "15px", 
-          display: "flex", 
-          flexWrap: "wrap", 
-          justifyContent: "center",
-          gap: "15px",
-          borderTop: "1px solid #e8ddd4",
-          paddingTop: "15px"
-        }}>
-          {categoryLabels && categoryLabels.map((label, idx) => (
-            <div key={idx} style={{ display: "flex", alignItems: "center", gap: "5px" }}>
-              <div style={{ 
-                width: "12px", 
-                height: "12px", 
-                backgroundColor: colors[idx % colors.length],
-                borderRadius: "3px"
-              }}></div>
-              <span style={{ fontSize: "11px", color: "#5d4037" }}>{label}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-    )
-  }
-
-  const renderEmptyState = () => (
-    <div
-      style={{
-        backgroundColor: "#fdfcfb",
-        padding: "40px",
-        borderRadius: "8px",
-        boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-        textAlign: "center",
-        gridColumn: "1 / -1",
-      }}
-    >
-      <p style={{ color: "#8d6e63", fontSize: "16px", marginBottom: "20px" }}>
-        No employee composition data available. Click "Add Data" to get started.
-      </p>
-      {!isInvestorView && (
-        <button
-          onClick={() => setShowModal(true)}
-          style={{
-            padding: "10px 20px",
-            backgroundColor: "#5d4037",
-            color: "#fdfcfb",
-            border: "none",
-            borderRadius: "4px",
-            cursor: "pointer",
-            fontWeight: "600",
-            fontSize: "14px",
-          }}
-        >
-          Add Your First Data
-        </button>
-      )}
-    </div>
-  )
-
-  if (activeSection !== "employee-composition") return null
-
-  return (
-    <div style={{ paddingTop: "20px" }}>
-      <KeyQuestionBox
-        question="Are we externally credible? Does our workforce composition reflect the markets we serve and stakeholders we engage?"
-        signals="Representation gaps, diversity metrics, inclusion indicators"
-        decisions="Board & leadership changes, targeted recruitment, inclusion programs"
-        section="employee-composition"
-      />
-
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          marginBottom: "20px",
-          flexWrap: "wrap",
-          gap: "10px",
-        }}
-      >
-        <h2 style={{ color: "#5d4037", fontSize: "24px", fontWeight: "700" }}>Employee Composition</h2>
-
-        <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
           <div style={{ display: "flex", gap: "5px", alignItems: "center" }}>
-            <span style={{ color: "#5d4037", fontSize: "14px", whiteSpace: "nowrap" }}>Select Year:</span>
+            <span style={{ color: "#5d4037", fontSize: "14px" }}>Year:</span>
             <select
               value={selectedYear}
               onChange={(e) => setSelectedYear(Number.parseInt(e.target.value))}
@@ -4953,121 +4941,125 @@ const EmployeeCompositionTab = ({ activeSection, user, isInvestorView }) => {
         </div>
       </div>
 
-      {loading ? (
-        <div style={{ textAlign: "center", padding: "40px", color: "#8d6e63" }}>
-          Loading employee composition data...
-        </div>
-      ) : !employeeData ? (
-        <div style={{ marginBottom: "30px" }}>
-          {renderEmptyState()}
-        </div>
-      ) : (
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(450px, 1fr))",
-            gap: "20px",
-            marginBottom: "30px",
-          }}
-        >
-          {renderPieChart(
-            "Gender Distribution", 
-            employeeData.gender, 
-            ["#3E2723", "#5D4037", "#8D6E63"],
-            "Gender Distribution shows the proportion of employees by gender.\n\n" +
-            "Calculation: (Employees in each gender category ÷ Total employees) × 100%\n\n" +
-            "Why this matters:\n" +
-            "• Reflects commitment to diversity and inclusion\n" +
-            "• Correlates with innovation and decision-making quality\n" +
-            "• Increasingly important to investors and clients\n\n" +
-            "Consider:\n" +
-            "• Compare to industry benchmarks\n" +
-            "• Analyze representation at different levels (entry, management, leadership)\n" +
-            "• Set improvement targets with timelines",
-            ["Male", "Female", "Other"]
-          )}
-          {renderPieChart(
-            "Race Distribution", 
-            employeeData.race, 
-            ["#3E2723", "#5D4037", "#8D6E63", "#A1887F", "#D7CCC8"],
-            "Race/Ethnicity Distribution shows workforce composition by racial/ethnic groups.\n\n" +
-            "Calculation: (Employees in each racial/ethnic group ÷ Total employees) × 100%\n\n" +
-            "Why this matters:\n" +
-            "• Demonstrates commitment to employment equity\n" +
-            "• Enhances understanding of diverse markets\n" +
-            "• Often required for regulatory compliance and tenders\n\n" +
-            "Consider:\n" +
-            "• Compare to available talent pool demographics\n" +
-            "• Analyze by job level and function\n" +
-            "• Review recruitment sources and selection processes",
-            ["African", "White", "Colored", "Indian", "Other"]
-          )}
-          {renderPieChart(
-            "Age Distribution", 
-            employeeData.age, 
-            ["#3E2723", "#5D4037", "#8D6E63", "#A1887F", "#D7CCC8"],
-            "Age Distribution shows the proportion of employees across age brackets.\n\n" +
-            "Calculation: (Employees in each age bracket ÷ Total employees) × 100%\n\n" +
-            "Why this matters:\n" +
-            "• Indicates succession planning readiness\n" +
-            "• Reveals potential knowledge transfer gaps\n" +
-            "• Highlights multi-generational workplace dynamics\n\n" +
-            "Consider:\n" +
-            "• High concentration in 55+ = retirement risk\n" +
-            "• Low concentration in under 30 = future talent pipeline concerns\n" +
-            "• Balance across generations for institutional memory + fresh perspectives",
-            ["Under 25", "25-34", "35-44", "45-54", "55+"]
-          )}
-          {renderPieChart(
-            "Tenure Distribution", 
-            employeeData.tenure, 
-            ["#3E2723", "#5D4037", "#8D6E63", "#A1887F", "#D7CCC8"],
-            "Tenure Distribution shows how long employees have been with the organization.\n\n" +
-            "Calculation: (Employees in each tenure bracket ÷ Total employees) × 100%\n\n" +
-            "Why this matters:\n" +
-            "• <1 year: New hire integration effectiveness\n" +
-            "• 1-3 years: Early career development\n" +
-            "• 3-5 years: Growing contributors\n" +
-            "• 5-10 years: Experienced core team\n" +
-            "• 10+ years: Institutional knowledge holders\n\n" +
-            "Healthy distribution includes mix of new talent and experienced staff.\n" +
-            "High concentration in <1 year may indicate rapid growth OR retention issues.",
-            ["<1 year", "1-3 years", "3-5 years", "5-10 years", "10+ years"]
-          )}
-          {renderPieChart(
-            "Education Distribution", 
-            employeeData.education, 
-            ["#3E2723", "#5D4037", "#8D6E63", "#A1887F"],
-            "Education Distribution shows the highest qualification levels of employees.\n\n" +
-            "Calculation: (Employees with each education level ÷ Total employees) × 100%\n\n" +
-            "Why this matters:\n" +
-            "• Indicates technical capability and knowledge base\n" +
-            "• Affects ability to innovate and solve complex problems\n" +
-            "• May influence client perception and credibility\n\n" +
-            "Consider:\n" +
-            "• Requirements vary by industry and role\n" +
-            "• Balance formal qualifications with experience\n" +
-            "• Support ongoing education and professional development",
-            ["High School", "Diploma", "Degree", "Postgraduate"]
-          )}
-        </div>
-      )}
+      {/* Row 1: Termination Table and Pie Chart */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px", marginBottom: "20px" }}>
+        {renderTerminationTable()}
+        {renderTerminationPieChart()}
+      </div>
 
+      {/* Row 2: New Hires Table and Pie Chart */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px", marginBottom: "20px" }}>
+        {renderNewHireTable()}
+        {renderNewHirePieChart()}
+      </div>
+
+      {/* Row 3: KPI Cards - 4 per row */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "20px", marginBottom: "30px" }}>
+        {renderKPICard(
+          "Overall Turnover (% Annually)", 
+          "overallTurnover", 
+          true,
+          "Overall Turnover measures the percentage of employees who leave the organization annually.\n\n" +
+          "Calculation: (Total terminations ÷ Average headcount) × 100%\n\n" +
+          "Industry benchmarks:\n" +
+          "• Overall average: 15-20%\n" +
+          "• High-performing companies: <10%\n" +
+          "• High-turnover industries: >30%\n\n" +
+          "Components:\n" +
+          "• Voluntary turnover (employee-initiated)\n" +
+          "• Involuntary turnover (employer-initiated)\n\n" +
+          "Cost of turnover: 50-200% of annual salary per role\n\n" +
+          "Target: <15% overall, <10% voluntary"
+        )}
+        {renderKPICard(
+          "Critical Role Turnover", 
+          "criticalRoleTurnover", 
+          true,
+          "Critical Role Turnover measures turnover specifically in roles that are essential to business operations.\n\n" +
+          "Critical roles are those that:\n" +
+          "• Are difficult to replace (specialized skills)\n" +
+          "• Have significant impact on revenue/operations\n" +
+          "• Take >3 months to recruit and onboard\n" +
+          "• Represent key intellectual property holders\n\n" +
+          "Calculation: (Critical role terminations ÷ Total critical roles) × 100%\n\n" +
+          "Target: <10% annually\n\n" +
+          "High critical role turnover indicates:\n" +
+          "• Succession planning gaps\n" +
+          "• Competitive compensation issues\n" +
+          "• Leadership or culture problems"
+        )}
+        {renderKPICard(
+          "Workforce Movements", 
+          "workforceMovements", 
+          false,
+          "Workforce Movements tracks net headcount change through hires and terminations.\n\n" +
+          "Calculation: New hires - Terminations\n\n" +
+          "Positive value = Net growth\n" +
+          "Negative value = Net reduction\n" +
+          "Zero = Stable headcount\n\n" +
+          "Analyze in context of:\n" +
+          "• Business growth phase\n" +
+          "• Seasonal patterns\n" +
+          "• Budget constraints\n\n" +
+          "Rapid changes (positive or negative) can indicate:\n" +
+          "• Aggressive expansion\n" +
+          "• Downsizing/restructuring\n" +
+          "• Instability in workforce planning"
+        )}
+        {renderKPICard(
+          "Contractor Dependence", 
+          "contractorDependence", 
+          true,
+          "Contractor Dependence measures the percentage of the workforce that are contractors/freelancers.\n\n" +
+          "Calculation: (Contractor headcount ÷ Total workforce) × 100%\n\n" +
+          "Benefits of contractors:\n" +
+          "• Flexibility for variable workload\n" +
+          "• Access to specialized skills\n" +
+          "• Lower fixed costs\n\n" +
+          "Risks of high contractor dependence:\n" +
+          "• Knowledge retention\n" +
+          "• Cultural integration\n" +
+          "• IP protection\n" +
+          "• Continuity risk\n\n" +
+          "Target ranges:\n" +
+          "• Stable operations: 10-20%\n" +
+          "• Project-based: 20-30%\n" +
+          "• High dependence: >30% - review conversion strategy"
+        )}
+      </div>
+
+      {/* Unified Data Entry Modal */}
       <UnifiedDataEntryModal
         isOpen={showModal}
         onClose={() => setShowModal(false)}
-        currentTab="employee-composition"
+        currentTab="stability-continuity"
         user={user}
-        onSave={loadEmployeeData}
+        onSave={() => {
+          loadStabilityData()
+          loadTerminationData()
+          loadNewHireData()
+        }}
         loading={loading}
       />
 
+      {/* Calculation Modal */}
       <CalculationModal
         isOpen={showCalculationModal}
         onClose={() => setShowCalculationModal(false)}
         title={selectedCalculation.title}
         calculation={selectedCalculation.calculation}
       />
+
+      {/* Trend Modal */}
+      {showTrendModal && (
+        <TrendModal
+          isOpen={showTrendModal}
+          onClose={() => setShowTrendModal(false)}
+          item={selectedTrendItem}
+          currencyUnit="zar"
+          formatValue={formatValue}
+        />
+      )}
     </div>
   )
 }
@@ -5075,10 +5067,13 @@ const EmployeeCompositionTab = ({ activeSection, user, isInvestorView }) => {
 // ==================== MAIN PEOPLE PERFORMANCE COMPONENT ====================
 
 const PeoplePerformance = () => {
-  const [activeSection, setActiveSection] = useState("execution-capacity")
+  const [activeSection, setActiveSection] = useState("employee-composition") // Changed default to employee-composition
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const [user, setUser] = useState(null)
   const [showFullDescription, setShowFullDescription] = useState(false)
+  const [showDataEntryModal, setShowDataEntryModal] = useState(false)
+  const [userData, setUserData] = useState({})
+  const [loading, setLoading] = useState(false)
 
   const [isInvestorView, setIsInvestorView] = useState(false)
   const [viewingSMEId, setViewingSMEId] = useState(null)
@@ -5109,6 +5104,35 @@ const PeoplePerformance = () => {
   }, [isInvestorView, viewingSMEId])
 
   useEffect(() => {
+    if (user && activeSection === "employee-composition") {
+      loadEmployeeData()
+    }
+  }, [user, activeSection])
+
+  const loadEmployeeData = async () => {
+    if (!user) return
+    setLoading(true)
+    try {
+      const employeeDoc = await getDoc(doc(db, "peopleData", `${user.uid}_employeeComposition`))
+      if (employeeDoc.exists()) {
+        const data = employeeDoc.data()
+        if (data.employeeData) {
+          setUserData(data.employeeData)
+        } else {
+          setUserData({})
+        }
+      } else {
+        setUserData({})
+      }
+    } catch (error) {
+      console.error("Error loading employee composition data:", error)
+      setUserData({})
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
     const checkSidebarState = () => {
       setIsSidebarCollapsed(document.body.classList.contains("sidebar-collapsed"))
     }
@@ -5135,11 +5159,11 @@ const PeoplePerformance = () => {
   })
 
   const sectionButtons = [
-    { id: "execution-capacity", label: "Execution Capacity & Scalability" },
+    { id: "employee-composition", label: "Employee Composition" },
+    { id: "execution-capacity", label: "Execution Capacity" },
     { id: "productivity", label: "Productivity" },
     { id: "capability-training", label: "Capability & Training" },
     { id: "stability-continuity", label: "Stability & Continuity" },
-    { id: "employee-composition", label: "Employee Composition" },
   ]
 
   const handleExitInvestorView = () => {
@@ -5147,6 +5171,10 @@ const PeoplePerformance = () => {
     sessionStorage.removeItem("viewingSMEName")
     sessionStorage.removeItem("investorViewMode")
     window.location.href = "/my-cohorts"
+  }
+
+  const handleOpenModal = (tabId) => {
+    setShowDataEntryModal(true)
   }
 
   return (
@@ -5186,7 +5214,7 @@ const PeoplePerformance = () => {
                 cursor: "pointer",
                 fontWeight: "600",
                 fontSize: "14px",
-                transition: "background-color 0.3s ease",
+                transition: "backgroundColor 0.3s ease",
               }}
               onMouseEnter={(e) => {
                 e.target.style.backgroundColor = "#45a049"
@@ -5263,57 +5291,6 @@ const PeoplePerformance = () => {
                     </ul>
                   </div>
                 </div>
-
-                <div style={{ marginTop: "30px", paddingTop: "20px", borderTop: "1px solid #e8ddd4" }}>
-                  <h3 style={{ color: "#7d5a50", marginTop: 0, marginBottom: "12px", fontSize: "16px" }}>
-                    Key People Performance Dimensions
-                  </h3>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
-                    <div>
-                      <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "8px", fontSize: "14px", fontWeight: "600" }}>
-                        Execution Capacity & Scalability
-                      </h4>
-                      <p style={{ color: "#4a352f", fontSize: "13px", lineHeight: "1.6", margin: 0 }}>
-                        Evaluate leadership capacity and team sufficiency for current and near-term workload
-                      </p>
-                    </div>
-                    <div>
-                      <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "8px", fontSize: "14px", fontWeight: "600" }}>
-                        Productivity
-                      </h4>
-                      <p style={{ color: "#4a352f", fontSize: "13px", lineHeight: "1.6", margin: 0 }}>
-                        Assess if output is scaling with headcount through efficiency trends
-                      </p>
-                    </div>
-                    <div>
-                      <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "8px", fontSize: "14px", fontWeight: "600" }}>
-                        Capability & Training
-                      </h4>
-                      <p style={{ color: "#4a352f", fontSize: "13px", lineHeight: "1.6", margin: 0 }}>
-                        Determine if the business is investing enough in skills development for future growth
-                      </p>
-                    </div>
-                    <div>
-                      <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "8px", fontSize: "14px", fontWeight: "600" }}>
-                        Stability & Continuity
-                      </h4>
-                      <p style={{ color: "#4a352f", fontSize: "13px", lineHeight: "1.6", margin: 0 }}>
-                        Monitor talent leakage risks and ensure business continuity
-                      </p>
-                    </div>
-                    <div style={{ gridColumn: "span 2" }}>
-                      <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "8px", fontSize: "14px", fontWeight: "600" }}>
-                        Employee Composition
-                      </h4>
-                      <p style={{ color: "#4a352f", fontSize: "13px", lineHeight: "1.6", margin: 0 }}>
-                        Analyze workforce demographics and representation for external credibility
-                      </p>
-                    </div>
-                  </div>
-                  <p style={{ color: "#4a352f", fontSize: "13px", lineHeight: "1.6", marginTop: "15px" }}>
-                    Each section provides key metrics, signals, and decision points to help you make informed strategic choices about your organization's human capital.
-                  </p>
-                </div>
               </div>
             </div>
           )}
@@ -5356,34 +5333,55 @@ const PeoplePerformance = () => {
           ))}
         </div>
 
-        <ExecutionCapacity
-          activeSection={activeSection}
-          user={user}
-          isInvestorView={isInvestorView}
-        />
+        {loading ? (
+          <div style={{ textAlign: "center", padding: "40px", color: "#8d6e63" }}>
+            Loading data...
+          </div>
+        ) : (
+          <>
+            <EmployeeComposition
+              activeSection={activeSection}
+              userData={userData}
+              onOpenModal={handleOpenModal}
+            />
 
-        <Productivity
-          activeSection={activeSection}
-          user={user}
-          isInvestorView={isInvestorView}
-        />
+            <ExecutionCapacity
+              activeSection={activeSection}
+              user={user}
+              isInvestorView={isInvestorView}
+            />
 
-        <CapabilityTraining
-          activeSection={activeSection}
-          user={user}
-          isInvestorView={isInvestorView}
-        />
+            <Productivity
+              activeSection={activeSection}
+              user={user}
+              isInvestorView={isInvestorView}
+            />
 
-        <StabilityContinuity
-          activeSection={activeSection}
-          user={user}
-          isInvestorView={isInvestorView}
-        />
+            <CapabilityTraining
+              activeSection={activeSection}
+              user={user}
+              isInvestorView={isInvestorView}
+            />
 
-        <EmployeeCompositionTab
-          activeSection={activeSection}
+            <StabilityContinuity
+              activeSection={activeSection}
+              user={user}
+              isInvestorView={isInvestorView}
+            />
+          </>
+        )}
+
+        <UnifiedDataEntryModal
+          isOpen={showDataEntryModal}
+          onClose={() => setShowDataEntryModal(false)}
+          currentTab={activeSection}
           user={user}
-          isInvestorView={isInvestorView}
+          onSave={() => {
+            if (activeSection === "employee-composition") {
+              loadEmployeeData()
+            }
+          }}
+          loading={loading}
         />
       </div>
     </div>
