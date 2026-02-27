@@ -4088,6 +4088,7 @@ const RiskManagement = ({ activeSection, currentUser, isInvestorView }) => {
     "reputational-risk": [],
     "compliance-risk": [],
     "technology-risk": [],
+    "people-risk": [],
   })
   const [riskSection, setRiskSection] = useState("business-risk")
   const [hoveredRiskType, setHoveredRiskType] = useState(null)
@@ -4101,15 +4102,15 @@ const RiskManagement = ({ activeSection, currentUser, isInvestorView }) => {
   const [analysisError, setAnalysisError] = useState("")
   const [savedAnalysis, setSavedAnalysis] = useState("")
 
-  // UPDATED RISK COLORS - Technology risk changed to pink
   const RISK_COLORS = {
-    "financial-risk": "#4CAF50", // Green
-    "market-risk": "#2196F3", // Blue
-    "operational-risk": "#FF9800", // Orange
-    "reputational-risk": "#9C27B0", // Purple
-    "compliance-risk": "#F44336", // Red
-    "technology-risk": "#FF69B4", // Hot Pink - distinct from market risk
-    "business-risk": "#7d5a50", // Brown for "All" view
+    "financial-risk": "#4CAF50",
+    "market-risk": "#2196F3",
+    "operational-risk": "#FF9800",
+    "reputational-risk": "#9C27B0",
+    "compliance-risk": "#F44336",
+    "technology-risk": "#FF69B4",
+    "people-risk": "#619399", // Teal
+    "business-risk": "#7d5a50",
   }
 
   const riskCategories = [
@@ -4120,31 +4121,22 @@ const RiskManagement = ({ activeSection, currentUser, isInvestorView }) => {
     { id: "reputational-risk", name: "Reputational Risk", color: RISK_COLORS["reputational-risk"] },
     { id: "compliance-risk", name: "Compliance Risk", color: RISK_COLORS["compliance-risk"] },
     { id: "technology-risk", name: "Technology Risk", color: RISK_COLORS["technology-risk"] },
+    { id: "people-risk", name: "People Risk", color: RISK_COLORS["people-risk"] },
   ]
 
-  // NEW: Function to clean up the AI response
   const cleanAIResponse = (text) => {
     if (!text) return text;
-    
-    // Remove all markdown hashtags (###, ##, #) and replace with bold styling or remove
     let cleaned = text
-      // Remove hashtags at beginning of lines
       .replace(/^#+\s*/gm, '')
-      // Remove any remaining hashtags
       .replace(/#/g, '')
-      // Remove asterisk formatting
       .replace(/\*\*/g, '')
       .replace(/\*/g, '')
-      // Clean up multiple newlines
       .replace(/\n{3,}/g, '\n\n')
-      // Remove markdown links but keep text
       .replace(/\[([^\]]+)\]\([^\)]+\)/g, '$1')
-      // Trim each line
       .split('\n')
       .map(line => line.trim())
       .join('\n')
       .trim();
-    
     return cleaned;
   }
 
@@ -4162,6 +4154,7 @@ const RiskManagement = ({ activeSection, currentUser, isInvestorView }) => {
           "reputational-risk": [],
           "compliance-risk": [],
           "technology-risk": [],
+          "people-risk": [],
         }
 
         riskSnapshot.docs.forEach((doc) => {
@@ -4181,7 +4174,6 @@ const RiskManagement = ({ activeSection, currentUser, isInvestorView }) => {
     loadRiskData()
   }, [activeSection, currentUser])
 
-  // Load saved AI analysis
   useEffect(() => {
     if (currentUser && activeSection === "strategic-risk-control") {
       loadSavedAIAnalysis()
@@ -4192,7 +4184,6 @@ const RiskManagement = ({ activeSection, currentUser, isInvestorView }) => {
     try {
       const aiAnalysisRef = doc(db, "strategicRiskControlAnalysis", currentUser.uid)
       const aiSnapshot = await getDoc(aiAnalysisRef)
-      
       if (aiSnapshot.exists()) {
         const data = aiSnapshot.data()
         if (data.analysis) {
@@ -4212,7 +4203,6 @@ const RiskManagement = ({ activeSection, currentUser, isInvestorView }) => {
       alert("You are in view-only mode and cannot make changes.")
       return
     }
-
     if (!currentUser) {
       alert("You must be logged in to add risks.")
       return
@@ -4240,7 +4230,6 @@ const RiskManagement = ({ activeSection, currentUser, isInvestorView }) => {
         ...prev,
         [category]: [...prev[category], { id: docRef.id, ...newRisk }],
       }))
-      // Clear saved analysis when data changes
       setSavedAnalysis("")
     } catch (error) {
       console.error("Error adding risk:", error)
@@ -4253,12 +4242,10 @@ const RiskManagement = ({ activeSection, currentUser, isInvestorView }) => {
       alert("You are in view-only mode and cannot make changes.")
       return
     }
-
     setRiskData((prev) => ({
       ...prev,
       [category]: prev[category].map((item) => (item.id === id ? { ...item, [field]: value } : item)),
     }))
-
     try {
       const riskRef = doc(db, "risks", id)
       await updateDoc(riskRef, { [field]: value })
@@ -4272,7 +4259,6 @@ const RiskManagement = ({ activeSection, currentUser, isInvestorView }) => {
       alert("You are in view-only mode and cannot make changes.")
       return
     }
-
     if (window.confirm("Are you sure you want to delete this risk item?")) {
       try {
         await deleteDoc(doc(db, "risks", id))
@@ -4280,7 +4266,6 @@ const RiskManagement = ({ activeSection, currentUser, isInvestorView }) => {
           ...prev,
           [category]: prev[category].filter((item) => item.id !== id),
         }))
-        // Clear saved analysis when data changes
         setSavedAnalysis("")
       } catch (error) {
         console.error("Error deleting risk:", error)
@@ -4289,29 +4274,22 @@ const RiskManagement = ({ activeSection, currentUser, isInvestorView }) => {
     }
   }
 
-  // UPDATED: Filter function for both table and scatter plot
   const filteredData = (data) => {
     return data.filter((item) => {
       if (!selectedMonth && !selectedYear) return true
-      
       if (!item.actionDate) return true
-      
       const actionDate = new Date(item.actionDate)
       const monthMatch = !selectedMonth || (actionDate.getMonth() + 1) === parseInt(selectedMonth)
       const yearMatch = !selectedYear || actionDate.getFullYear() === parseInt(selectedYear)
-      
       return monthMatch && yearMatch
     })
   }
 
-  // UPDATED: Create scatter chart data with filtered data
   const createScatterChartData = (category) => {
     if (category === "business-risk") {
-      // For "All" view, use different colors for each risk category with filtered data
       const datasets = []
-      
       Object.keys(riskData).forEach((catKey) => {
-        const data = filteredData(riskData[catKey] || []) // Apply filter here
+        const data = filteredData(riskData[catKey] || [])
         if (data.length > 0) {
           datasets.push({
             label: riskCategories.find(c => c.id === catKey)?.name || catKey,
@@ -4331,11 +4309,9 @@ const RiskManagement = ({ activeSection, currentUser, isInvestorView }) => {
           })
         }
       })
-      
       return { datasets }
     } else {
-      // For single category view with filtered data
-      const data = filteredData(riskData[category] || []) // Apply filter here
+      const data = filteredData(riskData[category] || [])
       return {
         datasets: [
           {
@@ -4362,18 +4338,11 @@ const RiskManagement = ({ activeSection, currentUser, isInvestorView }) => {
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
-      datalabels: {
-        display: false
-      },
+      datalabels: { display: false },
       legend: {
         display: true,
         position: 'top',
-        labels: {
-          color: "#4a352f",
-          font: {
-            size: 12
-          }
-        }
+        labels: { color: "#4a352f", font: { size: 12 } }
       },
       tooltip: {
         callbacks: {
@@ -4391,59 +4360,26 @@ const RiskManagement = ({ activeSection, currentUser, isInvestorView }) => {
     },
     scales: {
       x: {
-        title: {
-          display: true,
-          text: "Likelihood (1-5)",
-          color: "#4a352f",
-          font: {
-            weight: "bold",
-            size: 12,
-          },
-        },
-        min: 0,
-        max: 6,
-        ticks: {
-          stepSize: 1,
-          color: "#4a352f",
-        },
-        grid: {
-          color: "#f0e6d9",
-        },
+        title: { display: true, text: "Likelihood (1-5)", color: "#4a352f", font: { weight: "bold", size: 12 } },
+        min: 0, max: 6,
+        ticks: { stepSize: 1, color: "#4a352f" },
+        grid: { color: "#f0e6d9" },
       },
       y: {
-        title: {
-          display: true,
-          text: "Severity (1-5)",
-          color: "#4a352f",
-          font: {
-            weight: "bold",
-            size: 12,
-          },
-        },
-        min: 0,
-        max: 6,
-        ticks: {
-          stepSize: 1,
-          color: "#4a352f",
-        },
-        grid: {
-          color: "#f0e6d9",
-        },
+        title: { display: true, text: "Severity (1-5)", color: "#4a352f", font: { weight: "bold", size: 12 } },
+        min: 0, max: 6,
+        ticks: { stepSize: 1, color: "#4a352f" },
+        grid: { color: "#f0e6d9" },
       },
     },
   }
 
-  // AI Analysis Functions
   const prepareRiskData = (data) => {
     const allRisks = Object.values(data).flat()
-    
-    // Calculate risk scores
     const riskScores = allRisks.map(risk => ({
       ...risk,
       riskScore: (risk.severity || 1) * (risk.likelihood || 1)
     }))
-    
-    // Group by category
     const risksByCategory = {}
     const risksByStatus = {}
     const risksByOwner = {}
@@ -4451,43 +4387,33 @@ const RiskManagement = ({ activeSection, currentUser, isInvestorView }) => {
     const highRisks = []
     const mediumRisks = []
     const lowRisks = []
-    
+
     riskScores.forEach(risk => {
       const category = risk.riskCategory || "Uncategorized"
       if (!risksByCategory[category]) risksByCategory[category] = []
       risksByCategory[category].push(risk)
-      
-      // By status
       const status = risk.mitigationStatus || "Uncontrolled"
       if (!risksByStatus[status]) risksByStatus[status] = 0
       risksByStatus[status]++
-      
-      // By owner
       if (risk.owner) {
         if (!risksByOwner[risk.owner]) risksByOwner[risk.owner] = 0
         risksByOwner[risk.owner]++
       }
-      
-      // By review cadence
       if (risk.reviewCadence) {
         if (!risksByReviewCadence[risk.reviewCadence]) risksByReviewCadence[risk.reviewCadence] = 0
         risksByReviewCadence[risk.reviewCadence]++
       }
-      
-      // Risk levels
       if (risk.riskScore >= 16) highRisks.push(risk)
       else if (risk.riskScore >= 9) mediumRisks.push(risk)
       else lowRisks.push(risk)
     })
-    
-    // Calculate average scores by category
+
     const avgScoresByCategory = {}
     Object.keys(risksByCategory).forEach(category => {
       const risks = risksByCategory[category]
       const avgSeverity = risks.reduce((sum, r) => sum + (r.severity || 1), 0) / risks.length
       const avgLikelihood = risks.reduce((sum, r) => sum + (r.likelihood || 1), 0) / risks.length
       const avgRiskScore = risks.reduce((sum, r) => sum + (r.riskScore || 1), 0) / risks.length
-      
       avgScoresByCategory[category] = {
         avgSeverity: Math.round(avgSeverity * 10) / 10,
         avgLikelihood: Math.round(avgLikelihood * 10) / 10,
@@ -4497,7 +4423,7 @@ const RiskManagement = ({ activeSection, currentUser, isInvestorView }) => {
         uncontrolledRisks: risks.filter(r => r.mitigationStatus === "🔴 Uncontrolled").length
       }
     })
-    
+
     return {
       totalRisks: allRisks.length,
       risksByCategory,
@@ -4508,7 +4434,7 @@ const RiskManagement = ({ activeSection, currentUser, isInvestorView }) => {
       highRisks: highRisks.length,
       mediumRisks: mediumRisks.length,
       lowRisks: lowRisks.length,
-      highRiskItems: highRisks.slice(0, 5), // Top 5 high risks
+      highRiskItems: highRisks.slice(0, 5),
       controlledRisks: allRisks.filter(r => r.mitigationStatus === "🟢 Controlled").length,
       partiallyControlledRisks: allRisks.filter(r => r.mitigationStatus === "🟡 Partially controlled").length,
       uncontrolledRisks: allRisks.filter(r => r.mitigationStatus === "🔴 Uncontrolled").length,
@@ -4546,12 +4472,12 @@ ${Object.keys(data.avgScoresByCategory).map(category => {
 }).join('\n')}
 
 TOP 5 HIGHEST RISK ITEMS:
-${data.highRiskItems.map((risk, i) => 
+${data.highRiskItems.map((risk, i) =>
   `  ${i+1}. ${risk.risk || 'Unnamed Risk'} - Score: ${risk.riskScore} (Severity: ${risk.severity}, Likelihood: ${risk.likelihood}), Status: ${risk.mitigationStatus}, Owner: ${risk.owner || 'Unassigned'}`
 ).join('\n')}
 
 RISK STATUS DISTRIBUTION:
-${Object.keys(data.risksByStatus).map(status => 
+${Object.keys(data.risksByStatus).map(status =>
   `- ${status}: ${data.risksByStatus[status]}`
 ).join('\n')}
 
@@ -4634,13 +4560,11 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
       alert("You are in view-only mode and cannot generate AI analysis.")
       return
     }
-
     const allRisks = Object.values(riskData).flat()
     if (allRisks.length === 0 || !currentUser) {
       setAnalysisError("No risk data available for analysis. Please add some risk items first.")
       return
     }
-
     setIsGenerating(true)
     setAnalysisError("")
     setShowAIAnalysis(true)
@@ -4648,10 +4572,8 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
     try {
       const analysisData = prepareRiskData(riskData)
       const prompt = createRiskPrompt(analysisData)
-
       const functions = getFunctions()
       const generateStrategicRiskAnalysis = httpsCallable(functions, "generateStrategicRiskAnalysis")
-      
       const response = await generateStrategicRiskAnalysis({
         prompt: prompt,
         userId: currentUser.uid,
@@ -4659,15 +4581,9 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
       })
 
       let analysis = response?.data?.content || response?.data?.analysis
-      
-      if (!analysis) {
-        throw new Error("No analysis generated")
-      }
+      if (!analysis) throw new Error("No analysis generated")
+      analysis = cleanAIResponse(analysis)
 
-      // Clean the analysis before saving
-      analysis = cleanAIResponse(analysis);
-
-      // Save analysis to Firestore
       const aiAnalysisRef = doc(db, "strategicRiskControlAnalysis", currentUser.uid)
       await setDoc(aiAnalysisRef, {
         analysis: analysis,
@@ -4683,7 +4599,6 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
 
       setAiAnalysis(analysis)
       setSavedAnalysis(analysis)
-      
     } catch (error) {
       console.error("Error generating AI analysis:", error)
       setAnalysisError(`Failed to generate analysis: ${error.message}`)
@@ -4723,7 +4638,6 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
         boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
       }}
     >
-      {/* Key Question Section */}
       <KeyQuestionBox
         question={SECTION_DATA["strategic-risk-control"].keyQuestion}
         signals={SECTION_DATA["strategic-risk-control"].keySignals}
@@ -4732,23 +4646,15 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
 
       <h3 style={{ color: "#4a352f", marginBottom: "20px" }}>Risk Register</h3>
 
-      {/* Risk Category Tabs with hover tooltips - Technology Risk now pink */}
-      <div
-        style={{
-          display: "flex",
-          gap: "10px",
-          marginBottom: "20px",
-          flexWrap: "wrap",
-        }}
-      >
+      {/* Risk Category Tabs */}
+      <div style={{ display: "flex", gap: "10px", marginBottom: "20px", flexWrap: "wrap" }}>
         {riskCategories.map((category) => (
           <div key={category.id} style={{ position: "relative" }}>
             <button
               onClick={() => setRiskSection(category.id)}
               onMouseEnter={() => {
                 if (category.id !== "business-risk") {
-                  const typeName = category.name.replace(" Risk", " Risk")
-                  setHoveredRiskType(typeName)
+                  setHoveredRiskType(category.name)
                 }
               }}
               onMouseLeave={() => setHoveredRiskType(null)}
@@ -4804,7 +4710,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
         ))}
       </div>
 
-      {/* Month/Year Filter - Now affects BOTH table and scatter plot */}
+      {/* Month/Year Filter */}
       <div style={{ display: "flex", gap: "10px", marginBottom: "20px", alignItems: "center" }}>
         <label style={{ color: "#4a352f", fontWeight: "500" }}>Filter by Action Date:</label>
         <select
@@ -4827,7 +4733,6 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
             </option>
           ))}
         </select>
-        
         <select
           value={selectedYear}
           onChange={(e) => setSelectedYear(e.target.value)}
@@ -4843,18 +4748,12 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
         >
           <option value="">All Years</option>
           {years.map((year) => (
-            <option key={year} value={year}>
-              {year}
-            </option>
+            <option key={year} value={year}>{year}</option>
           ))}
         </select>
-        
         {(selectedMonth || selectedYear) && (
           <button
-            onClick={() => {
-              setSelectedMonth("")
-              setSelectedYear("")
-            }}
+            onClick={() => { setSelectedMonth(""); setSelectedYear("") }}
             style={{
               padding: "8px 12px",
               backgroundColor: "#e6d7c3",
@@ -4879,7 +4778,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
 
         return (
           <div key={category.id}>
-            {/* Scatter Chart - Now uses filtered data */}
+            {/* Scatter Chart */}
             <div
               style={{
                 backgroundColor: "#fdfcfb",
@@ -4893,9 +4792,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                 {category.name} Matrix
                 {category.id === "business-risk" && " (All Risks)"}
                 {(selectedMonth || selectedYear) && (
-                  <span style={{ fontSize: "12px", marginLeft: "10px", color: "#8d6e63" }}>
-                    (Filtered by date)
-                  </span>
+                  <span style={{ fontSize: "12px", marginLeft: "10px", color: "#8d6e63" }}>(Filtered by date)</span>
                 )}
               </h4>
               <div style={{ height: "300px" }}>
@@ -4903,7 +4800,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
               </div>
             </div>
 
-            {/* Risk Assessment Table - Uses filtered data */}
+            {/* Risk Assessment Table */}
             <div
               style={{
                 backgroundColor: "#fdfcfb",
@@ -4924,9 +4821,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                   Risk Assessment Table
                   {category.id === "business-risk" && " (All Risks)"}
                   {(selectedMonth || selectedYear) && (
-                    <span style={{ fontSize: "12px", marginLeft: "10px", color: "#8d6e63" }}>
-                      (Filtered by date)
-                    </span>
+                    <span style={{ fontSize: "12px", marginLeft: "10px", color: "#8d6e63" }}>(Filtered by date)</span>
                   )}
                 </h4>
                 {!isInvestorView && category.id !== "business-risk" && (
@@ -4970,42 +4865,19 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                     }}
                   >
                     <thead>
-                      <tr
-                        style={{
-                          backgroundColor: "#e6d7c3",
-                          borderBottom: "2px solid #c8b6a6",
-                        }}
-                      >
+                      <tr style={{ backgroundColor: "#e6d7c3", borderBottom: "2px solid #c8b6a6" }}>
                         <th style={{ padding: "12px", textAlign: "left", fontWeight: "600", width: "80px" }}>Risk</th>
-                        <th style={{ padding: "12px", textAlign: "left", fontWeight: "600", width: "120px" }}>
-                          Risk Category
-                        </th>
-                        <th style={{ padding: "12px", textAlign: "left", fontWeight: "600", width: "180px" }}>
-                          Description
-                        </th>
-                        <th style={{ padding: "12px", textAlign: "left", fontWeight: "600", width: "80px" }}>
-                          Severity (1-5)
-                        </th>
-                        <th style={{ padding: "12px", textAlign: "left", fontWeight: "600", width: "80px" }}>
-                          Likelihood (1-5)
-                        </th>
+                        <th style={{ padding: "12px", textAlign: "left", fontWeight: "600", width: "120px" }}>Risk Category</th>
+                        <th style={{ padding: "12px", textAlign: "left", fontWeight: "600", width: "180px" }}>Description</th>
+                        <th style={{ padding: "12px", textAlign: "left", fontWeight: "600", width: "80px" }}>Severity (1-5)</th>
+                        <th style={{ padding: "12px", textAlign: "left", fontWeight: "600", width: "80px" }}>Likelihood (1-5)</th>
                         <th style={{ padding: "12px", textAlign: "left", fontWeight: "600", width: "100px" }}>Owner</th>
-                        <th style={{ padding: "12px", textAlign: "left", fontWeight: "600", width: "180px" }}>
-                          Mitigation
-                        </th>
-                        <th style={{ padding: "12px", textAlign: "left", fontWeight: "600", width: "140px" }}>
-                          Mitigation Status
-                        </th>
-                        <th style={{ padding: "12px", textAlign: "left", fontWeight: "600", width: "120px" }}>
-                          Review Cadence
-                        </th>
-                        <th style={{ padding: "12px", textAlign: "left", fontWeight: "600", width: "100px" }}>
-                          Action Date
-                        </th>
+                        <th style={{ padding: "12px", textAlign: "left", fontWeight: "600", width: "180px" }}>Mitigation</th>
+                        <th style={{ padding: "12px", textAlign: "left", fontWeight: "600", width: "140px" }}>Mitigation Status</th>
+                        <th style={{ padding: "12px", textAlign: "left", fontWeight: "600", width: "120px" }}>Review Cadence</th>
+                        <th style={{ padding: "12px", textAlign: "left", fontWeight: "600", width: "100px" }}>Action Date</th>
                         {!isInvestorView && category.id !== "business-risk" && (
-                          <th style={{ padding: "12px", textAlign: "left", fontWeight: "600", width: "80px" }}>
-                            Actions
-                          </th>
+                          <th style={{ padding: "12px", textAlign: "left", fontWeight: "600", width: "80px" }}>Actions</th>
                         )}
                       </tr>
                     </thead>
@@ -5017,12 +4889,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                             : category.id
 
                         return (
-                          <tr
-                            key={item.id}
-                            style={{
-                              borderBottom: "1px solid #e6d7c3",
-                            }}
-                          >
+                          <tr key={item.id} style={{ borderBottom: "1px solid #e6d7c3" }}>
                             <td style={{ padding: "12px" }}>
                               <input
                                 type="text"
@@ -5030,13 +4897,9 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                                 onChange={(e) => updateRiskItem(originalCategory, item.id, "risk", e.target.value)}
                                 disabled={isInvestorView || category.id === "business-risk"}
                                 style={{
-                                  width: "100%",
-                                  padding: "6px",
-                                  border: "1px solid #e8ddd4",
-                                  borderRadius: "4px",
-                                  fontSize: "12px",
-                                  backgroundColor:
-                                    isInvestorView || category.id === "business-risk" ? "#f5f5f5" : "white",
+                                  width: "100%", padding: "6px", border: "1px solid #e8ddd4",
+                                  borderRadius: "4px", fontSize: "12px",
+                                  backgroundColor: isInvestorView || category.id === "business-risk" ? "#f5f5f5" : "white",
                                   cursor: isInvestorView || category.id === "business-risk" ? "not-allowed" : "text",
                                 }}
                               />
@@ -5045,88 +4908,53 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                             <td style={{ padding: "12px" }}>
                               <textarea
                                 value={item.description}
-                                onChange={(e) =>
-                                  updateRiskItem(originalCategory, item.id, "description", e.target.value)
-                                }
+                                onChange={(e) => updateRiskItem(originalCategory, item.id, "description", e.target.value)}
                                 disabled={isInvestorView || category.id === "business-risk"}
                                 rows="2"
                                 style={{
-                                  width: "100%",
-                                  padding: "6px",
-                                  border: "1px solid #e8ddd4",
-                                  borderRadius: "4px",
-                                  fontSize: "12px",
-                                  resize: "vertical",
-                                  backgroundColor:
-                                    isInvestorView || category.id === "business-risk" ? "#f5f5f5" : "white",
+                                  width: "100%", padding: "6px", border: "1px solid #e8ddd4",
+                                  borderRadius: "4px", fontSize: "12px", resize: "vertical",
+                                  backgroundColor: isInvestorView || category.id === "business-risk" ? "#f5f5f5" : "white",
                                   cursor: isInvestorView || category.id === "business-risk" ? "not-allowed" : "text",
                                 }}
                               />
                             </td>
                             <td style={{ padding: "12px" }}>
                               <input
-                                type="number"
-                                min="1"
-                                max="5"
-                                value={item.severity}
-                                onChange={(e) =>
-                                  updateRiskItem(originalCategory, item.id, "severity", Number.parseInt(e.target.value))
-                                }
+                                type="number" min="1" max="5" value={item.severity}
+                                onChange={(e) => updateRiskItem(originalCategory, item.id, "severity", Number.parseInt(e.target.value))}
                                 disabled={isInvestorView || category.id === "business-risk"}
                                 style={{
-                                  width: "60px",
-                                  padding: "6px",
-                                  border: "1px solid #e8ddd4",
-                                  borderRadius: "4px",
-                                  fontSize: "12px",
-                                  backgroundColor:
-                                    isInvestorView || category.id === "business-risk" ? "#f5f5f5" : "white",
+                                  width: "60px", padding: "6px", border: "1px solid #e8ddd4",
+                                  borderRadius: "4px", fontSize: "12px",
+                                  backgroundColor: isInvestorView || category.id === "business-risk" ? "#f5f5f5" : "white",
                                   cursor: isInvestorView || category.id === "business-risk" ? "not-allowed" : "text",
                                 }}
                               />
                             </td>
                             <td style={{ padding: "12px" }}>
                               <input
-                                type="number"
-                                min="1"
-                                max="5"
-                                value={item.likelihood}
-                                onChange={(e) =>
-                                  updateRiskItem(
-                                    originalCategory,
-                                    item.id,
-                                    "likelihood",
-                                    Number.parseInt(e.target.value),
-                                  )
-                                }
+                                type="number" min="1" max="5" value={item.likelihood}
+                                onChange={(e) => updateRiskItem(originalCategory, item.id, "likelihood", Number.parseInt(e.target.value))}
                                 disabled={isInvestorView || category.id === "business-risk"}
                                 style={{
-                                  width: "60px",
-                                  padding: "6px",
-                                  border: "1px solid #e8ddd4",
-                                  borderRadius: "4px",
-                                  fontSize: "12px",
-                                  backgroundColor:
-                                    isInvestorView || category.id === "business-risk" ? "#f5f5f5" : "white",
+                                  width: "60px", padding: "6px", border: "1px solid #e8ddd4",
+                                  borderRadius: "4px", fontSize: "12px",
+                                  backgroundColor: isInvestorView || category.id === "business-risk" ? "#f5f5f5" : "white",
                                   cursor: isInvestorView || category.id === "business-risk" ? "not-allowed" : "text",
                                 }}
                               />
                             </td>
                             <td style={{ padding: "12px" }}>
                               <input
-                                type="text"
-                                value={item.owner || ""}
+                                type="text" value={item.owner || ""}
                                 onChange={(e) => updateRiskItem(originalCategory, item.id, "owner", e.target.value)}
                                 disabled={isInvestorView || category.id === "business-risk"}
                                 placeholder="Owner name"
                                 style={{
-                                  width: "100%",
-                                  padding: "6px",
-                                  border: "1px solid #e8ddd4",
-                                  borderRadius: "4px",
-                                  fontSize: "12px",
-                                  backgroundColor:
-                                    isInvestorView || category.id === "business-risk" ? "#f5f5f5" : "white",
+                                  width: "100%", padding: "6px", border: "1px solid #e8ddd4",
+                                  borderRadius: "4px", fontSize: "12px",
+                                  backgroundColor: isInvestorView || category.id === "business-risk" ? "#f5f5f5" : "white",
                                   cursor: isInvestorView || category.id === "business-risk" ? "not-allowed" : "text",
                                 }}
                               />
@@ -5134,20 +4962,13 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                             <td style={{ padding: "12px" }}>
                               <textarea
                                 value={item.mitigation}
-                                onChange={(e) =>
-                                  updateRiskItem(originalCategory, item.id, "mitigation", e.target.value)
-                                }
+                                onChange={(e) => updateRiskItem(originalCategory, item.id, "mitigation", e.target.value)}
                                 disabled={isInvestorView || category.id === "business-risk"}
                                 rows="2"
                                 style={{
-                                  width: "100%",
-                                  padding: "6px",
-                                  border: "1px solid #e8ddd4",
-                                  borderRadius: "4px",
-                                  fontSize: "12px",
-                                  resize: "vertical",
-                                  backgroundColor:
-                                    isInvestorView || category.id === "business-risk" ? "#f5f5f5" : "white",
+                                  width: "100%", padding: "6px", border: "1px solid #e8ddd4",
+                                  borderRadius: "4px", fontSize: "12px", resize: "vertical",
+                                  backgroundColor: isInvestorView || category.id === "business-risk" ? "#f5f5f5" : "white",
                                   cursor: isInvestorView || category.id === "business-risk" ? "not-allowed" : "text",
                                 }}
                               />
@@ -5155,18 +4976,12 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                             <td style={{ padding: "12px" }}>
                               <select
                                 value={item.mitigationStatus}
-                                onChange={(e) =>
-                                  updateRiskItem(originalCategory, item.id, "mitigationStatus", e.target.value)
-                                }
+                                onChange={(e) => updateRiskItem(originalCategory, item.id, "mitigationStatus", e.target.value)}
                                 disabled={isInvestorView || category.id === "business-risk"}
                                 style={{
-                                  width: "100%",
-                                  padding: "6px",
-                                  border: "1px solid #e8ddd4",
-                                  borderRadius: "4px",
-                                  fontSize: "12px",
-                                  backgroundColor:
-                                    isInvestorView || category.id === "business-risk" ? "#f5f5f5" : "white",
+                                  width: "100%", padding: "6px", border: "1px solid #e8ddd4",
+                                  borderRadius: "4px", fontSize: "12px",
+                                  backgroundColor: isInvestorView || category.id === "business-risk" ? "#f5f5f5" : "white",
                                   cursor: isInvestorView || category.id === "business-risk" ? "not-allowed" : "pointer",
                                 }}
                               >
@@ -5177,41 +4992,27 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                             </td>
                             <td style={{ padding: "12px" }}>
                               <input
-                                type="text"
-                                value={item.reviewCadence || ""}
-                                onChange={(e) =>
-                                  updateRiskItem(originalCategory, item.id, "reviewCadence", e.target.value)
-                                }
+                                type="text" value={item.reviewCadence || ""}
+                                onChange={(e) => updateRiskItem(originalCategory, item.id, "reviewCadence", e.target.value)}
                                 disabled={isInvestorView || category.id === "business-risk"}
                                 placeholder="e.g., Monthly"
                                 style={{
-                                  width: "100%",
-                                  padding: "6px",
-                                  border: "1px solid #e8ddd4",
-                                  borderRadius: "4px",
-                                  fontSize: "12px",
-                                  backgroundColor:
-                                    isInvestorView || category.id === "business-risk" ? "#f5f5f5" : "white",
+                                  width: "100%", padding: "6px", border: "1px solid #e8ddd4",
+                                  borderRadius: "4px", fontSize: "12px",
+                                  backgroundColor: isInvestorView || category.id === "business-risk" ? "#f5f5f5" : "white",
                                   cursor: isInvestorView || category.id === "business-risk" ? "not-allowed" : "text",
                                 }}
                               />
                             </td>
                             <td style={{ padding: "12px" }}>
                               <input
-                                type="date"
-                                value={item.actionDate || ""}
-                                onChange={(e) =>
-                                  updateRiskItem(originalCategory, item.id, "actionDate", e.target.value)
-                                }
+                                type="date" value={item.actionDate || ""}
+                                onChange={(e) => updateRiskItem(originalCategory, item.id, "actionDate", e.target.value)}
                                 disabled={isInvestorView || category.id === "business-risk"}
                                 style={{
-                                  width: "100%",
-                                  padding: "6px",
-                                  border: "1px solid #e8ddd4",
-                                  borderRadius: "4px",
-                                  fontSize: "12px",
-                                  backgroundColor:
-                                    isInvestorView || category.id === "business-risk" ? "#f5f5f5" : "white",
+                                  width: "100%", padding: "6px", border: "1px solid #e8ddd4",
+                                  borderRadius: "4px", fontSize: "12px",
+                                  backgroundColor: isInvestorView || category.id === "business-risk" ? "#f5f5f5" : "white",
                                   cursor: isInvestorView || category.id === "business-risk" ? "not-allowed" : "text",
                                 }}
                               />
@@ -5219,18 +5020,11 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                             {!isInvestorView && category.id !== "business-risk" && (
                               <td style={{ padding: "12px", display: "flex", gap: "5px" }}>
                                 <button
-                                  onClick={() => {
-                                    // Edit functionality - could open a modal similar to milestones
-                                    // For now, fields are directly editable in the table
-                                  }}
+                                  onClick={() => {}}
                                   style={{
-                                    padding: "6px",
-                                    backgroundColor: "transparent",
-                                    color: "#7d5a50",
-                                    border: "none",
-                                    borderRadius: "4px",
-                                    cursor: "pointer",
-                                    fontSize: "16px",
+                                    padding: "6px", backgroundColor: "transparent",
+                                    color: "#7d5a50", border: "none", borderRadius: "4px",
+                                    cursor: "pointer", fontSize: "16px",
                                   }}
                                   title="Edit"
                                 >
@@ -5239,13 +5033,9 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                                 <button
                                   onClick={() => deleteRiskItem(originalCategory, item.id)}
                                   style={{
-                                    padding: "6px",
-                                    backgroundColor: "transparent",
-                                    color: "#F44336",
-                                    border: "none",
-                                    borderRadius: "4px",
-                                    cursor: "pointer",
-                                    fontSize: "16px",
+                                    padding: "6px", backgroundColor: "transparent",
+                                    color: "#F44336", border: "none", borderRadius: "4px",
+                                    cursor: "pointer", fontSize: "16px",
                                   }}
                                   title="Delete"
                                 >
@@ -5322,13 +5112,13 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
             </button>
           )}
         </div>
-        
+
         {Object.values(riskData).flat().length === 0 && (
           <p style={{ color: "#8d6e63", fontSize: "13px", fontStyle: "italic", marginLeft: "10px" }}>
             Add risk items to generate AI analysis of your strategic risk posture.
           </p>
         )}
-        
+
         {showAIAnalysis && (
           <div
             style={{
@@ -5340,73 +5130,32 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
               position: "relative"
             }}
           >
-            <div style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "flex-start",
-              marginBottom: "15px"
-            }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "15px" }}>
               <div>
-                <label
-                  style={{
-                    fontSize: "16px",
-                    color: "#5d4037",
-                    fontWeight: "600",
-                    display: "block",
-                    marginBottom: "8px",
-                  }}
-                >
+                <label style={{ fontSize: "16px", color: "#5d4037", fontWeight: "600", display: "block", marginBottom: "8px" }}>
                   Strategic Risk Control AI Analysis
                 </label>
-                <p style={{
-                  fontSize: "12px",
-                  color: "#8d6e63",
-                  margin: "0 0 10px 0",
-                  fontStyle: "italic"
-                }}>
+                <p style={{ fontSize: "12px", color: "#8d6e63", margin: "0 0 10px 0", fontStyle: "italic" }}>
                   Analysis generated from {Object.values(riskData).flat().length} risk items in your register
                 </p>
               </div>
-              
               {savedAnalysis && (
-                <span style={{
-                  fontSize: "10px",
-                  color: "#8d6e63",
-                  backgroundColor: "#efebe9",
-                  padding: "4px 8px",
-                  borderRadius: "4px",
-                  fontWeight: "500"
-                }}>
+                <span style={{ fontSize: "10px", color: "#8d6e63", backgroundColor: "#efebe9", padding: "4px 8px", borderRadius: "4px", fontWeight: "500" }}>
                   Saved Analysis
                 </span>
               )}
             </div>
 
             {analysisError ? (
-              <div style={{
-                padding: "15px",
-                backgroundColor: "#ffebee",
-                borderRadius: "6px",
-                border: "1px solid #ffcdd2",
-                color: "#c62828",
-                fontSize: "14px"
-              }}>
+              <div style={{ padding: "15px", backgroundColor: "#ffebee", borderRadius: "6px", border: "1px solid #ffcdd2", color: "#c62828", fontSize: "14px" }}>
                 <strong>Error:</strong> {analysisError}
               </div>
             ) : isGenerating ? (
-              <div style={{
-                textAlign: "center",
-                padding: "30px",
-                color: "#5d4037"
-              }}>
+              <div style={{ textAlign: "center", padding: "30px", color: "#5d4037" }}>
                 <div style={{
-                  width: "40px",
-                  height: "40px",
-                  border: "3px solid #f3e5f5",
-                  borderTop: "3px solid #8d6e63",
-                  borderRadius: "50%",
-                  animation: "spin 1s linear infinite",
-                  margin: "0 auto 15px"
+                  width: "40px", height: "40px", border: "3px solid #f3e5f5",
+                  borderTop: "3px solid #8d6e63", borderRadius: "50%",
+                  animation: "spin 1s linear infinite", margin: "0 auto 15px"
                 }}></div>
                 <p>Analyzing your risk register...</p>
                 <p style={{ fontSize: "12px", color: "#8d6e63", marginTop: "5px" }}>
@@ -5416,16 +5165,9 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
             ) : (
               <div
                 style={{
-                  backgroundColor: "white",
-                  padding: "20px",
-                  borderRadius: "6px",
-                  border: "1px solid #e8d8cf",
-                  maxHeight: "400px",
-                  overflowY: "auto",
-                  fontSize: "14px",
-                  lineHeight: "1.6",
-                  color: "#5d4037",
-                  whiteSpace: "pre-wrap"
+                  backgroundColor: "white", padding: "20px", borderRadius: "6px",
+                  border: "1px solid #e8d8cf", maxHeight: "400px", overflowY: "auto",
+                  fontSize: "14px", lineHeight: "1.6", color: "#5d4037", whiteSpace: "pre-wrap"
                 }}
               >
                 {aiAnalysis || "AI analysis will be generated based on your risk register data, identifying critical risks, evaluating mitigation effectiveness, and providing actionable recommendations to strengthen strategic risk control."}
@@ -5433,27 +5175,14 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
             )}
 
             <div style={{
-              marginTop: "15px",
-              paddingTop: "15px",
-              borderTop: "1px solid #e8d8cf",
-              fontSize: "11px",
-              color: "#8d6e63",
-              fontStyle: "italic",
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center"
+              marginTop: "15px", paddingTop: "15px", borderTop: "1px solid #e8d8cf",
+              fontSize: "11px", color: "#8d6e63", fontStyle: "italic",
+              display: "flex", justifyContent: "space-between", alignItems: "center"
             }}>
               <span>Analysis powered by AI • Updates when risk data changes</span>
               <button
                 onClick={() => setShowAIAnalysis(false)}
-                style={{
-                  background: "none",
-                  border: "none",
-                  color: "#8d6e63",
-                  cursor: "pointer",
-                  fontSize: "12px",
-                  textDecoration: "underline"
-                }}
+                style={{ background: "none", border: "none", color: "#8d6e63", cursor: "pointer", fontSize: "12px", textDecoration: "underline" }}
               >
                 Hide Analysis
               </button>

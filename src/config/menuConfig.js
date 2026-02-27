@@ -498,7 +498,7 @@ export const smeMenuItems = [
       },
       {
         id: "marketing-sales",
-        label: "Marketing & Sales Funnel",
+        label: "Marketing & Sales",
         icon: <BarChart size={16} />,
         route: "/MarketingSales",
       },
