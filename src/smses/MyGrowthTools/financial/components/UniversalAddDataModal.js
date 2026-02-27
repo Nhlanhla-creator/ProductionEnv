@@ -15,6 +15,20 @@ import {
 const inputCls = "w-full px-1.5 py-1.5 rounded border border-[#e8ddd4] text-xs"
 const labelCls = "text-[10px] text-lightBrown block mb-0.5"
 
+// Returns the correct calendar year for a given FY-ordered month position.
+// `months`      = fyMonths array (FY-ordered, first element = FY start month)
+// `idx`         = position within that array (0-based)
+// `selectedYear`= the FY year key (= END year of the FY, e.g. 2025 for Aug 2024 – Jul 2025)
+const _ALL_MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
+const getMonthCalYear = (months, idx, selectedYear) => {
+  const fyStartInCal = _ALL_MONTHS.indexOf(months[0]) // 0=Jan, 7=Aug, …
+  if (fyStartInCal === 0) return selectedYear           // Jan FY: every month in same year
+  const calIdx = _ALL_MONTHS.indexOf(months[idx])
+  // Months that fall in the SECOND half of a split FY belong to selectedYear
+  // Months in the FIRST half (≥ fyStart in calendar) belong to selectedYear - 1
+  return calIdx >= fyStartInCal ? selectedYear - 1 : selectedYear
+}
+
 const MonthlyInputRow = ({ label, category, data, selectedYear, setData, unit = "", step = "0.01", isSelect = false, selectOptions = [], months }) => (
   <div className="mb-5">
     <h5 className="text-mediumBrown mb-4 font-semibold text-sm">
@@ -23,7 +37,7 @@ const MonthlyInputRow = ({ label, category, data, selectedYear, setData, unit = 
     <div className="grid grid-cols-12 gap-1">
       {months.map((month, idx) => (
         <div key={month}>
-          <label className={labelCls}>{`${month} ${months.slice(0, 6).includes(month) ? selectedYear : selectedYear + 1}`}</label>
+          <label className={labelCls}>{`${month} ${getMonthCalYear(months, idx, selectedYear)}`}</label>
           {isSelect ? (
             <select
               value={data[category]?.[idx] || ""}
@@ -75,7 +89,7 @@ const BalanceSheetSection = ({ title, data, setData, months, selectedYear }) => 
           <div className="grid grid-cols-12 gap-1">
             {months.map((month, idx) => (
               <div key={month}>
-                <label className={labelCls}>{`${month} ${months.slice(0, 6).includes(month) ? selectedYear : selectedYear + 1}`}</label>
+                <label className={labelCls}>{`${month} ${getMonthCalYear(months, idx, selectedYear)}`}</label>
                 <input
                   type="number" step="0.01"
                   value={data[key]?.[idx] || ""}
@@ -141,9 +155,9 @@ const UniversalAddDataModal = ({ isOpen, onClose, currentTab, user, onSave, load
   const [loanData, setLoanData] = useState({ name: "", amount: "", interestRate: "", startDate: "", term: "", monthlyPayment: "", status: "active" })
   const [customKPI, setCustomKPI] = useState({ name: "", type: "bar", dataType: "currency", actual: Array(12).fill(""), budget: Array(12).fill("") })
 
-  const months    = getMonthsForYear(selectedYear, financialYearStart)  // Jan→Dec for pickers
-  const fyMonths  = getFYMonths(selectedYear, financialYearStart)        // FY-ordered for data columns
-  const years     = getYearsRange(2021, 2030)
+  const months = getMonthsForYear(selectedYear, financialYearStart); // Jan→Dec for pickers
+  const fyMonths = getFYMonths(selectedYear, financialYearStart); // FY-ordered for data columns
+  const years = getYearsRange(2021, 2030);
 
   // Load existing data on tab switch
   useEffect(() => {
@@ -264,11 +278,13 @@ const UniversalAddDataModal = ({ isOpen, onClose, currentTab, user, onSave, load
         {["capital-structure","performance-engine","cost-agility","liquidity-survival","custom-kpi"].includes(activeTab) && (
           <div className="flex gap-5 mb-5 flex-wrap items-center">
             <div className="flex gap-1.5 items-center">
-              <span className="text-mediumBrown text-sm">Select Year:</span>
-              <select className="px-3 py-2 rounded border border-[#e8ddd4] text-sm text-mediumBrown min-w-[100px]"
+              <span className="text-mediumBrown text-sm">Select Financial Year:</span>
+              <select className="px-3 py-2 rounded border border-[#e8ddd4] text-sm text-mediumBrown min-w-[150px]"
                 value={selectedYear}
                 onChange={e => setSelectedYear(parseInt(e.target.value))}>
-                {years.map(y => <option key={y} value={y}>{y}</option>)}
+                {years.map(y => {
+                  return <option key={y} value={y}>{y}</option>
+                })}
               </select>
             </div>
           </div>
@@ -293,10 +309,12 @@ const UniversalAddDataModal = ({ isOpen, onClose, currentTab, user, onSave, load
                 title={section.replace(/([A-Z])/g, " $1").replace(/^./, s => s.toUpperCase())}
                 data={balanceSheetData.liabilities[section]}
                 months={fyMonths}
+                selectedYear={selectedYear}
                 setData={newData => setBalanceSheetData(prev => ({ ...prev, liabilities: { ...prev.liabilities, [section]: newData } }))}
               />
             ))}
             <BalanceSheetSection title="Equity" data={balanceSheetData.equity} months={fyMonths}
+              selectedYear={selectedYear}
               setData={newData => setBalanceSheetData(prev => ({ ...prev, equity: newData }))} />
 
             {/* Custom categories */}

@@ -161,7 +161,7 @@ const PerformanceEngine = ({
         setViewMode={setViewMode}
         onAddData={!isInvestorView ? () => setShowModal(true) : null}
         showAddData={!isInvestorView}
-        extraControls={extraControls}
+        // extraControls={extraControls}
       />
 
       {/* Revenue & Cost */}

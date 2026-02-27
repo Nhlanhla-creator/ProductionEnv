@@ -321,3 +321,117 @@ export const computeLiquidityChartData = (firebaseData) => {
     monthsRunway: { actual: runway                 },
   }
 }
+
+// ==================== CAPITAL STRUCTURE PROCESSOR ====================
+// Sums all sub-section arrays for a given balance-sheet group (assets / liabilities / equity)
+
+const _sumBSSections = (group = {}, sections) =>
+  Array.from({ length: 12 }, (_, i) =>
+    (sections ?? Object.keys(group)).reduce((total, sec) => {
+      const block = group[sec] || {}
+      return total + Object.values(block).reduce((s, arr) => {
+        if (!Array.isArray(arr)) return s
+        const v = parseFloat(arr[i])
+        return s + (isNaN(v) ? 0 : v)
+      }, 0)
+    }, 0)
+  )
+
+const _sumEquity = (equity = {}) =>
+  Array.from({ length: 12 }, (_, i) =>
+    Object.values(equity).reduce((sum, arr) => {
+      if (!Array.isArray(arr)) return sum
+      const v = parseFloat(arr[i])
+      return sum + (isNaN(v) ? 0 : v)
+    }, 0)
+  )
+
+/**
+ * Transforms a raw capital-structure Firestore doc into the chart-data format
+ * expected by getLast12MonthsComputed.
+ *
+ * Priority for solvency / leverage / equity ratios:
+ *   1. Stored pre-computed values (solvencyData / leverageData / equityData arrays)
+ *   2. Computed on the fly from balanceSheetData if stored values are all zero/absent
+ */
+export const computeCapitalStructureChartData = (firebaseData) => {
+  const solvency = firebaseData.solvencyData     || {}
+  const leverage = firebaseData.leverageData     || {}
+  const equity   = firebaseData.equityData       || {}
+  const bs       = firebaseData.balanceSheetData || {}
+
+  // Helper: parse a stored array, returns null if the array is missing or all zeros
+  const stored = (obj, key) => {
+    const arr = obj[key]
+    if (!Array.isArray(arr)) return null
+    const parsed = arr.map(v => parseFloat(v) || 0)
+    return parsed.some(v => v !== 0) ? parsed : null
+  }
+
+  // Balance-sheet totals (always computed so trend totals work)
+  const assetSections  = ['bank', 'currentAssets', 'fixedAssets', 'intangibleAssets', 'nonCurrentAssets']
+  const liabSections   = ['currentLiabilities', 'nonCurrentLiabilities']
+  const totalAssets      = _sumBSSections(bs.assets      || {}, assetSections)
+  const totalLiabilities = _sumBSSections(bs.liabilities || {}, liabSections)
+  const totalEquity      = _sumEquity(bs.equity || {})
+
+  // Derived ratios from balance sheet (fallback)
+  const navCalc          = totalAssets.map((a, i) => a - totalLiabilities[i])
+  const equityRatioCalc  = totalAssets.map((a, i) => a !== 0 ? (totalEquity[i] / a) * 100 : 0)
+  const debtToEquityCalc = totalEquity.map((e, i) => e !== 0 ? totalLiabilities[i] / e : 0)
+  const debtToAssetsCalc = totalAssets.map((a, i) => a !== 0 ? totalLiabilities[i] / a : 0)
+
+  const toM  = arr => arr.map(v => v / 1_000_000)
+  const toArr = (obj, key) => obj[key]?.map(v => parseFloat(v) || 0) ?? Array(12).fill(0)
+
+  return {
+    // ── Solvency ──────────────────────────────────────────────────────────────
+    debtToEquity:        { actual: stored(solvency, 'debtToEquity')        ?? debtToEquityCalc },
+    debtToAssets:        { actual: stored(solvency, 'debtToAssets')        ?? debtToAssetsCalc },
+    equityRatio:         { actual: stored(solvency, 'equityRatio')         ?? equityRatioCalc  },
+    interestCoverage:    { actual: toArr(solvency, 'interestCoverage')     },
+    debtServiceCoverage: { actual: toArr(solvency, 'debtServiceCoverage')  },
+    nav:                 { actual: toM(stored(solvency, 'nav')             ?? navCalc) },
+
+    // ── Leverage ──────────────────────────────────────────────────────────────
+    totalDebtRatio:      { actual: toArr(leverage, 'totalDebtRatio')   },
+    longTermDebtRatio:   { actual: toArr(leverage, 'longTermDebtRatio') },
+    equityMultiplier:    { actual: toArr(leverage, 'equityMultiplier')  },
+
+    // ── Equity ────────────────────────────────────────────────────────────────
+    returnOnEquity:      { actual: toArr(equity, 'returnOnEquity')    },
+    bookValuePerShare:   { actual: toArr(equity, 'bookValuePerShare')  },
+
+    // ── Balance-sheet totals (for trend lines on the BS summary cards) ────────
+    totalAssets:         { actual: toM(totalAssets)      },
+    totalLiabilities:    { actual: toM(totalLiabilities) },
+    totalEquity:         { actual: toM(totalEquity)       },
+
+    // ── Per-section totals ────────────────────────────────────────────────────
+    totalBankAndCash:           { actual: toM(_sumBSSections(bs.assets      || {}, ['bank']))                   },
+    totalCurrentAssets:         { actual: toM(_sumBSSections(bs.assets      || {}, ['currentAssets']))          },
+    totalFixedAssets:           { actual: toM(_sumBSSections(bs.assets      || {}, ['fixedAssets']))            },
+    totalIntangibleAssets:      { actual: toM(_sumBSSections(bs.assets      || {}, ['intangibleAssets']))       },
+    totalNonCurrentAssets:      { actual: toM(_sumBSSections(bs.assets      || {}, ['nonCurrentAssets']))       },
+    totalCurrentLiabilities:    { actual: toM(_sumBSSections(bs.liabilities || {}, ['currentLiabilities']))     },
+    totalNonCurrentLiabilities: { actual: toM(_sumBSSections(bs.liabilities || {}, ['nonCurrentLiabilities'])) },
+  }
+}
+
+/**
+ * Convenience wrapper: fetches last-12-months capital-structure data with cross-FY stitching.
+ * Drop-in equivalent of getLast12MonthsComputed but pre-wired to the capital structure doc.
+ */
+export const getLast12MonthsCapitalStructure = ({
+  uid, chartKey, financialYearStart = "Jan", getDocFn, docFn, db,
+}) =>
+  getLast12MonthsComputed({
+    uid,
+    docBase: "_capitalStructure",
+    chartKey,
+    financialYearStart,
+    getDocFn,
+    docFn,
+    db,
+    processor: computeCapitalStructureChartData,
+  })

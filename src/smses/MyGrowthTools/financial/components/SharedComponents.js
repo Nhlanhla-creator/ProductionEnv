@@ -264,7 +264,7 @@ export const KPICard = ({
         {/* Variance */}
         <div className="flex flex-col items-center gap-1">
           <div
-            className={`w-[78px] h-[78px] rounded-full border-4 border-gray-400 bg-gray-50 flex flex-col items-center justify-center gap-0.5`}
+            className={`w-[78px] h-[78px] rounded-full border-4 ${varBorder} ${varBg} flex flex-col items-center justify-center gap-0.5`}
           >
             <VarianceArrow diff={diff} variancePct={variancePct} />
             <span
@@ -428,6 +428,7 @@ export const TrendModal = ({
             `${ctx.dataset.label}: ${ctx.raw !== null ? fmtVal(ctx.raw) : "No data"}`,
         },
       },
+      datalabels: { display: false },
     },
     scales: {
       y: {
