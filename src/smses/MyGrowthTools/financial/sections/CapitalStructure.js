@@ -26,6 +26,8 @@ import {
   makeFormatValue,
   getLast12MonthsLabels,
   getLast12MonthsMeta,
+  getLast12MonthsComputed,
+  computeCapitalStructureChartData,
 } from "../financialUtils";
 
 // ==================== BALANCE SHEET TABLE ====================
@@ -36,6 +38,7 @@ const BSTable = ({
   totalValue,
   monthIndex,
   openTrend,
+  totalTrendFn,
 }) => (
   <div className="mb-5">
     <h4 className="text-mediumBrown text-base font-semibold mb-2.5 border-b border-[#e8ddd4] pb-1">
@@ -77,7 +80,9 @@ const BSTable = ({
             <td className="py-2.5 text-right text-mediumBrown text-sm font-bold">
               {totalValue}
             </td>
-            <td />
+            <td className="py-2.5 text-center">
+              {totalTrendFn && <TrendButton onClick={totalTrendFn} />}
+            </td>
           </tr>
         )}
       </tbody>
@@ -317,6 +322,10 @@ const CapitalStructure = ({
   const totalEquity = calcTotalEquity(monthIndex);
 
   // ---- Trend opener ----
+  // fieldPath can be:
+  //   Array  → raw balance-sheet line-item (12-slot FY array)
+  //   string → a computeCapitalStructureChartData key  e.g. "nav", "debtToEquity",
+  //             "totalAssets", or legacy dot-path "solvencyData.nav" (auto-stripped)
   const openTrend = async (name, fieldPath, isPercentage = false) => {
     setSelectedTrendItem({ name, isPercentage });
     setTrendData(null);
@@ -324,78 +333,102 @@ const CapitalStructure = ({
     setShowTrendModal(true);
     try {
       const labels = getLast12MonthsLabels(financialYearStart);
-      const meta = getLast12MonthsMeta(financialYearStart);
+      const meta   = getLast12MonthsMeta(financialYearStart);
 
-      // Case 1: raw array (balance sheet line items)
+      // ── Case 1: raw balance-sheet array (line item) ──────────────────────────
+      // Cross-FY fix: fetch every unique FY year that appears in the last 12 months,
+      // not just the current one.
       if (Array.isArray(fieldPath)) {
-        const fyStartIdx = [
-          "Jan",
-          "Feb",
-          "Mar",
-          "Apr",
-          "May",
-          "Jun",
-          "Jul",
-          "Aug",
-          "Sep",
-          "Oct",
-          "Nov",
-          "Dec",
-        ].indexOf(financialYearStart);
-        const now = new Date();
-        const curFyYear =
-          now.getMonth() >= fyStartIdx
-            ? now.getFullYear()
-            : now.getFullYear() - 1;
+        const fyYears  = [...new Set(meta.map((m) => m.fyYear))];
+        const docCache = {};
+        await Promise.all(
+          fyYears.map(async (fy) => {
+            let snap = await getDoc(
+              doc(db, "financialData", `${user.uid}_capitalStructure_${fy}`),
+            );
+            if (!snap.exists())
+              snap = await getDoc(
+                doc(db, "financialData", `${user.uid}_capitalStructure_${fy + 1}`),
+              );
+            if (!snap.exists())
+              snap = await getDoc(
+                doc(db, "financialData", `${user.uid}_capitalStructure`),
+              );
+            docCache[fy] = snap.exists() ? snap.data() : null;
+          }),
+        );
+
+        // We need to know WHERE in the stored doc structure this array lives so
+        // we can re-read it per FY year. We locate it by comparing the in-memory
+        // array reference against the balance-sheet structure.
+        // Strategy: walk the balanceSheetData tree to find the matching key path,
+        // then re-read that path from each year's doc.
+        const findPath = (obj, target, path = []) => {
+          for (const k of Object.keys(obj || {})) {
+            if (Array.isArray(obj[k])) {
+              if (obj[k] === target) return [...path, k];
+            } else if (obj[k] && typeof obj[k] === "object") {
+              const found = findPath(obj[k], target, [...path, k]);
+              if (found) return found;
+            }
+          }
+          return null;
+        };
+
+        const keyPath = findPath(balanceSheetData, fieldPath);
+
         const actual = meta.map(({ fyYear, fyIndex }) => {
-          if (fyYear !== curFyYear) return null;
-          const v = fieldPath[fyIndex];
-          return v !== undefined && v !== "" && v !== null
-            ? parseFloat(v)
-            : null;
+          const raw = docCache[fyYear];
+          if (!raw) return null;
+
+          // Navigate the stored doc using the key path found above
+          let arr = null;
+          if (keyPath) {
+            arr = keyPath.reduce((obj, k) => obj?.[k], raw?.balanceSheetData);
+          }
+          // Fall back to the in-memory array if same FY year (single-year case)
+          if (!Array.isArray(arr)) arr = fieldPath;
+
+          const v = arr?.[fyIndex];
+          return v !== undefined && v !== "" && v !== null ? parseFloat(v) : null;
         });
+
         setTrendData({ labels, actual, budget: null });
         return;
       }
 
-      // Case 2: no fieldPath
+      // ── Case 2: no fieldPath ─────────────────────────────────────────────────
       if (!fieldPath || typeof fieldPath !== "string") {
         setTrendData({ labels, actual: Array(12).fill(null), budget: null });
         return;
       }
 
-      // Case 3: dotted field path e.g. "solvencyData.debtToEquity"
-      const fyYears = [...new Set(meta.map((m) => m.fyYear))];
-      const docCache = {};
-      await Promise.all(
-        fyYears.map(async (fy) => {
-          let snap = await getDoc(
-            doc(db, "financialData", `${user.uid}_capitalStructure_${fy}`),
-          );
-          if (!snap.exists())
-            snap = await getDoc(
-              doc(
-                db,
-                "financialData",
-                `${user.uid}_capitalStructure_${fy + 1}`,
-              ),
-            );
-          if (!snap.exists())
-            snap = await getDoc(
-              doc(db, "financialData", `${user.uid}_capitalStructure`),
-            );
-          docCache[fy] = snap.exists() ? snap.data() : null;
-        }),
-      );
+      // ── Case 3: string key — use computeCapitalStructureChartData processor ──
+      // Normalise legacy dot-paths like "solvencyData.nav" → "nav"
+      const DOT_PATH_MAP = {
+        "solvencyData.debtToEquity":        "debtToEquity",
+        "solvencyData.debtToAssets":        "debtToAssets",
+        "solvencyData.equityRatio":         "equityRatio",
+        "solvencyData.interestCoverage":    "interestCoverage",
+        "solvencyData.debtServiceCoverage": "debtServiceCoverage",
+        "solvencyData.nav":                 "nav",
+        "leverageData.totalDebtRatio":      "totalDebtRatio",
+        "leverageData.longTermDebtRatio":   "longTermDebtRatio",
+        "leverageData.equityMultiplier":    "equityMultiplier",
+        "equityData.returnOnEquity":        "returnOnEquity",
+        "equityData.bookValuePerShare":     "bookValuePerShare",
+      };
+      const chartKey = DOT_PATH_MAP[fieldPath] ?? fieldPath;
 
-      const parts = fieldPath.split(".");
-      const actual = meta.map(({ fyYear, fyIndex }) => {
-        const raw = docCache[fyYear];
-        if (!raw) return null;
-        const arr = parts.reduce((obj, k) => obj?.[k], raw);
-        if (!Array.isArray(arr)) return null;
-        const v = arr[fyIndex];
-        return v !== undefined && v !== "" && v !== null ? parseFloat(v) : null;
+      const { actual } = await getLast12MonthsComputed({
+        uid: user.uid,
+        docBase: "_capitalStructure",
+        chartKey,
+        financialYearStart,
+        getDocFn: getDoc,
+        docFn: doc,
+        db,
+        processor: computeCapitalStructureChartData,
       });
 
       setTrendData({ labels, actual, budget: null });
@@ -552,6 +585,7 @@ const CapitalStructure = ({
                 )}
                 monthIndex={monthIndex}
                 openTrend={(l, a) => openTrend(l, a)}
+                totalTrendFn={() => openTrend("Total Bank & Cash", "totalBankAndCash")}
               />
               <BSTable
                 title="Current Assets"
@@ -568,6 +602,7 @@ const CapitalStructure = ({
                 )}
                 monthIndex={monthIndex}
                 openTrend={openTrend}
+                totalTrendFn={() => openTrend("Total Current Assets", "totalCurrentAssets")}
               />
               <BSTable
                 title="Fixed Assets (Net)"
@@ -697,6 +732,7 @@ const CapitalStructure = ({
                 totalValue={fv(calcFixedAssets(monthIndex))}
                 monthIndex={monthIndex}
                 openTrend={openTrend}
+                totalTrendFn={() => openTrend("Total Fixed Assets", "totalFixedAssets")}
               />
               <BSTable
                 title="Intangible Assets"
@@ -724,6 +760,7 @@ const CapitalStructure = ({
                 totalValue={fv(calcIntangibles(monthIndex))}
                 monthIndex={monthIndex}
                 openTrend={openTrend}
+                totalTrendFn={() => openTrend("Total Intangible Assets", "totalIntangibleAssets")}
               />
               <BSTable
                 title="Non-Current Assets"
@@ -740,6 +777,7 @@ const CapitalStructure = ({
                 )}
                 monthIndex={monthIndex}
                 openTrend={openTrend}
+                totalTrendFn={() => openTrend("Total Non-Current Assets", "totalNonCurrentAssets")}
               />
               {(balanceSheetData.assets?.customCategories || []).map(
                 (custom, i) => (
@@ -794,6 +832,7 @@ const CapitalStructure = ({
                 )}
                 monthIndex={monthIndex}
                 openTrend={openTrend}
+                totalTrendFn={() => openTrend("Total Current Liabilities", "totalCurrentLiabilities")}
               />
               <BSTable
                 title="Non-Current Liabilities"
@@ -810,6 +849,7 @@ const CapitalStructure = ({
                 )}
                 monthIndex={monthIndex}
                 openTrend={openTrend}
+                totalTrendFn={() => openTrend("Total Non-Current Liabilities", "totalNonCurrentLiabilities")}
               />
               <div className="mb-5 p-4 bg-[#8d6e63] rounded-md flex justify-between items-center">
                 <span className="text-[#fdfcfb] text-base font-bold">
@@ -839,6 +879,7 @@ const CapitalStructure = ({
                 totalValue={fv(totalEquity)}
                 monthIndex={monthIndex}
                 openTrend={openTrend}
+                totalTrendFn={() => openTrend("Total Equity", "totalEquity")}
               />
               <div className="mt-5 p-4 bg-mediumBrown rounded-md flex justify-between items-center">
                 <span className="text-[#fdfcfb] text-base font-bold">

@@ -63,8 +63,8 @@ export const CALCULATION_TEXTS = {
     workingCapital: "Working Capital = Current Assets - Current Liabilities\n\nLiquidity available for day-to-day operations.",
   },
   capitalStructure: {
-    solvency: "Solvency metrics assess long-term financial stability:\n\n• Debt to Equity = Total Liabilities ÷ Total Equity\n• Debt to Assets = Total Liabilities ÷ Total Assets\n• Equity Ratio = Total Equity ÷ Total Assets\n• Interest Coverage = EBIT ÷ Interest Expense\n• Debt Service Coverage = Operating Income ÷ Total Debt Service\n• Net Asset Value = Total Assets - Total Liabilities",
-    leverage: "Leverage metrics measure debt usage:\n\n• Total Debt Ratio = Total Liabilities ÷ Total Assets\n• Long-term Debt Ratio = Long-term Debt ÷ Total Assets\n• Equity Multiplier = Total Assets ÷ Total Equity",
+    solvency: "Solvency metrics assess long-term financial stability:\n\n• Net Asset Value = Total Assets - Total Liabilities\n• Equity Ratio = Total Equity ÷ Total Assets",
+    leverage: "Leverage metrics measure debt usage:\n\n• Debt to Assets = Total Liabilities ÷ Total Assets\n• Debt to Equity = Total Liabilities ÷ Total Equity",
     equity: "Equity metrics measure shareholder value:\n\n• Return on Equity = Net Income ÷ Average Shareholders' Equity\n• Book Value per Share = (Total Equity - Preferred Equity) ÷ Number of Shares Outstanding",
   },
 }
