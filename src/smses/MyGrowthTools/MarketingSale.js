@@ -30,38 +30,23 @@ const getMonthsForYear = (year, financialYearStart = "Jan") => {
   const startIndex = allMonths.indexOf(financialYearStart)
   if (startIndex === -1) return allMonths
   
-  // Reorder months based on financial year start
   return [...allMonths.slice(startIndex), ...allMonths.slice(0, startIndex)]
 }
 
 const formatNumber = (value) => {
   const num = Number.parseFloat(value) || 0
-  
-  if (num >= 1e9) {
-    return (num / 1e9).toFixed(2) + 'B'
-  } else if (num >= 1e6) {
-    return (num / 1e6).toFixed(2) + 'M'
-  } else if (num >= 1e3) {
-    return (num / 1e3).toFixed(2) + 'K'
-  } else if (num >= 1) {
-    return num.toFixed(2)
-  } else {
-    return num.toFixed(2)
-  }
+  if (num >= 1e9) return (num / 1e9).toFixed(2) + 'B'
+  if (num >= 1e6) return (num / 1e6).toFixed(2) + 'M'
+  if (num >= 1e3) return (num / 1e3).toFixed(2) + 'K'
+  return num.toFixed(2)
 }
 
 const formatCurrency = (value) => {
   const num = Number.parseFloat(value) || 0
-  
-  if (num >= 1e9) {
-    return `R${(num / 1e9).toFixed(2)}B`
-  } else if (num >= 1e6) {
-    return `R${(num / 1e6).toFixed(2)}M`
-  } else if (num >= 1e3) {
-    return `R${(num / 1e3).toFixed(2)}K`
-  } else {
-    return `R${num.toFixed(2)}`
-  }
+  if (num >= 1e9) return `R${(num / 1e9).toFixed(2)}B`
+  if (num >= 1e6) return `R${(num / 1e6).toFixed(2)}M`
+  if (num >= 1e3) return `R${(num / 1e3).toFixed(2)}K`
+  return `R${num.toFixed(2)}`
 }
 
 const formatPercentage = (value) => {
@@ -74,29 +59,21 @@ const getMonthIndex = (month) => {
   return months.indexOf(month)
 }
 
-// Circle color palette - orange and green light colors
+// Circle colors - Orange and Green with better visibility
 const circleColors = [
-  { border: "#FF8C42", background: "#FFE5B4", text: "#8B4500" }, // Light Orange / Peach
-  { border: "#FF7F50", background: "#FFDAB9", text: "#8B3A2B" }, // Coral / Light Peach
-  { border: "#FFA07A", background: "#FFE4CD", text: "#8B4C39" }, // Light Salmon / Light Peach
-  { border: "#FFB347", background: "#FFE5B4", text: "#8B5A00" }, // Orange / Light Yellow
-  { border: "#FF8C69", background: "#FFDAB9", text: "#8B3E2C" }, // Salmon / Light Peach
-  { border: "#FFA500", background: "#FFE5B4", text: "#8B5A00" }, // Orange / Light Yellow
-  { border: "#FF9966", background: "#FFE5B4", text: "#8B4513" }, // Light Orange / Light Peach
-  { border: "#FFB07C", background: "#FFE5B4", text: "#8B4513" }, // Light Orange / Light Peach
-  { border: "#66BB6A", background: "#D0F0C0", text: "#1E5A20" }, // Light Green / Pale Green
-  { border: "#4CAF50", background: "#C8E6C9", text: "#1E4A20" }, // Green / Very Light Green
-  { border: "#81C784", background: "#D0F0C0", text: "#1E5A20" }, // Light Green / Pale Green
-  { border: "#AED581", background: "#E0F0D0", text: "#3A5A1E" }, // Light Green / Very Light Green
-  { border: "#66BB77", background: "#D0F0C0", text: "#1E5A20" }, // Light Green / Pale Green
-  { border: "#58A55C", background: "#C8E6C9", text: "#1E4A20" }, // Green / Very Light Green
-  { border: "#7CB342", background: "#E0F0D0", text: "#3A5A1E" }, // Light Green / Very Light Green
-  { border: "#9CCC65", background: "#E0F0D0", text: "#3A5A1E" }, // Light Green / Very Light Green
+  { border: "#FF8C00", background: "#FFB347", text: "#663d00" }, // Orange
+  { border: "#32CD32", background: "#90EE90", text: "#1e4d1e" }, // Light Green
+  { border: "#FFA500", background: "#FFD700", text: "#664d00" }, // Orange/Gold
+  { border: "#228B22", background: "#98FB98", text: "#145214" }, // Forest Green
+  { border: "#FF6347", background: "#FFA07A", text: "#8b3a2b" }, // Tomato/Light Salmon
+  { border: "#2E8B57", background: "#66CDAA", text: "#1e4d33" }, // Sea Green
+  { border: "#FF8C69", background: "#FFB6C1", text: "#8b4d39" }, // Coral/Light Pink
+  { border: "#006400", background: "#ADFF2F", text: "#003300" }, // Dark Green/Green Yellow
 ]
 
 // ==================== COMPONENTS ====================
 
-const EyeIcon = ({ onClick, title, color = "#FF8C42" }) => (
+const EyeIcon = ({ onClick, title, color = "#5d4037" }) => (
   <div
     onClick={onClick}
     style={{
@@ -139,7 +116,6 @@ const EyeIcon = ({ onClick, title, color = "#FF8C42" }) => (
       <circle cx="12" cy="12" r="5" strokeOpacity="0.5"></circle>
       <path d="M22 12c0 5.52-4.48 10-10 10S2 17.52 2 12 6.48 2 12 2s10 4.48 10 10z"></path>
     </svg>
-    {title && <span style={{ position: "absolute", top: "40px", right: "0", fontSize: "11px", color: "#5d4037", whiteSpace: "nowrap", backgroundColor: "#fdfcfb", padding: "4px 8px", borderRadius: "4px", boxShadow: "0 2px 4px rgba(0,0,0,0.1)", display: "none" }}>{title}</span>}
   </div>
 )
 
@@ -275,14 +251,22 @@ const KeyQuestionBox = ({ question, signals, decisions, section }) => {
 const TrendModal = ({ isOpen, onClose, title, data, labels, isPercentage }) => {
   if (!isOpen || !data) return null
 
+  // Format labels to show month and year
+  const formattedLabels = labels.map(label => {
+    if (label.includes(" ")) return label
+    const month = label.substring(0, 3)
+    const year = label.length > 3 ? label.substring(3) : new Date().getFullYear()
+    return `${month} ${year}`
+  })
+
   const chartData = {
-    labels: labels,
+    labels: formattedLabels,
     datasets: [
       {
         label: title,
         data: data,
-        borderColor: "#FF8C42",
-        backgroundColor: "rgba(255, 140, 66, 0.1)",
+        borderColor: "#5d4037",
+        backgroundColor: "rgba(93, 64, 55, 0.1)",
         borderWidth: 3,
         fill: true,
         tension: 0.3,
@@ -290,7 +274,6 @@ const TrendModal = ({ isOpen, onClose, title, data, labels, isPercentage }) => {
     ]
   }
 
-  // Calculate statistics
   const validData = data.filter(v => !isNaN(parseFloat(v)) && parseFloat(v) !== 0)
   const currentValue = validData.length > 0 ? validData[validData.length - 1] : 0
   const averageValue = validData.length > 0 
@@ -357,10 +340,8 @@ const TrendModal = ({ isOpen, onClose, title, data, labels, isPercentage }) => {
               responsive: true,
               maintainAspectRatio: false,
               plugins: {
-                legend: { 
-                  display: true,
-                  position: "top",
-                },
+                datalabels: { display: false },
+                legend: { display: true, position: "top" },
                 title: { display: false },
                 tooltip: {
                   callbacks: {
@@ -378,7 +359,7 @@ const TrendModal = ({ isOpen, onClose, title, data, labels, isPercentage }) => {
                   beginAtZero: true,
                   title: {
                     display: true,
-                    text: isPercentage ? "Percentage (%)" : `Value (R)`,
+                    text: isPercentage ? "Percentage (%)" : "Value (R)",
                     color: "#5d4037",
                   },
                 },
@@ -394,7 +375,6 @@ const TrendModal = ({ isOpen, onClose, title, data, labels, isPercentage }) => {
           />
         </div>
 
-        {/* Trend Statistics */}
         <div style={{ 
           backgroundColor: "#f5f0eb", 
           padding: "20px", 
@@ -406,32 +386,22 @@ const TrendModal = ({ isOpen, onClose, title, data, labels, isPercentage }) => {
             <div>
               <div style={{ fontSize: "12px", color: "#8d6e63", marginBottom: "5px" }}>Current Value</div>
               <div style={{ fontSize: "16px", fontWeight: "600", color: "#5d4037" }}>
-                {isPercentage 
-                  ? `${parseFloat(currentValue).toFixed(1)}%`
-                  : formatCurrency(currentValue)
-                }
+                {isPercentage ? `${parseFloat(currentValue).toFixed(1)}%` : formatCurrency(currentValue)}
               </div>
             </div>
             <div>
               <div style={{ fontSize: "12px", color: "#8d6e63", marginBottom: "5px" }}>Average</div>
               <div style={{ fontSize: "16px", fontWeight: "600", color: "#5d4037" }}>
-                {isPercentage
-                  ? `${parseFloat(averageValue).toFixed(1)}%`
-                  : formatCurrency(averageValue)
-                }
+                {isPercentage ? `${parseFloat(averageValue).toFixed(1)}%` : formatCurrency(averageValue)}
               </div>
             </div>
             <div>
               <div style={{ fontSize: "12px", color: "#8d6e63", marginBottom: "5px" }}>Trend</div>
-              <div style={{ fontSize: "16px", fontWeight: "600", color: "#5d4037" }}>
-                {trend}
-              </div>
+              <div style={{ fontSize: "16px", fontWeight: "600", color: "#5d4037" }}>{trend}</div>
             </div>
             <div>
               <div style={{ fontSize: "12px", color: "#8d6e63", marginBottom: "5px" }}>Data Points</div>
-              <div style={{ fontSize: "16px", fontWeight: "600", color: "#5d4037" }}>
-                {validData.length}
-              </div>
+              <div style={{ fontSize: "16px", fontWeight: "600", color: "#5d4037" }}>{validData.length}</div>
             </div>
           </div>
         </div>
@@ -471,7 +441,6 @@ const UniversalAddDataModal = ({
   const [activeTab, setActiveTab] = useState(currentTab)
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
   
-  // Tabs for the add data modal
   const tabs = [
     { id: "pipeline-visibility", label: "Pipeline Visibility" },
     { id: "pipeline-sufficiency", label: "Pipeline Sufficiency" },
@@ -480,14 +449,14 @@ const UniversalAddDataModal = ({
     { id: "pipeline-table", label: "Pipeline Table" }
   ]
   
-  // ========== PIPELINE VISIBILITY DATA ==========
+  // Pipeline Visibility Data
   const [pipelineVisibilityData, setPipelineVisibilityData] = useState({
     newLeads: Array(12).fill(""),
     salesVelocity: Array(12).fill(""),
     notes: "",
   })
 
-  // ========== PIPELINE SUFFICIENCY DATA ==========
+  // Pipeline Sufficiency Data
   const [pipelineSufficiencyData, setPipelineSufficiencyData] = useState({
     totalPipelineValue: "",
     probability: "",
@@ -497,7 +466,7 @@ const UniversalAddDataModal = ({
     notes: "",
   })
 
-  // ========== REVENUE CONCENTRATION DATA ==========
+  // Revenue Concentration Data
   const [revenueConcentrationData, setRevenueConcentrationData] = useState({
     revenueChannels: [
       { name: "Social Media", revenue: "", spend: "" },
@@ -517,9 +486,8 @@ const UniversalAddDataModal = ({
     notes: "",
   })
 
-  // ========== DEMAND SUSTAINABILITY DATA ==========
+  // Demand Sustainability Data
   const [demandSustainabilityData, setDemandSustainabilityData] = useState({
-    referralRateTrend: Array(12).fill(""),
     repeatCustomerRate: "",
     churnRate: "",
     campaigns: [
@@ -531,7 +499,7 @@ const UniversalAddDataModal = ({
     notes: "",
   })
 
-  // ========== PIPELINE TABLE DATA ==========
+  // Pipeline Table Data
   const [pipelineDealData, setPipelineDealData] = useState({
     clientName: "",
     segment: "",
@@ -549,7 +517,6 @@ const UniversalAddDataModal = ({
   const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
   const years = Array.from({ length: 5 }, (_, i) => selectedYear - 2 + i)
 
-  // Load existing data when modal opens or tab changes
   useEffect(() => {
     if (isOpen && user) {
       loadDataForTab(activeTab)
@@ -613,7 +580,6 @@ const UniversalAddDataModal = ({
           if (sustainabilityDoc.exists()) {
             const data = sustainabilityDoc.data()
             setDemandSustainabilityData({
-              referralRateTrend: data.referralRateTrend?.map(String) || Array(12).fill(""),
               repeatCustomerRate: data.repeatCustomerRate?.toString() || "",
               churnRate: data.churnRate?.toString() || "",
               campaigns: data.campaigns || [
@@ -686,7 +652,6 @@ const UniversalAddDataModal = ({
           await setDoc(doc(db, "pipelineData", `${user.uid}_sustainability_${selectedYear}`), {
             userId: user.uid,
             year: selectedYear,
-            referralRateTrend: demandSustainabilityData.referralRateTrend.map(v => Number.parseFloat(v) || 0),
             repeatCustomerRate: Number.parseFloat(demandSustainabilityData.repeatCustomerRate) || 0,
             churnRate: Number.parseFloat(demandSustainabilityData.churnRate) || 0,
             campaigns: demandSustainabilityData.campaigns.map(c => ({
@@ -700,60 +665,26 @@ const UniversalAddDataModal = ({
           break
         case "pipeline-table":
           if (!pipelineDealData.clientName || !pipelineDealData.dealValue) {
-            alert("Please fill in required fields (Client Name and Deal Value)")
+            alert("Please fill in required fields")
             return
           }
+          const riskAdjustedValue = (Number.parseFloat(pipelineDealData.dealValue) * Number.parseFloat(pipelineDealData.probability) / 100) || 0
           
-          // Calculate risk adjusted value
-          const prob = Number.parseFloat(pipelineDealData.probability) || 0
-          const value = Number.parseFloat(pipelineDealData.dealValue) || 0
-          const riskAdjustedValue = (value * prob) / 100
-          
-          // Create a clean object with only defined values
-          const dealData = {
-            userId: user.uid,
+          // Use subcollection for deals
+          const dealsRef = collection(db, "users", user.uid, "pipelineDeals")
+          await addDoc(dealsRef, {
             year: selectedYear,
-            clientName: pipelineDealData.clientName,
-            segment: pipelineDealData.segment || "",
-            stage: pipelineDealData.stage || "initial-contact",
-            probability: prob,
-            expectedClose: pipelineDealData.expectedClose || "",
-            dealValue: value,
-            riskAdjustedValue: riskAdjustedValue,
-            source: pipelineDealData.source || "",
-            owner: pipelineDealData.owner || "",
-            establishedStartDate: pipelineDealData.establishedStartDate || "",
-            expectedOnboardingDate: pipelineDealData.expectedOnboardingDate || "",
-            signedDate: pipelineDealData.signedDate || "",
+            ...pipelineDealData,
+            probability: Number.parseFloat(pipelineDealData.probability) || 0,
+            dealValue: Number.parseFloat(pipelineDealData.dealValue) || 0,
+            riskAdjustedValue,
             createdAt: new Date().toISOString(),
-          }
-          
-          console.log("Saving deal:", dealData) // Debug log
-          
-          // Use a different collection structure for deals
-          const dealsRef = collection(db, "pipelineDeals")
-          await addDoc(dealsRef, dealData)
-          
-          // Reset form after successful save
-          setPipelineDealData({
-            clientName: "",
-            segment: "",
-            stage: "initial-contact",
-            probability: "",
-            expectedClose: "",
-            dealValue: "",
-            source: "",
-            owner: "",
-            establishedStartDate: "",
-            expectedOnboardingDate: "",
-            signedDate: "",
           })
           break
       }
       
       if (onSave) onSave()
       alert("Data saved successfully!")
-      onClose() // Close modal after successful save
     } catch (error) {
       console.error("Error saving data:", error)
       alert("Error saving data. Please try again.")
@@ -894,15 +825,13 @@ const UniversalAddDataModal = ({
               }}
             >
               {years.map((year) => (
-                <option key={year} value={year}>
-                  {year}
-                </option>
+                <option key={year} value={year}>{year}</option>
               ))}
             </select>
           </div>
         </div>
 
-        {/* ========== PIPELINE VISIBILITY ========== */}
+        {/* Pipeline Visibility */}
         {activeTab === "pipeline-visibility" && (
           <div>
             <h4 style={{ color: "#5d4037", marginBottom: "20px" }}>Pipeline Visibility Data</h4>
@@ -916,9 +845,7 @@ const UniversalAddDataModal = ({
               setPipelineVisibilityData({...pipelineVisibilityData, salesVelocity: val}), { unit: "days", step: "1" })}
             
             <div style={{ marginBottom: "20px" }}>
-              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
-                Notes:
-              </label>
+              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>Notes:</label>
               <textarea
                 value={pipelineVisibilityData.notes}
                 onChange={(e) => setPipelineVisibilityData({...pipelineVisibilityData, notes: e.target.value})}
@@ -936,7 +863,7 @@ const UniversalAddDataModal = ({
           </div>
         )}
 
-        {/* ========== PIPELINE SUFFICIENCY ========== */}
+        {/* Pipeline Sufficiency */}
         {activeTab === "pipeline-sufficiency" && (
           <div>
             <h4 style={{ color: "#5d4037", marginBottom: "20px" }}>Pipeline Sufficiency Data</h4>
@@ -982,9 +909,7 @@ const UniversalAddDataModal = ({
               setPipelineSufficiencyData({...pipelineSufficiencyData, conversionRates: val}), { unit: "%", step: "0.1" })}
             
             <div style={{ marginBottom: "20px" }}>
-              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
-                Notes:
-              </label>
+              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>Notes:</label>
               <textarea
                 value={pipelineSufficiencyData.notes}
                 onChange={(e) => setPipelineSufficiencyData({...pipelineSufficiencyData, notes: e.target.value})}
@@ -1002,7 +927,7 @@ const UniversalAddDataModal = ({
           </div>
         )}
 
-        {/* ========== REVENUE CONCENTRATION ========== */}
+        {/* Revenue Concentration */}
         {activeTab === "revenue-concentration" && (
           <div>
             <h4 style={{ color: "#5d4037", marginBottom: "20px" }}>Revenue Concentration Data</h4>
@@ -1084,9 +1009,7 @@ const UniversalAddDataModal = ({
             ))}
             
             <div style={{ marginBottom: "20px", marginTop: "30px" }}>
-              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
-                Notes:
-              </label>
+              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>Notes:</label>
               <textarea
                 value={revenueConcentrationData.notes}
                 onChange={(e) => setRevenueConcentrationData({...revenueConcentrationData, notes: e.target.value})}
@@ -1104,14 +1027,10 @@ const UniversalAddDataModal = ({
           </div>
         )}
 
-        {/* ========== DEMAND SUSTAINABILITY ========== */}
+        {/* Demand Sustainability */}
         {activeTab === "demand-sustainability" && (
           <div>
             <h4 style={{ color: "#5d4037", marginBottom: "20px" }}>Demand Sustainability Data</h4>
-            
-            <h5 style={{ color: "#5d4037", marginBottom: "15px", fontWeight: "600" }}>Referral Rate Trend (%)</h5>
-            {renderMonthlyInputs("Referral Rate", demandSustainabilityData.referralRateTrend, (val) => 
-              setDemandSustainabilityData({...demandSustainabilityData, referralRateTrend: val}), { unit: "%", step: "0.1" })}
             
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px", marginBottom: "30px" }}>
               <div>
@@ -1173,9 +1092,7 @@ const UniversalAddDataModal = ({
             ))}
             
             <div style={{ marginBottom: "20px" }}>
-              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>
-                Notes:
-              </label>
+              <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>Notes:</label>
               <textarea
                 value={demandSustainabilityData.notes}
                 onChange={(e) => setDemandSustainabilityData({...demandSustainabilityData, notes: e.target.value})}
@@ -1193,7 +1110,7 @@ const UniversalAddDataModal = ({
           </div>
         )}
 
-        {/* ========== PIPELINE TABLE ========== */}
+        {/* Pipeline Table */}
         {activeTab === "pipeline-table" && (
           <div style={{ padding: "20px" }}>
             <h4 style={{ color: "#5d4037", marginBottom: "20px" }}>Add New Deal</h4>
@@ -1206,7 +1123,6 @@ const UniversalAddDataModal = ({
                   value={pipelineDealData.clientName}
                   onChange={(e) => setPipelineDealData({...pipelineDealData, clientName: e.target.value})}
                   style={{ width: "100%", padding: "8px", borderRadius: "4px", border: "1px solid #e8ddd4" }}
-                  required
                 />
               </div>
               <div>
@@ -1240,8 +1156,6 @@ const UniversalAddDataModal = ({
                   value={pipelineDealData.probability}
                   onChange={(e) => setPipelineDealData({...pipelineDealData, probability: e.target.value})}
                   style={{ width: "100%", padding: "8px", borderRadius: "4px", border: "1px solid #e8ddd4" }}
-                  min="0"
-                  max="100"
                 />
               </div>
               <div>
@@ -1260,7 +1174,6 @@ const UniversalAddDataModal = ({
                   value={pipelineDealData.dealValue}
                   onChange={(e) => setPipelineDealData({...pipelineDealData, dealValue: e.target.value})}
                   style={{ width: "100%", padding: "8px", borderRadius: "4px", border: "1px solid #e8ddd4" }}
-                  required
                 />
               </div>
               <div>
@@ -1350,14 +1263,12 @@ const UniversalAddDataModal = ({
   )
 }
 
-// ==================== PIPELINE TABLE COMPONENT ====================
+// ==================== PIPELINE TABLE COMPONENT (Now inside Pipeline Sufficiency) ====================
 
-const PipelineTable = ({ currentUser, isInvestorView, onAddData }) => {
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
+const PipelineTable = ({ currentUser, isInvestorView, selectedYear, onAddData }) => {
   const [deals, setDeals] = useState([])
   const [loading, setLoading] = useState(false)
   const [confirmDialog, setConfirmDialog] = useState({ show: false, dealId: null })
-  const [showYearDropdown, setShowYearDropdown] = useState(false)
 
   const stageOptions = [
     { value: "initial-contact", label: "Initial Contact" },
@@ -1367,8 +1278,6 @@ const PipelineTable = ({ currentUser, isInvestorView, onAddData }) => {
     { value: "closed-won", label: "Closed Won" },
     { value: "closed-lost", label: "Closed Lost" },
   ]
-
-  const years = Array.from({ length: 5 }, (_, i) => selectedYear - 2 + i)
 
   useEffect(() => {
     if (currentUser) {
@@ -1380,11 +1289,8 @@ const PipelineTable = ({ currentUser, isInvestorView, onAddData }) => {
     if (!currentUser) return
     setLoading(true)
     try {
-      const q = query(
-        collection(db, "pipelineDeals"),
-        where("userId", "==", currentUser.uid),
-        where("year", "==", selectedYear)
-      )
+      const dealsRef = collection(db, "users", currentUser.uid, "pipelineDeals")
+      const q = query(dealsRef, where("year", "==", selectedYear))
       const querySnapshot = await getDocs(q)
       const dealsData = []
       querySnapshot.forEach((doc) => {
@@ -1408,7 +1314,8 @@ const PipelineTable = ({ currentUser, isInvestorView, onAddData }) => {
 
   const handleConfirmDelete = async () => {
     try {
-      await deleteDoc(doc(db, "pipelineDeals", confirmDialog.dealId))
+      const dealsRef = collection(db, "users", currentUser.uid, "pipelineDeals")
+      await deleteDoc(doc(dealsRef, confirmDialog.dealId))
       loadDeals()
     } catch (error) {
       console.error("Error deleting deal:", error)
@@ -1493,102 +1400,32 @@ const PipelineTable = ({ currentUser, isInvestorView, onAddData }) => {
           gap: "15px",
         }}
       >
-        <h3 style={{ color: "#5d4037", fontSize: "20px", fontWeight: "700", margin: 0 }}>Pipeline Deals</h3>
-
-        <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
-          {/* Year Selection */}
-          <div style={{ position: "relative" }}>
-            <div
-              onClick={() => setShowYearDropdown(!showYearDropdown)}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#fdfcfb",
-                border: "1px solid #5d4037",
-                borderRadius: "4px",
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
-                minWidth: "100px",
-                justifyContent: "space-between",
-              }}
-            >
-              <span style={{ color: "#5d4037", fontSize: "14px" }}>
-                {selectedYear}
-              </span>
-              <ChevronDown size={16} color="#5d4037" />
-            </div>
-
-            {showYearDropdown && (
-              <div
-                style={{
-                  position: "absolute",
-                  top: "100%",
-                  right: 0,
-                  marginTop: "4px",
-                  backgroundColor: "#fdfcfb",
-                  border: "1px solid #5d4037",
-                  borderRadius: "4px",
-                  zIndex: 100,
-                  minWidth: "100px",
-                }}
-              >
-                {years.map((year) => (
-                  <div
-                    key={year}
-                    onClick={() => {
-                      setSelectedYear(year)
-                      setShowYearDropdown(false)
-                    }}
-                    style={{
-                      padding: "8px 12px",
-                      cursor: "pointer",
-                      backgroundColor: selectedYear === year ? "#e8ddd4" : "transparent",
-                      color: "#5d4037",
-                      fontSize: "13px",
-                      borderBottom: "1px solid #e8ddd4",
-                    }}
-                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#f5f0eb"}
-                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 
-                      selectedYear === year ? "#e8ddd4" : "transparent"
-                    }
-                  >
-                    {year}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-          
-          {!isInvestorView && (
-            <button
-              onClick={onAddData}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#5d4037",
-                color: "#fdfcfb",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: "600",
-                fontSize: "14px",
-              }}
-            >
-              Add Deal
-            </button>
-          )}
-        </div>
+        <h3 style={{ color: "#5d4037", fontSize: "18px", fontWeight: "700", margin: 0 }}>Pipeline Deals</h3>
+        
+        {!isInvestorView && (
+          <button
+            onClick={onAddData}
+            style={{
+              padding: "8px 16px",
+              backgroundColor: "#5d4037",
+              color: "#fdfcfb",
+              border: "none",
+              borderRadius: "4px",
+              cursor: "pointer",
+              fontWeight: "600",
+              fontSize: "14px",
+            }}
+          >
+            Add Deal
+          </button>
+        )}
       </div>
 
       {/* Deals Table */}
       <div style={{ overflowX: "auto", backgroundColor: "#f5f0eb", borderRadius: "8px", padding: "20px", marginBottom: "30px" }}>
-        {loading ? (
+        {deals.length === 0 ? (
           <div style={{ textAlign: "center", padding: "40px", color: "#8d6e63" }}>
-            Loading deals...
-          </div>
-        ) : deals.length === 0 ? (
-          <div style={{ textAlign: "center", padding: "40px", color: "#8d6e63" }}>
-            No deals found for {selectedYear}. Click "Add Deal" to get started.
+            No deals found. Click "Add Deal" to get started.
           </div>
         ) : (
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -1660,14 +1497,7 @@ const PipelineTable = ({ currentUser, isInvestorView, onAddData }) => {
 
       {/* Summary */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "15px", marginBottom: "20px" }}>
-        <div
-          style={{
-            backgroundColor: "#f5f0eb",
-            padding: "20px",
-            borderRadius: "6px",
-            textAlign: "center",
-          }}
-        >
+        <div style={{ backgroundColor: "#f5f0eb", padding: "20px", borderRadius: "6px", textAlign: "center" }}>
           <div style={{ fontSize: "14px", color: "#5d4037", marginBottom: "8px", fontWeight: "600" }}>
             Total Deals
           </div>
@@ -1676,14 +1506,7 @@ const PipelineTable = ({ currentUser, isInvestorView, onAddData }) => {
           </div>
         </div>
         
-        <div
-          style={{
-            backgroundColor: "#f5f0eb",
-            padding: "20px",
-            borderRadius: "6px",
-            textAlign: "center",
-          }}
-        >
+        <div style={{ backgroundColor: "#f5f0eb", padding: "20px", borderRadius: "6px", textAlign: "center" }}>
           <div style={{ fontSize: "14px", color: "#5d4037", marginBottom: "8px", fontWeight: "600" }}>
             Pipeline Value
           </div>
@@ -1692,14 +1515,7 @@ const PipelineTable = ({ currentUser, isInvestorView, onAddData }) => {
           </div>
         </div>
         
-        <div
-          style={{
-            backgroundColor: "#f5f0eb",
-            padding: "20px",
-            borderRadius: "6px",
-            textAlign: "center",
-          }}
-        >
+        <div style={{ backgroundColor: "#f5f0eb", padding: "20px", borderRadius: "6px", textAlign: "center" }}>
           <div style={{ fontSize: "14px", color: "#5d4037", marginBottom: "8px", fontWeight: "600" }}>
             Risk Adjusted
           </div>
@@ -1733,7 +1549,6 @@ const PipelineVisibility = ({ activeSection, currentUser, isInvestorView, onAddD
     notes: "",
   })
 
-  // Load financial year from EntityOverview
   useEffect(() => {
     const loadFinancialYear = async () => {
       if (!currentUser) return
@@ -1744,10 +1559,9 @@ const PipelineVisibility = ({ activeSection, currentUser, isInvestorView, onAddD
           const data = docSnap.data()
           const fyEnd = data.entityOverview?.financialYearEnd
           if (fyEnd) {
-            // Extract month from "2024-06" format
             const monthNum = parseInt(fyEnd.split('-')[1])
             const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-            setFinancialYearStart(months[(monthNum % 12)]) // Next month after year end
+            setFinancialYearStart(months[(monthNum % 12)])
           }
         }
       } catch (error) {
@@ -1785,13 +1599,11 @@ const PipelineVisibility = ({ activeSection, currentUser, isInvestorView, onAddD
   }
 
   const openTrendModal = (itemName, dataArray, isPercentage = false) => {
-    // Get last 11 months + current month (12 months total)
     const monthIndex = months.indexOf(selectedDate.month)
+    // Get last 11 months + current month (total 12 months)
     const startIndex = Math.max(0, monthIndex - 11)
-    const endIndex = monthIndex + 1
-    
-    const trendData = dataArray.slice(startIndex, endIndex)
-    const trendLabels = months.slice(startIndex, endIndex).map(m => `${m} ${selectedDate.year}`)
+    const trendData = dataArray.slice(startIndex, monthIndex + 1)
+    const trendLabels = months.slice(startIndex, monthIndex + 1).map(m => `${m} ${selectedDate.year}`)
     
     setSelectedTrendItem({ 
       name: itemName, 
@@ -1811,23 +1623,16 @@ const PipelineVisibility = ({ activeSection, currentUser, isInvestorView, onAddD
   const years = Array.from({ length: 5 }, (_, i) => selectedDate.year - 2 + i)
   const monthIndex = months.indexOf(selectedDate.month)
 
-  const formatValue = (value) => {
-    return formatNumber(value)
-  }
-
   const renderKPICard = (title, dataKey, calculation = "", isPercentage = false, colorIndex = 0) => {
     let currentValue = 0
     let dataArray = []
-    let canViewTrend = false
     
     if (dataKey === "newLeads") {
       dataArray = pipelineData.newLeads || []
       currentValue = dataArray[monthIndex] || 0
-      canViewTrend = true
     } else if (dataKey === "salesVelocity") {
       dataArray = pipelineData.salesVelocity || []
       currentValue = dataArray[monthIndex] || 0
-      canViewTrend = true
     }
 
     const displayValue = isPercentage 
@@ -1909,23 +1714,21 @@ const PipelineVisibility = ({ activeSection, currentUser, isInvestorView, onAddD
             >
               AI analysis
             </button>
-            {canViewTrend && (
-              <button
-                onClick={() => openTrendModal(title, dataArray, isPercentage)}
-                style={{
-                  padding: "6px 12px",
-                  backgroundColor: "#e8ddd4",
-                  color: "#5d4037",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  fontWeight: "600",
-                  fontSize: "12px",
-                }}
-              >
-                View trend
-              </button>
-            )}
+            <button
+              onClick={() => openTrendModal(title, dataArray, isPercentage)}
+              style={{
+                padding: "6px 12px",
+                backgroundColor: "#e8ddd4",
+                color: "#5d4037",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontWeight: "600",
+                fontSize: "12px",
+              }}
+            >
+              View trend
+            </button>
           </div>
 
           {expandedNotes[dataKey] && (
@@ -2022,7 +1825,7 @@ const PipelineVisibility = ({ activeSection, currentUser, isInvestorView, onAddD
         <h2 style={{ color: "#5d4037", fontSize: "24px", fontWeight: "700", margin: 0 }}>Pipeline Visibility</h2>
 
         <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
-          {/* Unified Date Dropdown */}
+          {/* Year/Month Dropdown */}
           <div style={{ position: "relative" }}>
             <div
               onClick={() => setShowMonthDropdown(!showMonthDropdown)}
@@ -2123,8 +1926,8 @@ const PipelineVisibility = ({ activeSection, currentUser, isInvestorView, onAddD
         </div>
       </div>
 
-      {/* KPI Cards - 4 per row */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "20px", marginBottom: "30px" }}>
+      {/* KPI Cards */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "20px", marginBottom: "30px" }}>
         {renderKPICard("New Leads", "newLeads", calculationTexts.newLeads, false, 0)}
         {renderKPICard("Sales Velocity", "salesVelocity", calculationTexts.salesVelocity, false, 1)}
       </div>
@@ -2152,7 +1955,7 @@ const PipelineVisibility = ({ activeSection, currentUser, isInvestorView, onAddD
   )
 }
 
-// ==================== PIPELINE SUFFICIENCY COMPONENT ====================
+// ==================== PIPELINE SUFFICIENCY COMPONENT (with Pipeline Table inside) ====================
 
 const PipelineSufficiency = ({ activeSection, currentUser, isInvestorView, onAddData }) => {
   const [loading, setLoading] = useState(false)
@@ -2176,7 +1979,6 @@ const PipelineSufficiency = ({ activeSection, currentUser, isInvestorView, onAdd
     notes: "",
   })
 
-  // Load financial year
   useEffect(() => {
     const loadFinancialYear = async () => {
       if (!currentUser) return
@@ -2231,11 +2033,10 @@ const PipelineSufficiency = ({ activeSection, currentUser, isInvestorView, onAdd
 
   const openTrendModal = (itemName, dataArray, isPercentage = false) => {
     const monthIndex = months.indexOf(selectedDate.month)
+    // Get last 11 months + current month (total 12 months)
     const startIndex = Math.max(0, monthIndex - 11)
-    const endIndex = monthIndex + 1
-    
-    const trendData = dataArray.slice(startIndex, endIndex)
-    const trendLabels = months.slice(startIndex, endIndex).map(m => `${m} ${selectedDate.year}`)
+    const trendData = dataArray.slice(startIndex, monthIndex + 1)
+    const trendLabels = months.slice(startIndex, monthIndex + 1).map(m => `${m} ${selectedDate.year}`)
     
     setSelectedTrendItem({ 
       name: itemName, 
@@ -2255,23 +2056,16 @@ const PipelineSufficiency = ({ activeSection, currentUser, isInvestorView, onAdd
   const years = Array.from({ length: 5 }, (_, i) => selectedDate.year - 2 + i)
   const monthIndex = months.indexOf(selectedDate.month)
 
-  const formatValue = (value) => {
-    return formatCurrency(value)
-  }
-
   const renderKPICard = (title, dataKey, calculation = "", isPercentage = false, colorIndex = 2) => {
     let currentValue = 0
     let dataArray = []
-    let canViewTrend = false
     
     if (dataKey === "leadVolumeTrends") {
       dataArray = pipelineData.leadVolumeTrends || []
       currentValue = dataArray[monthIndex] || 0
-      canViewTrend = true
     } else if (dataKey === "conversionRates") {
       dataArray = pipelineData.conversionRates || []
       currentValue = dataArray[monthIndex] || 0
-      canViewTrend = true
     } else if (dataKey === "riskAdjustedValue") {
       currentValue = (pipelineData.totalPipelineValue * pipelineData.probability) / 100
     } else if (dataKey === "pipelineCoverage") {
@@ -2357,23 +2151,27 @@ const PipelineSufficiency = ({ activeSection, currentUser, isInvestorView, onAdd
             >
               AI analysis
             </button>
-            {canViewTrend && (
-              <button
-                onClick={() => openTrendModal(title, dataArray, isPercentage)}
-                style={{
-                  padding: "6px 12px",
-                  backgroundColor: "#e8ddd4",
-                  color: "#5d4037",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  fontWeight: "600",
-                  fontSize: "12px",
-                }}
-              >
-                View trend
-              </button>
-            )}
+            <button
+              onClick={() => {
+                if (dataKey === "leadVolumeTrends" || dataKey === "conversionRates") {
+                  openTrendModal(title, dataArray, isPercentage)
+                } else {
+                  alert("Trend view not available for this metric")
+                }
+              }}
+              style={{
+                padding: "6px 12px",
+                backgroundColor: "#e8ddd4",
+                color: "#5d4037",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontWeight: "600",
+                fontSize: "12px",
+              }}
+            >
+              View trend
+            </button>
           </div>
 
           {expandedNotes[dataKey] && (
@@ -2475,7 +2273,7 @@ const PipelineSufficiency = ({ activeSection, currentUser, isInvestorView, onAdd
         <h2 style={{ color: "#5d4037", fontSize: "24px", fontWeight: "700", margin: 0 }}>Pipeline Sufficiency</h2>
 
         <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
-          {/* Unified Date Dropdown */}
+          {/* Year/Month Dropdown */}
           <div style={{ position: "relative" }}>
             <div
               onClick={() => setShowMonthDropdown(!showMonthDropdown)}
@@ -2576,18 +2374,19 @@ const PipelineSufficiency = ({ activeSection, currentUser, isInvestorView, onAdd
         </div>
       </div>
 
-      {/* KPI Cards - 4 per row */}
+      {/* KPI Cards - All 4 circles in one row */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "20px", marginBottom: "30px" }}>
-        {renderKPICard("Risk Adjusted Value", "riskAdjustedValue", calculationTexts.riskAdjustedValue, false, 2)}
-        {renderKPICard("Pipeline Coverage", "pipelineCoverage", calculationTexts.pipelineCoverage, true, 3)}
-        {renderKPICard("Lead Volume Trends", "leadVolumeTrends", calculationTexts.leadVolumeTrends, false, 4)}
-        {renderKPICard("Conversion Rates", "conversionRates", calculationTexts.conversionRates, true, 5)}
+        {renderKPICard("Risk Adjusted Value", "riskAdjustedValue", calculationTexts.riskAdjustedValue, false, 0)}
+        {renderKPICard("Pipeline Coverage", "pipelineCoverage", calculationTexts.pipelineCoverage, true, 1)}
+        {renderKPICard("Lead Volume Trends", "leadVolumeTrends", calculationTexts.leadVolumeTrends, false, 2)}
+        {renderKPICard("Conversion Rates", "conversionRates", calculationTexts.conversionRates, true, 3)}
       </div>
 
       {/* Pipeline Table inside Pipeline Sufficiency */}
-      <PipelineTable
+      <PipelineTable 
         currentUser={currentUser}
         isInvestorView={isInvestorView}
+        selectedYear={selectedDate.year}
         onAddData={onAddData}
       />
 
@@ -2649,7 +2448,6 @@ const RevenueConcentration = ({ activeSection, currentUser, isInvestorView, onAd
     notes: "",
   })
 
-  // Load financial year
   useEffect(() => {
     const loadFinancialYear = async () => {
       if (!currentUser) return
@@ -2712,23 +2510,6 @@ const RevenueConcentration = ({ activeSection, currentUser, isInvestorView, onAd
     }
   }
 
-  const openTrendModal = (itemName, dataArray, isPercentage = false) => {
-    const monthIndex = months.indexOf(selectedDate.month)
-    const startIndex = Math.max(0, monthIndex - 11)
-    const endIndex = monthIndex + 1
-    
-    const trendData = dataArray.slice(startIndex, endIndex)
-    const trendLabels = months.slice(startIndex, endIndex).map(m => `${m} ${selectedDate.year}`)
-    
-    setSelectedTrendItem({ 
-      name: itemName, 
-      data: trendData,
-      labels: trendLabels,
-      isPercentage
-    })
-    setShowTrendModal(true)
-  }
-
   const handleCalculationClick = (title, calculation) => {
     setSelectedCalculation({ title, calculation })
     setShowCalculationModal(true)
@@ -2737,11 +2518,7 @@ const RevenueConcentration = ({ activeSection, currentUser, isInvestorView, onAd
   const months = getMonthsForYear(selectedDate.year, financialYearStart)
   const years = Array.from({ length: 5 }, (_, i) => selectedDate.year - 2 + i)
 
-  const formatValue = (value) => {
-    return formatCurrency(value)
-  }
-
-  const renderKPICard = (title, dataKey, calculation = "", isPercentage = false, colorIndex = 6) => {
+  const renderKPICard = (title, dataKey, calculation = "", isPercentage = false, colorIndex = 4) => {
     let currentValue = 0
     
     if (dataKey === "totalRevenue") {
@@ -2942,7 +2719,7 @@ const RevenueConcentration = ({ activeSection, currentUser, isInvestorView, onAd
         <h2 style={{ color: "#5d4037", fontSize: "24px", fontWeight: "700", margin: 0 }}>Revenue Concentration</h2>
 
         <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
-          {/* Unified Date Dropdown */}
+          {/* Year/Month Dropdown */}
           <div style={{ position: "relative" }}>
             <div
               onClick={() => setShowMonthDropdown(!showMonthDropdown)}
@@ -3076,12 +2853,12 @@ const RevenueConcentration = ({ activeSection, currentUser, isInvestorView, onAd
         </div>
       </div>
 
-      {/* KPI Cards - 4 per row */}
+      {/* KPI Cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "20px", marginBottom: "30px" }}>
-        {renderKPICard("Total Revenue", "totalRevenue", calculationTexts.totalRevenue, false, 6)}
-        {renderKPICard("Total Spend", "totalSpend", calculationTexts.totalSpend, false, 7)}
-        {renderKPICard("Overall ROI", "totalROI", calculationTexts.totalROI, true, 8)}
-        {renderKPICard("Top 3 Concentration", "top3Concentration", calculationTexts.top3Concentration, true, 9)}
+        {renderKPICard("Total Revenue", "totalRevenue", calculationTexts.totalRevenue, false, 4)}
+        {renderKPICard("Total Spend", "totalSpend", calculationTexts.totalSpend, false, 5)}
+        {renderKPICard("Overall ROI", "totalROI", calculationTexts.totalROI, true, 6)}
+        {renderKPICard("Top 3 Concentration", "top3Concentration", calculationTexts.top3Concentration, true, 7)}
       </div>
 
       {/* Channel/Segment Chart */}
@@ -3107,13 +2884,13 @@ const RevenueConcentration = ({ activeSection, currentUser, isInvestorView, onAd
                   data: chartType === "channel"
                     ? concentrationData.revenueChannels.map(c => c.revenue)
                     : concentrationData.customerSegments.map(s => s.revenue),
-                  backgroundColor: "#FF8C42",
+                  backgroundColor: "#5d4037",
                   borderRadius: 4,
                 },
                 ...(chartType === "channel" ? [{
                   label: "Spend",
                   data: concentrationData.revenueChannels.map(c => c.spend),
-                  backgroundColor: "#66BB6A",
+                  backgroundColor: "#8d6e63",
                   borderRadius: 4,
                 }] : []),
               ],
@@ -3122,6 +2899,7 @@ const RevenueConcentration = ({ activeSection, currentUser, isInvestorView, onAd
               responsive: true,
               maintainAspectRatio: false,
               plugins: {
+                datalabels: { display: false },
                 legend: { display: chartType === "channel" },
                 tooltip: {
                   callbacks: {
@@ -3274,12 +3052,9 @@ const DemandSustainability = ({ activeSection, currentUser, isInvestorView, onAd
   const [kpiAnalysis, setKpiAnalysis] = useState({})
   const [showCalculationModal, setShowCalculationModal] = useState(false)
   const [selectedCalculation, setSelectedCalculation] = useState({ title: "", calculation: "" })
-  const [showTrendModal, setShowTrendModal] = useState(false)
-  const [selectedTrendItem, setSelectedTrendItem] = useState(null)
   const [financialYearStart, setFinancialYearStart] = useState("Jan")
 
   const [sustainabilityData, setSustainabilityData] = useState({
-    referralRateTrend: Array(12).fill(0),
     repeatCustomerRate: 0,
     churnRate: 0,
     campaigns: [
@@ -3291,7 +3066,6 @@ const DemandSustainability = ({ activeSection, currentUser, isInvestorView, onAd
     notes: "",
   })
 
-  // Load financial year
   useEffect(() => {
     const loadFinancialYear = async () => {
       if (!currentUser) return
@@ -3329,7 +3103,6 @@ const DemandSustainability = ({ activeSection, currentUser, isInvestorView, onAd
       if (docSnap.exists()) {
         const data = docSnap.data()
         setSustainabilityData({
-          referralRateTrend: data.referralRateTrend || Array(12).fill(0),
           repeatCustomerRate: data.repeatCustomerRate || 0,
           churnRate: data.churnRate || 0,
           campaigns: data.campaigns || [
@@ -3348,23 +3121,6 @@ const DemandSustainability = ({ activeSection, currentUser, isInvestorView, onAd
     }
   }
 
-  const openTrendModal = (itemName, dataArray, isPercentage = false) => {
-    const monthIndex = months.indexOf(selectedDate.month)
-    const startIndex = Math.max(0, monthIndex - 11)
-    const endIndex = monthIndex + 1
-    
-    const trendData = dataArray.slice(startIndex, endIndex)
-    const trendLabels = months.slice(startIndex, endIndex).map(m => `${m} ${selectedDate.year}`)
-    
-    setSelectedTrendItem({ 
-      name: itemName, 
-      data: trendData,
-      labels: trendLabels,
-      isPercentage
-    })
-    setShowTrendModal(true)
-  }
-
   const handleCalculationClick = (title, calculation) => {
     setSelectedCalculation({ title, calculation })
     setShowCalculationModal(true)
@@ -3372,16 +3128,9 @@ const DemandSustainability = ({ activeSection, currentUser, isInvestorView, onAd
 
   const months = getMonthsForYear(selectedDate.year, financialYearStart)
   const years = Array.from({ length: 5 }, (_, i) => selectedDate.year - 2 + i)
-  const monthIndex = months.indexOf(selectedDate.month)
 
-  const formatValue = (value) => {
-    return formatCurrency(value)
-  }
-
-  const renderKPICard = (title, dataKey, calculation = "", isPercentage = false, colorIndex = 10) => {
+  const renderKPICard = (title, dataKey, calculation = "", isPercentage = false, colorIndex = 0) => {
     let currentValue = 0
-    let canViewTrend = false
-    let dataArray = []
     
     if (dataKey === "repeatCustomerRate") {
       currentValue = sustainabilityData.repeatCustomerRate
@@ -3389,11 +3138,6 @@ const DemandSustainability = ({ activeSection, currentUser, isInvestorView, onAd
       currentValue = sustainabilityData.churnRate
     } else if (dataKey === "netRetention") {
       currentValue = sustainabilityData.repeatCustomerRate - sustainabilityData.churnRate
-    } else if (dataKey === "avgReferralRate") {
-      dataArray = sustainabilityData.referralRateTrend
-      const validData = dataArray.slice(0, monthIndex + 1)
-      currentValue = validData.reduce((sum, r) => sum + r, 0) / (validData.length || 1)
-      canViewTrend = true
     } else if (dataKey === "campaignROI") {
       const totalCost = sustainabilityData.campaigns.reduce((sum, c) => sum + c.cost, 0)
       const totalRevenue = sustainabilityData.campaigns.reduce((sum, c) => sum + c.revenue, 0)
@@ -3477,23 +3221,6 @@ const DemandSustainability = ({ activeSection, currentUser, isInvestorView, onAd
             >
               AI analysis
             </button>
-            {canViewTrend && (
-              <button
-                onClick={() => openTrendModal(title, dataArray, isPercentage)}
-                style={{
-                  padding: "6px 12px",
-                  backgroundColor: "#e8ddd4",
-                  color: "#5d4037",
-                  border: "none",
-                  borderRadius: "4px",
-                  cursor: "pointer",
-                  fontWeight: "600",
-                  fontSize: "12px",
-                }}
-              >
-                View trend
-              </button>
-            )}
           </div>
 
           {expandedNotes[dataKey] && (
@@ -3563,7 +3290,6 @@ const DemandSustainability = ({ activeSection, currentUser, isInvestorView, onAd
 
   if (activeSection !== "demand-sustainability") return null
 
-  const avgReferralRate = sustainabilityData.referralRateTrend.slice(0, monthIndex + 1).reduce((sum, r) => sum + r, 0) / (monthIndex + 1 || 1)
   const netRetention = sustainabilityData.repeatCustomerRate - sustainabilityData.churnRate
   
   const totalCampaignCost = sustainabilityData.campaigns.reduce((sum, c) => sum + c.cost, 0)
@@ -3574,7 +3300,6 @@ const DemandSustainability = ({ activeSection, currentUser, isInvestorView, onAd
     repeatCustomerRate: "Repeat Customer Rate = (Repeat Customers ÷ Total Customers) × 100%\n\nMeasures customer loyalty and satisfaction.",
     churnRate: "Churn Rate = (Customers Lost ÷ Total Customers) × 100%\n\nMeasures customer retention.",
     netRetention: "Net Retention Rate = Repeat Customer Rate - Churn Rate\n\nIndicates overall customer retention health.",
-    avgReferralRate: "Average Referral Rate = Total Referrals ÷ Total Customers\n\nMeasures organic growth through referrals.",
     campaignROI: "Campaign ROI = (Revenue - Cost) ÷ Cost × 100%\n\nMeasures marketing campaign effectiveness.",
   }
 
@@ -3600,7 +3325,7 @@ const DemandSustainability = ({ activeSection, currentUser, isInvestorView, onAd
         <h2 style={{ color: "#5d4037", fontSize: "24px", fontWeight: "700", margin: 0 }}>Demand Sustainability</h2>
 
         <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
-          {/* Unified Date Dropdown */}
+          {/* Year/Month Dropdown */}
           <div style={{ position: "relative" }}>
             <div
               onClick={() => setShowMonthDropdown(!showMonthDropdown)}
@@ -3701,13 +3426,12 @@ const DemandSustainability = ({ activeSection, currentUser, isInvestorView, onAd
         </div>
       </div>
 
-      {/* KPI Cards - 4 per row */}
+      {/* KPI Cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "20px", marginBottom: "30px" }}>
-        {renderKPICard("Repeat Customer Rate", "repeatCustomerRate", calculationTexts.repeatCustomerRate, true, 10)}
-        {renderKPICard("Churn Rate", "churnRate", calculationTexts.churnRate, true, 11)}
-        {renderKPICard("Net Retention", "netRetention", calculationTexts.netRetention, true, 12)}
-        {renderKPICard("Avg Referral Rate", "avgReferralRate", calculationTexts.avgReferralRate, true, 13)}
-        {renderKPICard("Campaign ROI", "campaignROI", calculationTexts.campaignROI, true, 14)}
+        {renderKPICard("Repeat Customer Rate", "repeatCustomerRate", calculationTexts.repeatCustomerRate, true, 0)}
+        {renderKPICard("Churn Rate", "churnRate", calculationTexts.churnRate, true, 1)}
+        {renderKPICard("Net Retention", "netRetention", calculationTexts.netRetention, true, 2)}
+        {renderKPICard("Campaign ROI", "campaignROI", calculationTexts.campaignROI, true, 3)}
       </div>
 
       {/* Campaign Table */}
@@ -3772,18 +3496,6 @@ const DemandSustainability = ({ activeSection, currentUser, isInvestorView, onAd
         title={selectedCalculation.title}
         calculation={selectedCalculation.calculation}
       />
-
-      {/* Trend Modal */}
-      {showTrendModal && selectedTrendItem && (
-        <TrendModal
-          isOpen={showTrendModal}
-          onClose={() => setShowTrendModal(false)}
-          title={selectedTrendItem.name}
-          data={selectedTrendItem.data}
-          labels={selectedTrendItem.labels}
-          isPercentage={selectedTrendItem.isPercentage}
-        />
-      )}
     </div>
   )
 }
@@ -3800,7 +3512,6 @@ export default function MarketingSales() {
   const [viewingSMEId, setViewingSMEId] = useState(null)
   const [viewingSMEName, setViewingSMEName] = useState("")
   
-  // Universal Add Data Modal
   const [showAddDataModal, setShowAddDataModal] = useState(false)
   const [loading, setLoading] = useState(false)
 
@@ -3912,7 +3623,7 @@ export default function MarketingSales() {
             </h1>
           </div>
 
-          {/* See more about dashboard */}
+          {/* About Dashboard */}
           <div
             style={{
               backgroundColor: "#fdfcfb",
@@ -4043,7 +3754,6 @@ export default function MarketingSales() {
         currentTab={activeSection}
         user={user}
         onSave={() => {
-          // Refresh data for current tab
           setLoading(true)
           setTimeout(() => setLoading(false), 1000)
         }}

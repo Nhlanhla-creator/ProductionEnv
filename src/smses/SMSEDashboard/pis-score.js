@@ -6,6 +6,7 @@ import { db, auth } from "../../firebaseConfig";
 import { doc, onSnapshot, updateDoc, setDoc, getDoc } from "firebase/firestore";
 import { API_KEYS } from '../../API';
 import { getFunctions, httpsCallable } from "firebase/functions";
+import { buildGovernancePrompt, calculateGovernanceScore } from './governance-improvements'
 
 export function PISScoreCard({ styles, profileData, onScoreUpdate, apiKey }) {
   const [showModal, setShowModal] = useState(false);
@@ -21,7 +22,28 @@ export function PISScoreCard({ styles, profileData, onScoreUpdate, apiKey }) {
   const [governanceStage, setGovernanceStage] = useState("");
   const [governanceRecommendation, setGovernanceRecommendation] = useState("");
   const [triggeredByAuto, setTriggeredByAuto] = useState(true);
+const [pisCalculation, setPisCalculation] = useState(() => {
+  const employees = parseInt(profileData?.entityOverview?.employeeCount) || 0;
+  const turnoverRaw = profileData?.financialOverview?.annualRevenue || '0';
+  const turnover = parseFloat(turnoverRaw.toString().replace(/[R,\s]/g, '')) || 0;
+  const liabilitiesRaw = profileData?.financialOverview?.existingDebt || '0';
+  const liabilities = parseFloat(liabilitiesRaw.toString().replace(/[R,\s]/g, '')) || 0;
+  const shareholders = profileData?.ownershipManagement?.shareholders?.length || 1;
+  const turnoverComponent = parseFloat((turnover / 1000000).toFixed(2));
+  const liabilitiesComponent = parseFloat((liabilities / 1000000).toFixed(2));
+  return {
+    employees,
+    turnover,
+    liabilities,
+    shareholders,
+    turnoverComponent,
+    liabilitiesComponent,
+    totalPIS: parseFloat((employees + turnoverComponent + liabilitiesComponent + shareholders).toFixed(2))
+  };
+});
+// Inside runAiEvaluation, after const pisCalc = calculatePIS():
 
+// Then replace pisCalc in the JSX above with pisCalculation
   const calculatePIS = () => {
     const employees = parseInt(profileData?.entityOverview?.employeeCount) || 0;
 
@@ -152,189 +174,97 @@ export function PISScoreCard({ styles, profileData, onScoreUpdate, apiKey }) {
     }
   };
 
-  const parseAiEvaluation = (text) => {
-    console.log("Parsing AI evaluation:", text?.substring(0, 200)); // Debug log
+ const parseAiEvaluation = (text) => {
+  const raw = text || "";
+  const cleaned = raw.replace(/\*\*/g, "");
 
-    const raw = text || "";
-    const cleaned = raw.replace(/\*\*/g, "");
+  // ── PIS (use calculated value as the ground truth) ────────────────────────
+  const pisCalcLocal = calculatePIS();
+  let pis = pisCalcLocal.totalPIS;
+  const pisMatch = cleaned.match(/PIS\s*Score\s*[:\-–—]?\s*([\d.]+)/i);
+  if (pisMatch) pis = parseFloat(pisMatch[1]);
 
-    // Calculate actual PIS from profile data
-    const pisCalculation = calculatePIS();
-    const actualPIS = pisCalculation.totalPIS;
-
-    // --- PIS --- (use calculated value as fallback)
-    let pis = actualPIS;
-    const pisRegexes = [
-      /PIS\s*Score\s*[:\-–—]?\s*([\d.]+)/i,
-      /PIS[^=]{0,20}=\s*([\d.]+)/i,
-    ];
-    for (const rx of pisRegexes) {
-      const m = cleaned.match(rx);
-      if (m) {
-        pis = parseFloat(m[1]);
-        break;
-      }
-    }
-
-    // --- Governance Score ---
-    let govScore = 0;
+  // ── Governance Score ──────────────────────────────────────────────────────
+  let govScore = 0;
   const govRegexes = [
-  /Overall Governance Score\s*=.*?=\s*([\d.]+)\s*%/i,   
-  /(?:Overall\s*)?Governance\s*Score\s*[:\-–—]?\s*([\d.]+)\s*%/i,
-  /Governance\s*:\s*([\d.]+)\s*%/i,
-  /Overall Score = .*?([\d.]+)%/i,
-  /Governance Score:.*?([\d.]+)%/i,
-];
-    for (const rx of govRegexes) {
-      const m = cleaned.match(rx);
-      if (m) {
-        govScore = Math.round(parseFloat(m[1]));
-        console.log("Found governance score:", govScore); // Debug
-        break;
-      }
-    }
+    /Overall Governance Score\s*=.*?=\s*([\d.]+)\s*%/i,
+    /(?:Overall\s*)?Governance\s*Score\s*[:\-–—]?\s*([\d.]+)\s*%/i,
+    /Governance\s*:\s*([\d.]+)\s*%/i,
+    /Overall Score = .*?([\d.]+)%/i,
+  ];
+  for (const rx of govRegexes) {
+    const m = cleaned.match(rx);
+    if (m) { govScore = Math.round(parseFloat(m[1])); break; }
+  }
 
-    // --- Stage & Recommendation ---
-    let stage = "";
-    if (/Advisors Stage/i.test(cleaned)) stage = "Advisors Stage";
-    else if (/Emerging Board Stage/i.test(cleaned)) stage = "Emerging Board Stage";
-    else if (/Full Board Stage/i.test(cleaned)) stage = "Full Board Stage";
+  // ── Stage & Recommendation ────────────────────────────────────────────────
+  let stage = "";
+  if (/Advisors Stage/i.test(cleaned)) stage = "Advisors Stage";
+  else if (/Emerging Board Stage/i.test(cleaned)) stage = "Emerging Board Stage";
+  else if (/Full Board Stage/i.test(cleaned)) stage = "Full Board Stage";
 
-    let recommendation = "";
-    if (/Advisors sufficient/i.test(cleaned)) recommendation = "Advisors sufficient";
-    else if (/Informal board recommended/i.test(cleaned)) recommendation = "Informal board recommended";
-    else if (/Formal board strongly recommended/i.test(cleaned)) recommendation = "Formal board strongly recommended";
+  let recommendation = "";
+  if (/Advisors sufficient/i.test(cleaned)) recommendation = "Advisors sufficient";
+  else if (/Informal board recommended/i.test(cleaned)) recommendation = "Informal board recommended";
+  else if (/Formal board strongly recommended/i.test(cleaned)) recommendation = "Formal board strongly recommended";
 
-    // --- Category breakdown - IMPROVED PARSING ---
-    const policiesData = calculatePoliciesScore();
-    const breakdown = [];
-    const colors = ["#8D6E63", "#6D4C41", "#A67C52", "#5D4037", "#4E342E"];
+  // ── Per-category extraction (confidence + evidence) ───────────────────────
+  // Used only for the narrative display in formatAiResult badges.
+  // Actual scores come from calculateGovernanceScore() (deterministic).
+  const expectedCategories = [
+    { key: "strategic",     label: "Strategic Planning" },
+    { key: "risk",          label: "Risk Management" },
+    { key: "transparency",  label: "Transparency and Reporting" },
+    { key: "policies",      label: "Policies & Documentation" },
+    { key: "board",         label: "Board Structure" },
+  ];
 
-    console.log("Looking for categories in AI response..."); // Debug
+  const categoryMeta = {}; // { strategic: { confidence, confidenceRationale, evidence }, ... }
 
-    // Define the expected categories in order
-    const expectedCategories = [
-      "Strategic Planning",
-      "Risk Management",
-      "Transparency and Reporting",
-      "Policies & Documentation"
-    ];
+  for (const { key, label } of expectedCategories) {
+    // Find the section body for this category
+    const sectionRe = new RegExp(
+      `###\\s*\\d+\\.\\s*${label}[^\\n]*\\n([\\s\\S]*?)(?=###|$)`,
+      "i"
+    );
+    const sectionMatch = raw.match(sectionRe);
+    const body = sectionMatch ? sectionMatch[1] : "";
 
-    // Try multiple patterns to find scores
-    const scorePatterns = [
-      /###\s*\d+\.\s*Strategic Planning[^#]*?Score:\s*(\d+)/gi,
-      /###\s*\d+\.\s*Risk Management[^#]*?Score:\s*(\d+)/gi,
-      /###\s*\d+\.\s*Transparency and Reporting[^#]*?Score:\s*(\d+)/gi,
-      /###\s*\d+\.\s*Policies & Documentation[^#]*?Score:\s*(\d+)/gi,
-      /Strategic Planning[^#]*?Score:\s*(\d+)/gi,
-      /Risk Management[^#]*?Score:\s*(\d+)/gi,
-      /Transparency and Reporting[^#]*?Score:\s*(\d+)/gi,
-      /Policies & Documentation[^#]*?Score:\s*(\d+)/gi,
-      /1\.\s*Strategic Planning[^#]*?Score:\s*(\d+)/gi,
-      /2\.\s*Risk Management[^#]*?Score:\s*(\d+)/gi,
-      /3\.\s*Transparency and Reporting[^#]*?Score:\s*(\d+)/gi,
-      /4\.\s*Policies & Documentation[^#]*?Score:\s*(\d+)/gi
-    ];
+    // Confidence level
+    let confidence = "Medium";
+    const confMatch = body.match(/Confidence\s*:\s*(High|Medium|Low)/i);
+    if (confMatch) confidence = confMatch[1];
 
-    const scores = [];
+    // Confidence rationale
+    let confidenceRationale = "";
+    const confRatMatch = body.match(/Confidence Rationale\s*:\s*([^\n]+)/i);
+    if (confRatMatch) confidenceRationale = confRatMatch[1].trim();
 
-    // Extract scores using patterns
-    for (const pattern of scorePatterns) {
-      const matches = [...raw.matchAll(pattern)];
-      if (matches.length > 0) {
-        for (const match of matches) {
-          if (match[1] && !isNaN(parseInt(match[1]))) {
-            scores.push(parseInt(match[1]));
-          }
-        }
-        if (scores.length >= expectedCategories.length) break;
-      }
-    }
+    // Evidence
+    let evidence = "";
+    const evidenceMatch = body.match(/Evidence\s*:\s*([^\n]+)/i);
+    if (evidenceMatch) evidence = evidenceMatch[1].trim();
 
-    console.log("Extracted scores:", scores); // Debug
+    categoryMeta[key] = { confidence, confidenceRationale, evidence };
+  }
 
-    // If we found scores, use them
-    if (scores.length > 0) {
-      expectedCategories.forEach((categoryName, index) => {
-        const score = scores[index] || 0;
-        const max = 100;
+  // ── Policies breakdown (always deterministic) ─────────────────────────────
+  const policiesData = calculatePoliciesScore();
 
-        if (categoryName === "Policies & Documentation") {
-          breakdown.push({
-            name: categoryName,
-            score: policiesData.score, // Use calculated score for policies
-            max: max,
-            completed: policiesData.completed,
-            total: policiesData.total,
-            color: colors[index % colors.length],
-          });
-        } else {
-          breakdown.push({
-            name: categoryName,
-            score: score,
-            max: max,
-            color: colors[index % colors.length],
-          });
-        }
-      });
-    } else {
-      // Fallback: Use default scores if parsing fails
-      console.log("No scores found in AI response, using fallback"); // Debug
-
-      expectedCategories.forEach((categoryName, index) => {
-        let score = 0;
-
-        // Set some reasonable defaults based on the overall score
-        if (govScore > 0) {
-          if (categoryName === "Policies & Documentation") {
-            score = policiesData.score;
-          } else {
-            // Distribute scores around the overall score with some variation
-            score = Math.max(0, Math.min(100, govScore + (Math.random() * 20 - 10)));
-          }
-        }
-
-        if (categoryName === "Policies & Documentation") {
-          breakdown.push({
-            name: categoryName,
-            score: score,
-            max: 100,
-            completed: policiesData.completed,
-            total: policiesData.total,
-            color: colors[index % colors.length],
-          });
-        } else {
-          breakdown.push({
-            name: categoryName,
-            score: score,
-            max: 100,
-            color: colors[index % colors.length],
-          });
-        }
-      });
-    }
-
-    // Calculate weights for all categories
-    if (breakdown.length > 0) {
-      const weightPerCategory = 100 / breakdown.length;
-      breakdown.forEach(category => {
-        category.weight = weightPerCategory;
-        category.weightedScore = (category.score / category.max) * weightPerCategory;
-      });
-    }
-
-    console.log("Final breakdown:", breakdown); // Debug
-
-    return {
-      pis,
-      govScore: govScore || 0, // Default to 50 if no score found
-      stage: stage || "Advisors Stage",
-      recommendation: recommendation || "Advisors sufficient",
-      breakdown,
-      analysis: raw,
-      pisCalculation: pisCalculation
-    };
+  // ── Return structure ──────────────────────────────────────────────────────
+  // breakdown is intentionally empty here — it gets populated by
+  // calculateGovernanceScore() in runAiEvaluation() and loadSavedEvaluation().
+  return {
+    pis,
+    govScore: govScore || 0,
+    stage: stage || "Advisors Stage",
+    recommendation: recommendation || "Advisors sufficient",
+    breakdown: [],       // populated by calculateGovernanceScore()
+    categoryMeta,        // confidence + evidence per category for badge display
+    analysis: raw,
+    pisCalculation: pisCalcLocal,
   };
+};
 
 
   const runAiEvaluation = async () => {
@@ -362,6 +292,7 @@ export function PISScoreCard({ styles, profileData, onScoreUpdate, apiKey }) {
       const evaluationData = prepareDataForAiEvaluation(profileData);
       const policiesData = calculatePoliciesScore();
       const pisCalc = calculatePIS();
+setPisCalculation(pisCalc);
 
       // Determine stage based on PIS
       let stage, recommendation, stageContext;
@@ -381,120 +312,15 @@ export function PISScoreCard({ styles, profileData, onScoreUpdate, apiKey }) {
 
       const needsBoardEvaluation = pisCalc.totalPIS >= 350;
 
-      const prompt = `Evaluate the business's governance readiness using the Public Interest Score (PIS) system.
-
-IMPORTANT: Use the exact PIS calculation provided below.
-
-## PIS CALCULATION:
-Employees: ${pisCalc.employees}
-Annual Turnover: R ${pisCalc.turnover.toLocaleString()}
-Liabilities: R ${pisCalc.liabilities.toLocaleString()}
-Shareholders: ${pisCalc.shareholders}
-
-PIS = Employees + (Turnover/R1m) + (Liabilities/R1m) + Shareholders
-PIS = ${pisCalc.employees} + (${pisCalc.turnover.toLocaleString()}/1,000,000) + (${pisCalc.liabilities.toLocaleString()}/1,000,000) + ${pisCalc.shareholders}
-PIS = ${pisCalc.employees} + ${pisCalc.turnoverComponent} + ${pisCalc.liabilitiesComponent} + ${pisCalc.shareholders}
-PIS = ${pisCalc.totalPIS}
-
-PIS Score: ${pisCalc.totalPIS}
-Governance Stage: ${stage}
-Business Context: ${stageContext}
-
-## SCORING METHODOLOGY:
-${needsBoardEvaluation ?
-          '5 categories, each weighted equally at 20%: Strategic Planning, Risk Management, Transparency & Reporting, Policies & Documentation, Board Structure' :
-          '4 categories, each weighted equally at 25%: Strategic Planning, Risk Management, Transparency & Reporting, Policies & Documentation'
-        }
-
-## FINAL SCORE CALCULATION:
-${needsBoardEvaluation ?
-          'Overall Score = (Strategic Planning + Risk Management + Transparency & Reporting + Policies & Documentation + Board Structure) / 5' :
-          'Overall Score = (Strategic Planning + Risk Management + Transparency & Reporting + Policies & Documentation) / 4'
-        }
-
-## EVALUATION CATEGORIES:
-
-### 1. Strategic Planning
-**Weight:** ${needsBoardEvaluation ? '20%' : '25%'}
-**Evaluation Context:** ${stage} - ${pisCalc.totalPIS < 100 ? "Focus on foundational planning suitable for small operations" :
-          pisCalc.totalPIS < 350 ? "Evaluate structured planning appropriate for growth stage" :
-            "Assess comprehensive strategic frameworks for complex operations"}
-**Score:** [0-100]
-**Rationale:** [2-3 sentence explanation assessing their planning maturity FOR THEIR STAGE]
-**How to Improve:** 
-• [Stage-appropriate platform action 1]
-• [Stage-appropriate platform action 2]
-• [Stage-appropriate platform action 3]
-
-### 2. Risk Management
-**Weight:** ${needsBoardEvaluation ? '20%' : '25%'}
-**Evaluation Context:** ${stage} - ${pisCalc.totalPIS < 100 ? "Assess basic risk awareness and simple protections" :
-          pisCalc.totalPIS < 350 ? "Evaluate documented risk processes for growing business" :
-            "Analyze sophisticated risk management for enterprise operations"}
-**Score:** [0-100]
-**Rationale:** [2-3 sentence explanation assessing their risk management FOR THEIR STAGE]
-**How to Improve:** 
-• [Stage-appropriate risk action 1]
-• [Stage-appropriate risk action 2]
-• [Stage-appropriate risk action 3]
-
-### 3. Transparency and Reporting
-**Weight:** ${needsBoardEvaluation ? '20%' : '25%'}
-**Evaluation Context:** ${stage} - ${pisCalc.totalPIS < 100 ? "Evaluate basic reporting and communication practices" :
-          pisCalc.totalPIS < 350 ? "Assess structured reporting for stakeholders" :
-            "Analyze comprehensive transparency systems"}
-**Score:** [0-100]
-**Rationale:** [2-3 sentence explanation assessing their transparency FOR THEIR STAGE]
-**How to Improve:** 
-• [Stage-appropriate reporting action 1]
-• [Stage-appropriate reporting action 2]
-• [Stage-appropriate reporting action 3]
-
-### 4. Policies & Documentation
-**Weight:** ${needsBoardEvaluation ? '20%' : '25%'}
-**Evaluation Context:** ${stage} - ${pisCalc.totalPIS < 100 ? "Focus on essential policy completion (${policiesData.completed}/${policiesData.total})" :
-          pisCalc.totalPIS < 350 ? "Evaluate core policy framework development" :
-            "Assess comprehensive policy suite implementation"}
-Current Completion: ${policiesData.completed}/${policiesData.total} policies (${policiesData.score}%)
-**Score:** [0-100]
-**Rationale:** [2-3 sentence explanation assessing their policy framework FOR THEIR STAGE]
-**How to Improve:** 
-• [Complete stage-appropriate priority policies]
-• [Use appropriate templates for their size]
-• [Set up stage-suitable compliance tracking]
-
-${needsBoardEvaluation ? `
-### 5. Board Structure and Functionality
-**Weight:** 20%
-**Evaluation Context:** ${stage} - Formal board requirements for complex operations
-**Score:** [0-100]
-**Rationale:** [2-3 sentence explanation based on actual board structure data - assess composition, roles, meeting frequency, oversight effectiveness]
-**How to Improve:** 
-• [Formal board composition steps using Ownership Management tools]
-• [Board governance templates for roles and responsibilities]
-• [Meeting frequency and documentation in Enterprise Readiness]
-• [Director accountability and performance evaluation frameworks]` : ''}
-
-## FINAL OUTPUT:
-${needsBoardEvaluation ?
-          'Overall Governance Score = (Strategic Planning + Risk Management + Transparency & Reporting + Policies & Documentation + Board Structure) / 5 = [calculated score]%' :
-          'Overall Governance Score = (Strategic Planning + Risk Management + Transparency & Reporting + Policies & Documentation) / 4 = [calculated score]%'
-        }
-Governance Stage: ${stage}
-Governance Recommendation: ${recommendation}
-
-### Overall Assessment
-**Final Analysis:** [Brief overall assessment with stage-appropriate recommendations. ${needsBoardEvaluation ? 'Pay special attention to board structure readiness.' : 'Focus on core operational governance improvements.'}]
-
-Input Data:
-${evaluationData}`;
+     const prompt = buildGovernancePrompt(profileData, pisCalc, stage, recommendation);
 
       const result = await sendMessageToChatGPT(prompt);
       const parsed = parseAiEvaluation(result);
 
       setPisScore(parsed.pis);
-      setGovernanceScore(parsed.govScore);
-      setScoreBreakdown(parsed.breakdown);
+     const localScores = calculateGovernanceScore(profileData);
+setGovernanceScore(localScores.overall);
+setScoreBreakdown(localScores.categories);
       setGovernanceStage(parsed.stage);
       setGovernanceRecommendation(parsed.recommendation);
       setAiEvaluationResult(parsed.analysis);
@@ -633,103 +459,202 @@ ${evaluationData}`;
     return { level: "Poor Governance", color: "#B71C1C", icon: AlertCircle };
   };
 
-  const formatAiResult = (text) => {
-    if (!text) return null;
+ /**
+ * Drop this formatAiResult into PISScoreCard.jsx.
+ * Renders confidence badges and evidence badges per category,
+ * matching the LegitimacyScoreCard pattern.
+ */
 
-    const cleanedResult = text.replace(/\*\*(.*?)\*\*/g, "$1");
+const formatAiResult = (text) => {
+  if (!text) return null;
 
-    // Split by major sections (### headers)
-    const sections = cleanedResult.split(/(?=###\s)/g);
+  const cleanedResult = text.replace(/\*\*(.*?)\*\*/g, "$1");
+  const sections = cleanedResult.split(/(?=###\s)/g);
 
-    return sections.map((section, index) => {
-      const trimmed = section.trim();
-      if (!trimmed) return null;
+  return sections.map((section, index) => {
+    const trimmed = section.trim();
+    if (!trimmed) return null;
 
-      // Check if this is a category section with "How to Improve"
-      const isCategorySection = /^###\s+\d+\./.test(trimmed);
+    const isCategorySection = /^###\s+\d+\./.test(trimmed);
 
-      if (isCategorySection) {
-        // Split the category section into parts
-        const lines = trimmed.split('\n').filter(line => line.trim());
-        const header = lines[0];
-        const content = lines.slice(1).join('\n');
+    if (isCategorySection) {
+      const lines = trimmed.split("\n").filter(line => line.trim());
+      const header = lines[0];
+      const content = lines.slice(1).join("\n");
 
-        // Extract improvement section with special styling
-        const improvementIndex = content.toLowerCase().indexOf('how to improve');
-        let mainContent = content;
-        let improvementContent = '';
+      // ── Extract badges ──────────────────────────────────────────────────
+      const evidenceMatch      = content.match(/Evidence\s*:\s*([^\n]+)/i);
+      const confidenceMatch    = content.match(/Confidence\s*:\s*(High|Medium|Low)/i);
+      const confRatMatch       = content.match(/Confidence Rationale\s*:\s*([^\n]+)/i);
 
-        if (improvementIndex !== -1) {
-          mainContent = content.substring(0, improvementIndex);
-          improvementContent = content.substring(improvementIndex);
-        }
+      const confidenceLevel    = confidenceMatch?.[1] || null;
+      const confidenceColor    = confidenceLevel === "High"   ? { bg: "#e8f5e9", text: "#1B5E20" }
+                               : confidenceLevel === "Medium" ? { bg: "#fff3e0", text: "#E65100" }
+                               : confidenceLevel === "Low"    ? { bg: "#ffebee", text: "#B71C1C" }
+                               : null;
 
-        return (
-          <div key={index} style={{ marginBottom: "20px", border: "1px solid #e8d8cf", borderRadius: "8px", overflow: "hidden" }}>
-            {/* Header */}
-            <div style={{ backgroundColor: "#8d6e63", color: "white", padding: "12px 16px", fontWeight: "bold" }}>
-              {header.replace('###', '').trim()}
-            </div>
+      // ── Split off improvement section ───────────────────────────────────
+      const improvementIndex = content.toLowerCase().indexOf("how to improve");
+      let mainContent       = content;
+      let improvementContent = "";
+      if (improvementIndex !== -1) {
+        mainContent        = content.substring(0, improvementIndex);
+        improvementContent = content.substring(improvementIndex);
+      }
 
-            {/* Main Content */}
-            <div style={{ padding: "16px", backgroundColor: "white" }}>
-              <div style={{ whiteSpace: "pre-wrap", lineHeight: "1.6", color: "#5d4037", marginBottom: improvementContent ? "15px" : "0" }}>
-                {mainContent}
-              </div>
+      // ── Strip badge lines from mainContent so they don't double-render ──
+      const mainCleaned = mainContent
+        .replace(/Evidence\s*:\s*[^\n]+\n?/i, "")
+        .replace(/Confidence\s*:\s*[^\n]+\n?/i, "")
+        .replace(/Confidence Rationale\s*:\s*[^\n]+\n?/i, "")
+        .trim();
 
-              {/* Improvement Section with Special Styling */}
-              {improvementContent && (
+      return (
+        <div key={index} style={{
+          marginBottom: "20px",
+          border: "1px solid #e8d8cf",
+          borderRadius: "8px",
+          overflow: "hidden"
+        }}>
+          {/* Category header */}
+          <div style={{
+            backgroundColor: "#8d6e63",
+            color: "white",
+            padding: "12px 16px",
+            fontWeight: "bold"
+          }}>
+            {header.replace("###", "").trim()}
+          </div>
+
+          {/* Evidence + Confidence badges — same pattern as LegitimacyScoreCard */}
+          {(evidenceMatch || confidenceLevel) && (
+            <div style={{
+              display: "flex",
+              gap: "10px",
+              padding: "10px 16px",
+              backgroundColor: "#f9f5f0",
+              borderBottom: "1px solid #e8d8cf",
+              flexWrap: "wrap",
+              alignItems: "flex-start"
+            }}>
+              {/* Evidence badge */}
+              {evidenceMatch && (
                 <div style={{
-                  backgroundColor: "#f8f4f0",
-                  padding: "15px",
-                  borderRadius: "6px",
-                  borderLeft: "4px solid #ff9800"
+                  display: "flex",
+                  alignItems: "flex-start",
+                  gap: "6px",
+                  backgroundColor: "#f3e8dc",
+                  padding: "5px 12px",
+                  borderRadius: "16px",
+                  fontSize: "12px",
+                  color: "#5d4037",
+                  maxWidth: "100%"
                 }}>
-                  <div style={{
-                    fontWeight: "bold",
-                    color: "#5d4037",
-                    marginBottom: "10px",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px"
-                  }}>
-                    <TrendingUp size={16} />
-                    Improvement Actions
-                  </div>
-                  <div style={{
-                    whiteSpace: "pre-wrap",
-                    lineHeight: "1.6",
-                    color: "#6d4c41",
-                    fontSize: "14px"
-                  }}>
-                    {improvementContent.replace('How to Improve:', '').trim()}
-                  </div>
+                  {/* FileText icon equivalent */}
+                  <span style={{ marginTop: "1px", flexShrink: 0 }}>📄</span>
+                  <span style={{ lineHeight: "1.4" }}>{evidenceMatch[1].trim()}</span>
+                </div>
+              )}
+
+              {/* Confidence badge */}
+              {confidenceLevel && confidenceColor && (
+                <div style={{
+                  display: "flex",
+                  alignItems: "flex-start",
+                  gap: "6px",
+                  backgroundColor: confidenceColor.bg,
+                  padding: "5px 12px",
+                  borderRadius: "16px",
+                  fontSize: "12px",
+                  color: confidenceColor.text,
+                  fontWeight: "600",
+                  flexShrink: 0
+                }}>
+                  <span style={{ marginTop: "1px" }}>🛡</span>
+                  <span>Confidence: {confidenceLevel}</span>
+                </div>
+              )}
+
+              {/* Confidence rationale — shown inline under the badges if present */}
+              {confRatMatch && (
+                <div style={{
+                  width: "100%",
+                  fontSize: "12px",
+                  color: "#8d6e63",
+                  fontStyle: "italic",
+                  paddingLeft: "4px",
+                  marginTop: "2px",
+                  lineHeight: "1.4"
+                }}>
+                  {confRatMatch[1].trim()}
                 </div>
               )}
             </div>
-          </div>
-        );
-      }
+          )}
 
-      // Regular section formatting (for overall assessment, etc.)
-      return (
-        <div key={index} style={{ marginBottom: "15px" }}>
-          <div style={{
-            fontSize: "14px",
-            lineHeight: "1.6",
-            color: "#6d4c41",
-            whiteSpace: "pre-wrap",
-            backgroundColor: "white",
-            padding: "16px",
-            borderRadius: "8px",
-            border: "1px solid #e8d8cf"
-          }}>
-            {trimmed}
+          {/* Main body + improvement section */}
+          <div style={{ padding: "16px", backgroundColor: "white" }}>
+            <div style={{
+              whiteSpace: "pre-wrap",
+              lineHeight: "1.6",
+              color: "#5d4037",
+              marginBottom: improvementContent ? "15px" : "0"
+            }}>
+              {mainCleaned}
+            </div>
+
+            {improvementContent && (
+              <div style={{
+                backgroundColor: "#f8f4f0",
+                padding: "15px",
+                borderRadius: "6px",
+                borderLeft: "4px solid #ff9800"
+              }}>
+                <div style={{
+                  fontWeight: "bold",
+                  color: "#5d4037",
+                  marginBottom: "10px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  fontSize: "14px"
+                }}>
+                  📈 Improvement Actions
+                </div>
+                <div style={{
+                  whiteSpace: "pre-wrap",
+                  lineHeight: "1.6",
+                  color: "#6d4c41",
+                  fontSize: "14px"
+                }}>
+                  {improvementContent.replace("How to Improve:", "").trim()}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       );
-    }).filter(Boolean);
-  };
+    }
+
+    // ── Non-category section (Overall Assessment etc.) ──────────────────────
+    return (
+      <div key={index} style={{ marginBottom: "15px" }}>
+        <div style={{
+          fontSize: "14px",
+          lineHeight: "1.6",
+          color: "#6d4c41",
+          whiteSpace: "pre-wrap",
+          backgroundColor: "white",
+          padding: "16px",
+          borderRadius: "8px",
+          border: "1px solid #e8d8cf"
+        }}>
+          {trimmed}
+        </div>
+      </div>
+    );
+  }).filter(Boolean);
+};
 
   const scoreLevel = getScoreLevel(governanceScore);
   const ScoreIcon = scoreLevel.icon;
@@ -1391,6 +1316,7 @@ ${evaluationData}`;
                 )}
               </div>
 
+
               {/* Detailed Analysis Section */}
               <div style={{
                 marginTop: "20px",
@@ -1420,12 +1346,14 @@ ${evaluationData}`;
                     }}
                   />
                 </div>
+
                 {showDetailedAnalysis && (
                   <div style={{
                     backgroundColor: "#f5f2f0",
                     padding: "20px",
                     color: "#5d4037"
                   }}>
+                               
                     {aiEvaluationResult ? (
                       <div style={{
                         backgroundColor: "white",
@@ -1435,9 +1363,34 @@ ${evaluationData}`;
                         maxHeight: "400px",
                         overflowY: "auto"
                       }}>
+                           {/* Add this block in your modal, above the detailed analysis */}
+<div style={{
+  backgroundColor: "#efebe9",
+  padding: "16px",
+  borderRadius: "8px",
+  marginBottom: "20px",
+  borderLeft: "4px solid #8d6e63"
+}}>
+  <p style={{ fontWeight: "bold", marginBottom: "10px", color: "#5d4037" }}>
+    Public Interest Score (PIS)
+  </p>
+  <div style={{ fontSize: "14px", color: "#6d4c41", lineHeight: "1.8" }}>
+    <div>Employees: <strong>{pisCalculation.employees}</strong></div>
+    <div>Annual Turnover: <strong>R {pisCalculation.turnover.toLocaleString()}</strong> → {pisCalculation.turnoverComponent}</div>
+    <div>Liabilities: <strong>R {pisCalculation.liabilities.toLocaleString()}</strong> → {pisCalculation.liabilitiesComponent}</div>
+    <div>Shareholders: <strong>{pisCalculation.shareholders}</strong></div>
+    <div style={{ marginTop: "8px", fontWeight: "bold", color: "#5d4037" }}>
+      PIS = {pisCalculation.employees} + {pisCalculation.turnoverComponent} + {pisCalculation.liabilitiesComponent} + {pisCalculation.shareholders} = <span style={{ fontSize: "16px" }}>{pisCalculation.totalPIS}</span>
+    </div>
+    <div style={{ marginTop: "6px", color: "#8d6e63" }}>
+      Stage: <strong>{governanceStage}</strong> — {governanceRecommendation}
+    </div>
+  </div>
+</div>
                         {formatAiResult(aiEvaluationResult)}
                       </div>
                     ) : (
+
                       <div style={{ color: "#5d4037", lineHeight: "1.6" }}>
                         {governanceScore > 90 && (
                           <p style={{ margin: "0" }}>
