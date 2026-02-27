@@ -39,7 +39,9 @@ export function FundabilityScoreCard({
   const [showAboutScore, setShowAboutScore] = useState(false);
   const [showScoreBreakdown, setShowScoreBreakdown] = useState(false);
   const [showDetailedAnalysis, setShowDetailedAnalysis] = useState(false);
-
+const [confidenceScores, setConfidenceScores] = useState({});
+const [evidenceMap, setEvidenceMap] = useState({});
+const [confRationaleMap, setConfRationaleMap] = useState({});
   // Additional states for funding application sections
   const [businessPlanAnalysis, setBusinessPlanAnalysis] = useState(null);
   const [pitchDeckAnalysis, setPitchDeckAnalysis] = useState(null);
@@ -368,77 +370,79 @@ export function FundabilityScoreCard({
     isFundingDataLoaded,
   ]);
 
-  const parseAiEvaluationScores = (text) => {
-    console.log("🔍 Parsing AI evaluation text for scores...");
+const parseAiEvaluationScores = (text) => {
+  console.log("🔍 Parsing AI evaluation text for scores...");
 
-    const baseCategories = {
-      financialReadiness: ["Financial Readiness"],
-      financialStrength: ["Financial Strength"],
-      operations: ["Operational Strength"],
-      impact: ["Impact Proof"],
-    };
-
-    // Conditionally add funding categories - use EXACT section names from AI response
-    const fundingCategories = hasAppliedForFunding
-      ? {
-          businessPlanAnalysis: ["Business Plan Quality"],
-          pitchDeckScore: ["Pitch Deck Effectiveness"],
-          creditReport: ["Creditworthiness"],
-        }
-      : {};
-
-    const allCategories = { ...baseCategories, ...fundingCategories };
-    const scores = {};
-
-    Object.entries(allCategories).forEach(([key, labels]) => {
-      let foundScore = 0;
-
-      console.log(`🔍 Looking for score for ${key} with labels:`, labels);
-
-      for (const label of labels) {
-        // Enhanced patterns that match the EXACT format from your AI response
-        const patterns = [
-          // Primary pattern: ### 1. Financial Readiness\n**Score:** 5
-          new RegExp(
-            `###\\s+\\d+\\.\\s*${label}[\\s\\S]*?\\*\\*Score:\\*\\*\\s*(\\d)`,
-            "i"
-          ),
-          // Alternative pattern: **Score:** 5 (anywhere after the section header)
-          new RegExp(`${label}[\\s\\S]*?\\*\\*Score:\\*\\*\\s*(\\d)`, "i"),
-          // Fallback pattern: Score: 5 (without bold)
-          new RegExp(`${label}[\\s\\S]*?Score:\\s*(\\d)`, "i"),
-        ];
-
-        for (const pattern of patterns) {
-          const match = text.match(pattern);
-          if (match) {
-            foundScore = Number.parseInt(match[1]);
-            console.log(
-              `✅ Found score for ${key} (${label}): ${foundScore} using pattern`
-            );
-            break;
-          }
-        }
-        if (foundScore > 0) break;
-      }
-
-      // If no score found for funding categories, they might not be in the response
-      if (
-        foundScore === 0 &&
-        hasAppliedForFunding &&
-        ["businessPlanAnalysis", "pitchDeckScore", "creditReport"].includes(key)
-      ) {
-        console.log(
-          `⚠️ Funding category ${key} score not found - section may be missing from AI response`
-        );
-      }
-
-      scores[key] = Math.min(Math.max(foundScore, 0), 5);
-    });
-
-    console.log("🎯 Final parsed AI scores:", scores);
-    return scores;
+  const baseCategories = {
+    financialReadiness: ["Financial Readiness"],
+    financialStrength: ["Financial Strength"],
+    operations: ["Operational Strength"],
+    impact: ["Impact Proof"],
   };
+
+  const fundingCategories = hasAppliedForFunding
+    ? {
+        businessPlanAnalysis: ["Business Plan Quality"],
+        pitchDeckScore: ["Pitch Deck Effectiveness"],
+        creditReport: ["Creditworthiness"],
+      }
+    : {};
+
+  const allCategories = { ...baseCategories, ...fundingCategories };
+  const scores = {};
+  const confidenceMap = {};
+  const evidenceMap = {};
+  const confRationaleMap = {};
+
+  Object.entries(allCategories).forEach(([key, labels]) => {
+    let foundScore = 0;
+
+    for (const label of labels) {
+      // Find section body
+      const sectionRe = new RegExp(
+        `###\\s*\\d+\\.\\s*${label}[^\\n]*\\n([\\s\\S]*?)(?=###|$)`,
+        "i"
+      );
+      const sectionMatch = text.match(sectionRe);
+      const body = sectionMatch ? sectionMatch[1] : "";
+
+      // Extract confidence
+      const confMatch = body.match(/Confidence\s*:\s*(High|Medium|Low)/i);
+      if (confMatch) confidenceMap[key] = confMatch[1];
+
+      // Extract confidence rationale
+      const confRatMatch = body.match(/Confidence Rationale\s*:\s*([^\n]+)/i);
+      if (confRatMatch) confRationaleMap[key] = confRatMatch[1].trim();
+
+      // Extract evidence
+      const evidenceMatch = body.match(/Evidence\s*:\s*([^\n]+)/i);
+      if (evidenceMatch) evidenceMap[key] = evidenceMatch[1].trim();
+
+      const patterns = [
+        new RegExp(`###\\s+\\d+\\.\\s*${label}[\\s\\S]*?\\*\\*Score:\\*\\*\\s*(\\d)`, "i"),
+        new RegExp(`${label}[\\s\\S]*?\\*\\*Score:\\*\\*\\s*(\\d)`, "i"),
+        new RegExp(`${label}[\\s\\S]*?Score:\\s*(\\d)`, "i"),
+      ];
+
+      for (const pattern of patterns) {
+        const match = text.match(pattern);
+        if (match) { foundScore = parseInt(match[1]); break; }
+      }
+      if (foundScore > 0) break;
+    }
+
+    scores[key] = Math.min(Math.max(foundScore, 0), 5);
+  });
+
+  // Store on component refs for use in formatAiResult
+  scores._confidence = confidenceMap;
+  scores._evidence = evidenceMap;
+  scores._confRationale = confRationaleMap;
+
+  console.log("🎯 Final parsed AI scores:", scores);
+  return scores;
+};
+
 
   // Add this comprehensive debug function
   const debugFullAiResponse = (text) => {
@@ -610,7 +614,10 @@ export function FundabilityScoreCard({
       ? parseAiEvaluationScores(aiEvaluationResult)
       : {};
     console.log("AI scores extracted:", aiScores);
-
+// Sync confidence/evidence to state for formatAiResult badges
+if (aiScores._confidence) setConfidenceScores(aiScores._confidence);
+if (aiScores._evidence) setEvidenceMap(aiScores._evidence);
+if (aiScores._confRationale) setConfRationaleMap(aiScores._confRationale);
     // 🔥 ADD THIS: If funding scores are missing but should be there, set defaults
     if (hasAppliedForFunding) {
       if (aiScores.businessPlanAnalysis === undefined) {
@@ -1033,37 +1040,93 @@ export function FundabilityScoreCard({
 
       console.log(`📋 Evaluating ${totalCategories} categories`);
 
-      const combinedMessage = `Evaluate the fundability of the following business using the BIG Fundability Scorecard rubric.
+     const combinedMessage = `Evaluate the fundability of the following business using the BIG Fundability Scorecard rubric.
 
 CRITICAL INSTRUCTION: You MUST evaluate ALL ${totalCategories} categories listed below. Do not skip any categories.
 
-${
-  hasAppliedForFunding
-    ? `
+STRICT DATA RULES:
+- Only reference data explicitly provided in the input below
+- If a section says "not yet completed" or "not provided", score it 0 and say so — do not guess
+- Do NOT invent operational details, team sizes, infrastructure, or processes
+- Do NOT assume anything about fields marked "Not specified" or "Unknown"
+
+IMPROVEMENT ACTIONS RULES - CRITICAL:
+For each category provide improvements in TWO parts:
+
+PART 1 - PLATFORM ACTIONS (always first):
+Suggest improvements from the specific platform sections listed below.
+Format: "→ [Section Name]: [specific action]"
+
+PART 2 - GENERAL GUIDANCE (always after platform actions):
+If the business is missing critical items entirely (not just incomplete), add 1-2 sentences of general real-world guidance on how to obtain or create that item outside the platform.
+Format: "💡 [general guidance]"
+
+- If a category scores 5/5: Do NOT list platform actions. Instead write a single line:
+  "✅ This area is well covered — keep records current and maintain what you have."
+  Then add ONE optional 💡 tip only if genuinely useful (e.g. a way to maintain or grow this strength).
+  
+- If a category scores 4/5: List only 1 platform action (the most impactful gap) + 1 💡 tip maximum.
+
+- If a category scores 3/5 or below: List all relevant platform actions + up to 2 💡 general guidance tips.
+
+FINANCIAL READINESS platform actions:
+- Financial Overview section → enable accounting software, mark books as up to date
+- Legal & Compliance section → add tax number, VAT number
+- Document Uploads section → upload financial statements
+
+FINANCIAL STRENGTH platform actions:
+- Financial Overview section → update annual revenue, profitability status
+- Enterprise Readiness section → confirm financials available, upload audited financials
+- Document Uploads section → upload audited financial statements, bank statements
+
+OPERATIONAL STRENGTH platform actions:
+- Operational Strength section → complete this section on the platform (not yet available)
+- Enterprise Readiness section → confirm MVP, traction, paying customers details
+- Products & Services section → update delivery modes, key clients, product descriptions
+
+IMPACT PROOF platform actions:
+- Social Impact section → update jobs to create, local employees hired, beneficiary numbers
+- Social Impact section → update black/women/youth/disabled ownership percentages
+- Social Impact section → update CSR/CSI spend, community investment, SDG alignment
+- Social Impact section → update environmental impact, local procurement spend
+
+BUSINESS PLAN QUALITY platform actions:
+- Document Uploads section → upload an updated business plan
+- Enterprise Readiness section → confirm business plan exists and update details
+
+PITCH DECK EFFECTIVENESS platform actions:
+- Document Uploads section → upload an updated pitch deck
+- Enterprise Readiness section → confirm pitch deck exists and update details
+
+CREDITWORTHINESS platform actions:
+- Document Uploads section → upload an updated credit report
+- Financial Overview section → update existing debt, profitability status
+
+OUTPUT FORMAT for How to Improve (follow exactly):
+**How to Improve:**
+- → [Section Name]: [specific platform action]
+- → [Section Name]: [specific platform action]
+- 💡 [General real-world guidance for obtaining/creating missing items if critical gaps exist]
+- 💡 [Second general guidance point if needed]
+
+EVIDENCE AND CONFIDENCE RULES:
+For EVERY category you must output:
+- **Evidence:** [cite the exact field names and values from the input that justify this score]
+- **Confidence:** [High | Medium | Low]
+  - High = all key fields for this category are present and specific
+  - Medium = some fields present but incomplete or vague
+  - Low = most fields missing, "Not specified", or 0
+- **Confidence Rationale:** [one sentence explaining why this confidence level was chosen]
+
+
+${hasAppliedForFunding ? `
 ⚠️ IMPORTANT: This business HAS APPLIED FOR FUNDING. 
-You MUST include sections 5, 6, and 7 in your analysis:
-- Section 5: Business Plan Quality
-- Section 6: Pitch Deck Effectiveness  
-- Section 7: Creditworthiness
-
-These sections have pre-existing analysis data provided in the input. Use that data to inform your scores.
-`
-    : ""
-}
-
-FORMATTING REQUIREMENTS:
-- Use clear section headers with ###
-- Provide specific, actionable improvement recommendations for EACH category
-- Keep rationale concise but insightful
+You MUST include sections 5, 6, and 7 in your analysis.
+` : ''}
 
 Instructions:
-- Score each of the ${totalCategories} categories from 0 to 5:
-  • 0 = No evidence or very poor
-  • 1 = Minimal/poor evidence  
-  • 2 = Below average
-  • 3 = Average/acceptable
-  • 4 = Good/strong evidence
-  • 5 = Excellent/outstanding
+- Score each of the ${totalCategories} categories from 0 to 5
+- Each improvement action must reference a SPECIFIC section name from the list above
 
 Categories to evaluate (YOU MUST INCLUDE ALL ${totalCategories}):
 ${baseCategories}${fundingCategories}
@@ -1074,67 +1137,80 @@ ${evaluationData}
 OUTPUT FORMAT - YOU MUST FOLLOW THIS EXACTLY:
 ### 1. Financial Readiness
 **Score:** [0-5]
-**Rationale:** [explanation]
-**How to Improve:** 
-- [action 1]
-- [action 2]
-- [action 3]
+**Evidence:** [cite exact fields used]
+**Confidence:** [High | Medium | Low]
+**Confidence Rationale:** [one sentence]
+**Rationale:** [explanation based only on provided data]
+**How to Improve:** ...
+
 
 ### 2. Financial Strength
-**Score:** [0-5]
-**Rationale:** [explanation]
-**How to Improve:** 
-- [action 1]
-- [action 2]
-- [action 3]
+  **Score:** [0-5]
+  **Evidence:** [cite exact fields used]
+  **Confidence:** [High | Medium | Low]
+  **Confidence Rationale:** [one sentence]
+  **Rationale:** [explanation based only on provided data]
+  **How to Improve:** 
+  - [platform section name]: [specific action]
+  - [platform section name]: [specific action]
+  - [platform section name]: [specific action]
 
 ### 3. Operational Strength
 **Score:** [0-5]
-**Rationale:** [explanation]
+**Rationale:** [explanation based only on provided data]
 **How to Improve:** 
-- [action 1]
-- [action 2]
-- [action 3]
+- [platform section name]: [specific action]
+- [platform section name]: [specific action]
+- [platform section name]: [specific action]
 
 ### 4. Impact Proof
 **Score:** [0-5]
-**Rationale:** [explanation]
+**Evidence:** [cite exact fields used]
+**Confidence:** [High | Medium | Low]
+**Confidence Rationale:** [one sentence]
+**Rationale:** [explanation based only on provided data]
 **How to Improve:** 
-- [action 1]
-- [action 2]
-- [action 3]
-${
-  hasAppliedForFunding
-    ? `
+- [platform section name]: [specific action]
+- [platform section name]: [specific action]
+- [platform section name]: [specific action]
+
+${hasAppliedForFunding ? `
 ### 5. Business Plan Quality
 **Score:** [0-5]
-**Rationale:** [explanation]
+**Evidence:** [cite exact fields used]
+**Confidence:** [High | Medium | Low]
+**Confidence Rationale:** [one sentence]
+**Rationale:** [explanation based only on provided data]
 **How to Improve:** 
-- [action 1]
-- [action 2]
-- [action 3]
+- [platform section name]: [specific action]
+- [platform section name]: [specific action]
+- [platform section name]: [specific action]
 
 ### 6. Pitch Deck Effectiveness
 **Score:** [0-5]
-**Rationale:** [explanation]
+**Evidence:** [cite exact fields used]
+**Confidence:** [High | Medium | Low]
+**Confidence Rationale:** [one sentence]
+**Rationale:** [explanation based only on provided data]
 **How to Improve:** 
-- [action 1]
-- [action 2]
-- [action 3]
+- [platform section name]: [specific action]
+- [platform section name]: [specific action]
+- [platform section name]: [specific action]
 
 ### 7. Creditworthiness
 **Score:** [0-5]
-**Rationale:** [explanation]
+**Evidence:** [cite exact fields used]
+**Confidence:** [High | Medium | Low]
+**Confidence Rationale:** [one sentence]
+**Rationale:** [explanation based only on provided data]
 **How to Improve:** 
-- [action 1]
-- [action 2]
-- [action 3]
-`
-    : ""
-}
+- [platform section name]: [specific action]
+- [platform section name]: [specific action]
+- [platform section name]: [specific action]
+` : ''}
 
 ### Overall Assessment
-**Final Analysis:** [Brief overall assessment]`;
+**Final Analysis:** [Brief summary referencing only the data provided. End with the top 2 platform sections to complete next.]`;
 
       console.log("📤 Sending prompt to AI");
       const result = await sendMessageToChatGPT(combinedMessage);
@@ -1301,6 +1377,27 @@ ${
       </div>
     );
   }; // 🔥 UPDATE your Firebase listener to handle initial evaluation properly
+  
+
+  // Add this helper function before the problematic useEffect
+const waitForFundingCheck = () => {
+  return new Promise((resolve, reject) => {
+    const maxWaitTime = 15000;
+    const startTime = Date.now();
+    
+    const checkInterval = setInterval(() => {
+      if (fundingCheckComplete) {
+        clearInterval(checkInterval);
+        resolve();
+      } else if (Date.now() - startTime > maxWaitTime) {
+        clearInterval(checkInterval);
+        reject(new Error("Timeout"));
+      }
+    }, 100);
+  });
+};
+
+
   useEffect(() => {
     if (!auth?.currentUser?.uid || !apiKey) {
       console.log("⏳ Waiting for auth or API key...");
@@ -1327,31 +1424,31 @@ ${
           );
 
           // 🔥 CRITICAL: Wait for ALL prerequisites
-          if (!fundingCheckComplete) {
-            console.log("⏳ Waiting for funding check to complete...");
-            setEvaluationError("Determining funding application status...");
+          // Replace this entire section in the Firebase listener useEffect:
 
-            // Wait for funding check to complete
-            const maxWaitTime = 15000;
-            const startTime = Date.now();
+// 🔥 CRITICAL: Wait for ALL prerequisites
+if (!fundingCheckComplete) {
+  console.log("⏳ Waiting for funding check to complete...");
+  setEvaluationError("Determining funding application status...");
 
-            while (
-              !fundingCheckComplete &&
-              Date.now() - startTime < maxWaitTime
-            ) {
-              await new Promise((resolve) => setTimeout(resolve, 500));
-            }
-
-            if (!fundingCheckComplete) {
-              console.log("❌ Funding check timeout");
-              await updateDoc(docRef, { triggerFundabilityEvaluation: false });
-              setEvaluationError(
-                "Funding status check timeout. Please try again."
-              );
-              return;
-            }
-          }
-
+  try {
+    // Wait for funding check to complete with a promise
+    await waitForFundingCheck();
+    
+    // Double-check if it completed
+    if (!fundingCheckComplete) {
+      throw new Error("Funding status check timed out");
+    }
+    
+    console.log("✅ Funding check completed successfully");
+    setEvaluationError("");
+  } catch (error) {
+    console.log("❌ Funding check timeout or error:", error);
+    await updateDoc(docRef, { triggerFundabilityEvaluation: false });
+    setEvaluationError("Funding status check timeout. Please try again.");
+    return;
+  }
+}
           // 🔥 Wait for funding data if user has applied
           if (hasAppliedForFunding && !isFundingDataLoaded) {
             console.log(
@@ -1489,138 +1586,131 @@ ${
   const scoreLevel = getScoreLevel(fundabilityScore);
   const ScoreIcon = scoreLevel.icon;
 
-  // Helper function to format AI result into sections
   const formatAiResult = (text) => {
-    if (!text) return null;
+  if (!text) return null;
 
-    const cleanedResult = text.replace(/\*\*(.*?)\*\*/g, "$1");
+  const cleanedResult = text.replace(/\*\*(.*?)\*\*/g, "$1");
+  const sections = cleanedResult.split(/(?=###\s)/g);
 
-    // Split by major sections (### headers)
-    const sections = cleanedResult.split(/(?=###\s)/g);
+  return sections.map((section, index) => {
+    const trimmed = section.trim();
+    if (!trimmed) return null;
 
-    return sections
-      .map((section, index) => {
-        const trimmed = section.trim();
-        if (!trimmed) return null;
+    const isCategorySection = /^###\s+\d+\./.test(trimmed);
 
-        // Check if this is a category section with "How to Improve"
-        const isCategorySection = /^###\s+\d+\./.test(trimmed);
+    if (isCategorySection) {
+      const lines = trimmed.split("\n").filter((line) => line.trim());
+      const header = lines[0];
+      const content = lines.slice(1).join("\n");
 
-        if (isCategorySection) {
-          // Split the category section into parts
-          const lines = trimmed.split("\n").filter((line) => line.trim());
-          const header = lines[0];
-          const content = lines.slice(1).join("\n");
+      // Extract badges
+      const evidenceMatch   = content.match(/Evidence\s*:\s*([^\n]+)/i);
+      const confidenceMatch = content.match(/Confidence\s*:\s*(High|Medium|Low)/i);
+      const confRatMatch    = content.match(/Confidence Rationale\s*:\s*([^\n]+)/i);
+      const confidenceLevel = confidenceMatch?.[1] || null;
 
-          // Extract improvement section with special styling
-          const improvementIndex = content
-            .toLowerCase()
-            .indexOf("how to improve");
-          let mainContent = content;
-          let improvementContent = "";
+      const confidenceColor =
+        confidenceLevel === "High"   ? { bg: "#e8f5e9", text: "#1B5E20" } :
+        confidenceLevel === "Medium" ? { bg: "#fff3e0", text: "#E65100" } :
+        confidenceLevel === "Low"    ? { bg: "#ffebee", text: "#B71C1C" } : null;
 
-          if (improvementIndex !== -1) {
-            mainContent = content.substring(0, improvementIndex);
-            improvementContent = content.substring(improvementIndex);
-          }
+      // Split off improvement section
+      const improvementIndex = content.toLowerCase().indexOf("how to improve");
+      let mainContent = content;
+      let improvementContent = "";
+      if (improvementIndex !== -1) {
+        mainContent = content.substring(0, improvementIndex);
+        improvementContent = content.substring(improvementIndex);
+      }
 
-          return (
-            <div
-              key={index}
-              style={{
-                marginBottom: "20px",
-                border: "1px solid #e8d8cf",
-                borderRadius: "8px",
-                overflow: "hidden",
-              }}
-            >
-              {/* Header */}
-              <div
-                style={{
-                  backgroundColor: "#8d6e63",
-                  color: "white",
-                  padding: "12px 16px",
-                  fontWeight: "bold",
-                }}
-              >
-                {header.replace("###", "").trim()}
-              </div>
+      // Strip badge lines from main content
+      const mainCleaned = mainContent
+        .replace(/Evidence\s*:\s*[^\n]+\n?/i, "")
+        .replace(/Confidence\s*:\s*[^\n]+\n?/i, "")
+        .replace(/Confidence Rationale\s*:\s*[^\n]+\n?/i, "")
+        .trim();
 
-              {/* Main Content */}
-              <div style={{ padding: "16px", backgroundColor: "white" }}>
-                <div
-                  style={{
-                    whiteSpace: "pre-wrap",
-                    lineHeight: "1.6",
-                    color: "#5d4037",
-                    marginBottom: improvementContent ? "15px" : "0",
-                  }}
-                >
-                  {mainContent}
-                </div>
-
-                {/* Improvement Section with Special Styling */}
-                {improvementContent && (
-                  <div
-                    style={{
-                      backgroundColor: "#f8f4f0",
-                      padding: "15px",
-                      borderRadius: "6px",
-                      borderLeft: "4px solid #ff9800",
-                    }}
-                  >
-                    <div
-                      style={{
-                        fontWeight: "bold",
-                        color: "#5d4037",
-                        marginBottom: "10px",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "8px",
-                      }}
-                    >
-                      <TrendingUp size={16} />
-                      Improvement Actions
-                    </div>
-                    <div
-                      style={{
-                        whiteSpace: "pre-wrap",
-                        lineHeight: "1.6",
-                        color: "#6d4c41",
-                        fontSize: "14px",
-                      }}
-                    >
-                      {improvementContent.replace("How to Improve:", "").trim()}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          );
-        }
-
-        // Regular section formatting (for overall assessment, etc.)
-        return (
-          <div key={index} style={{ marginBottom: "15px" }}>
-            <div
-              style={{
-                fontSize: "14px",
-                lineHeight: "1.6",
-                color: "#6d4c41",
-                whiteSpace: "pre-wrap",
-                backgroundColor: "white",
-                padding: "16px",
-                borderRadius: "8px",
-                border: "1px solid #e8d8cf",
-              }}
-            >
-              {trimmed}
-            </div>
+      return (
+        <div key={index} style={{ marginBottom: "20px", border: "1px solid #e8d8cf", borderRadius: "8px", overflow: "hidden" }}>
+          {/* Header */}
+          <div style={{ backgroundColor: "#8d6e63", color: "white", padding: "12px 16px", fontWeight: "bold" }}>
+            {header.replace("###", "").trim()}
           </div>
-        );
-      })
-      .filter(Boolean);
-  };
+
+          {/* Evidence + Confidence badges */}
+          {(evidenceMatch || confidenceLevel) && (
+            <div style={{
+              display: "flex", gap: "10px", padding: "10px 16px",
+              backgroundColor: "#f9f5f0", borderBottom: "1px solid #e8d8cf",
+              flexWrap: "wrap", alignItems: "flex-start"
+            }}>
+              {evidenceMatch && (
+                <div style={{
+                  display: "flex", alignItems: "flex-start", gap: "6px",
+                  backgroundColor: "#f3e8dc", padding: "5px 12px",
+                  borderRadius: "16px", fontSize: "12px", color: "#5d4037", maxWidth: "100%"
+                }}>
+                  <span style={{ marginTop: "1px", flexShrink: 0 }}>📄</span>
+                  <span style={{ lineHeight: "1.4" }}>{evidenceMatch[1].trim()}</span>
+                </div>
+              )}
+              {confidenceLevel && confidenceColor && (
+                <div style={{
+                  display: "flex", alignItems: "center", gap: "6px",
+                  backgroundColor: confidenceColor.bg, padding: "5px 12px",
+                  borderRadius: "16px", fontSize: "12px",
+                  color: confidenceColor.text, fontWeight: "600", flexShrink: 0
+                }}>
+                  <span>🛡</span>
+                  <span>Confidence: {confidenceLevel}</span>
+                </div>
+              )}
+              {confRatMatch && (
+                <div style={{
+                  width: "100%", fontSize: "12px", color: "#8d6e63",
+                  fontStyle: "italic", paddingLeft: "4px", marginTop: "2px", lineHeight: "1.4"
+                }}>
+                  {confRatMatch[1].trim()}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Main Content */}
+          <div style={{ padding: "16px", backgroundColor: "white" }}>
+            <div style={{ whiteSpace: "pre-wrap", lineHeight: "1.6", color: "#5d4037", marginBottom: improvementContent ? "15px" : "0" }}>
+              {mainCleaned}
+            </div>
+
+            {improvementContent && (
+              <div style={{ backgroundColor: "#f8f4f0", padding: "15px", borderRadius: "6px", borderLeft: "4px solid #ff9800" }}>
+                <div style={{ fontWeight: "bold", color: "#5d4037", marginBottom: "10px", display: "flex", alignItems: "center", gap: "8px" }}>
+                  <TrendingUp size={16} />
+                  Improvement Actions
+                </div>
+                <div style={{ whiteSpace: "pre-wrap", lineHeight: "1.6", color: "#6d4c41", fontSize: "14px" }}>
+                  {improvementContent.replace("How to Improve:", "").trim()}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    return (
+      <div key={index} style={{ marginBottom: "15px" }}>
+        <div style={{
+          fontSize: "14px", lineHeight: "1.6", color: "#6d4c41",
+          whiteSpace: "pre-wrap", backgroundColor: "white",
+          padding: "16px", borderRadius: "8px", border: "1px solid #e8d8cf"
+        }}>
+          {trimmed}
+        </div>
+      </div>
+    );
+  }).filter(Boolean);
+};
 
   return (
     <>

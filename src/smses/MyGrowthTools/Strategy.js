@@ -1984,248 +1984,309 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
           {activeSubTab === "all" ? (
             <div
               style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(5, 1fr)",
-                gridTemplateRows: "auto auto",
+                display: "flex",
+                flexDirection: "column",
                 gap: "15px",
                 marginBottom: "20px",
               }}
             >
-              {/* Key Partners */}
-              <div
-                style={{
-                  gridColumn: "1",
-                  gridRow: "1 / 3",
-                  backgroundColor: "white",
-                  padding: "15px",
-                  borderRadius: "6px",
-                  border: "2px solid #e8ddd4",
-                }}
-              >
-                <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "10px", fontSize: "14px" }}>Key Partners</h4>
-                <textarea
-                  value={canvasData.keyPartners}
-                  onChange={(e) => setCanvasData((prev) => ({ ...prev, keyPartners: e.target.value }))}
-                  placeholder="Who are your key partners?"
-                  rows="10"
-                  disabled={isInvestorView}
+              {/* First Row - Value Proposition and Key Activities */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px" }}>
+                {/* Value Proposition */}
+                <div
                   style={{
-                    width: "100%",
-                    padding: "10px",
-                    border: "1px solid #e8ddd4",
-                    borderRadius: "4px",
-                    fontSize: "12px",
-                    boxSizing: "border-box",
-                    resize: "vertical",
-                    fontFamily: "inherit",
-                    backgroundColor: isInvestorView ? "#f5f5f5" : "white",
-                    cursor: isInvestorView ? "not-allowed" : "text",
+                    backgroundColor: "white",
+                    padding: "15px",
+                    borderRadius: "6px",
+                    border: "2px solid #e8ddd4",
                   }}
-                />
+                >
+                  <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "10px", fontSize: "14px" }}>
+                    Value Proposition
+                  </h4>
+                  <textarea
+                    value={canvasData.valuePropositions}
+                    onChange={(e) => setCanvasData((prev) => ({ ...prev, valuePropositions: e.target.value }))}
+                    placeholder="What value do you deliver?"
+                    rows="4"
+                    disabled={isInvestorView}
+                    style={{
+                      width: "100%",
+                      padding: "10px",
+                      border: "1px solid #e8ddd4",
+                      borderRadius: "4px",
+                      fontSize: "12px",
+                      boxSizing: "border-box",
+                      resize: "vertical",
+                      fontFamily: "inherit",
+                      backgroundColor: isInvestorView ? "#f5f5f5" : "white",
+                      cursor: isInvestorView ? "not-allowed" : "text",
+                    }}
+                  />
+                </div>
+
+                {/* Key Activities */}
+                <div
+                  style={{
+                    backgroundColor: "white",
+                    padding: "15px",
+                    borderRadius: "6px",
+                    border: "2px solid #e8ddd4",
+                  }}
+                >
+                  <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "10px", fontSize: "14px" }}>Key Activities</h4>
+                  <textarea
+                    value={canvasData.keyActivities}
+                    onChange={(e) => setCanvasData((prev) => ({ ...prev, keyActivities: e.target.value }))}
+                    placeholder="What key activities do you perform?"
+                    rows="4"
+                    disabled={isInvestorView}
+                    style={{
+                      width: "100%",
+                      padding: "10px",
+                      border: "1px solid #e8ddd4",
+                      borderRadius: "4px",
+                      fontSize: "12px",
+                      boxSizing: "border-box",
+                      resize: "vertical",
+                      fontFamily: "inherit",
+                      backgroundColor: isInvestorView ? "#f5f5f5" : "white",
+                      cursor: isInvestorView ? "not-allowed" : "text",
+                    }}
+                  />
+                </div>
               </div>
 
-              {/* Key Activities */}
-              <div
-                style={{
-                  gridColumn: "2",
-                  gridRow: "1",
-                  backgroundColor: "white",
-                  padding: "15px",
-                  borderRadius: "6px",
-                  border: "2px solid #e8ddd4",
-                }}
-              >
-                <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "10px", fontSize: "14px" }}>Key Activities</h4>
-                <textarea
-                  value={canvasData.keyActivities}
-                  onChange={(e) => setCanvasData((prev) => ({ ...prev, keyActivities: e.target.value }))}
-                  placeholder="What key activities do you perform?"
-                  rows="4"
-                  disabled={isInvestorView}
+              {/* Second Row - Key Partners and Key Resources */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px" }}>
+                {/* Key Partners */}
+                <div
                   style={{
-                    width: "100%",
-                    padding: "10px",
-                    border: "1px solid #e8ddd4",
-                    borderRadius: "4px",
-                    fontSize: "12px",
-                    boxSizing: "border-box",
-                    resize: "vertical",
-                    fontFamily: "inherit",
-                    backgroundColor: isInvestorView ? "#f5f5f5" : "white",
-                    cursor: isInvestorView ? "not-allowed" : "text",
+                    backgroundColor: "white",
+                    padding: "15px",
+                    borderRadius: "6px",
+                    border: "2px solid #e8ddd4",
                   }}
-                />
+                >
+                  <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "10px", fontSize: "14px" }}>Key Partners</h4>
+                  <textarea
+                    value={canvasData.keyPartners}
+                    onChange={(e) => setCanvasData((prev) => ({ ...prev, keyPartners: e.target.value }))}
+                    placeholder="Who are your key partners?"
+                    rows="4"
+                    disabled={isInvestorView}
+                    style={{
+                      width: "100%",
+                      padding: "10px",
+                      border: "1px solid #e8ddd4",
+                      borderRadius: "4px",
+                      fontSize: "12px",
+                      boxSizing: "border-box",
+                      resize: "vertical",
+                      fontFamily: "inherit",
+                      backgroundColor: isInvestorView ? "#f5f5f5" : "white",
+                      cursor: isInvestorView ? "not-allowed" : "text",
+                    }}
+                  />
+                </div>
+
+                {/* Key Resources */}
+                <div
+                  style={{
+                    backgroundColor: "white",
+                    padding: "15px",
+                    borderRadius: "6px",
+                    border: "2px solid #e8ddd4",
+                  }}
+                >
+                  <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "10px", fontSize: "14px" }}>Key Resources</h4>
+                  <textarea
+                    value={canvasData.keyResources}
+                    onChange={(e) => setCanvasData((prev) => ({ ...prev, keyResources: e.target.value }))}
+                    placeholder="What key resources do you need?"
+                    rows="4"
+                    disabled={isInvestorView}
+                    style={{
+                      width: "100%",
+                      padding: "10px",
+                      border: "1px solid #e8ddd4",
+                      borderRadius: "4px",
+                      fontSize: "12px",
+                      boxSizing: "border-box",
+                      resize: "vertical",
+                      fontFamily: "inherit",
+                      backgroundColor: isInvestorView ? "#f5f5f5" : "white",
+                      cursor: isInvestorView ? "not-allowed" : "text",
+                    }}
+                  />
+                </div>
               </div>
 
-              {/* Value Propositions */}
-              <div
-                style={{
-                  gridColumn: "3",
-                  gridRow: "1 / 3",
-                  backgroundColor: "white",
-                  padding: "15px",
-                  borderRadius: "6px",
-                  border: "2px solid #e8ddd4",
-                }}
-              >
-                <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "10px", fontSize: "14px" }}>
-                  Value Proposition
-                </h4>
-                <textarea
-                  value={canvasData.valuePropositions}
-                  onChange={(e) => setCanvasData((prev) => ({ ...prev, valuePropositions: e.target.value }))}
-                  placeholder="What value do you deliver?"
-                  rows="10"
-                  disabled={isInvestorView}
+              {/* Third Row - Customer Segments, Channels, and Customer Relationships */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "15px" }}>
+                {/* Customer Segments */}
+                <div
                   style={{
-                    width: "100%",
-                    padding: "10px",
-                    border: "1px solid #e8ddd4",
-                    borderRadius: "4px",
-                    fontSize: "12px",
-                    boxSizing: "border-box",
-                    resize: "vertical",
-                    fontFamily: "inherit",
-                    backgroundColor: isInvestorView ? "#f5f5f5" : "white",
-                    cursor: isInvestorView ? "not-allowed" : "text",
+                    backgroundColor: "white",
+                    padding: "15px",
+                    borderRadius: "6px",
+                    border: "2px solid #e8ddd4",
                   }}
-                />
+                >
+                  <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "10px", fontSize: "14px" }}>
+                    Customer Segments
+                  </h4>
+                  <textarea
+                    value={canvasData.customerSegments}
+                    onChange={(e) => setCanvasData((prev) => ({ ...prev, customerSegments: e.target.value }))}
+                    placeholder="Who are your customers?"
+                    rows="4"
+                    disabled={isInvestorView}
+                    style={{
+                      width: "100%",
+                      padding: "10px",
+                      border: "1px solid #e8ddd4",
+                      borderRadius: "4px",
+                      fontSize: "12px",
+                      boxSizing: "border-box",
+                      resize: "vertical",
+                      fontFamily: "inherit",
+                      backgroundColor: isInvestorView ? "#f5f5f5" : "white",
+                      cursor: isInvestorView ? "not-allowed" : "text",
+                    }}
+                  />
+                </div>
+
+                {/* Channels */}
+                <div
+                  style={{
+                    backgroundColor: "white",
+                    padding: "15px",
+                    borderRadius: "6px",
+                    border: "2px solid #e8ddd4",
+                  }}
+                >
+                  <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "10px", fontSize: "14px" }}>Channels</h4>
+                  <textarea
+                    value={canvasData.channels}
+                    onChange={(e) => setCanvasData((prev) => ({ ...prev, channels: e.target.value }))}
+                    placeholder="How do you reach customers?"
+                    rows="4"
+                    disabled={isInvestorView}
+                    style={{
+                      width: "100%",
+                      padding: "10px",
+                      border: "1px solid #e8ddd4",
+                      borderRadius: "4px",
+                      fontSize: "12px",
+                      boxSizing: "border-box",
+                      resize: "vertical",
+                      fontFamily: "inherit",
+                      backgroundColor: isInvestorView ? "#f5f5f5" : "white",
+                      cursor: isInvestorView ? "not-allowed" : "text",
+                    }}
+                  />
+                </div>
+
+                {/* Customer Relationships */}
+                <div
+                  style={{
+                    backgroundColor: "white",
+                    padding: "15px",
+                    borderRadius: "6px",
+                    border: "2px solid #e8ddd4",
+                  }}
+                >
+                  <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "10px", fontSize: "14px" }}>
+                    Customer Relationships
+                  </h4>
+                  <textarea
+                    value={canvasData.customerRelationships}
+                    onChange={(e) => setCanvasData((prev) => ({ ...prev, customerRelationships: e.target.value }))}
+                    placeholder="What relationships do you have with customers?"
+                    rows="4"
+                    disabled={isInvestorView}
+                    style={{
+                      width: "100%",
+                      padding: "10px",
+                      border: "1px solid #e8ddd4",
+                      borderRadius: "4px",
+                      fontSize: "12px",
+                      boxSizing: "border-box",
+                      resize: "vertical",
+                      fontFamily: "inherit",
+                      backgroundColor: isInvestorView ? "#f5f5f5" : "white",
+                      cursor: isInvestorView ? "not-allowed" : "text",
+                    }}
+                  />
+                </div>
               </div>
 
-              {/* Customer Relationships */}
-              <div
-                style={{
-                  gridColumn: "4",
-                  gridRow: "1",
-                  backgroundColor: "white",
-                  padding: "15px",
-                  borderRadius: "6px",
-                  border: "2px solid #e8ddd4",
-                }}
-              >
-                <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "10px", fontSize: "14px" }}>
-                  Customer Relationships
-                </h4>
-                <textarea
-                  value={canvasData.customerRelationships}
-                  onChange={(e) => setCanvasData((prev) => ({ ...prev, customerRelationships: e.target.value }))}
-                  placeholder="What relationships do you have with customers?"
-                  rows="4"
-                  disabled={isInvestorView}
+              {/* Fourth Row - Cost Structure and Revenue Streams */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px" }}>
+                {/* Cost Structure */}
+                <div
                   style={{
-                    width: "100%",
-                    padding: "10px",
-                    border: "1px solid #e8ddd4",
-                    borderRadius: "4px",
-                    fontSize: "12px",
-                    boxSizing: "border-box",
-                    resize: "vertical",
-                    fontFamily: "inherit",
-                    backgroundColor: isInvestorView ? "#f5f5f5" : "white",
-                    cursor: isInvestorView ? "not-allowed" : "text",
+                    backgroundColor: "white",
+                    padding: "15px",
+                    borderRadius: "6px",
+                    border: "2px solid #e8ddd4",
                   }}
-                />
-              </div>
+                >
+                  <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "10px", fontSize: "14px" }}>Cost Structure</h4>
+                  <textarea
+                    value={canvasData.costStructure}
+                    onChange={(e) => setCanvasData((prev) => ({ ...prev, costStructure: e.target.value }))}
+                    placeholder="What are your main costs?"
+                    rows="4"
+                    disabled={isInvestorView}
+                    style={{
+                      width: "100%",
+                      padding: "10px",
+                      border: "1px solid #e8ddd4",
+                      borderRadius: "4px",
+                      fontSize: "12px",
+                      boxSizing: "border-box",
+                      resize: "vertical",
+                      fontFamily: "inherit",
+                      backgroundColor: isInvestorView ? "#f5f5f5" : "white",
+                      cursor: isInvestorView ? "not-allowed" : "text",
+                    }}
+                  />
+                </div>
 
-              {/* Customer Segments */}
-              <div
-                style={{
-                  gridColumn: "5",
-                  gridRow: "1 / 3",
-                  backgroundColor: "white",
-                  padding: "15px",
-                  borderRadius: "6px",
-                  border: "2px solid #e8ddd4",
-                }}
-              >
-                <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "10px", fontSize: "14px" }}>
-                  Customer Segments
-                </h4>
-                <textarea
-                  value={canvasData.customerSegments}
-                  onChange={(e) => setCanvasData((prev) => ({ ...prev, customerSegments: e.target.value }))}
-                  placeholder="Who are your customers?"
-                  rows="10"
-                  disabled={isInvestorView}
+                {/* Revenue Streams */}
+                <div
                   style={{
-                    width: "100%",
-                    padding: "10px",
-                    border: "1px solid #e8ddd4",
-                    borderRadius: "4px",
-                    fontSize: "12px",
-                    boxSizing: "border-box",
-                    resize: "vertical",
-                    fontFamily: "inherit",
-                    backgroundColor: isInvestorView ? "#f5f5f5" : "white",
-                    cursor: isInvestorView ? "not-allowed" : "text",
+                    backgroundColor: "white",
+                    padding: "15px",
+                    borderRadius: "6px",
+                    border: "2px solid #e8ddd4",
                   }}
-                />
-              </div>
-
-              {/* Key Resources */}
-              <div
-                style={{
-                  gridColumn: "2",
-                  gridRow: "2",
-                  backgroundColor: "white",
-                  padding: "15px",
-                  borderRadius: "6px",
-                  border: "2px solid #e8ddd4",
-                }}
-              >
-                <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "10px", fontSize: "14px" }}>Key Resources</h4>
-                <textarea
-                  value={canvasData.keyResources}
-                  onChange={(e) => setCanvasData((prev) => ({ ...prev, keyResources: e.target.value }))}
-                  placeholder="What key resources do you need?"
-                  rows="4"
-                  disabled={isInvestorView}
-                  style={{
-                    width: "100%",
-                    padding: "10px",
-                    border: "1px solid #e8ddd4",
-                    borderRadius: "4px",
-                    fontSize: "12px",
-                    boxSizing: "border-box",
-                    resize: "vertical",
-                    fontFamily: "inherit",
-                    backgroundColor: isInvestorView ? "#f5f5f5" : "white",
-                    cursor: isInvestorView ? "not-allowed" : "text",
-                  }}
-                />
-              </div>
-
-              {/* Channels */}
-              <div
-                style={{
-                  gridColumn: "4",
-                  gridRow: "2",
-                  backgroundColor: "white",
-                  padding: "15px",
-                  borderRadius: "6px",
-                  border: "2px solid #e8ddd4",
-                }}
-              >
-                <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "10px", fontSize: "14px" }}>Channels</h4>
-                <textarea
-                  value={canvasData.channels}
-                  onChange={(e) => setCanvasData((prev) => ({ ...prev, channels: e.target.value }))}
-                  placeholder="How do you reach customers?"
-                  rows="4"
-                  disabled={isInvestorView}
-                  style={{
-                    width: "100%",
-                    padding: "10px",
-                    border: "1px solid #e8ddd4",
-                    borderRadius: "4px",
-                    fontSize: "12px",
-                    boxSizing: "border-box",
-                    resize: "vertical",
-                    fontFamily: "inherit",
-                    backgroundColor: isInvestorView ? "#f5f5f5" : "white",
-                    cursor: isInvestorView ? "not-allowed" : "text",
-                  }}
-                />
+                >
+                  <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "10px", fontSize: "14px" }}>
+                    Revenue Streams
+                  </h4>
+                  <textarea
+                    value={canvasData.revenueStreams}
+                    onChange={(e) => setCanvasData((prev) => ({ ...prev, revenueStreams: e.target.value }))}
+                    placeholder="How do you generate revenue?"
+                    rows="4"
+                    disabled={isInvestorView}
+                    style={{
+                      width: "100%",
+                      padding: "10px",
+                      border: "1px solid #e8ddd4",
+                      borderRadius: "4px",
+                      fontSize: "12px",
+                      boxSizing: "border-box",
+                      resize: "vertical",
+                      fontFamily: "inherit",
+                      backgroundColor: isInvestorView ? "#f5f5f5" : "white",
+                      cursor: isInvestorView ? "not-allowed" : "text",
+                    }}
+                  />
+                </div>
               </div>
             </div>
           ) : (
@@ -2250,82 +2311,6 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                     border: "1px solid #e8ddd4",
                     borderRadius: "4px",
                     fontSize: "14px",
-                    boxSizing: "border-box",
-                    resize: "vertical",
-                    fontFamily: "inherit",
-                    backgroundColor: isInvestorView ? "#f5f5f5" : "white",
-                    cursor: isInvestorView ? "not-allowed" : "text",
-                  }}
-                />
-              </div>
-            </div>
-          )}
-
-          {/* Cost Structure and Revenue Streams - Full Width Bottom Section */}
-          {(activeSubTab === "all" || activeSubTab === "costStructure" || activeSubTab === "revenueStreams") && (
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr",
-                gap: "15px",
-                marginBottom: "20px",
-              }}
-            >
-              {/* Cost Structure */}
-              <div
-                style={{
-                  backgroundColor: "white",
-                  padding: "15px",
-                  borderRadius: "6px",
-                  border: "2px solid #e8ddd4",
-                }}
-              >
-                <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "10px", fontSize: "14px" }}>Cost Structure</h4>
-                <textarea
-                  value={canvasData.costStructure}
-                  onChange={(e) => setCanvasData((prev) => ({ ...prev, costStructure: e.target.value }))}
-                  placeholder="What are your main costs?"
-                  rows="4"
-                  disabled={isInvestorView}
-                  style={{
-                    width: "100%",
-                    padding: "10px",
-                    border: "1px solid #e8ddd4",
-                    borderRadius: "4px",
-                    fontSize: "12px",
-                    boxSizing: "border-box",
-                    resize: "vertical",
-                    fontFamily: "inherit",
-                    backgroundColor: isInvestorView ? "#f5f5f5" : "white",
-                    cursor: isInvestorView ? "not-allowed" : "text",
-                  }}
-                />
-              </div>
-
-              {/* Revenue Streams */}
-              <div
-                style={{
-                  backgroundColor: "white",
-                  padding: "15px",
-                  borderRadius: "6px",
-                  border: "2px solid #e8ddd4",
-                }}
-              >
-                <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "10px", fontSize: "14px" }}>
-                  Revenue Streams
-                </h4>
-                <textarea
-                  value={canvasData.revenueStreams}
-                  onChange={(e) => setCanvasData((prev) => ({ ...prev, revenueStreams: e.target.value }))}
-                  placeholder="How do you generate revenue?"
-                  rows="4"
-                  disabled={isInvestorView}
-                  style={{
-                    width: "100%",
-                    padding: "10px",
-                    border: "1px solid #e8ddd4",
-                    borderRadius: "4px",
-                    fontSize: "12px",
                     boxSizing: "border-box",
                     resize: "vertical",
                     fontFamily: "inherit",
@@ -2566,6 +2551,13 @@ const StrategicGoals = ({ activeSection, milestoneData, setMilestoneData, curren
   const [analysisError, setAnalysisError] = useState("")
   const [savedAnalysis, setSavedAnalysis] = useState("")
   
+  // Filter states
+  const [filterGoal, setFilterGoal] = useState("")
+  const [filterGoalDomain, setFilterGoalDomain] = useState("")
+  const [filterStatus, setFilterStatus] = useState("")
+  const [filterOwner, setFilterOwner] = useState("")
+  const [filterDate, setFilterDate] = useState("")
+  
   const categories = [
     { key: "Growth", name: "Growth", color: "#4A2E1F" },
     { key: "Marketing", name: "Marketing", color: "#6B3F2A" },
@@ -2586,15 +2578,11 @@ const StrategicGoals = ({ activeSection, milestoneData, setMilestoneData, curren
 
   const [showMilestoneModal, setShowMilestoneModal] = useState(false)
   const [editingMilestone, setEditingMilestone] = useState(null)
-  const [filterBy, setFilterBy] = useState("all")
-  const [selectedMonth, setSelectedMonth] = useState("")
-  const [selectedYearFilter, setSelectedYearFilter] = useState("")
   const [newMilestone, setNewMilestone] = useState({
     growthStage: "",
     customGrowthStage: "",
     goal: "",
-    milestoneCategory: "",
-    customMilestoneCategory: "",
+    goalDescription: "",
     milestoneDescription: "",
     targetDate: "",
     status: "",
@@ -2654,6 +2642,27 @@ const StrategicGoals = ({ activeSection, milestoneData, setMilestoneData, curren
 
   if (activeSection !== "strategy-operationalisation") return null
 
+  // Get unique values for filters
+  const getUniqueGoals = () => {
+    const goals = [...new Set(milestoneData.map(m => m.goal))].sort()
+    return goals
+  }
+
+  const getUniqueGoalDomains = () => {
+    const domains = [...new Set(milestoneData.map(m => m.growthStage))].sort()
+    return domains
+  }
+
+  const getUniqueStatuses = () => {
+    const statuses = [...new Set(milestoneData.map(m => m.status))].sort()
+    return statuses
+  }
+
+  const getUniqueOwners = () => {
+    const owners = [...new Set(milestoneData.map(m => m.owner))].sort()
+    return owners
+  }
+
   const calculateGoalCompletion = (goalNumber, growthStage) => {
     const relevantMilestones = milestoneData.filter(
       (milestone) => milestone.goal === `Goal ${goalNumber}` && milestone.growthStage === growthStage,
@@ -2668,63 +2677,72 @@ const StrategicGoals = ({ activeSection, milestoneData, setMilestoneData, curren
     return Math.round(totalPercentage / relevantMilestones.length)
   }
 
-  // Store all milestone descriptions by goal for tooltips
-  const getAllMilestoneDescriptions = (growthStage) => {
+  // Store all goal descriptions by goal for tooltips
+  const getAllGoalDescriptions = (growthStage) => {
     const descriptionsByGoal = {};
     
     milestoneData
-      .filter(m => m.growthStage === growthStage)
+      .filter(m => m.growthStage === growthStage && m.goalDescription)
       .forEach(milestone => {
         if (!descriptionsByGoal[milestone.goal]) {
-          descriptionsByGoal[milestone.goal] = [];
+          descriptionsByGoal[milestone.goal] = new Set(); // Use Set to avoid duplicates
         }
-        if (milestone.milestoneDescription) {
-          descriptionsByGoal[milestone.goal].push(milestone);
+        if (milestone.goalDescription) {
+          descriptionsByGoal[milestone.goal].add(milestone.goalDescription);
         }
       });
     
-    return descriptionsByGoal;
+    // Convert Sets to arrays
+    const result = {};
+    Object.keys(descriptionsByGoal).forEach(goal => {
+      result[goal] = Array.from(descriptionsByGoal[goal]);
+    });
+    
+    return result;
   };
 
   const createChartData = (growthStage, color) => {
-    const goals = ["Goal 1", "Goal 2", "Goal 3", "Goal 4"]
-    const completionData = goals.map((_, index) => calculateGoalCompletion(index + 1, growthStage))
-
-    const goalsWithData = []
-    const dataWithValues = []
+    // Get all unique goals for this growth stage
+    const goalsInStage = [...new Set(
+      milestoneData
+        .filter(m => m.growthStage === growthStage)
+        .map(m => m.goal)
+    )].sort()
     
-    // Get ALL milestone descriptions for this growth stage
-    const allDescriptions = getAllMilestoneDescriptions(growthStage);
-
-    goals.forEach((goal, index) => {
-      const completion = completionData[index]
+    const completionData = goalsInStage.map(goal => {
       const relevantMilestones = milestoneData.filter(
         (milestone) => milestone.goal === goal && milestone.growthStage === growthStage,
       )
-
-      if (relevantMilestones.length > 0 || completion > 0) {
-        goalsWithData.push(goal)
-        dataWithValues.push(completion)
-      }
+      
+      if (relevantMilestones.length === 0) return 0
+      
+      const totalPercentage = relevantMilestones.reduce((sum, milestone) => {
+        return sum + (milestone.percentageCompletion || 0)
+      }, 0)
+      
+      return Math.round(totalPercentage / relevantMilestones.length)
     })
 
+    // Get ALL goal descriptions for this growth stage
+    const allGoalDescriptions = getAllGoalDescriptions(growthStage);
+
     return {
-      labels: goalsWithData,
+      labels: goalsInStage,
       datasets: [
         {
           label: "% Completion",
-          data: dataWithValues,
+          data: completionData,
           backgroundColor: color,
           borderColor: "#7d5a50",
           borderWidth: 1,
-          // Store descriptions directly in the dataset for tooltip access
-          milestoneDescriptions: allDescriptions,
+          // Store goal descriptions directly in the dataset for tooltip access
+          goalDescriptions: allGoalDescriptions,
         },
       ],
     }
   }
 
-  // UPDATED chartOptions to show milestone descriptions on hover
+  // UPDATED chartOptions to show goal descriptions on hover
   const chartOptions = {
     responsive: true,
     maintainAspectRatio: false,
@@ -2744,15 +2762,14 @@ const StrategicGoals = ({ activeSection, milestoneData, setMilestoneData, curren
           title: (context) => {
             return context[0].label;
           },
-          // Show the completion percentage
+          // Show completion percentage
           label: (context) => {
             return `Completion: ${context.raw}%`;
           },
-          // Show all milestone descriptions for this goal
+          // Show goal descriptions
           afterBody: (context) => {
             const dataPoint = context[0];
             const goalName = dataPoint.label;
-            const dataset = dataPoint.dataset;
             
             // Get the growth stage from the chart's data-growth-stage attribute
             const chartElement = dataPoint.chart.canvas;
@@ -2760,29 +2777,27 @@ const StrategicGoals = ({ activeSection, milestoneData, setMilestoneData, curren
             
             if (!growthStage) return [];
             
-            // Get all milestones for this goal and growth stage
-            const relevantMilestones = milestoneData.filter(
-              m => m.growthStage === growthStage && 
-                   m.goal === goalName && 
-                   m.milestoneDescription
-            );
+            // Get goal descriptions for this goal and growth stage
+            const goalDescriptions = milestoneData
+              .filter(m => m.growthStage === growthStage && 
+                          m.goal === goalName && 
+                          m.goalDescription)
+              .map(m => m.goalDescription);
             
-            if (relevantMilestones.length === 0) {
-              return ['No milestone descriptions available'];
+            // Remove duplicates
+            const uniqueDescriptions = [...new Set(goalDescriptions)];
+            
+            if (uniqueDescriptions.length === 0) {
+              return ['No goal description available'];
             }
             
-            // Format each milestone with description, status, and completion
-            const milestoneLines = ['Milestones:'];
-            relevantMilestones.forEach((m, index) => {
-              milestoneLines.push(
-                `  ${index + 1}. ${m.milestoneDescription}`
-              );
-              milestoneLines.push(
-                `     Status: ${m.status} (${m.percentageCompletion}%)`
-              );
+            // Format each goal description
+            const descriptionLines = ['Goal Description:'];
+            uniqueDescriptions.forEach((desc, index) => {
+              descriptionLines.push(`  ${desc}`);
             });
             
-            return milestoneLines;
+            return descriptionLines;
           },
         },
         // Make tooltip multiline
@@ -2896,27 +2911,52 @@ const StrategicGoals = ({ activeSection, milestoneData, setMilestoneData, curren
     "Other (Specify)": ["Other (Specify)"],
   }
 
-  const goals = ["Goal 1", "Goal 2", "Goal 3", "Goal 4"]
+  // Dynamically generate goals based on existing milestones
+  const getAvailableGoals = () => {
+    const existingGoals = milestoneData.map(m => m.goal)
+    // Get all goals up to the maximum existing goal number, plus allow for new ones
+    const maxGoalNumber = existingGoals.reduce((max, goal) => {
+      const match = goal.match(/Goal (\d+)/)
+      if (match) {
+        const num = parseInt(match[1])
+        return num > max ? num : max
+      }
+      return max
+    }, 0)
+    
+    // Generate goals up to max + 2 to allow for future goals
+    const goals = []
+    for (let i = 1; i <= maxGoalNumber + 2; i++) {
+      goals.push(`Goal ${i}`)
+    }
+    return goals
+  }
+
   const statuses = ["Not Started", "In Progress", "On Track", "At Risk", "Done"]
   const owners = ["Product Team", "Business Dev", "Legal Team", "Engineering", "Marketing", "Operations"]
 
+  // Enhanced filtering for the table
   const filteredMilestones = milestoneData.filter((milestone) => {
+    // Apply tab filter
     if (activeSubTab !== "all" && milestone.growthStage !== activeSubTab) return false
-    if (filterBy === "all") return true
-    if (goalDomains.includes(filterBy)) return milestone.growthStage === filterBy
-    if (statuses.includes(filterBy)) return milestone.status === filterBy
-    if (owners.includes(filterBy)) return milestone.owner === filterBy
-    if (goals.includes(filterBy)) return milestone.goal === filterBy
+    
+    // Apply all filters
+    if (filterGoal && milestone.goal !== filterGoal) return false
+    if (filterGoalDomain && milestone.growthStage !== filterGoalDomain) return false
+    if (filterStatus && milestone.status !== filterStatus) return false
+    if (filterOwner && milestone.owner !== filterOwner) return false
+    if (filterDate && milestone.targetDate !== filterDate) return false
+    
     return true
-  }).filter((milestone) => {
-    if (!selectedMonth && !selectedYearFilter) return true
-    
-    const targetDate = new Date(milestone.targetDate)
-    const monthMatch = !selectedMonth || (targetDate.getMonth() + 1) === parseInt(selectedMonth)
-    const yearMatch = !selectedYearFilter || targetDate.getFullYear() === parseInt(selectedYearFilter)
-    
-    return monthMatch && yearMatch
   })
+
+  const clearAllFilters = () => {
+    setFilterGoal("")
+    setFilterGoalDomain("")
+    setFilterStatus("")
+    setFilterOwner("")
+    setFilterDate("")
+  }
 
   // AI Analysis Functions
   const prepareStrategicOperationalisationData = (data) => {
@@ -3001,7 +3041,7 @@ MILESTONE DETAILS BY DOMAIN:
 ${Object.keys(data.milestonesByDomain).map(domain => {
   const milestones = data.milestonesByDomain[domain]
   return `\n${domain}:
-  ${milestones.map(m => `  • ${m.goal}: ${m.milestoneDescription} - Status: ${m.status}, ${m.percentageCompletion}% complete, Owner: ${m.owner}, Target: ${m.targetDate}`).join('\n')}`
+  ${milestones.map(m => `  • Goal: ${m.goal} - Goal Description: ${m.goalDescription || 'Not provided'} - Milestone: ${m.milestoneDescription} - Status: ${m.status}, ${m.percentageCompletion}% complete, Owner: ${m.owner}, Target: ${m.targetDate}`).join('\n')}`
 }).join('')}
 
 ANALYSIS REQUIREMENTS:
@@ -3162,8 +3202,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
       growthStage: "",
       customGrowthStage: "",
       goal: "",
-      milestoneCategory: "",
-      customMilestoneCategory: "",
+      goalDescription: "",
       milestoneDescription: "",
       targetDate: "",
       status: "",
@@ -3183,7 +3222,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
     setNewMilestone({
       ...milestone,
       customGrowthStage: milestone.customGrowthStage || "",
-      customMilestoneCategory: milestone.customMilestoneCategory || "",
+      goalDescription: milestone.goalDescription || "",
       percentageCompletion: milestone.percentageCompletion || 0,
     })
     setShowMilestoneModal(true)
@@ -3204,17 +3243,11 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
       const finalGrowthStage =
         newMilestone.growthStage === "Other (Specify)" ? newMilestone.customGrowthStage : newMilestone.growthStage
 
-      const finalMilestoneCategory =
-        newMilestone.milestoneCategory === "Other (Specify)"
-          ? newMilestone.customMilestoneCategory
-          : newMilestone.milestoneCategory
-
       const milestoneWithUser = {
         growthStage: finalGrowthStage,
         customGrowthStage: newMilestone.customGrowthStage,
         goal: newMilestone.goal,
-        milestoneCategory: finalMilestoneCategory,
-        customMilestoneCategory: newMilestone.customMilestoneCategory,
+        goalDescription: newMilestone.goalDescription,
         milestoneDescription: newMilestone.milestoneDescription,
         targetDate: newMilestone.targetDate,
         status: newMilestone.status,
@@ -3242,8 +3275,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
         growthStage: "",
         customGrowthStage: "",
         goal: "",
-        milestoneCategory: "",
-        customMilestoneCategory: "",
+        goalDescription: "",
         milestoneDescription: "",
         targetDate: "",
         status: "",
@@ -3386,199 +3418,497 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
         </div>
       )}
 
-      {/* Month/Year Filter - ADDED BACK like Risk Management */}
-      <div style={{ display: "flex", gap: "10px", marginBottom: "20px", alignItems: "center", flexWrap: "wrap" }}>
-        <label style={{ color: "#4a352f", fontWeight: "500" }}>Filter by Target Date:</label>
-        
-        <select
-          value={selectedMonth}
-          onChange={(e) => setSelectedMonth(e.target.value)}
-          style={{
-            padding: "8px 12px",
-            border: "2px solid #e8ddd4",
-            borderRadius: "4px",
-            backgroundColor: "white",
-            color: "#4a352f",
-            cursor: "pointer",
-            fontSize: "14px",
-          }}
-        >
-          <option value="">All Months</option>
-          {Array.from({ length: 12 }, (_, i) => (
-            <option key={i + 1} value={i + 1}>
-              {new Date(2024, i, 1).toLocaleString('default', { month: 'long' })}
-            </option>
-          ))}
-        </select>
-        
-        <select
-          value={selectedYearFilter}
-          onChange={(e) => setSelectedYearFilter(e.target.value)}
-          style={{
-            padding: "8px 12px",
-            border: "2px solid #e8ddd4",
-            borderRadius: "4px",
-            backgroundColor: "white",
-            color: "#4a352f",
-            cursor: "pointer",
-            fontSize: "14px",
-          }}
-        >
-          <option value="">All Years</option>
-          {years.map((year) => (
-            <option key={year} value={year}>
-              {year}
-            </option>
-          ))}
-        </select>
-        
-        {(selectedMonth || selectedYearFilter) && (
+      {/* Filters Section - Placed right before the table */}
+      <div style={{ 
+        marginBottom: "20px", 
+        padding: "20px", 
+        backgroundColor: "#f8f4f0", 
+        borderRadius: "6px",
+        border: activeSubTab === "all" 
+          ? "2px solid #7d5a50" 
+          : `2px solid ${categories.find(c => c.key === activeSubTab)?.color || "#7d5a50"}`,
+      }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
+          <h4 style={{ color: "#4a352f", margin: 0, fontSize: "15px", fontWeight: "600" }}>
+            Quick Filters
+            {activeSubTab !== "all" && (
+              <span style={{ fontSize: "12px", marginLeft: "10px", color: "#8d6e63", fontWeight: "normal" }}>
+                {categories.find(c => c.key === activeSubTab)?.name}
+              </span>
+            )}
+          </h4>
           <button
-            onClick={() => {
-              setSelectedMonth("")
-              setSelectedYearFilter("")
-            }}
+            onClick={clearAllFilters}
             style={{
-              padding: "8px 12px",
+              padding: "6px 12px",
               backgroundColor: "#e6d7c3",
               color: "#4a352f",
               border: "none",
               borderRadius: "4px",
               cursor: "pointer",
               fontSize: "12px",
+              fontWeight: "500",
             }}
           >
-            Clear Filter
+            Clear All
           </button>
-        )}
+        </div>
+        
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "12px" }}>
+          {/* Filter by Goal */}
+          <div>
+            <label style={{ display: "block", marginBottom: "5px", color: "#4a352f", fontWeight: "500", fontSize: "12px" }}>
+              Goal
+            </label>
+            <select
+              value={filterGoal}
+              onChange={(e) => setFilterGoal(e.target.value)}
+              style={{
+                width: "100%",
+                padding: "8px",
+                border: "2px solid #e8ddd4",
+                borderRadius: "4px",
+                backgroundColor: "white",
+                color: "#4a352f",
+                fontSize: "13px",
+              }}
+            >
+              <option value="">All Goals</option>
+              {getUniqueGoals().map((goal) => (
+                <option key={goal} value={goal}>{goal}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Filter by Goal Domain (only show in "all" tab) */}
+          {activeSubTab === "all" && (
+            <div>
+              <label style={{ display: "block", marginBottom: "5px", color: "#4a352f", fontWeight: "500", fontSize: "12px" }}>
+                Goal Domain
+              </label>
+              <select
+                value={filterGoalDomain}
+                onChange={(e) => setFilterGoalDomain(e.target.value)}
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  border: "2px solid #e8ddd4",
+                  borderRadius: "4px",
+                  backgroundColor: "white",
+                  color: "#4a352f",
+                  fontSize: "13px",
+                }}
+              >
+                <option value="">All Domains</option>
+                {getUniqueGoalDomains().map((domain) => (
+                  <option key={domain} value={domain}>{domain}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {/* Filter by Status */}
+          <div>
+            <label style={{ display: "block", marginBottom: "5px", color: "#4a352f", fontWeight: "500", fontSize: "12px" }}>
+              Status
+            </label>
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+              style={{
+                width: "100%",
+                padding: "8px",
+                border: "2px solid #e8ddd4",
+                borderRadius: "4px",
+                backgroundColor: "white",
+                color: "#4a352f",
+                fontSize: "13px",
+              }}
+            >
+              <option value="">All Statuses</option>
+              {getUniqueStatuses().map((status) => (
+                <option key={status} value={status}>{status}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Filter by Owner */}
+          <div>
+            <label style={{ display: "block", marginBottom: "5px", color: "#4a352f", fontWeight: "500", fontSize: "12px" }}>
+              Owner
+            </label>
+            <select
+              value={filterOwner}
+              onChange={(e) => setFilterOwner(e.target.value)}
+              style={{
+                width: "100%",
+                padding: "8px",
+                border: "2px solid #e8ddd4",
+                borderRadius: "4px",
+                backgroundColor: "white",
+                color: "#4a352f",
+                fontSize: "13px",
+              }}
+            >
+              <option value="">All Owners</option>
+              {getUniqueOwners().map((owner) => (
+                <option key={owner} value={owner}>{owner}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Filter by Date */}
+          <div>
+            <label style={{ display: "block", marginBottom: "5px", color: "#4a352f", fontWeight: "500", fontSize: "12px" }}>
+              Target Date
+            </label>
+            <input
+              type="date"
+              value={filterDate}
+              onChange={(e) => setFilterDate(e.target.value)}
+              style={{
+                width: "100%",
+                padding: "8px",
+                border: "2px solid #e8ddd4",
+                borderRadius: "4px",
+                backgroundColor: "white",
+                color: "#4a352f",
+                fontSize: "13px",
+              }}
+            />
+          </div>
+        </div>
 
         {/* Add Milestone button */}
         {!isInvestorView && (
-          <button
-            onClick={handleAddMilestone}
-            style={{
-              padding: "8px 16px",
-              backgroundColor: "#7d5a50",
-              color: "white",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-              fontWeight: "500",
-              fontSize: "14px",
-              marginLeft: "auto",
-            }}
-          >
-            Add Milestone
-          </button>
-        )}
-      </div>
-
-      {/* Milestone Table */}
-      <div style={{ overflowX: "auto", backgroundColor: "#fdfcfb", borderRadius: "6px", padding: "20px" }}>
-        {filteredMilestones.length === 0 ? (
-          <div style={{ textAlign: "center", padding: "40px", color: "#7d5a50" }}>
-            {milestoneData.length === 0 
-              ? `No milestones added yet. ${!isInvestorView ? 'Click "Add Milestone" to get started.' : ""}`
-              : `No milestones found for the selected filters.`}
-            {(selectedMonth || selectedYearFilter) && milestoneData.length > 0 && (
-              <p style={{ marginTop: "10px", fontSize: "13px" }}>
-                Try clearing the date filters to see all milestones.
-              </p>
-            )}
+          <div style={{ marginTop: "15px", textAlign: "right" }}>
+            <button
+              onClick={handleAddMilestone}
+              style={{
+                padding: "10px 20px",
+                backgroundColor: "#7d5a50",
+                color: "white",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontWeight: "600",
+                fontSize: "14px",
+              }}
+            >
+              + Add Milestone
+            </button>
           </div>
-        ) : (
-          <table
-            style={{
-              width: "100%",
-              borderCollapse: "collapse",
-              color: "#4a352f",
-              minWidth: "1000px",
-            }}
-          >
-            <thead>
-              <tr style={{ backgroundColor: "#e6d7c3", borderBottom: "2px solid #c8b6a6" }}>
-                <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Goal Domain</th>
-                <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Goal</th>
-                <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Category</th>
-                <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Description</th>
-                <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Target Date</th>
-                <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Status</th>
-                <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Owner</th>
-                <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>% Complete</th>
-                {!isInvestorView && <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Actions</th>}
-              </tr>
-            </thead>
-            <tbody>
-              {filteredMilestones.map((milestone) => (
-                <tr key={milestone.id} style={{ borderBottom: "1px solid #e6d7c3" }}>
-                  <td style={{ padding: "12px" }}>{milestone.growthStage}</td>
-                  <td style={{ padding: "12px" }}>{milestone.goal}</td>
-                  <td style={{ padding: "12px" }}>{milestone.milestoneCategory}</td>
-                  <td style={{ padding: "12px", maxWidth: "250px" }}>{milestone.milestoneDescription}</td>
-                  <td style={{ padding: "12px" }}>{milestone.targetDate}</td>
-                  <td style={{ padding: "12px" }}>
-                    <span
-                      style={{
-                        padding: "4px 8px",
-                        borderRadius: "4px",
-                        fontSize: "12px",
-                        fontWeight: "500",
-                        backgroundColor:
-                          milestone.status === "Done"
-                            ? "#c8e6c9"
-                            : milestone.status === "On Track"
-                              ? "#fff9c4"
-                              : milestone.status === "At Risk"
-                                ? "#ffcdd2"
-                                : "#f5f5f5",
-                      }}
-                    >
-                      {milestone.status}
-                    </span>
-                  </td>
-                  <td style={{ padding: "12px" }}>{milestone.owner}</td>
-                  <td style={{ padding: "12px" }}>{milestone.percentageCompletion}%</td>
-                  {!isInvestorView && (
-                    <td style={{ padding: "12px", display: "flex", gap: "5px" }}>
-                      <button
-                        onClick={() => handleEditMilestone(milestone)}
-                        style={{
-                          padding: "6px",
-                          backgroundColor: "transparent",
-                          color: "#7d5a50",
-                          border: "none",
-                          borderRadius: "4px",
-                          cursor: "pointer",
-                          fontSize: "16px",
-                        }}
-                        title="Edit"
-                      >
-                        ✏️
-                      </button>
-                      <button
-                        onClick={() => handleDeleteMilestone(milestone.id)}
-                        style={{
-                          padding: "6px",
-                          backgroundColor: "transparent",
-                          color: "#F44336",
-                          border: "none",
-                          borderRadius: "4px",
-                          cursor: "pointer",
-                          fontSize: "16px",
-                        }}
-                        title="Delete"
-                      >
-                        ×
-                      </button>
-                    </td>
-                  )}
-                </tr>
-              ))}
-            </tbody>
-          </table>
         )}
       </div>
 
+      {/* Milestone Table - Same size as Risk Management table */}
+{/* Milestone Table - Same size as Risk Management table */}
+<div style={{ 
+  overflowX: "auto", 
+  backgroundColor: "#fdfcfb", 
+  borderRadius: "6px", 
+  padding: "20px",
+  border: activeSubTab === "all" 
+    ? "2px solid #7d5a50" 
+    : `2px solid ${categories.find(c => c.key === activeSubTab)?.color || "#7d5a50"}`,
+}}>
+  <div style={{ marginBottom: "15px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+    <h4 style={{ color: "#4a352f", margin: 0, fontSize: "15px", fontWeight: "600" }}>
+      Milestones
+      {activeSubTab !== "all" && (
+        <span style={{ fontSize: "12px", marginLeft: "10px", color: "#8d6e63", fontWeight: "normal" }}>
+          {categories.find(c => c.key === activeSubTab)?.name}
+        </span>
+      )}
+    </h4>
+    {(filterGoal || filterGoalDomain || filterStatus || filterOwner || filterDate) && (
+      <span style={{ fontSize: "12px", color: "#8d6e63" }}>
+        Showing {filteredMilestones.length} of {milestoneData.filter(m => activeSubTab === "all" ? true : m.growthStage === activeSubTab).length} items
+      </span>
+    )}
+  </div>
+
+  {filteredMilestones.length === 0 ? (
+    <div style={{ textAlign: "center", padding: "40px", color: "#7d5a50" }}>
+      {milestoneData.length === 0 
+        ? `No milestones added yet. ${!isInvestorView ? 'Click "Add Milestone" to get started.' : ""}`
+        : `No milestones found for the selected filters.`}
+      {(filterGoal || filterGoalDomain || filterStatus || filterOwner || filterDate) && (
+        <p style={{ marginTop: "10px", fontSize: "13px" }}>
+          Try clearing some filters to see more milestones.
+        </p>
+      )}
+    </div>
+  ) : (
+    <div style={{ overflowX: "auto" }}>
+      <table
+        style={{
+          width: "100%",
+          borderCollapse: "collapse",
+          color: "#4a352f",
+          minWidth: "1400px",
+          fontSize: "12px",
+          tableLayout: "fixed", // This helps with column width control
+        }}
+      >
+        <colgroup>
+          {activeSubTab === "all" && (
+            <col style={{ width: "120px" }} /> // Fixed width for Goal Domain
+          )}
+          <col style={{ width: "80px" }} /> // Goal
+          <col style={{ width: "200px" }} /> // Goal Description
+          <col style={{ width: "200px" }} /> // Milestone
+          <col style={{ width: "100px" }} /> // Target Date
+          <col style={{ width: "120px" }} /> // Status
+          <col style={{ width: "120px" }} /> // Owner
+          <col style={{ width: "80px" }} /> // % Complete
+          {!isInvestorView && activeSubTab !== "all" && (
+            <col style={{ width: "80px" }} /> // Actions
+          )}
+        </colgroup>
+        <thead>
+          <tr style={{ backgroundColor: "#e6d7c3", borderBottom: "2px solid #c8b6a6" }}>
+            {activeSubTab === "all" && (
+              <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Goal Domain</th>
+            )}
+            <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Goal</th>
+            <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Goal Description</th>
+            <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Milestone</th>
+            <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Target Date</th>
+            <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Status</th>
+            <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Owner</th>
+            <th style={{ padding: "12px", textAlign: "center", fontWeight: "600" }}>% Complete</th>
+            {!isInvestorView && activeSubTab !== "all" && (
+              <th style={{ padding: "12px", textAlign: "center", fontWeight: "600" }}>Actions</th>
+            )}
+          </tr>
+        </thead>
+        <tbody>
+          {filteredMilestones.map((milestone) => (
+            <tr key={milestone.id} style={{ borderBottom: "1px solid #e6d7c3" }}>
+              {activeSubTab === "all" && (
+                <td style={{ 
+                  padding: "12px", 
+                  fontSize: "12px",
+                  wordWrap: "break-word",
+                  whiteSpace: "normal",
+                  wordBreak: "break-word",
+                  maxWidth: "120px",
+                  lineHeight: "1.4",
+                }}>
+                  {milestone.growthStage}
+                </td>
+              )}
+              <td style={{ 
+                padding: "12px", 
+                fontSize: "12px",
+                wordWrap: "break-word",
+                whiteSpace: "normal",
+                wordBreak: "break-word",
+              }}>
+                {milestone.goal}
+              </td>
+              <td style={{ padding: "12px", fontSize: "12px" }}>
+                <textarea
+                  value={milestone.goalDescription || ""}
+                  onChange={(e) => {
+                    if (!isInvestorView && activeSubTab !== "all") {
+                      const updatedMilestone = { ...milestone, goalDescription: e.target.value };
+                      setMilestoneData(prev => 
+                        prev.map(m => m.id === milestone.id ? updatedMilestone : m)
+                      );
+                      const milestoneRef = doc(db, "milestones", milestone.id);
+                      updateDoc(milestoneRef, { goalDescription: e.target.value });
+                    }
+                  }}
+                  disabled={isInvestorView || activeSubTab === "all"}
+                  rows="2"
+                  placeholder="Goal description"
+                  style={{
+                    width: "100%",
+                    padding: "6px",
+                    border: "1px solid #e8ddd4",
+                    borderRadius: "4px",
+                    fontSize: "12px",
+                    resize: "vertical",
+                    backgroundColor: isInvestorView || activeSubTab === "all" ? "#f5f5f5" : "white",
+                    cursor: isInvestorView || activeSubTab === "all" ? "not-allowed" : "text",
+                    fontFamily: "inherit",
+                  }}
+                />
+              </td>
+              <td style={{ padding: "12px", fontSize: "12px" }}>
+                <textarea
+                  value={milestone.milestoneDescription}
+                  onChange={(e) => {
+                    if (!isInvestorView && activeSubTab !== "all") {
+                      const updatedMilestone = { ...milestone, milestoneDescription: e.target.value };
+                      setMilestoneData(prev => 
+                        prev.map(m => m.id === milestone.id ? updatedMilestone : m)
+                      );
+                      const milestoneRef = doc(db, "milestones", milestone.id);
+                      updateDoc(milestoneRef, { milestoneDescription: e.target.value });
+                    }
+                  }}
+                  disabled={isInvestorView || activeSubTab === "all"}
+                  rows="2"
+                  placeholder="How to reach this goal"
+                  style={{
+                    width: "100%",
+                    padding: "6px",
+                    border: "1px solid #e8ddd4",
+                    borderRadius: "4px",
+                    fontSize: "12px",
+                    resize: "vertical",
+                    backgroundColor: isInvestorView || activeSubTab === "all" ? "#f5f5f5" : "white",
+                    cursor: isInvestorView || activeSubTab === "all" ? "not-allowed" : "text",
+                    fontFamily: "inherit",
+                  }}
+                />
+              </td>
+              <td style={{ padding: "12px", fontSize: "12px" }}>
+                <input
+                  type="date"
+                  value={milestone.targetDate}
+                  onChange={(e) => {
+                    if (!isInvestorView && activeSubTab !== "all") {
+                      const updatedMilestone = { ...milestone, targetDate: e.target.value };
+                      setMilestoneData(prev => 
+                        prev.map(m => m.id === milestone.id ? updatedMilestone : m)
+                      );
+                      const milestoneRef = doc(db, "milestones", milestone.id);
+                      updateDoc(milestoneRef, { targetDate: e.target.value });
+                    }
+                  }}
+                  disabled={isInvestorView || activeSubTab === "all"}
+                  style={{
+                    width: "100%",
+                    padding: "6px",
+                    border: "1px solid #e8ddd4",
+                    borderRadius: "4px",
+                    fontSize: "12px",
+                    backgroundColor: isInvestorView || activeSubTab === "all" ? "#f5f5f5" : "white",
+                    cursor: isInvestorView || activeSubTab === "all" ? "not-allowed" : "text",
+                  }}
+                />
+              </td>
+              <td style={{ padding: "12px", fontSize: "12px" }}>
+                <select
+                  value={milestone.status}
+                  onChange={(e) => {
+                    if (!isInvestorView && activeSubTab !== "all") {
+                      const updatedMilestone = { ...milestone, status: e.target.value };
+                      setMilestoneData(prev => 
+                        prev.map(m => m.id === milestone.id ? updatedMilestone : m)
+                      );
+                      const milestoneRef = doc(db, "milestones", milestone.id);
+                      updateDoc(milestoneRef, { status: e.target.value });
+                    }
+                  }}
+                  disabled={isInvestorView || activeSubTab === "all"}
+                  style={{
+                    width: "100%",
+                    padding: "6px",
+                    border: "1px solid #e8ddd4",
+                    borderRadius: "4px",
+                    fontSize: "12px",
+                    backgroundColor: isInvestorView || activeSubTab === "all" ? "#f5f5f5" : "white",
+                    cursor: isInvestorView || activeSubTab === "all" ? "not-allowed" : "pointer",
+                  }}
+                >
+                  <option value="">Select Status</option>
+                  {statuses.map((status) => (
+                    <option key={status} value={status}>{status}</option>
+                  ))}
+                </select>
+              </td>
+              <td style={{ padding: "12px", fontSize: "12px" }}>
+                <select
+                  value={milestone.owner}
+                  onChange={(e) => {
+                    if (!isInvestorView && activeSubTab !== "all") {
+                      const updatedMilestone = { ...milestone, owner: e.target.value };
+                      setMilestoneData(prev => 
+                        prev.map(m => m.id === milestone.id ? updatedMilestone : m)
+                      );
+                      const milestoneRef = doc(db, "milestones", milestone.id);
+                      updateDoc(milestoneRef, { owner: e.target.value });
+                    }
+                  }}
+                  disabled={isInvestorView || activeSubTab === "all"}
+                  style={{
+                    width: "100%",
+                    padding: "6px",
+                    border: "1px solid #e8ddd4",
+                    borderRadius: "4px",
+                    fontSize: "12px",
+                    backgroundColor: isInvestorView || activeSubTab === "all" ? "#f5f5f5" : "white",
+                    cursor: isInvestorView || activeSubTab === "all" ? "not-allowed" : "pointer",
+                  }}
+                >
+                  <option value="">Select Owner</option>
+                  {owners.map((owner) => (
+                    <option key={owner} value={owner}>{owner}</option>
+                  ))}
+                </select>
+              </td>
+              <td style={{ padding: "12px", textAlign: "center", fontSize: "12px" }}>
+                <input
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="5"
+                  value={milestone.percentageCompletion || 0}
+                  onChange={(e) => {
+                    if (!isInvestorView && activeSubTab !== "all") {
+                      const value = Number.parseInt(e.target.value);
+                      const updatedMilestone = { ...milestone, percentageCompletion: value };
+                      setMilestoneData(prev => 
+                        prev.map(m => m.id === milestone.id ? updatedMilestone : m)
+                      );
+                      const milestoneRef = doc(db, "milestones", milestone.id);
+                      updateDoc(milestoneRef, { percentageCompletion: value });
+                    }
+                  }}
+                  disabled={isInvestorView || activeSubTab === "all"}
+                  style={{
+                    width: "60px",
+                    padding: "6px",
+                    border: "1px solid #e8ddd4",
+                    borderRadius: "4px",
+                    fontSize: "12px",
+                    textAlign: "center",
+                    backgroundColor: isInvestorView || activeSubTab === "all" ? "#f5f5f5" : "white",
+                    cursor: isInvestorView || activeSubTab === "all" ? "not-allowed" : "text",
+                  }}
+                />
+              </td>
+              {!isInvestorView && activeSubTab !== "all" && (
+                <td style={{ padding: "12px", textAlign: "center" }}>
+                  <button
+                    onClick={() => handleDeleteMilestone(milestone.id)}
+                    style={{
+                      padding: "6px 12px",
+                      backgroundColor: "transparent",
+                      color: "#F44336",
+                      border: "1px solid #F44336",
+                      borderRadius: "4px",
+                      cursor: "pointer",
+                      fontSize: "12px",
+                    }}
+                    title="Delete"
+                  >
+                    Delete
+                  </button>
+                </td>
+              )}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  )}
+</div>
       {/* AI Analysis Section */}
       <div style={{ marginTop: "30px", marginBottom: "20px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "15px" }}>
@@ -3819,7 +4149,6 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                   setNewMilestone((prev) => ({
                     ...prev,
                     growthStage: e.target.value,
-                    milestoneCategory: "",
                   }))
                 }}
                 style={{
@@ -3875,7 +4204,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                 }}
               >
                 <option value="">Select Goal</option>
-                {goals.map((goal) => (
+                {getAvailableGoals().map((goal) => (
                   <option key={goal} value={goal}>
                     {goal}
                   </option>
@@ -3883,62 +4212,36 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
               </select>
             </div>
 
-            {newMilestone.growthStage && newMilestone.growthStage !== "Other (Specify)" && (
-              <div style={{ marginBottom: "15px" }}>
-                <label style={{ display: "block", marginBottom: "5px", color: "#4a352f", fontWeight: "500" }}>
-                  Milestone Category
-                </label>
-                <select
-                  value={newMilestone.milestoneCategory}
-                  onChange={(e) => setNewMilestone((prev) => ({ ...prev, milestoneCategory: e.target.value }))}
-                  style={{
-                    width: "100%",
-                    padding: "10px",
-                    border: "2px solid #e8ddd4",
-                    borderRadius: "4px",
-                    fontSize: "14px",
-                  }}
-                >
-                  <option value="">Select Category</option>
-                  {milestoneCategoriesByDomain[newMilestone.growthStage]?.map((category) => (
-                    <option key={category} value={category}>
-                      {category}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            {newMilestone.milestoneCategory === "Other (Specify)" && (
-              <div style={{ marginBottom: "15px" }}>
-                <label style={{ display: "block", marginBottom: "5px", color: "#4a352f", fontWeight: "500" }}>
-                  Custom Milestone Category
-                </label>
-                <input
-                  type="text"
-                  value={newMilestone.customMilestoneCategory}
-                  onChange={(e) => setNewMilestone((prev) => ({ ...prev, customMilestoneCategory: e.target.value }))}
-                  placeholder="Enter custom category"
-                  style={{
-                    width: "100%",
-                    padding: "10px",
-                    border: "2px solid #e8ddd4",
-                    borderRadius: "4px",
-                    fontSize: "14px",
-                    boxSizing: "border-box",
-                  }}
-                />
-              </div>
-            )}
+            <div style={{ marginBottom: "15px" }}>
+              <label style={{ display: "block", marginBottom: "5px", color: "#4a352f", fontWeight: "500" }}>
+                Goal Description
+              </label>
+              <textarea
+                value={newMilestone.goalDescription}
+                onChange={(e) => setNewMilestone((prev) => ({ ...prev, goalDescription: e.target.value }))}
+                placeholder="Describe the goal you want to achieve"
+                rows="2"
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  border: "2px solid #e8ddd4",
+                  borderRadius: "4px",
+                  fontSize: "14px",
+                  boxSizing: "border-box",
+                  resize: "vertical",
+                  fontFamily: "inherit",
+                }}
+              />
+            </div>
 
             <div style={{ marginBottom: "15px" }}>
               <label style={{ display: "block", marginBottom: "5px", color: "#4a352f", fontWeight: "500" }}>
-                Milestone Description
+                Milestone <span style={{ fontSize: "12px", color: "#8d6e63", fontWeight: "normal" }}>(How you will reach this goal)</span>
               </label>
               <textarea
                 value={newMilestone.milestoneDescription}
                 onChange={(e) => setNewMilestone((prev) => ({ ...prev, milestoneDescription: e.target.value }))}
-                placeholder="Describe the milestone"
+                placeholder="Describe the specific actions or steps to achieve this goal"
                 rows="3"
                 style={{
                   width: "100%",
@@ -4095,6 +4398,12 @@ const RiskManagement = ({ activeSection, currentUser, isInvestorView }) => {
   const [selectedMonth, setSelectedMonth] = useState("")
   const [selectedYear, setSelectedYear] = useState("")
   
+  // Table filter states - Reduced to essential ones
+  const [filterRisk, setFilterRisk] = useState("")
+  const [filterCategory, setFilterCategory] = useState("")
+  const [filterOwner, setFilterOwner] = useState("")
+  const [filterStatus, setFilterStatus] = useState("")
+  
   // AI Analysis States
   const [showAIAnalysis, setShowAIAnalysis] = useState(false)
   const [aiAnalysis, setAiAnalysis] = useState("")
@@ -4109,7 +4418,7 @@ const RiskManagement = ({ activeSection, currentUser, isInvestorView }) => {
     "reputational-risk": "#9C27B0",
     "compliance-risk": "#F44336",
     "technology-risk": "#FF69B4",
-    "people-risk": "#619399", // Teal
+    "people-risk": "#619399",
     "business-risk": "#7d5a50",
   }
 
@@ -4274,14 +4583,63 @@ const RiskManagement = ({ activeSection, currentUser, isInvestorView }) => {
     }
   }
 
+  // Get unique values for filters
+  const getUniqueRiskNames = (category) => {
+    const data = category === "business-risk" 
+      ? Object.values(riskData).flat() 
+      : riskData[category] || []
+    return [...new Set(data.map(item => item.risk).filter(Boolean))].sort()
+  }
+
+  const getUniqueCategories = (category) => {
+    const data = category === "business-risk" 
+      ? Object.values(riskData).flat() 
+      : riskData[category] || []
+    return [...new Set(data.map(item => item.riskCategory).filter(Boolean))].sort()
+  }
+
+  const getUniqueOwners = (category) => {
+    const data = category === "business-risk" 
+      ? Object.values(riskData).flat() 
+      : riskData[category] || []
+    return [...new Set(data.map(item => item.owner).filter(Boolean))].sort()
+  }
+
+  const getUniqueStatuses = (category) => {
+    const data = category === "business-risk" 
+      ? Object.values(riskData).flat() 
+      : riskData[category] || []
+    return [...new Set(data.map(item => item.mitigationStatus).filter(Boolean))].sort()
+  }
+
+  const clearAllFilters = () => {
+    setFilterRisk("")
+    setFilterCategory("")
+    setFilterOwner("")
+    setFilterStatus("")
+    setSelectedMonth("")
+    setSelectedYear("")
+  }
+
+  // Enhanced filteredData function with essential filters
   const filteredData = (data) => {
     return data.filter((item) => {
-      if (!selectedMonth && !selectedYear) return true
-      if (!item.actionDate) return true
-      const actionDate = new Date(item.actionDate)
-      const monthMatch = !selectedMonth || (actionDate.getMonth() + 1) === parseInt(selectedMonth)
-      const yearMatch = !selectedYear || actionDate.getFullYear() === parseInt(selectedYear)
-      return monthMatch && yearMatch
+      // Date filters
+      if (selectedMonth || selectedYear) {
+        if (!item.actionDate) return false
+        const actionDate = new Date(item.actionDate)
+        const monthMatch = !selectedMonth || (actionDate.getMonth() + 1) === parseInt(selectedMonth)
+        const yearMatch = !selectedYear || actionDate.getFullYear() === parseInt(selectedYear)
+        if (!monthMatch || !yearMatch) return false
+      }
+      
+      // Essential table filters
+      if (filterRisk && item.risk !== filterRisk) return false
+      if (filterCategory && item.riskCategory !== filterCategory) return false
+      if (filterOwner && item.owner !== filterOwner) return false
+      if (filterStatus && item.mitigationStatus !== filterStatus) return false
+      
+      return true
     })
   }
 
@@ -4710,65 +5068,6 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
         ))}
       </div>
 
-      {/* Month/Year Filter */}
-      <div style={{ display: "flex", gap: "10px", marginBottom: "20px", alignItems: "center" }}>
-        <label style={{ color: "#4a352f", fontWeight: "500" }}>Filter by Action Date:</label>
-        <select
-          value={selectedMonth}
-          onChange={(e) => setSelectedMonth(e.target.value)}
-          style={{
-            padding: "8px 12px",
-            border: "2px solid #e8ddd4",
-            borderRadius: "4px",
-            backgroundColor: "white",
-            color: "#4a352f",
-            cursor: "pointer",
-            fontSize: "14px",
-          }}
-        >
-          <option value="">All Months</option>
-          {Array.from({ length: 12 }, (_, i) => (
-            <option key={i + 1} value={i + 1}>
-              {new Date(2024, i, 1).toLocaleString('default', { month: 'long' })}
-            </option>
-          ))}
-        </select>
-        <select
-          value={selectedYear}
-          onChange={(e) => setSelectedYear(e.target.value)}
-          style={{
-            padding: "8px 12px",
-            border: "2px solid #e8ddd4",
-            borderRadius: "4px",
-            backgroundColor: "white",
-            color: "#4a352f",
-            cursor: "pointer",
-            fontSize: "14px",
-          }}
-        >
-          <option value="">All Years</option>
-          {years.map((year) => (
-            <option key={year} value={year}>{year}</option>
-          ))}
-        </select>
-        {(selectedMonth || selectedYear) && (
-          <button
-            onClick={() => { setSelectedMonth(""); setSelectedYear("") }}
-            style={{
-              padding: "8px 12px",
-              backgroundColor: "#e6d7c3",
-              color: "#4a352f",
-              border: "none",
-              borderRadius: "4px",
-              cursor: "pointer",
-              fontSize: "12px",
-            }}
-          >
-            Clear Filter
-          </button>
-        )}
-      </div>
-
       {/* Risk Category Content */}
       {riskCategories.map((category) => {
         if (riskSection !== category.id) return null
@@ -4791,8 +5090,8 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
               <h4 style={{ color: "#4a352f", marginBottom: "15px" }}>
                 {category.name} Matrix
                 {category.id === "business-risk" && " (All Risks)"}
-                {(selectedMonth || selectedYear) && (
-                  <span style={{ fontSize: "12px", marginLeft: "10px", color: "#8d6e63" }}>(Filtered by date)</span>
+                {(selectedMonth || selectedYear || filterRisk || filterCategory || filterOwner || filterStatus) && (
+                  <span style={{ fontSize: "12px", marginLeft: "10px", color: "#8d6e63" }}>(Filtered)</span>
                 )}
               </h4>
               <div style={{ height: "300px" }}>
@@ -4800,257 +5099,471 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
               </div>
             </div>
 
-            {/* Risk Assessment Table */}
-            <div
-              style={{
-                backgroundColor: "#fdfcfb",
-                padding: "20px",
-                borderRadius: "6px",
-                border: `2px solid ${category.color}`,
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  marginBottom: "15px",
-                }}
-              >
-                <h4 style={{ color: "#4a352f", margin: 0 }}>
-                  Risk Assessment Table
-                  {category.id === "business-risk" && " (All Risks)"}
-                  {(selectedMonth || selectedYear) && (
-                    <span style={{ fontSize: "12px", marginLeft: "10px", color: "#8d6e63" }}>(Filtered by date)</span>
-                  )}
-                </h4>
-                {!isInvestorView && category.id !== "business-risk" && (
+            {/* Filters Section - Reduced to 4 essential filters */}
+            <div style={{ 
+              marginBottom: "20px", 
+              padding: "20px", 
+              backgroundColor: "#f8f4f0", 
+              borderRadius: "6px",
+              border: `2px solid ${category.color}`,
+            }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
+                <h4 style={{ color: "#4a352f", margin: 0, fontSize: "15px", fontWeight: "600" }}>Quick Filters</h4>
+                <button
+                  onClick={clearAllFilters}
+                  style={{
+                    padding: "6px 12px",
+                    backgroundColor: "#e6d7c3",
+                    color: "#4a352f",
+                    border: "none",
+                    borderRadius: "4px",
+                    cursor: "pointer",
+                    fontSize: "12px",
+                    fontWeight: "500",
+                  }}
+                >
+                  Clear All
+                </button>
+              </div>
+              
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "12px" }}>
+                {/* Filter by Risk Name */}
+                <div>
+                  <label style={{ display: "block", marginBottom: "5px", color: "#4a352f", fontWeight: "500", fontSize: "12px" }}>
+                    Risk Name
+                  </label>
+                  <select
+                    value={filterRisk}
+                    onChange={(e) => setFilterRisk(e.target.value)}
+                    style={{
+                      width: "100%",
+                      padding: "8px",
+                      border: "2px solid #e8ddd4",
+                      borderRadius: "4px",
+                      backgroundColor: "white",
+                      color: "#4a352f",
+                      fontSize: "13px",
+                    }}
+                  >
+                    <option value="">All Risks</option>
+                    {getUniqueRiskNames(category.id).map((risk) => (
+                      <option key={risk} value={risk}>{risk}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Filter by Risk Category (only in Business Risk view) */}
+                {category.id === "business-risk" && (
+                  <div>
+                    <label style={{ display: "block", marginBottom: "5px", color: "#4a352f", fontWeight: "500", fontSize: "12px" }}>
+                      Category
+                    </label>
+                    <select
+                      value={filterCategory}
+                      onChange={(e) => setFilterCategory(e.target.value)}
+                      style={{
+                        width: "100%",
+                        padding: "8px",
+                        border: "2px solid #e8ddd4",
+                        borderRadius: "4px",
+                        backgroundColor: "white",
+                        color: "#4a352f",
+                        fontSize: "13px",
+                      }}
+                    >
+                      <option value="">All Categories</option>
+                      {getUniqueCategories(category.id).map((cat) => (
+                        <option key={cat} value={cat}>{cat}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                {/* Filter by Owner */}
+                <div>
+                  <label style={{ display: "block", marginBottom: "5px", color: "#4a352f", fontWeight: "500", fontSize: "12px" }}>
+                    Owner
+                  </label>
+                  <select
+                    value={filterOwner}
+                    onChange={(e) => setFilterOwner(e.target.value)}
+                    style={{
+                      width: "100%",
+                      padding: "8px",
+                      border: "2px solid #e8ddd4",
+                      borderRadius: "4px",
+                      backgroundColor: "white",
+                      color: "#4a352f",
+                      fontSize: "13px",
+                    }}
+                  >
+                    <option value="">All Owners</option>
+                    {getUniqueOwners(category.id).map((owner) => (
+                      <option key={owner} value={owner}>{owner}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Filter by Status */}
+                <div>
+                  <label style={{ display: "block", marginBottom: "5px", color: "#4a352f", fontWeight: "500", fontSize: "12px" }}>
+                    Status
+                  </label>
+                  <select
+                    value={filterStatus}
+                    onChange={(e) => setFilterStatus(e.target.value)}
+                    style={{
+                      width: "100%",
+                      padding: "8px",
+                      border: "2px solid #e8ddd4",
+                      borderRadius: "4px",
+                      backgroundColor: "white",
+                      color: "#4a352f",
+                      fontSize: "13px",
+                    }}
+                  >
+                    <option value="">All Statuses</option>
+                    {getUniqueStatuses(category.id).map((status) => (
+                      <option key={status} value={status}>{status}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Month/Year Filters in same row */}
+                <div>
+                  <label style={{ display: "block", marginBottom: "5px", color: "#4a352f", fontWeight: "500", fontSize: "12px" }}>
+                    Month
+                  </label>
+                  <select
+                    value={selectedMonth}
+                    onChange={(e) => setSelectedMonth(e.target.value)}
+                    style={{
+                      width: "100%",
+                      padding: "8px",
+                      border: "2px solid #e8ddd4",
+                      borderRadius: "4px",
+                      backgroundColor: "white",
+                      color: "#4a352f",
+                      fontSize: "13px",
+                    }}
+                  >
+                    <option value="">All</option>
+                    {Array.from({ length: 12 }, (_, i) => (
+                      <option key={i + 1} value={i + 1}>
+                        {new Date(2024, i, 1).toLocaleString('default', { month: 'short' })}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label style={{ display: "block", marginBottom: "5px", color: "#4a352f", fontWeight: "500", fontSize: "12px" }}>
+                    Year
+                  </label>
+                  <select
+                    value={selectedYear}
+                    onChange={(e) => setSelectedYear(e.target.value)}
+                    style={{
+                      width: "100%",
+                      padding: "8px",
+                      border: "2px solid #e8ddd4",
+                      borderRadius: "4px",
+                      backgroundColor: "white",
+                      color: "#4a352f",
+                      fontSize: "13px",
+                    }}
+                  >
+                    <option value="">All</option>
+                    {years.map((year) => (
+                      <option key={year} value={year}>{year}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Add Risk Item button */}
+              {!isInvestorView && category.id !== "business-risk" && (
+                <div style={{ marginTop: "15px", textAlign: "right" }}>
                   <button
                     onClick={() => addRiskItem(category.id)}
                     style={{
-                      padding: "8px 16px",
+                      padding: "10px 20px",
                       backgroundColor: "#7d5a50",
                       color: "white",
                       border: "none",
                       borderRadius: "4px",
                       cursor: "pointer",
-                      fontWeight: "500",
-                      fontSize: "12px",
+                      fontWeight: "600",
+                      fontSize: "14px",
                     }}
                   >
-                    Add Risk Item
+                    + Add Risk Item
                   </button>
-                )}
-              </div>
-
-              {filtered.length === 0 ? (
-                <div style={{ textAlign: "center", padding: "40px", color: "#7d5a50" }}>
-                  {category.id === "business-risk"
-                    ? "No risk items added yet in any category."
-                    : `No risk items added yet. ${!isInvestorView ? 'Click "Add Risk Item" to get started.' : ""}`}
-                  {(selectedMonth || selectedYear) && (
-                    <p style={{ marginTop: "10px", fontSize: "13px" }}>
-                      Try clearing the date filters to see all items.
-                    </p>
-                  )}
-                </div>
-              ) : (
-                <div style={{ overflowX: "auto" }}>
-                  <table
-                    style={{
-                      width: "100%",
-                      borderCollapse: "collapse",
-                      color: "#4a352f",
-                      minWidth: "1200px",
-                    }}
-                  >
-                    <thead>
-                      <tr style={{ backgroundColor: "#e6d7c3", borderBottom: "2px solid #c8b6a6" }}>
-                        <th style={{ padding: "12px", textAlign: "left", fontWeight: "600", width: "80px" }}>Risk</th>
-                        <th style={{ padding: "12px", textAlign: "left", fontWeight: "600", width: "120px" }}>Risk Category</th>
-                        <th style={{ padding: "12px", textAlign: "left", fontWeight: "600", width: "180px" }}>Description</th>
-                        <th style={{ padding: "12px", textAlign: "left", fontWeight: "600", width: "80px" }}>Severity (1-5)</th>
-                        <th style={{ padding: "12px", textAlign: "left", fontWeight: "600", width: "80px" }}>Likelihood (1-5)</th>
-                        <th style={{ padding: "12px", textAlign: "left", fontWeight: "600", width: "100px" }}>Owner</th>
-                        <th style={{ padding: "12px", textAlign: "left", fontWeight: "600", width: "180px" }}>Mitigation</th>
-                        <th style={{ padding: "12px", textAlign: "left", fontWeight: "600", width: "140px" }}>Mitigation Status</th>
-                        <th style={{ padding: "12px", textAlign: "left", fontWeight: "600", width: "120px" }}>Review Cadence</th>
-                        <th style={{ padding: "12px", textAlign: "left", fontWeight: "600", width: "100px" }}>Action Date</th>
-                        {!isInvestorView && category.id !== "business-risk" && (
-                          <th style={{ padding: "12px", textAlign: "left", fontWeight: "600", width: "80px" }}>Actions</th>
-                        )}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filtered.map((item) => {
-                        const originalCategory =
-                          category.id === "business-risk"
-                            ? Object.keys(riskData).find((key) => riskData[key].some((r) => r.id === item.id))
-                            : category.id
-
-                        return (
-                          <tr key={item.id} style={{ borderBottom: "1px solid #e6d7c3" }}>
-                            <td style={{ padding: "12px" }}>
-                              <input
-                                type="text"
-                                value={item.risk}
-                                onChange={(e) => updateRiskItem(originalCategory, item.id, "risk", e.target.value)}
-                                disabled={isInvestorView || category.id === "business-risk"}
-                                style={{
-                                  width: "100%", padding: "6px", border: "1px solid #e8ddd4",
-                                  borderRadius: "4px", fontSize: "12px",
-                                  backgroundColor: isInvestorView || category.id === "business-risk" ? "#f5f5f5" : "white",
-                                  cursor: isInvestorView || category.id === "business-risk" ? "not-allowed" : "text",
-                                }}
-                              />
-                            </td>
-                            <td style={{ padding: "12px" }}>{item.riskCategory}</td>
-                            <td style={{ padding: "12px" }}>
-                              <textarea
-                                value={item.description}
-                                onChange={(e) => updateRiskItem(originalCategory, item.id, "description", e.target.value)}
-                                disabled={isInvestorView || category.id === "business-risk"}
-                                rows="2"
-                                style={{
-                                  width: "100%", padding: "6px", border: "1px solid #e8ddd4",
-                                  borderRadius: "4px", fontSize: "12px", resize: "vertical",
-                                  backgroundColor: isInvestorView || category.id === "business-risk" ? "#f5f5f5" : "white",
-                                  cursor: isInvestorView || category.id === "business-risk" ? "not-allowed" : "text",
-                                }}
-                              />
-                            </td>
-                            <td style={{ padding: "12px" }}>
-                              <input
-                                type="number" min="1" max="5" value={item.severity}
-                                onChange={(e) => updateRiskItem(originalCategory, item.id, "severity", Number.parseInt(e.target.value))}
-                                disabled={isInvestorView || category.id === "business-risk"}
-                                style={{
-                                  width: "60px", padding: "6px", border: "1px solid #e8ddd4",
-                                  borderRadius: "4px", fontSize: "12px",
-                                  backgroundColor: isInvestorView || category.id === "business-risk" ? "#f5f5f5" : "white",
-                                  cursor: isInvestorView || category.id === "business-risk" ? "not-allowed" : "text",
-                                }}
-                              />
-                            </td>
-                            <td style={{ padding: "12px" }}>
-                              <input
-                                type="number" min="1" max="5" value={item.likelihood}
-                                onChange={(e) => updateRiskItem(originalCategory, item.id, "likelihood", Number.parseInt(e.target.value))}
-                                disabled={isInvestorView || category.id === "business-risk"}
-                                style={{
-                                  width: "60px", padding: "6px", border: "1px solid #e8ddd4",
-                                  borderRadius: "4px", fontSize: "12px",
-                                  backgroundColor: isInvestorView || category.id === "business-risk" ? "#f5f5f5" : "white",
-                                  cursor: isInvestorView || category.id === "business-risk" ? "not-allowed" : "text",
-                                }}
-                              />
-                            </td>
-                            <td style={{ padding: "12px" }}>
-                              <input
-                                type="text" value={item.owner || ""}
-                                onChange={(e) => updateRiskItem(originalCategory, item.id, "owner", e.target.value)}
-                                disabled={isInvestorView || category.id === "business-risk"}
-                                placeholder="Owner name"
-                                style={{
-                                  width: "100%", padding: "6px", border: "1px solid #e8ddd4",
-                                  borderRadius: "4px", fontSize: "12px",
-                                  backgroundColor: isInvestorView || category.id === "business-risk" ? "#f5f5f5" : "white",
-                                  cursor: isInvestorView || category.id === "business-risk" ? "not-allowed" : "text",
-                                }}
-                              />
-                            </td>
-                            <td style={{ padding: "12px" }}>
-                              <textarea
-                                value={item.mitigation}
-                                onChange={(e) => updateRiskItem(originalCategory, item.id, "mitigation", e.target.value)}
-                                disabled={isInvestorView || category.id === "business-risk"}
-                                rows="2"
-                                style={{
-                                  width: "100%", padding: "6px", border: "1px solid #e8ddd4",
-                                  borderRadius: "4px", fontSize: "12px", resize: "vertical",
-                                  backgroundColor: isInvestorView || category.id === "business-risk" ? "#f5f5f5" : "white",
-                                  cursor: isInvestorView || category.id === "business-risk" ? "not-allowed" : "text",
-                                }}
-                              />
-                            </td>
-                            <td style={{ padding: "12px" }}>
-                              <select
-                                value={item.mitigationStatus}
-                                onChange={(e) => updateRiskItem(originalCategory, item.id, "mitigationStatus", e.target.value)}
-                                disabled={isInvestorView || category.id === "business-risk"}
-                                style={{
-                                  width: "100%", padding: "6px", border: "1px solid #e8ddd4",
-                                  borderRadius: "4px", fontSize: "12px",
-                                  backgroundColor: isInvestorView || category.id === "business-risk" ? "#f5f5f5" : "white",
-                                  cursor: isInvestorView || category.id === "business-risk" ? "not-allowed" : "pointer",
-                                }}
-                              >
-                                <option value="🟢 Controlled">🟢 Controlled</option>
-                                <option value="🟡 Partially controlled">🟡 Partially controlled</option>
-                                <option value="🔴 Uncontrolled">🔴 Uncontrolled</option>
-                              </select>
-                            </td>
-                            <td style={{ padding: "12px" }}>
-                              <input
-                                type="text" value={item.reviewCadence || ""}
-                                onChange={(e) => updateRiskItem(originalCategory, item.id, "reviewCadence", e.target.value)}
-                                disabled={isInvestorView || category.id === "business-risk"}
-                                placeholder="e.g., Monthly"
-                                style={{
-                                  width: "100%", padding: "6px", border: "1px solid #e8ddd4",
-                                  borderRadius: "4px", fontSize: "12px",
-                                  backgroundColor: isInvestorView || category.id === "business-risk" ? "#f5f5f5" : "white",
-                                  cursor: isInvestorView || category.id === "business-risk" ? "not-allowed" : "text",
-                                }}
-                              />
-                            </td>
-                            <td style={{ padding: "12px" }}>
-                              <input
-                                type="date" value={item.actionDate || ""}
-                                onChange={(e) => updateRiskItem(originalCategory, item.id, "actionDate", e.target.value)}
-                                disabled={isInvestorView || category.id === "business-risk"}
-                                style={{
-                                  width: "100%", padding: "6px", border: "1px solid #e8ddd4",
-                                  borderRadius: "4px", fontSize: "12px",
-                                  backgroundColor: isInvestorView || category.id === "business-risk" ? "#f5f5f5" : "white",
-                                  cursor: isInvestorView || category.id === "business-risk" ? "not-allowed" : "text",
-                                }}
-                              />
-                            </td>
-                            {!isInvestorView && category.id !== "business-risk" && (
-                              <td style={{ padding: "12px", display: "flex", gap: "5px" }}>
-                                <button
-                                  onClick={() => {}}
-                                  style={{
-                                    padding: "6px", backgroundColor: "transparent",
-                                    color: "#7d5a50", border: "none", borderRadius: "4px",
-                                    cursor: "pointer", fontSize: "16px",
-                                  }}
-                                  title="Edit"
-                                >
-                                  ✏️
-                                </button>
-                                <button
-                                  onClick={() => deleteRiskItem(originalCategory, item.id)}
-                                  style={{
-                                    padding: "6px", backgroundColor: "transparent",
-                                    color: "#F44336", border: "none", borderRadius: "4px",
-                                    cursor: "pointer", fontSize: "16px",
-                                  }}
-                                  title="Delete"
-                                >
-                                  ×
-                                </button>
-                              </td>
-                            )}
-                          </tr>
-                        )
-                      })}
-                    </tbody>
-                  </table>
                 </div>
               )}
             </div>
+
+            {/* Risk Assessment Table */}
+           {/* Risk Assessment Table */}
+<div
+  style={{
+    backgroundColor: "#fdfcfb",
+    padding: "20px",
+    borderRadius: "6px",
+    border: `2px solid ${category.color}`,
+  }}
+>
+  <div
+    style={{
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: "15px",
+    }}
+  >
+    <h4 style={{ color: "#4a352f", margin: 0 }}>
+      Risk Assessment Table
+      {category.id === "business-risk" && " (All Risks)"}
+      {(selectedMonth || selectedYear || filterRisk || filterCategory || filterOwner || filterStatus) && (
+        <span style={{ fontSize: "12px", marginLeft: "10px", color: "#8d6e63" }}>
+          (Showing {filtered.length} of {data.length} items)
+        </span>
+      )}
+    </h4>
+  </div>
+
+  {filtered.length === 0 ? (
+    <div style={{ textAlign: "center", padding: "40px", color: "#7d5a50" }}>
+      {category.id === "business-risk"
+        ? "No risk items added yet in any category."
+        : `No risk items added yet. ${!isInvestorView ? 'Click "Add Risk Item" to get started.' : ""}`}
+      {(selectedMonth || selectedYear || filterRisk || filterCategory || filterOwner || filterStatus) && (
+        <p style={{ marginTop: "10px", fontSize: "13px" }}>
+          Try clearing some filters to see more items.
+        </p>
+      )}
+    </div>
+  ) : (
+    <div style={{ overflowX: "auto" }}>
+      <table
+        style={{
+          width: "100%",
+          borderCollapse: "collapse",
+          color: "#4a352f",
+          minWidth: "1400px", // Increased to accommodate full column names
+          fontSize: "12px",
+        }}
+      >
+        <thead>
+          <tr style={{ backgroundColor: "#e6d7c3", borderBottom: "2px solid #c8b6a6" }}>
+            <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Risk Name</th>
+            {category.id === "business-risk" && (
+              <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Risk Category</th>
+            )}
+            <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Description</th>
+            <th style={{ padding: "12px", textAlign: "center", fontWeight: "600" }}>Severity (1-5)</th>
+            <th style={{ padding: "12px", textAlign: "center", fontWeight: "600" }}>Likelihood (1-5)</th>
+            <th style={{ padding: "12px", textAlign: "center", fontWeight: "600" }}>Risk Score</th>
+            <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Owner</th>
+            <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Status</th>
+            <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Mitigation Plan</th>
+            <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Review Cadence</th>
+            <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Action Date</th>
+            {!isInvestorView && category.id !== "business-risk" && (
+              <th style={{ padding: "12px", textAlign: "center", fontWeight: "600" }}>Actions</th>
+            )}
+          </tr>
+        </thead>
+        <tbody>
+          {filtered.map((item) => {
+            const originalCategory =
+              category.id === "business-risk"
+                ? Object.keys(riskData).find((key) => riskData[key].some((r) => r.id === item.id))
+                : category.id
+            const riskScore = (item.severity || 1) * (item.likelihood || 1)
+            const scoreColor = 
+              riskScore >= 16 ? "#F44336" : 
+              riskScore >= 9 ? "#FF9800" : 
+              "#4CAF50"
+
+            return (
+              <tr key={item.id} style={{ borderBottom: "1px solid #e6d7c3" }}>
+                <td style={{ padding: "12px" }}>
+                  <input
+                    type="text"
+                    value={item.risk}
+                    onChange={(e) => updateRiskItem(originalCategory, item.id, "risk", e.target.value)}
+                    disabled={isInvestorView || category.id === "business-risk"}
+                    placeholder="Risk name"
+                    style={{
+                      width: "120px", padding: "6px", border: "1px solid #e8ddd4",
+                      borderRadius: "4px", fontSize: "12px",
+                      backgroundColor: isInvestorView || category.id === "business-risk" ? "#f5f5f5" : "white",
+                    }}
+                  />
+                </td>
+                
+                {category.id === "business-risk" && (
+                  <td style={{ padding: "12px", fontSize: "12px" }}>{item.riskCategory}</td>
+                )}
+                
+                <td style={{ padding: "12px" }}>
+                  <textarea
+                    value={item.description}
+                    onChange={(e) => updateRiskItem(originalCategory, item.id, "description", e.target.value)}
+                    disabled={isInvestorView || category.id === "business-risk"}
+                    rows="2"
+                    placeholder="Description"
+                    style={{
+                      width: "150px", padding: "6px", border: "1px solid #e8ddd4",
+                      borderRadius: "4px", fontSize: "12px", resize: "vertical",
+                      backgroundColor: isInvestorView || category.id === "business-risk" ? "#f5f5f5" : "white",
+                    }}
+                  />
+                </td>
+                
+                <td style={{ padding: "12px", textAlign: "center" }}>
+                  <input
+                    type="number" min="1" max="5" value={item.severity}
+                    onChange={(e) => updateRiskItem(originalCategory, item.id, "severity", Number.parseInt(e.target.value))}
+                    disabled={isInvestorView || category.id === "business-risk"}
+                    style={{
+                      width: "50px", padding: "6px", border: "1px solid #e8ddd4",
+                      borderRadius: "4px", fontSize: "12px", textAlign: "center",
+                      backgroundColor: isInvestorView || category.id === "business-risk" ? "#f5f5f5" : "white",
+                    }}
+                  />
+                </td>
+                
+                <td style={{ padding: "12px", textAlign: "center" }}>
+                  <input
+                    type="number" min="1" max="5" value={item.likelihood}
+                    onChange={(e) => updateRiskItem(originalCategory, item.id, "likelihood", Number.parseInt(e.target.value))}
+                    disabled={isInvestorView || category.id === "business-risk"}
+                    style={{
+                      width: "50px", padding: "6px", border: "1px solid #e8ddd4",
+                      borderRadius: "4px", fontSize: "12px", textAlign: "center",
+                      backgroundColor: isInvestorView || category.id === "business-risk" ? "#f5f5f5" : "white",
+                    }}
+                  />
+                </td>
+                
+                <td style={{ padding: "12px", textAlign: "center" }}>
+                  <span style={{
+                    padding: "4px 8px",
+                    borderRadius: "4px",
+                    backgroundColor: scoreColor,
+                    color: "white",
+                    fontWeight: "600",
+                    fontSize: "12px",
+                    display: "inline-block",
+                    minWidth: "40px",
+                    textAlign: "center"
+                  }}>
+                    {riskScore}
+                  </span>
+                </td>
+                
+                <td style={{ padding: "12px" }}>
+                  <input
+                    type="text" value={item.owner || ""}
+                    onChange={(e) => updateRiskItem(originalCategory, item.id, "owner", e.target.value)}
+                    disabled={isInvestorView || category.id === "business-risk"}
+                    placeholder="Owner"
+                    style={{
+                      width: "100px", padding: "6px", border: "1px solid #e8ddd4",
+                      borderRadius: "4px", fontSize: "12px",
+                      backgroundColor: isInvestorView || category.id === "business-risk" ? "#f5f5f5" : "white",
+                    }}
+                  />
+                </td>
+                
+                <td style={{ padding: "12px" }}>
+                  <select
+                    value={item.mitigationStatus}
+                    onChange={(e) => updateRiskItem(originalCategory, item.id, "mitigationStatus", e.target.value)}
+                    disabled={isInvestorView || category.id === "business-risk"}
+                    style={{
+                      width: "140px", padding: "6px", border: "1px solid #e8ddd4",
+                      borderRadius: "4px", fontSize: "12px",
+                      backgroundColor: isInvestorView || category.id === "business-risk" ? "#f5f5f5" : "white",
+                    }}
+                  >
+                    <option value="🟢 Controlled">🟢 Controlled</option>
+                    <option value="🟡 Partially controlled">🟡 Partially controlled</option>
+                    <option value="🔴 Uncontrolled">🔴 Uncontrolled</option>
+                  </select>
+                </td>
+                
+                <td style={{ padding: "12px" }}>
+                  <textarea
+                    value={item.mitigation}
+                    onChange={(e) => updateRiskItem(originalCategory, item.id, "mitigation", e.target.value)}
+                    disabled={isInvestorView || category.id === "business-risk"}
+                    rows="2"
+                    placeholder="Mitigation plan"
+                    style={{
+                      width: "150px", padding: "6px", border: "1px solid #e8ddd4",
+                      borderRadius: "4px", fontSize: "12px", resize: "vertical",
+                      backgroundColor: isInvestorView || category.id === "business-risk" ? "#f5f5f5" : "white",
+                    }}
+                  />
+                </td>
+                
+                <td style={{ padding: "12px" }}>
+                  <input
+                    type="text" value={item.reviewCadence || ""}
+                    onChange={(e) => updateRiskItem(originalCategory, item.id, "reviewCadence", e.target.value)}
+                    disabled={isInvestorView || category.id === "business-risk"}
+                    placeholder="e.g., Monthly"
+                    style={{
+                      width: "100px", padding: "6px", border: "1px solid #e8ddd4",
+                      borderRadius: "4px", fontSize: "12px",
+                      backgroundColor: isInvestorView || category.id === "business-risk" ? "#f5f5f5" : "white",
+                    }}
+                  />
+                </td>
+                
+                <td style={{ padding: "12px" }}>
+                  <input
+                    type="date" value={item.actionDate || ""}
+                    onChange={(e) => updateRiskItem(originalCategory, item.id, "actionDate", e.target.value)}
+                    disabled={isInvestorView || category.id === "business-risk"}
+                    style={{
+                      width: "120px", padding: "6px", border: "1px solid #e8ddd4",
+                      borderRadius: "4px", fontSize: "12px",
+                      backgroundColor: isInvestorView || category.id === "business-risk" ? "#f5f5f5" : "white",
+                    }}
+                  />
+                </td>
+                
+                {!isInvestorView && category.id !== "business-risk" && (
+                  <td style={{ padding: "12px", textAlign: "center" }}>
+                    <button
+                      onClick={() => deleteRiskItem(originalCategory, item.id)}
+                      style={{
+                        padding: "6px 12px",
+                        backgroundColor: "transparent",
+                        color: "#F44336",
+                        border: "1px solid #F44336",
+                        borderRadius: "4px",
+                        cursor: "pointer",
+                        fontSize: "14px",
+                      }}
+                      title="Delete"
+                    >
+                      Delete
+                    </button>
+                  </td>
+                )}
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
+  )}
+</div>
           </div>
         )
       })}
@@ -5193,7 +5706,6 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
     </div>
   )
 }
-
 const ChangeAdaptability = ({ activeSection, currentUser, isInvestorView }) => {
   const [reviewData, setReviewData] = useState([])
   const [adjustments, setAdjustments] = useState([])
