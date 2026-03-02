@@ -6,7 +6,7 @@ import { doc, getDoc, setDoc, collection, query, where, getDocs, addDoc, deleteD
 import { auth, db } from "../../firebaseConfig"
 import { onAuthStateChanged } from "firebase/auth"
 import Sidebar from "smses/Sidebar/Sidebar"
-import { Info, ChevronDown, ChevronUp, Upload, X } from "lucide-react"
+import { Info, ChevronDown, ChevronUp, Upload, X, Calendar } from "lucide-react"
 import Header from "../DashboardHeader/DashboardHeader"
 import {
   Chart as ChartJS,
@@ -70,6 +70,188 @@ const circleColors = [
   { border: "#FF8C69", background: "#FFB6C1", text: "#8b4d39" }, // Coral/Light Pink
   { border: "#006400", background: "#ADFF2F", text: "#003300" }, // Dark Green/Green Yellow
 ]
+
+// ==================== DATE RANGE PICKER COMPONENT ====================
+
+const DateRangePicker = ({ startDate, endDate, onStartDateChange, onEndDateChange }) => {
+  const [showStartPicker, setShowStartPicker] = useState(false)
+  const [showEndPicker, setShowEndPicker] = useState(false)
+  const [startPickerYear, setStartPickerYear] = useState(startDate?.year || new Date().getFullYear())
+  const [endPickerYear, setEndPickerYear] = useState(endDate?.year || new Date().getFullYear())
+  
+  const years = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 2 + i)
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+
+  return (
+    <div style={{ display: "flex", gap: "10px", alignItems: "center", position: "relative" }}>
+      {/* Start Date Picker */}
+      <div style={{ position: "relative" }}>
+        <div
+          onClick={() => setShowStartPicker(!showStartPicker)}
+          style={{
+            padding: "8px 16px",
+            backgroundColor: "#fdfcfb",
+            border: "1px solid #5d4037",
+            borderRadius: "4px",
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            minWidth: "120px",
+            justifyContent: "space-between",
+          }}
+        >
+          <span style={{ color: "#5d4037", fontSize: "14px" }}>
+            {startDate ? `${startDate.month} ${startDate.year}` : "Start Date"}
+          </span>
+          <Calendar size={16} color="#5d4037" />
+        </div>
+
+        {showStartPicker && (
+          <div
+            style={{
+              position: "absolute",
+              top: "100%",
+              left: 0,
+              marginTop: "4px",
+              backgroundColor: "#fdfcfb",
+              border: "1px solid #5d4037",
+              borderRadius: "4px",
+              zIndex: 1000,
+              minWidth: "200px",
+              maxHeight: "300px",
+              overflow: "auto",
+              boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+            }}
+          >
+            {years.map((year) => (
+              <div key={year}>
+                <div
+                  style={{
+                    padding: "8px 12px",
+                    backgroundColor: "#5d4037",
+                    color: "#fdfcfb",
+                    fontWeight: "600",
+                    fontSize: "13px",
+                  }}
+                >
+                  {year}
+                </div>
+                {months.map((month) => (
+                  <div
+                    key={`${year}-${month}`}
+                    onClick={() => {
+                      onStartDateChange({ year, month })
+                      setShowStartPicker(false)
+                    }}
+                    style={{
+                      padding: "8px 12px 8px 24px",
+                      cursor: "pointer",
+                      backgroundColor: startDate?.year === year && startDate?.month === month ? "#e8ddd4" : "transparent",
+                      color: "#5d4037",
+                      fontSize: "13px",
+                      borderBottom: "1px solid #e8ddd4",
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#f5f0eb"}
+                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 
+                      startDate?.year === year && startDate?.month === month ? "#e8ddd4" : "transparent"
+                    }
+                  >
+                    {month}
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <span style={{ color: "#5d4037", fontSize: "14px" }}>to</span>
+
+      {/* End Date Picker */}
+      <div style={{ position: "relative" }}>
+        <div
+          onClick={() => setShowEndPicker(!showEndPicker)}
+          style={{
+            padding: "8px 16px",
+            backgroundColor: "#fdfcfb",
+            border: "1px solid #5d4037",
+            borderRadius: "4px",
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            minWidth: "120px",
+            justifyContent: "space-between",
+          }}
+        >
+          <span style={{ color: "#5d4037", fontSize: "14px" }}>
+            {endDate ? `${endDate.month} ${endDate.year}` : "End Date"}
+          </span>
+          <Calendar size={16} color="#5d4037" />
+        </div>
+
+        {showEndPicker && (
+          <div
+            style={{
+              position: "absolute",
+              top: "100%",
+              left: 0,
+              marginTop: "4px",
+              backgroundColor: "#fdfcfb",
+              border: "1px solid #5d4037",
+              borderRadius: "4px",
+              zIndex: 1000,
+              minWidth: "200px",
+              maxHeight: "300px",
+              overflow: "auto",
+              boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+            }}
+          >
+            {years.map((year) => (
+              <div key={year}>
+                <div
+                  style={{
+                    padding: "8px 12px",
+                    backgroundColor: "#5d4037",
+                    color: "#fdfcfb",
+                    fontWeight: "600",
+                    fontSize: "13px",
+                  }}
+                >
+                  {year}
+                </div>
+                {months.map((month) => (
+                  <div
+                    key={`${year}-${month}`}
+                    onClick={() => {
+                      onEndDateChange({ year, month })
+                      setShowEndPicker(false)
+                    }}
+                    style={{
+                      padding: "8px 12px 8px 24px",
+                      cursor: "pointer",
+                      backgroundColor: endDate?.year === year && endDate?.month === month ? "#e8ddd4" : "transparent",
+                      color: "#5d4037",
+                      fontSize: "13px",
+                      borderBottom: "1px solid #e8ddd4",
+                    }}
+                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#f5f0eb"}
+                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 
+                      endDate?.year === year && endDate?.month === month ? "#e8ddd4" : "transparent"
+                    }
+                  >
+                    {month}
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
 
 // ==================== COMPONENTS ====================
 
@@ -449,20 +631,19 @@ const UniversalAddDataModal = ({
     { id: "pipeline-table", label: "Pipeline Table" }
   ]
   
-  // Pipeline Visibility Data
+  // Pipeline Visibility Data (Now with Conversion Rates)
   const [pipelineVisibilityData, setPipelineVisibilityData] = useState({
     newLeads: Array(12).fill(""),
     salesVelocity: Array(12).fill(""),
+    conversionRates: Array(12).fill(""),
     notes: "",
   })
 
-  // Pipeline Sufficiency Data
+  // Pipeline Sufficiency Data (Removed Lead Volume Trends and Conversion Rates)
   const [pipelineSufficiencyData, setPipelineSufficiencyData] = useState({
     totalPipelineValue: "",
     probability: "",
     targetRevenue: "",
-    leadVolumeTrends: Array(12).fill(""),
-    conversionRates: Array(12).fill(""),
     notes: "",
   })
 
@@ -483,6 +664,7 @@ const UniversalAddDataModal = ({
       { name: "Non-Profit", revenue: "", customerCount: "" },
       { name: "Education", revenue: "", customerCount: "" }
     ],
+    revenueByCustomer: [],
     notes: "",
   })
 
@@ -533,6 +715,7 @@ const UniversalAddDataModal = ({
             setPipelineVisibilityData({
               newLeads: data.newLeads?.map(String) || Array(12).fill(""),
               salesVelocity: data.salesVelocity?.map(String) || Array(12).fill(""),
+              conversionRates: data.conversionRates?.map(String) || Array(12).fill(""),
               notes: data.notes || "",
             })
           }
@@ -545,8 +728,6 @@ const UniversalAddDataModal = ({
               totalPipelineValue: data.totalPipelineValue?.toString() || "",
               probability: data.probability?.toString() || "",
               targetRevenue: data.targetRevenue?.toString() || "",
-              leadVolumeTrends: data.leadVolumeTrends?.map(String) || Array(12).fill(""),
-              conversionRates: data.conversionRates?.map(String) || Array(12).fill(""),
               notes: data.notes || "",
             })
           }
@@ -571,6 +752,7 @@ const UniversalAddDataModal = ({
                 { name: "Non-Profit", revenue: "", customerCount: "" },
                 { name: "Education", revenue: "", customerCount: "" }
               ],
+              revenueByCustomer: data.revenueByCustomer || [],
               notes: data.notes || "",
             })
           }
@@ -613,6 +795,7 @@ const UniversalAddDataModal = ({
             year: selectedYear,
             newLeads: pipelineVisibilityData.newLeads.map(v => Number.parseFloat(v) || 0),
             salesVelocity: pipelineVisibilityData.salesVelocity.map(v => Number.parseFloat(v) || 0),
+            conversionRates: pipelineVisibilityData.conversionRates.map(v => Number.parseFloat(v) || 0),
             notes: pipelineVisibilityData.notes,
             lastUpdated: new Date().toISOString(),
           })
@@ -624,8 +807,6 @@ const UniversalAddDataModal = ({
             totalPipelineValue: Number.parseFloat(pipelineSufficiencyData.totalPipelineValue) || 0,
             probability: Number.parseFloat(pipelineSufficiencyData.probability) || 0,
             targetRevenue: Number.parseFloat(pipelineSufficiencyData.targetRevenue) || 0,
-            leadVolumeTrends: pipelineSufficiencyData.leadVolumeTrends.map(v => Number.parseFloat(v) || 0),
-            conversionRates: pipelineSufficiencyData.conversionRates.map(v => Number.parseFloat(v) || 0),
             notes: pipelineSufficiencyData.notes,
             lastUpdated: new Date().toISOString(),
           })
@@ -644,6 +825,7 @@ const UniversalAddDataModal = ({
               revenue: Number.parseFloat(s.revenue) || 0,
               customerCount: Number.parseFloat(s.customerCount) || 0
             })),
+            revenueByCustomer: revenueConcentrationData.revenueByCustomer,
             notes: revenueConcentrationData.notes,
             lastUpdated: new Date().toISOString(),
           })
@@ -843,6 +1025,10 @@ const UniversalAddDataModal = ({
             <h5 style={{ color: "#5d4037", marginBottom: "15px", fontWeight: "600" }}>Sales Velocity (Days to Close)</h5>
             {renderMonthlyInputs("Sales Velocity", pipelineVisibilityData.salesVelocity, (val) => 
               setPipelineVisibilityData({...pipelineVisibilityData, salesVelocity: val}), { unit: "days", step: "1" })}
+
+            <h5 style={{ color: "#5d4037", marginBottom: "15px", fontWeight: "600" }}>Conversion Rates (%)</h5>
+            {renderMonthlyInputs("Conversion Rates", pipelineVisibilityData.conversionRates, (val) => 
+              setPipelineVisibilityData({...pipelineVisibilityData, conversionRates: val}), { unit: "%", step: "0.1" })}
             
             <div style={{ marginBottom: "20px" }}>
               <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>Notes:</label>
@@ -900,14 +1086,6 @@ const UniversalAddDataModal = ({
               </div>
             </div>
             
-            <h5 style={{ color: "#5d4037", marginBottom: "15px", fontWeight: "600" }}>Lead Volume Trends</h5>
-            {renderMonthlyInputs("Lead Volume Trends", pipelineSufficiencyData.leadVolumeTrends, (val) => 
-              setPipelineSufficiencyData({...pipelineSufficiencyData, leadVolumeTrends: val}), { unit: "leads", step: "1" })}
-            
-            <h5 style={{ color: "#5d4037", marginBottom: "15px", fontWeight: "600" }}>Conversion Rates (%)</h5>
-            {renderMonthlyInputs("Conversion Rates", pipelineSufficiencyData.conversionRates, (val) => 
-              setPipelineSufficiencyData({...pipelineSufficiencyData, conversionRates: val}), { unit: "%", step: "0.1" })}
-            
             <div style={{ marginBottom: "20px" }}>
               <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>Notes:</label>
               <textarea
@@ -964,7 +1142,7 @@ const UniversalAddDataModal = ({
                     newChannels[index].spend = e.target.value
                     setRevenueConcentrationData({...revenueConcentrationData, revenueChannels: newChannels})
                   }}
-                  placeholder="Spend (R)"
+                  placeholder="Marketing Spend (R)"
                   style={{ padding: "8px", borderRadius: "4px", border: "1px solid #e8ddd4" }}
                 />
               </div>
@@ -1263,12 +1441,24 @@ const UniversalAddDataModal = ({
   )
 }
 
-// ==================== PIPELINE TABLE COMPONENT (Now inside Pipeline Sufficiency) ====================
+// ==================== PIPELINE TABLE COMPONENT (Now inside Pipeline Sufficiency with Filters) ====================
 
 const PipelineTable = ({ currentUser, isInvestorView, selectedYear, onAddData }) => {
   const [deals, setDeals] = useState([])
+  const [filteredDeals, setFilteredDeals] = useState([])
   const [loading, setLoading] = useState(false)
   const [confirmDialog, setConfirmDialog] = useState({ show: false, dealId: null })
+  
+  // Filter states
+  const [filters, setFilters] = useState({
+    clientName: "",
+    segment: "",
+    stage: "",
+    source: "",
+    owner: "",
+    minValue: "",
+    maxValue: ""
+  })
 
   const stageOptions = [
     { value: "initial-contact", label: "Initial Contact" },
@@ -1285,6 +1475,10 @@ const PipelineTable = ({ currentUser, isInvestorView, selectedYear, onAddData })
     }
   }, [currentUser, selectedYear])
 
+  useEffect(() => {
+    applyFilters()
+  }, [deals, filters])
+
   const loadDeals = async () => {
     if (!currentUser) return
     setLoading(true)
@@ -1297,11 +1491,54 @@ const PipelineTable = ({ currentUser, isInvestorView, selectedYear, onAddData })
         dealsData.push({ id: doc.id, ...doc.data() })
       })
       setDeals(dealsData)
+      setFilteredDeals(dealsData)
     } catch (error) {
       console.error("Error loading deals:", error)
     } finally {
       setLoading(false)
     }
+  }
+
+  const applyFilters = () => {
+    let filtered = [...deals]
+    
+    if (filters.clientName) {
+      filtered = filtered.filter(deal => 
+        deal.clientName?.toLowerCase().includes(filters.clientName.toLowerCase())
+      )
+    }
+    
+    if (filters.segment) {
+      filtered = filtered.filter(deal => 
+        deal.segment?.toLowerCase().includes(filters.segment.toLowerCase())
+      )
+    }
+    
+    if (filters.stage) {
+      filtered = filtered.filter(deal => deal.stage === filters.stage)
+    }
+    
+    if (filters.source) {
+      filtered = filtered.filter(deal => 
+        deal.source?.toLowerCase().includes(filters.source.toLowerCase())
+      )
+    }
+    
+    if (filters.owner) {
+      filtered = filtered.filter(deal => 
+        deal.owner?.toLowerCase().includes(filters.owner.toLowerCase())
+      )
+    }
+    
+    if (filters.minValue) {
+      filtered = filtered.filter(deal => (deal.dealValue || 0) >= parseFloat(filters.minValue))
+    }
+    
+    if (filters.maxValue) {
+      filtered = filtered.filter(deal => (deal.dealValue || 0) <= parseFloat(filters.maxValue))
+    }
+    
+    setFilteredDeals(filtered)
   }
 
   const deleteDeal = async (dealId) => {
@@ -1325,8 +1562,20 @@ const PipelineTable = ({ currentUser, isInvestorView, selectedYear, onAddData })
     }
   }
 
-  const totalPipelineValue = deals.reduce((sum, deal) => sum + (deal.dealValue || 0), 0)
-  const totalRiskAdjusted = deals.reduce((sum, deal) => sum + (deal.riskAdjustedValue || 0), 0)
+  const clearFilters = () => {
+    setFilters({
+      clientName: "",
+      segment: "",
+      stage: "",
+      source: "",
+      owner: "",
+      minValue: "",
+      maxValue: ""
+    })
+  }
+
+  const totalPipelineValue = filteredDeals.reduce((sum, deal) => sum + (deal.dealValue || 0), 0)
+  const totalRiskAdjusted = filteredDeals.reduce((sum, deal) => sum + (deal.riskAdjustedValue || 0), 0)
 
   return (
     <div style={{ marginTop: "30px" }}>
@@ -1421,11 +1670,177 @@ const PipelineTable = ({ currentUser, isInvestorView, selectedYear, onAddData })
         )}
       </div>
 
+      {/* Filters Section */}
+      <div style={{ 
+        backgroundColor: "#f5f0eb", 
+        padding: "20px", 
+        borderRadius: "8px", 
+        marginBottom: "20px",
+        border: "1px solid #e8ddd4"
+      }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
+          <h4 style={{ color: "#5d4037", fontSize: "16px", fontWeight: "600", margin: 0 }}>Filters</h4>
+          <button
+            onClick={clearFilters}
+            style={{
+              padding: "6px 12px",
+              backgroundColor: "#e8ddd4",
+              color: "#5d4037",
+              border: "none",
+              borderRadius: "4px",
+              cursor: "pointer",
+              fontSize: "12px",
+              fontWeight: "600",
+            }}
+          >
+            Clear Filters
+          </button>
+        </div>
+        
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "15px" }}>
+          <div>
+            <label style={{ fontSize: "12px", color: "#5d4037", display: "block", marginBottom: "5px" }}>
+              Client Name
+            </label>
+            <input
+              type="text"
+              value={filters.clientName}
+              onChange={(e) => setFilters({...filters, clientName: e.target.value})}
+              placeholder="Search client..."
+              style={{
+                width: "100%",
+                padding: "8px",
+                borderRadius: "4px",
+                border: "1px solid #e8ddd4",
+                fontSize: "13px",
+              }}
+            />
+          </div>
+          
+          <div>
+            <label style={{ fontSize: "12px", color: "#5d4037", display: "block", marginBottom: "5px" }}>
+              Segment
+            </label>
+            <input
+              type="text"
+              value={filters.segment}
+              onChange={(e) => setFilters({...filters, segment: e.target.value})}
+              placeholder="Filter by segment..."
+              style={{
+                width: "100%",
+                padding: "8px",
+                borderRadius: "4px",
+                border: "1px solid #e8ddd4",
+                fontSize: "13px",
+              }}
+            />
+          </div>
+          
+          <div>
+            <label style={{ fontSize: "12px", color: "#5d4037", display: "block", marginBottom: "5px" }}>
+              Stage
+            </label>
+            <select
+              value={filters.stage}
+              onChange={(e) => setFilters({...filters, stage: e.target.value})}
+              style={{
+                width: "100%",
+                padding: "8px",
+                borderRadius: "4px",
+                border: "1px solid #e8ddd4",
+                fontSize: "13px",
+              }}
+            >
+              <option value="">All Stages</option>
+              {stageOptions.map(option => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </div>
+          
+          <div>
+            <label style={{ fontSize: "12px", color: "#5d4037", display: "block", marginBottom: "5px" }}>
+              Source
+            </label>
+            <input
+              type="text"
+              value={filters.source}
+              onChange={(e) => setFilters({...filters, source: e.target.value})}
+              placeholder="Filter by source..."
+              style={{
+                width: "100%",
+                padding: "8px",
+                borderRadius: "4px",
+                border: "1px solid #e8ddd4",
+                fontSize: "13px",
+              }}
+            />
+          </div>
+          
+          <div>
+            <label style={{ fontSize: "12px", color: "#5d4037", display: "block", marginBottom: "5px" }}>
+              Owner
+            </label>
+            <input
+              type="text"
+              value={filters.owner}
+              onChange={(e) => setFilters({...filters, owner: e.target.value})}
+              placeholder="Filter by owner..."
+              style={{
+                width: "100%",
+                padding: "8px",
+                borderRadius: "4px",
+                border: "1px solid #e8ddd4",
+                fontSize: "13px",
+              }}
+            />
+          </div>
+          
+          <div>
+            <label style={{ fontSize: "12px", color: "#5d4037", display: "block", marginBottom: "5px" }}>
+              Min Value (R)
+            </label>
+            <input
+              type="number"
+              value={filters.minValue}
+              onChange={(e) => setFilters({...filters, minValue: e.target.value})}
+              placeholder="Min amount..."
+              style={{
+                width: "100%",
+                padding: "8px",
+                borderRadius: "4px",
+                border: "1px solid #e8ddd4",
+                fontSize: "13px",
+              }}
+            />
+          </div>
+          
+          <div>
+            <label style={{ fontSize: "12px", color: "#5d4037", display: "block", marginBottom: "5px" }}>
+              Max Value (R)
+            </label>
+            <input
+              type="number"
+              value={filters.maxValue}
+              onChange={(e) => setFilters({...filters, maxValue: e.target.value})}
+              placeholder="Max amount..."
+              style={{
+                width: "100%",
+                padding: "8px",
+                borderRadius: "4px",
+                border: "1px solid #e8ddd4",
+                fontSize: "13px",
+              }}
+            />
+          </div>
+        </div>
+      </div>
+
       {/* Deals Table */}
       <div style={{ overflowX: "auto", backgroundColor: "#f5f0eb", borderRadius: "8px", padding: "20px", marginBottom: "30px" }}>
-        {deals.length === 0 ? (
+        {filteredDeals.length === 0 ? (
           <div style={{ textAlign: "center", padding: "40px", color: "#8d6e63" }}>
-            No deals found. Click "Add Deal" to get started.
+            {deals.length === 0 ? "No deals found. Click 'Add Deal' to get started." : "No deals match the current filters."}
           </div>
         ) : (
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
@@ -1444,7 +1859,7 @@ const PipelineTable = ({ currentUser, isInvestorView, selectedYear, onAddData })
               </tr>
             </thead>
             <tbody>
-              {deals.map((deal, index) => {
+              {filteredDeals.map((deal, index) => {
                 const stageLabel = stageOptions.find(option => option.value === deal.stage)?.label || deal.stage
                 return (
                   <tr
@@ -1499,10 +1914,10 @@ const PipelineTable = ({ currentUser, isInvestorView, selectedYear, onAddData })
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "15px", marginBottom: "20px" }}>
         <div style={{ backgroundColor: "#f5f0eb", padding: "20px", borderRadius: "6px", textAlign: "center" }}>
           <div style={{ fontSize: "14px", color: "#5d4037", marginBottom: "8px", fontWeight: "600" }}>
-            Total Deals
+            Total Deals (Filtered)
           </div>
           <div style={{ fontSize: "28px", color: "#5d4037", fontWeight: "700" }}>
-            {deals.length}
+            {filteredDeals.length}
           </div>
         </div>
         
@@ -1530,10 +1945,8 @@ const PipelineTable = ({ currentUser, isInvestorView, selectedYear, onAddData })
 
 // ==================== PIPELINE VISIBILITY COMPONENT ====================
 
-const PipelineVisibility = ({ activeSection, currentUser, isInvestorView, onAddData }) => {
+const PipelineVisibility = ({ activeSection, currentUser, isInvestorView, onAddData, startDate, endDate }) => {
   const [loading, setLoading] = useState(false)
-  const [selectedDate, setSelectedDate] = useState({ year: new Date().getFullYear(), month: "Jan" })
-  const [showMonthDropdown, setShowMonthDropdown] = useState(false)
   const [expandedNotes, setExpandedNotes] = useState({})
   const [kpiNotes, setKpiNotes] = useState({})
   const [kpiAnalysis, setKpiAnalysis] = useState({})
@@ -1546,6 +1959,7 @@ const PipelineVisibility = ({ activeSection, currentUser, isInvestorView, onAddD
   const [pipelineData, setPipelineData] = useState({
     newLeads: Array(12).fill(0),
     salesVelocity: Array(12).fill(0),
+    conversionRates: Array(12).fill(0),
     notes: "",
   })
 
@@ -1575,19 +1989,20 @@ const PipelineVisibility = ({ activeSection, currentUser, isInvestorView, onAddD
     if (currentUser && activeSection === "pipeline-visibility") {
       loadData()
     }
-  }, [currentUser, activeSection, selectedDate.year])
+  }, [currentUser, activeSection, startDate?.year])
 
   const loadData = async () => {
-    if (!currentUser) return
+    if (!currentUser || !startDate) return
     setLoading(true)
     try {
-      const docRef = doc(db, "pipelineData", `${currentUser.uid}_visibility_${selectedDate.year}`)
+      const docRef = doc(db, "pipelineData", `${currentUser.uid}_visibility_${startDate.year}`)
       const docSnap = await getDoc(docRef)
       if (docSnap.exists()) {
         const data = docSnap.data()
         setPipelineData({
           newLeads: data.newLeads || Array(12).fill(0),
           salesVelocity: data.salesVelocity || Array(12).fill(0),
+          conversionRates: data.conversionRates || Array(12).fill(0),
           notes: data.notes || "",
         })
       }
@@ -1599,11 +2014,32 @@ const PipelineVisibility = ({ activeSection, currentUser, isInvestorView, onAddD
   }
 
   const openTrendModal = (itemName, dataArray, isPercentage = false) => {
-    const monthIndex = months.indexOf(selectedDate.month)
-    // Get last 11 months + current month (total 12 months)
-    const startIndex = Math.max(0, monthIndex - 11)
-    const trendData = dataArray.slice(startIndex, monthIndex + 1)
-    const trendLabels = months.slice(startIndex, monthIndex + 1).map(m => `${m} ${selectedDate.year}`)
+    if (!startDate || !endDate) return
+    
+    const months = getMonthsForYear(startDate.year, financialYearStart)
+    const startMonthIndex = months.indexOf(startDate.month)
+    const endMonthIndex = months.indexOf(endDate.month)
+    
+    // Get all months from start to end
+    const monthIndices = []
+    let currentIndex = startMonthIndex
+    while (currentIndex !== endMonthIndex) {
+      monthIndices.push(currentIndex)
+      currentIndex = (currentIndex + 1) % 12
+      if (currentIndex === startMonthIndex) break
+    }
+    monthIndices.push(endMonthIndex)
+    
+    // Get last 12 months of data
+    const allData = dataArray
+    const trendData = []
+    const trendLabels = []
+    
+    for (let i = 0; i < Math.min(12, monthIndices.length); i++) {
+      const idx = monthIndices[monthIndices.length - 1 - i]
+      trendData.unshift(allData[idx] || 0)
+      trendLabels.unshift(`${months[idx]} ${startDate.year}`)
+    }
     
     setSelectedTrendItem({ 
       name: itemName, 
@@ -1619,9 +2055,8 @@ const PipelineVisibility = ({ activeSection, currentUser, isInvestorView, onAddD
     setShowCalculationModal(true)
   }
 
-  const months = getMonthsForYear(selectedDate.year, financialYearStart)
-  const years = Array.from({ length: 5 }, (_, i) => selectedDate.year - 2 + i)
-  const monthIndex = months.indexOf(selectedDate.month)
+  const months = getMonthsForYear(startDate?.year || new Date().getFullYear(), financialYearStart)
+  const monthIndex = startDate ? months.indexOf(startDate.month) : 0
 
   const renderKPICard = (title, dataKey, calculation = "", isPercentage = false, colorIndex = 0) => {
     let currentValue = 0
@@ -1632,6 +2067,9 @@ const PipelineVisibility = ({ activeSection, currentUser, isInvestorView, onAddD
       currentValue = dataArray[monthIndex] || 0
     } else if (dataKey === "salesVelocity") {
       dataArray = pipelineData.salesVelocity || []
+      currentValue = dataArray[monthIndex] || 0
+    } else if (dataKey === "conversionRates") {
+      dataArray = pipelineData.conversionRates || []
       currentValue = dataArray[monthIndex] || 0
     }
 
@@ -1796,11 +2234,12 @@ const PipelineVisibility = ({ activeSection, currentUser, isInvestorView, onAddD
     )
   }
 
-  if (activeSection !== "pipeline-visibility") return null
+  if (activeSection !== "pipeline-visibility" || !startDate || !endDate) return null
 
   const calculationTexts = {
     newLeads: "New Leads: Number of new leads generated in the period.\n\nCalculation: Count of new leads added to CRM.",
     salesVelocity: "Sales Velocity = (Number of Opportunities × Deal Value × Win Rate) ÷ Sales Cycle Length\n\nMeasures how quickly deals move through the pipeline.",
+    conversionRates: "Conversion Rate = (Number of Converted Leads ÷ Total Leads) × 100%\n\nMeasures how effectively leads are converted to customers.",
   }
 
   return (
@@ -1825,87 +2264,6 @@ const PipelineVisibility = ({ activeSection, currentUser, isInvestorView, onAddD
         <h2 style={{ color: "#5d4037", fontSize: "24px", fontWeight: "700", margin: 0 }}>Pipeline Visibility</h2>
 
         <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
-          {/* Year/Month Dropdown */}
-          <div style={{ position: "relative" }}>
-            <div
-              onClick={() => setShowMonthDropdown(!showMonthDropdown)}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#fdfcfb",
-                border: "1px solid #5d4037",
-                borderRadius: "4px",
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
-                minWidth: "140px",
-                justifyContent: "space-between",
-              }}
-            >
-              <span style={{ color: "#5d4037", fontSize: "14px" }}>
-                {selectedDate.month} {selectedDate.year}
-              </span>
-              <ChevronDown size={16} color="#5d4037" />
-            </div>
-
-            {showMonthDropdown && (
-              <div
-                style={{
-                  position: "absolute",
-                  top: "100%",
-                  right: 0,
-                  marginTop: "4px",
-                  backgroundColor: "#fdfcfb",
-                  border: "1px solid #5d4037",
-                  borderRadius: "4px",
-                  zIndex: 100,
-                  minWidth: "200px",
-                  maxHeight: "300px",
-                  overflow: "auto",
-                }}
-              >
-                {years.map((year) => (
-                  <div key={year}>
-                    <div
-                      style={{
-                        padding: "8px 12px",
-                        backgroundColor: "#5d4037",
-                        color: "#fdfcfb",
-                        fontWeight: "600",
-                        fontSize: "13px",
-                      }}
-                    >
-                      {year}
-                    </div>
-                    {months.map((month) => (
-                      <div
-                        key={`${year}-${month}`}
-                        onClick={() => {
-                          setSelectedDate({ year, month })
-                          setShowMonthDropdown(false)
-                        }}
-                        style={{
-                          padding: "8px 12px 8px 24px",
-                          cursor: "pointer",
-                          backgroundColor: selectedDate.year === year && selectedDate.month === month ? "#e8ddd4" : "transparent",
-                          color: "#5d4037",
-                          fontSize: "13px",
-                          borderBottom: "1px solid #e8ddd4",
-                        }}
-                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#f5f0eb"}
-                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 
-                          selectedDate.year === year && selectedDate.month === month ? "#e8ddd4" : "transparent"
-                        }
-                      >
-                        {month}
-                      </div>
-                    ))}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-          
           {!isInvestorView && (
             <button
               onClick={onAddData}
@@ -1926,10 +2284,11 @@ const PipelineVisibility = ({ activeSection, currentUser, isInvestorView, onAddD
         </div>
       </div>
 
-      {/* KPI Cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "20px", marginBottom: "30px" }}>
+      {/* KPI Cards - 3 in a row */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "20px", marginBottom: "30px" }}>
         {renderKPICard("New Leads", "newLeads", calculationTexts.newLeads, false, 0)}
         {renderKPICard("Sales Velocity", "salesVelocity", calculationTexts.salesVelocity, false, 1)}
+        {renderKPICard("Conversion Rates", "conversionRates", calculationTexts.conversionRates, true, 2)}
       </div>
 
       {/* Calculation Modal */}
@@ -1957,10 +2316,8 @@ const PipelineVisibility = ({ activeSection, currentUser, isInvestorView, onAddD
 
 // ==================== PIPELINE SUFFICIENCY COMPONENT (with Pipeline Table inside) ====================
 
-const PipelineSufficiency = ({ activeSection, currentUser, isInvestorView, onAddData }) => {
+const PipelineSufficiency = ({ activeSection, currentUser, isInvestorView, onAddData, startDate, endDate }) => {
   const [loading, setLoading] = useState(false)
-  const [selectedDate, setSelectedDate] = useState({ year: new Date().getFullYear(), month: "Jan" })
-  const [showMonthDropdown, setShowMonthDropdown] = useState(false)
   const [expandedNotes, setExpandedNotes] = useState({})
   const [kpiNotes, setKpiNotes] = useState({})
   const [kpiAnalysis, setKpiAnalysis] = useState({})
@@ -1974,8 +2331,6 @@ const PipelineSufficiency = ({ activeSection, currentUser, isInvestorView, onAdd
     totalPipelineValue: 0,
     probability: 0,
     targetRevenue: 0,
-    leadVolumeTrends: Array(12).fill(0),
-    conversionRates: Array(12).fill(0),
     notes: "",
   })
 
@@ -2005,13 +2360,13 @@ const PipelineSufficiency = ({ activeSection, currentUser, isInvestorView, onAdd
     if (currentUser && activeSection === "pipeline-sufficiency") {
       loadData()
     }
-  }, [currentUser, activeSection, selectedDate.year])
+  }, [currentUser, activeSection, startDate?.year])
 
   const loadData = async () => {
-    if (!currentUser) return
+    if (!currentUser || !startDate) return
     setLoading(true)
     try {
-      const docRef = doc(db, "pipelineData", `${currentUser.uid}_sufficiency_${selectedDate.year}`)
+      const docRef = doc(db, "pipelineData", `${currentUser.uid}_sufficiency_${startDate.year}`)
       const docSnap = await getDoc(docRef)
       if (docSnap.exists()) {
         const data = docSnap.data()
@@ -2019,8 +2374,6 @@ const PipelineSufficiency = ({ activeSection, currentUser, isInvestorView, onAdd
           totalPipelineValue: data.totalPipelineValue || 0,
           probability: data.probability || 0,
           targetRevenue: data.targetRevenue || 0,
-          leadVolumeTrends: data.leadVolumeTrends || Array(12).fill(0),
-          conversionRates: data.conversionRates || Array(12).fill(0),
           notes: data.notes || "",
         })
       }
@@ -2031,42 +2384,18 @@ const PipelineSufficiency = ({ activeSection, currentUser, isInvestorView, onAdd
     }
   }
 
-  const openTrendModal = (itemName, dataArray, isPercentage = false) => {
-    const monthIndex = months.indexOf(selectedDate.month)
-    // Get last 11 months + current month (total 12 months)
-    const startIndex = Math.max(0, monthIndex - 11)
-    const trendData = dataArray.slice(startIndex, monthIndex + 1)
-    const trendLabels = months.slice(startIndex, monthIndex + 1).map(m => `${m} ${selectedDate.year}`)
-    
-    setSelectedTrendItem({ 
-      name: itemName, 
-      data: trendData,
-      labels: trendLabels,
-      isPercentage
-    })
-    setShowTrendModal(true)
-  }
-
   const handleCalculationClick = (title, calculation) => {
     setSelectedCalculation({ title, calculation })
     setShowCalculationModal(true)
   }
 
-  const months = getMonthsForYear(selectedDate.year, financialYearStart)
-  const years = Array.from({ length: 5 }, (_, i) => selectedDate.year - 2 + i)
-  const monthIndex = months.indexOf(selectedDate.month)
+  const months = getMonthsForYear(startDate?.year || new Date().getFullYear(), financialYearStart)
+  const monthIndex = startDate ? months.indexOf(startDate.month) : 0
 
   const renderKPICard = (title, dataKey, calculation = "", isPercentage = false, colorIndex = 2) => {
     let currentValue = 0
-    let dataArray = []
     
-    if (dataKey === "leadVolumeTrends") {
-      dataArray = pipelineData.leadVolumeTrends || []
-      currentValue = dataArray[monthIndex] || 0
-    } else if (dataKey === "conversionRates") {
-      dataArray = pipelineData.conversionRates || []
-      currentValue = dataArray[monthIndex] || 0
-    } else if (dataKey === "riskAdjustedValue") {
+    if (dataKey === "riskAdjustedValue") {
       currentValue = (pipelineData.totalPipelineValue * pipelineData.probability) / 100
     } else if (dataKey === "pipelineCoverage") {
       currentValue = pipelineData.targetRevenue > 0 ? (pipelineData.totalPipelineValue / pipelineData.targetRevenue) * 100 : 0
@@ -2074,9 +2403,7 @@ const PipelineSufficiency = ({ activeSection, currentUser, isInvestorView, onAdd
 
     const displayValue = isPercentage 
       ? `${currentValue.toFixed(1)}%`
-      : dataKey === "leadVolumeTrends"
-        ? formatNumber(currentValue)
-        : formatCurrency(currentValue)
+      : formatCurrency(currentValue)
 
     const color = circleColors[colorIndex % circleColors.length]
 
@@ -2151,27 +2478,6 @@ const PipelineSufficiency = ({ activeSection, currentUser, isInvestorView, onAdd
             >
               AI analysis
             </button>
-            <button
-              onClick={() => {
-                if (dataKey === "leadVolumeTrends" || dataKey === "conversionRates") {
-                  openTrendModal(title, dataArray, isPercentage)
-                } else {
-                  alert("Trend view not available for this metric")
-                }
-              }}
-              style={{
-                padding: "6px 12px",
-                backgroundColor: "#e8ddd4",
-                color: "#5d4037",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: "600",
-                fontSize: "12px",
-              }}
-            >
-              View trend
-            </button>
           </div>
 
           {expandedNotes[dataKey] && (
@@ -2239,7 +2545,7 @@ const PipelineSufficiency = ({ activeSection, currentUser, isInvestorView, onAdd
     )
   }
 
-  if (activeSection !== "pipeline-sufficiency") return null
+  if (activeSection !== "pipeline-sufficiency" || !startDate || !endDate) return null
 
   const riskAdjustedValue = (pipelineData.totalPipelineValue * pipelineData.probability) / 100
   const pipelineCoverage = pipelineData.targetRevenue > 0 ? (pipelineData.totalPipelineValue / pipelineData.targetRevenue) * 100 : 0
@@ -2247,8 +2553,6 @@ const PipelineSufficiency = ({ activeSection, currentUser, isInvestorView, onAdd
   const calculationTexts = {
     riskAdjustedValue: "Risk Adjusted Pipeline Value = Total Pipeline Value × Probability %\n\nAccounts for deal probability to show expected value.",
     pipelineCoverage: "Pipeline Coverage Ratio = (Pipeline Value ÷ Target Revenue) × 100%\n\nMeasures if pipeline is sufficient to meet revenue targets.",
-    leadVolumeTrends: "Lead Volume Trends: Monthly count of new leads.\n\nIndicates demand generation effectiveness.",
-    conversionRates: "Conversion Rates: Percentage of leads that convert through each stage.\n\nShows funnel efficiency.",
   }
 
   return (
@@ -2273,87 +2577,6 @@ const PipelineSufficiency = ({ activeSection, currentUser, isInvestorView, onAdd
         <h2 style={{ color: "#5d4037", fontSize: "24px", fontWeight: "700", margin: 0 }}>Pipeline Sufficiency</h2>
 
         <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
-          {/* Year/Month Dropdown */}
-          <div style={{ position: "relative" }}>
-            <div
-              onClick={() => setShowMonthDropdown(!showMonthDropdown)}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#fdfcfb",
-                border: "1px solid #5d4037",
-                borderRadius: "4px",
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
-                minWidth: "140px",
-                justifyContent: "space-between",
-              }}
-            >
-              <span style={{ color: "#5d4037", fontSize: "14px" }}>
-                {selectedDate.month} {selectedDate.year}
-              </span>
-              <ChevronDown size={16} color="#5d4037" />
-            </div>
-
-            {showMonthDropdown && (
-              <div
-                style={{
-                  position: "absolute",
-                  top: "100%",
-                  right: 0,
-                  marginTop: "4px",
-                  backgroundColor: "#fdfcfb",
-                  border: "1px solid #5d4037",
-                  borderRadius: "4px",
-                  zIndex: 100,
-                  minWidth: "200px",
-                  maxHeight: "300px",
-                  overflow: "auto",
-                }}
-              >
-                {years.map((year) => (
-                  <div key={year}>
-                    <div
-                      style={{
-                        padding: "8px 12px",
-                        backgroundColor: "#5d4037",
-                        color: "#fdfcfb",
-                        fontWeight: "600",
-                        fontSize: "13px",
-                      }}
-                    >
-                      {year}
-                    </div>
-                    {months.map((month) => (
-                      <div
-                        key={`${year}-${month}`}
-                        onClick={() => {
-                          setSelectedDate({ year, month })
-                          setShowMonthDropdown(false)
-                        }}
-                        style={{
-                          padding: "8px 12px 8px 24px",
-                          cursor: "pointer",
-                          backgroundColor: selectedDate.year === year && selectedDate.month === month ? "#e8ddd4" : "transparent",
-                          color: "#5d4037",
-                          fontSize: "13px",
-                          borderBottom: "1px solid #e8ddd4",
-                        }}
-                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#f5f0eb"}
-                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 
-                          selectedDate.year === year && selectedDate.month === month ? "#e8ddd4" : "transparent"
-                        }
-                      >
-                        {month}
-                      </div>
-                    ))}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-          
           {!isInvestorView && (
             <button
               onClick={onAddData}
@@ -2374,19 +2597,17 @@ const PipelineSufficiency = ({ activeSection, currentUser, isInvestorView, onAdd
         </div>
       </div>
 
-      {/* KPI Cards - All 4 circles in one row */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "20px", marginBottom: "30px" }}>
+      {/* KPI Cards - 2 in a row */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "20px", marginBottom: "30px" }}>
         {renderKPICard("Risk Adjusted Value", "riskAdjustedValue", calculationTexts.riskAdjustedValue, false, 0)}
         {renderKPICard("Pipeline Coverage", "pipelineCoverage", calculationTexts.pipelineCoverage, true, 1)}
-        {renderKPICard("Lead Volume Trends", "leadVolumeTrends", calculationTexts.leadVolumeTrends, false, 2)}
-        {renderKPICard("Conversion Rates", "conversionRates", calculationTexts.conversionRates, true, 3)}
       </div>
 
       {/* Pipeline Table inside Pipeline Sufficiency */}
       <PipelineTable 
         currentUser={currentUser}
         isInvestorView={isInvestorView}
-        selectedYear={selectedDate.year}
+        selectedYear={startDate?.year || new Date().getFullYear()}
         onAddData={onAddData}
       />
 
@@ -2415,10 +2636,8 @@ const PipelineSufficiency = ({ activeSection, currentUser, isInvestorView, onAdd
 
 // ==================== REVENUE CONCENTRATION COMPONENT ====================
 
-const RevenueConcentration = ({ activeSection, currentUser, isInvestorView, onAddData }) => {
+const RevenueConcentration = ({ activeSection, currentUser, isInvestorView, onAddData, startDate, endDate }) => {
   const [loading, setLoading] = useState(false)
-  const [selectedDate, setSelectedDate] = useState({ year: new Date().getFullYear(), month: "Jan" })
-  const [showMonthDropdown, setShowMonthDropdown] = useState(false)
   const [expandedNotes, setExpandedNotes] = useState({})
   const [kpiNotes, setKpiNotes] = useState({})
   const [kpiAnalysis, setKpiAnalysis] = useState({})
@@ -2426,7 +2645,7 @@ const RevenueConcentration = ({ activeSection, currentUser, isInvestorView, onAd
   const [selectedCalculation, setSelectedCalculation] = useState({ title: "", calculation: "" })
   const [showTrendModal, setShowTrendModal] = useState(false)
   const [selectedTrendItem, setSelectedTrendItem] = useState(null)
-  const [chartType, setChartType] = useState("channel")
+  const [activeTab, setActiveTab] = useState("channel") // "channel", "customer", "segment"
   const [financialYearStart, setFinancialYearStart] = useState("Jan")
 
   const [concentrationData, setConcentrationData] = useState({
@@ -2444,6 +2663,13 @@ const RevenueConcentration = ({ activeSection, currentUser, isInvestorView, onAd
       { name: "Startup", revenue: 0, customerCount: 0 },
       { name: "Non-Profit", revenue: 0, customerCount: 0 },
       { name: "Education", revenue: 0, customerCount: 0 }
+    ],
+    revenueByCustomer: [
+      { name: "Customer A", revenue: 0 },
+      { name: "Customer B", revenue: 0 },
+      { name: "Customer C", revenue: 0 },
+      { name: "Customer D", revenue: 0 },
+      { name: "Customer E", revenue: 0 },
     ],
     notes: "",
   })
@@ -2474,13 +2700,13 @@ const RevenueConcentration = ({ activeSection, currentUser, isInvestorView, onAd
     if (currentUser && activeSection === "revenue-concentration") {
       loadData()
     }
-  }, [currentUser, activeSection, selectedDate.year])
+  }, [currentUser, activeSection, startDate?.year])
 
   const loadData = async () => {
-    if (!currentUser) return
+    if (!currentUser || !startDate) return
     setLoading(true)
     try {
-      const docRef = doc(db, "pipelineData", `${currentUser.uid}_concentration_${selectedDate.year}`)
+      const docRef = doc(db, "pipelineData", `${currentUser.uid}_concentration_${startDate.year}`)
       const docSnap = await getDoc(docRef)
       if (docSnap.exists()) {
         const data = docSnap.data()
@@ -2500,6 +2726,13 @@ const RevenueConcentration = ({ activeSection, currentUser, isInvestorView, onAd
             { name: "Non-Profit", revenue: 0, customerCount: 0 },
             { name: "Education", revenue: 0, customerCount: 0 }
           ],
+          revenueByCustomer: data.revenueByCustomer || [
+            { name: "Customer A", revenue: 0 },
+            { name: "Customer B", revenue: 0 },
+            { name: "Customer C", revenue: 0 },
+            { name: "Customer D", revenue: 0 },
+            { name: "Customer E", revenue: 0 },
+          ],
           notes: data.notes || "",
         })
       }
@@ -2515,15 +2748,14 @@ const RevenueConcentration = ({ activeSection, currentUser, isInvestorView, onAd
     setShowCalculationModal(true)
   }
 
-  const months = getMonthsForYear(selectedDate.year, financialYearStart)
-  const years = Array.from({ length: 5 }, (_, i) => selectedDate.year - 2 + i)
+  const months = getMonthsForYear(startDate?.year || new Date().getFullYear(), financialYearStart)
 
   const renderKPICard = (title, dataKey, calculation = "", isPercentage = false, colorIndex = 4) => {
     let currentValue = 0
     
     if (dataKey === "totalRevenue") {
       currentValue = concentrationData.revenueChannels.reduce((sum, c) => sum + c.revenue, 0)
-    } else if (dataKey === "totalSpend") {
+    } else if (dataKey === "totalMarketingSpend") {
       currentValue = concentrationData.revenueChannels.reduce((sum, c) => sum + c.spend, 0)
     } else if (dataKey === "totalROI") {
       const totalRevenue = concentrationData.revenueChannels.reduce((sum, c) => sum + c.revenue, 0)
@@ -2680,19 +2912,26 @@ const RevenueConcentration = ({ activeSection, currentUser, isInvestorView, onAd
     )
   }
 
-  if (activeSection !== "revenue-concentration") return null
+  if (activeSection !== "revenue-concentration" || !startDate || !endDate) return null
 
   const totalRevenue = concentrationData.revenueChannels.reduce((sum, c) => sum + c.revenue, 0)
-  const totalSpend = concentrationData.revenueChannels.reduce((sum, c) => sum + c.spend, 0)
-  const totalROI = totalSpend > 0 ? ((totalRevenue - totalSpend) / totalSpend) * 100 : 0
+  const totalMarketingSpend = concentrationData.revenueChannels.reduce((sum, c) => sum + c.spend, 0)
+  const totalROI = totalMarketingSpend > 0 ? ((totalRevenue - totalMarketingSpend) / totalMarketingSpend) * 100 : 0
   
   const sortedChannels = [...concentrationData.revenueChannels].sort((a, b) => b.revenue - a.revenue)
-  const top3Revenue = sortedChannels.slice(0, 3).reduce((sum, c) => sum + c.revenue, 0)
+  const top3Channels = sortedChannels.slice(0, 3)
+  const top3Revenue = top3Channels.reduce((sum, c) => sum + c.revenue, 0)
   const top3Percentage = totalRevenue > 0 ? (top3Revenue / totalRevenue) * 100 : 0
+
+  const sortedSegments = [...concentrationData.customerSegments].sort((a, b) => b.revenue - a.revenue)
+  const top3Segments = sortedSegments.slice(0, 3)
+
+  const sortedCustomers = [...concentrationData.revenueByCustomer].sort((a, b) => b.revenue - a.revenue)
+  const top3Customers = sortedCustomers.slice(0, 3)
 
   const calculationTexts = {
     totalRevenue: "Total Revenue: Sum of revenue from all channels.\n\nIndicates overall revenue performance.",
-    totalSpend: "Total Spend: Sum of marketing spend across all channels.\n\nShows total marketing investment.",
+    totalMarketingSpend: "Total Marketing Spend: Sum of marketing spend across all channels.\n\nShows total marketing investment.",
     totalROI: "Return on Investment = (Revenue - Spend) ÷ Spend × 100%\n\nMeasures marketing efficiency.",
     top3Concentration: "Top 3 Channels as % of Revenue = (Revenue from Top 3 Channels ÷ Total Revenue) × 100%\n\nIndicates revenue concentration risk.",
   }
@@ -2719,94 +2958,14 @@ const RevenueConcentration = ({ activeSection, currentUser, isInvestorView, onAd
         <h2 style={{ color: "#5d4037", fontSize: "24px", fontWeight: "700", margin: 0 }}>Revenue Concentration</h2>
 
         <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
-          {/* Year/Month Dropdown */}
-          <div style={{ position: "relative" }}>
-            <div
-              onClick={() => setShowMonthDropdown(!showMonthDropdown)}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#fdfcfb",
-                border: "1px solid #5d4037",
-                borderRadius: "4px",
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
-                minWidth: "140px",
-                justifyContent: "space-between",
-              }}
-            >
-              <span style={{ color: "#5d4037", fontSize: "14px" }}>
-                {selectedDate.month} {selectedDate.year}
-              </span>
-              <ChevronDown size={16} color="#5d4037" />
-            </div>
-
-            {showMonthDropdown && (
-              <div
-                style={{
-                  position: "absolute",
-                  top: "100%",
-                  right: 0,
-                  marginTop: "4px",
-                  backgroundColor: "#fdfcfb",
-                  border: "1px solid #5d4037",
-                  borderRadius: "4px",
-                  zIndex: 100,
-                  minWidth: "200px",
-                  maxHeight: "300px",
-                  overflow: "auto",
-                }}
-              >
-                {years.map((year) => (
-                  <div key={year}>
-                    <div
-                      style={{
-                        padding: "8px 12px",
-                        backgroundColor: "#5d4037",
-                        color: "#fdfcfb",
-                        fontWeight: "600",
-                        fontSize: "13px",
-                      }}
-                    >
-                      {year}
-                    </div>
-                    {months.map((month) => (
-                      <div
-                        key={`${year}-${month}`}
-                        onClick={() => {
-                          setSelectedDate({ year, month })
-                          setShowMonthDropdown(false)
-                        }}
-                        style={{
-                          padding: "8px 12px 8px 24px",
-                          cursor: "pointer",
-                          backgroundColor: selectedDate.year === year && selectedDate.month === month ? "#e8ddd4" : "transparent",
-                          color: "#5d4037",
-                          fontSize: "13px",
-                          borderBottom: "1px solid #e8ddd4",
-                        }}
-                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#f5f0eb"}
-                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 
-                          selectedDate.year === year && selectedDate.month === month ? "#e8ddd4" : "transparent"
-                        }
-                      >
-                        {month}
-                      </div>
-                    ))}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-          
+          {/* Toggle Buttons */}
           <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
             <button
-              onClick={() => setChartType("channel")}
+              onClick={() => setActiveTab("channel")}
               style={{
                 padding: "8px 16px",
-                backgroundColor: chartType === "channel" ? "#5d4037" : "#e8ddd4",
-                color: chartType === "channel" ? "#fdfcfb" : "#5d4037",
+                backgroundColor: activeTab === "channel" ? "#5d4037" : "#e8ddd4",
+                color: activeTab === "channel" ? "#fdfcfb" : "#5d4037",
                 border: "none",
                 borderRadius: "4px",
                 cursor: "pointer",
@@ -2817,11 +2976,26 @@ const RevenueConcentration = ({ activeSection, currentUser, isInvestorView, onAd
               By Channel
             </button>
             <button
-              onClick={() => setChartType("segment")}
+              onClick={() => setActiveTab("customer")}
               style={{
                 padding: "8px 16px",
-                backgroundColor: chartType === "segment" ? "#5d4037" : "#e8ddd4",
-                color: chartType === "segment" ? "#fdfcfb" : "#5d4037",
+                backgroundColor: activeTab === "customer" ? "#5d4037" : "#e8ddd4",
+                color: activeTab === "customer" ? "#fdfcfb" : "#5d4037",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontWeight: "500",
+                fontSize: "14px",
+              }}
+            >
+              By Customer
+            </button>
+            <button
+              onClick={() => setActiveTab("segment")}
+              style={{
+                padding: "8px 16px",
+                backgroundColor: activeTab === "segment" ? "#5d4037" : "#e8ddd4",
+                color: activeTab === "segment" ? "#fdfcfb" : "#5d4037",
                 border: "none",
                 borderRadius: "4px",
                 cursor: "pointer",
@@ -2856,12 +3030,12 @@ const RevenueConcentration = ({ activeSection, currentUser, isInvestorView, onAd
       {/* KPI Cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "20px", marginBottom: "30px" }}>
         {renderKPICard("Total Revenue", "totalRevenue", calculationTexts.totalRevenue, false, 4)}
-        {renderKPICard("Total Spend", "totalSpend", calculationTexts.totalSpend, false, 5)}
+        {renderKPICard("Total Marketing Spend", "totalMarketingSpend", calculationTexts.totalMarketingSpend, false, 5)}
         {renderKPICard("Overall ROI", "totalROI", calculationTexts.totalROI, true, 6)}
         {renderKPICard("Top 3 Concentration", "top3Concentration", calculationTexts.top3Concentration, true, 7)}
       </div>
 
-      {/* Channel/Segment Chart */}
+      {/* Top 3 Concentration Table */}
       <div style={{ 
         backgroundColor: "#f5f0eb", 
         padding: "20px", 
@@ -2869,26 +3043,124 @@ const RevenueConcentration = ({ activeSection, currentUser, isInvestorView, onAd
         marginBottom: "30px"
       }}>
         <h3 style={{ color: "#5d4037", marginTop: 0, marginBottom: "15px", fontSize: "16px" }}>
-          {chartType === "channel" ? "Revenue by Channel" : "Revenue by Segment"}
+          Top 3 Concentration
+        </h3>
+        
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "20px" }}>
+          <div>
+            <h4 style={{ color: "#5d4037", fontSize: "14px", marginBottom: "10px" }}>Top 3 Channels</h4>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr style={{ backgroundColor: "#5d4037", color: "#fdfcfb" }}>
+                  <th style={{ padding: "8px", textAlign: "left", fontSize: "12px" }}>Channel</th>
+                  <th style={{ padding: "8px", textAlign: "right", fontSize: "12px" }}>Revenue</th>
+                  <th style={{ padding: "8px", textAlign: "right", fontSize: "12px" }}>%</th>
+                </tr>
+              </thead>
+              <tbody>
+                {top3Channels.map((channel, index) => (
+                  <tr key={index} style={{ borderBottom: "1px solid #e8ddd4" }}>
+                    <td style={{ padding: "8px", fontSize: "12px", color: "#5d4037" }}>{channel.name}</td>
+                    <td style={{ padding: "8px", fontSize: "12px", color: "#5d4037", textAlign: "right" }}>
+                      {formatCurrency(channel.revenue)}
+                    </td>
+                    <td style={{ padding: "8px", fontSize: "12px", color: "#5d4037", textAlign: "right" }}>
+                      {totalRevenue > 0 ? ((channel.revenue / totalRevenue) * 100).toFixed(1) : 0}%
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          
+          <div>
+            <h4 style={{ color: "#5d4037", fontSize: "14px", marginBottom: "10px" }}>Top 3 Customers</h4>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr style={{ backgroundColor: "#5d4037", color: "#fdfcfb" }}>
+                  <th style={{ padding: "8px", textAlign: "left", fontSize: "12px" }}>Customer</th>
+                  <th style={{ padding: "8px", textAlign: "right", fontSize: "12px" }}>Revenue</th>
+                  <th style={{ padding: "8px", textAlign: "right", fontSize: "12px" }}>%</th>
+                </tr>
+              </thead>
+              <tbody>
+                {top3Customers.map((customer, index) => (
+                  <tr key={index} style={{ borderBottom: "1px solid #e8ddd4" }}>
+                    <td style={{ padding: "8px", fontSize: "12px", color: "#5d4037" }}>{customer.name}</td>
+                    <td style={{ padding: "8px", fontSize: "12px", color: "#5d4037", textAlign: "right" }}>
+                      {formatCurrency(customer.revenue)}
+                    </td>
+                    <td style={{ padding: "8px", fontSize: "12px", color: "#5d4037", textAlign: "right" }}>
+                      {totalRevenue > 0 ? ((customer.revenue / totalRevenue) * 100).toFixed(1) : 0}%
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          
+          <div>
+            <h4 style={{ color: "#5d4037", fontSize: "14px", marginBottom: "10px" }}>Top 3 Segments</h4>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr style={{ backgroundColor: "#5d4037", color: "#fdfcfb" }}>
+                  <th style={{ padding: "8px", textAlign: "left", fontSize: "12px" }}>Segment</th>
+                  <th style={{ padding: "8px", textAlign: "right", fontSize: "12px" }}>Revenue</th>
+                  <th style={{ padding: "8px", textAlign: "right", fontSize: "12px" }}>%</th>
+                </tr>
+              </thead>
+              <tbody>
+                {top3Segments.map((segment, index) => (
+                  <tr key={index} style={{ borderBottom: "1px solid #e8ddd4" }}>
+                    <td style={{ padding: "8px", fontSize: "12px", color: "#5d4037" }}>{segment.name}</td>
+                    <td style={{ padding: "8px", fontSize: "12px", color: "#5d4037", textAlign: "right" }}>
+                      {formatCurrency(segment.revenue)}
+                    </td>
+                    <td style={{ padding: "8px", fontSize: "12px", color: "#5d4037", textAlign: "right" }}>
+                      {totalRevenue > 0 ? ((segment.revenue / totalRevenue) * 100).toFixed(1) : 0}%
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      {/* Channel/Segment Chart based on active tab */}
+      <div style={{ 
+        backgroundColor: "#f5f0eb", 
+        padding: "20px", 
+        borderRadius: "8px",
+        marginBottom: "30px"
+      }}>
+        <h3 style={{ color: "#5d4037", marginTop: 0, marginBottom: "15px", fontSize: "16px" }}>
+          {activeTab === "channel" && "Revenue by Channel"}
+          {activeTab === "customer" && "Revenue by Customer"}
+          {activeTab === "segment" && "Revenue by Segment"}
         </h3>
         
         <div style={{ height: "300px" }}>
           <Bar
             data={{
-              labels: chartType === "channel" 
+              labels: activeTab === "channel" 
                 ? concentrationData.revenueChannels.map(c => c.name)
-                : concentrationData.customerSegments.map(s => s.name),
+                : activeTab === "customer"
+                  ? concentrationData.revenueByCustomer.map(c => c.name)
+                  : concentrationData.customerSegments.map(s => s.name),
               datasets: [
                 {
-                  label: chartType === "channel" ? "Revenue" : "Revenue",
-                  data: chartType === "channel"
+                  label: "Revenue",
+                  data: activeTab === "channel"
                     ? concentrationData.revenueChannels.map(c => c.revenue)
-                    : concentrationData.customerSegments.map(s => s.revenue),
+                    : activeTab === "customer"
+                      ? concentrationData.revenueByCustomer.map(c => c.revenue)
+                      : concentrationData.customerSegments.map(s => s.revenue),
                   backgroundColor: "#5d4037",
                   borderRadius: 4,
                 },
-                ...(chartType === "channel" ? [{
-                  label: "Spend",
+                ...(activeTab === "channel" ? [{
+                  label: "Marketing Spend",
                   data: concentrationData.revenueChannels.map(c => c.spend),
                   backgroundColor: "#8d6e63",
                   borderRadius: 4,
@@ -2900,7 +3172,7 @@ const RevenueConcentration = ({ activeSection, currentUser, isInvestorView, onAd
               maintainAspectRatio: false,
               plugins: {
                 datalabels: { display: false },
-                legend: { display: chartType === "channel" },
+                legend: { display: activeTab === "channel" },
                 tooltip: {
                   callbacks: {
                     label: (context) => {
@@ -2922,7 +3194,7 @@ const RevenueConcentration = ({ activeSection, currentUser, isInvestorView, onAd
         </div>
       </div>
 
-      {/* Channel Table */}
+      {/* Channel Table (always show full data) */}
       <div style={{ 
         backgroundColor: "#f5f0eb", 
         padding: "20px", 
@@ -2938,7 +3210,7 @@ const RevenueConcentration = ({ activeSection, currentUser, isInvestorView, onAd
               <tr style={{ backgroundColor: "#5d4037", color: "#fdfcfb" }}>
                 <th style={{ padding: "12px", textAlign: "left", fontSize: "13px" }}>Channel</th>
                 <th style={{ padding: "12px", textAlign: "right", fontSize: "13px" }}>Revenue</th>
-                <th style={{ padding: "12px", textAlign: "right", fontSize: "13px" }}>Spend</th>
+                <th style={{ padding: "12px", textAlign: "right", fontSize: "13px" }}>Marketing Spend</th>
                 <th style={{ padding: "12px", textAlign: "right", fontSize: "13px" }}>Net Profit</th>
                 <th style={{ padding: "12px", textAlign: "right", fontSize: "13px" }}>ROI %</th>
                 <th style={{ padding: "12px", textAlign: "right", fontSize: "13px" }}>% of Revenue</th>
@@ -3043,15 +3315,15 @@ const RevenueConcentration = ({ activeSection, currentUser, isInvestorView, onAd
 
 // ==================== DEMAND SUSTAINABILITY COMPONENT ====================
 
-const DemandSustainability = ({ activeSection, currentUser, isInvestorView, onAddData }) => {
+const DemandSustainability = ({ activeSection, currentUser, isInvestorView, onAddData, startDate, endDate }) => {
   const [loading, setLoading] = useState(false)
-  const [selectedDate, setSelectedDate] = useState({ year: new Date().getFullYear(), month: "Jan" })
-  const [showMonthDropdown, setShowMonthDropdown] = useState(false)
   const [expandedNotes, setExpandedNotes] = useState({})
   const [kpiNotes, setKpiNotes] = useState({})
   const [kpiAnalysis, setKpiAnalysis] = useState({})
   const [showCalculationModal, setShowCalculationModal] = useState(false)
   const [selectedCalculation, setSelectedCalculation] = useState({ title: "", calculation: "" })
+  const [showTrendModal, setShowTrendModal] = useState(false)
+  const [selectedTrendItem, setSelectedTrendItem] = useState(null)
   const [financialYearStart, setFinancialYearStart] = useState("Jan")
 
   const [sustainabilityData, setSustainabilityData] = useState({
@@ -3092,13 +3364,13 @@ const DemandSustainability = ({ activeSection, currentUser, isInvestorView, onAd
     if (currentUser && activeSection === "demand-sustainability") {
       loadData()
     }
-  }, [currentUser, activeSection, selectedDate.year])
+  }, [currentUser, activeSection, startDate?.year])
 
   const loadData = async () => {
-    if (!currentUser) return
+    if (!currentUser || !startDate) return
     setLoading(true)
     try {
-      const docRef = doc(db, "pipelineData", `${currentUser.uid}_sustainability_${selectedDate.year}`)
+      const docRef = doc(db, "pipelineData", `${currentUser.uid}_sustainability_${startDate.year}`)
       const docSnap = await getDoc(docRef)
       if (docSnap.exists()) {
         const data = docSnap.data()
@@ -3126,11 +3398,49 @@ const DemandSustainability = ({ activeSection, currentUser, isInvestorView, onAd
     setShowCalculationModal(true)
   }
 
-  const months = getMonthsForYear(selectedDate.year, financialYearStart)
-  const years = Array.from({ length: 5 }, (_, i) => selectedDate.year - 2 + i)
+  const openTrendModal = (itemName, dataArray, isPercentage = false) => {
+    if (!startDate || !endDate) return
+    
+    const months = getMonthsForYear(startDate.year, financialYearStart)
+    const startMonthIndex = months.indexOf(startDate.month)
+    const endMonthIndex = months.indexOf(endDate.month)
+    
+    // Get all months from start to end
+    const monthIndices = []
+    let currentIndex = startMonthIndex
+    while (currentIndex !== endMonthIndex) {
+      monthIndices.push(currentIndex)
+      currentIndex = (currentIndex + 1) % 12
+      if (currentIndex === startMonthIndex) break
+    }
+    monthIndices.push(endMonthIndex)
+    
+    // Get last 12 months of data
+    const allData = dataArray
+    const trendData = []
+    const trendLabels = []
+    
+    for (let i = 0; i < Math.min(12, monthIndices.length); i++) {
+      const idx = monthIndices[monthIndices.length - 1 - i]
+      trendData.unshift(allData[idx] || 0)
+      trendLabels.unshift(`${months[idx]} ${startDate.year}`)
+    }
+    
+    setSelectedTrendItem({ 
+      name: itemName, 
+      data: trendData,
+      labels: trendLabels,
+      isPercentage
+    })
+    setShowTrendModal(true)
+  }
+
+  const months = getMonthsForYear(startDate?.year || new Date().getFullYear(), financialYearStart)
+  const monthIndex = startDate ? months.indexOf(startDate.month) : 0
 
   const renderKPICard = (title, dataKey, calculation = "", isPercentage = false, colorIndex = 0) => {
     let currentValue = 0
+    let dataArray = []
     
     if (dataKey === "repeatCustomerRate") {
       currentValue = sustainabilityData.repeatCustomerRate
@@ -3221,6 +3531,25 @@ const DemandSustainability = ({ activeSection, currentUser, isInvestorView, onAd
             >
               AI analysis
             </button>
+            <button
+              onClick={() => {
+                if (dataArray && dataArray.length > 0) {
+                  openTrendModal(title, dataArray, isPercentage)
+                }
+              }}
+              style={{
+                padding: "6px 12px",
+                backgroundColor: "#e8ddd4",
+                color: "#5d4037",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontWeight: "600",
+                fontSize: "12px",
+              }}
+            >
+              View trend
+            </button>
           </div>
 
           {expandedNotes[dataKey] && (
@@ -3288,7 +3617,7 @@ const DemandSustainability = ({ activeSection, currentUser, isInvestorView, onAd
     )
   }
 
-  if (activeSection !== "demand-sustainability") return null
+  if (activeSection !== "demand-sustainability" || !startDate || !endDate) return null
 
   const netRetention = sustainabilityData.repeatCustomerRate - sustainabilityData.churnRate
   
@@ -3325,87 +3654,6 @@ const DemandSustainability = ({ activeSection, currentUser, isInvestorView, onAd
         <h2 style={{ color: "#5d4037", fontSize: "24px", fontWeight: "700", margin: 0 }}>Demand Sustainability</h2>
 
         <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
-          {/* Year/Month Dropdown */}
-          <div style={{ position: "relative" }}>
-            <div
-              onClick={() => setShowMonthDropdown(!showMonthDropdown)}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#fdfcfb",
-                border: "1px solid #5d4037",
-                borderRadius: "4px",
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
-                minWidth: "140px",
-                justifyContent: "space-between",
-              }}
-            >
-              <span style={{ color: "#5d4037", fontSize: "14px" }}>
-                {selectedDate.month} {selectedDate.year}
-              </span>
-              <ChevronDown size={16} color="#5d4037" />
-            </div>
-
-            {showMonthDropdown && (
-              <div
-                style={{
-                  position: "absolute",
-                  top: "100%",
-                  right: 0,
-                  marginTop: "4px",
-                  backgroundColor: "#fdfcfb",
-                  border: "1px solid #5d4037",
-                  borderRadius: "4px",
-                  zIndex: 100,
-                  minWidth: "200px",
-                  maxHeight: "300px",
-                  overflow: "auto",
-                }}
-              >
-                {years.map((year) => (
-                  <div key={year}>
-                    <div
-                      style={{
-                        padding: "8px 12px",
-                        backgroundColor: "#5d4037",
-                        color: "#fdfcfb",
-                        fontWeight: "600",
-                        fontSize: "13px",
-                      }}
-                    >
-                      {year}
-                    </div>
-                    {months.map((month) => (
-                      <div
-                        key={`${year}-${month}`}
-                        onClick={() => {
-                          setSelectedDate({ year, month })
-                          setShowMonthDropdown(false)
-                        }}
-                        style={{
-                          padding: "8px 12px 8px 24px",
-                          cursor: "pointer",
-                          backgroundColor: selectedDate.year === year && selectedDate.month === month ? "#e8ddd4" : "transparent",
-                          color: "#5d4037",
-                          fontSize: "13px",
-                          borderBottom: "1px solid #e8ddd4",
-                        }}
-                        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#f5f0eb"}
-                        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 
-                          selectedDate.year === year && selectedDate.month === month ? "#e8ddd4" : "transparent"
-                        }
-                      >
-                        {month}
-                      </div>
-                    ))}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-          
           {!isInvestorView && (
             <button
               onClick={onAddData}
@@ -3496,6 +3744,18 @@ const DemandSustainability = ({ activeSection, currentUser, isInvestorView, onAd
         title={selectedCalculation.title}
         calculation={selectedCalculation.calculation}
       />
+
+      {/* Trend Modal */}
+      {showTrendModal && selectedTrendItem && (
+        <TrendModal
+          isOpen={showTrendModal}
+          onClose={() => setShowTrendModal(false)}
+          title={selectedTrendItem.name}
+          data={selectedTrendItem.data}
+          labels={selectedTrendItem.labels}
+          isPercentage={selectedTrendItem.isPercentage}
+        />
+      )}
     </div>
   )
 }
@@ -3514,6 +3774,10 @@ export default function MarketingSales() {
   
   const [showAddDataModal, setShowAddDataModal] = useState(false)
   const [loading, setLoading] = useState(false)
+
+  // Date range state
+  const [startDate, setStartDate] = useState({ year: new Date().getFullYear(), month: "Jan" })
+  const [endDate, setEndDate] = useState({ year: new Date().getFullYear(), month: "Dec" })
 
   useEffect(() => {
     const investorViewMode = sessionStorage.getItem("investorViewMode")
@@ -3682,6 +3946,16 @@ export default function MarketingSales() {
             )}
           </div>
 
+          {/* Date Range Picker */}
+          <div style={{ marginBottom: "30px" }}>
+            <DateRangePicker
+              startDate={startDate}
+              endDate={endDate}
+              onStartDateChange={setStartDate}
+              onEndDateChange={setEndDate}
+            />
+          </div>
+
           {/* Section Buttons */}
           <div
             style={{
@@ -3725,24 +3999,32 @@ export default function MarketingSales() {
             currentUser={user}
             isInvestorView={isInvestorView}
             onAddData={() => setShowAddDataModal(true)}
+            startDate={startDate}
+            endDate={endDate}
           />
           <PipelineSufficiency
             activeSection={activeSection}
             currentUser={user}
             isInvestorView={isInvestorView}
             onAddData={() => setShowAddDataModal(true)}
+            startDate={startDate}
+            endDate={endDate}
           />
           <RevenueConcentration
             activeSection={activeSection}
             currentUser={user}
             isInvestorView={isInvestorView}
             onAddData={() => setShowAddDataModal(true)}
+            startDate={startDate}
+            endDate={endDate}
           />
           <DemandSustainability
             activeSection={activeSection}
             currentUser={user}
             isInvestorView={isInvestorView}
             onAddData={() => setShowAddDataModal(true)}
+            startDate={startDate}
+            endDate={endDate}
           />
         </div>
       </div>

@@ -535,10 +535,11 @@ const UnifiedDataEntryModal = ({
   })
   const [terminationEntries, setTerminationEntries] = useState([])
   const [newTermination, setNewTermination] = useState({
-    month: "Jan",
+    name: "",
+    dateStarted: "",
+    dateEnded: "",
     reason: "",
-    customReason: "",
-    count: ""
+    customReason: ""
   })
   const [newHireEntries, setNewHireEntries] = useState([])
   const [newHireForm, setNewHireForm] = useState({
@@ -802,8 +803,8 @@ const UnifiedDataEntryModal = ({
   }
 
   const addTerminationEntry = () => {
-    if (!newTermination.reason || !newTermination.count || !newTermination.month) {
-      alert("Please select month, reason, and enter count")
+    if (!newTermination.name || !newTermination.reason || !newTermination.dateStarted || !newTermination.dateEnded) {
+      alert("Please fill in all fields: Employee Name, Date Started, Date Ended, and Reason")
       return
     }
 
@@ -816,9 +817,10 @@ const UnifiedDataEntryModal = ({
 
     const newEntry = {
       id: Date.now(),
-      month: newTermination.month,
+      name: newTermination.name,
+      dateStarted: newTermination.dateStarted,
+      dateEnded: newTermination.dateEnded,
       reason: reasonToSave,
-      count: Number.parseInt(newTermination.count) || 0,
       dateAdded: new Date().toISOString()
     }
 
@@ -826,10 +828,11 @@ const UnifiedDataEntryModal = ({
     
     // Reset form
     setNewTermination({
-      month: "Jan",
+      name: "",
+      dateStarted: "",
+      dateEnded: "",
       reason: "",
-      customReason: "",
-      count: ""
+      customReason: ""
     })
   }
 
@@ -1728,15 +1731,17 @@ const UnifiedDataEntryModal = ({
                 <div style={{ marginBottom: "20px", padding: "15px", backgroundColor: "#fff", borderRadius: "6px", border: "1px solid #e8ddd4" }}>
                   <h5 style={{ color: "#5d4037", marginBottom: "15px" }}>Add New Termination Record</h5>
                   
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "15px", marginBottom: "15px" }}>
-                    {/* Month Selection */}
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px", marginBottom: "15px" }}>
+                    {/* Employee Name */}
                     <div>
                       <label style={{ display: "block", color: "#5d4037", marginBottom: "5px", fontSize: "13px", fontWeight: "600" }}>
-                        Month
+                        Employee Name
                       </label>
-                      <select
-                        value={newTermination.month}
-                        onChange={(e) => setNewTermination({...newTermination, month: e.target.value})}
+                      <input
+                        type="text"
+                        value={newTermination.name}
+                        onChange={(e) => setNewTermination({...newTermination, name: e.target.value})}
+                        placeholder="John Doe"
                         style={{
                           width: "100%",
                           padding: "10px",
@@ -1745,17 +1750,13 @@ const UnifiedDataEntryModal = ({
                           fontSize: "13px",
                           color: "#5d4037",
                         }}
-                      >
-                        {months.map(month => (
-                          <option key={month} value={month}>{month}</option>
-                        ))}
-                      </select>
+                      />
                     </div>
 
                     {/* Reason Selection */}
                     <div>
                       <label style={{ display: "block", color: "#5d4037", marginBottom: "5px", fontSize: "13px", fontWeight: "600" }}>
-                        Reason
+                        Reason for Termination
                       </label>
                       <select
                         value={newTermination.reason}
@@ -1775,18 +1776,38 @@ const UnifiedDataEntryModal = ({
                         ))}
                       </select>
                     </div>
+                  </div>
 
-                    {/* Count Input */}
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px", marginBottom: "15px" }}>
+                    {/* Date Started */}
                     <div>
                       <label style={{ display: "block", color: "#5d4037", marginBottom: "5px", fontSize: "13px", fontWeight: "600" }}>
-                        Number of People
+                        Date Started
                       </label>
                       <input
-                        type="number"
-                        min="1"
-                        value={newTermination.count}
-                        onChange={(e) => setNewTermination({...newTermination, count: e.target.value})}
-                        placeholder="0"
+                        type="date"
+                        value={newTermination.dateStarted}
+                        onChange={(e) => setNewTermination({...newTermination, dateStarted: e.target.value})}
+                        style={{
+                          width: "100%",
+                          padding: "10px",
+                          borderRadius: "4px",
+                          border: "1px solid #e8ddd4",
+                          fontSize: "13px",
+                          color: "#5d4037",
+                        }}
+                      />
+                    </div>
+
+                    {/* Date Ended */}
+                    <div>
+                      <label style={{ display: "block", color: "#5d4037", marginBottom: "5px", fontSize: "13px", fontWeight: "600" }}>
+                        Date Ended
+                      </label>
+                      <input
+                        type="date"
+                        value={newTermination.dateEnded}
+                        onChange={(e) => setNewTermination({...newTermination, dateEnded: e.target.value})}
                         style={{
                           width: "100%",
                           padding: "10px",
@@ -1844,48 +1865,55 @@ const UnifiedDataEntryModal = ({
                   <h5 style={{ color: "#5d4037", marginBottom: "15px" }}>Current Termination Records ({terminationEntries.length})</h5>
                   
                   {terminationEntries.length > 0 ? (
-                    <div style={{ maxHeight: "200px", overflowY: "auto" }}>
-                      {terminationEntries.map((entry, index) => (
-                        <div key={entry.id} style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                          padding: "12px",
-                          marginBottom: "8px",
-                          backgroundColor: index % 2 === 0 ? "#fdfcfb" : "#f5f0eb",
-                          borderRadius: "6px",
-                          border: "1px solid #e8ddd4"
-                        }}>
-                          <div>
-                            <span style={{ color: "#5d4037", fontWeight: "600", marginRight: "10px" }}>{entry.month}</span>
-                            <span style={{ color: "#5d4037", marginRight: "10px" }}>{entry.reason}</span>
-                            <span style={{
-                              padding: "2px 6px",
-                              backgroundColor: "#e3f2fd",
-                              color: "#1565c0",
-                              borderRadius: "12px",
-                              fontSize: "11px",
-                              fontWeight: "600"
-                            }}>
-                              {entry.count} person{entry.count !== 1 ? 's' : ''}
-                            </span>
-                          </div>
-                          <button
-                            onClick={() => removeTerminationEntry(entry.id)}
-                            style={{
-                              padding: "4px 8px",
-                              backgroundColor: "#f44336",
-                              color: "#fff",
-                              border: "none",
-                              borderRadius: "4px",
-                              cursor: "pointer",
-                              fontSize: "11px",
-                            }}
-                          >
-                            Remove
-                          </button>
-                        </div>
-                      ))}
+                    <div style={{ maxHeight: "300px", overflowY: "auto" }}>
+                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
+                        <thead>
+                          <tr style={{ backgroundColor: "#e8ddd4" }}>
+                            <th style={{ padding: "10px", textAlign: "left", color: "#5d4037" }}>Employee Name</th>
+                            <th style={{ padding: "10px", textAlign: "left", color: "#5d4037" }}>Date Started</th>
+                            <th style={{ padding: "10px", textAlign: "left", color: "#5d4037" }}>Date Ended</th>
+                            <th style={{ padding: "10px", textAlign: "left", color: "#5d4037" }}>Reason</th>
+                            <th style={{ padding: "10px", textAlign: "center", color: "#5d4037" }}>Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {terminationEntries.map((entry, index) => (
+                            <tr key={entry.id || index} style={{ borderBottom: "1px solid #e8ddd4" }}>
+                              <td style={{ padding: "10px", color: "#5d4037" }}>{entry.name || "-"}</td>
+                              <td style={{ padding: "10px", color: "#5d4037" }}>{entry.dateStarted || "-"}</td>
+                              <td style={{ padding: "10px", color: "#5d4037" }}>{entry.dateEnded || "-"}</td>
+                              <td style={{ padding: "10px", color: "#5d4037" }}>
+                                <span style={{
+                                  padding: "4px 8px",
+                                  backgroundColor: "#ffebee",
+                                  color: "#c62828",
+                                  borderRadius: "12px",
+                                  fontSize: "11px",
+                                  fontWeight: "600"
+                                }}>
+                                  {entry.reason}
+                                </span>
+                              </td>
+                              <td style={{ padding: "10px", textAlign: "center" }}>
+                                <button
+                                  onClick={() => removeTerminationEntry(entry.id)}
+                                  style={{
+                                    padding: "4px 8px",
+                                    backgroundColor: "#f44336",
+                                    color: "#fff",
+                                    border: "none",
+                                    borderRadius: "4px",
+                                    cursor: "pointer",
+                                    fontSize: "11px",
+                                  }}
+                                >
+                                  Remove
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
                   ) : (
                     <div style={{ padding: "20px", textAlign: "center", color: "#8d6e63", backgroundColor: "#fff", borderRadius: "6px" }}>
@@ -2014,60 +2042,58 @@ const UnifiedDataEntryModal = ({
                   
                   {newHireEntries.length > 0 ? (
                     <div style={{ maxHeight: "200px", overflowY: "auto" }}>
-                      {newHireEntries.map((entry, index) => (
-                        <div key={entry.id} style={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                          alignItems: "center",
-                          padding: "12px",
-                          marginBottom: "8px",
-                          backgroundColor: index % 2 === 0 ? "#fdfcfb" : "#f5f0eb",
-                          borderRadius: "6px",
-                          border: "1px solid #e8ddd4"
-                        }}>
-                          <div>
-                            <span style={{ color: "#5d4037", fontWeight: "600", marginRight: "10px" }}>{entry.name}</span>
-                            <span style={{ color: "#5d4037", marginRight: "10px" }}>Started: {entry.dateStarted}</span>
-                            <span style={{
-                              padding: "2px 6px",
-                              backgroundColor: "#e8f5e9",
-                              color: "#2e7d32",
-                              borderRadius: "12px",
-                              fontSize: "11px",
-                              fontWeight: "600",
-                              marginRight: "5px"
-                            }}>
-                              {entry.contractType}
-                            </span>
-                            {entry.endDate && (
-                              <span style={{
-                                padding: "2px 6px",
-                                backgroundColor: "#fff3e0",
-                                color: "#f57c00",
-                                borderRadius: "12px",
-                                fontSize: "11px",
-                                fontWeight: "600"
-                              }}>
-                                Ends: {entry.endDate}
-                              </span>
-                            )}
-                          </div>
-                          <button
-                            onClick={() => removeNewHireEntry(entry.id)}
-                            style={{
-                              padding: "4px 8px",
-                              backgroundColor: "#f44336",
-                              color: "#fff",
-                              border: "none",
-                              borderRadius: "4px",
-                              cursor: "pointer",
-                              fontSize: "11px",
-                            }}
-                          >
-                            Remove
-                          </button>
-                        </div>
-                      ))}
+                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
+                        <thead>
+                          <tr style={{ backgroundColor: "#e8ddd4" }}>
+                            <th style={{ padding: "10px", textAlign: "left", color: "#5d4037" }}>Employee Name</th>
+                            <th style={{ padding: "10px", textAlign: "left", color: "#5d4037" }}>Date Started</th>
+                            <th style={{ padding: "10px", textAlign: "left", color: "#5d4037" }}>Contract Type</th>
+                            <th style={{ padding: "10px", textAlign: "left", color: "#5d4037" }}>End Date</th>
+                            <th style={{ padding: "10px", textAlign: "center", color: "#5d4037" }}>Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {newHireEntries.map((entry, index) => (
+                            <tr key={entry.id || index} style={{ borderBottom: "1px solid #e8ddd4" }}>
+                              <td style={{ padding: "10px", color: "#5d4037" }}>{entry.name}</td>
+                              <td style={{ padding: "10px", color: "#5d4037" }}>{entry.dateStarted}</td>
+                              <td style={{ padding: "10px", color: "#5d4037" }}>
+                                <span style={{
+                                  padding: "4px 8px",
+                                  backgroundColor: 
+                                    entry.contractType === "Permanent" ? "#e8f5e9" :
+                                    entry.contractType === "Contract" ? "#fff3e0" : "#f3e5f5",
+                                  color: 
+                                    entry.contractType === "Permanent" ? "#2e7d32" :
+                                    entry.contractType === "Contract" ? "#f57c00" : "#7b1fa2",
+                                  borderRadius: "12px",
+                                  fontSize: "11px",
+                                  fontWeight: "600"
+                                }}>
+                                  {entry.contractType}
+                                </span>
+                              </td>
+                              <td style={{ padding: "10px", color: "#5d4037" }}>{entry.endDate || "-"}</td>
+                              <td style={{ padding: "10px", textAlign: "center" }}>
+                                <button
+                                  onClick={() => removeNewHireEntry(entry.id)}
+                                  style={{
+                                    padding: "4px 8px",
+                                    backgroundColor: "#f44336",
+                                    color: "#fff",
+                                    border: "none",
+                                    borderRadius: "4px",
+                                    cursor: "pointer",
+                                    fontSize: "11px",
+                                  }}
+                                >
+                                  Remove
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
                   ) : (
                     <div style={{ padding: "20px", textAlign: "center", color: "#8d6e63", backgroundColor: "#fff", borderRadius: "6px" }}>
@@ -2242,6 +2268,22 @@ const EmployeeComposition = ({ activeSection, userData, onOpenModal }) => {
         </button>
       </div>
 
+      {/* ESG-N NOTE - VISIBLE ON FRONTEND */}
+      <div
+        style={{
+          backgroundColor: "#f5f0eb",
+          padding: "12px 15px",
+          marginBottom: "25px",
+          borderRadius: "8px",
+          borderLeft: `4px solid ${DARK_BROWN_COLORS.primary}`,
+          fontSize: "14px",
+          color: DARK_BROWN_COLORS.secondary,
+        }}
+      >
+        <strong>ESG Note:</strong> All other demographics (female%, male%, other%, female leadership%, 
+        youth leadership%, HDI ownership%) are tracked and reported under ESG Impact.
+      </div>
+
       {/* Top Row - Head Count, Contract Type, Occupational Levels */}
       <div
         style={{
@@ -2323,7 +2365,7 @@ const EmployeeComposition = ({ activeSection, userData, onOpenModal }) => {
           </div>
         </div>
 
-        {/* Contract Type */}
+        {/* Contract Type - WITH WHITE NUMBERS */}
         <div
           style={{
             backgroundColor: "#f7f3f0",
@@ -2361,6 +2403,21 @@ const EmployeeComposition = ({ activeSection, userData, onOpenModal }) => {
                       }
                     }
                   },
+                  // WHITE NUMBERS on pie chart
+                  datalabels: {
+                    display: true,
+                    color: '#ffffff',
+                    font: {
+                      weight: 'bold',
+                      size: 12
+                    },
+                    formatter: (value, context) => {
+                      return value > 0 ? value : '';
+                    },
+                    anchor: 'center',
+                    align: 'center',
+                    offset: 0
+                  }
                 },
               }}
             />
@@ -2398,6 +2455,10 @@ const EmployeeComposition = ({ activeSection, userData, onOpenModal }) => {
                       }
                     }
                   },
+                  // NO datalabels on bar chart
+                  datalabels: {
+                    display: false
+                  }
                 },
                 scales: {
                   x: {
@@ -2441,10 +2502,7 @@ const EmployeeComposition = ({ activeSection, userData, onOpenModal }) => {
           marginBottom: "20px",
         }}
       >
-       
-
-      
-      
+        {/* These fields are under ESG-N reporting */}
       </div>
     </div>
   )
@@ -2472,7 +2530,23 @@ const ExecutionCapacity = ({ activeSection, user, isInvestorView }) => {
     spanOfControl: Array(12).fill(""), // average number
   })
 
+  // Get months for trend view - last 11 months plus current month
+  const getTrendMonths = () => {
+    const months = []
+    const currentDate = new Date()
+    const currentMonth = currentDate.getMonth()
+    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    
+    // Start from 11 months ago and go to current month
+    for (let i = 11; i >= 0; i--) {
+      const monthIndex = (currentMonth - i + 12) % 12
+      months.push(monthNames[monthIndex])
+    }
+    return months
+  }
+
   const months = getMonthsForYear(selectedYear, "month")
+  const trendMonths = getTrendMonths() // Last 11 months + current month
   const years = Array.from({ length: 5 }, (_, i) => selectedYear - 2 + i)
 
   useEffect(() => {
@@ -2548,15 +2622,17 @@ const ExecutionCapacity = ({ activeSection, user, isInvestorView }) => {
   }
 
   const openTrendModal = (itemName, dataArray, isPercentage = false) => {
+    // Get last 12 months of data (last 11 + current)
     const actualData = Array.isArray(dataArray) 
-      ? dataArray.map(v => parseFloat(v) || 0)
+      ? dataArray.slice(-12).map(v => parseFloat(v) || 0)
       : Array(12).fill(0)
     
     setSelectedTrendItem({ 
       name: itemName, 
       actual: actualData,
       budget: null,
-      isPercentage 
+      isPercentage,
+      labels: trendMonths // Use the last 11 + current month labels
     })
     setShowTrendModal(true)
   }
@@ -2758,7 +2834,7 @@ const ExecutionCapacity = ({ activeSection, user, isInvestorView }) => {
         }}
       >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
-          <h4 style={{ color: "#5d4037", marginBottom: "5px", fontSize: "16px" }}>Founder Operational Load</h4>
+          <h4 style={{ color: "#5d4037", marginBottom: "5px", fontSize: "16px" }}>Founder Operational Load - Last 12 Months</h4>
           <EyeIcon 
             onClick={() => handleCalculationClick(
               "Founder Operational Load", 
@@ -2777,7 +2853,7 @@ const ExecutionCapacity = ({ activeSection, user, isInvestorView }) => {
             <thead>
               <tr style={{ backgroundColor: "#e8ddd4" }}>
                 <th style={{ padding: "10px", textAlign: "left", color: "#5d4037", fontSize: "12px" }}>Month</th>
-                {months.map((month, idx) => (
+                {trendMonths.map((month, idx) => (
                   <th key={month} style={{ padding: "10px", textAlign: "center", color: "#5d4037", fontSize: "12px" }}>
                     {month}
                   </th>
@@ -2789,12 +2865,11 @@ const ExecutionCapacity = ({ activeSection, user, isInvestorView }) => {
                 <td style={{ padding: "10px", color: "#5d4037", fontSize: "12px", fontWeight: "600" }}>
                   Load Level
                 </td>
-                {months.map((month, idx) => {
-                  const value = executionData.founderLoad[idx]
+                {executionData.founderLoad.slice(-12).map((value, idx) => {
                   const status = getStatus(value, "founderLoad")
                   
                   return (
-                    <td key={month} style={{ padding: "10px", textAlign: "center" }}>
+                    <td key={idx} style={{ padding: "10px", textAlign: "center" }}>
                       <div
                         style={{
                           padding: "8px 4px",
@@ -2837,7 +2912,7 @@ const ExecutionCapacity = ({ activeSection, user, isInvestorView }) => {
         }}
       >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "15px" }}>
-          <h4 style={{ color: "#5d4037", marginBottom: "5px", fontSize: "16px" }}>Average Span of Control</h4>
+          <h4 style={{ color: "#5d4037", marginBottom: "5px", fontSize: "16px" }}>Average Span of Control - Last 12 Months</h4>
           <EyeIcon 
             onClick={() => handleCalculationClick(
               "Span of Control", 
@@ -2856,7 +2931,7 @@ const ExecutionCapacity = ({ activeSection, user, isInvestorView }) => {
             <thead>
               <tr style={{ backgroundColor: "#e8ddd4" }}>
                 <th style={{ padding: "10px", textAlign: "left", color: "#5d4037", fontSize: "12px" }}>Month</th>
-                {months.map((month, idx) => (
+                {trendMonths.map((month, idx) => (
                   <th key={month} style={{ padding: "10px", textAlign: "center", color: "#5d4037", fontSize: "12px" }}>
                     {month}
                   </th>
@@ -2868,12 +2943,11 @@ const ExecutionCapacity = ({ activeSection, user, isInvestorView }) => {
                 <td style={{ padding: "10px", color: "#5d4037", fontSize: "12px", fontWeight: "600" }}>
                   Average Number
                 </td>
-                {months.map((month, idx) => {
-                  const value = executionData.spanOfControl[idx]
+                {executionData.spanOfControl.slice(-12).map((value, idx) => {
                   const status = getStatus(value, "spanOfControl")
                   
                   return (
-                    <td key={month} style={{ padding: "10px", textAlign: "center" }}>
+                    <td key={idx} style={{ padding: "10px", textAlign: "center" }}>
                       <div
                         style={{
                           padding: "8px 4px",
@@ -2885,7 +2959,7 @@ const ExecutionCapacity = ({ activeSection, user, isInvestorView }) => {
                           minWidth: "60px",
                         }}
                       >
-                        {value ? `${Number.parseFloat(value).toFixed(1)} (${status.text})` : "Not Set"}
+                        {value ? `${Number.parseFloat(value).toFixed(1)}` : "Not Set"}
                       </div>
                     </td>
                   )
@@ -2969,13 +3043,7 @@ const ExecutionCapacity = ({ activeSection, user, isInvestorView }) => {
         </div>
       </div>
 
-      {/* Founder Load Table */}
-      {renderFounderLoadTable()}
-
-      {/* Average Span of Control Table */}
-      {renderSpanOfControlTable()}
-
-      {/* KPI Cards - 2 per row */}
+      {/* CRITICAL CHARTS - First Row - 2 per row */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "20px", marginBottom: "30px" }}>
         {renderKPICard(
           "% Critical Functions Dependent on 1 Person", 
@@ -3000,6 +3068,10 @@ const ExecutionCapacity = ({ activeSection, user, isInvestorView }) => {
           "Target: >80% for organizational resilience."
         )}
       </div>
+
+      {/* LONG TABLES - Only the original two tables with last 11 + current month data */}
+      {renderFounderLoadTable()}
+      {renderSpanOfControlTable()}
 
       {/* Unified Data Entry Modal */}
       <UnifiedDataEntryModal
@@ -4210,10 +4282,24 @@ const StabilityContinuity = ({ activeSection, user, isInvestorView }) => {
   const [terminationEntries, setTerminationEntries] = useState([])
   const [newHireEntries, setNewHireEntries] = useState([])
 
+  // Get months for trend view - last 11 months plus current month
+  const getTrendMonths = () => {
+    const months = []
+    const currentDate = new Date()
+    const currentMonth = currentDate.getMonth()
+    const monthNames = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    
+    // Start from 11 months ago and go to current month
+    for (let i = 11; i >= 0; i--) {
+      const monthIndex = (currentMonth - i + 12) % 12
+      months.push(monthNames[monthIndex])
+    }
+    return months
+  }
+
   const months = getMonthsForYear(selectedYear, "month")
+  const trendMonths = getTrendMonths() // Last 11 months + current month
   const years = Array.from({ length: 5 }, (_, i) => selectedYear - 2 + i)
-  const monthOptions = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-  const contractTypes = ["Permanent", "Contract", "Internship"]
 
   useEffect(() => {
     if (user) {
@@ -4267,18 +4353,15 @@ const StabilityContinuity = ({ activeSection, user, isInvestorView }) => {
     }
   }
 
-  // Calculate summary statistics
+  // Calculate summary statistics from termination entries
   const calculateTerminationSummary = () => {
     const summary = {
-      total: 0,
-      byMonth: {},
+      total: terminationEntries.length,
       byReason: {}
     }
 
     terminationEntries.forEach(entry => {
-      summary.total += entry.count
-      summary.byMonth[entry.month] = (summary.byMonth[entry.month] || 0) + entry.count
-      summary.byReason[entry.reason] = (summary.byReason[entry.reason] || 0) + entry.count
+      summary.byReason[entry.reason] = (summary.byReason[entry.reason] || 0) + 1
     })
 
     return summary
@@ -4329,9 +4412,10 @@ const StabilityContinuity = ({ activeSection, user, isInvestorView }) => {
     
     setSelectedTrendItem({ 
       name: itemName, 
-      actual: actualData,
+      actual: actualData.slice(-12), // Last 12 months
       budget: null,
-      isPercentage 
+      isPercentage,
+      labels: trendMonths
     })
     setShowTrendModal(true)
   }
@@ -4353,7 +4437,7 @@ const StabilityContinuity = ({ activeSection, user, isInvestorView }) => {
           <EyeIcon 
             onClick={() => handleCalculationClick(
               "Termination Analysis", 
-              "Termination Analysis tracks employee exits by month and reason.\n\n" +
+              "Termination Analysis tracks employee exits by employee.\n\n" +
               "Common termination reasons and implications:\n\n" +
               "• Performance: May indicate hiring quality or management issues\n" +
               "• Resignation: Voluntary exits - conduct exit interviews to identify patterns\n" +
@@ -4362,8 +4446,7 @@ const StabilityContinuity = ({ activeSection, user, isInvestorView }) => {
               "• Retirement: Natural attrition - plan for knowledge transfer\n\n" +
               "Key metrics:\n" +
               "• Total terminations: Monitor trend over time\n" +
-              "• Top reasons: Address root causes\n" +
-              "• Seasonal patterns: Plan for cyclical exits\n\n" +
+              "• Top reasons: Address root causes\n\n" +
               "Target: Voluntary turnover <15% annually, involuntary turnover <5% annually"
             )} 
           />
@@ -4372,7 +4455,7 @@ const StabilityContinuity = ({ activeSection, user, isInvestorView }) => {
         {/* Summary Statistics */}
         <div style={{ 
           display: "grid", 
-          gridTemplateColumns: "repeat(3, 1fr)", 
+          gridTemplateColumns: "repeat(2, 1fr)", 
           gap: "15px", 
           marginBottom: "20px",
           padding: "15px",
@@ -4382,10 +4465,6 @@ const StabilityContinuity = ({ activeSection, user, isInvestorView }) => {
           <div style={{ textAlign: "center" }}>
             <div style={{ fontSize: "24px", fontWeight: "700", color: "#5d4037" }}>{summary.total}</div>
             <div style={{ fontSize: "12px", color: "#8d6e63" }}>Total Terminations</div>
-          </div>
-          <div style={{ textAlign: "center" }}>
-            <div style={{ fontSize: "24px", fontWeight: "700", color: "#5d4037" }}>{terminationEntries.length}</div>
-            <div style={{ fontSize: "12px", color: "#8d6e63" }}>Records</div>
           </div>
           <div style={{ textAlign: "center" }}>
             <div style={{ fontSize: "24px", fontWeight: "700", color: "#5d4037" }}>
@@ -4403,6 +4482,7 @@ const StabilityContinuity = ({ activeSection, user, isInvestorView }) => {
                 <th style={{ padding: "12px", textAlign: "left", color: "#5d4037" }}>Date Started</th>
                 <th style={{ padding: "12px", textAlign: "left", color: "#5d4037" }}>Date Ended</th>
                 <th style={{ padding: "12px", textAlign: "left", color: "#5d4037" }}>Reason</th>
+                <th style={{ padding: "12px", textAlign: "center", color: "#5d4037" }}>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -4424,12 +4504,31 @@ const StabilityContinuity = ({ activeSection, user, isInvestorView }) => {
                         {entry.reason}
                       </span>
                     </td>
+                    <td style={{ padding: "12px", textAlign: "center" }}>
+                      <button
+                        onClick={() => {
+                          const newEntries = terminationEntries.filter(e => e.id !== entry.id)
+                          setTerminationEntries(newEntries)
+                        }}
+                        style={{
+                          padding: "4px 8px",
+                          backgroundColor: "#f44336",
+                          color: "#fff",
+                          border: "none",
+                          borderRadius: "4px",
+                          cursor: "pointer",
+                          fontSize: "11px",
+                        }}
+                      >
+                        Remove
+                      </button>
+                    </td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan="4" style={{ padding: "20px", textAlign: "center", color: "#8d6e63" }}>
-                    No termination records found.
+                  <td colSpan="5" style={{ padding: "20px", textAlign: "center", color: "#8d6e63" }}>
+                    No termination records found. Click "Add Data" to add termination records.
                   </td>
                 </tr>
               )}
@@ -4507,6 +4606,7 @@ const StabilityContinuity = ({ activeSection, user, isInvestorView }) => {
                 <th style={{ padding: "12px", textAlign: "left", color: "#5d4037" }}>Date Started</th>
                 <th style={{ padding: "12px", textAlign: "left", color: "#5d4037" }}>Contract Type</th>
                 <th style={{ padding: "12px", textAlign: "left", color: "#5d4037" }}>End Date</th>
+                <th style={{ padding: "12px", textAlign: "center", color: "#5d4037" }}>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -4532,12 +4632,31 @@ const StabilityContinuity = ({ activeSection, user, isInvestorView }) => {
                       </span>
                     </td>
                     <td style={{ padding: "12px", color: "#5d4037" }}>{entry.endDate || "-"}</td>
+                    <td style={{ padding: "12px", textAlign: "center" }}>
+                      <button
+                        onClick={() => {
+                          const newEntries = newHireEntries.filter(e => e.id !== entry.id)
+                          setNewHireEntries(newEntries)
+                        }}
+                        style={{
+                          padding: "4px 8px",
+                          backgroundColor: "#f44336",
+                          color: "#fff",
+                          border: "none",
+                          borderRadius: "4px",
+                          cursor: "pointer",
+                          fontSize: "11px",
+                        }}
+                      >
+                        Remove
+                      </button>
+                    </td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan="4" style={{ padding: "20px", textAlign: "center", color: "#8d6e63" }}>
-                    No new hire records found.
+                  <td colSpan="5" style={{ padding: "20px", textAlign: "center", color: "#8d6e63" }}>
+                    No new hire records found. Click "Add Data" to add new hire records.
                   </td>
                 </tr>
               )}
@@ -4608,6 +4727,21 @@ const StabilityContinuity = ({ activeSection, user, isInvestorView }) => {
                     }
                   }
                 },
+                // WHITE NUMBERS on pie chart
+                datalabels: {
+                  display: true,
+                  color: '#ffffff',
+                  font: {
+                    weight: 'bold',
+                    size: 12
+                  },
+                  formatter: (value, context) => {
+                    return value > 0 ? value : '';
+                  },
+                  anchor: 'center',
+                  align: 'center',
+                  offset: 0
+                }
               },
             }}
           />
@@ -4618,7 +4752,7 @@ const StabilityContinuity = ({ activeSection, user, isInvestorView }) => {
 
   const renderNewHirePieChart = () => {
     const summary = calculateNewHireSummary()
-    const types = Object.keys(summary.byType)
+    const types = Object.keys(summary.byType).filter(type => summary.byType[type] > 0)
     const values = types.map(t => summary.byType[t])
 
     if (types.length === 0 || summary.total === 0) return null
@@ -4630,7 +4764,7 @@ const StabilityContinuity = ({ activeSection, user, isInvestorView }) => {
       datasets: [
         {
           data: values,
-          backgroundColor: colors,
+          backgroundColor: colors.slice(0, types.length),
           borderColor: "#ffffff",
           borderWidth: 2,
         },
@@ -4675,6 +4809,21 @@ const StabilityContinuity = ({ activeSection, user, isInvestorView }) => {
                     }
                   }
                 },
+                // WHITE NUMBERS on pie chart
+                datalabels: {
+                  display: true,
+                  color: '#ffffff',
+                  font: {
+                    weight: 'bold',
+                    size: 12
+                  },
+                  formatter: (value, context) => {
+                    return value > 0 ? value : '';
+                  },
+                  anchor: 'center',
+                  align: 'center',
+                  offset: 0
+                }
               },
             }}
           />
