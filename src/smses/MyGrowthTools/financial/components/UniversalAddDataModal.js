@@ -155,9 +155,9 @@ const UniversalAddDataModal = ({ isOpen, onClose, currentTab, user, onSave, load
   const [loanData, setLoanData] = useState({ name: "", amount: "", interestRate: "", startDate: "", term: "", monthlyPayment: "", status: "active" })
   const [customKPI, setCustomKPI] = useState({ name: "", type: "bar", dataType: "currency", actual: Array(12).fill(""), budget: Array(12).fill("") })
 
-  const months = getMonthsForYear(selectedYear, financialYearStart); // Jan→Dec for pickers
-  const fyMonths = getFYMonths(selectedYear, financialYearStart); // FY-ordered for data columns
-  const years = getYearsRange(2021, 2030);
+  const months    = getMonthsForYear(selectedYear, financialYearStart)  // Jan→Dec for pickers
+  const fyMonths  = getFYMonths(selectedYear, financialYearStart)        // FY-ordered for data columns
+  const years     = getYearsRange(2021, 2030)
 
   // Load existing data on tab switch
   useEffect(() => {
@@ -278,12 +278,18 @@ const UniversalAddDataModal = ({ isOpen, onClose, currentTab, user, onSave, load
         {["capital-structure","performance-engine","cost-agility","liquidity-survival","custom-kpi"].includes(activeTab) && (
           <div className="flex gap-5 mb-5 flex-wrap items-center">
             <div className="flex gap-1.5 items-center">
-              <span className="text-mediumBrown text-sm">Select Financial Year:</span>
-              <select className="px-3 py-2 rounded border border-[#e8ddd4] text-sm text-mediumBrown min-w-[150px]"
+              <span className="text-mediumBrown text-sm">Financial Year:</span>
+              <select className="px-3 pr-10 py-2 rounded border border-[#e8ddd4] text-sm text-mediumBrown min-w-[150px]"
                 value={selectedYear}
                 onChange={e => setSelectedYear(parseInt(e.target.value))}>
                 {years.map(y => {
-                  return <option key={y} value={y}>{y}</option>
+                  const fyStartIdx = _ALL_MONTHS.indexOf(financialYearStart)
+                  const isJanFY = fyStartIdx === 0
+                  const endMonth = isJanFY ? "Dec" : _ALL_MONTHS[(fyStartIdx + 11) % 12]
+                  const label = isJanFY
+                    ? String(y)
+                    : `${y} (${financialYearStart} ${y - 1} – ${endMonth} ${y})`
+                  return <option key={y} value={y}>{label}</option>
                 })}
               </select>
             </div>
@@ -373,8 +379,8 @@ const UniversalAddDataModal = ({ isOpen, onClose, currentTab, user, onSave, load
           <div>
             <h4 className="text-mediumBrown mb-5 font-semibold">Profit & Loss Statement</h4>
             {[
-              [["sales","Sales / Revenue",{unit:"R m"}],["salesBudget","Sales Budget",{unit:"R m"}]],
-              [["cogs","COGS",{unit:"R m"}],["cogsBudget","COGS Budget",{unit:"R m"}]],
+              [["sales","Sales / Revenue",{unit:"R"}],["salesBudget","Sales Budget",{unit:"R"}]],
+              [["cogs","COGS",{unit:"R"}],["cogsBudget","COGS Budget",{unit:"R"}]],
             ].map((group, gi) => (
               <div key={gi} className="mb-7">
                 <h5 className="text-mediumBrown mb-4 font-semibold text-sm">{gi === 0 ? "Revenue" : "Cost of Goods Sold"}</h5>
@@ -384,28 +390,28 @@ const UniversalAddDataModal = ({ isOpen, onClose, currentTab, user, onSave, load
             <div className="mb-7">
               <h5 className="text-mediumBrown mb-4 font-semibold text-sm">Operating Expenses</h5>
               {renderFields(pnlData, setPnlData, [
-                ["opex","Total Opex",{unit:"R m"}],["opexBudget","Opex Budget",{unit:"R m"}],
-                ["salaries","Salaries & Wages",{unit:"R m"}],["salariesBudget","Salaries Budget",{unit:"R m"}],
-                ["rent","Rent",{unit:"R m"}],["rentBudget","Rent Budget",{unit:"R m"}],
-                ["utilities","Utilities",{unit:"R m"}],["utilitiesBudget","Utilities Budget",{unit:"R m"}],
-                ["marketing","Marketing",{unit:"R m"}],["marketingBudget","Marketing Budget",{unit:"R m"}],
-                ["admin","Administrative",{unit:"R m"}],["adminBudget","Administrative Budget",{unit:"R m"}],
-                ["otherExpenses","Other Expenses",{unit:"R m"}],["otherExpensesBudget","Other Expenses Budget",{unit:"R m"}],
+                ["opex","Total Opex",{unit:"R"}],["opexBudget","Opex Budget",{unit:"R"}],
+                ["salaries","Salaries & Wages",{unit:"R"}],["salariesBudget","Salaries Budget",{unit:"R"}],
+                ["rent","Rent",{unit:"R"}],["rentBudget","Rent Budget",{unit:"R"}],
+                ["utilities","Utilities",{unit:"R"}],["utilitiesBudget","Utilities Budget",{unit:"R"}],
+                ["marketing","Marketing",{unit:"R"}],["marketingBudget","Marketing Budget",{unit:"R"}],
+                ["admin","Administrative",{unit:"R"}],["adminBudget","Administrative Budget",{unit:"R"}],
+                ["otherExpenses","Other Expenses",{unit:"R"}],["otherExpensesBudget","Other Expenses Budget",{unit:"R"}],
               ])}
             </div>
             <div className="mb-7">
               <h5 className="text-mediumBrown mb-4 font-semibold text-sm">Depreciation & Amortization</h5>
               {renderFields(pnlData, setPnlData, [
-                ["depreciation","Depreciation",{unit:"R m"}],["depreciationBudget","Depreciation Budget",{unit:"R m"}],
-                ["amortization","Amortization",{unit:"R m"}],["amortizationBudget","Amortization Budget",{unit:"R m"}],
+                ["depreciation","Depreciation",{unit:"R"}],["depreciationBudget","Depreciation Budget",{unit:"R"}],
+                ["amortization","Amortization",{unit:"R"}],["amortizationBudget","Amortization Budget",{unit:"R"}],
               ])}
             </div>
             <div className="mb-7">
               <h5 className="text-mediumBrown mb-4 font-semibold text-sm">Interest & Tax</h5>
               {renderFields(pnlData, setPnlData, [
-                ["interestExpense","Interest Expense",{unit:"R m"}],["interestExpenseBudget","Interest Expense Budget",{unit:"R m"}],
-                ["interestIncome","Interest Income",{unit:"R m"}],["interestIncomeBudget","Interest Income Budget",{unit:"R m"}],
-                ["tax","Tax",{unit:"R m"}],["taxBudget","Tax Budget",{unit:"R m"}],
+                ["interestExpense","Interest Expense",{unit:"R"}],["interestExpenseBudget","Interest Expense Budget",{unit:"R"}],
+                ["interestIncome","Interest Income",{unit:"R"}],["interestIncomeBudget","Interest Income Budget",{unit:"R"}],
+                ["tax","Tax",{unit:"R"}],["taxBudget","Tax Budget",{unit:"R"}],
               ])}
             </div>
             {textareaRow(pnlData.notes, e => setPnlData(p => ({...p, notes: e.target.value})), "Add any additional notes...")}
@@ -417,10 +423,10 @@ const UniversalAddDataModal = ({ isOpen, onClose, currentTab, user, onSave, load
           <div>
             <h4 className="text-mediumBrown mb-5 font-semibold">Cost Structure Analysis</h4>
             {renderFields(costData, setCostData, [
-              ["fixedCosts","Fixed Costs",{unit:"R m"}],
-              ["variableCosts","Variable Costs",{unit:"R m"}],
-              ["semiVariableCosts","Semi-Variable Costs",{unit:"R m"}],
-              ["discretionaryCosts","Discretionary Costs",{unit:"R m"}],
+              ["fixedCosts","Fixed Costs",{unit:"R"}],
+              ["variableCosts","Variable Costs",{unit:"R"}],
+              ["semiVariableCosts","Semi-Variable Costs",{unit:"R"}],
+              ["discretionaryCosts","Discretionary Costs",{unit:"R"}],
               ["lockInDuration","Fixed Costs Lock-in Duration",{unit:"months",step:"1"}],
             ])}
             {textareaRow(costData.notes, e => setCostData(p => ({...p, notes: e.target.value})), "Add notes about your cost structure...")}
@@ -435,15 +441,15 @@ const UniversalAddDataModal = ({ isOpen, onClose, currentTab, user, onSave, load
               ["currentRatio","Current Ratio",{step:"0.01",unit:"ratio"}],
               ["quickRatio","Quick Ratio",{step:"0.01",unit:"ratio"}],
               ["cashRatio","Cash Ratio",{step:"0.01",unit:"ratio"}],
-              ["burnRate","Burn Rate",{unit:"R m"}],
+              ["burnRate","Burn Rate",{unit:"R"}],
               ["cashCover","Cash Cover",{unit:"months",step:"1"}],
-              ["cashflow","Free Cashflow",{unit:"R m"}],
-              ["operatingCashflow","Operating Cashflow",{unit:"R m"}],
-              ["investingCashflow","Investing Cashflow",{unit:"R m"}],
-              ["financingCashflow","Financing Cashflow",{unit:"R m"}],
-              ["loanRepayments","Loan Repayments",{unit:"R m"}],
-              ["cashBalance","Cash Balance",{unit:"R m"}],
-              ["workingCapital","Working Capital",{unit:"R m"}],
+              ["cashflow","Free Cashflow",{unit:"R"}],
+              ["operatingCashflow","Operating Cashflow",{unit:"R"}],
+              ["investingCashflow","Investing Cashflow",{unit:"R"}],
+              ["financingCashflow","Financing Cashflow",{unit:"R"}],
+              ["loanRepayments","Loan Repayments",{unit:"R"}],
+              ["cashBalance","Cash Balance",{unit:"R"}],
+              ["workingCapital","Working Capital",{unit:"R"}],
             ])}
             {textareaRow(liquidData.notes, e => setLiquidData(p => ({...p, notes: e.target.value})), "Add notes about your liquidity position...")}
           </div>
@@ -502,10 +508,10 @@ const UniversalAddDataModal = ({ isOpen, onClose, currentTab, user, onSave, load
             </div>
             <h5 className="text-mediumBrown mb-4 font-semibold text-sm">Actual Values</h5>
             <MonthlyInputRow category="actual" label="Actual" data={customKPI} selectedYear={selectedYear} setData={setCustomKPI} months={fyMonths}
-              unit={customKPI.dataType === "percentage" ? "%" : customKPI.dataType === "currency" ? "R m" : "units"} />
+              unit={customKPI.dataType === "percentage" ? "%" : customKPI.dataType === "currency" ? "R" : "units"} />
             <h5 className="text-mediumBrown mb-4 font-semibold text-sm">Budget Values</h5>
             <MonthlyInputRow category="budget" label="Budget" data={customKPI} selectedYear={selectedYear} setData={setCustomKPI} months={fyMonths}
-              unit={customKPI.dataType === "percentage" ? "%" : customKPI.dataType === "currency" ? "R m" : "units"} />
+              unit={customKPI.dataType === "percentage" ? "%" : customKPI.dataType === "currency" ? "R" : "units"} />
           </div>
         )}
 

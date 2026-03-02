@@ -21,6 +21,8 @@ import {
   getLast12MonthsLabels,
   getLast12MonthsComputed,
   computePnlChartData,
+  formatSmartNumber,
+  getSmartUnit,
 } from "../financialUtils";
 
 const PerformanceEngine = ({
@@ -102,11 +104,20 @@ const PerformanceEngine = ({
 
   const renderKPI = (title, dataKey, isPercentage = false) => {
     const data = firebaseChartData[dataKey] || { actual: [], budget: [] };
-    const chartArr = aggregateDataForView(data.actual, viewMode);
-    const budgetArr = aggregateDataForView(data.budget || [], viewMode);
+    // isAverage=true for % KPIs (yearly avg margin), false for monetary (yearly sum)
+    const chartArr = aggregateDataForView(data.actual, viewMode, isPercentage);
+    const budgetArr = aggregateDataForView(data.budget || [], viewMode, isPercentage);
     const current = chartArr.at(-1) ?? 0;
     const budget = budgetArr.at(-1) ?? 0;
     const calc = CALCULATION_TEXTS.performance[dataKey] || "";
+
+    // Unit label: "%" for margins, smart currency unit for monetary KPIs
+    const unitLabel = isPercentage ? "%" : getSmartUnit(current);
+    // Circle shows plain number (unit is in heading)
+    const formatCircleValue = isPercentage
+      ? (v) => parseFloat(v).toFixed(2)
+      : (v) => formatSmartNumber(v);
+
     return (
       <KPICard
         key={dataKey}
@@ -115,6 +126,8 @@ const PerformanceEngine = ({
         budgetValue={budget}
         unit={currencyUnit}
         isPercentage={isPercentage}
+        unitLabel={unitLabel}
+        formatCircleValue={formatCircleValue}
         onEyeClick={() => openCalc(title, calc)}
         onAddNotes={(notes) =>
           setChartNotes((p) => ({ ...p, [dataKey]: notes }))
@@ -161,7 +174,7 @@ const PerformanceEngine = ({
         setViewMode={setViewMode}
         onAddData={!isInvestorView ? () => setShowModal(true) : null}
         showAddData={!isInvestorView}
-        // extraControls={extraControls}
+        extraControls={extraControls}
       />
 
       {/* Revenue & Cost */}
