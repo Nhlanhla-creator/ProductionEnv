@@ -10,6 +10,7 @@ import {
   AlertCircle,
   Info,
 } from "lucide-react";
+import { getDocumentId } from "../../utils/documentMapping";
 
 export function ComplianceScoreCard({ styles, profileData, onScoreUpdate }) {
   const [showModal, setShowModal] = useState(false);
@@ -28,7 +29,6 @@ export function ComplianceScoreCard({ styles, profileData, onScoreUpdate }) {
       document.body.classList.remove("modal-open");
       document.body.style.overflow = "";
     }
-    // Cleanup on unmount
     return () => {
       document.body.classList.remove("modal-open");
       document.body.style.overflow = "";
@@ -44,37 +44,56 @@ export function ComplianceScoreCard({ styles, profileData, onScoreUpdate }) {
     }
   }, [profileData]);
 
-  const checkFieldExists = (data, path) => {
-    const parts = path.split(".");
-    let current = data;
-    for (const part of parts) {
-      if (!current || !(part in current)) return false;
-      current = current[part];
-    }
-    // Array or string (like a COID number or file URL)
-    if (Array.isArray(current)) return current.length > 0;
-    if (typeof current === "string") return current.trim().length > 0;
-    return !!current;
-  };
-
-  const checkFieldExistsInDocuments = (data, documentId) => {
+  // Helper function to check document status from MyDocuments
+  const getDocumentVerified = (docLabel, profileData) => {
     try {
-      if (!data || !data.documents) return false;
-      const files = data.documents[documentId];
-      return Array.isArray(files) ? files.length > 0 : !!files;
+      const documentId = getDocumentId(docLabel);
+      
+      // Check in verification object first (AI validation results)
+      const verification = profileData.verification?.[documentId];
+      if (verification && (verification.status === "verified" || verification.status === "verified:not_audited")) {
+        return true;
+      }
+      
+      // For multi-upload documents, check if any are verified
+      const multiUploadDocs = profileData.documents?.[`${documentId}_multiple`];
+      if (Array.isArray(multiUploadDocs)) {
+        return multiUploadDocs.some(doc => 
+          doc.url && doc.url !== "" && 
+          (doc.status === "verified" || doc.status === "verified:not_audited")
+        );
+      }
+      
+      // Check single document
+      const singleDoc = profileData.documents?.[documentId];
+      if (singleDoc && typeof singleDoc === 'string' && singleDoc.trim() !== '') {
+        // If it's a URL string, consider it uploaded but check verification
+        const verificationStatus = profileData.verification?.[documentId]?.status;
+        return verificationStatus === "verified" || verificationStatus === "verified:not_audited";
+      }
+      
+      return false;
     } catch (error) {
-      console.error(`Error checking document ${documentId}:`, error);
+      console.error(`Error checking document ${docLabel}:`, error);
       return false;
     }
   };
 
-  const checkFieldExistsInFundingDocuments = (data, documentId) => {
+  // Helper to check if document exists (any status)
+  const getDocumentExists = (docLabel, profileData) => {
     try {
-      if (!data || !data.fundingDocuments) return false;
-      const files = data.fundingDocuments[documentId];
-      return Array.isArray(files) ? files.length > 0 : !!files;
+      const documentId = getDocumentId(docLabel);
+      
+      // Check multi-upload documents
+      const multiUploadDocs = profileData.documents?.[`${documentId}_multiple`];
+      if (Array.isArray(multiUploadDocs)) {
+        return multiUploadDocs.some(doc => doc.url && doc.url !== "");
+      }
+      
+      // Check single document
+      const singleDoc = profileData.documents?.[documentId];
+      return !!(singleDoc && typeof singleDoc === 'string' && singleDoc.trim() !== '');
     } catch (error) {
-      console.error(`Error checking funding document ${documentId}:`, error);
       return false;
     }
   };
@@ -90,118 +109,117 @@ export function ComplianceScoreCard({ styles, profileData, onScoreUpdate }) {
       weightKey = "matureStage";
     }
 
+    // Updated rubric with actual document labels from MyDocuments
     const rubric = [
       {
-        documentId: "registrationCertificate",
-        path: "entityOverview.registrationCertificate",
-        displayName: "CIPC business registration",
-        description: "Company registration certificate",
+        docLabel: "Company Registration Certificate",
+        displayName: "Company Registration Certificate",
+        description: "CIPC registration document",
         importance: "Non-negotiable – proves legal existence",
         compulsory: true,
         weights: { earlyStage: 0.2, growthStage: 0.15, matureStage: 0.1 },
+        verifyFn: (data) => getDocumentVerified("Company Registration Certificate", data)
       },
       {
-        documentId: "taxClearanceCert",
-        path: "legalCompliance.taxClearanceCert",
-        displayName: "SARS tax compliance status",
-        description: "Tax clearance certificate",
+        docLabel: "Tax Clearance Certificate",
+        displayName: "SARS Tax Clearance",
+        description: "Valid tax clearance certificate",
         importance: "Critical – shows financial/legal integrity",
         compulsory: true,
         weights: { earlyStage: 0.2, growthStage: 0.15, matureStage: 0.1 },
+        verifyFn: (data) => getDocumentVerified("Tax Clearance Certificate", data)
       },
       {
-        documentId: "vatCertificate",
-        path: "legalCompliance.vatNumber",
+        docLabel: "VAT Registration",
         displayName: "VAT registration (if applicable)",
         description: "VAT number present",
         importance: "Needed for turnover above R1M",
         condition: () =>
-          Number.parseFloat(data.financialOverview?.annualRevenue || "0") >
-          1000000,
+          Number.parseFloat(data.financialOverview?.annualRevenue || "0") > 1000000,
         weights: { earlyStage: 0.0, growthStage: 0.05, matureStage: 0.05 },
+        verifyFn: (data) => {
+          // Check VAT number exists in legal compliance
+          return data.legalCompliance?.vatNumber?.trim().length > 0;
+        }
       },
       {
-        documentId: "bbbeeCert",
-        path: "legalCompliance.bbbeeCert",
-        displayName: "B-BBEE certification",
-        description: "B-BBEE certificate uploaded",
-        importance:
-          "Essential for corporate procurement – only relevant for RSA",
+        docLabel: "B-BBEE Certificate",
+        displayName: "B-BBEE Certification",
+        description: "Valid B-BBEE certificate",
+        importance: "Essential for corporate procurement",
         compulsory: true,
         weights: { earlyStage: 0.1, growthStage: 0.15, matureStage: 0.15 },
+        verifyFn: (data) => getDocumentVerified("B-BBEE Certificate", data)
       },
       {
-        documentId: "uifCoida",
-        path: "legalCompliance.uifNumber",
-        displayName: "UIF & COIDA Registration",
-        description: "UIF and COIDA registration documents",
-        importance: "Shows SME complies with labour laws (staff cover)",
-        verifyFn: (data) => {
-          // Check both UIF number and COIDA number exist
-          const hasUIF = data.legalCompliance?.uifNumber?.trim().length > 0;
-          const hasCOIDA = data.legalCompliance?.coidaNumber?.trim().length > 0;
-          // Also check for uploaded documents if available
-          const hasDocs = checkFieldExistsInDocuments(data, "uifCoida");
-          return (hasUIF && hasCOIDA) || hasDocs;
-        },
+        docLabel: "COIDA Letter of Good Standing",
+        displayName: "COIDA Registration",
+        description: "Letter of good standing from Compensation Fund",
+        importance: "Shows compliance with labour laws",
         weights: { earlyStage: 0.0, growthStage: 0.05, matureStage: 0.1 },
-      },
-      {
-        documentId: "bankAccount",
-        path: "financialOverview.bankAccount",
-        displayName: "Business Bank Account",
-        description: "Proof of business banking details",
-        importance: "Confirms financial separation from owners",
         verifyFn: (data) => {
-          // Check bank confirmation in either documents or fundingDocuments
-          return (
-            checkFieldExistsInDocuments(data, "bankConfirmation") ||
-            checkFieldExistsInFundingDocuments(data, "bankConfirmation") ||
-            checkFieldExists(data, "financialOverview.bankAccount")
-          );
-        },
-        weights: { earlyStage: 0.1, growthStage: 0.15, matureStage: 0.2 },
+          const hasCOIDA = getDocumentVerified("COIDA Letter of Good Standing", data);
+          const hasUIF = data.legalCompliance?.uifNumber?.trim().length > 0;
+          return hasCOIDA && hasUIF;
+        }
       },
       {
-        documentId: "shareRegister",
-        path: "ownershipManagement.shareRegister",
-        displayName: "Ownership/Shareholding Structure",
-        description: "Share register uploaded",
-        importance: "Ensures transparency (helps with B-BBEE too)",
+        docLabel: "Bank Details Confirmation Letter",
+        displayName: "Business Bank Account",
+        description: "Bank confirmation letter with business details",
+        importance: "Confirms financial separation from owners",
+        weights: { earlyStage: 0.1, growthStage: 0.15, matureStage: 0.2 },
+        verifyFn: (data) => getDocumentVerified("Bank Details Confirmation Letter", data)
+      },
+      {
+        docLabel: "Share Register",
+        displayName: "Share Register",
+        description: "Official share register document",
+        importance: "Ensures ownership transparency",
         compulsory: true,
         weights: { earlyStage: 0.1, growthStage: 0.1, matureStage: 0.1 },
+        verifyFn: (data) => getDocumentVerified("Share Register", data)
       },
       {
-        documentId: "certifiedIds",
-        path: "ownershipManagement.certifiedIds",
-        displayName: "Verified Address & Director ID",
-        description: "ID documents and proof of address uploaded",
-        importance: "Confirms accountable individuals",
+        docLabel: "IDs of Directors & Shareholders",
+        displayName: "Director IDs",
+        description: "Certified copies of ID documents",
+        importance: "Verifies accountable individuals",
         compulsory: true,
-        weights: { earlyStage: 0.2, growthStage: 0.15, matureStage: 0.1 },
+        weights: { earlyStage: 0.1, growthStage: 0.1, matureStage: 0.05 },
+        verifyFn: (data) => getDocumentVerified("IDs of Directors & Shareholders", data)
       },
       {
-        documentId: "sectorLicenses",
-        path: "legalCompliance.industryAccreditations",
-        displayName: "Sector-Specific Licenses (if applicable)",
-        description: "Industry-specific licenses and permits",
-        importance: "e.g., FSP license, Health Dept permit, Mining permits",
-        verifyFn: (data) => {
-          // Check for either accreditation docs or specific licenses
-          return (
-            checkFieldExistsInDocuments(data, "industryAccreditationDocs") ||
-            checkFieldExists(data, "legalCompliance.industryAccreditations")
-          );
-        },
+        docLabel: "Proof of Address",
+        displayName: "Proof of Address",
+        description: "Business address verification",
+        importance: "Confirms physical business location",
+        compulsory: true,
+        weights: { earlyStage: 0.1, growthStage: 0.05, matureStage: 0.05 },
+        verifyFn: (data) => getDocumentVerified("Proof of Address", data)
+      },
+      {
+        docLabel: "Industry Accreditations",
+        displayName: "Industry Licenses",
+        description: "Sector-specific permits and accreditations",
+        importance: "Required for regulated industries",
         weights: { earlyStage: 0.0, growthStage: 0.05, matureStage: 0.1 },
+        verifyFn: (data) => getDocumentVerified("Industry Accreditations", data)
       },
       {
-        path: "fundabilityScore",
+        docLabel: "Company Profile",
+        displayName: "Company Profile",
+        description: "Business profile and overview",
+        importance: "Provides business context to funders",
+        weights: { earlyStage: 0.0, growthStage: 0.0, matureStage: 0.0 },
+        verifyFn: (data) => getDocumentExists("Company Profile / Brochure", data)
+      },
+      {
+        isProfileScore: true,
         displayName: "Complete business profile",
-        description: "Profile filled (based on fundability score)",
+        description: "All profile sections completed",
         importance: "Tells funders who they're dealing with",
         weights: { earlyStage: 0.1, growthStage: 0.1, matureStage: 0.1 },
-        isProfileScore: true,
       },
     ];
 
@@ -212,9 +230,12 @@ export function ComplianceScoreCard({ styles, profileData, onScoreUpdate }) {
       let verified = false;
       let weight = doc.weights[weightKey];
 
+      // Check if document is applicable based on condition
       if (doc.condition && !doc.condition()) {
         weight = 0;
-      } else if (doc.isProfileScore) {
+      } 
+      // Handle profile completion score
+      else if (doc.isProfileScore) {
         const totalSections = [
           "instructions",
           "entityOverview",
@@ -232,20 +253,13 @@ export function ComplianceScoreCard({ styles, profileData, onScoreUpdate }) {
         ).length;
         const completionRatio = completedCount / totalSections.length;
 
-        // Always contribute partial weight to totalScore
         totalScore += weight * completionRatio;
         maxScore += weight;
-
-        // Consider 80%+ as verified ✅
         verified = completionRatio >= 0.8;
-      } else if (doc.verifyFn) {
+      } 
+      // Use verifyFn if provided
+      else if (doc.verifyFn) {
         verified = doc.verifyFn(data);
-      } else if (doc.documentId) {
-        // Check AI validation status
-        const verification = data.verification?.[doc.documentId];
-        verified = verification && verification.status === "verified";
-      } else {
-        verified = checkFieldExists(data, doc.path);
       }
 
       if (weight > 0) {
@@ -254,7 +268,7 @@ export function ComplianceScoreCard({ styles, profileData, onScoreUpdate }) {
       }
 
       return {
-        path: doc.path,
+        docLabel: doc.docLabel,
         displayName: doc.displayName,
         description: doc.description,
         importance: doc.importance,
@@ -269,7 +283,7 @@ export function ComplianceScoreCard({ styles, profileData, onScoreUpdate }) {
 
     return {
       score: finalScore,
-      documents: documents.filter((doc) => doc.weight > 0), // Only show documents with weight > 0
+      documents: documents.filter((doc) => doc.weight > 0),
     };
   };
 
@@ -295,7 +309,7 @@ export function ComplianceScoreCard({ styles, profileData, onScoreUpdate }) {
 
   return (
     <>
-      {/* Enhanced Outside Card Design - Same as PIS Score */}
+      {/* Enhanced Outside Card Design */}
       <div
         style={{
           background: "linear-gradient(135deg, #ffffff 0%, #faf8f6 100%)",
@@ -304,8 +318,8 @@ export function ComplianceScoreCard({ styles, profileData, onScoreUpdate }) {
           border: "1px solid #e8ddd6",
           overflow: "hidden",
           position: "relative",
-          width: "100%", // Add this line to make it full width
-          minWidth: "210px", // Add this for minimum width
+          width: "100%",
+          minWidth: "210px",
         }}
       >
         {/* Header with gradient */}
@@ -729,7 +743,7 @@ export function ComplianceScoreCard({ styles, profileData, onScoreUpdate }) {
                           color: "#6d4c41",
                         }}
                       >
-                        Essential requirements verified:
+                        Documents verified:
                       </p>
                       <ul
                         style={{
@@ -739,31 +753,31 @@ export function ComplianceScoreCard({ styles, profileData, onScoreUpdate }) {
                         }}
                       >
                         <li style={{ marginBottom: "4px" }}>
-                          CIPC business registration
+                          Company Registration Certificate
                         </li>
                         <li style={{ marginBottom: "4px" }}>
-                          SARS tax compliance status
+                          Tax Clearance Certificate
                         </li>
                         <li style={{ marginBottom: "4px" }}>
-                          VAT registration (where applicable)
+                          B-BBEE Certificate
                         </li>
                         <li style={{ marginBottom: "4px" }}>
-                          Verified business address & Director IDs
+                          Bank Details Confirmation Letter
                         </li>
                         <li style={{ marginBottom: "4px" }}>
-                          Ownership and shareholding structure
+                          Share Register
                         </li>
                         <li style={{ marginBottom: "4px" }}>
-                          B-BBEE certification
+                          IDs of Directors & Shareholders
                         </li>
                         <li style={{ marginBottom: "4px" }}>
-                          UIF & COIDA registration (for growth/mature)
+                          Proof of Address
                         </li>
                         <li style={{ marginBottom: "4px" }}>
-                          POPIA compliance documentation
+                          COIDA Letter of Good Standing
                         </li>
                         <li style={{ marginBottom: "4px" }}>
-                          Complete business profile
+                          Industry Accreditations (if applicable)
                         </li>
                       </ul>
                     </div>
@@ -824,10 +838,10 @@ export function ComplianceScoreCard({ styles, profileData, onScoreUpdate }) {
                         color: "#6d4c41",
                       }}
                     >
-                      This assessment is tailored to your business stage, with
-                      higher weight given to critical documents like
-                      registration certificates, tax clearance, and B-BBEE
-                      certification.
+                      Documents are considered "verified" when they have passed
+                      AI validation and are marked as verified in the system.
+                      Regular uploads without verification are not counted
+                      toward your score.
                     </p>
                   </div>
                 )}
