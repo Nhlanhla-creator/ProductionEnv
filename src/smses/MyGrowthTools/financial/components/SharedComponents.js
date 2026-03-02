@@ -176,13 +176,16 @@ const VarianceArrow = ({ diff, variancePct }) => {
   );
 };
 
-// ==================== KPI CARD (3 circles: Actual / Budget / Variance) ====================
+// ==================== KPI CARD (3 circles: Actual / Budget / Variance  OR  1 circle: singleCircle mode) ====================
 export const KPICard = ({
   title,
   actualValue,
   budgetValue,
   unit = "zar_million",
   isPercentage = false,
+  unitLabel,            // shown in heading e.g. "R k", "%", "months", "×"
+  singleCircle = false, // show only actual circle (no budget / variance)
+  formatCircleValue,    // optional fn(v) → string override for circle display
   onEyeClick,
   onAddNotes,
   onAnalysis,
@@ -192,92 +195,97 @@ export const KPICard = ({
   decimals = 2,
 }) => {
   const [expanded, setExpanded] = useState(false);
-  const fmt = (v) =>
-    isPercentage
+
+  // Circle formatter: use override if provided, else existing behaviour
+  const fmtCircle = formatCircleValue
+    || ((v) => isPercentage
       ? formatPercentage(v, decimals)
-      : formatValue(v, unit, decimals);
+      : formatValue(v, unit, decimals));
 
   const actualNum = parseFloat(actualValue) || 0;
   const budgetNum = parseFloat(budgetValue) || 0;
   const diff = actualNum - budgetNum;
   const variancePct = budgetNum !== 0 ? (diff / Math.abs(budgetNum)) * 100 : 0;
 
-  // Variance circle style
-  let varBorder, varBg, varLabelColor, varPctColor;
-  if (diff > 0) {
-    varBorder = "border-green-500";
-    varBg = "bg-green-50";
-    varLabelColor = "text-green-700";
-    varPctColor = "text-green-600";
-  } else if (diff < 0 && Math.abs(variancePct) <= 20) {
-    varBorder = "border-orange-400";
-    varBg = "bg-orange-50";
-    varLabelColor = "text-orange-700";
-    varPctColor = "text-orange-600";
-  } else if (diff < 0) {
-    varBorder = "border-red-500";
-    varBg = "bg-red-50";
-    varLabelColor = "text-red-700";
-    varPctColor = "text-red-600";
-  } else {
-    varBorder = "border-yellow-400";
-    varBg = "bg-yellow-50";
-    varLabelColor = "text-yellow-700";
-    varPctColor = "text-yellow-600";
+  // Variance circle style (only needed in 3-circle mode)
+  let varBorder = "border-yellow-400", varBg = "bg-yellow-50",
+      varLabelColor = "text-yellow-700", varPctColor = "text-yellow-600";
+  if (!singleCircle) {
+    if (diff > 0) {
+      varBorder = "border-green-500"; varBg = "bg-green-50";
+      varLabelColor = "text-green-700"; varPctColor = "text-green-600";
+    } else if (diff < 0 && Math.abs(variancePct) <= 20) {
+      varBorder = "border-orange-400"; varBg = "bg-orange-50";
+      varLabelColor = "text-orange-700"; varPctColor = "text-orange-600";
+    } else if (diff < 0) {
+      varBorder = "border-red-500"; varBg = "bg-red-50";
+      varLabelColor = "text-red-700"; varPctColor = "text-red-600";
+    }
   }
 
   return (
     <div className="bg-[#fdfcfb] p-5 rounded-lg shadow-md mb-5 relative">
       <EyeIcon onClick={onEyeClick} />
+
+      {/* Title + optional unit label */}
       <div className="text-center mb-4">
         <h4 className="text-mediumBrown m-0 text-base font-semibold">
           {title}
+          {unitLabel && (
+            <span className="text-xs font-normal text-lightBrown ml-1.5">
+              ({unitLabel})
+            </span>
+          )}
         </h4>
       </div>
 
-      {/* 3 circles: Actual | Budget | Variance */}
-      <div className="flex justify-around items-start mb-4">
-        {/* Actual */}
-        <div className="flex flex-col items-center gap-1">
-          <div className="w-[78px] h-[78px] rounded-full border-4 border-mediumBrown flex items-center justify-center bg-[#fdfcfb]">
-            <div className="text-xs font-bold text-mediumBrown leading-tight px-1 text-center">
-              {fmt(actualValue)}
+      {/* ── Single-circle mode ───────────────────────────────────────────── */}
+      {singleCircle ? (
+        <div className="flex justify-center mb-4">
+          <div className="flex flex-col items-center gap-1">
+            <div className="w-[90px] h-[90px] rounded-full border-4 border-mediumBrown flex items-center justify-center bg-[#fdfcfb]">
+              <div className="text-sm font-bold text-mediumBrown leading-tight px-2 text-center break-all">
+                {fmtCircle(actualValue)}
+              </div>
             </div>
+            <span className="text-[10px] text-lightBrown font-medium">Current</span>
           </div>
-          <span className="text-[10px] text-lightBrown font-medium">
-            Actual
-          </span>
         </div>
-
-        {/* Budget */}
-        <div className="flex flex-col items-center gap-1">
-          <div className="w-[78px] h-[78px] rounded-full border-4 border-gray-400 flex items-center justify-center bg-gray-50">
-            <div className="text-xs font-bold text-mediumBrown leading-tight px-1 text-center">
-              {fmt(budgetValue)}
+      ) : (
+        /* ── 3-circle mode ──────────────────────────────────────────────── */
+        <div className="flex justify-around items-start mb-4">
+          {/* Actual */}
+          <div className="flex flex-col items-center gap-1">
+            <div className="w-[78px] h-[78px] rounded-full border-4 border-mediumBrown flex items-center justify-center bg-[#fdfcfb]">
+              <div className="text-xs font-bold text-mediumBrown leading-tight px-1 text-center">
+                {fmtCircle(actualValue)}
+              </div>
             </div>
+            <span className="text-[10px] text-lightBrown font-medium">Actual</span>
           </div>
-          <span className="text-[10px] text-lightBrown font-medium">
-            Budget
-          </span>
-        </div>
 
-        {/* Variance */}
-        <div className="flex flex-col items-center gap-1">
-          <div
-            className={`w-[78px] h-[78px] rounded-full border-4 ${varBorder} ${varBg} flex flex-col items-center justify-center gap-0.5`}
-          >
-            <VarianceArrow diff={diff} variancePct={variancePct} />
-            <span
-              className={`text-[10px] font-bold ${varPctColor} leading-none`}
-            >
-              {diff === 0 ? "0%" : `${Math.abs(variancePct).toFixed(1)}%`}
-            </span>
+          {/* Budget */}
+          <div className="flex flex-col items-center gap-1">
+            <div className="w-[78px] h-[78px] rounded-full border-4 border-gray-400 flex items-center justify-center bg-gray-50">
+              <div className="text-xs font-bold text-mediumBrown leading-tight px-1 text-center">
+                {fmtCircle(budgetValue)}
+              </div>
+            </div>
+            <span className="text-[10px] text-lightBrown font-medium">Budget</span>
           </div>
-          <span className={`text-[10px] font-medium ${varLabelColor}`}>
-            Variance
-          </span>
+
+          {/* Variance */}
+          <div className="flex flex-col items-center gap-1">
+            <div className={`w-[78px] h-[78px] rounded-full border-4 ${varBorder} ${varBg} flex flex-col items-center justify-center gap-0.5`}>
+              <VarianceArrow diff={diff} variancePct={variancePct} />
+              <span className={`text-[10px] font-bold ${varPctColor} leading-none`}>
+                {diff === 0 ? "0%" : `${Math.abs(variancePct).toFixed(1)}%`}
+              </span>
+            </div>
+            <span className={`text-[10px] font-medium ${varLabelColor}`}>Variance</span>
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="border-t border-[#e8ddd4] pt-4">
         <div className="flex gap-2 justify-center flex-wrap">
@@ -345,9 +353,11 @@ export const TrendModal = ({
       : "N/A";
 
   const fmtVal = (v) =>
-    item.isPercentage
-      ? `${parseFloat(v).toFixed(2)}%`
-      : formatValue(v, currencyUnit);
+    item.trendFormatValue
+      ? item.trendFormatValue(v)
+      : item.isPercentage
+        ? `${parseFloat(v).toFixed(2)}%`
+        : formatValue(v, currencyUnit);
   const hasBudget = budget?.some((v) => v !== null && parseFloat(v) !== 0);
 
   // Bar colours: positive = brand brown, negative = red
@@ -435,11 +445,18 @@ export const TrendModal = ({
         beginAtZero: true,
         title: {
           display: true,
-          text: item.isPercentage ? "Percentage (%)" : "Value",
+          text: item.yAxisLabel
+            ?? (item.isPercentage ? "Percentage (%)" : "Value"),
           color: "#5d4037",
         },
         grid: { color: "rgba(93,64,55,0.08)" },
-        ticks: { color: "#5d4037" },
+        ticks: {
+          color: "#5d4037",
+          callback: item.yTickFmt
+            ?? (item.isPercentage
+              ? (v) => `${parseFloat(v).toFixed(1)}%`
+              : undefined),
+        },
       },
       x: {
         title: { display: true, text: "Last 12 Months", color: "#5d4037" },
@@ -545,26 +562,29 @@ export const SectionControlsBar = ({
   onAddData,
   showAddData = true,
   extraControls,
+  showViewMode = true,
 }) => (
   <div className="flex justify-between items-center mb-5 flex-wrap gap-4">
     {title && <h2 className="text-mediumBrown text-2xl font-bold">{title}</h2>}
     <div className="flex gap-2.5 items-center flex-wrap">
       {extraControls}
-      <div className="flex gap-2.5 items-center">
-        {["month", "quarter", "year"].map((m) => (
-          <button
-            key={m}
-            onClick={() => setViewMode(m)}
-            className={`px-4 py-2 border-0 rounded cursor-pointer font-medium text-sm capitalize ${viewMode === m ? "bg-mediumBrown text-[#fdfcfb]" : "bg-[#e8ddd4] text-mediumBrown hover:bg-[#d4c4b8]"}`}
-          >
-            {m === "month"
-              ? "Monthly"
-              : m === "quarter"
-                ? "Quarterly"
-                : "Yearly"}
-          </button>
-        ))}
-      </div>
+      {showViewMode && (
+        <div className="flex gap-2.5 items-center">
+          {["month", "quarter", "year"].map((m) => (
+            <button
+              key={m}
+              onClick={() => setViewMode(m)}
+              className={`px-4 py-2 border-0 rounded cursor-pointer font-medium text-sm capitalize ${viewMode === m ? "bg-mediumBrown text-[#fdfcfb]" : "bg-[#e8ddd4] text-mediumBrown hover:bg-[#d4c4b8]"}`}
+            >
+              {m === "month"
+                ? "Monthly"
+                : m === "quarter"
+                  ? "Quarterly"
+                  : "Yearly"}
+            </button>
+          ))}
+        </div>
+      )}
       {showAddData && onAddData && (
         <button
           onClick={onAddData}
@@ -624,11 +644,10 @@ export const DateRangePicker = ({
   fromDate, setFromDate,
   toDate, setToDate,
   selectedYear, setSelectedYear,
-  selectedMonth, setSelectedMonth,
-  years, months,
+  years,
 }) => {
   const isRange = filterMode === "range";
-  const isMonthly = filterMode === "month";
+  const isYearly = filterMode === "year" || filterMode === "month"; // accept legacy "month" mode
 
   const inputCls = (active) =>
     `px-3 py-1.5 rounded border text-sm min-w-[130px] transition-opacity duration-150 ${
@@ -644,47 +663,29 @@ export const DateRangePicker = ({
 
   return (
     <div className="flex flex-wrap gap-x-5 gap-y-2 items-center p-3 rounded-lg border border-[#e8ddd4] bg-[#faf7f5]">
-      {/* ── Year–Month ── */}
+      {/* ── Year only ── */}
       <div className="flex items-center gap-2">
         <input
           type="radio"
-          id="filter-month"
+          id="filter-year"
           name="filterMode"
-          value="month"
-          checked={isMonthly}
-          onChange={() => setFilterMode("month")}
+          value="year"
+          checked={isYearly}
+          onChange={() => setFilterMode("year")}
           className={radioCls}
         />
-        <label
-          htmlFor="filter-month"
-          className={`${labelCls(isMonthly)} cursor-pointer`}
-        >
+        <label htmlFor="filter-year" className={`${labelCls(isYearly)} cursor-pointer`}>
+          Year
         </label>
-        <div
-          className={`flex items-center gap-2 ${isMonthly ? "" : "pointer-events-none"}`}
-        >
+        <div className={`flex items-center gap-2 ${isYearly ? "" : "pointer-events-none"}`}>
           <select
             value={selectedYear}
             onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-            className={inputCls(isMonthly)}
-            disabled={!isMonthly}
+            className={inputCls(isYearly)}
+            disabled={!isYearly}
           >
             {years.map((y) => (
-              <option key={y} value={y}>
-                {y}
-              </option>
-            ))}
-          </select>
-          <select
-            value={selectedMonth}
-            onChange={(e) => setSelectedMonth(e.target.value)}
-            className={inputCls(isMonthly)}
-            disabled={!isMonthly}
-          >
-            {months.map((m) => (
-              <option key={m} value={m}>
-                {m}
-              </option>
+              <option key={y} value={y}>{y}</option>
             ))}
           </select>
         </div>
@@ -702,14 +703,10 @@ export const DateRangePicker = ({
           onChange={() => setFilterMode("range")}
           className={radioCls}
         />
-        <label
-          htmlFor="filter-range"
-          className={`${labelCls(isRange)} cursor-pointer`}
-        >
+        <label htmlFor="filter-range" className={`${labelCls(isRange)} cursor-pointer`}>
+          Range
         </label>
-        <div
-          className={`flex items-center gap-1.5 ${isRange ? "" : "pointer-events-none"}`}
-        >
+        <div className={`flex items-center gap-1.5 ${isRange ? "" : "pointer-events-none"}`}>
           <input
             type="month"
             value={fromDate}
