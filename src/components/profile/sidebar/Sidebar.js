@@ -26,10 +26,7 @@ function Sidebar({
   const navigate = useNavigate()
   const location = useLocation()
   const [expandedMenus, setExpandedMenus] = useState(autoExpandMenus)
-  // --- Hover/manual expand/collapse logic ---
   const [isCollapsed, setIsCollapsed] = useState(false)
-  const [manualOverride, setManualOverride] = useState(false)
-  const [isHovered, setIsHovered] = useState(false)
   const [showHelpModal, setShowHelpModal] = useState(false)
   // Use central hook to fetch profile name when parent doesn't pass it
   const { userName: hookUserName } = useHeaderProfile(userCollection, userNameField, "entityOverview.companyLogo", "User")
@@ -55,36 +52,6 @@ function Sidebar({
       document.body.classList.remove("sidebar-collapsed")
     }
   }, [isCollapsed, storageKey])
-
-  // Hover handlers for sidebar (not chevron)
-  const handleSidebarMouseEnter = () => {
-    if (!manualOverride) {
-      setIsCollapsed(false)
-    }
-    setIsHovered(true)
-  }
-  const handleSidebarMouseLeave = () => {
-    setIsHovered(false)
-    if (!manualOverride) {
-      setIsCollapsed(true)
-    }
-  }
-
-  // Manual chevron click: override hover
-  const toggleSidebar = useCallback((e) => {
-    if (e) e.stopPropagation()
-    setIsCollapsed((prev) => {
-      setManualOverride(true)
-      return !prev
-    })
-  }, [])
-
-  // If user clicks anywhere else, reset manual override
-  useEffect(() => {
-    if (!isHovered && manualOverride) {
-      if (isCollapsed) setManualOverride(false)
-    }
-  }, [isHovered, isCollapsed, manualOverride])
 
   // Update expanded menus when the route changes.
   // Merge route-driven expansions with the existing state so
@@ -144,6 +111,10 @@ function Sidebar({
       }
     }
   }, [navigate])
+
+  const toggleSidebar = useCallback(() => {
+    setIsCollapsed(!isCollapsed)
+  }, [isCollapsed])
 
   const handleLogout = useCallback(() => {
     if (onLogout) {
@@ -233,18 +204,9 @@ function Sidebar({
       </div>
 
       {/* Sidebar */}
-      <div
-        className={`${styles.sidebar} ${isCollapsed ? styles.collapsed : ""}`}
-        onMouseEnter={handleSidebarMouseEnter}
-        onMouseLeave={handleSidebarMouseLeave}
-      >
+      <div className={`${styles.sidebar} ${isCollapsed ? styles.collapsed : ""}`}>
         {/* Collapse Toggle */}
-        <button
-          className={styles.sidebarToggle}
-          onClick={toggleSidebar}
-          onMouseEnter={(e) => e.stopPropagation()} // Prevent hover expand on chevron
-          onMouseLeave={(e) => e.stopPropagation()}
-        >
+        <button className={styles.sidebarToggle} onClick={toggleSidebar}>
           {isCollapsed ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}
         </button>
 
