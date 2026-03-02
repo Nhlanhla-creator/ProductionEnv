@@ -17,7 +17,6 @@ import UniversalAddDataModal from "../components/UniversalAddDataModal";
 import { useLiquidityData } from "../../../hooks/useFinancialData";
 import {
   CALCULATION_TEXTS,
-  getMonthsForYear,
   getYearsRange,
 } from "../financialConstants";
 import {
@@ -26,6 +25,8 @@ import {
   getLast12MonthsLabels,
   getLast12MonthsComputed,
   computeLiquidityChartData,
+  formatSmartNumber,
+  getSmartUnit,
 } from "../financialUtils";
 
 // Default From-To: last 12 months
@@ -35,11 +36,9 @@ const _defaultFrom = (() => { const d = new Date(_now.getFullYear(), _now.getMon
 
 const LiquiditySurvival = ({ activeSection, user, isInvestorView, financialYearStart }) => {
   const [showModal, setShowModal]   = useState(false)
-  const [viewMode, setViewMode]     = useState("month")
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
-  const [selectedMonth, setSelectedMonth] = useState(financialYearStart)
-  // Date filter state — default to From-To (last 12 months)
-  const [filterMode, setFilterMode] = useState("range")
+  // Date filter state — default to Year
+  const [filterMode, setFilterMode] = useState("year")
   const [fromDate, setFromDate]     = useState(_defaultFrom)
   const [toDate, setToDate]         = useState(_defaultTo)
   const [expandedNotes, setExpandedNotes] = useState({})
@@ -62,7 +61,6 @@ const LiquiditySurvival = ({ activeSection, user, isInvestorView, financialYearS
   } = useLiquidityData(user);
 
   const formatValue = makeFormatValue(currencyUnit);
-  const months = getMonthsForYear(selectedYear, financialYearStart);
   const years = getYearsRange(2021, 2030);
 
   useEffect(() => {
@@ -107,11 +105,32 @@ const LiquiditySurvival = ({ activeSection, user, isInvestorView, financialYearS
     setShowCalcModal(true);
   };
 
+  // Per-KPI display config: unitLabel + circle formatter
+  // Currency KPIs (null unitLabel) get smart units derived from their live value
+  const KPI_TYPE = {
+    currentRatio:   { unitLabel: '×',      fmt: (v) => parseFloat(v).toFixed(2) },
+    quickRatio:     { unitLabel: '×',      fmt: (v) => parseFloat(v).toFixed(2) },
+    cashRatio:      { unitLabel: '×',      fmt: (v) => parseFloat(v).toFixed(2) },
+    cashCover:      { unitLabel: 'months', fmt: (v) => parseFloat(v).toFixed(1) },
+    monthsRunway:   { unitLabel: 'months', fmt: (v) => parseFloat(v).toFixed(1) },
+    // monetary — smart unit resolved at render time from live value
+    burnRate:       { unitLabel: null, fmt: null },
+    cashflow:       { unitLabel: null, fmt: null },
+    cashBalance:    { unitLabel: null, fmt: null },
+    workingCapital: { unitLabel: null, fmt: null },
+  };
+
   const renderKPI = (title, dataKey, isPercentage = false) => {
-    const data = firebaseChartData[dataKey] || { actual: [] };
-    const chartArr = aggregateDataForView(data.actual, viewMode);
-    const current = chartArr.at(-1) ?? 0;
-    const calc = CALCULATION_TEXTS.liquidity?.[dataKey] || "";
+    const type    = KPI_TYPE[dataKey] || {};
+    const data    = firebaseChartData[dataKey] || { actual: [] };
+    // Most-recent value — no view-mode aggregation for this section
+    const current = data.actual?.at(-1) ?? 0;
+    const calc    = CALCULATION_TEXTS.liquidity?.[dataKey] || "";
+
+    const isCurrency   = !type.unitLabel && !isPercentage;
+    const unitLabel    = type.unitLabel ?? (isPercentage ? '%' : getSmartUnit(current));
+    const formatCircle = type.fmt      ?? (isCurrency ? (v) => formatSmartNumber(v) : (v) => parseFloat(v).toFixed(2));
+
     return (
       <KPICard
         key={dataKey}
@@ -120,6 +139,8 @@ const LiquiditySurvival = ({ activeSection, user, isInvestorView, financialYearS
         budgetValue={0}
         unit={currencyUnit}
         isPercentage={isPercentage}
+        unitLabel={unitLabel}
+        formatCircleValue={formatCircle}
         onEyeClick={() => openCalc(title, calc)}
         onAddNotes={(notes) =>
           setChartNotes((p) => ({ ...p, [dataKey]: notes }))
@@ -153,10 +174,7 @@ const LiquiditySurvival = ({ activeSection, user, isInvestorView, financialYearS
         setToDate={setToDate}
         selectedYear={selectedYear}
         setSelectedYear={setSelectedYear}
-        selectedMonth={selectedMonth}
-        setSelectedMonth={setSelectedMonth}
         years={years}
-        months={months}
       />
     </div>
   );
@@ -171,10 +189,9 @@ const LiquiditySurvival = ({ activeSection, user, isInvestorView, financialYearS
 
       <SectionControlsBar
         title="Liquidity & Survival"
-        viewMode={viewMode}
-        setViewMode={setViewMode}
         onAddData={!isInvestorView ? () => setShowModal(true) : null}
         showAddData={!isInvestorView}
+        showViewMode={false}
         extraControls={extraControls}
       />
 

@@ -28,6 +28,8 @@ import {
   getLast12MonthsMeta,
   getLast12MonthsComputed,
   computeCapitalStructureChartData,
+  formatSmartNumber,
+  getSmartUnit,
 } from "../financialUtils";
 
 // ==================== BALANCE SHEET TABLE ====================
@@ -106,10 +108,12 @@ const CapitalStructure = ({
   const [activeSubTab, setActiveSubTab] = useState("balance-sheet");
   const [showModal, setShowModal] = useState(false);
   const [showDividendModal, setShowDividendModal] = useState(false);
-  const [selectedMonth, setSelectedMonth] = useState(financialYearStart);
+  const [selectedMonth, setSelectedMonth] = useState(
+    ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][new Date().getMonth()]
+  );
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   // Date filter state — default to From-To (last 12 months)
-  const [filterMode, setFilterMode] = useState("range")
+  const [filterMode, setFilterMode] = useState("year")
   const [fromDate, setFromDate]     = useState(_defaultFrom)
   const [toDate, setToDate]         = useState(_defaultTo)
   const [showTrendModal, setShowTrendModal] = useState(false);
@@ -148,7 +152,12 @@ const CapitalStructure = ({
 
   const months = getMonthsForYear(selectedYear, financialYearStart);
   const years = getYearsRange(2021, 2030);
-  const monthIndex = getMonthIndex(selectedMonth);
+  // Data arrays are FY-ordered (index 0 = FY start month).
+  // Convert selected calendar month → FY index.
+  const _ALL_MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const _fyStartIdx = _ALL_MONTHS.indexOf(financialYearStart);
+  const _calIdx     = _ALL_MONTHS.indexOf(selectedMonth);
+  const monthIndex  = (_calIdx - _fyStartIdx + 12) % 12;
   const formatValue = makeFormatValue(currencyUnit);
 
   useEffect(() => {
@@ -335,9 +344,7 @@ const CapitalStructure = ({
       const labels = getLast12MonthsLabels(financialYearStart);
       const meta   = getLast12MonthsMeta(financialYearStart);
 
-      // ── Case 1: raw balance-sheet array (line item) ──────────────────────────
-      // Cross-FY fix: fetch every unique FY year that appears in the last 12 months,
-      // not just the current one.
+      // ── Case 1: raw balance-sheet array (line item, stored in full rands) ──
       if (Array.isArray(fieldPath)) {
         const fyYears  = [...new Set(meta.map((m) => m.fyYear))];
         const docCache = {};
@@ -358,11 +365,6 @@ const CapitalStructure = ({
           }),
         );
 
-        // We need to know WHERE in the stored doc structure this array lives so
-        // we can re-read it per FY year. We locate it by comparing the in-memory
-        // array reference against the balance-sheet structure.
-        // Strategy: walk the balanceSheetData tree to find the matching key path,
-        // then re-read that path from each year's doc.
         const findPath = (obj, target, path = []) => {
           for (const k of Object.keys(obj || {})) {
             if (Array.isArray(obj[k])) {
@@ -380,19 +382,28 @@ const CapitalStructure = ({
         const actual = meta.map(({ fyYear, fyIndex }) => {
           const raw = docCache[fyYear];
           if (!raw) return null;
-
-          // Navigate the stored doc using the key path found above
           let arr = null;
           if (keyPath) {
             arr = keyPath.reduce((obj, k) => obj?.[k], raw?.balanceSheetData);
           }
-          // Fall back to the in-memory array if same FY year (single-year case)
           if (!Array.isArray(arr)) arr = fieldPath;
-
           const v = arr?.[fyIndex];
           return v !== undefined && v !== "" && v !== null ? parseFloat(v) : null;
         });
 
+        // Line items are stored in full rands — show them in full
+        // Compute scale from the fetched values for a clean y-axis
+        const absVals = actual.filter((v) => v !== null).map(Math.abs);
+        const maxAbs  = absVals.length ? Math.max(...absVals) : 0;
+        const scaleUnit    = maxAbs >= 1_000_000 ? "R m" : maxAbs >= 1_000 ? "R k" : "R";
+        const scaleDivisor = maxAbs >= 1_000_000 ? 1_000_000  : maxAbs >= 1_000 ? 1_000 : 1;
+        setSelectedTrendItem({
+          name,
+          isPercentage,
+          trendFormatValue: (v) => formatCurrency(v, "zar", 2),
+          yAxisLabel: `Value (${scaleUnit})`,
+          yTickFmt:   (v) => (v / scaleDivisor).toFixed(1),
+        });
         setTrendData({ labels, actual, budget: null });
         return;
       }
@@ -404,7 +415,6 @@ const CapitalStructure = ({
       }
 
       // ── Case 3: string key — use computeCapitalStructureChartData processor ──
-      // Normalise legacy dot-paths like "solvencyData.nav" → "nav"
       const DOT_PATH_MAP = {
         "solvencyData.debtToEquity":        "debtToEquity",
         "solvencyData.debtToAssets":        "debtToAssets",
@@ -431,6 +441,34 @@ const CapitalStructure = ({
         processor: computeCapitalStructureChartData,
       });
 
+      // BS total keys are stored in millions (after toM()) — convert back to full rands
+      const BS_TOTAL_KEYS = new Set([
+        "totalAssets", "totalLiabilities", "totalEquity",
+        "totalBankAndCash", "totalCurrentAssets", "totalFixedAssets",
+        "totalIntangibleAssets", "totalNonCurrentAssets",
+        "totalCurrentLiabilities", "totalNonCurrentLiabilities",
+      ]);
+      // Ratio/multiplier keys — plain number, no currency prefix
+      const RATIO_KEYS = new Set([
+        "debtToEquity", "debtToAssets", "interestCoverage",
+        "debtServiceCoverage", "totalDebtRatio", "longTermDebtRatio", "equityMultiplier",
+      ]);
+
+      let trendFormatValue, yAxisLabel, yTickFmt;
+      if (BS_TOTAL_KEYS.has(chartKey)) {
+        // Values are in millions → multiply back to full rands for tooltip
+        // Y-axis: keep values in millions, label as (R m)
+        trendFormatValue = (v) => formatCurrency(v * 1_000_000, "zar", 2);
+        yAxisLabel = "Value (R m)";
+        yTickFmt   = (v) => parseFloat(v).toFixed(1);
+      } else if (RATIO_KEYS.has(chartKey)) {
+        trendFormatValue = (v) => parseFloat(v).toFixed(2);
+        yAxisLabel = "Ratio (×)";
+        yTickFmt   = (v) => parseFloat(v).toFixed(2);
+      }
+      // percentage keys: leave undefined — TrendModal's isPercentage path handles them
+
+      setSelectedTrendItem({ name, isPercentage, trendFormatValue, yAxisLabel, yTickFmt });
       setTrendData({ labels, actual, budget: null });
     } catch (e) {
       console.error("Trend load error:", e);
@@ -449,37 +487,65 @@ const CapitalStructure = ({
     setShowCalculationModal(true);
   };
 
-  // KPI card renderer — no variance circle (budget=0 for these derived metrics)
+  // Per-KPI display metadata
+  const KPI_META = {
+    nav:                 { unitLabel: null,  fmt: (v) => formatSmartNumber(v),        isPercentage: false }, // smart currency
+    equityRatio:         { unitLabel: "%",   fmt: (v) => parseFloat(v).toFixed(2),    isPercentage: true  },
+    debtToEquity:        { unitLabel: "×",   fmt: (v) => parseFloat(v).toFixed(2),    isPercentage: false },
+    debtToAssets:        { unitLabel: "×",   fmt: (v) => parseFloat(v).toFixed(2),    isPercentage: false },
+    interestCoverage:    { unitLabel: "×",   fmt: (v) => parseFloat(v).toFixed(2),    isPercentage: false },
+    debtServiceCoverage: { unitLabel: "×",   fmt: (v) => parseFloat(v).toFixed(2),    isPercentage: false },
+    totalDebtRatio:      { unitLabel: "×",   fmt: (v) => parseFloat(v).toFixed(2),    isPercentage: false },
+    longTermDebtRatio:   { unitLabel: "×",   fmt: (v) => parseFloat(v).toFixed(2),    isPercentage: false },
+    equityMultiplier:    { unitLabel: "×",   fmt: (v) => parseFloat(v).toFixed(2),    isPercentage: false },
+    returnOnEquity:      { unitLabel: "%",   fmt: (v) => parseFloat(v).toFixed(2),    isPercentage: true  },
+    bookValuePerShare:   { unitLabel: null,  fmt: (v) => formatSmartNumber(v),        isPercentage: false },
+  };
+
+  // KPI card renderer — 3 circles (Actual / Budget / Variance), budget always 0 for derived metrics
   const renderKPICard = (
     title,
     data,
     kpiKey,
-    isPercentage = false,
+    _isPercentage = false, // kept for legacy call-sites; KPI_META takes priority
     fieldPath = null,
-  ) => (
-    <KPICard
-      key={kpiKey}
-      title={title}
-      actualValue={parseFloat(data?.[monthIndex]) || 0}
-      budgetValue={0}
-      unit={currencyUnit}
-      isPercentage={isPercentage}
-      onEyeClick={() => {
-        const tab = SUB_TABS.find((t) => t.id === activeSubTab);
-        openCalc(title, tab?.calculation || "");
-      }}
-      onAddNotes={(notes) => setKpiNotes((p) => ({ ...p, [kpiKey]: notes }))}
-      onAnalysis={() =>
-        setExpandedNotes((p) => ({
-          ...p,
-          [`${kpiKey}_analysis`]: !p[`${kpiKey}_analysis`],
-        }))
-      }
-      onTrend={() => openTrend(title, fieldPath || kpiKey, isPercentage)}
-      notes={kpiNotes[kpiKey]}
-      formatValue={formatValue}
-    />
-  );
+  ) => {
+    const meta         = KPI_META[kpiKey] || {};
+    const isPercentage = meta.isPercentage ?? _isPercentage;
+    const rawValue     = parseFloat(data?.[monthIndex]) || 0;
+    // For NAV (smart currency) resolve unit from value; others use fixed label
+    const unitLabel    = meta.unitLabel !== undefined
+      ? meta.unitLabel ?? getSmartUnit(rawValue)
+      : (isPercentage ? "%" : getSmartUnit(rawValue));
+    const fmtCircle    = meta.fmt ?? ((v) => parseFloat(v).toFixed(2));
+
+    return (
+      <KPICard
+        key={kpiKey}
+        title={title}
+        actualValue={rawValue}
+        budgetValue={0}
+        unit={currencyUnit}
+        isPercentage={isPercentage}
+        unitLabel={unitLabel}
+        formatCircleValue={fmtCircle}
+        onEyeClick={() => {
+          const tab = SUB_TABS.find((t) => t.id === activeSubTab);
+          openCalc(title, tab?.calculation || "");
+        }}
+        onAddNotes={(notes) => setKpiNotes((p) => ({ ...p, [kpiKey]: notes }))}
+        onAnalysis={() =>
+          setExpandedNotes((p) => ({
+            ...p,
+            [`${kpiKey}_analysis`]: !p[`${kpiKey}_analysis`],
+          }))
+        }
+        onTrend={() => openTrend(title, fieldPath || kpiKey, isPercentage)}
+        notes={kpiNotes[kpiKey]}
+        formatValue={formatValue}
+      />
+    );
+  };
 
   const SUB_TABS = [
     { id: "balance-sheet", label: "Balance Sheet" },
@@ -502,7 +568,8 @@ const CapitalStructure = ({
 
   if (activeSection !== "capital-structure") return null;
 
-  const fv = (v) => formatValue(v, currencyUnit);
+  // Show balance sheet amounts in full (raw stored value, R prefix, no scaling)
+  const fv = (v) => formatCurrency(parseFloat(v) || 0, "zar", 2)
 
   const bsRows = (obj, mi, overrides = {}) =>
     Object.keys(obj).map((key) => ({
@@ -552,10 +619,7 @@ const CapitalStructure = ({
               setToDate={setToDate}
               selectedYear={selectedYear}
               setSelectedYear={setSelectedYear}
-              selectedMonth={selectedMonth}
-              setSelectedMonth={setSelectedMonth}
               years={years}
-              months={months}
             />
             {!isInvestorView && (
               <button
