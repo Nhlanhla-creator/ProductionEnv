@@ -19,10 +19,9 @@ import {
   getDocumentUrlFromAnyLocation,
   getSyncConfig
 } from "../../utils/documentSyncService";
+import { getFunctions, httpsCallable } from "firebase/functions";
 
-const ai = new GoogleGenAI({ 
-  apiKey: "AIzaSyA3AIJgagmVwL930v9CO56i3M45Gq0usPI"
-});
+
 
 const DOCUMENTS = [
   "5 Year Budget",
@@ -66,7 +65,7 @@ const MyDocuments = () => {
   const [expandedAccreditations, setExpandedAccreditations] = useState(false);
   const [expandedLoanAgreements, setExpandedLoanAgreements] = useState(false);
   const [activeSection, setActiveSection] = useState('documents');
-
+const functions = getFunctions();
   // Use the synchronization hook
   useDocumentSync(setSubmittedDocuments, setProfileData, null);
 
@@ -162,625 +161,33 @@ const MyDocuments = () => {
       return null;
     }
   };
-
 const validateDocumentWithAI = async (docLabel, file, registeredName) => {
-  // Helper function for name similarity (inside the function to avoid global scope)
-  const calculateNameSimilarity = (name1, name2) => {
-    if (!name1 || !name2) return 0;
-    
-    const normalize = (str) => {
-      return str.toLowerCase()
-        .replace(/[^a-z0-9\s]/g, '') // Remove special chars
-        .replace(/\b(pty|ltd|limited|cc|inc|incorporation|and|&)\b/g, '') // Remove common suffixes
-        .replace(/\s+/g, ' ')
-        .trim();
-    };
-    
-    const normalized1 = normalize(name1);
-    const normalized2 = normalize(name2);
-    
-    // Get core words (skip common words)
-    const words1 = normalized1.split(' ').filter(w => w.length > 2);
-    const words2 = normalized2.split(' ').filter(w => w.length > 2);
-    
-    if (words1.length === 0 || words2.length === 0) return 0;
-    
-    // Count matching words
-    let matches = 0;
-    for (const word of words1) {
-      if (words2.some(w => w.includes(word) || word.includes(w))) {
-        matches++;
-      }
-    }
-    
-    // Calculate similarity percentage
-    const similarity = (matches / Math.max(words1.length, words2.length)) * 100;
-    return similarity;
-  };
-
-  // Document validation rules (flexible version)
-  const documentValidationRules = {
-    "5 Year Budget": {
-      requiredElements: [
-        "Financial projections covering multiple years",
-        "Income statement or revenue projections",
-        "Expense or cost projections"
-      ],
-      strictChecks: ["covers_approximately_5_years", "has_financial_projections"],
-      skipNameCheck: true // Budgets don't need name check
-    },
-    "Bank Confirmation Letter": {
-  requiredElements: [
-    "Bank name clearly stated",
-    "Account holder name",
-    "Account number",
-    "Date (statement date or issue date)",  // More flexible
-    "Bank details (branch code or account type optional)"
-  ],
-  strictChecks: ["has_account_number", "shows_valid_south_african_bank", "has_account_holder's_name"]
-},
- "B-BBEE Certificate": {
-  requiredElements: [
-    "B-BBEE level or exemption status (1-8 or Exempted)",
-    "Company name",
-    "Issue date",
-    "Expiry date or validity period",
-    "ACCEPT BOTH: Formal certificates AND sworn affidavits",
-    "FORMAL CERTIFICATES MUST HAVE: Accredited verification agency name or SANAS accreditation",
-    "SWORN AFFIDAVITS MUST HAVE: Commissioner of Oaths stamp and signature",
-    "ACCEPT MULTI-PAGE DOCUMENTS: Even if other certificates are included"
-  ],
-  strictChecks: ["has_bbbee_status", "not_expired", "has_valid_issuing_body"]
-},
-
-    "Business Plan": {
-      requiredElements: [
-        "Business description",
-        "Market analysis", 
-        "Financial projections"
-      ],
-      strictChecks: ["has_business_description", "has_market_analysis", "has_financials"],
-      skipNameCheck: true
-    },
-   "IDs of Directors & Shareholders": {
-  requiredElements: [
-    "ID document",
-    "Photograph",
-    "ID number"
-  ],
-  strictChecks: ["has_photo", "has_id_number", "is_official_id"],
-  skipNameCheck: true // Don't check names
-},
-    "Client references / Support Letters": {
-      requiredElements: [
-        "Client company name",
-        "Description of services",
-        "Contact details"
-      ],
-      strictChecks: ["has_client_details", "describes_services", "has_contact"],
-      skipNameCheck: true // References are about client, not company
-    },
-    "Company Profile / Brochure": {
-      requiredElements: [
-        "Company name",
-        "Description of business",
-        "Contact information"
-      ],
-      strictChecks: ["has_company_name", "has_description", "has_contact_info"],
-      nameThreshold: 40
-    },
-    "Company Registration Certificate": {
-      requiredElements: [
-        "Company registration number",
-        "Registered company name",
-        "Official issuance"
-      ],
-      strictChecks: ["has_registration_number", "matches_company_name_flexible", "from_cipc"],
-      nameThreshold: 40
-    },
-    "COIDA Letter of Good Standing": {
-      requiredElements: [
-        "Issued by Compensation Fund",
-        "Letter of Good Standing title", 
-        "Employer reference number",
-        "Company name that matches your registered company",
-        "Good Standing status confirmation",
-        "Issue date",
-        "ACCEPT MULTI-PAGE DOCUMENTS: Even if other COIDA documents are included"
-      ],
-      strictChecks: ["issued_by_compensation_fund", "has_employer_reference", "shows_good_standing", "company_name_matches"]
-    },
-    "CV": {
-      requiredElements: [
-        "Person's name",
-        "Work experience",
-        "Education or qualifications"
-      ],
-      strictChecks: ["has_work_experience", "has_education", "is_cv"],
-      skipNameCheck: true // CVs are personal
-    },
-      "Financial Statements": {
-      requiredElements: [
-        "Financial figures (revenue, expenses, or balances)",
-        "Company name",
-        "Period covered",
-        "ACCEPT BOTH: Audited AND Unaudited financial statements",
-        "ACCEPT BOTH: Full statements AND management accounts",
-        "ACCEPT MULTI-PAGE DOCUMENTS: Even if other documents are included"
-      ],
-      strictChecks: ["has_financials", "has_company_name", "has_period"]
-    },
-    "Guarantee/Contract": {
-  requiredElements: [
-    "Contract/Agreement title",
-    "Parties involved clearly defined",
-    "Terms and obligations specified",
-    "Duration or effective date",
-    "ACCEPT BOTH: Signed AND unsigned agreements (if parties and terms are clear)",
-    "ACCEPT MULTI-PAGE DOCUMENTS: Even if terms and conditions are included"
-  ],
-  strictChecks: ["has_parties", "has_terms", "has_dates"]
-},
-    "Industry Accreditations": {
-      requiredElements: [
-        "Issuing body",
-        "Company name",
-        "Accreditation details"
-      ],
-      strictChecks: ["has_issuing_body", "matches_company_name_flexible", "has_accreditation"],
-      nameThreshold: 40
-    },
-    "Loan Agreements": {
-      requiredElements: [
-        "Parties involved",
-        "Loan amount",
-        "Signatures"
-      ],
-      strictChecks: ["has_loan_amount", "has_parties", "has_signatures"],
-      skipNameCheck: true
-    },
-    "Pitch Deck": {
-      requiredElements: [
-        "Business concept",
-        "Market opportunity",
-        "Team information"
-      ],
-      strictChecks: ["has_business_concept", "has_market_info", "has_team_info"],
-      skipNameCheck: true
-    },
-   "Proof of Address": {
-  requiredElements: [
-    "Full name and physical address",
-    "Date (reasonably recent - within 6 months)",
-    "Issuer name (utility, bank, municipality, etc.)",
-    "Reference or account number",
-  ],
-  strictChecks: ["recent_issue_date", "matches_applicant_name", "has_physical_address"]
-},
-"Share Register": {
-  requiredElements: [
-    "Company name",                    // MUST have
-    "Shareholder names",               // MUST have  
-    "Share quantities or percentages", // MUST have
-    "ACCEPT BOTH: Formal registers AND simple shareholder lists",
-    "ACCEPT BOTH: Signed documents AND unsigned extracts",
-    "ACCEPT MULTI-PAGE DOCUMENTS: Even if other company documents are included"
-  ],
-  strictChecks: ["has_shareholders", "has_share_details", "matches_company_name"], // Keep this
-  nameThreshold: 40 // 
-},
-    "Tax Clearance Certificate": {
-  requiredElements: [
-    "Issued by South African Revenue Service (SARS)",
-    "Tax Reference Number",
-    "Taxpayer Name",
-    "Compliance status (Good Standing or Compliant)",
-    "ACCEPT BOTH: Tax Clearance Certificate AND Tax Compliance Status",
-    "ACCEPT MULTI-PAGE DOCUMENTS: Even if other tax documents are included"
-  ],
-  criticalChecks: ["has_tax_reference_number", "issued_by_sars", "valid_clearance_status"]
-},
-  };
-
- const createStrictPrompt = (docLabel, rules, registeredName) => { 
-  let customInstructions = "";
-  
-  // Special handling for specific document types
-  if (docLabel === "Company Registration Certificate") {
-    customInstructions = `SPECIAL INSTRUCTIONS FOR REGISTRATION CERTIFICATES:
-- ✅ ACCEPT ANY VARIATION: COR14.3, Certificate of Incorporation, CIPC Certificate, CK1, CK2
-- ✅ COMMON VARIATIONS TO ACCEPT: "COR14.3", "CoR 14.3", "Certificate of Incorporation", "Registration Certificate"
-`;
-  }
-  
-  if (docLabel === "B-BBEE Certificate") {
-    customInstructions = `SPECIAL INSTRUCTIONS FOR B-BBEE DOCUMENTS:
-- ACCEPT BOTH: Traditional B-BBEE Certificates AND Exemption Affidavits for micro-enterprises
-- EXEMPTION AFFIDAVITS MUST CONTAIN: Clear 'Exemption Affidavit' or 'Micro Enterprise' title, Commissioner of Oaths stamp, turnover declaration below R10 million
-- CERTIFICATES MUST CONTAIN: B-BBEE level (1-8), issued by accredited agency, expiry date
-- BOTH DOCUMENT TYPES ARE VALID for different business sizes
-- FORMAL CERTIFICATES MUST HAVE: Accredited verification agency name or SANAS accreditation
-- SWORN AFFIDAVITS MUST HAVE: Commissioner of Oaths stamp and signature
-`;
-  }
-
-  if (docLabel === "Company Letterhead") {
-    customInstructions = `SPECIAL INSTRUCTIONS FOR COMPANY LETTERHEAD:
-- ✅ ACCEPT ANY OFFICIAL BUSINESS STATIONERY: Letterhead, business letter, official company paper
-- ✅ COMPANY LOGO: Optional - accept even if logo is missing
-- ✅ REGISTRATION NUMBER: Optional - not always required on letterhead
-- ✅ DATE: Optional - letterhead may or may not have a date
-- ✅ MINIMAL REQUIREMENTS: Company name + at least one contact method (phone, email, address, or website)
-- ✅ DESIGN: Must look like official business stationery (not plain paper)
-- ✅ REJECT: Plain blank paper without company branding
-- ✅ ACCEPT MULTIPLE FORMATS: Single-page letters, multi-page documents, scanned stationery
-- ✅ MATCHING COMPANY NAME: Should contain or match "${registeredName}" (be flexible with abbreviations)
-`;
-  }
-  
-  if (docLabel === "IDs of Directors & Shareholders") {
-    customInstructions = `SPECIAL INSTRUCTIONS FOR ID DOCUMENTS:
-- ACCEPT ANY OFFICIAL ID DOCUMENT: South African ID Card, Passport, Driver's License, Refugee ID, Asylum Seeker Certificate
-- CERTIFICATION NOT REQUIRED: Regular ID copies are acceptable - no commissioner stamp needed
-- FOCUS ON: Document clarity, ID details, readability
-- IGNORE COMPANY NAME CHECK: ID DOCUMENTS DON'T CONTAIN COMPANY NAMES
-- DO NOT REJECT based on specific ID type - all official IDs are acceptable
-- DO NOT REQUIRE CERTIFICATION: Regular copies are fully acceptable
-`;
-  }
-
-  if (docLabel === "Tax Clearance Certificate") {
-    customInstructions = `SPECIAL INSTRUCTIONS FOR TAX DOCUMENTS:
-- ACCEPT BOTH: Tax Clearance Certificate AND Tax Compliance Status documents - THEY ARE THE SAME
-- BOTH DOCUMENTS serve the same purpose and are issued by SARS
-- FOCUS ON: SARS issuance, tax reference number, company name, compliance status
-- EXPIRY DATE: Check if present, but focus on "compliant" status
-- DO NOT REJECT based on document title variation
-`;
-  }
-
-  if (docLabel === "Financial Statements") { 
-    customInstructions = `SPECIAL INSTRUCTIONS FOR FINANCIAL STATEMENTS:
-- ACCEPT BOTH: Audited AND Unaudited financial statements
-- ACCEPT BOTH: Full statements AND management accounts
-- ACCEPT MULTI-PAGE DOCUMENTS: Even if the PDF contains other documents
-- FOCUS ON: Finding financial figures anywhere in the document
-- DO NOT REJECT if other documents are included in the same PDF
-- CHECK ALL PAGES: Scan entire document for financial content
-- IF FINANCIAL INFORMATION FOUND: Return status "verified" regardless of audit status
-- IF NOT AUDITED: Return status "verified:not_audited" with appropriate message
-- AUDITED DOCUMENTS MUST CONTAIN: "auditor", "audit report", or "audit opinion" keywords
-- KEY ELEMENTS TO LOOK FOR: Revenue, expenses, assets, liabilities, profit/loss
-`;
-  }
-
-  if (docLabel === "Proof of Address") {
-    customInstructions = `SPECIAL INSTRUCTIONS FOR PROOF OF ADDRESS:
-- ACCEPT ANY OFFICIAL DOCUMENT: Utility bill, bank statement, municipal letter, lease agreement
-- DATE REQUIREMENT: Should be within last 6 months (flexible)
-- FOCUS ON: Full physical address and name matching
-- DO NOT REJECT for missing stamps or letterheads
-`;
-  }
-
-  if (docLabel === "Bank Confirmation Letter") {
-    customInstructions = `SPECIAL INSTRUCTIONS FOR BANK DOCUMENTS:
-- ACCEPT BOTH: Formal confirmation letters AND bank statements
-- FOCUS ON: Account number, bank name, account holder name
-- BRANCH CODE & ACCOUNT TYPE: Optional - don't reject if missing
-- DATE: Statement date or letter date is sufficient
-`;
-  }
-if (docLabel === "Share Register") {
-  customInstructions = `SPECIAL INSTRUCTIONS FOR SHARE REGISTER:
-- ACCEPT BOTH: Formal registers AND simple shareholder lists
-- ACCEPT BOTH: Signed documents AND unsigned extracts
-- FOCUS ON: Shareholder names and share quantities/percentages
-- CERTIFICATE NUMBERS & SIGNATURES: Optional - don't reject if missing
-
-🔴 CRITICAL - COMPANY NAME MUST MATCH:
-- Extract the company name from the share register
-- Compare with "${registeredName}"
-- If company name is different → REJECT with "name_mismatch"
-- Do NOT accept share registers from other companies
-`;
-}
-
-  if (docLabel === "Guarantee/Contract") {
-    customInstructions = `SPECIAL INSTRUCTIONS FOR CONTRACTS:
-- ACCEPT BOTH: Signed AND unsigned agreements
-- FOCUS ON: Parties involved, terms and conditions, effective date
-- SIGNATURES: Preferred but not mandatory for validation
-- DURATION: Should be specified or implied
-`;
-  }
-
-  // Add this special instruction for COIDA right after your other special instructions:
-if (docLabel === "COIDA Letter of Good Standing") {
-  customInstructions = `CRITICAL - COIDA LETTER VALIDATION RULES:
-  
-🔴 YOU MUST EXTRACT AND RETURN:
-- The company name found on the COIDA letter
-- Compare it with "${registeredName}"
-
-🔴 RESPONSE MUST INCLUDE:
-"extractedCompanyName": "the name you found on the document"
-
-🔴 REJECT IF:
-- Extracted name doesn't match "${registeredName}" (allow flexible matching)
-- No company name found on the document
-`;
-}
-
-  // Special handling for CVs - complete override
-  if (docLabel === "CV") {
-    return `ANALYZE THE UPLOADED DOCUMENT FILE:
-
-DOCUMENT VALIDATION FOR: CV
-
-IMPORTANT - CV VALIDATION RULES:
-1. 🔴 THIS IS A CV - DO NOT CHECK COMPANY NAME
-2. 🔴 CVs are personal documents - they will NOT contain "${registeredName}"
-3. 🔴 ONLY validate that this is a legitimate CV/resume
-
-REQUIRED ELEMENTS:
-- Person's full name
-- Work experience with dates
-- Educational background
-- Skills or competencies
-
-ACCEPT IF:
-- Document is a CV, resume, or curriculum vitae
-- Contains personal details and work history
-- Shows education or qualifications
-
-REJECT IF:
-- Document is not a CV (e.g., company document, ID, certificate)
-- No work experience or education section
-- Appears to be a company document
-
-RESPOND WITH:
-{
-  "isValid": true/false,
-  "status": "verified" | "wrong_type" | "incomplete",
-  "identifiedDocumentType": "What you detected",
-  "message": "Brief validation result",
-  "warnings": []
-}`;
-  }
-
-  // PRIORITIZATION SYSTEM - Add this after special instructions
-  const prioritizationRules = `VALIDATION PRIORITY LEVELS - CRITICAL TO UNDERSTAND:
-
-🔴 LEVEL 1 - MUST HAVE (Hard Requirements - REJECT IF MISSING):
-- Document type must be correct or serve the same purpose
-- Company name in document MUST match "${registeredName}" (for company documents)
-  → Extract the actual company name from the document text
-  → Compare with registered name
-  → If different company found → REJECT
-- Document must not be expired (for certificates with expiry dates)
-
-🟡 LEVEL 2 - SHOULD HAVE (Important but flexible - ACCEPT WITH WARNING IF MISSING):
-- Most required elements should be present, but missing 1-2 is acceptable
-- Formatting can vary (audited/unaudited, certified/uncertified, formal/informal)
-- Dates should be recent but not strictly enforced (within 6 months for proof of address)
-- Signatures on contracts (preferred but not mandatory)
-
-🟢 LEVEL 3 - NICE TO HAVE (Ignore completely if missing - NEVER REJECT FOR THESE):
-- Branch codes, certificate numbers, specific stamps/logos (except Commissioner stamps on affidavits)
-- "Professional certifications" on CVs, "Certificate numbers" on share registers
-- Exact document titles - variations like "COR14.3", "Tax Compliance Status" are fine
-- SANAS logos, accreditation numbers (except for formal B-BBEE certificates)
-- Account type on bank statements
-
-DECISION RULES:
-- If ALL Level 1 requirements are met → ACCEPT the document
-- If Level 1 requirements are met but some Level 2 are missing → ACCEPT with warning
-- If ANY Level 1 requirement fails → REJECT the document
-- Level 3 items should NEVER cause a rejection
-`;
-
-  // FLEXIBILITY GUIDELINES
-  const flexibilityGuidelines = `FLEXIBILITY GUIDELINES:
-- ✅ ACCEPT DOCUMENT VARIATIONS: Different names for the same document are acceptable
-- ✅ ACCEPT MULTI-PAGE DOCUMENTS: Even if other documents are included in the same PDF
-- ✅ SCAN ALL PAGES: Check the entire document thoroughly
-- ✅ IF FOUND ANYWHERE: Consider it valid, regardless of other content
-- ✅ BE PRACTICAL: The goal is to verify the document exists, not to enforce strict formatting
-`;
-
-  // UNIVERSAL INSTRUCTIONS
-  const universalInstructions = `UNIVERSAL DOCUMENT VALIDATION RULES:
-- ✅ SCAN ALL PAGES: Check every page of the uploaded document
-- ✅ ACCEPT MULTI-PAGE DOCUMENTS: Even if other documents are included in the same PDF
-- ✅ IF THE REQUIRED DOCUMENT IS FOUND ON ANY PAGE: Return status "verified"
-- ✅ DO NOT REJECT just because there are other documents in the same file
-- ✅ FOCUS ON: Finding the required ${docLabel} anywhere in the document
-`;
-
-  return `${customInstructions}
-${prioritizationRules}
-${flexibilityGuidelines}
-${universalInstructions}
-
-ANALYZE THE UPLOADED DOCUMENT FILE:
-
-DOCUMENT VALIDATION FOR: ${docLabel}
-
-CRITICAL CHECKS:
-1. 🔴 DOCUMENT TYPE: Must be ${docLabel} or an accepted variation
-2. 🔴 COMPANY NAME VERIFICATION: 
-   - Extract the company name FROM THE DOCUMENT CONTENT
-   - Compare it with "${registeredName}"
-   - They must match (flexible matching allowed for Pty Ltd variations)
-   - If the document shows a DIFFERENT company name → REJECT with "name_mismatch"
-   - Do NOT guess or assume - actually check the content
-3. 🔴 EXPIRY DATE: Check for expiry if applicable (current year: 2025)
-4. 🔴 COMPLETENESS: Apply Priority Levels above when evaluating
-
-REQUIRED ELEMENTS (mix of Level 1, 2, and 3):
-${rules.requiredElements.map(item => `- ${item}`).join('\n')}
-
-Apply the Priority Levels above when evaluating this document. Remember:
-- Level 1 items MUST be present
-- Level 2 items SHOULD be present (accept if 1-2 missing)
-- Level 3 items are NICE TO HAVE (ignore if missing)
-
-RESPOND WITH:
-{
-  "isValid": true/false,
-  "status": "verified" | "verified:not_audited" | "wrong_type" | "name_mismatch" | "expired" | "incomplete",
-  "extractedCompanyName": "name from document", // ADD THIS
-  "identifiedDocumentType": "What you detected the uploaded file to be",
-  "message": "Brief validation result",
-  "missingLevel1Elements": [],
-  "warnings": []
-}
-`;
-};
   try {
-    const rules = documentValidationRules[docLabel] || {
-      requiredElements: ["Document must be valid and complete"],
-      skipNameCheck: true
-    };
-    
-    const validationPrompt = createStrictPrompt(docLabel, rules, registeredName);
-
     const base64Data = await new Promise((resolve) => {
       const reader = new FileReader();
       reader.readAsDataURL(file);
       reader.onload = () => resolve(reader.result.split(',')[1]);
     });
 
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: [
-        {
-          parts: [
-            {
-              inlineData: {
-                mimeType: file.type,
-                data: base64Data,
-              }
-            },
-            {
-              text: validationPrompt
-            }
-          ]
-        }
-      ]
+    
+    const validateMyDocument = httpsCallable(functions, 'validateMyDocument');
+
+    const result = await validateMyDocument({
+      documentLabel: docLabel,
+      base64File: base64Data,
+      mimeType: file.type,
+      registeredName: registeredName,
     });
 
-    const parseDetailedResponse = (responseText, docLabel) => {
-      try {
-        const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          const parsed = JSON.parse(jsonMatch[0]);
-          
-          // Special handling for CVs - if it looks like a CV, accept it
-          if (docLabel === "CV" && 
-              (parsed.identifiedDocumentType?.toLowerCase().includes("cv") ||
-               parsed.identifiedDocumentType?.toLowerCase().includes("resume") ||
-               parsed.identifiedDocumentType?.toLowerCase().includes("curriculum"))) {
-            return {
-              isValid: true,
-              status: "verified",
-              message: "CV verified",
-              warnings: []
-            };
-          }
-          
-          let userMessage;
-          let status = parsed.status;
-          
-          if (parsed.status === "wrong_type") {
-            userMessage = `Please upload a ${docLabel} document`;
-            status = "wrong_type";
-          } else if (parsed.status === "name_mismatch") {
-            userMessage = "Company name does not match your registered name";
-            status = "name_mismatch";
-          } else if (parsed.status === "incomplete") {
-            userMessage = "Document is incomplete - missing required elements";
-            status = "incomplete";
-          } else {
-            userMessage = "Document verified";
-            status = "verified";
-          }
-          
-          return {
-            isValid: parsed.isValid,
-            status: status,
-            message: userMessage,
-            warnings: parsed.warnings || []
-          };
-        }
-        
-        // Fallback - be more accepting for CVs
-        if (docLabel === "CV") {
-          return {
-            isValid: true,
-            status: "verified",
-            message: "CV verified",
-            warnings: []
-          };
-        }
-        
-        const lowerText = responseText.toLowerCase();
-        if (lowerText.includes('false') || lowerText.includes('invalid') || lowerText.includes('reject')) {
-          return {
-            isValid: false,
-            status: "wrong_type",
-            message: `Please upload a ${docLabel} document`,
-            warnings: []
-          };
-        }
-        
-        return {
-          isValid: true,
-          status: "verified", 
-          message: "Document verified",
-          warnings: []
-        };
-        
-      } catch (error) {
-        // On parse error, be more accepting for CVs
-        if (docLabel === "CV") {
-          return {
-            isValid: true,
-            status: "verified",
-            message: "CV verified",
-            warnings: []
-          };
-        }
-        
-        return {
-          isValid: false,
-          status: "rejected",
-          message: "Validation error",
-          warnings: []
-        };
-      }
-    };
+    return result.data.validationResult;
 
-    return parseDetailedResponse(response.text, docLabel);
-    
   } catch (error) {
     console.error("AI validation failed:", error);
-    
-    // For CVs, be forgiving on network errors
-    if (docLabel === "CV") {
-      return {
-        isValid: true,
-        status: "verified",
-        message: "CV accepted",
-        warnings: []
-      };
-    }
-    
-    // Throw network error to prevent document upload
     throw new Error("Network error - please check your connection and try again");
   }
 };
+
+
 
 
   const getMultipleDocumentData = (docLabel, profileData) => {
@@ -1531,7 +938,8 @@ const renderIndividualDocumentActions = (docLabel, docIndex, doc) => {
     }
   };
 
- const getDocumentStatus = (docLabel) => {
+ 
+  const getDocumentStatus = (docLabel) => {
   const multiUploadDocuments = [
     "IDs of Directors & Shareholders",
     "Client references / Support Letters",
@@ -1739,6 +1147,7 @@ const renderIndividualDocumentActions = (docLabel, docIndex, doc) => {
       return true; // "all" filter - show all documents
     });
   };
+
 
   const filteredDocuments = DOCUMENTS.filter((docLabel) => {
     const documentId = getDocumentId(docLabel);
@@ -1949,7 +1358,6 @@ const badgeStyles = (status) => {
     ...styles[status]
   };
 };
-
 
   const getContainerStyles = () => ({
     fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
@@ -2657,28 +2065,29 @@ const badgeStyles = (status) => {
                     }}>Actions</th>
                   </tr>
                 </thead>
-        <tbody>
+                <tbody>
     {filteredDocuments.map((docLabel, index) => {
       const documentId = getDocumentId(docLabel);
       const unifiedPath = UNIFIED_DOCUMENT_PATHS[documentId];
       
-    // Get the most recent updatedAt - check both root and documents nested
-let updatedAt = 
-  // Check in documents nested first (your current structure)
-  profileData?.documents?.[`${documentId}UpdatedAt`] || 
-  profileData?.documents?.[`${documentId}_multiple_updated`] ||
-  // Then check at root level (where your data actually is)
-  profileData?.[`${documentId}UpdatedAt`] ||
-  profileData?.[`${documentId}_multiple_updated`];
+          // Get the most recent updatedAt - check both root and documents nested
+  let updatedAt = 
+    // Check in documents nested first (your current structure)
+    profileData?.documents?.[`${documentId}UpdatedAt`] || 
+    profileData?.documents?.[`${documentId}_multiple_updated`] ||
+    // Then check at root level (where your data actually is)
+    profileData?.[`${documentId}UpdatedAt`] ||
+    profileData?.[`${documentId}_multiple_updated`];
 
-// If unified path exists, try that too in both locations
-if (!updatedAt && unifiedPath) {
-  updatedAt = profileData?.documents?.[`${unifiedPath}UpdatedAt`] ||
-              profileData?.[`${unifiedPath}UpdatedAt`];
-}
+  // If unified path exists, try that too in both locations
+  if (!updatedAt && unifiedPath) {
+    updatedAt = profileData?.documents?.[`${unifiedPath}UpdatedAt`] ||
+                profileData?.[`${unifiedPath}UpdatedAt`];
+  }
 
-console.log(`UpdatedAt for ${docLabel}:`, updatedAt);
-console.log(`Full documents object:`, profileData?.documents)
+  // console.log(`UpdatedAt for ${docLabel}:`, updatedAt);
+  // console.log(`Full documents object:`, profileData?.documents)
+      
       // For multi-upload documents, check the multiple updated timestamp
       const multiUploadDocuments = [
         "IDs of Directors & Shareholders",
@@ -2687,27 +2096,24 @@ console.log(`Full documents object:`, profileData?.documents)
         "Industry Accreditations",
         "Loan Agreements"
       ];
-
+      
       const isMultiUpload = multiUploadDocuments.includes(docLabel);
-
+      if (isMultiUpload) {
+        const multipleUpdatedAt = profileData[`documents.${documentId}_multiple_updated`];
+        if (multipleUpdatedAt) {
+          updatedAt = multipleUpdatedAt;
+        }
+      }
       
-      // const isMultiUpload = multiUploadDocuments.includes(docLabel);
-      // if (isMultiUpload) {
-      //   const multipleUpdatedAt = profileData[`documents.${documentId}_multiple_updated`];
-      //   if (multipleUpdatedAt) {
-      //     updatedAt = multipleUpdatedAt;
-      //   }
-      // }
-      
-      // // For CVs, check CV specific timestamps
-      // if (docLabel === "CV") {
-      //   const cvUpdatedAt = profileData[`documents.cv_multiple_updated`];
-      //   if (cvUpdatedAt) {
-      //     updatedAt = cvUpdatedAt;
-      //   }
-      // }
+      // For CVs, check CV specific timestamps
+      if (docLabel === "CV") {
+        const cvUpdatedAt = profileData[`documents.cv_multiple_updated`];
+        if (cvUpdatedAt) {
+          updatedAt = cvUpdatedAt;
+        }
+      }
 
-          // Format the date for display
+            // Format the date for display
  const formattedDate = updatedAt ? 
     new Date(updatedAt.seconds * 1000).toLocaleDateString() : 
     "Never";
@@ -2810,12 +2216,9 @@ console.log(`Full documents object:`, profileData?.documents)
               verticalAlign: "middle",
               backgroundColor: "transparent"
             }}>
-              {updatedAt ? (
-    // Handle both Timestamp objects and string dates
-    updatedAt.seconds 
-      ? new Date(updatedAt.seconds * 1000).toLocaleDateString()  // Firestore Timestamp
-      : new Date(updatedAt).toLocaleDateString()                  // String date
-  ) : "-"}
+              {updatedAt?.seconds
+                ? new Date(updatedAt.seconds * 1000).toLocaleDateString()
+                : "-"}
             </td>
 
             <td style={{
