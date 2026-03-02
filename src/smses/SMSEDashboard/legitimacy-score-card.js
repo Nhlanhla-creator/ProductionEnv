@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { ChevronDown, RefreshCw, AlertCircle, Shield, CheckCircle, TrendingUp } from "lucide-react"
+import { ChevronDown, RefreshCw, AlertCircle, Shield, CheckCircle, TrendingUp, FileText } from "lucide-react"
 import { db, auth } from "../../firebaseConfig"
 import { doc, onSnapshot, updateDoc, setDoc, getDoc } from "firebase/firestore"
 import { API_KEYS } from "../../API" // Make sure this path is correct
@@ -18,7 +18,9 @@ export function LegitimacyScoreCard({ styles, profileData, onScoreUpdate, apiKey
   const [showScoreBreakdown, setShowScoreBreakdown] = useState(false)
   const [showDetailedAnalysis, setShowDetailedAnalysis] = useState(false)
   const [triggeredByAuto, setTriggeredByAuto] = useState(false)
- 
+  const [confidenceScores, setConfidenceScores] = useState({})
+  const [evidenceTraceability, setEvidenceTraceability] = useState({})
+
   useEffect(() => {
     document.body.style.overflow = showModal ? "hidden" : ""
     return () => (document.body.style.overflow = "")
@@ -34,7 +36,7 @@ export function LegitimacyScoreCard({ styles, profileData, onScoreUpdate, apiKey
   }, [profileData, aiEvaluationResult])
 
   const parseAiEvaluationScores = (text) => {
-    console.log("Full AI response text:", text); // Debug log
+    console.log("Full AI response text:", text);
 
     const categories = {
       foundational: ["Identity Markers", "Foundational Business Identity", "foundational"],
@@ -43,68 +45,108 @@ export function LegitimacyScoreCard({ styles, profileData, onScoreUpdate, apiKey
       thirdParty: ["Third-Party Validation", "Third-Party Validations", "third-party", "thirdparty"],
     }
 
+    const cleanedText = text.replace(/\*\*(.*?)\*\*/g, "$1")
     const scores = {}
+    const evidenceMap = {}
+    const confidenceMap = {}
 
-    // Split text into lines for easier processing
     const lines = text.split('\n');
-    console.log("Text lines:", lines); // Debug log
 
-    // Then extract individual category scores
+    const findSectionBody = (label) => {
+      const sectionRe = new RegExp(
+        `(^|\\n)\\s*(?:#{1,6}\\s*)?\\d*\\.?\\s*${label}[^\\n]*\\n([\\s\\S]*?)(?=\\n\\s*(?:#{1,6}\\s*|\\d+\\.\\s|$))`,
+        "i"
+      )
+      const m = cleanedText.match(sectionRe)
+      return m ? m[2] : null
+    }
+
     Object.entries(categories).forEach(([key, labels]) => {
       let foundScore = 0
+      let evidence = null
+      let confidence = "Medium"
 
-      // Try multiple label variations
       for (const label of labels) {
-        console.log(`Looking for label: "${label}" in category: ${key}`); // Debug log
+        const body = findSectionBody(label)
 
-        // Most specific pattern for your AI response format: **1. Identity Markers: Score 5**
-        const exactPattern = new RegExp(`\\*\\*\\d+\\.\\s*${label}\\s*:\\s*Score\\s+(\\d+)\\*\\*`, "i")
+        if (body) {
+          // Extract evidence
+          const evidencePatterns = [
+            /Evidence:?\s*([^\n]+)/i,
+            /Based on:?\s*([^\n]+)/i,
+            /Supporting data:?\s*([^\n]+)/i
+          ]
+          for (const p of evidencePatterns) {
+            const mm = body.match(p)
+            if (mm) { evidence = mm[1].trim(); break }
+          }
 
-        // Alternative patterns
-        const patterns = [
-          exactPattern,
-          new RegExp(`\\*\\*\\d+\\.\\s*${label}\\s*:\\s*Score\\s*=\\s*(\\d+)\\*\\*`, "i"), // with equals
-          new RegExp(`${label}\\s*:\\s*Score\\s+(\\d+)`, "i"), // without bold/numbers
-          new RegExp(`${label}\\s*:\\s*Score\\s*=\\s*(\\d+)`, "i"), // without bold/numbers with equals
-          new RegExp(`\\d+\\.\\s*${label}\\s*:\\s*Score\\s+(\\d+)`, "i"), // numbered without bold
-          new RegExp(`${label}[^\\d]*?(\\d+)`, "i"), // fallback: label followed by any number
-        ]
+          // Extract confidence
+          const confidencePatterns = [
+            /Confidence:?\s*(High|Medium|Low)/i,
+            /Confidence level:?\s*(High|Medium|Low)/i
+          ]
+          for (const p of confidencePatterns) {
+            const mm = body.match(p)
+            if (mm) { confidence = mm[1]; break }
+          }
 
-        for (let i = 0; i < patterns.length; i++) {
-          const pattern = patterns[i]
-          const match = text.match(pattern)
-          console.log(`Pattern ${i} for ${label}:`, pattern, "Match:", match); // Debug log
-
-          if (match && match[1]) {
-            foundScore = parseInt(match[1])
-            console.log(`✓ Found score for ${key} (${label}): ${foundScore} using pattern ${i}`)
-            break
+          // Extract score
+          const scorePatterns = [
+            /Score\s*:\s*(\d(?:\.\d)?)/i,
+            /(\d(?:\.\d)?)\s*\/\s*5/i,
+            /(\d(?:\.\d)?)\s*out\s*of\s*5/i,
+          ]
+          for (const p of scorePatterns) {
+            const mm = body.match(p)
+            if (mm) { foundScore = parseFloat(mm[1]); break }
           }
         }
+
+        // Fallback patterns for your specific format
+        const exactPattern = new RegExp(`\\*\\*\\d+\\.\\s*${label}\\s*:\\s*Score\\s+(\\d+)\\*\\*`, "i")
+        const match = text.match(exactPattern)
+        if (match && match[1]) {
+          foundScore = parseInt(match[1])
+        }
+
         if (foundScore > 0) break
       }
 
-      scores[key] = Math.min(Math.max(foundScore, 0), 5) // Ensure score is between 0-5
-      console.log(`Final score for ${key}: ${scores[key]}`); // Debug log
+      scores[key] = Math.min(Math.max(foundScore, 0), 5)
+      if (evidence) evidenceMap[key] = evidence
+      if (confidence) confidenceMap[key] = confidence
     })
 
-    // Extract normalized score - try multiple patterns
+    // Extract overall confidence and evidence
+    let overallConfidence = "Medium"
+    let overallEvidence = null
+
+    const confidenceMatch = cleanedText.match(/Overall\s*Confidence:?\s*(High|Medium|Low)/i)
+    if (confidenceMatch) overallConfidence = confidenceMatch[1]
+
+    const evidenceMatch = cleanedText.match(/Evidence\s*Summary:?\s*([^\n]+)/i)
+    if (evidenceMatch) overallEvidence = evidenceMatch[1].trim()
+
+    // Extract normalized score
     const normalizedPatterns = [
       /Normalized Score:\s*[:=]?\s*\(?(\d+)\/\d+\)?\s*\*\s*100\s*=\s*(\d+)/i,
       /Normalized Score:\s*[:=]?\s*(\d+)/i,
-      /\((\d+)\/\d+\)\s*\*\s*100\s*=\s*(\d+)/i, // (22/25) * 100 = 88
-      /=\s*(\d+)$/m // Just look for = followed by number at end of line
+      /\((\d+)\/\d+\)\s*\*\s*100\s*=\s*(\d+)/i,
+      /=\s*(\d+)$/m
     ]
 
     for (const pattern of normalizedPatterns) {
       const match = text.match(pattern)
-      console.log("Normalized pattern:", pattern, "Match:", match); // Debug log
       if (match) {
-        scores.normalized = parseInt(match[match.length - 1]) // Get the last captured group
-        console.log(`✓ Found normalized score: ${scores.normalized}`)
+        scores.normalized = parseInt(match[match.length - 1])
         break
       }
     }
+
+    // Update state
+    setConfidenceScores(confidenceMap)
+    setEvidenceTraceability(evidenceMap)
 
     console.log("Final parsed AI scores:", scores)
     return scores
@@ -302,90 +344,162 @@ export function LegitimacyScoreCard({ styles, profileData, onScoreUpdate, apiKey
     setEvaluationError("")
 
     try {
-      // Prepare data for AI evaluation
       const evaluationData = prepareDataForAiEvaluation(profileData)
 
-      const combinedMessage = `Evaluate the legitimacy of the following business using the BIG Legitimacy Scorecard rubric.
+      // Enhanced system prompt with guardrails and improved "How to Improve" section
+      const systemPrompt = `You are a board-level business analyst evaluating business legitimacy.
+    
+CRITICAL RULES:
+- ONLY use the provided structured data - never invent or assume missing information
+- Never fabricate benchmarks or market comparisons
+- Clearly separate fact from inference
+- For EVERY conclusion, provide:
+  1. Confidence level (High/Medium/Low)
+  2. Evidence citation (specific data points referenced)
+- If insufficient data exists, state: "Insufficient data to determine"
+- All recommendations must map to specific, actionable steps`
 
-IMPORTANT FORMATTING REQUIREMENTS:
-- Use clear section headers with ###
-- Provide specific, actionable improvement recommendations for EACH category
-- Keep rationale concise but insightful
+      const combinedMessage = `${systemPrompt}
 
-Instructions:
-- Score each of the 4 categories below from 0 to 5 using the rubric where:
-  • 0 = No evidence or very poor
-  • 1 = Minimal/poor evidence  
-  • 2 = Below average
-  • 3 = Average/acceptable
-  • 4 = Good/strong evidence
-  • 5 = Excellent/outstanding
-- Provide a short rationale for each score (2-3 sentences)
-- FOR EACH CATEGORY, include a "How to Improve" section with 3-5 specific, actionable steps to increase the score
-- At the end, give a total score out of 20, normalize it to 100, and assign a legitimacy band:
-  • 85–100: Highly Legitimate
-  • 65–84: Credible but Improving
-  • 50–64: Emerging Presence
-  • <50: Needs Credibility Work
+Evaluate the legitimacy of this business using the provided data:
 
-CRITICAL: For improvement recommendations, be SPECIFIC and ACTIONABLE. Instead of vague advice like "improve online presence," provide concrete steps like:
-- "Create and publish 3 case studies showcasing client success stories within the next 3 months"
-- "Register for BBBEE certification and complete the application within 6 months"
-- "Launch a professional website with company portfolio and contact information by next quarter"
-- "Establish active LinkedIn and Facebook business pages with weekly content updates"
-
-Categories to evaluate:
-1. Identity Markers (website, domain email, registered address, company logo)
-2. Digital Presence (Google search, online visibility, social links, discoverability)
-3. Track Record (clients, years in operation, projects, financials, revenue history)
-4. Third-Party Validation (certifications, awards, memberships, accreditations)
-
-Input Data:
+INPUT DATA:
 ${evaluationData}
 
-OUTPUT FORMAT:
+INSTRUCTIONS:
+For each of the 4 categories below, provide:
+
+1. Score (0-5) based ONLY on provided data
+2. Evidence line citing specific data points used
+3. Confidence level (High/Medium/Low)
+4. Rationale explaining how the data supports this score
+5. For "How to Improve" - CRITICAL: Follow the EXACT format below with platform-specific actions
+
+IMPROVEMENT ACTIONS RULES - CRITICAL:
+For each category provide improvements in this exact format:
+
+**How to Improve:**
+- → [Platform Section Name]: [specific action]
+- → [Platform Section Name]: [specific action]
+- → [Platform Section Name]: [specific action]
+- 💡 [General real-world guidance for obtaining/creating missing items if critical gaps exist]
+- 💡 [Second general guidance point if needed]
+
+PLATFORM ACTIONS REFERENCE:
+
+Identity Markers platform actions:
+- Contact Details section → add professional website URL
+- Contact Details section → add business email address
+- Entity Overview section → upload company logo
+- Contact Details section → add physical address
+- Documents section → upload proof of address
+
+Digital Presence platform actions:
+- Contact Details section → add LinkedIn profile
+- Contact Details section → add Facebook page
+- Contact Details section → add X/Twitter account
+- Contact Details section → add Instagram account
+- Contact Details section → add YouTube channel
+- Ensure all social links are active and consistent with brand
+
+Track Record platform actions:
+- Entity Overview section → update years in operation
+- Products & Services section → add key clients and references
+- Enterprise Readiness section → confirm paying customers status
+- Financial Overview section → update annual revenue
+- Financial Overview section → confirm revenue generation status
+
+Third-Party Validation platform actions:
+- Documents section → upload B-BBEE certificate
+- Documents section → upload industry accreditations
+- Document Upload section → upload support/reference letters
+- Enterprise Readiness section → confirm mentor/business advisor
+- Documents section → upload any awards or recognition certificates
+
+SCORING RUBRIC (use strictly):
+- 0 = No evidence or very poor
+- 1 = Minimal/poor evidence
+- 2 = Below average
+- 3 = Average/acceptable
+- 4 = Good/strong evidence
+- 5 = Excellent/outstanding
+
+OUTPUT FORMAT - YOU MUST FOLLOW THIS EXACTLY:
+
 ### 1. Identity Markers
 **Score:** [0-5]
-**Rationale:** [2-3 sentence explanation]
+**Evidence:** [Cite specific data: Website = X, Email = Y, Logo = Z, Address = W]
+**Confidence:** [High/Medium/Low]
+**Rationale:** [2-3 sentences explaining how the data supports this score]
 **How to Improve:** 
-• [Specific action 1 with timeline]
-• [Specific action 2 with measurable goal]
-• [Specific action 3 with concrete steps]
+- → [Platform Section Name]: [specific action with measurable goal]
+- → [Platform Section Name]: [specific action with measurable goal]
+- → [Platform Section Name]: [specific action with measurable goal]
+- 💡 [General real-world guidance for obtaining/creating missing items if critical gaps exist]
 
 ### 2. Digital Presence
 **Score:** [0-5]
-**Rationale:** [2-3 sentence explanation]
+**Evidence:** [Cite specific data: Social links present = X of 6, Website present = Y]
+**Confidence:** [High/Medium/Low]
+**Rationale:** [2-3 sentences]
 **How to Improve:** 
-• [Specific action 1 with timeline]
-• [Specific action 2 with measurable goal]
-• [Specific action 3 with concrete steps]
+- → [Platform Section Name]: [specific action with measurable goal]
+- → [Platform Section Name]: [specific action with measurable goal]
+- → [Platform Section Name]: [specific action with measurable goal]
+- 💡 [General real-world guidance for obtaining/creating missing items if critical gaps exist]
 
 ### 3. Track Record
 **Score:** [0-5]
-**Rationale:** [2-3 sentence explanation]
+**Evidence:** [Cite specific data: Years in operation = X, Key clients = Y, Revenue = Z]
+**Confidence:** [High/Medium/Low]
+**Rationale:** [2-3 sentences]
 **How to Improve:** 
-• [Specific action 1 with timeline]
-• [Specific action 2 with measurable goal]
-• [Specific action 3 with concrete steps]
+- → [Platform Section Name]: [specific action with measurable goal]
+- → [Platform Section Name]: [specific action with measurable goal]
+- → [Platform Section Name]: [specific action with measurable goal]
+- 💡 [General real-world guidance for obtaining/creating missing items if critical gaps exist]
 
 ### 4. Third-Party Validation
 **Score:** [0-5]
-**Rationale:** [2-3 sentence explanation]
+**Evidence:** [Cite specific data: Certifications = X, Accreditations = Y, Support letters = Z]
+**Confidence:** [High/Medium/Low]
+**Rationale:** [2-3 sentences]
 **How to Improve:** 
-• [Specific action 1 with timeline]
-• [Specific action 2 with measurable goal]
-• [Specific action 3 with concrete steps]
+- → [Platform Section Name]: [specific action with measurable goal]
+- → [Platform Section Name]: [specific action with measurable goal]
+- → [Platform Section Name]: [specific action with measurable goal]
+- 💡 [General real-world guidance for obtaining/creating missing items if critical gaps exist]
 
 ### Overall Assessment
 **Total Score:** [X]/20
 **Normalized to 100:** [Y]%
 **Legitimacy Band:** [Band Name]
-**Final Analysis:** [Brief overall assessment with key recommendations]`
+**Overall Confidence:** [High/Medium/Low]
+**Evidence Summary:** [Brief summary of key data points supporting overall score]
+**Final Analysis:** [Brief overall assessment with key recommendations, referencing specific data points]`
 
       const result = await sendMessageToChatGPT(combinedMessage)
+
+      // Optional: Two-pass validation
+      try {
+        const validationPrompt = `Review this legitimacy analysis and identify ANY claims that are NOT directly supported by the provided data. List them:
+
+${result}
+
+INPUT DATA USED:
+${evaluationData}
+
+If all claims are supported, respond with "VALIDATION PASSED". If unsupported claims exist, list them with explanations.`
+
+        const validationResult = await sendMessageToChatGPT(validationPrompt)
+        console.log("Validation result:", validationResult)
+      } catch (validationError) {
+        console.log("Validation skipped:", validationError)
+      }
+
       setAiEvaluationResult(result)
       setShowDetailedAnalysis(true)
-      return result // Return result to be used elsewhere
+      return result
     } catch (error) {
       console.error("AI Evaluation error:", error)
       setEvaluationError(`Failed to get AI evaluation: ${error.message}`)
@@ -519,6 +633,8 @@ OUTPUT FORMAT:
         color: colors[i],
         rawScore: aiRaw,
         maxScore: 5,
+        confidence: confidenceScores[key] || "Medium",
+        evidence: evidenceTraceability[key] || "No evidence cited"
       }
     })
 
@@ -568,7 +684,7 @@ OUTPUT FORMAT:
   const scoreLevel = getScoreLevel(legitimacyScore)
   const ScoreIcon = scoreLevel.icon
 
-  // UPDATED: Format AI result with improvement actions styling
+  // UPDATED: Format AI result with improvement actions styling matching fundability-score-card
   const formatAiResult = (result) => {
     const cleanedResult = result.replace(/\*\*(.*?)\*\*/g, "$1")
 
@@ -611,7 +727,7 @@ OUTPUT FORMAT:
                 {mainContent}
               </div>
 
-              {/* Improvement Section with Special Styling */}
+              {/* Improvement Section with Special Styling - MATCHING FUNDABILITY SCORE CARD */}
               {improvementContent && (
                 <div style={{
                   backgroundColor: "#f8f4f0",
@@ -886,7 +1002,7 @@ OUTPUT FORMAT:
         </div>
 
         {/* CSS Animations */}
-        <style>{`
+        <style jsx>{`
           @keyframes pulse {
             0% {
               transform: scale(1);
@@ -1502,7 +1618,7 @@ OUTPUT FORMAT:
         </div>
       )}
 
-      <style>{`
+      <style jsx>{`
         .spin {
           animation: spin 1s linear infinite;
         }

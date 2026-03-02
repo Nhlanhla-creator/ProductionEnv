@@ -18,6 +18,8 @@ export function LeadershipScoreCard({ styles, profileData, onScoreUpdate, apiKey
   const [showScoreBreakdown, setShowScoreBreakdown] = useState(false)
   const [showDetailedAnalysis, setShowDetailedAnalysis] = useState(false)
   const [triggeredByAuto, setTriggeredByAuto] = useState(false)
+  const [confidenceScores, setConfidenceScores] = useState({})
+  const [evidenceTraceability, setEvidenceTraceability] = useState({})
 
   useEffect(() => {
     document.body.style.overflow = showModal ? "hidden" : ""
@@ -35,39 +37,19 @@ export function LeadershipScoreCard({ styles, profileData, onScoreUpdate, apiKey
 
   const parseAiEvaluationScores = (text) => {
     const categories = {
-      leadership_experience: [
-        "Leadership Experience",
-        "Experience",
-        "Leadership Experience \\(Years in Operation\\)"
-      ],
-      leadership_team: [
-        "Team Management",
-        "Team Size",
-        "Board Members Count",
-        "Team"
-      ],
-      leadership_recognition: [
-        "Recognition & Education",
-        "Certifications Count",
-        "Recognition",
-        "Education"
-      ],
-      // ADDED: Team & leadership category
-      team_leadership: [
-        "Team & Leadership",
-        "Leadership Visibility",
-        "Team Leadership",
-        "Leadership Team"
-      ]
+      leadership_experience: ["Leadership Experience"],
+      team_management: ["Team Management"],
+      leadership_recognition: ["Recognition & Education"],
+      team_leadership: ["Team & Leadership"]
     }
 
     const cleanedText = text.replace(/\*\*(.*?)\*\*/g, "$1")
     const scores = {}
+    const evidenceMap = {}
+    const confidenceMap = {}
 
-    // Helper: extract the section body after a header containing the label
     const findSectionBody = (label) => {
       const sectionRe = new RegExp(
-        // start of line + optional ### or number., then label, then capture until next ###/number. or end
         `(^|\\n)\\s*(?:#{1,6}\\s*)?\\d*\\.?\\s*${label}[^\\n]*\\n([\\s\\S]*?)(?=\\n\\s*(?:#{1,6}\\s*|\\d+\\.\\s|$))`,
         "i"
       )
@@ -77,15 +59,36 @@ export function LeadershipScoreCard({ styles, profileData, onScoreUpdate, apiKey
 
     Object.entries(categories).forEach(([key, labels]) => {
       let found = null
+      let evidence = null
+      let confidence = "Medium"
+
       for (const label of labels) {
         const body = findSectionBody(label)
         if (body) {
-          // Common bullet variants inside the section
+          const evidencePatterns = [
+            /Evidence:?\s*([^\n]+)/i,
+            /Based on:?\s*([^\n]+)/i,
+            /Supporting data:?\s*([^\n]+)/i
+          ]
+          for (const p of evidencePatterns) {
+            const mm = body.match(p)
+            if (mm) { evidence = mm[1].trim(); break }
+          }
+
+          const confidencePatterns = [
+            /Confidence:?\s*(High|Medium|Low)/i,
+            /Confidence level:?\s*(High|Medium|Low)/i
+          ]
+          for (const p of confidencePatterns) {
+            const mm = body.match(p)
+            if (mm) { confidence = mm[1]; break }
+          }
+
           const scorePatterns = [
-            /Score\s*:\s*(\d(?:\.\d)?)/i,               // "- Score: 4.5"
-            /(\d(?:\.\d)?)\s*\/\s*5/i,                  // "4.5/5"
-            /(\d(?:\.\d)?)\s*out\s*of\s*5/i,            // "4 out of 5"
-            /(\d(?:\.\d)?)\s*\*\s*\d+%/i                // "4 * 50%"
+            /Score\s*:\s*(\d(?:\.\d)?)/i,
+            /(\d(?:\.\d)?)\s*\/\s*5/i,
+            /(\d(?:\.\d)?)\s*out\s*of\s*5/i,
+            /(\d(?:\.\d)?)\s*\*\s*\d+%/i
           ]
           for (const p of scorePatterns) {
             const mm = body.match(p)
@@ -93,25 +96,19 @@ export function LeadershipScoreCard({ styles, profileData, onScoreUpdate, apiKey
           }
         }
         if (found != null) break
-
-        // fallback: single-line forms with label + score on same line
-        const inlinePatterns = [
-          new RegExp(`${label}[^\\d]*(\\d(?:\\.\\d)?)\\s*(?:/\\s*5)?`, "i"),
-          new RegExp(`${label}[^\\d]*(\\d(?:\\.\\d)?)\\s*out\\s*of\\s*5`, "i"),
-          new RegExp(`${label}[^\\d]*(\\d(?:\\.\\d)?)\\s*\\*\\s*\\d+%`, "i"),
-          new RegExp(`${label}[^\\d]*Score\\s*:?\\s*(\\d(?:\\.\\d)?)`, "i"),
-        ]
-        for (const p of inlinePatterns) {
-          const mm = cleanedText.match(p)
-          if (mm) { found = parseFloat(mm[1]); break }
-        }
-        if (found != null) break
       }
-      if (found != null) scores[key] = Math.min(Math.max(found, 0), 5)
+
+      if (found != null) {
+        scores[key] = Math.min(Math.max(found, 0), 5)
+        if (evidence) evidenceMap[key] = evidence
+        if (confidence) confidenceMap[key] = confidence
+      }
     })
 
-    // Final score (handle lines like "Total Score: 2 + 1.35 + 1 = 4.35")
     let finalScore = null
+    let overallConfidence = "Medium"
+    let overallEvidence = null
+
     const totalLine = cleanedText.match(/Total\s*Score\s*:\s*([^\n]+)/i)
     if (totalLine) {
       const eqNum = totalLine[1].match(/=\s*([\d.]+)/)
@@ -123,17 +120,22 @@ export function LeadershipScoreCard({ styles, profileData, onScoreUpdate, apiKey
       }
     }
 
-    // Normalized to 100
-    let normalizedScore = null
+    const confidenceMatch = cleanedText.match(/Overall\s*Confidence:?\s*(High|Medium|Low)/i)
+    if (confidenceMatch) overallConfidence = confidenceMatch[1]
+
+    const evidenceMatch = cleanedText.match(/Evidence\s*Summary:?\s*([^\n]+)/i)
+    if (evidenceMatch) overallEvidence = evidenceMatch[1].trim()
+
     const normPattern = cleanedText.match(/Normalized\s*(?:to|at)\s*100\s*:?[\s]*([\d.]+)/i)
-    if (normPattern) normalizedScore = parseFloat(normPattern[1])
+    const normalizedScore = normPattern ? parseFloat(normPattern[1]) : null
 
-    // Band: support both "Leadership Band:" and "Band:"
-    let band = null
     const bandPattern = cleanedText.match(/(?:Leadership\s*Band|Band)\s*:\s*([^\n]+)/i)
-    if (bandPattern) band = bandPattern[1].trim()
+    const band = bandPattern ? bandPattern[1].trim() : null
 
-    console.log("Parsed AI scores:", scores, { finalScore, normalizedScore, band })
+    // Update state here instead of returning
+    setConfidenceScores(confidenceMap)
+    setEvidenceTraceability(evidenceMap)
+
     return { scores, finalScore, normalizedScore, band }
   }
 
@@ -284,84 +286,137 @@ export function LeadershipScoreCard({ styles, profileData, onScoreUpdate, apiKey
     try {
       const evaluationData = prepareDataForAiEvaluation(profileData)
 
-      const combinedMessage = `Evaluate the leadership strength of the following business leader using the Leadership Scorecard rubric.
+      // Enhanced system prompt with guardrails and improved "How to Improve" section matching fundability-score-card
+      const systemPrompt = `You are a board-level business analyst evaluating leadership strength.
+    
+CRITICAL RULES:
+- ONLY use the provided structured KPI data - never invent or assume missing information
+- Never fabricate benchmarks or market comparisons
+- Clearly separate fact from inference
+- For EVERY conclusion, provide:
+  1. Confidence level (High/Medium/Low)
+  2. Evidence citation (specific KPI name + value)
+- If causation cannot be proven, state correlation only
+- If insufficient data exists, state: "Insufficient data to determine"
+- All recommendations must map to specific, actionable steps`
 
-IMPORTANT FORMATTING REQUIREMENTS:
-- Use clear section headers with ###
-- Provide specific, actionable improvement recommendations for EACH category
-- Keep rationale concise but insightful
+      const combinedMessage = `${systemPrompt}
 
-Instructions:
-- Score each of the 4 categories below from 0 to 5 using the rubric where:
-  • 0 = No evidence or very poor
-  • 1 = Minimal/poor evidence  
-  • 2 = Below average
-  • 3 = Average/acceptable
-  • 4 = Good/strong evidence
-  • 5 = Excellent/outstanding
-- Provide a short rationale for each score (2-3 sentences)
-- FOR EACH CATEGORY, include a "How to Improve" section with 3-5 specific, actionable steps to increase the score
-- At the end, give a total score out of 20, normalize it to 100, and assign a leadership band:
-  • 85–100: Exceptional Leader
-  • 65–84: Strong Leader
-  • 50–64: Developing Leader
-  • <50: Needs Development
+Evaluate the leadership strength using this data:
 
-CRITICAL: For improvement recommendations, be SPECIFIC and ACTIONABLE. Instead of vague advice like "gain more experience," provide concrete steps like:
-- "Complete a leadership certification program within the next 6 months"
-- "Increase board members from 2 to 4 by Q3 next year"
-- "Document 3+ years of leadership experience with specific metrics"
-- "Pursue industry-specific certifications relevant to your field"
-
-Categories to evaluate:
-1. Leadership Experience (Years in Operation)
-2. Team Management (Board Members Count) 
-3. Recognition & Education (Certifications Count)
-4. Team & Leadership (Directors with LinkedIn profiles, leadership visibility)
-
-Input Data:
+INPUT DATA:
 ${evaluationData}
 
-OUTPUT FORMAT:
+INSTRUCTIONS:
+For each of the 4 categories below, provide:
+
+1. Score (0-5) based ONLY on provided data
+2. Evidence line citing specific KPI values
+3. Confidence level (High/Medium/Low)
+4. Rationale explaining how data supports this score
+5. For "How to Improve" - CRITICAL: Follow the EXACT format below with platform-specific actions
+
+IMPROVEMENT ACTIONS RULES - CRITICAL:
+For each category provide improvements in this exact format:
+
+**How to Improve:**
+- → [Platform Section Name]: [specific action]
+- → [Platform Section Name]: [specific action]
+- → [Platform Section Name]: [specific action]
+- 💡 [General real-world guidance for obtaining/creating missing items if critical gaps exist]
+- 💡 [Second general guidance point if needed]
+
+PLATFORM ACTIONS REFERENCE:
+
+Team Management platform actions (Executive Management):
+- Ownership & Management section → add executive team members with their positions
+- Ownership & Management section → upload CVs for each executive
+- Ownership & Management section → add LinkedIn profiles for executives
+- Ownership & Management section → complete demographic data for executives (race, gender, youth, disability)
+- Ownership & Management section → add department information for executives
+
+Leadership Experience platform actions (Directors):
+- Ownership & Management section → add directors with their positions
+- Ownership & Management section → upload CVs for each director
+- Ownership & Management section → add LinkedIn profiles for directors
+- Ownership & Management section → complete executive/non-executive designation
+- Ownership & Management section → add nationality for directors
+- Ownership & Management section → complete demographic data for directors (race, gender, youth, disability)
+
+Recognition & Education platform actions:
+- Documents section → upload certifications, qualifications, awards
+- Documents section → upload professional memberships and accreditations
+- Enterprise Readiness section → confirm qualifications and experience
+
+Team & Leadership platform actions:
+- Ownership & Management section → ensure all directors have LinkedIn profiles
+- Ownership & Management section → ensure all executives have complete profiles
+- Enterprise Readiness section → confirm leadership team structure and roles
+
+SCORING RUBRIC (use strictly):
+- 0 = No evidence or very poor
+- 1 = Minimal/poor evidence
+- 2 = Below average
+- 3 = Average/acceptable
+- 4 = Good/strong evidence
+- 5 = Excellent/outstanding
+
+OUTPUT FORMAT - YOU MUST FOLLOW THIS EXACTLY:
+
 ### 1. Leadership Experience
 **Score:** [0-5]
-**Rationale:** [2-3 sentence explanation]
+**Evidence:** [Cite specific KPI: Directors Count = X, CVs uploaded = Y, LinkedIn profiles = Z]
+**Confidence:** [High/Medium/Low]
+**Rationale:** [2-3 sentences explaining how the data supports this score]
 **How to Improve:** 
-• [Specific action 1 with timeline]
-• [Specific action 2 with measurable goal]
-• [Specific action 3 with concrete steps]
+- → [Platform Section Name]: [specific action with measurable goal]
+- → [Platform Section Name]: [specific action with measurable goal]
+- → [Platform Section Name]: [specific action with measurable goal]
+- 💡 [General real-world guidance for obtaining/creating missing items if critical gaps exist]
 
 ### 2. Team Management
 **Score:** [0-5]
-**Rationale:** [2-3 sentence explanation]
+**Evidence:** [Cite specific KPI: Executives Count = X, CVs uploaded = Y, LinkedIn profiles = Z, Positions filled = W]
+**Confidence:** [High/Medium/Low]
+**Rationale:** [2-3 sentences explaining how the data supports this score]
 **How to Improve:** 
-• [Specific action 1 with timeline]
-• [Specific action 2 with measurable goal]
-• [Specific action 3 with concrete steps]
+- → [Platform Section Name]: [specific action with measurable goal]
+- → [Platform Section Name]: [specific action with measurable goal]
+- → [Platform Section Name]: [specific action with measurable goal]
+- 💡 [General real-world guidance for obtaining/creating missing items if critical gaps exist]
 
 ### 3. Recognition & Education
 **Score:** [0-5]
-**Rationale:** [2-3 sentence explanation]
+**Evidence:** [Cite specific KPI: Certifications Count = X]
+**Confidence:** [High/Medium/Low]
+**Rationale:** [2-3 sentences]
 **How to Improve:** 
-• [Specific action 1 with timeline]
-• [Specific action 2 with measurable goal]
-• [Specific action 3 with concrete steps]
+- → [Platform Section Name]: [specific action with measurable goal]
+- → [Platform Section Name]: [specific action with measurable goal]
+- → [Platform Section Name]: [specific action with measurable goal]
+- 💡 [General real-world guidance for obtaining/creating missing items if critical gaps exist]
 
 ### 4. Team & Leadership
 **Score:** [0-5]
-**Rationale:** [2-3 sentence explanation]
+**Evidence:** [Cite specific KPI: Directors with LinkedIn = X of Y, Executives with LinkedIn = Z of W]
+**Confidence:** [High/Medium/Low]
+**Rationale:** [2-3 sentences]
 **How to Improve:** 
-• [Specific action 1 with timeline]
-• [Specific action 2 with measurable goal]
-• [Specific action 3 with concrete steps]
+- → [Platform Section Name]: [specific action with measurable goal]
+- → [Platform Section Name]: [specific action with measurable goal]
+- → [Platform Section Name]: [specific action with measurable goal]
+- 💡 [General real-world guidance for obtaining/creating missing items if critical gaps exist]
 
 ### Overall Assessment
 **Total Score:** [X]/20
 **Normalized to 100:** [Y]%
 **Leadership Band:** [Band Name]
-**Final Analysis:** [Brief overall assessment with key recommendations]`
+**Overall Confidence:** [High/Medium/Low]
+**Evidence Summary:** [Brief summary of key data points supporting overall score]
+**Final Analysis:** [Brief overall assessment with key recommendations, referencing specific data points]`
 
       const result = await sendMessageToChatGPT(combinedMessage)
+
       const userId = auth?.currentUser?.uid;
       if (userId) {
         const aiEvalRef = doc(db, "aiLeadershipEvaluation", userId);
@@ -392,23 +447,59 @@ OUTPUT FORMAT:
   const prepareDataForAiEvaluation = (data) => {
     let evaluationData = ""
 
-    // Leadership Experience - ONLY YEARS
-    evaluationData += `\n=== LEADERSHIP EXPERIENCE ===\n`
-    evaluationData += `Years of Experience: ${data?.entityOverview?.yearsInOperation || "not specified"}\n`
+    // Leadership Experience - DIRECTORS from ownership-management
+    evaluationData += `\n=== LEADERSHIP EXPERIENCE (DIRECTORS) ===\n`
+    const directors = data?.ownershipManagement?.directors || []
+    evaluationData += `Directors Count: ${directors.length}\n`
+    
+    // Detailed director information
+    directors.forEach((director, index) => {
+      evaluationData += `\n--- Director ${index + 1} ---\n`
+      evaluationData += `Name: ${director.name || "Not specified"}\n`
+      evaluationData += `Position: ${director.position === "Other" ? director.customPosition || "Other" : director.position || "Not specified"}\n`
+      evaluationData += `Executive Type: ${director.execType || "Not specified"}\n`
+      evaluationData += `LinkedIn: ${director.linkedin ? "Provided" : "Not provided"}\n`
+      evaluationData += `CV Uploaded: ${director.cv ? "Yes" : "No"}\n`
+      evaluationData += `Nationality: ${director.nationality || "Not specified"}\n`
+    })
 
-    // Team Management - ONLY BOARD MEMBERS
-    evaluationData += `\n=== TEAM MANAGEMENT ===\n`
-    evaluationData += `Board Members: ${data?.ownershipManagement?.directors?.length || "not specified"}\n`
+    evaluationData += `\nDirectors with LinkedIn: ${directors.filter(d => d?.linkedin).length || 0}\n`
+    evaluationData += `Directors with CVs: ${directors.filter(d => d?.cv).length || 0}\n`
 
-    // Recognition & Education - ONLY CERTIFICATIONS
-    evaluationData += `\n=== RECOGNITION & EDUCATION ===\n`
-    evaluationData += `Certifications: ${data?.documents?.otherCerts?.length || 0}\n`
+    // Team Management - EXECUTIVES from ownership-management
+    evaluationData += `\n=== TEAM MANAGEMENT (EXECUTIVES) ===\n`
+    const executives = data?.ownershipManagement?.executives || []
+    evaluationData += `Executives Count: ${executives.length}\n`
+    
+    // Detailed executive information
+    executives.forEach((executive, index) => {
+      evaluationData += `\n--- Executive ${index + 1} ---\n`
+      evaluationData += `Name: ${executive.name || "Not specified"}\n`
+      evaluationData += `Position: ${executive.position === "Other" ? executive.customPosition || "Other" : executive.position || "Not specified"}\n`
+      evaluationData += `Department: ${executive.department || "Not specified"}\n`
+      evaluationData += `LinkedIn: ${executive.linkedin ? "Provided" : "Not provided"}\n`
+      evaluationData += `CV Uploaded: ${executive.cv ? "Yes" : "No"}\n`
+      evaluationData += `Nationality: ${executive.nationality || "Not specified"}\n`
+    })
 
-    // ADDED: Team & Leadership section
+    evaluationData += `\nExecutives with LinkedIn: ${executives.filter(e => e?.linkedin).length || 0}\n`
+    evaluationData += `Executives with CVs: ${executives.filter(e => e?.cv).length || 0}\n`
+
+    // Team & Leadership - Combined visibility
     evaluationData += `\n=== TEAM & LEADERSHIP ===\n`
-    evaluationData += `Directors Count: ${data?.ownershipManagement?.directors?.length || "not specified"}\n`
-    evaluationData += `Directors with LinkedIn: ${data?.ownershipManagement?.directors?.filter(d => d?.linkedin).length || 0}\n`
-    evaluationData += `Leadership Profiles Available: ${data?.ownershipManagement?.directors?.some(d => d?.linkedin) ? "Yes" : "No"}\n`
+    evaluationData += `Total Leadership Team: ${directors.length + executives.length}\n`
+    evaluationData += `Total with LinkedIn: ${directors.filter(d => d?.linkedin).length + executives.filter(e => e?.linkedin).length}\n`
+    evaluationData += `Total with CVs: ${directors.filter(d => d?.cv).length + executives.filter(e => e?.cv).length}\n`
+
+    // Recognition & Education - CERTIFICATIONS
+    evaluationData += `\n=== RECOGNITION & EDUCATION ===\n`
+    evaluationData += `Certifications Count: ${data?.documents?.otherCerts?.length || 0}\n`
+    
+    if (data?.documents?.otherCerts?.length > 0) {
+      evaluationData += `Certifications Available: Yes\n`
+    } else {
+      evaluationData += `Certifications Available: No\n`
+    }
 
     return evaluationData
   }
@@ -421,30 +512,34 @@ OUTPUT FORMAT:
     return "#B71C1C" // Dark red
   }
 
-  // UPDATED WEIGHTINGS: Added team_leadership category
+  // UPDATED WEIGHTINGS
   const calculateLeadershipScore = (data, aiEvaluationResult = "") => {
     console.log("Calculating leadership score with AI result:", !!aiEvaluationResult)
-    const weightings = { experience: 32, team: 28, recognition: 20, team_leadership: 20 } // Updated weights
+    const weightings = { 
+      experience: 32,      // Directors analysis
+      team: 28,            // Executives analysis
+      recognition: 20,      // Certifications
+      team_leadership: 20   // Combined LinkedIn/CV presence
+    }
 
     const parsed = aiEvaluationResult ? parseAiEvaluationScores(aiEvaluationResult) : null
     const ai = parsed?.scores || parsed || {}
 
-    // map parsed keys -> breakdown keys
     const keyMap = {
-      experience: ["leadership_experience", "experience"],
-      team: ["leadership_team", "team"],
-      recognition: ["leadership_recognition", "recognition"],
-      team_leadership: ["team_leadership", "team_leadership"], // ADDED
+      experience: ["leadership_experience"],
+      team: ["team_management"],
+      recognition: ["leadership_recognition"],
+      team_leadership: ["team_leadership"],
     }
 
     const categoryNames = {
-      experience: "Leadership experience",
-      team: "Team management",
+      experience: "Leadership experience (Directors)",
+      team: "Team management (Executives)",
       recognition: "Recognition & education",
-      team_leadership: "Team & leadership", // ADDED
+      team_leadership: "Team & leadership",
     }
 
-    const colors = ["#8D6E63", "#6D4C41", "#A67C52", "#D7CCC8"] // Added one color
+    const colors = ["#8D6E63", "#6D4C41", "#A67C52", "#D7CCC8"]
 
     const breakdown = Object.entries(categoryNames).map(([key, label], i) => {
       const raw =
@@ -459,6 +554,8 @@ OUTPUT FORMAT:
         color: colors[i],
         rawScore: raw,
         maxScore: 5,
+        confidence: confidenceScores[key] || "Medium",
+        evidence: evidenceTraceability[key] || "No evidence cited"
       }
     })
 
@@ -467,7 +564,7 @@ OUTPUT FORMAT:
     return { totalScore, breakdown }
   }
 
-  // Updated score levels with new labels from the image
+  // Updated score levels
   const getScoreLevel = (score) => {
     if (score >= 91)
       return {
@@ -550,7 +647,7 @@ OUTPUT FORMAT:
                 {mainContent}
               </div>
 
-              {/* Improvement Section with Special Styling */}
+              {/* Improvement Section with Special Styling - MATCHING FUNDABILITY SCORE CARD */}
               {improvementContent && (
                 <div style={{
                   backgroundColor: "#f8f4f0",
@@ -615,8 +712,8 @@ OUTPUT FORMAT:
           border: "1px solid #e8ddd6",
           overflow: "hidden",
           position: "relative",
-          width: "100%", // Add this line to make it full width
-          minWidth: "210px", // Add this for minimum width
+          width: "100%",
+          minWidth: "210px",
         }}
       >
         {/* Header with gradient */}
@@ -816,7 +913,7 @@ OUTPUT FORMAT:
         </div>
 
         {/* CSS Animations */}
-        <style>{`
+        <style jsx>{`
           @keyframes pulse {
             0% {
               transform: scale(1);
@@ -1104,20 +1201,16 @@ OUTPUT FORMAT:
                       </p>
                       <ul style={{ margin: "0", paddingLeft: "20px", color: "#5d4037" }}>
                         <li style={{ marginBottom: "6px" }}>
-                          <strong>Leadership experience (32%):</strong> Years of management experience, positions held,
-                          and business complexity managed
+                          <strong>Leadership experience (32%):</strong> Analysis of directors - their positions, CVs, and professional presence
                         </li>
                         <li style={{ marginBottom: "6px" }}>
-                          <strong>Team management (28%):</strong> Scale of teams led, organizational structure, and
-                          revenue management success
+                          <strong>Team management (28%):</strong> Analysis of executive management - team composition, roles, and qualifications
                         </li>
                         <li style={{ marginBottom: "6px" }}>
-                          <strong>Recognition & education (20%):</strong> Educational qualifications, certifications,
-                          awards, and industry recognition
+                          <strong>Recognition & education (20%):</strong> Educational qualifications, certifications, awards, and industry recognition
                         </li>
                         <li style={{ marginBottom: "6px" }}>
-                          <strong>Team & leadership (20%):</strong> Professional profiles, leadership visibility, and
-                          team composition credibility
+                          <strong>Team & leadership (20%):</strong> Combined leadership visibility through LinkedIn profiles and CV documentation
                         </li>
                       </ul>
                     </div>
@@ -1442,7 +1535,7 @@ OUTPUT FORMAT:
         </div>
       )}
 
-      <style>{`
+      <style jsx>{`
         .spin {
           animation: spin 1s linear infinite;
         }
