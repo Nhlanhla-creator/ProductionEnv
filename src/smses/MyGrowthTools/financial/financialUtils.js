@@ -169,6 +169,30 @@ export const formatCurrency = (value, unit = "zar_million", decimals = 2) => {
 export const formatPercentage = (value, decimals = 2) =>
   `${(parseFloat(value) || 0).toFixed(decimals)}%`
 
+/**
+ * Smart number formatter — value is already in millions (post toM).
+ * Returns a plain numeric string scaled to the appropriate unit.
+ * Pair with getSmartUnit() to get the matching unit label.
+ */
+export const formatSmartNumber = (valueInM, decimals = 2) => {
+  const num = parseFloat(valueInM) || 0
+  const abs = Math.abs(num)
+  if (abs >= 1000)  return (num / 1000).toFixed(decimals)   // → bn range
+  if (abs >= 1)     return num.toFixed(decimals)             // → m range
+  return (num * 1000).toFixed(decimals)                      // → k range (default)
+}
+
+/**
+ * Returns the matching unit label for formatSmartNumber.
+ * Defaults to 'R k' for zero / small values.
+ */
+export const getSmartUnit = (valueInM) => {
+  const abs = Math.abs(parseFloat(valueInM) || 0)
+  if (abs >= 1000)  return 'R bn'
+  if (abs >= 1)     return 'R m'
+  return 'R k'
+}
+
 export const makeFormatValue = (unit = "zar_million") =>
   (value, overrideUnit, decimals = 2) =>
     formatCurrency(value, overrideUnit ?? unit, decimals)
@@ -195,17 +219,19 @@ export const calculateTotal = (items, monthIndex) => {
   }, 0)
 }
 
-export const aggregateDataForView = (data, viewMode) => {
+export const aggregateDataForView = (data, viewMode, isAverage = false) => {
   if (!data?.length) return data
   if (viewMode === "month") return data
   if (viewMode === "quarter") {
     return Array.from({ length: 4 }, (_, i) => {
       const slice = data.slice(i * 3, i * 3 + 3)
-      return slice.reduce((a, b) => a + b, 0) / slice.length
+      const total = slice.reduce((a, b) => a + b, 0)
+      return isAverage ? total / slice.length : total
     })
   }
   // year
-  return [data.reduce((a, b) => a + b, 0) / data.length]
+  const total = data.reduce((a, b) => a + b, 0)
+  return [isAverage ? total / data.length : total]
 }
 
 export const generateMonthLabels = (financialYearStart, viewMode, year) => {

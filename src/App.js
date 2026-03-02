@@ -60,7 +60,7 @@ import AdvisorDocuments from "./advisors/AdvisorDocuments/advisor-documents"
 import CatalystDocuments from "./catalyst/CatalystDocuments/support-documents"
 
 // Layout Components
-import Sidebar from "./smses/Sidebar/Sidebar"
+import SMESidebar from "./smses/Sidebar/Sidebar"
 import InvestorSidebar from "./Investor/Sidebar/InvestorSidebar"
 import SupportProgramSidebar from "./catalyst/CatalystSidebar/AcceleratorSidebar"
 import SMSEHeader from "./smses/DashboardHeader/SMSEHeader"
@@ -519,7 +519,7 @@ function App() {
     const location = useLocation()
     return (
       <div className="app-layout">
-        <Sidebar companyName={companyName} />
+        <SMESidebar companyName={companyName} />
         <div className="main-content">
           <SMSEHeader companyName={companyName} profileImage={profileImage} setProfileImage={setProfileImage} />
           <div className="page-content">{children}</div>
