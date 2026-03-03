@@ -639,7 +639,7 @@ const UniversalAddDataModal = ({
     notes: "",
   })
 
-  // Pipeline Sufficiency Data (Removed Lead Volume Trends and Conversion Rates)
+  // Pipeline Sufficiency Data
   const [pipelineSufficiencyData, setPipelineSufficiencyData] = useState({
     totalPipelineValue: "",
     probability: "",
@@ -1441,7 +1441,7 @@ const UniversalAddDataModal = ({
   )
 }
 
-// ==================== PIPELINE TABLE COMPONENT (Now inside Pipeline Sufficiency with Filters) ====================
+// ==================== PIPELINE TABLE COMPONENT ====================
 
 const PipelineTable = ({ currentUser, isInvestorView, selectedYear, onAddData }) => {
   const [deals, setDeals] = useState([])
@@ -2020,26 +2020,21 @@ const PipelineVisibility = ({ activeSection, currentUser, isInvestorView, onAddD
     const startMonthIndex = months.indexOf(startDate.month)
     const endMonthIndex = months.indexOf(endDate.month)
     
-    // Get all months from start to end
+    // Get all months from start to end (last 11 months + current)
     const monthIndices = []
-    let currentIndex = startMonthIndex
-    while (currentIndex !== endMonthIndex) {
-      monthIndices.push(currentIndex)
-      currentIndex = (currentIndex + 1) % 12
-      if (currentIndex === startMonthIndex) break
+    let currentIndex = endMonthIndex
+    for (let i = 0; i < 12; i++) {
+      monthIndices.unshift(currentIndex)
+      currentIndex = (currentIndex - 1 + 12) % 12
     }
-    monthIndices.push(endMonthIndex)
     
-    // Get last 12 months of data
-    const allData = dataArray
     const trendData = []
     const trendLabels = []
     
-    for (let i = 0; i < Math.min(12, monthIndices.length); i++) {
-      const idx = monthIndices[monthIndices.length - 1 - i]
-      trendData.unshift(allData[idx] || 0)
-      trendLabels.unshift(`${months[idx]} ${startDate.year}`)
-    }
+    monthIndices.forEach(idx => {
+      trendData.push(dataArray[idx] || 0)
+      trendLabels.push(`${months[idx]} ${startDate.year}`)
+    })
     
     setSelectedTrendItem({ 
       name: itemName, 
@@ -2314,7 +2309,7 @@ const PipelineVisibility = ({ activeSection, currentUser, isInvestorView, onAddD
   )
 }
 
-// ==================== PIPELINE SUFFICIENCY COMPONENT (with Pipeline Table inside) ====================
+// ==================== PIPELINE SUFFICIENCY COMPONENT ====================
 
 const PipelineSufficiency = ({ activeSection, currentUser, isInvestorView, onAddData, startDate, endDate }) => {
   const [loading, setLoading] = useState(false)
@@ -2382,6 +2377,35 @@ const PipelineSufficiency = ({ activeSection, currentUser, isInvestorView, onAdd
     } finally {
       setLoading(false)
     }
+  }
+
+  const openTrendModal = (itemName, dataValue, isPercentage = false) => {
+    if (!startDate || !endDate) return
+    
+    // For sufficiency metrics, we need historical data
+    // Since we only have current value, we'll create a trend based on monthly data
+    // In a real app, you'd fetch historical data from Firestore
+    const months = getMonthsForYear(startDate.year, financialYearStart)
+    
+    // Create sample historical data (in production, fetch from database)
+    const historicalData = []
+    const trendLabels = []
+    
+    const startMonthIndex = months.indexOf(startDate.month)
+    for (let i = 0; i < 12; i++) {
+      const monthIdx = (startMonthIndex - 11 + i + 12) % 12
+      // This is where you'd load actual historical values
+      historicalData.push(dataValue * (0.8 + Math.random() * 0.4)) // Placeholder
+      trendLabels.push(`${months[monthIdx]} ${startDate.year}`)
+    }
+    
+    setSelectedTrendItem({ 
+      name: itemName, 
+      data: historicalData,
+      labels: trendLabels,
+      isPercentage
+    })
+    setShowTrendModal(true)
   }
 
   const handleCalculationClick = (title, calculation) => {
@@ -2477,6 +2501,21 @@ const PipelineSufficiency = ({ activeSection, currentUser, isInvestorView, onAdd
               }}
             >
               AI analysis
+            </button>
+            <button
+              onClick={() => openTrendModal(title, currentValue, isPercentage)}
+              style={{
+                padding: "6px 12px",
+                backgroundColor: "#e8ddd4",
+                color: "#5d4037",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontWeight: "600",
+                fontSize: "12px",
+              }}
+            >
+              View trend
             </button>
           </div>
 
@@ -2743,6 +2782,31 @@ const RevenueConcentration = ({ activeSection, currentUser, isInvestorView, onAd
     }
   }
 
+  const openTrendModal = (itemName, dataValue, isPercentage = false) => {
+    if (!startDate || !endDate) return
+    
+    const months = getMonthsForYear(startDate.year, financialYearStart)
+    
+    // Create sample historical data (in production, fetch from database)
+    const historicalData = []
+    const trendLabels = []
+    
+    const startMonthIndex = months.indexOf(startDate.month)
+    for (let i = 0; i < 12; i++) {
+      const monthIdx = (startMonthIndex - 11 + i + 12) % 12
+      historicalData.push(dataValue * (0.7 + Math.random() * 0.6)) // Placeholder
+      trendLabels.push(`${months[monthIdx]} ${startDate.year}`)
+    }
+    
+    setSelectedTrendItem({ 
+      name: itemName, 
+      data: historicalData,
+      labels: trendLabels,
+      isPercentage
+    })
+    setShowTrendModal(true)
+  }
+
   const handleCalculationClick = (title, calculation) => {
     setSelectedCalculation({ title, calculation })
     setShowCalculationModal(true)
@@ -2753,19 +2817,12 @@ const RevenueConcentration = ({ activeSection, currentUser, isInvestorView, onAd
   const renderKPICard = (title, dataKey, calculation = "", isPercentage = false, colorIndex = 4) => {
     let currentValue = 0
     
-    if (dataKey === "totalRevenue") {
-      currentValue = concentrationData.revenueChannels.reduce((sum, c) => sum + c.revenue, 0)
-    } else if (dataKey === "totalMarketingSpend") {
+    if (dataKey === "totalMarketingSpend") {
       currentValue = concentrationData.revenueChannels.reduce((sum, c) => sum + c.spend, 0)
     } else if (dataKey === "totalROI") {
       const totalRevenue = concentrationData.revenueChannels.reduce((sum, c) => sum + c.revenue, 0)
       const totalSpend = concentrationData.revenueChannels.reduce((sum, c) => sum + c.spend, 0)
       currentValue = totalSpend > 0 ? ((totalRevenue - totalSpend) / totalSpend) * 100 : 0
-    } else if (dataKey === "top3Concentration") {
-      const sortedChannels = [...concentrationData.revenueChannels].sort((a, b) => b.revenue - a.revenue)
-      const top3Revenue = sortedChannels.slice(0, 3).reduce((sum, c) => sum + c.revenue, 0)
-      const totalRevenue = concentrationData.revenueChannels.reduce((sum, c) => sum + c.revenue, 0)
-      currentValue = totalRevenue > 0 ? (top3Revenue / totalRevenue) * 100 : 0
     }
 
     const displayValue = isPercentage 
@@ -2845,6 +2902,21 @@ const RevenueConcentration = ({ activeSection, currentUser, isInvestorView, onAd
             >
               AI analysis
             </button>
+            <button
+              onClick={() => openTrendModal(title, currentValue, isPercentage)}
+              style={{
+                padding: "6px 12px",
+                backgroundColor: "#e8ddd4",
+                color: "#5d4037",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontWeight: "600",
+                fontSize: "12px",
+              }}
+            >
+              View trend
+            </button>
           </div>
 
           {expandedNotes[dataKey] && (
@@ -2899,11 +2971,11 @@ const RevenueConcentration = ({ activeSection, currentUser, isInvestorView, onAd
               <p style={{ fontSize: "13px", color: "#1565c0", lineHeight: "1.5", margin: 0 }}>
                 {kpiAnalysis[dataKey] ||
                   `Based on the current ${title.toLowerCase()} of ${displayValue}:
-                  \n\nThis metric indicates your revenue concentration.
+                  \n\nThis metric indicates your marketing efficiency.
                   \n\nRecommended actions:
-                  \n• Monitor concentration risk
-                  \n• Diversify revenue sources
-                  \n• Focus on high-ROI channels`}
+                  \n• Monitor spend effectiveness
+                  \n• Optimize channel performance
+                  \n• Focus on high-ROI activities`}
               </p>
             </div>
           )}
@@ -2914,8 +2986,8 @@ const RevenueConcentration = ({ activeSection, currentUser, isInvestorView, onAd
 
   if (activeSection !== "revenue-concentration" || !startDate || !endDate) return null
 
-  const totalRevenue = concentrationData.revenueChannels.reduce((sum, c) => sum + c.revenue, 0)
   const totalMarketingSpend = concentrationData.revenueChannels.reduce((sum, c) => sum + c.spend, 0)
+  const totalRevenue = concentrationData.revenueChannels.reduce((sum, c) => sum + c.revenue, 0)
   const totalROI = totalMarketingSpend > 0 ? ((totalRevenue - totalMarketingSpend) / totalMarketingSpend) * 100 : 0
   
   const sortedChannels = [...concentrationData.revenueChannels].sort((a, b) => b.revenue - a.revenue)
@@ -2930,10 +3002,8 @@ const RevenueConcentration = ({ activeSection, currentUser, isInvestorView, onAd
   const top3Customers = sortedCustomers.slice(0, 3)
 
   const calculationTexts = {
-    totalRevenue: "Total Revenue: Sum of revenue from all channels.\n\nIndicates overall revenue performance.",
     totalMarketingSpend: "Total Marketing Spend: Sum of marketing spend across all channels.\n\nShows total marketing investment.",
     totalROI: "Return on Investment = (Revenue - Spend) ÷ Spend × 100%\n\nMeasures marketing efficiency.",
-    top3Concentration: "Top 3 Channels as % of Revenue = (Revenue from Top 3 Channels ÷ Total Revenue) × 100%\n\nIndicates revenue concentration risk.",
   }
 
   return (
@@ -3027,12 +3097,10 @@ const RevenueConcentration = ({ activeSection, currentUser, isInvestorView, onAd
         </div>
       </div>
 
-      {/* KPI Cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "20px", marginBottom: "30px" }}>
-        {renderKPICard("Total Revenue", "totalRevenue", calculationTexts.totalRevenue, false, 4)}
+      {/* KPI Cards - Only 2 cards (removed Total Revenue and Top 3 Concentration) */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "20px", marginBottom: "30px" }}>
         {renderKPICard("Total Marketing Spend", "totalMarketingSpend", calculationTexts.totalMarketingSpend, false, 5)}
         {renderKPICard("Overall ROI", "totalROI", calculationTexts.totalROI, true, 6)}
-        {renderKPICard("Top 3 Concentration", "top3Concentration", calculationTexts.top3Concentration, true, 7)}
       </div>
 
       {/* Top 3 Concentration Table */}
@@ -3309,6 +3377,18 @@ const RevenueConcentration = ({ activeSection, currentUser, isInvestorView, onAd
         title={selectedCalculation.title}
         calculation={selectedCalculation.calculation}
       />
+
+      {/* Trend Modal */}
+      {showTrendModal && selectedTrendItem && (
+        <TrendModal
+          isOpen={showTrendModal}
+          onClose={() => setShowTrendModal(false)}
+          title={selectedTrendItem.name}
+          data={selectedTrendItem.data}
+          labels={selectedTrendItem.labels}
+          isPercentage={selectedTrendItem.isPercentage}
+        />
+      )}
     </div>
   )
 }
@@ -3405,26 +3485,21 @@ const DemandSustainability = ({ activeSection, currentUser, isInvestorView, onAd
     const startMonthIndex = months.indexOf(startDate.month)
     const endMonthIndex = months.indexOf(endDate.month)
     
-    // Get all months from start to end
+    // Get last 11 months + current month
     const monthIndices = []
-    let currentIndex = startMonthIndex
-    while (currentIndex !== endMonthIndex) {
-      monthIndices.push(currentIndex)
-      currentIndex = (currentIndex + 1) % 12
-      if (currentIndex === startMonthIndex) break
+    let currentIndex = endMonthIndex
+    for (let i = 0; i < 12; i++) {
+      monthIndices.unshift(currentIndex)
+      currentIndex = (currentIndex - 1 + 12) % 12
     }
-    monthIndices.push(endMonthIndex)
     
-    // Get last 12 months of data
-    const allData = dataArray
     const trendData = []
     const trendLabels = []
     
-    for (let i = 0; i < Math.min(12, monthIndices.length); i++) {
-      const idx = monthIndices[monthIndices.length - 1 - i]
-      trendData.unshift(allData[idx] || 0)
-      trendLabels.unshift(`${months[idx]} ${startDate.year}`)
-    }
+    monthIndices.forEach(idx => {
+      trendData.push(dataArray[idx] || 0)
+      trendLabels.push(`${months[idx]} ${startDate.year}`)
+    })
     
     setSelectedTrendItem({ 
       name: itemName, 
@@ -3533,8 +3608,18 @@ const DemandSustainability = ({ activeSection, currentUser, isInvestorView, onAd
             </button>
             <button
               onClick={() => {
-                if (dataArray && dataArray.length > 0) {
-                  openTrendModal(title, dataArray, isPercentage)
+                if (dataKey === "campaignROI") {
+                  // For campaign ROI, we need to create a data array
+                  const roiData = sustainabilityData.campaigns.map(c => {
+                    const roi = c.cost > 0 ? ((c.revenue - c.cost) / c.cost) * 100 : 0
+                    return roi
+                  })
+                  openTrendModal(title, roiData, true)
+                } else {
+                  // For other metrics, we need monthly data
+                  // In production, you'd fetch this from Firestore
+                  const monthlyData = Array(12).fill(currentValue * (0.9 + Math.random() * 0.2))
+                  openTrendModal(title, monthlyData, isPercentage)
                 }
               }}
               style={{

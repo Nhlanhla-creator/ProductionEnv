@@ -24,6 +24,7 @@ const ProfileSummary = ({ data, onEdit }) => {
     ownershipManagement: false,
     contactDetails: false,
     legalCompliance: false,
+    operationsOverview: false,
     financialOverview: false,
     governance: false,
     productsServices: false,
@@ -1855,6 +1856,376 @@ const ProfileSummary = ({ data, onEdit }) => {
                 </div>
               )}
             </div>
+
+            {/* Operations Overview */}
+<div
+  style={{
+    background: "linear-gradient(135deg, rgba(250, 247, 242, 0.9), rgba(245, 240, 225, 0.9))",
+    backdropFilter: "blur(20px)",
+    borderRadius: "16px",
+    overflow: "hidden",
+    border: "1px solid rgba(200, 182, 166, 0.3)",
+    boxShadow: "0 16px 32px rgba(74, 53, 47, 0.08)",
+    transition: "all 0.3s ease",
+  }}
+>
+  <div
+    onClick={() => toggleSection("operationsOverview")}
+    style={{
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center",
+      padding: "16px 20px",
+      background: expandedSections.operationsOverview
+        ? "linear-gradient(135deg, #7d5a50, #4a352f)"
+        : "linear-gradient(135deg, #e6d7c3, #c8b6a6)",
+      cursor: "pointer",
+      transition: "all 0.3s ease",
+    }}
+  >
+    <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+      <FileCheck size={20} color={expandedSections.operationsOverview ? "#faf7f2" : "#4a352f"} />
+      <h2
+        style={{
+          margin: 0,
+          fontSize: "clamp(16px, 2.5vw, 20px)",
+          fontWeight: "700",
+          color: expandedSections.operationsOverview ? "#faf7f2" : "#4a352f",
+        }}
+      >
+        Operations Overview
+      </h2>
+    </div>
+    {expandedSections.operationsOverview ? (
+      <ChevronUp size={20} color="#faf7f2" />
+    ) : (
+      <ChevronDown size={20} color="#4a352f" />
+    )}
+  </div>
+
+  {expandedSections.operationsOverview && (
+    <div
+      style={{
+        padding: "20px",
+        background: "linear-gradient(135deg, rgba(250, 247, 242, 0.8), rgba(240, 230, 217, 0.6))",
+        animation: "slideDown 0.3s ease-out",
+      }}
+    >
+      <p style={{
+        fontSize: "14px",
+        color: "#7d5a50",
+        marginBottom: "20px",
+        fontWeight: "500",
+        fontStyle: "italic"
+      }}>
+        BIG Score – Operational Strength (Risk-Based Yes/No Model)
+      </p>
+
+      <h3
+        style={{
+          fontSize: "16px",
+          fontWeight: "700",
+          color: "#4a352f",
+          marginBottom: "16px",
+          display: "flex",
+          alignItems: "center",
+          gap: "8px",
+        }}
+      >
+        <CheckSquare size={18} color="#a67c52" />
+        1️⃣ Supplier & Continuity Risk
+      </h3>
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+          gap: "16px",
+          marginBottom: "24px",
+        }}
+      >
+        <div
+          style={{
+            background: "rgba(250, 247, 242, 0.8)",
+            borderRadius: "12px",
+            padding: "16px",
+            border: "1px solid rgba(200, 182, 166, 0.2)",
+          }}
+        >
+          <span
+            style={{
+              display: "block",
+              fontSize: "12px",
+              color: "#7d5a50",
+              marginBottom: "6px",
+              fontWeight: "600",
+              textTransform: "uppercase",
+              letterSpacing: "0.5px",
+            }}
+          >
+            Q1. Multiple Key Suppliers
+          </span>
+          <span
+            style={{
+              fontSize: "14px",
+              color: "#4a352f",
+              fontWeight: "500",
+            }}
+          >
+            {data?.operationsOverview?.multipleSuppliers === "yes" ? "✅ Yes" : 
+             data?.operationsOverview?.multipleSuppliers === "no" ? "❌ No" : "Not answered"}
+          </span>
+        </div>
+
+        <div
+          style={{
+            background: "rgba(250, 247, 242, 0.8)",
+            borderRadius: "12px",
+            padding: "16px",
+            border: "1px solid rgba(200, 182, 166, 0.2)",
+          }}
+        >
+          <span
+            style={{
+              display: "block",
+              fontSize: "12px",
+              color: "#7d5a50",
+              marginBottom: "6px",
+              fontWeight: "600",
+              textTransform: "uppercase",
+              letterSpacing: "0.5px",
+            }}
+          >
+            Q2. Documented Contingency Plan
+          </span>
+          <span
+            style={{
+              fontSize: "14px",
+              color: "#4a352f",
+              fontWeight: "500",
+            }}
+          >
+            {data?.operationsOverview?.contingencyPlan === "yes" ? "✅ Yes" : 
+             data?.operationsOverview?.contingencyPlan === "no" ? "❌ No" : "Not answered"}
+          </span>
+        </div>
+      </div>
+
+      <h3
+        style={{
+          fontSize: "16px",
+          fontWeight: "700",
+          color: "#4a352f",
+          marginBottom: "16px",
+          display: "flex",
+          alignItems: "center",
+          gap: "8px",
+        }}
+      >
+        <CheckSquare size={18} color="#a67c52" />
+        2️⃣ Delivery (Productivity & Reliability)
+      </h3>
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+          gap: "16px",
+          marginBottom: "24px",
+        }}
+      >
+        <div
+          style={{
+            background: "rgba(250, 247, 242, 0.8)",
+            borderRadius: "12px",
+            padding: "16px",
+            border: "1px solid rgba(200, 182, 166, 0.2)",
+          }}
+        >
+          <span
+            style={{
+              display: "block",
+              fontSize: "12px",
+              color: "#7d5a50",
+              marginBottom: "6px",
+              fontWeight: "600",
+              textTransform: "uppercase",
+              letterSpacing: "0.5px",
+            }}
+          >
+            Q3. Track Performance Metrics
+          </span>
+          <span
+            style={{
+              fontSize: "14px",
+              color: "#4a352f",
+              fontWeight: "500",
+            }}
+          >
+            {data?.operationsOverview?.trackPerformanceMetrics === "yes" ? "✅ Yes" : 
+             data?.operationsOverview?.trackPerformanceMetrics === "no" ? "❌ No" : "Not answered"}
+          </span>
+        </div>
+
+        <div
+          style={{
+            background: "rgba(250, 247, 242, 0.8)",
+            borderRadius: "12px",
+            padding: "16px",
+            border: "1px solid rgba(200, 182, 166, 0.2)",
+          }}
+        >
+          <span
+            style={{
+              display: "block",
+              fontSize: "12px",
+              color: "#7d5a50",
+              marginBottom: "6px",
+              fontWeight: "600",
+              textTransform: "uppercase",
+              letterSpacing: "0.5px",
+            }}
+          >
+            Q4. 3+ Successful Deliveries (12 months)
+          </span>
+          <span
+            style={{
+              fontSize: "14px",
+              color: "#4a352f",
+              fontWeight: "500",
+            }}
+          >
+            {data?.operationsOverview?.threeSuccessfulDeliveries === "yes" ? "✅ Yes" : 
+             data?.operationsOverview?.threeSuccessfulDeliveries === "no" ? "❌ No" : "Not answered"}
+          </span>
+        </div>
+
+        <div
+          style={{
+            background: "rgba(250, 247, 242, 0.8)",
+            borderRadius: "12px",
+            padding: "16px",
+            border: "1px solid rgba(200, 182, 166, 0.2)",
+          }}
+        >
+          <span
+            style={{
+              display: "block",
+              fontSize: "12px",
+              color: "#7d5a50",
+              marginBottom: "6px",
+              fontWeight: "600",
+              textTransform: "uppercase",
+              letterSpacing: "0.5px",
+            }}
+          >
+            Q5. Capacity to Increase Output
+          </span>
+          <span
+            style={{
+              fontSize: "14px",
+              color: "#4a352f",
+              fontWeight: "500",
+            }}
+          >
+            {data?.operationsOverview?.hasCapacityToIncrease === "yes" ? "✅ Yes" : 
+             data?.operationsOverview?.hasCapacityToIncrease === "no" ? "❌ No" : "Not answered"}
+          </span>
+        </div>
+      </div>
+
+      <h3
+        style={{
+          fontSize: "16px",
+          fontWeight: "700",
+          color: "#4a352f",
+          marginBottom: "16px",
+          display: "flex",
+          alignItems: "center",
+          gap: "8px",
+        }}
+      >
+        <CheckSquare size={18} color="#a67c52" />
+        3️⃣ Safety (Risk & Compliance)
+      </h3>
+
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+          gap: "16px",
+          marginBottom: "24px",
+        }}
+      >
+        <div
+          style={{
+            background: "rgba(250, 247, 242, 0.8)",
+            borderRadius: "12px",
+            padding: "16px",
+            border: "1px solid rgba(200, 182, 166, 0.2)",
+          }}
+        >
+          <span
+            style={{
+              display: "block",
+              fontSize: "12px",
+              color: "#7d5a50",
+              marginBottom: "6px",
+              fontWeight: "600",
+              textTransform: "uppercase",
+              letterSpacing: "0.5px",
+            }}
+          >
+            Q6. Formal Safety/Compliance Procedures
+          </span>
+          <span
+            style={{
+              fontSize: "14px",
+              color: "#4a352f",
+              fontWeight: "500",
+            }}
+          >
+            {data?.operationsOverview?.hasFormalProcedures === "yes" ? "✅ Yes" : 
+             data?.operationsOverview?.hasFormalProcedures === "no" ? "❌ No" : "Not answered"}
+          </span>
+        </div>
+
+        <div
+          style={{
+            background: "rgba(250, 247, 242, 0.8)",
+            borderRadius: "12px",
+            padding: "16px",
+            border: "1px solid rgba(200, 182, 166, 0.2)",
+          }}
+        >
+          <span
+            style={{
+              display: "block",
+              fontSize: "12px",
+              color: "#7d5a50",
+              marginBottom: "6px",
+              fontWeight: "600",
+              textTransform: "uppercase",
+              letterSpacing: "0.5px",
+            }}
+          >
+            Q7. Major Incidents (Past 24 months)
+          </span>
+          <span
+            style={{
+              fontSize: "14px",
+              color: "#4a352f",
+              fontWeight: "500",
+            }}
+          >
+            {data?.operationsOverview?.hasMajorIncidents === "yes" ? "✅ Yes" : 
+             data?.operationsOverview?.hasMajorIncidents === "no" ? "❌ No" : "Not answered"}
+          </span>
+        </div>
+      </div>
+    </div>
+  )}
+</div>
 
             {/* Financial Overview */}
            {/* Financial Overview */}
