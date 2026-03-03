@@ -4393,7 +4393,7 @@ const RiskManagement = ({ activeSection, currentUser, isInvestorView }) => {
     "technology-risk": [],
     "people-risk": [],
   })
-  const [riskSection, setRiskSection] = useState("business-risk")
+  const [riskSection, setRiskSection] = useState("financial-risk") // Changed from "business-risk" to a specific category
   const [hoveredRiskType, setHoveredRiskType] = useState(null)
   const [selectedMonth, setSelectedMonth] = useState("")
   const [selectedYear, setSelectedYear] = useState("")
@@ -4432,6 +4432,16 @@ const RiskManagement = ({ activeSection, currentUser, isInvestorView }) => {
     { id: "technology-risk", name: "Technology Risk", color: RISK_COLORS["technology-risk"] },
     { id: "people-risk", name: "People Risk", color: RISK_COLORS["people-risk"] },
   ]
+
+  const RISK_TYPE_DEFINITIONS = {
+    "Financial Risk": "Risks related to funding, cash flow, pricing, revenue, and financial sustainability",
+    "Market Risk": "Risks related to market dynamics, competition, demand shifts, and market positioning",
+    "Operational Risk": "Risks related to processes, systems, resource availability, and operational execution",
+    "Reputational Risk": "Risks related to brand perception, stakeholder trust, and public image",
+    "Compliance Risk": "Risks related to legal requirements, regulations, licenses, and statutory obligations",
+    "Technology Risk": "Risks related to technology infrastructure, cybersecurity, and digital capabilities",
+    "People Risk": "Risks related to talent, culture, leadership, and human resources",
+  }
 
   const cleanAIResponse = (text) => {
     if (!text) return text;
@@ -4508,6 +4518,8 @@ const RiskManagement = ({ activeSection, currentUser, isInvestorView }) => {
   if (activeSection !== "strategic-risk-control") return null
 
   const addRiskItem = async (category) => {
+    console.log("Add risk item clicked for category:", category);
+    
     if (isInvestorView) {
       alert("You are in view-only mode and cannot make changes.")
       return
@@ -4517,8 +4529,13 @@ const RiskManagement = ({ activeSection, currentUser, isInvestorView }) => {
       return
     }
 
+    // Generate risk number based on category and count
+    const categoryRisks = riskData[category] || []
+    const riskNumber = `${category.split('-')[0].toUpperCase()}-${String(categoryRisks.length + 1).padStart(3, '0')}`
+
     const newRisk = {
-      risk: "",
+      riskNumber: riskNumber,
+      riskSubCategory: "",
       riskCategory: riskCategories.find((c) => c.id === category)?.name || "Financial Risk",
       description: "",
       severity: 1,
@@ -4540,6 +4557,7 @@ const RiskManagement = ({ activeSection, currentUser, isInvestorView }) => {
         [category]: [...prev[category], { id: docRef.id, ...newRisk }],
       }))
       setSavedAnalysis("")
+      alert("Risk item added successfully!");
     } catch (error) {
       console.error("Error adding risk:", error)
       alert("Error adding risk. Please try again.")
@@ -4588,7 +4606,7 @@ const RiskManagement = ({ activeSection, currentUser, isInvestorView }) => {
     const data = category === "business-risk" 
       ? Object.values(riskData).flat() 
       : riskData[category] || []
-    return [...new Set(data.map(item => item.risk).filter(Boolean))].sort()
+    return [...new Set(data.map(item => item.riskSubCategory).filter(Boolean))].sort()
   }
 
   const getUniqueCategories = (category) => {
@@ -4634,7 +4652,7 @@ const RiskManagement = ({ activeSection, currentUser, isInvestorView }) => {
       }
       
       // Essential table filters
-      if (filterRisk && item.risk !== filterRisk) return false
+      if (filterRisk && item.riskSubCategory !== filterRisk) return false
       if (filterCategory && item.riskCategory !== filterCategory) return false
       if (filterOwner && item.owner !== filterOwner) return false
       if (filterStatus && item.mitigationStatus !== filterStatus) return false
@@ -4645,19 +4663,23 @@ const RiskManagement = ({ activeSection, currentUser, isInvestorView }) => {
 
   const createScatterChartData = (category) => {
     if (category === "business-risk") {
+      // For Business Risk (All), we want to show ALL risks from ALL categories
       const datasets = []
+      
       Object.keys(riskData).forEach((catKey) => {
-        const data = filteredData(riskData[catKey] || [])
+        const data = riskData[catKey] || []
         if (data.length > 0) {
           datasets.push({
             label: riskCategories.find(c => c.id === catKey)?.name || catKey,
             data: data.map((item) => ({
               x: item.likelihood,
               y: item.severity,
-              label: item.risk || "Unnamed Risk",
+              label: item.riskSubCategory || "Unnamed Risk",
+              riskNumber: item.riskNumber || "N/A",
               riskLevel: item.likelihood * item.severity,
               status: item.mitigationStatus,
               category: catKey,
+              description: item.description || "",
             })),
             backgroundColor: RISK_COLORS[catKey] || "#7d5a50",
             borderColor: "#5d4037",
@@ -4667,8 +4689,15 @@ const RiskManagement = ({ activeSection, currentUser, isInvestorView }) => {
           })
         }
       })
+      
+      // If no datasets were created (no risks at all), return empty structure
+      if (datasets.length === 0) {
+        return { datasets: [] }
+      }
+      
       return { datasets }
     } else {
+      // For specific categories, use filtered data
       const data = filteredData(riskData[category] || [])
       return {
         datasets: [
@@ -4677,9 +4706,11 @@ const RiskManagement = ({ activeSection, currentUser, isInvestorView }) => {
             data: data.map((item) => ({
               x: item.likelihood,
               y: item.severity,
-              label: item.risk || "Unnamed Risk",
+              label: item.riskSubCategory || "Unnamed Risk",
+              riskNumber: item.riskNumber || "N/A",
               riskLevel: item.likelihood * item.severity,
               status: item.mitigationStatus,
+              description: item.description || "",
             })),
             backgroundColor: RISK_COLORS[category] || "#7d5a50",
             borderColor: "#5d4037",
@@ -4707,11 +4738,17 @@ const RiskManagement = ({ activeSection, currentUser, isInvestorView }) => {
           label: (context) => {
             const datasetLabel = context.dataset.label || "Risk"
             const pointLabel = context.raw.label || "Risk"
-            return `${datasetLabel}: ${pointLabel}`
+            const riskNumber = context.raw.riskNumber || "N/A"
+            return `${datasetLabel}: ${pointLabel} (${riskNumber})`
           },
           afterLabel: (context) => {
             const riskLevel = context.raw.x * context.raw.y
-            return `Risk Score: ${riskLevel} (${context.raw.x} × ${context.raw.y})`
+            const description = context.raw.description
+            const lines = [`Risk Score: ${riskLevel} (${context.raw.x} × ${context.raw.y})`]
+            if (description) {
+              lines.push(`Description: ${description}`)
+            }
+            return lines
           },
         },
       },
@@ -4719,13 +4756,15 @@ const RiskManagement = ({ activeSection, currentUser, isInvestorView }) => {
     scales: {
       x: {
         title: { display: true, text: "Likelihood (1-5)", color: "#4a352f", font: { weight: "bold", size: 12 } },
-        min: 0, max: 6,
+        min: 0.5, 
+        max: 5.5,
         ticks: { stepSize: 1, color: "#4a352f" },
         grid: { color: "#f0e6d9" },
       },
       y: {
         title: { display: true, text: "Severity (1-5)", color: "#4a352f", font: { weight: "bold", size: 12 } },
-        min: 0, max: 6,
+        min: 0.5, 
+        max: 5.5,
         ticks: { stepSize: 1, color: "#4a352f" },
         grid: { color: "#f0e6d9" },
       },
@@ -4831,7 +4870,7 @@ ${Object.keys(data.avgScoresByCategory).map(category => {
 
 TOP 5 HIGHEST RISK ITEMS:
 ${data.highRiskItems.map((risk, i) =>
-  `  ${i+1}. ${risk.risk || 'Unnamed Risk'} - Score: ${risk.riskScore} (Severity: ${risk.severity}, Likelihood: ${risk.likelihood}), Status: ${risk.mitigationStatus}, Owner: ${risk.owner || 'Unassigned'}`
+  `  ${i+1}. ${risk.riskSubCategory || 'Unnamed Risk'} (${risk.riskNumber || 'N/A'}) - Score: ${risk.riskScore} (Severity: ${risk.severity}, Likelihood: ${risk.likelihood}), Status: ${risk.mitigationStatus}, Owner: ${risk.owner || 'Unassigned'}`
 ).join('\n')}
 
 RISK STATUS DISTRIBUTION:
@@ -5090,16 +5129,30 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
               <h4 style={{ color: "#4a352f", marginBottom: "15px" }}>
                 {category.name} Matrix
                 {category.id === "business-risk" && " (All Risks)"}
-                {(selectedMonth || selectedYear || filterRisk || filterCategory || filterOwner || filterStatus) && (
+                {(selectedMonth || selectedYear || filterRisk || filterCategory || filterOwner || filterStatus) && category.id !== "business-risk" && (
                   <span style={{ fontSize: "12px", marginLeft: "10px", color: "#8d6e63" }}>(Filtered)</span>
                 )}
               </h4>
               <div style={{ height: "300px" }}>
                 <Scatter data={createScatterChartData(category.id)} options={scatterOptions} />
               </div>
+              
+              {/* Debug section to show risk counts */}
+              {category.id === "business-risk" && (
+                <div style={{ marginTop: "10px", padding: "10px", backgroundColor: "#f0f0f0", borderRadius: "4px", fontSize: "12px" }}>
+                  <strong>Risk Count Summary:</strong>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: "5px", marginTop: "5px" }}>
+                    {Object.keys(riskData).map(catKey => (
+                      <div key={catKey} style={{ color: RISK_COLORS[catKey] }}>
+                        {riskCategories.find(c => c.id === catKey)?.name || catKey}: {riskData[catKey]?.length || 0} risks
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
-            {/* Filters Section - Reduced to 4 essential filters */}
+            {/* Filters Section */}
             <div style={{ 
               marginBottom: "20px", 
               padding: "20px", 
@@ -5127,10 +5180,10 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
               </div>
               
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: "12px" }}>
-                {/* Filter by Risk Name */}
+                {/* Filter by Risk Sub-Category */}
                 <div>
                   <label style={{ display: "block", marginBottom: "5px", color: "#4a352f", fontWeight: "500", fontSize: "12px" }}>
-                    Risk Name
+                    Risk Sub-Category
                   </label>
                   <select
                     value={filterRisk}
@@ -5145,7 +5198,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                       fontSize: "13px",
                     }}
                   >
-                    <option value="">All Risks</option>
+                    <option value="">All Sub-Categories</option>
                     {getUniqueRiskNames(category.id).map((risk) => (
                       <option key={risk} value={risk}>{risk}</option>
                     ))}
@@ -5272,7 +5325,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                       color: "#4a352f",
                       fontSize: "13px",
                     }}
-                  >
+                    >
                     <option value="">All</option>
                     {years.map((year) => (
                       <option key={year} value={year}>{year}</option>
@@ -5281,11 +5334,14 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                 </div>
               </div>
 
-              {/* Add Risk Item button */}
+              {/* Add Risk Item button - NOW VISIBLE for specific categories */}
               {!isInvestorView && category.id !== "business-risk" && (
                 <div style={{ marginTop: "15px", textAlign: "right" }}>
                   <button
-                    onClick={() => addRiskItem(category.id)}
+                    onClick={() => {
+                      console.log("Add button clicked for category:", category.id);
+                      addRiskItem(category.id);
+                    }}
                     style={{
                       padding: "10px 20px",
                       backgroundColor: "#7d5a50",
@@ -5297,273 +5353,297 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                       fontSize: "14px",
                     }}
                   >
-                    + Add Risk Item
+                    + Add Risk Item to {category.name}
                   </button>
+                </div>
+              )}
+              
+              {/* Message for Business Risk view */}
+              {category.id === "business-risk" && (
+                <div style={{ marginTop: "15px", padding: "10px", backgroundColor: "#e6d7c3", borderRadius: "4px", textAlign: "center" }}>
+                  <p style={{ color: "#4a352f", margin: 0, fontSize: "13px" }}>
+                    To add a new risk, select a specific risk category tab above.
+                  </p>
                 </div>
               )}
             </div>
 
             {/* Risk Assessment Table */}
-           {/* Risk Assessment Table */}
-<div
-  style={{
-    backgroundColor: "#fdfcfb",
-    padding: "20px",
-    borderRadius: "6px",
-    border: `2px solid ${category.color}`,
-  }}
->
-  <div
-    style={{
-      display: "flex",
-      justifyContent: "space-between",
-      alignItems: "center",
-      marginBottom: "15px",
-    }}
-  >
-    <h4 style={{ color: "#4a352f", margin: 0 }}>
-      Risk Assessment Table
-      {category.id === "business-risk" && " (All Risks)"}
-      {(selectedMonth || selectedYear || filterRisk || filterCategory || filterOwner || filterStatus) && (
-        <span style={{ fontSize: "12px", marginLeft: "10px", color: "#8d6e63" }}>
-          (Showing {filtered.length} of {data.length} items)
-        </span>
-      )}
-    </h4>
-  </div>
+            <div
+              style={{
+                backgroundColor: "#fdfcfb",
+                padding: "20px",
+                borderRadius: "6px",
+                border: `2px solid ${category.color}`,
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: "15px",
+                }}
+              >
+                <h4 style={{ color: "#4a352f", margin: 0 }}>
+                  Risk Assessment Table
+                  {category.id === "business-risk" && " (All Risks)"}
+                  {(selectedMonth || selectedYear || filterRisk || filterCategory || filterOwner || filterStatus) && (
+                    <span style={{ fontSize: "12px", marginLeft: "10px", color: "#8d6e63" }}>
+                      (Showing {filtered.length} of {data.length} items)
+                    </span>
+                  )}
+                </h4>
+              </div>
 
-  {filtered.length === 0 ? (
-    <div style={{ textAlign: "center", padding: "40px", color: "#7d5a50" }}>
-      {category.id === "business-risk"
-        ? "No risk items added yet in any category."
-        : `No risk items added yet. ${!isInvestorView ? 'Click "Add Risk Item" to get started.' : ""}`}
-      {(selectedMonth || selectedYear || filterRisk || filterCategory || filterOwner || filterStatus) && (
-        <p style={{ marginTop: "10px", fontSize: "13px" }}>
-          Try clearing some filters to see more items.
-        </p>
-      )}
-    </div>
-  ) : (
-    <div style={{ overflowX: "auto" }}>
-      <table
-        style={{
-          width: "100%",
-          borderCollapse: "collapse",
-          color: "#4a352f",
-          minWidth: "1400px", // Increased to accommodate full column names
-          fontSize: "12px",
-        }}
-      >
-        <thead>
-          <tr style={{ backgroundColor: "#e6d7c3", borderBottom: "2px solid #c8b6a6" }}>
-            <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Risk Name</th>
-            {category.id === "business-risk" && (
-              <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Risk Category</th>
-            )}
-            <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Description</th>
-            <th style={{ padding: "12px", textAlign: "center", fontWeight: "600" }}>Severity (1-5)</th>
-            <th style={{ padding: "12px", textAlign: "center", fontWeight: "600" }}>Likelihood (1-5)</th>
-            <th style={{ padding: "12px", textAlign: "center", fontWeight: "600" }}>Risk Score</th>
-            <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Owner</th>
-            <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Status</th>
-            <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Mitigation Plan</th>
-            <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Review Cadence</th>
-            <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Action Date</th>
-            {!isInvestorView && category.id !== "business-risk" && (
-              <th style={{ padding: "12px", textAlign: "center", fontWeight: "600" }}>Actions</th>
-            )}
-          </tr>
-        </thead>
-        <tbody>
-          {filtered.map((item) => {
-            const originalCategory =
-              category.id === "business-risk"
-                ? Object.keys(riskData).find((key) => riskData[key].some((r) => r.id === item.id))
-                : category.id
-            const riskScore = (item.severity || 1) * (item.likelihood || 1)
-            const scoreColor = 
-              riskScore >= 16 ? "#F44336" : 
-              riskScore >= 9 ? "#FF9800" : 
-              "#4CAF50"
-
-            return (
-              <tr key={item.id} style={{ borderBottom: "1px solid #e6d7c3" }}>
-                <td style={{ padding: "12px" }}>
-                  <input
-                    type="text"
-                    value={item.risk}
-                    onChange={(e) => updateRiskItem(originalCategory, item.id, "risk", e.target.value)}
-                    disabled={isInvestorView || category.id === "business-risk"}
-                    placeholder="Risk name"
+              {filtered.length === 0 ? (
+                <div style={{ textAlign: "center", padding: "40px", color: "#7d5a50" }}>
+                  {category.id === "business-risk"
+                    ? "No risk items added yet in any category."
+                    : `No risk items added yet in ${category.name}. ${!isInvestorView ? 'Click "Add Risk Item" above to get started.' : ""}`}
+                  {(selectedMonth || selectedYear || filterRisk || filterCategory || filterOwner || filterStatus) && (
+                    <p style={{ marginTop: "10px", fontSize: "13px" }}>
+                      Try clearing some filters to see more items.
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <div style={{ overflowX: "auto" }}>
+                  <table
                     style={{
-                      width: "120px", padding: "6px", border: "1px solid #e8ddd4",
-                      borderRadius: "4px", fontSize: "12px",
-                      backgroundColor: isInvestorView || category.id === "business-risk" ? "#f5f5f5" : "white",
-                    }}
-                  />
-                </td>
-                
-                {category.id === "business-risk" && (
-                  <td style={{ padding: "12px", fontSize: "12px" }}>{item.riskCategory}</td>
-                )}
-                
-                <td style={{ padding: "12px" }}>
-                  <textarea
-                    value={item.description}
-                    onChange={(e) => updateRiskItem(originalCategory, item.id, "description", e.target.value)}
-                    disabled={isInvestorView || category.id === "business-risk"}
-                    rows="2"
-                    placeholder="Description"
-                    style={{
-                      width: "150px", padding: "6px", border: "1px solid #e8ddd4",
-                      borderRadius: "4px", fontSize: "12px", resize: "vertical",
-                      backgroundColor: isInvestorView || category.id === "business-risk" ? "#f5f5f5" : "white",
-                    }}
-                  />
-                </td>
-                
-                <td style={{ padding: "12px", textAlign: "center" }}>
-                  <input
-                    type="number" min="1" max="5" value={item.severity}
-                    onChange={(e) => updateRiskItem(originalCategory, item.id, "severity", Number.parseInt(e.target.value))}
-                    disabled={isInvestorView || category.id === "business-risk"}
-                    style={{
-                      width: "50px", padding: "6px", border: "1px solid #e8ddd4",
-                      borderRadius: "4px", fontSize: "12px", textAlign: "center",
-                      backgroundColor: isInvestorView || category.id === "business-risk" ? "#f5f5f5" : "white",
-                    }}
-                  />
-                </td>
-                
-                <td style={{ padding: "12px", textAlign: "center" }}>
-                  <input
-                    type="number" min="1" max="5" value={item.likelihood}
-                    onChange={(e) => updateRiskItem(originalCategory, item.id, "likelihood", Number.parseInt(e.target.value))}
-                    disabled={isInvestorView || category.id === "business-risk"}
-                    style={{
-                      width: "50px", padding: "6px", border: "1px solid #e8ddd4",
-                      borderRadius: "4px", fontSize: "12px", textAlign: "center",
-                      backgroundColor: isInvestorView || category.id === "business-risk" ? "#f5f5f5" : "white",
-                    }}
-                  />
-                </td>
-                
-                <td style={{ padding: "12px", textAlign: "center" }}>
-                  <span style={{
-                    padding: "4px 8px",
-                    borderRadius: "4px",
-                    backgroundColor: scoreColor,
-                    color: "white",
-                    fontWeight: "600",
-                    fontSize: "12px",
-                    display: "inline-block",
-                    minWidth: "40px",
-                    textAlign: "center"
-                  }}>
-                    {riskScore}
-                  </span>
-                </td>
-                
-                <td style={{ padding: "12px" }}>
-                  <input
-                    type="text" value={item.owner || ""}
-                    onChange={(e) => updateRiskItem(originalCategory, item.id, "owner", e.target.value)}
-                    disabled={isInvestorView || category.id === "business-risk"}
-                    placeholder="Owner"
-                    style={{
-                      width: "100px", padding: "6px", border: "1px solid #e8ddd4",
-                      borderRadius: "4px", fontSize: "12px",
-                      backgroundColor: isInvestorView || category.id === "business-risk" ? "#f5f5f5" : "white",
-                    }}
-                  />
-                </td>
-                
-                <td style={{ padding: "12px" }}>
-                  <select
-                    value={item.mitigationStatus}
-                    onChange={(e) => updateRiskItem(originalCategory, item.id, "mitigationStatus", e.target.value)}
-                    disabled={isInvestorView || category.id === "business-risk"}
-                    style={{
-                      width: "140px", padding: "6px", border: "1px solid #e8ddd4",
-                      borderRadius: "4px", fontSize: "12px",
-                      backgroundColor: isInvestorView || category.id === "business-risk" ? "#f5f5f5" : "white",
+                      width: "100%",
+                      borderCollapse: "collapse",
+                      color: "#4a352f",
+                      minWidth: "1600px",
+                      fontSize: "12px",
                     }}
                   >
-                    <option value="🟢 Controlled">🟢 Controlled</option>
-                    <option value="🟡 Partially controlled">🟡 Partially controlled</option>
-                    <option value="🔴 Uncontrolled">🔴 Uncontrolled</option>
-                  </select>
-                </td>
-                
-                <td style={{ padding: "12px" }}>
-                  <textarea
-                    value={item.mitigation}
-                    onChange={(e) => updateRiskItem(originalCategory, item.id, "mitigation", e.target.value)}
-                    disabled={isInvestorView || category.id === "business-risk"}
-                    rows="2"
-                    placeholder="Mitigation plan"
-                    style={{
-                      width: "150px", padding: "6px", border: "1px solid #e8ddd4",
-                      borderRadius: "4px", fontSize: "12px", resize: "vertical",
-                      backgroundColor: isInvestorView || category.id === "business-risk" ? "#f5f5f5" : "white",
-                    }}
-                  />
-                </td>
-                
-                <td style={{ padding: "12px" }}>
-                  <input
-                    type="text" value={item.reviewCadence || ""}
-                    onChange={(e) => updateRiskItem(originalCategory, item.id, "reviewCadence", e.target.value)}
-                    disabled={isInvestorView || category.id === "business-risk"}
-                    placeholder="e.g., Monthly"
-                    style={{
-                      width: "100px", padding: "6px", border: "1px solid #e8ddd4",
-                      borderRadius: "4px", fontSize: "12px",
-                      backgroundColor: isInvestorView || category.id === "business-risk" ? "#f5f5f5" : "white",
-                    }}
-                  />
-                </td>
-                
-                <td style={{ padding: "12px" }}>
-                  <input
-                    type="date" value={item.actionDate || ""}
-                    onChange={(e) => updateRiskItem(originalCategory, item.id, "actionDate", e.target.value)}
-                    disabled={isInvestorView || category.id === "business-risk"}
-                    style={{
-                      width: "120px", padding: "6px", border: "1px solid #e8ddd4",
-                      borderRadius: "4px", fontSize: "12px",
-                      backgroundColor: isInvestorView || category.id === "business-risk" ? "#f5f5f5" : "white",
-                    }}
-                  />
-                </td>
-                
-                {!isInvestorView && category.id !== "business-risk" && (
-                  <td style={{ padding: "12px", textAlign: "center" }}>
-                    <button
-                      onClick={() => deleteRiskItem(originalCategory, item.id)}
-                      style={{
-                        padding: "6px 12px",
-                        backgroundColor: "transparent",
-                        color: "#F44336",
-                        border: "1px solid #F44336",
-                        borderRadius: "4px",
-                        cursor: "pointer",
-                        fontSize: "14px",
-                      }}
-                      title="Delete"
-                    >
-                      Delete
-                    </button>
-                  </td>
-                )}
-              </tr>
-            )
-          })}
-        </tbody>
-      </table>
-    </div>
-  )}
-</div>
+                    <thead>
+                      <tr style={{ backgroundColor: "#e6d7c3", borderBottom: "2px solid #c8b6a6" }}>
+                        <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Risk Number</th>
+                        {category.id === "business-risk" && (
+                          <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Risk Category</th>
+                        )}
+                        <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Risk Sub-Category</th>
+                        <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Description</th>
+                        <th style={{ padding: "12px", textAlign: "center", fontWeight: "600" }}>Severity (1-5)</th>
+                        <th style={{ padding: "12px", textAlign: "center", fontWeight: "600" }}>Likelihood (1-5)</th>
+                        <th style={{ padding: "12px", textAlign: "center", fontWeight: "600" }}>Risk Score</th>
+                        <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Owner</th>
+                        <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Status</th>
+                        <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Mitigation Plan</th>
+                        <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Review Cadence</th>
+                        <th style={{ padding: "12px", textAlign: "left", fontWeight: "600" }}>Action Date</th>
+                        {!isInvestorView && category.id !== "business-risk" && (
+                          <th style={{ padding: "12px", textAlign: "center", fontWeight: "600" }}>Actions</th>
+                        )}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filtered.map((item) => {
+                        const originalCategory =
+                          category.id === "business-risk"
+                            ? Object.keys(riskData).find((key) => riskData[key].some((r) => r.id === item.id))
+                            : category.id
+                        const riskScore = (item.severity || 1) * (item.likelihood || 1)
+                        const scoreColor = 
+                          riskScore >= 16 ? "#F44336" : 
+                          riskScore >= 9 ? "#FF9800" : 
+                          "#4CAF50"
+
+                        return (
+                          <tr key={item.id} style={{ borderBottom: "1px solid #e6d7c3" }}>
+                            <td style={{ padding: "12px" }}>
+                              <input
+                                type="text"
+                                value={item.riskNumber || ""}
+                                onChange={(e) => updateRiskItem(originalCategory, item.id, "riskNumber", e.target.value)}
+                                disabled={isInvestorView || category.id === "business-risk"}
+                                placeholder="Risk #"
+                                style={{
+                                  width: "80px", padding: "6px", border: "1px solid #e8ddd4",
+                                  borderRadius: "4px", fontSize: "12px",
+                                  backgroundColor: isInvestorView || category.id === "business-risk" ? "#f5f5f5" : "white",
+                                }}
+                              />
+                            </td>
+                            
+                            {category.id === "business-risk" && (
+                              <td style={{ padding: "12px", fontSize: "12px" }}>{item.riskCategory}</td>
+                            )}
+                            
+                            <td style={{ padding: "12px" }}>
+                              <input
+                                type="text"
+                                value={item.riskSubCategory || ""}
+                                onChange={(e) => updateRiskItem(originalCategory, item.id, "riskSubCategory", e.target.value)}
+                                disabled={isInvestorView || category.id === "business-risk"}
+                                placeholder="Sub-category"
+                                style={{
+                                  width: "120px", padding: "6px", border: "1px solid #e8ddd4",
+                                  borderRadius: "4px", fontSize: "12px",
+                                  backgroundColor: isInvestorView || category.id === "business-risk" ? "#f5f5f5" : "white",
+                                }}
+                              />
+                            </td>
+                            
+                            <td style={{ padding: "12px" }}>
+                              <textarea
+                                value={item.description}
+                                onChange={(e) => updateRiskItem(originalCategory, item.id, "description", e.target.value)}
+                                disabled={isInvestorView || category.id === "business-risk"}
+                                rows="2"
+                                placeholder="Description"
+                                style={{
+                                  width: "150px", padding: "6px", border: "1px solid #e8ddd4",
+                                  borderRadius: "4px", fontSize: "12px", resize: "vertical",
+                                  backgroundColor: isInvestorView || category.id === "business-risk" ? "#f5f5f5" : "white",
+                                }}
+                              />
+                            </td>
+                            
+                            <td style={{ padding: "12px", textAlign: "center" }}>
+                              <input
+                                type="number" min="1" max="5" value={item.severity}
+                                onChange={(e) => updateRiskItem(originalCategory, item.id, "severity", Number.parseInt(e.target.value))}
+                                disabled={isInvestorView || category.id === "business-risk"}
+                                style={{
+                                  width: "50px", padding: "6px", border: "1px solid #e8ddd4",
+                                  borderRadius: "4px", fontSize: "12px", textAlign: "center",
+                                  backgroundColor: isInvestorView || category.id === "business-risk" ? "#f5f5f5" : "white",
+                                }}
+                              />
+                            </td>
+                            
+                            <td style={{ padding: "12px", textAlign: "center" }}>
+                              <input
+                                type="number" min="1" max="5" value={item.likelihood}
+                                onChange={(e) => updateRiskItem(originalCategory, item.id, "likelihood", Number.parseInt(e.target.value))}
+                                disabled={isInvestorView || category.id === "business-risk"}
+                                style={{
+                                  width: "50px", padding: "6px", border: "1px solid #e8ddd4",
+                                  borderRadius: "4px", fontSize: "12px", textAlign: "center",
+                                  backgroundColor: isInvestorView || category.id === "business-risk" ? "#f5f5f5" : "white",
+                                }}
+                              />
+                            </td>
+                            
+                            <td style={{ padding: "12px", textAlign: "center" }}>
+                              <span style={{
+                                padding: "4px 8px",
+                                borderRadius: "4px",
+                                backgroundColor: scoreColor,
+                                color: "white",
+                                fontWeight: "600",
+                                fontSize: "12px",
+                                display: "inline-block",
+                                minWidth: "40px",
+                                textAlign: "center"
+                              }}>
+                                {riskScore}
+                              </span>
+                            </td>
+                            
+                            <td style={{ padding: "12px" }}>
+                              <input
+                                type="text" value={item.owner || ""}
+                                onChange={(e) => updateRiskItem(originalCategory, item.id, "owner", e.target.value)}
+                                disabled={isInvestorView || category.id === "business-risk"}
+                                placeholder="Owner"
+                                style={{
+                                  width: "100px", padding: "6px", border: "1px solid #e8ddd4",
+                                  borderRadius: "4px", fontSize: "12px",
+                                  backgroundColor: isInvestorView || category.id === "business-risk" ? "#f5f5f5" : "white",
+                                }}
+                              />
+                            </td>
+                            
+                            <td style={{ padding: "12px" }}>
+                              <select
+                                value={item.mitigationStatus}
+                                onChange={(e) => updateRiskItem(originalCategory, item.id, "mitigationStatus", e.target.value)}
+                                disabled={isInvestorView || category.id === "business-risk"}
+                                style={{
+                                  width: "140px", padding: "6px", border: "1px solid #e8ddd4",
+                                  borderRadius: "4px", fontSize: "12px",
+                                  backgroundColor: isInvestorView || category.id === "business-risk" ? "#f5f5f5" : "white",
+                                }}
+                              >
+                                <option value="🟢 Controlled">🟢 Controlled</option>
+                                <option value="🟡 Partially controlled">🟡 Partially controlled</option>
+                                <option value="🔴 Uncontrolled">🔴 Uncontrolled</option>
+                              </select>
+                            </td>
+                            
+                            <td style={{ padding: "12px" }}>
+                              <textarea
+                                value={item.mitigation}
+                                onChange={(e) => updateRiskItem(originalCategory, item.id, "mitigation", e.target.value)}
+                                disabled={isInvestorView || category.id === "business-risk"}
+                                rows="2"
+                                placeholder="Mitigation plan"
+                                style={{
+                                  width: "150px", padding: "6px", border: "1px solid #e8ddd4",
+                                  borderRadius: "4px", fontSize: "12px", resize: "vertical",
+                                  backgroundColor: isInvestorView || category.id === "business-risk" ? "#f5f5f5" : "white",
+                                }}
+                              />
+                            </td>
+                            
+                            <td style={{ padding: "12px" }}>
+                              <input
+                                type="text" value={item.reviewCadence || ""}
+                                onChange={(e) => updateRiskItem(originalCategory, item.id, "reviewCadence", e.target.value)}
+                                disabled={isInvestorView || category.id === "business-risk"}
+                                placeholder="e.g., Monthly"
+                                style={{
+                                  width: "100px", padding: "6px", border: "1px solid #e8ddd4",
+                                  borderRadius: "4px", fontSize: "12px",
+                                  backgroundColor: isInvestorView || category.id === "business-risk" ? "#f5f5f5" : "white",
+                                }}
+                              />
+                            </td>
+                            
+                            <td style={{ padding: "12px" }}>
+                              <input
+                                type="date" value={item.actionDate || ""}
+                                onChange={(e) => updateRiskItem(originalCategory, item.id, "actionDate", e.target.value)}
+                                disabled={isInvestorView || category.id === "business-risk"}
+                                style={{
+                                  width: "120px", padding: "6px", border: "1px solid #e8ddd4",
+                                  borderRadius: "4px", fontSize: "12px",
+                                  backgroundColor: isInvestorView || category.id === "business-risk" ? "#f5f5f5" : "white",
+                                }}
+                              />
+                            </td>
+                            
+                            {!isInvestorView && category.id !== "business-risk" && (
+                              <td style={{ padding: "12px", textAlign: "center" }}>
+                                <button
+                                  onClick={() => deleteRiskItem(originalCategory, item.id)}
+                                  style={{
+                                    padding: "6px 12px",
+                                    backgroundColor: "transparent",
+                                    color: "#F44336",
+                                    border: "1px solid #F44336",
+                                    borderRadius: "4px",
+                                    cursor: "pointer",
+                                    fontSize: "14px",
+                                  }}
+                                  title="Delete"
+                                >
+                                  Delete
+                                </button>
+                              </td>
+                            )}
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
           </div>
         )
       })}
