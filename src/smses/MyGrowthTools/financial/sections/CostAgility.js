@@ -15,12 +15,19 @@ import { useCostAgilityData } from "../../../hooks/useFinancialData";
 import { CALCULATION_TEXTS } from "../financialConstants";
 import {
   makeFormatValue,
-  getLast12MonthsLabels,
-  getLast12MonthsComputed,
+  getRangeLabels,
+  getRangeComputed,
   computeCostChartData,
 } from "../financialUtils";
 
-const CostAgility = ({ activeSection, user, isInvestorView, financialYearStart }) => {
+const _now        = new Date();
+const _defaultTo  = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, "0")}`;
+const _defaultFrom = (() => {
+  const d = new Date(_now.getFullYear(), _now.getMonth() - 11, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+})();
+
+const CostAgility = ({ activeSection, user, isInvestorView }) => {
   const [showModal, setShowModal]             = useState(false);
   const [expandedNotes, setExpandedNotes]     = useState({});
   const [showTrendModal, setShowTrendModal]   = useState(false);
@@ -31,19 +38,25 @@ const CostAgility = ({ activeSection, user, isInvestorView, financialYearStart }
   const [selectedCalc, setSelectedCalc]       = useState({ title: "", calculation: "" });
   const [currencyUnit]                        = useState("zar_million");
 
+  // Date range — default to last 12 months
+  const [fromDate, setFromDate] = useState(_defaultFrom);
+  const [toDate, setToDate]     = useState(_defaultTo);
+
   const {
     firebaseChartData,
     chartNotes,
     setChartNotes,
     loading,
+    firstDataMonth,
     loadCostData,
   } = useCostAgilityData(user);
 
   const formatValue = makeFormatValue(currencyUnit);
 
+  // Reload when user or range changes
   useEffect(() => {
-    if (user) loadCostData();
-  }, [user]);
+    if (user) loadCostData(fromDate, toDate);
+  }, [user, fromDate, toDate]);
 
   const openTrend = async (name, dataKey, isPercentage = false) => {
     setSelectedTrendItem({ name, isPercentage });
@@ -51,22 +64,54 @@ const CostAgility = ({ activeSection, user, isInvestorView, financialYearStart }
     setTrendLoading(true);
     setShowTrendModal(true);
     try {
-      const labels = getLast12MonthsLabels(financialYearStart);
-      const { actual, budget } = await getLast12MonthsComputed({
+      const labels = getRangeLabels(fromDate, toDate);
+      const { actual, budget } = await getRangeComputed({
         uid: user.uid,
         docBase: "_costAgility",
         chartKey: dataKey,
-        financialYearStart,
+        fromYM: fromDate,
+        toYM: toDate,
         getDocFn: getDoc,
         docFn: doc,
         db,
         processor: computeCostChartData,
       });
+
+      // Build smart y-axis formatting
+      // Cost Agility KPIs: fixedVariableRatio & discretionaryPercentage are %,
+      // lockInDuration is in months — treat as unitless scalar.
+      let trendFormatValue, yAxisLabel, yTickFmt;
+      if (isPercentage) {
+        trendFormatValue = (v) => `${parseFloat(v).toFixed(2)}%`;
+        yAxisLabel       = "Percentage (%)";
+        yTickFmt         = (v) => `${parseFloat(v).toFixed(1)}%`;
+      } else if (dataKey === "lockInDuration") {
+        trendFormatValue = (v) => `${parseFloat(v).toFixed(1)} months`;
+        yAxisLabel       = "Months";
+        yTickFmt         = (v) => parseFloat(v).toFixed(1);
+      } else {
+        // Currency values stored in millions
+        const allVals    = [...(actual || []), ...(budget || [])].filter((v) => v !== null && !isNaN(v));
+        const maxAbs     = allVals.length ? Math.max(...allVals.map(Math.abs)) : 0;
+        const scaleUnit    = maxAbs >= 1_000 ? "R bn" : maxAbs >= 1 ? "R m" : "R k";
+        const scaleDivisor = maxAbs >= 1_000 ? 1_000   : maxAbs >= 1 ? 1    : 0.001;
+        trendFormatValue = (v) => {
+          const num = parseFloat(v) || 0;
+          const abs = Math.abs(num);
+          if (abs >= 1_000) return `R${(num / 1_000).toFixed(2)}bn`;
+          if (abs >= 1)     return `R${num.toFixed(2)}m`;
+          return `R${(num * 1_000).toFixed(2)}k`;
+        };
+        yAxisLabel = `Value (${scaleUnit})`;
+        yTickFmt   = (v) => (v / scaleDivisor).toFixed(2);
+      }
+
+      setSelectedTrendItem({ name, isPercentage, trendFormatValue, yAxisLabel, yTickFmt });
       setTrendData({ labels, actual, budget });
     } catch (e) {
       console.error("Trend load error:", e);
       setTrendData({
-        labels: getLast12MonthsLabels(financialYearStart),
+        labels: getRangeLabels(fromDate, toDate),
         actual: Array(12).fill(null),
         budget: null,
       });
@@ -80,7 +125,6 @@ const CostAgility = ({ activeSection, user, isInvestorView, financialYearStart }
     setShowCalcModal(true);
   };
 
-  // Single-source KPI config: dataKey, display title, unit label, circle formatter
   const KPI_CONFIG = [
     {
       dataKey:      "fixedVariableRatio",
@@ -104,7 +148,6 @@ const CostAgility = ({ activeSection, user, isInvestorView, financialYearStart }
 
   const renderKPI = ({ dataKey, title, unitLabel, formatCircle }) => {
     const data    = firebaseChartData[dataKey] || { actual: [] };
-    // Most-recent value only — no view-mode aggregation for this section
     const current = data.actual?.at(-1) ?? 0;
     const calc    = CALCULATION_TEXTS.costAgility?.[dataKey] || "";
     return (
@@ -118,14 +161,9 @@ const CostAgility = ({ activeSection, user, isInvestorView, financialYearStart }
         singleCircle
         formatCircleValue={formatCircle}
         onEyeClick={() => openCalc(title, calc)}
-        onAddNotes={(notes) =>
-          setChartNotes((p) => ({ ...p, [dataKey]: notes }))
-        }
+        onAddNotes={(notes) => setChartNotes((p) => ({ ...p, [dataKey]: notes }))}
         onAnalysis={() =>
-          setExpandedNotes((p) => ({
-            ...p,
-            [`${dataKey}_analysis`]: !p[`${dataKey}_analysis`],
-          }))
+          setExpandedNotes((p) => ({ ...p, [`${dataKey}_analysis`]: !p[`${dataKey}_analysis`] }))
         }
         onTrend={() => openTrend(title, dataKey, unitLabel === "%")}
         notes={chartNotes[dataKey]}
@@ -149,6 +187,12 @@ const CostAgility = ({ activeSection, user, isInvestorView, financialYearStart }
         onAddData={!isInvestorView ? () => setShowModal(true) : null}
         showAddData={!isInvestorView}
         showViewMode={false}
+        fromDate={fromDate}
+        setFromDate={setFromDate}
+        toDate={toDate}
+        setToDate={setToDate}
+        minDate={firstDataMonth ?? "2023-01"}
+        maxDate={_defaultTo}
       />
 
       <KpiGrid3>
@@ -160,9 +204,10 @@ const CostAgility = ({ activeSection, user, isInvestorView, financialYearStart }
         onClose={() => setShowModal(false)}
         currentTab="cost-agility"
         user={user}
-        onSave={loadCostData}
+        onSave={() => loadCostData(fromDate, toDate)}
         loading={loading}
-        financialYearStart={financialYearStart}
+        fromDate={fromDate}
+        toDate={toDate}
       />
 
       <CalculationModal
@@ -175,10 +220,7 @@ const CostAgility = ({ activeSection, user, isInvestorView, financialYearStart }
       {showTrendModal && (
         <TrendModal
           isOpen={showTrendModal}
-          onClose={() => {
-            setShowTrendModal(false);
-            setTrendData(null);
-          }}
+          onClose={() => { setShowTrendModal(false); setTrendData(null); }}
           item={selectedTrendItem}
           trendData={trendData}
           currencyUnit={currencyUnit}

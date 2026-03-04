@@ -643,11 +643,8 @@ export const DateRangePicker = ({
   filterMode, setFilterMode,
   fromDate, setFromDate,
   toDate, setToDate,
-  selectedYear, setSelectedYear,
-  years,
 }) => {
   const isRange = filterMode === "range";
-  const isYearly = filterMode === "year" || filterMode === "month"; // accept legacy "month" mode
 
   const inputCls = (active) =>
     `px-3 py-1.5 rounded border text-sm min-w-[130px] transition-opacity duration-150 ${
@@ -657,41 +654,14 @@ export const DateRangePicker = ({
     }`;
 
   const labelCls = (active) =>
-    `text-sm font-medium transition-opacity duration-150 ${active ? "text-mediumBrown" : "text-[#b0a098] opacity-50"}`;
+    `text-sm font-medium transition-opacity duration-150 ${
+      active ? "text-mediumBrown" : "text-[#b0a098] opacity-50"
+    }`;
 
-  const radioCls = "accent-[#6b4c3b] w-3.5 h-3.5 cursor-pointer";
+  const radioCls = "hidden accent-[#6b4c3b] w-3.5 h-3.5 cursor-pointer";
 
   return (
     <div className="flex flex-wrap gap-x-5 gap-y-2 items-center p-3 rounded-lg border border-[#e8ddd4] bg-[#faf7f5]">
-      {/* ── Year only ── */}
-      <div className="flex items-center gap-2">
-        <input
-          type="radio"
-          id="filter-year"
-          name="filterMode"
-          value="year"
-          checked={isYearly}
-          onChange={() => setFilterMode("year")}
-          className={radioCls}
-        />
-        <label htmlFor="filter-year" className={`${labelCls(isYearly)} cursor-pointer`}>
-          Year
-        </label>
-        <div className={`flex items-center gap-2 ${isYearly ? "" : "pointer-events-none"}`}>
-          <select
-            value={selectedYear}
-            onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-            className={inputCls(isYearly)}
-            disabled={!isYearly}
-          >
-            {years.map((y) => (
-              <option key={y} value={y}>{y}</option>
-            ))}
-          </select>
-        </div>
-      </div>
-      {/* ── Divider ── */}
-      <span className="text-[#d4c4b8] text-lg select-none">|</span>
       {/* ── From–To Range ── */}
       <div className="flex items-center gap-2">
         <input
@@ -703,10 +673,17 @@ export const DateRangePicker = ({
           onChange={() => setFilterMode("range")}
           className={radioCls}
         />
-        <label htmlFor="filter-range" className={`${labelCls(isRange)} cursor-pointer`}>
-          Range
+        <label
+          htmlFor="filter-range"
+          className={`${labelCls(isRange)} cursor-pointer`}
+        >
+          From: 
         </label>
-        <div className={`flex items-center gap-1.5 ${isRange ? "" : "pointer-events-none"}`}>
+        <div
+          className={`flex items-center gap-1.5 ${
+            isRange ? "" : "pointer-events-none"
+          }`}
+        >
           <input
             type="month"
             value={fromDate}
@@ -717,7 +694,7 @@ export const DateRangePicker = ({
             className={inputCls(isRange)}
             disabled={!isRange}
           />
-          <span className={labelCls(isRange)}>→</span>
+          <span className={labelCls(isRange)}>To: </span>
           <input
             type="month"
             value={toDate}
@@ -730,7 +707,8 @@ export const DateRangePicker = ({
       </div>
     </div>
   );
-}
+};
+
 
 // ==================== KPI GRID WRAPPERS ====================
 export const KpiGrid3 = ({ children }) => (

@@ -18,35 +18,43 @@ import { CALCULATION_TEXTS } from "../financialConstants";
 import {
   aggregateDataForView,
   makeFormatValue,
-  getLast12MonthsLabels,
-  getLast12MonthsComputed,
+  getRangeLabels,
+  getRangeComputed,
   computePnlChartData,
   formatSmartNumber,
   getSmartUnit,
+  getDefaultRange,
 } from "../financialUtils";
+
+// Default range helpers (same as other sections)
+const _now        = new Date();
+const _defaultTo  = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, "0")}`;
+const _defaultFrom = (() => {
+  const d = new Date(_now.getFullYear(), _now.getMonth() - 11, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+})();
 
 const PerformanceEngine = ({
   activeSection,
-  financialYearStart,
   user,
   onUpdateChartData,
   isInvestorView,
 }) => {
-  const [showModal, setShowModal] = useState(false);
-  const [viewMode, setViewMode] = useState("month");
-  const [selectedYear] = useState(new Date().getFullYear());
-  const [showVariance, setShowVariance] = useState(false);
+  const [showModal, setShowModal]         = useState(false);
+  const [viewMode, setViewMode]           = useState("month");
+  const [showVariance, setShowVariance]   = useState(false);
   const [expandedNotes, setExpandedNotes] = useState({});
-  const [showTrendModal, setShowTrendModal] = useState(false);
+  const [showTrendModal, setShowTrendModal]       = useState(false);
   const [selectedTrendItem, setSelectedTrendItem] = useState(null);
-  const [trendData, setTrendData] = useState(null);
-  const [trendLoading, setTrendLoading] = useState(false);
-  const [showCalcModal, setShowCalcModal] = useState(false);
-  const [selectedCalc, setSelectedCalc] = useState({
-    title: "",
-    calculation: "",
-  });
+  const [trendData, setTrendData]                 = useState(null);
+  const [trendLoading, setTrendLoading]           = useState(false);
+  const [showCalcModal, setShowCalcModal]   = useState(false);
+  const [selectedCalc, setSelectedCalc]     = useState({ title: "", calculation: "" });
   const [currencyUnit] = useState("zar_million");
+
+  // Date range — default to last 12 months
+  const [fromDate, setFromDate] = useState(_defaultFrom);
+  const [toDate, setToDate]     = useState(_defaultTo);
 
   const {
     firebaseChartData,
@@ -54,18 +62,20 @@ const PerformanceEngine = ({
     setChartNotes,
     customKPIs,
     loading,
+    firstDataMonth,
     loadPnLData,
     loadCustomKPIs,
   } = usePerformanceEngineData(user);
 
   const formatValue = makeFormatValue(currencyUnit);
 
+  // Reload when user or range changes
   useEffect(() => {
     if (user) {
-      loadPnLData(onUpdateChartData);
+      loadPnLData(fromDate, toDate, onUpdateChartData);
       loadCustomKPIs();
     }
-  }, [user]);
+  }, [user, fromDate, toDate]);
 
   const openTrend = async (name, dataKey, isPercentage = false) => {
     setSelectedTrendItem({ name, isPercentage });
@@ -73,22 +83,48 @@ const PerformanceEngine = ({
     setTrendLoading(true);
     setShowTrendModal(true);
     try {
-      const labels = getLast12MonthsLabels(financialYearStart);
-      const { actual, budget } = await getLast12MonthsComputed({
+      const labels = getRangeLabels(fromDate, toDate);
+      const { actual, budget } = await getRangeComputed({
         uid: user.uid,
         docBase: "_pnlManual",
         chartKey: dataKey,
-        financialYearStart,
+        fromYM: fromDate,
+        toYM: toDate,
         getDocFn: getDoc,
         docFn: doc,
         db,
         processor: computePnlChartData,
       });
+
+      // Build smart y-axis formatting (values are in millions)
+      let trendFormatValue, yAxisLabel, yTickFmt;
+      if (isPercentage) {
+        trendFormatValue = (v) => `${parseFloat(v).toFixed(2)}%`;
+        yAxisLabel       = "Percentage (%)";
+        yTickFmt         = (v) => `${parseFloat(v).toFixed(1)}%`;
+      } else {
+        const allVals    = [...(actual || []), ...(budget || [])].filter((v) => v !== null && !isNaN(v));
+        const maxAbs     = allVals.length ? Math.max(...allVals.map(Math.abs)) : 0;
+        const scaleUnit    = maxAbs >= 1_000 ? "R bn" : maxAbs >= 1 ? "R m" : "R k";
+        const scaleDivisor = maxAbs >= 1_000 ? 1_000   : maxAbs >= 1 ? 1      : 0.001;
+        const fmtDecimals  = maxAbs >= 1_000 ? 2       : maxAbs >= 1 ? 2      : 2;
+        trendFormatValue = (v) => {
+          const num = parseFloat(v) || 0;
+          const abs = Math.abs(num);
+          if (abs >= 1_000) return `R${(num / 1_000).toFixed(2)}bn`;
+          if (abs >= 1)     return `R${num.toFixed(2)}m`;
+          return `R${(num * 1_000).toFixed(2)}k`;
+        };
+        yAxisLabel = `Value (${scaleUnit})`;
+        yTickFmt   = (v) => (v / scaleDivisor).toFixed(fmtDecimals);
+      }
+
+      setSelectedTrendItem({ name, isPercentage, trendFormatValue, yAxisLabel, yTickFmt });
       setTrendData({ labels, actual, budget });
     } catch (e) {
       console.error("Trend load error:", e);
       setTrendData({
-        labels: getLast12MonthsLabels(financialYearStart),
+        labels: getRangeLabels(fromDate, toDate),
         actual: Array(12).fill(null),
         budget: null,
       });
@@ -103,17 +139,14 @@ const PerformanceEngine = ({
   };
 
   const renderKPI = (title, dataKey, isPercentage = false) => {
-    const data = firebaseChartData[dataKey] || { actual: [], budget: [] };
-    // isAverage=true for % KPIs (yearly avg margin), false for monetary (yearly sum)
-    const chartArr = aggregateDataForView(data.actual, viewMode, isPercentage);
-    const budgetArr = aggregateDataForView(data.budget || [], viewMode, isPercentage);
-    const current = chartArr.at(-1) ?? 0;
-    const budget = budgetArr.at(-1) ?? 0;
-    const calc = CALCULATION_TEXTS.performance[dataKey] || "";
+    const data      = firebaseChartData[dataKey] || { actual: [], budget: [] };
+    const chartArr  = aggregateDataForView(data.actual,        viewMode, isPercentage);
+    const budgetArr = aggregateDataForView(data.budget || [],  viewMode, isPercentage);
+    const current   = chartArr.at(-1)  ?? 0;
+    const budget    = budgetArr.at(-1) ?? 0;
+    const calc      = CALCULATION_TEXTS.performance[dataKey] || "";
 
-    // Unit label: "%" for margins, smart currency unit for monetary KPIs
-    const unitLabel = isPercentage ? "%" : getSmartUnit(current);
-    // Circle shows plain number (unit is in heading)
+    const unitLabel        = isPercentage ? "%" : getSmartUnit(current);
     const formatCircleValue = isPercentage
       ? (v) => parseFloat(v).toFixed(2)
       : (v) => formatSmartNumber(v);
@@ -129,14 +162,9 @@ const PerformanceEngine = ({
         unitLabel={unitLabel}
         formatCircleValue={formatCircleValue}
         onEyeClick={() => openCalc(title, calc)}
-        onAddNotes={(notes) =>
-          setChartNotes((p) => ({ ...p, [dataKey]: notes }))
-        }
+        onAddNotes={(notes) => setChartNotes((p) => ({ ...p, [dataKey]: notes }))}
         onAnalysis={() =>
-          setExpandedNotes((p) => ({
-            ...p,
-            [`${dataKey}_analysis`]: !p[`${dataKey}_analysis`],
-          }))
+          setExpandedNotes((p) => ({ ...p, [`${dataKey}_analysis`]: !p[`${dataKey}_analysis`] }))
         }
         onTrend={() => openTrend(title, dataKey, isPercentage)}
         notes={chartNotes[dataKey]}
@@ -175,95 +203,46 @@ const PerformanceEngine = ({
         onAddData={!isInvestorView ? () => setShowModal(true) : null}
         showAddData={!isInvestorView}
         extraControls={extraControls}
+        // Range picker props forwarded so SectionControlsBar can render it if desired;
+        // for now the section inherits its own range state managed above.
+        fromDate={fromDate}
+        setFromDate={setFromDate}
+        toDate={toDate}
+        setToDate={setToDate}
+        minDate={firstDataMonth ?? "2023-01"}
+        maxDate={_defaultTo}
       />
 
       {/* Revenue & Cost */}
       <KpiGrid3>
-        {renderKPI("Revenue", "sales")}
-        {renderKPI("COGS", "cogs")}
+        {renderKPI("Revenue",            "sales")}
+        {renderKPI("COGS",               "cogs")}
         {renderKPI("Operating Expenses", "opex")}
       </KpiGrid3>
 
-      {/* Profitability — EBITDA and EBIT removed */}
+      {/* Profitability */}
       <SectionHeading>Profitability Analysis</SectionHeading>
       <KpiGrid2>
         {renderKPI("Gross Profit", "grossProfit")}
-        {renderKPI("Net Profit", "netProfit")}
+        {renderKPI("Net Profit",   "netProfit")}
       </KpiGrid2>
 
       {/* Margins */}
       <SectionHeading>Margin Analysis</SectionHeading>
       <KpiGrid2>
         {renderKPI("Gross Profit Margin", "gpMargin", true)}
-        {renderKPI("Net Profit Margin", "npMargin", true)}
+        {renderKPI("Net Profit Margin",   "npMargin", true)}
       </KpiGrid2>
-
-      {/* Custom KPIs */}
-      {/* {Object.keys(customKPIs).length > 0 && (
-        <>
-          <SectionHeading>Custom KPIs</SectionHeading>
-          <KpiGrid2>
-            {Object.values(customKPIs).map((kpi) => {
-              const data = firebaseChartData[kpi.chartName] || {
-                actual: [],
-                budget: [],
-              };
-              const chartArr = aggregateDataForView(data.actual, viewMode);
-              const budgetArr = aggregateDataForView(
-                data.budget || [],
-                viewMode,
-              );
-              return (
-                <KPICard
-                  key={kpi.chartName}
-                  title={kpi.name}
-                  actualValue={chartArr.at(-1) ?? 0}
-                  budgetValue={budgetArr.at(-1) ?? 0}
-                  unit={currencyUnit}
-                  isPercentage={kpi.dataType === "percentage"}
-                  onEyeClick={() =>
-                    openCalc(
-                      kpi.name,
-                      `Custom KPI: ${kpi.name}\n\nData Type: ${kpi.dataType}\nChart Type: ${kpi.type}`,
-                    )
-                  }
-                  onAddNotes={(notes) =>
-                    setChartNotes((p) => ({ ...p, [kpi.chartName]: notes }))
-                  }
-                  onAnalysis={() =>
-                    setExpandedNotes((p) => ({
-                      ...p,
-                      [`${kpi.chartName}_analysis`]:
-                        !p[`${kpi.chartName}_analysis`],
-                    }))
-                  }
-                  onTrend={() =>
-                    openTrend(
-                      kpi.name,
-                      kpi.chartName,
-                      kpi.dataType === "percentage",
-                    )
-                  }
-                  notes={chartNotes[kpi.chartName]}
-                  formatValue={formatValue}
-                />
-              );
-            })}
-          </KpiGrid2>
-        </>
-      )} */}
 
       <UniversalAddDataModal
         isOpen={showModal}
         onClose={() => setShowModal(false)}
         currentTab="performance-engine"
         user={user}
-        onSave={() => {
-          loadPnLData(onUpdateChartData);
-          loadCustomKPIs();
-        }}
+        onSave={() => loadPnLData(fromDate, toDate, onUpdateChartData)}
         loading={loading}
-        financialYearStart={financialYearStart}
+        fromDate={fromDate}
+        toDate={toDate}
       />
 
       <CalculationModal
@@ -276,10 +255,7 @@ const PerformanceEngine = ({
       {showTrendModal && (
         <TrendModal
           isOpen={showTrendModal}
-          onClose={() => {
-            setShowTrendModal(false);
-            setTrendData(null);
-          }}
+          onClose={() => { setShowTrendModal(false); setTrendData(null); }}
           item={selectedTrendItem}
           trendData={trendData}
           currencyUnit={currencyUnit}
