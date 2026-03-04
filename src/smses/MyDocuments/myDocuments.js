@@ -29,7 +29,7 @@ const DOCUMENTS = [
   "B-BBEE Certificate",
   "Business Plan",
   "IDs of Directors & Shareholders",
-  "Client References / Support Letters",
+  "Client References & Support Letters",
   "Company Profile / Brochure",
   "Company Registration Certificate",
   "Company Letterhead",
@@ -195,7 +195,7 @@ const validateDocumentWithAI = async (docLabel, file, registeredName) => {
     
     const multiUploadDocuments = [
       "IDs of Directors & Shareholders",
-      "Client references / Support Letters",
+      "Client references & Support Letters",
       "Guarantee/Contract",
       "Industry Accreditations",
       "Loan Agreements"
@@ -657,7 +657,7 @@ const renderIndividualDocumentActions = (docLabel, docIndex, doc) => {
   const renderDocumentLink = (label) => {
     const multiUploadDocuments = [
       "IDs of Directors & Shareholders", 
-      "Client references / Support Letters",
+      "Client references& Support Letters",
       "Guarantee/Contract",
       "Industry Accreditations",
       "Loan Agreements"
@@ -683,7 +683,7 @@ const renderIndividualDocumentActions = (docLabel, docIndex, doc) => {
         switch(label) {
           case "IDs of Directors & Shareholders":
             return { isExpanded: expandedIDs, setExpanded: setExpandedIDs };
-          case "Client references / Support Letters":
+          case "Client references& Support Letters":
             return { isExpanded: expandedClientReferences, setExpanded: setExpandedClientReferences };
           case "Guarantee/Contract":
             return { isExpanded: expandedGuarantees, setExpanded: setExpandedGuarantees };
@@ -942,7 +942,7 @@ const renderIndividualDocumentActions = (docLabel, docIndex, doc) => {
   const getDocumentStatus = (docLabel) => {
   const multiUploadDocuments = [
     "IDs of Directors & Shareholders",
-    "Client references / Support Letters",
+    "Client references & Support Letters",
     "Guarantee/Contract",
     "Industry Accreditations",
     "Loan Agreements"
@@ -1034,7 +1034,7 @@ const renderIndividualDocumentActions = (docLabel, docIndex, doc) => {
   const hasDocumentMatchingStatusFilter = (docLabel, statusFilter) => {
     const multiUploadDocuments = [
       "IDs of Directors & Shareholders",
-      "Client references / Support Letters",
+      "Client references & Support Letters",
       "Guarantee/Contract",
       "Industry Accreditations",
       "Loan Agreements"
@@ -1096,7 +1096,7 @@ const renderIndividualDocumentActions = (docLabel, docIndex, doc) => {
   const getIndividualDocumentsMatchingFilter = (docLabel, statusFilter) => {
     const multiUploadDocuments = [
       "IDs of Directors & Shareholders",
-      "Client references / Support Letters",
+      "Client references & Support Letters",
       "Guarantee/Contract",
       "Industry Accreditations",
       "Loan Agreements"
@@ -1171,7 +1171,7 @@ const renderIndividualDocumentActions = (docLabel, docIndex, doc) => {
 
     const legitimacyDocuments = [
       "Industry Accreditations",
-      "Client References / Support Letters",
+      "Client References & Support Letters",
       "Company Profile / Brochure",
     ];
 
@@ -1242,7 +1242,7 @@ const renderIndividualDocumentActions = (docLabel, docIndex, doc) => {
  const getStatusBadge = (docLabel, individualDoc = null, docIndex = null) => {
   const multiUploadDocuments = [
     "IDs of Directors & Shareholders",
-    "Client references / Support Letters",
+    "Client references & Support Letters",
     "Guarantee/Contract",
     "Industry Accreditations",
     "Loan Agreements"
@@ -1383,7 +1383,7 @@ const badgeStyles = (status) => {
         return expandedIDs;
       case "CV":
         return expandedCVs;
-      case "Client references / Support Letters":
+      case "Client references & Support Letters":
         return expandedClientReferences;
       case "Guarantee/Contract":
         return expandedGuarantees;
@@ -2091,7 +2091,7 @@ const badgeStyles = (status) => {
       // For multi-upload documents, check the multiple updated timestamp
       const multiUploadDocuments = [
         "IDs of Directors & Shareholders",
-        "Client references / Support Letters",
+        "Client references & Support Letters",
         "Guarantee/Contract",
         "Industry Accreditations",
         "Loan Agreements"

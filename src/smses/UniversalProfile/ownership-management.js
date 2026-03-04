@@ -7,13 +7,18 @@ import { useEffect, useState } from 'react';
 import { db, auth, storage } from '../../firebaseConfig';
 import { doc, setDoc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
-import { validateDocument } from '../../services/documentValidationService';
+import { validateCV } from '../../services/documentValidationService';
+
+
 // Add these imports at the top
 import { 
   uploadDocumentWithSync, 
   deleteDocumentWithSync,
   getSyncConfig 
 } from '../../utils/documentSyncService';
+import { getFunctions, httpsCallable } from "firebase/functions";
+
+
 
 const raceOptions = [
   { value: "black", label: "Black African" },
@@ -176,7 +181,7 @@ export default function OwnershipManagement({ data = { shareholders: [], directo
 });
 const [isUploadOverlayVisible, setIsUploadOverlayVisible] = useState(false);
 const [isLoading, setIsLoading] = useState(true);
-
+const functions = getFunctions();
   // Helper functions
   const updateFormData = (newData) => {
     setFormData(newData);
@@ -273,8 +278,7 @@ const handleDeleteCV = async (type, index) => {
     }));
   }
 };
-
- const handleDirectorCVUpload = async (index, file) => {
+const handleDirectorCVUpload = async (index, file) => {
   if (!file) return;
 
   // Set loading state
@@ -291,11 +295,11 @@ const handleDeleteCV = async (type, index) => {
       return;
     }
 
-    // ✅ RUN AI VALIDATION - NO COMPANY NAME CHECK FOR CVs
-    const validationResult = await validateDocument('CV', file, ""); // Pass empty string for registered name
+    // ✅ RUN AI VALIDATION using the Firebase function via validateCV
+    const validationResult = await validateCV(file);
     
     if (!validationResult.isValid) {
-      alert(`Validation failed: ${validationResult.message}`);
+      alert(`CV validation failed: ${validationResult.message}`);
       return;
     }
 
@@ -318,7 +322,8 @@ const handleDeleteCV = async (type, index) => {
       url: downloadURL,
       uploadedAt: new Date().toISOString(),
       status: validationResult.status,
-      message: validationResult.message
+      message: validationResult.message,
+      isValid: validationResult.isValid
     });
 
     // ✅ SYNC WITH MYDOCUMENTS SYSTEM
@@ -334,6 +339,7 @@ const handleDeleteCV = async (type, index) => {
       url: downloadURL,
       status: validationResult.status,
       message: validationResult.message,
+      isValid: validationResult.isValid,
       uploadedAt: new Date().toISOString(),
       directorIndex: index,
       directorName: formData.directors[index]?.name || `Director ${index + 1}`,
@@ -341,7 +347,8 @@ const handleDeleteCV = async (type, index) => {
       documentType: "CV",
       role: "Director",
       roleLabel: `Director ${index + 1}`,
-      personName: formData.directors[index]?.name || `Director ${index + 1}`
+      personName: formData.directors[index]?.name || `Director ${index + 1}`,
+      fileName: file.name
     };
 
     // Find if this director already has a CV in the system
@@ -367,11 +374,16 @@ const handleDeleteCV = async (type, index) => {
       [`documents.cv_count`]: updatedCVs.length
     });
 
-    console.log("Director CV uploaded and synced to MyDocuments with AI validation");
+    console.log("Director CV uploaded and synced to MyDocuments with AI validation", validationResult);
+    
+    // Show success message with validation details
+    if (validationResult.message && validationResult.message !== "Document verified") {
+      alert(`CV uploaded: ${validationResult.message}`);
+    }
     
   } catch (error) {
     console.error("Error uploading director CV:", error);
-    alert("Failed to upload CV. Please try again.");
+    alert("Failed to upload CV. Please check your connection and try again.");
   } finally {
     // Clear loading state
     setUploadingCVs(prev => ({
@@ -382,10 +394,10 @@ const handleDeleteCV = async (type, index) => {
   }
 };
 
+// In handleExecutiveCVUpload function (around line 300)
 const handleExecutiveCVUpload = async (index, file) => {
   if (!file) return;
 
-  // Set loading state
   setUploadingCVs(prev => ({
     ...prev,
     executive: { ...prev.executive, [index]: true }
@@ -399,16 +411,13 @@ const handleExecutiveCVUpload = async (index, file) => {
       return;
     }
 
- 
-
-    // ✅ RUN AI VALIDATION
-    const validationResult = await validateDocument('CV', file);
+    // ✅ RUN AI VALIDATION using the Firebase function via validateCV
+    const validationResult = await validateCV(file);
     
     if (!validationResult.isValid) {
-      alert(`Validation failed: ${validationResult.message}`);
+      alert(`CV validation failed: ${validationResult.message}`);
       return;
     }
-
     // Create a unique filename
     const timestamp = Date.now();
     const fileName = `executives/cv/${userId}/${index}_${timestamp}_${file.name}`;
@@ -428,7 +437,8 @@ const handleExecutiveCVUpload = async (index, file) => {
       url: downloadURL,
       uploadedAt: new Date().toISOString(),
       status: validationResult.status,
-      message: validationResult.message
+      message: validationResult.message,
+      isValid: validationResult.isValid
     });
 
     // ✅ SYNC WITH MYDOCUMENTS SYSTEM
@@ -444,6 +454,7 @@ const handleExecutiveCVUpload = async (index, file) => {
       url: downloadURL,
       status: validationResult.status,
       message: validationResult.message,
+      isValid: validationResult.isValid,
       uploadedAt: new Date().toISOString(),
       executiveIndex: index,
       executiveName: formData.executives[index]?.name || `Executive ${index + 1}`,
@@ -451,7 +462,8 @@ const handleExecutiveCVUpload = async (index, file) => {
       documentType: "CV",
       role: "Executive",
       roleLabel: `Executive ${index + 1}`,
-      personName: formData.executives[index]?.name || `Executive ${index + 1}`
+      personName: formData.executives[index]?.name || `Executive ${index + 1}`,
+      fileName: file.name
     };
 
     // Find if this executive already has a CV in the system
@@ -477,11 +489,16 @@ const handleExecutiveCVUpload = async (index, file) => {
       [`documents.cv_count`]: updatedCVs.length
     });
 
-    console.log("Executive CV uploaded and synced to MyDocuments with AI validation");
+    console.log("Executive CV uploaded and synced to MyDocuments with AI validation", validationResult);
+    
+    // Show success message with validation details
+    if (validationResult.message && validationResult.message !== "Document verified") {
+      alert(`CV uploaded: ${validationResult.message}`);
+    }
     
   } catch (error) {
     console.error("Error uploading executive CV:", error);
-    alert("Failed to upload CV. Please try again.");
+    alert("Failed to upload CV. Please check your connection and try again.");
   } finally {
     // Clear loading state
     setUploadingCVs(prev => ({
