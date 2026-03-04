@@ -7,7 +7,6 @@ import {
   KPICard,
   TrendModal,
   CalculationModal,
-  YearMonthSelector,
   TrendButton,
   SectionHeading,
   DateRangePicker,
@@ -15,33 +14,33 @@ import {
 import UniversalAddDataModal from "../components/UniversalAddDataModal";
 import { useCapitalStructureData } from "../../../hooks/useFinancialData";
 import {
-  getMonthsForYear,
   getYearsRange,
   CALCULATION_TEXTS,
 } from "../financialConstants";
 import {
-  getMonthIndex,
   calculateTotal,
   formatCurrency,
   makeFormatValue,
-  getLast12MonthsLabels,
-  getLast12MonthsMeta,
-  getLast12MonthsComputed,
+  parseYM,
+  getRangeMonthsMeta,
+  getRangeLabels,
+  getRangeComputed,
   computeCapitalStructureChartData,
   formatSmartNumber,
   getSmartUnit,
 } from "../financialUtils";
 
+// ==================== HELPERS ====================
+
+const _now        = new Date();
+const _defaultTo  = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, "0")}`;
+const _defaultFrom = (() => {
+  const d = new Date(_now.getFullYear(), _now.getMonth() - 11, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+})();
+
 // ==================== BALANCE SHEET TABLE ====================
-const BSTable = ({
-  title,
-  rows,
-  totalLabel,
-  totalValue,
-  monthIndex,
-  openTrend,
-  totalTrendFn,
-}) => (
+const BSTable = ({ title, rows, totalLabel, totalValue, openTrend, totalTrendFn }) => (
   <div className="mb-5">
     <h4 className="text-mediumBrown text-base font-semibold mb-2.5 border-b border-[#e8ddd4] pb-1">
       {title}
@@ -49,24 +48,16 @@ const BSTable = ({
     <table className="w-full border-collapse">
       <thead>
         <tr className="bg-[#e8ddd4]">
-          <th className="p-2.5 text-left text-mediumBrown text-xs font-semibold">
-            Item
-          </th>
-          <th className="p-2.5 text-right text-mediumBrown text-xs font-semibold">
-            Amount
-          </th>
-          <th className="p-2.5 text-center text-mediumBrown text-xs font-semibold w-12">
-            Trend
-          </th>
+          <th className="p-2.5 text-left text-mediumBrown text-xs font-semibold">Item</th>
+          <th className="p-2.5 text-right text-mediumBrown text-xs font-semibold">Amount</th>
+          <th className="p-2.5 text-center text-mediumBrown text-xs font-semibold w-12">Trend</th>
         </tr>
       </thead>
       <tbody>
         {rows.map(({ key, label, value, redLabel, arr }) => (
           <tr key={key}>
             <td className="py-2 text-mediumBrown text-xs">{label}</td>
-            <td
-              className={`py-2 text-right text-xs font-semibold ${redLabel ? "text-red-700" : "text-mediumBrown"}`}
-            >
+            <td className={`py-2 text-right text-xs font-semibold ${redLabel ? "text-red-700" : "text-mediumBrown"}`}>
               {redLabel ? `(${value})` : value}
             </td>
             <td className="py-2 text-center">
@@ -76,12 +67,8 @@ const BSTable = ({
         ))}
         {totalLabel && (
           <tr className="bg-[#f5f0eb]">
-            <td className="py-2.5 text-mediumBrown text-sm font-bold">
-              {totalLabel}
-            </td>
-            <td className="py-2.5 text-right text-mediumBrown text-sm font-bold">
-              {totalValue}
-            </td>
+            <td className="py-2.5 text-mediumBrown text-sm font-bold">{totalLabel}</td>
+            <td className="py-2.5 text-right text-mediumBrown text-sm font-bold">{totalValue}</td>
             <td className="py-2.5 text-center">
               {totalTrendFn && <TrendButton onClick={totalTrendFn} />}
             </td>
@@ -92,165 +79,117 @@ const BSTable = ({
   </div>
 );
 
-
-// Default From-To: last 12 months
-const _now = new Date()
-const _defaultTo   = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, "0")}`
-const _defaultFrom = (() => { const d = new Date(_now.getFullYear(), _now.getMonth() - 11, 1); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}` })()
-
 // ==================== CAPITAL STRUCTURE COMPONENT ====================
-const CapitalStructure = ({
-  activeSection,
-  user,
-  isInvestorView,
-  financialYearStart,
-}) => {
-  const [activeSubTab, setActiveSubTab] = useState("balance-sheet");
-  const [showModal, setShowModal] = useState(false);
+const CapitalStructure = ({ activeSection, user, isInvestorView }) => {
+  // ── Sub-tab & modal state ──────────────────────────────────────────────────
+  const [activeSubTab, setActiveSubTab]   = useState("balance-sheet");
+  const [showModal, setShowModal]         = useState(false);
   const [showDividendModal, setShowDividendModal] = useState(false);
-  const [selectedMonth, setSelectedMonth] = useState(
-    ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][new Date().getMonth()]
-  );
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-  // Date filter state — default to From-To (last 12 months)
-  const [filterMode, setFilterMode] = useState("year")
-  const [fromDate, setFromDate]     = useState(_defaultFrom)
-  const [toDate, setToDate]         = useState(_defaultTo)
-  const [showTrendModal, setShowTrendModal] = useState(false);
+
+  // ── Date range filter — drives everything ─────────────────────────────────
+  const [filterMode, setFilterMode]   = useState("range");
+  const [fromDate, setFromDate]       = useState(_defaultFrom);
+  const [toDate, setToDate]           = useState(_defaultTo);
+  const [selectedYear, setSelectedYear] = useState(_now.getFullYear());
+
+  // ── Trend / calculation modals ────────────────────────────────────────────
+  const [showTrendModal, setShowTrendModal]       = useState(false);
   const [selectedTrendItem, setSelectedTrendItem] = useState(null);
-  const [trendData, setTrendData] = useState(null);
-  const [trendLoading, setTrendLoading] = useState(false);
+  const [trendData, setTrendData]                 = useState(null);
+  const [trendLoading, setTrendLoading]           = useState(false);
   const [showCalculationModal, setShowCalculationModal] = useState(false);
-  const [selectedCalculation, setSelectedCalculation] = useState({
-    title: "",
-    calculation: "",
-  });
-  const [kpiNotes, setKpiNotes] = useState({});
+  const [selectedCalculation, setSelectedCalculation]   = useState({ title: "", calculation: "" });
+
+  // ── Notes / dividend form ─────────────────────────────────────────────────
+  const [kpiNotes, setKpiNotes]       = useState({});
   const [expandedNotes, setExpandedNotes] = useState({});
-  const [dividendForm, setDividendForm] = useState({
-    date: "",
-    amount: "",
-    type: "Interim",
-    declaredBy: "",
-  });
+  const [dividendForm, setDividendForm]   = useState({ date: "", amount: "", type: "Interim", declaredBy: "" });
+
   const [currencyUnit] = useState("zar_million");
 
+  // ── Hook ──────────────────────────────────────────────────────────────────
   const {
     balanceSheetData,
-    solvencyData,
-    setSolvencyData,
-    leverageData,
-    setLeverageData,
-    equityData,
-    setEquityData,
+    solvencyData,   setSolvencyData,
+    leverageData,   setLeverageData,
+    equityData,     setEquityData,
     dividendHistory,
     kpiAnalysis,
     loading,
+    firstDataMonth,
     loadCapitalStructureData,
     loadDividendHistory,
+    loadTrendData,
   } = useCapitalStructureData(user);
 
-  const months = getMonthsForYear(selectedYear, financialYearStart);
-  const years = getYearsRange(2021, 2030);
-  // Data arrays are FY-ordered (index 0 = FY start month).
-  // Convert selected calendar month → FY index.
-  const _ALL_MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-  const _fyStartIdx = _ALL_MONTHS.indexOf(financialYearStart);
-  const _calIdx     = _ALL_MONTHS.indexOf(selectedMonth);
-  const monthIndex  = (_calIdx - _fyStartIdx + 12) % 12;
+  // ── Derived snapshot index — always the last month of the selected range ──
+  // Balance sheet is a point-in-time snapshot; we show the most recent month.
+  const { year: snapshotYear, monthIndex: snapshotMonthIndex } = parseYM(toDate);
+
+  const years       = getYearsRange(2021, 2030);
   const formatValue = makeFormatValue(currencyUnit);
 
+  // ── Initial load + reload when toDate changes ─────────────────────────────
   useEffect(() => {
     if (user) {
-      loadCapitalStructureData();
+      loadCapitalStructureData(toDate);
       loadDividendHistory();
     }
-  }, [user]);
+  }, [user, toDate]);
 
-  // Auto-calculate solvency/leverage from balance sheet
+  // ── Auto-calculate solvency / leverage / equity from balance sheet ─────────
   useEffect(() => {
-    if (monthIndex < 0 || monthIndex >= 12) return;
-    const totalAssets = calcTotalAssets(monthIndex);
-    const totalLiabilities = calcTotalLiabilities(monthIndex);
-    const totalEquity = calcTotalEquity(monthIndex);
-    const ebit = totalAssets * 0.1;
-    const intExp = totalLiabilities * 0.05;
+    const mi = snapshotMonthIndex;
+    if (mi < 0 || mi >= 12) return;
+
+    const totalAssets_     = calcTotalAssets(mi);
+    const totalLiabilities_= calcTotalLiabilities(mi);
+    const totalEquity_     = calcTotalEquity(mi);
+    const ebit_            = totalAssets_      * 0.1;
+    const intExp_          = totalLiabilities_ * 0.05;
+
     const ensure = (obj, key) => {
       if (!Array.isArray(obj[key])) obj[key] = Array(12).fill("0");
     };
 
     setSolvencyData((prev) => {
       const s = { ...prev };
-      [
-        "debtToEquity",
-        "debtToAssets",
-        "equityRatio",
-        "interestCoverage",
-        "nav",
-      ].forEach((k) => ensure(s, k));
-      s.debtToEquity[monthIndex] = (
-        totalEquity !== 0 ? totalLiabilities / totalEquity : 0
-      ).toFixed(2);
-      s.debtToAssets[monthIndex] = (
-        totalAssets !== 0 ? totalLiabilities / totalAssets : 0
-      ).toFixed(2);
-      s.equityRatio[monthIndex] = (
-        totalAssets !== 0 ? (totalEquity / totalAssets) * 100 : 0
-      ).toFixed(2);
-      s.interestCoverage[monthIndex] = (
-        intExp !== 0 ? ebit / intExp : 0
-      ).toFixed(2);
-      s.nav[monthIndex] = (
-        (totalAssets - totalLiabilities) /
-        1_000_000
-      ).toFixed(2);
+      ["debtToEquity", "debtToAssets", "equityRatio", "interestCoverage", "nav"].forEach((k) => ensure(s, k));
+      s.debtToEquity[mi]      = (totalEquity_     !== 0 ? totalLiabilities_ / totalEquity_     : 0).toFixed(2);
+      s.debtToAssets[mi]      = (totalAssets_     !== 0 ? totalLiabilities_ / totalAssets_     : 0).toFixed(2);
+      s.equityRatio[mi]       = (totalAssets_     !== 0 ? (totalEquity_  / totalAssets_) * 100 : 0).toFixed(2);
+      s.interestCoverage[mi]  = (intExp_          !== 0 ? ebit_ / intExp_ : 0).toFixed(2);
+      s.nav[mi]               = ((totalAssets_ - totalLiabilities_) / 1_000_000).toFixed(2);
       return s;
     });
+
     setLeverageData((prev) => {
       const l = { ...prev };
-      ["totalDebtRatio", "longTermDebtRatio", "equityMultiplier"].forEach((k) =>
-        ensure(l, k),
-      );
-      const ltDebt = calculateTotal(
-        balanceSheetData.liabilities.nonCurrentLiabilities,
-        monthIndex,
-      );
-      l.totalDebtRatio[monthIndex] = (
-        totalAssets !== 0 ? totalLiabilities / totalAssets : 0
-      ).toFixed(2);
-      l.longTermDebtRatio[monthIndex] = (
-        totalAssets !== 0 ? ltDebt / totalAssets : 0
-      ).toFixed(2);
-      l.equityMultiplier[monthIndex] = (
-        totalEquity !== 0 ? totalAssets / totalEquity : 0
-      ).toFixed(2);
+      ["totalDebtRatio", "longTermDebtRatio", "equityMultiplier"].forEach((k) => ensure(l, k));
+      const ltDebt = calculateTotal(balanceSheetData.liabilities.nonCurrentLiabilities, mi);
+      l.totalDebtRatio[mi]    = (totalAssets_  !== 0 ? totalLiabilities_ / totalAssets_        : 0).toFixed(2);
+      l.longTermDebtRatio[mi] = (totalAssets_  !== 0 ? ltDebt             / totalAssets_        : 0).toFixed(2);
+      l.equityMultiplier[mi]  = (totalEquity_  !== 0 ? totalAssets_        / totalEquity_       : 0).toFixed(2);
       return l;
     });
+
     setEquityData((prev) => {
       const e = { ...prev };
       ensure(e, "equityRatio");
-      e.equityRatio[monthIndex] = (
-        totalAssets !== 0 ? (totalEquity / totalAssets) * 100 : 0
-      ).toFixed(2);
+      e.equityRatio[mi] = (totalAssets_ !== 0 ? (totalEquity_ / totalAssets_) * 100 : 0).toFixed(2);
       return e;
     });
-  }, [balanceSheetData, selectedMonth, selectedYear]);
+  }, [balanceSheetData, toDate]);
 
-  // ---- Balance sheet calculations ----
+  // ── Balance sheet calculation helpers ─────────────────────────────────────
   const calcTotalAssets = (mi) => {
-    const { bank, currentAssets, nonCurrentAssets, customCategories } =
-      balanceSheetData.assets;
+    const { bank, currentAssets, nonCurrentAssets, customCategories } = balanceSheetData.assets;
     const sumObj = (obj) =>
-      Object.values(obj || {}).reduce(
-        (s, a) => s + (parseFloat(a?.[mi]) || 0),
-        0,
-      );
+      Object.values(obj || {}).reduce((s, a) => s + (parseFloat(a?.[mi]) || 0), 0);
     let custom = 0;
     (customCategories || []).forEach((c) => {
       if (c?.items)
-        Object.values(c.items).forEach((a) => {
-          custom += parseFloat(a?.[mi]) || 0;
-        });
+        Object.values(c.items).forEach((a) => { custom += parseFloat(a?.[mi]) || 0; });
     });
     return (
       sumObj(bank) +
@@ -265,24 +204,8 @@ const CapitalStructure = ({
   const calcFixedAssets = (mi) => {
     const fa = balanceSheetData.assets?.fixedAssets;
     if (!fa) return 0;
-    const add = [
-      "land",
-      "buildings",
-      "computerEquipment",
-      "vehicles",
-      "furniture",
-      "machinery",
-      "otherPropertyPlantEquipment",
-      "assetsUnderConstruction",
-    ];
-    const sub = [
-      "lessDepreciationBuildings",
-      "lessDepreciationComputer",
-      "lessDepreciationVehicles",
-      "lessDepreciationFurniture",
-      "lessDepreciationMachinery",
-      "lessDepreciationOther",
-    ];
+    const add = ["land","buildings","computerEquipment","vehicles","furniture","machinery","otherPropertyPlantEquipment","assetsUnderConstruction"];
+    const sub = ["lessDepreciationBuildings","lessDepreciationComputer","lessDepreciationVehicles","lessDepreciationFurniture","lessDepreciationMachinery","lessDepreciationOther"];
     return (
       add.reduce((s, k) => s + (parseFloat(fa[k]?.[mi]) || 0), 0) -
       sub.reduce((s, k) => s + (parseFloat(fa[k]?.[mi]) || 0), 0)
@@ -293,10 +216,8 @@ const CapitalStructure = ({
     const ia = balanceSheetData.assets?.intangibleAssets;
     if (!ia) return 0;
     return (
-      ["goodwill", "trademarks", "patents", "software", "customerLists"].reduce(
-        (s, k) => s + (parseFloat(ia[k]?.[mi]) || 0),
-        0,
-      ) - (parseFloat(ia.lessAmortization?.[mi]) || 0)
+      ["goodwill","trademarks","patents","software","customerLists"].reduce((s, k) => s + (parseFloat(ia[k]?.[mi]) || 0), 0) -
+      (parseFloat(ia.lessAmortization?.[mi]) || 0)
     );
   };
 
@@ -304,12 +225,7 @@ const CapitalStructure = ({
     calculateTotal(balanceSheetData.liabilities.currentLiabilities, mi) +
     calculateTotal(balanceSheetData.liabilities.nonCurrentLiabilities, mi) +
     (balanceSheetData.customLiabilitiesCategories || []).reduce(
-      (s, c) =>
-        s +
-        Object.values(c.items || {}).reduce(
-          (ss, a) => ss + (parseFloat(a?.[mi]) || 0),
-          0,
-        ),
+      (s, c) => s + Object.values(c.items || {}).reduce((ss, a) => ss + (parseFloat(a?.[mi]) || 0), 0),
       0,
     );
 
@@ -317,54 +233,44 @@ const CapitalStructure = ({
     calculateTotal(balanceSheetData.equity, mi) -
     (parseFloat(balanceSheetData.equity.treasuryShares?.[mi]) || 0) +
     (balanceSheetData.customEquityCategories || []).reduce(
-      (s, c) =>
-        s +
-        Object.values(c.items || {}).reduce(
-          (ss, a) => ss + (parseFloat(a?.[mi]) || 0),
-          0,
-        ),
+      (s, c) => s + Object.values(c.items || {}).reduce((ss, a) => ss + (parseFloat(a?.[mi]) || 0), 0),
       0,
     );
 
-  const totalAssets = calcTotalAssets(monthIndex);
-  const totalLiabilities = calcTotalLiabilities(monthIndex);
-  const totalEquity = calcTotalEquity(monthIndex);
+  const totalAssets      = calcTotalAssets(snapshotMonthIndex);
+  const totalLiabilities = calcTotalLiabilities(snapshotMonthIndex);
+  const totalEquity      = calcTotalEquity(snapshotMonthIndex);
 
-  // ---- Trend opener ----
-  // fieldPath can be:
-  //   Array  → raw balance-sheet line-item (12-slot FY array)
-  //   string → a computeCapitalStructureChartData key  e.g. "nav", "debtToEquity",
-  //             "totalAssets", or legacy dot-path "solvencyData.nav" (auto-stripped)
+  // ── Trend opener — range-aware ─────────────────────────────────────────────
+  //
+  //   fieldPath can be:
+  //     Array  → raw balance-sheet line-item (12-slot calendar array)
+  //     string → a computeCapitalStructureChartData key or legacy dot-path
   const openTrend = async (name, fieldPath, isPercentage = false) => {
     setSelectedTrendItem({ name, isPercentage });
     setTrendData(null);
     setTrendLoading(true);
     setShowTrendModal(true);
-    try {
-      const labels = getLast12MonthsLabels(financialYearStart);
-      const meta   = getLast12MonthsMeta(financialYearStart);
 
-      // ── Case 1: raw balance-sheet array (line item, stored in full rands) ──
+    try {
+      const labels = getRangeLabels(fromDate, toDate);
+      const meta   = getRangeMonthsMeta(fromDate, toDate);
+
+      // ── Case 1: raw balance-sheet array (line item) ─────────────────────
       if (Array.isArray(fieldPath)) {
-        const fyYears  = [...new Set(meta.map((m) => m.fyYear))];
-        const docCache = {};
+        const years_    = [...new Set(meta.map((m) => m.year))];
+        const docCache  = {};
+
         await Promise.all(
-          fyYears.map(async (fy) => {
-            let snap = await getDoc(
-              doc(db, "financialData", `${user.uid}_capitalStructure_${fy}`),
-            );
+          years_.map(async (yr) => {
+            let snap = await getDoc(doc(db, "financialData", `${user.uid}_capitalStructure_${yr}`));
             if (!snap.exists())
-              snap = await getDoc(
-                doc(db, "financialData", `${user.uid}_capitalStructure_${fy + 1}`),
-              );
-            if (!snap.exists())
-              snap = await getDoc(
-                doc(db, "financialData", `${user.uid}_capitalStructure`),
-              );
-            docCache[fy] = snap.exists() ? snap.data() : null;
+              snap = await getDoc(doc(db, "financialData", `${user.uid}_capitalStructure`));
+            docCache[yr] = snap.exists() ? snap.data() : null;
           }),
         );
 
+        // Locate the same array by reference in current balanceSheetData
         const findPath = (obj, target, path = []) => {
           for (const k of Object.keys(obj || {})) {
             if (Array.isArray(obj[k])) {
@@ -379,24 +285,22 @@ const CapitalStructure = ({
 
         const keyPath = findPath(balanceSheetData, fieldPath);
 
-        const actual = meta.map(({ fyYear, fyIndex }) => {
-          const raw = docCache[fyYear];
+        const actual = meta.map(({ year: yr, monthIndex: mi }) => {
+          const raw = docCache[yr];
           if (!raw) return null;
           let arr = null;
-          if (keyPath) {
-            arr = keyPath.reduce((obj, k) => obj?.[k], raw?.balanceSheetData);
-          }
+          if (keyPath) arr = keyPath.reduce((o, k) => o?.[k], raw?.balanceSheetData);
           if (!Array.isArray(arr)) arr = fieldPath;
-          const v = arr?.[fyIndex];
+          const v = arr?.[mi];
           return v !== undefined && v !== "" && v !== null ? parseFloat(v) : null;
         });
 
-        // Line items are stored in full rands — show them in full
-        // Compute scale from the fetched values for a clean y-axis
-        const absVals = actual.filter((v) => v !== null).map(Math.abs);
-        const maxAbs  = absVals.length ? Math.max(...absVals) : 0;
+        // Smart y-axis scale from fetched values
+        const absVals    = actual.filter((v) => v !== null).map(Math.abs);
+        const maxAbs     = absVals.length ? Math.max(...absVals) : 0;
         const scaleUnit    = maxAbs >= 1_000_000 ? "R m" : maxAbs >= 1_000 ? "R k" : "R";
-        const scaleDivisor = maxAbs >= 1_000_000 ? 1_000_000  : maxAbs >= 1_000 ? 1_000 : 1;
+        const scaleDivisor = maxAbs >= 1_000_000 ? 1_000_000 : maxAbs >= 1_000 ? 1_000 : 1;
+
         setSelectedTrendItem({
           name,
           isPercentage,
@@ -408,13 +312,13 @@ const CapitalStructure = ({
         return;
       }
 
-      // ── Case 2: no fieldPath ─────────────────────────────────────────────────
+      // ── Case 2: no fieldPath ────────────────────────────────────────────
       if (!fieldPath || typeof fieldPath !== "string") {
-        setTrendData({ labels, actual: Array(12).fill(null), budget: null });
+        setTrendData({ labels, actual: Array(labels.length).fill(null), budget: null });
         return;
       }
 
-      // ── Case 3: string key — use computeCapitalStructureChartData processor ──
+      // ── Case 3: string key — use hook's range-aware loadTrendData ───────
       const DOT_PATH_MAP = {
         "solvencyData.debtToEquity":        "debtToEquity",
         "solvencyData.debtToAssets":        "debtToAssets",
@@ -430,34 +334,25 @@ const CapitalStructure = ({
       };
       const chartKey = DOT_PATH_MAP[fieldPath] ?? fieldPath;
 
-      const { actual } = await getLast12MonthsComputed({
-        uid: user.uid,
-        docBase: "_capitalStructure",
-        chartKey,
-        financialYearStart,
-        getDocFn: getDoc,
-        docFn: doc,
-        db,
-        processor: computeCapitalStructureChartData,
-      });
+      const { actual } = await loadTrendData(chartKey, fromDate, toDate);
 
-      // BS total keys are stored in millions (after toM()) — convert back to full rands
+      // Format helpers per key family
       const BS_TOTAL_KEYS = new Set([
-        "totalAssets", "totalLiabilities", "totalEquity",
-        "totalBankAndCash", "totalCurrentAssets", "totalFixedAssets",
-        "totalIntangibleAssets", "totalNonCurrentAssets",
-        "totalCurrentLiabilities", "totalNonCurrentLiabilities",
+        "totalAssets","totalLiabilities","totalEquity",
+        "totalBankAndCash","totalCurrentAssets","totalFixedAssets",
+        "totalIntangibleAssets","totalNonCurrentAssets",
+        "totalCurrentLiabilities","totalNonCurrentLiabilities",
       ]);
-      // Ratio/multiplier keys — plain number, no currency prefix
       const RATIO_KEYS = new Set([
-        "debtToEquity", "debtToAssets", "interestCoverage",
-        "debtServiceCoverage", "totalDebtRatio", "longTermDebtRatio", "equityMultiplier",
+        "debtToEquity","debtToAssets","interestCoverage",
+        "debtServiceCoverage","totalDebtRatio","longTermDebtRatio","equityMultiplier",
       ]);
+
+      const PERCENT_KEYS = new Set(["equityRatio", "returnOnEquity"]);
+      const CURRENCY_KPI_KEYS = new Set(["nav", "bookValuePerShare"]);
 
       let trendFormatValue, yAxisLabel, yTickFmt;
       if (BS_TOTAL_KEYS.has(chartKey)) {
-        // Values are in millions → multiply back to full rands for tooltip
-        // Y-axis: keep values in millions, label as (R m)
         trendFormatValue = (v) => formatCurrency(v * 1_000_000, "zar", 2);
         yAxisLabel = "Value (R m)";
         yTickFmt   = (v) => parseFloat(v).toFixed(1);
@@ -465,16 +360,35 @@ const CapitalStructure = ({
         trendFormatValue = (v) => parseFloat(v).toFixed(2);
         yAxisLabel = "Ratio (×)";
         yTickFmt   = (v) => parseFloat(v).toFixed(2);
+      } else if (PERCENT_KEYS.has(chartKey)) {
+        trendFormatValue = (v) => `${parseFloat(v).toFixed(2)}%`;
+        yAxisLabel       = "Percentage (%)";
+        yTickFmt         = (v) => `${parseFloat(v).toFixed(1)}%`;
+      } else if (CURRENCY_KPI_KEYS.has(chartKey)) {
+        // Values are already in millions from the hook
+        const allVals  = (actual || []).filter((v) => v !== null && !isNaN(v));
+        const maxAbs   = allVals.length ? Math.max(...allVals.map(Math.abs)) : 0;
+        const scaleUnit    = maxAbs >= 1_000 ? "R bn" : maxAbs >= 1 ? "R m" : "R k";
+        const scaleDivisor = maxAbs >= 1_000 ? 1_000  : maxAbs >= 1 ? 1     : 0.001;
+        trendFormatValue = (v) => {
+          const num = parseFloat(v) || 0;
+          const abs = Math.abs(num);
+          if (abs >= 1_000) return `R${(num / 1_000).toFixed(2)}bn`;
+          if (abs >= 1)     return `R${num.toFixed(2)}m`;
+          return `R${(num * 1_000).toFixed(2)}k`;
+        };
+        yAxisLabel = `Value (${scaleUnit})`;
+        yTickFmt   = (v) => (v / scaleDivisor).toFixed(2);
       }
-      // percentage keys: leave undefined — TrendModal's isPercentage path handles them
 
       setSelectedTrendItem({ name, isPercentage, trendFormatValue, yAxisLabel, yTickFmt });
       setTrendData({ labels, actual, budget: null });
+
     } catch (e) {
       console.error("Trend load error:", e);
       setTrendData({
-        labels: getLast12MonthsLabels(financialYearStart),
-        actual: Array(12).fill(null),
+        labels: getRangeLabels(fromDate, toDate),
+        actual: Array(getRangeMonthsMeta(fromDate, toDate).length).fill(null),
         budget: null,
       });
     } finally {
@@ -487,33 +401,26 @@ const CapitalStructure = ({
     setShowCalculationModal(true);
   };
 
-  // Per-KPI display metadata
+  // ── KPI card metadata ─────────────────────────────────────────────────────
   const KPI_META = {
-    nav:                 { unitLabel: null,  fmt: (v) => formatSmartNumber(v),        isPercentage: false }, // smart currency
-    equityRatio:         { unitLabel: "%",   fmt: (v) => parseFloat(v).toFixed(2),    isPercentage: true  },
-    debtToEquity:        { unitLabel: "×",   fmt: (v) => parseFloat(v).toFixed(2),    isPercentage: false },
-    debtToAssets:        { unitLabel: "×",   fmt: (v) => parseFloat(v).toFixed(2),    isPercentage: false },
-    interestCoverage:    { unitLabel: "×",   fmt: (v) => parseFloat(v).toFixed(2),    isPercentage: false },
-    debtServiceCoverage: { unitLabel: "×",   fmt: (v) => parseFloat(v).toFixed(2),    isPercentage: false },
-    totalDebtRatio:      { unitLabel: "×",   fmt: (v) => parseFloat(v).toFixed(2),    isPercentage: false },
-    longTermDebtRatio:   { unitLabel: "×",   fmt: (v) => parseFloat(v).toFixed(2),    isPercentage: false },
-    equityMultiplier:    { unitLabel: "×",   fmt: (v) => parseFloat(v).toFixed(2),    isPercentage: false },
-    returnOnEquity:      { unitLabel: "%",   fmt: (v) => parseFloat(v).toFixed(2),    isPercentage: true  },
-    bookValuePerShare:   { unitLabel: null,  fmt: (v) => formatSmartNumber(v),        isPercentage: false },
+    nav:                 { unitLabel: null, fmt: (v) => formatSmartNumber(v),     isPercentage: false },
+    equityRatio:         { unitLabel: "%",  fmt: (v) => parseFloat(v).toFixed(2), isPercentage: true  },
+    debtToEquity:        { unitLabel: "×",  fmt: (v) => parseFloat(v).toFixed(2), isPercentage: false },
+    debtToAssets:        { unitLabel: "×",  fmt: (v) => parseFloat(v).toFixed(2), isPercentage: false },
+    interestCoverage:    { unitLabel: "×",  fmt: (v) => parseFloat(v).toFixed(2), isPercentage: false },
+    debtServiceCoverage: { unitLabel: "×",  fmt: (v) => parseFloat(v).toFixed(2), isPercentage: false },
+    totalDebtRatio:      { unitLabel: "×",  fmt: (v) => parseFloat(v).toFixed(2), isPercentage: false },
+    longTermDebtRatio:   { unitLabel: "×",  fmt: (v) => parseFloat(v).toFixed(2), isPercentage: false },
+    equityMultiplier:    { unitLabel: "×",  fmt: (v) => parseFloat(v).toFixed(2), isPercentage: false },
+    returnOnEquity:      { unitLabel: "%",  fmt: (v) => parseFloat(v).toFixed(2), isPercentage: true  },
+    bookValuePerShare:   { unitLabel: null, fmt: (v) => formatSmartNumber(v),     isPercentage: false },
   };
 
-  // KPI card renderer — 3 circles (Actual / Budget / Variance), budget always 0 for derived metrics
-  const renderKPICard = (
-    title,
-    data,
-    kpiKey,
-    _isPercentage = false, // kept for legacy call-sites; KPI_META takes priority
-    fieldPath = null,
-  ) => {
+  // KPI card renderer — reads from snapshot month index
+  const renderKPICard = (title, data, kpiKey, _isPercentage = false, fieldPath = null) => {
     const meta         = KPI_META[kpiKey] || {};
     const isPercentage = meta.isPercentage ?? _isPercentage;
-    const rawValue     = parseFloat(data?.[monthIndex]) || 0;
-    // For NAV (smart currency) resolve unit from value; others use fixed label
+    const rawValue     = parseFloat(data?.[snapshotMonthIndex]) || 0;
     const unitLabel    = meta.unitLabel !== undefined
       ? meta.unitLabel ?? getSmartUnit(rawValue)
       : (isPercentage ? "%" : getSmartUnit(rawValue));
@@ -535,10 +442,7 @@ const CapitalStructure = ({
         }}
         onAddNotes={(notes) => setKpiNotes((p) => ({ ...p, [kpiKey]: notes }))}
         onAnalysis={() =>
-          setExpandedNotes((p) => ({
-            ...p,
-            [`${kpiKey}_analysis`]: !p[`${kpiKey}_analysis`],
-          }))
+          setExpandedNotes((p) => ({ ...p, [`${kpiKey}_analysis`]: !p[`${kpiKey}_analysis`] }))
         }
         onTrend={() => openTrend(title, fieldPath || kpiKey, isPercentage)}
         notes={kpiNotes[kpiKey]}
@@ -548,43 +452,33 @@ const CapitalStructure = ({
   };
 
   const SUB_TABS = [
-    { id: "balance-sheet", label: "Balance Sheet" },
-    {
-      id: "solvency",
-      label: "Solvency",
-      calculation: CALCULATION_TEXTS.capitalStructure?.solvency || "",
-    },
-    {
-      id: "leverage",
-      label: "Leverage",
-      calculation: CALCULATION_TEXTS.capitalStructure?.leverage || "",
-    },
-    {
-      id: "equity",
-      label: "Equity Structure",
-      calculation: CALCULATION_TEXTS.capitalStructure?.equity || "",
-    },
+    { id: "balance-sheet",  label: "Balance Sheet"  },
+    { id: "solvency",  label: "Solvency",  calculation: CALCULATION_TEXTS.capitalStructure?.solvency || "" },
+    { id: "leverage",  label: "Leverage",  calculation: CALCULATION_TEXTS.capitalStructure?.leverage || "" },
+    { id: "equity",    label: "Equity Structure", calculation: CALCULATION_TEXTS.capitalStructure?.equity || "" },
   ];
 
   if (activeSection !== "capital-structure") return null;
 
-  // Show balance sheet amounts in full (raw stored value, R prefix, no scaling)
-  const fv = (v) => formatCurrency(parseFloat(v) || 0, "zar", 2)
+  // Balance sheet amounts displayed in full rands
+  const fv = (v) => formatCurrency(parseFloat(v) || 0, "zar", 2);
 
   const bsRows = (obj, mi, overrides = {}) =>
     Object.keys(obj).map((key) => ({
       key,
       arr: obj[key],
-      label:
-        overrides[key]?.label ??
-        key.replace(/([A-Z])/g, " $1").replace(/^./, (s) => s.toUpperCase()),
+      label: overrides[key]?.label ?? key.replace(/([A-Z])/g, " $1").replace(/^./, (s) => s.toUpperCase()),
       value: fv(parseFloat(obj[key]?.[mi]) || 0),
       redLabel: overrides[key]?.red ?? false,
     }));
 
+  // Snapshot label shown next to picker (e.g. "Showing snapshot: Feb 2025")
+  const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const snapshotLabel = `${MONTH_NAMES[snapshotMonthIndex]} ${snapshotYear}`;
+
   return (
     <div>
-      {/* Sub-tab nav */}
+      {/* ── Sub-tab nav ──────────────────────────────────────────────────────── */}
       <div className="flex gap-2.5 mb-5 border-b-2 border-[#e8ddd4] pb-2.5">
         {SUB_TABS.map((tab) => (
           <button
@@ -601,6 +495,40 @@ const CapitalStructure = ({
         ))}
       </div>
 
+      {/* ── Global date range picker + action buttons ─────────────────────────
+           Visible across ALL sub-tabs so the range is consistent everywhere.   */}
+      <div className="flex justify-between items-center mb-5 flex-wrap gap-3">
+        <div className="flex items-center gap-4 flex-wrap">
+          <DateRangePicker
+            filterMode={filterMode}
+            setFilterMode={setFilterMode}
+            fromDate={fromDate}
+            setFromDate={setFromDate}
+            toDate={toDate}
+            setToDate={setToDate}
+            selectedYear={selectedYear}
+            setSelectedYear={setSelectedYear}
+            years={years}
+            minDate={firstDataMonth ?? "2023-01"}
+            maxDate={_defaultTo}
+          />
+          {/* Snapshot indicator — relevant for Balance Sheet but harmless to show globally
+          {activeSubTab === "balance-sheet" && (
+            <span className="text-xs text-lightBrown bg-[#f0ebe6] px-3 py-1.5 rounded-md border border-[#e0d4cc]">
+              As of: <strong>{snapshotLabel}</strong>
+            </span>
+          )} */}
+        </div>
+        {!isInvestorView && (
+          <button
+            onClick={() => setShowModal(true)}
+            className="px-4 py-2 bg-mediumBrown text-[#fdfcfb] border-0 rounded cursor-pointer font-semibold text-xs hover:bg-[#4a3027]"
+          >
+            + Add Data
+          </button>
+        )}
+      </div>
+
       {/* ===== BALANCE SHEET ===== */}
       {activeSubTab === "balance-sheet" && (
         <div>
@@ -609,386 +537,226 @@ const CapitalStructure = ({
             signals="Leverage, balance sheet strength, working capital position"
             decisions="Raise equity vs debt, restructure balance sheet, optimize working capital"
           />
-          <div className="flex justify-between items-center mb-5 flex-wrap gap-2.5">
-            <DateRangePicker
-              filterMode={filterMode}
-              setFilterMode={setFilterMode}
-              fromDate={fromDate}
-              setFromDate={setFromDate}
-              toDate={toDate}
-              setToDate={setToDate}
-              selectedYear={selectedYear}
-              setSelectedYear={setSelectedYear}
-              years={years}
-            />
-            {!isInvestorView && (
-              <button
-                onClick={() => setShowModal(true)}
-                className="px-4 py-2 bg-mediumBrown text-[#fdfcfb] border-0 rounded cursor-pointer font-semibold text-xs hover:bg-[#4a3027]"
-              >
-                Add Data
-              </button>
-            )}
-          </div>
 
           <div className="grid grid-cols-2 gap-7">
             {/* ASSETS */}
             <div className="bg-[#fdfcfb] p-5 rounded-lg shadow-md">
-              <h3 className="text-mediumBrown mb-4 text-lg font-bold">
-                ASSETS
-              </h3>
+              <h3 className="text-mediumBrown mb-4 text-lg font-bold">ASSETS</h3>
+
               <BSTable
                 title="Bank & Cash"
-                rows={bsRows(balanceSheetData.assets?.bank || {}, monthIndex)}
+                rows={bsRows(balanceSheetData.assets?.bank || {}, snapshotMonthIndex)}
                 totalLabel="Total Bank & Cash"
                 totalValue={fv(
                   Object.values(balanceSheetData.assets?.bank || {}).reduce(
-                    (s, a) => s + (parseFloat(a?.[monthIndex]) || 0),
-                    0,
+                    (s, a) => s + (parseFloat(a?.[snapshotMonthIndex]) || 0), 0,
                   ),
                 )}
-                monthIndex={monthIndex}
                 openTrend={(l, a) => openTrend(l, a)}
                 totalTrendFn={() => openTrend("Total Bank & Cash", "totalBankAndCash")}
               />
+
               <BSTable
                 title="Current Assets"
-                rows={bsRows(
-                  balanceSheetData.assets?.currentAssets || {},
-                  monthIndex,
-                )}
+                rows={bsRows(balanceSheetData.assets?.currentAssets || {}, snapshotMonthIndex)}
                 totalLabel="Total Current Assets"
-                totalValue={fv(
-                  calculateTotal(
-                    balanceSheetData.assets?.currentAssets || {},
-                    monthIndex,
-                  ),
-                )}
-                monthIndex={monthIndex}
+                totalValue={fv(calculateTotal(balanceSheetData.assets?.currentAssets || {}, snapshotMonthIndex))}
                 openTrend={openTrend}
                 totalTrendFn={() => openTrend("Total Current Assets", "totalCurrentAssets")}
               />
+
               <BSTable
                 title="Fixed Assets (Net)"
                 rows={[
                   {
-                    key: "land",
-                    label: "Land",
-                    value: fv(
-                      parseFloat(
-                        balanceSheetData.assets?.fixedAssets?.land?.[
-                          monthIndex
-                        ],
-                      ) || 0,
-                    ),
+                    key: "land", label: "Land",
+                    value: fv(parseFloat(balanceSheetData.assets?.fixedAssets?.land?.[snapshotMonthIndex]) || 0),
                     arr: balanceSheetData.assets?.fixedAssets?.land,
                   },
                   {
-                    key: "buildings",
-                    label: "Buildings (Net)",
+                    key: "buildings", label: "Buildings (Net)",
                     value: fv(
-                      (parseFloat(
-                        balanceSheetData.assets?.fixedAssets?.buildings?.[
-                          monthIndex
-                        ],
-                      ) || 0) -
-                        (parseFloat(
-                          balanceSheetData.assets?.fixedAssets
-                            ?.lessDepreciationBuildings?.[monthIndex],
-                        ) || 0),
+                      (parseFloat(balanceSheetData.assets?.fixedAssets?.buildings?.[snapshotMonthIndex]) || 0) -
+                      (parseFloat(balanceSheetData.assets?.fixedAssets?.lessDepreciationBuildings?.[snapshotMonthIndex]) || 0)
                     ),
                     arr: balanceSheetData.assets?.fixedAssets?.buildings,
                   },
                   {
-                    key: "computer",
-                    label: "Computer Equipment (Net)",
+                    key: "computer", label: "Computer Equipment (Net)",
                     value: fv(
-                      (parseFloat(
-                        balanceSheetData.assets?.fixedAssets
-                          ?.computerEquipment?.[monthIndex],
-                      ) || 0) -
-                        (parseFloat(
-                          balanceSheetData.assets?.fixedAssets
-                            ?.lessDepreciationComputer?.[monthIndex],
-                        ) || 0),
+                      (parseFloat(balanceSheetData.assets?.fixedAssets?.computerEquipment?.[snapshotMonthIndex]) || 0) -
+                      (parseFloat(balanceSheetData.assets?.fixedAssets?.lessDepreciationComputer?.[snapshotMonthIndex]) || 0)
                     ),
-                    arr: balanceSheetData.assets?.fixedAssets
-                      ?.computerEquipment,
+                    arr: balanceSheetData.assets?.fixedAssets?.computerEquipment,
                   },
                   {
-                    key: "vehicles",
-                    label: "Vehicles (Net)",
+                    key: "vehicles", label: "Vehicles (Net)",
                     value: fv(
-                      (parseFloat(
-                        balanceSheetData.assets?.fixedAssets?.vehicles?.[
-                          monthIndex
-                        ],
-                      ) || 0) -
-                        (parseFloat(
-                          balanceSheetData.assets?.fixedAssets
-                            ?.lessDepreciationVehicles?.[monthIndex],
-                        ) || 0),
+                      (parseFloat(balanceSheetData.assets?.fixedAssets?.vehicles?.[snapshotMonthIndex]) || 0) -
+                      (parseFloat(balanceSheetData.assets?.fixedAssets?.lessDepreciationVehicles?.[snapshotMonthIndex]) || 0)
                     ),
                     arr: balanceSheetData.assets?.fixedAssets?.vehicles,
                   },
                   {
-                    key: "furniture",
-                    label: "Furniture (Net)",
+                    key: "furniture", label: "Furniture (Net)",
                     value: fv(
-                      (parseFloat(
-                        balanceSheetData.assets?.fixedAssets?.furniture?.[
-                          monthIndex
-                        ],
-                      ) || 0) -
-                        (parseFloat(
-                          balanceSheetData.assets?.fixedAssets
-                            ?.lessDepreciationFurniture?.[monthIndex],
-                        ) || 0),
+                      (parseFloat(balanceSheetData.assets?.fixedAssets?.furniture?.[snapshotMonthIndex]) || 0) -
+                      (parseFloat(balanceSheetData.assets?.fixedAssets?.lessDepreciationFurniture?.[snapshotMonthIndex]) || 0)
                     ),
                     arr: balanceSheetData.assets?.fixedAssets?.furniture,
                   },
                   {
-                    key: "machinery",
-                    label: "Machinery (Net)",
+                    key: "machinery", label: "Machinery (Net)",
                     value: fv(
-                      (parseFloat(
-                        balanceSheetData.assets?.fixedAssets?.machinery?.[
-                          monthIndex
-                        ],
-                      ) || 0) -
-                        (parseFloat(
-                          balanceSheetData.assets?.fixedAssets
-                            ?.lessDepreciationMachinery?.[monthIndex],
-                        ) || 0),
+                      (parseFloat(balanceSheetData.assets?.fixedAssets?.machinery?.[snapshotMonthIndex]) || 0) -
+                      (parseFloat(balanceSheetData.assets?.fixedAssets?.lessDepreciationMachinery?.[snapshotMonthIndex]) || 0)
                     ),
                     arr: balanceSheetData.assets?.fixedAssets?.machinery,
                   },
                   {
-                    key: "ppe",
-                    label: "Other PPE (Net)",
+                    key: "ppe", label: "Other PPE (Net)",
                     value: fv(
-                      (parseFloat(
-                        balanceSheetData.assets?.fixedAssets
-                          ?.otherPropertyPlantEquipment?.[monthIndex],
-                      ) || 0) -
-                        (parseFloat(
-                          balanceSheetData.assets?.fixedAssets
-                            ?.lessDepreciationOther?.[monthIndex],
-                        ) || 0),
+                      (parseFloat(balanceSheetData.assets?.fixedAssets?.otherPropertyPlantEquipment?.[snapshotMonthIndex]) || 0) -
+                      (parseFloat(balanceSheetData.assets?.fixedAssets?.lessDepreciationOther?.[snapshotMonthIndex]) || 0)
                     ),
-                    arr: balanceSheetData.assets?.fixedAssets
-                      ?.otherPropertyPlantEquipment,
+                    arr: balanceSheetData.assets?.fixedAssets?.otherPropertyPlantEquipment,
                   },
                   {
-                    key: "auc",
-                    label: "Assets Under Construction",
-                    value: fv(
-                      parseFloat(
-                        balanceSheetData.assets?.fixedAssets
-                          ?.assetsUnderConstruction?.[monthIndex],
-                      ) || 0,
-                    ),
-                    arr: balanceSheetData.assets?.fixedAssets
-                      ?.assetsUnderConstruction,
+                    key: "auc", label: "Assets Under Construction",
+                    value: fv(parseFloat(balanceSheetData.assets?.fixedAssets?.assetsUnderConstruction?.[snapshotMonthIndex]) || 0),
+                    arr: balanceSheetData.assets?.fixedAssets?.assetsUnderConstruction,
                   },
                 ]}
                 totalLabel="Total Fixed Assets"
-                totalValue={fv(calcFixedAssets(monthIndex))}
-                monthIndex={monthIndex}
+                totalValue={fv(calcFixedAssets(snapshotMonthIndex))}
                 openTrend={openTrend}
                 totalTrendFn={() => openTrend("Total Fixed Assets", "totalFixedAssets")}
               />
+
               <BSTable
                 title="Intangible Assets"
-                rows={Object.keys(
-                  balanceSheetData.assets?.intangibleAssets || {},
-                ).map((key) => ({
+                rows={Object.keys(balanceSheetData.assets?.intangibleAssets || {}).map((key) => ({
                   key,
                   arr: balanceSheetData.assets.intangibleAssets[key],
-                  label:
-                    key === "lessAmortization"
-                      ? "Less: Accumulated Amortization"
-                      : key
-                          .replace(/([A-Z])/g, " $1")
-                          .replace(/^./, (s) => s.toUpperCase()),
-                  value: fv(
-                    parseFloat(
-                      balanceSheetData.assets.intangibleAssets[key]?.[
-                        monthIndex
-                      ],
-                    ) || 0,
-                  ),
+                  label: key === "lessAmortization"
+                    ? "Less: Accumulated Amortization"
+                    : key.replace(/([A-Z])/g, " $1").replace(/^./, (s) => s.toUpperCase()),
+                  value: fv(parseFloat(balanceSheetData.assets.intangibleAssets[key]?.[snapshotMonthIndex]) || 0),
                   redLabel: key === "lessAmortization",
                 }))}
                 totalLabel="Total Intangible Assets"
-                totalValue={fv(calcIntangibles(monthIndex))}
-                monthIndex={monthIndex}
+                totalValue={fv(calcIntangibles(snapshotMonthIndex))}
                 openTrend={openTrend}
                 totalTrendFn={() => openTrend("Total Intangible Assets", "totalIntangibleAssets")}
               />
+
               <BSTable
                 title="Non-Current Assets"
-                rows={bsRows(
-                  balanceSheetData.assets?.nonCurrentAssets || {},
-                  monthIndex,
-                )}
+                rows={bsRows(balanceSheetData.assets?.nonCurrentAssets || {}, snapshotMonthIndex)}
                 totalLabel="Total Non-Current Assets"
-                totalValue={fv(
-                  calculateTotal(
-                    balanceSheetData.assets?.nonCurrentAssets || {},
-                    monthIndex,
-                  ),
-                )}
-                monthIndex={monthIndex}
+                totalValue={fv(calculateTotal(balanceSheetData.assets?.nonCurrentAssets || {}, snapshotMonthIndex))}
                 openTrend={openTrend}
                 totalTrendFn={() => openTrend("Total Non-Current Assets", "totalNonCurrentAssets")}
               />
-              {(balanceSheetData.assets?.customCategories || []).map(
-                (custom, i) => (
-                  <BSTable
-                    key={i}
-                    title={custom?.category || "Custom"}
-                    rows={Object.keys(custom?.items || {}).map((k) => ({
-                      key: k,
-                      label: k,
-                      value: fv(parseFloat(custom.items[k]?.[monthIndex]) || 0),
-                      arr: custom.items[k],
-                    }))}
-                    totalLabel={`Total ${custom?.category}`}
-                    totalValue={fv(
-                      Object.values(custom?.items || {}).reduce(
-                        (s, a) => s + (parseFloat(a?.[monthIndex]) || 0),
-                        0,
-                      ),
-                    )}
-                    monthIndex={monthIndex}
-                    openTrend={openTrend}
-                  />
-                ),
-              )}
+
+              {(balanceSheetData.assets?.customCategories || []).map((custom, i) => (
+                <BSTable
+                  key={i}
+                  title={custom?.category || "Custom"}
+                  rows={Object.keys(custom?.items || {}).map((k) => ({
+                    key: k, label: k,
+                    value: fv(parseFloat(custom.items[k]?.[snapshotMonthIndex]) || 0),
+                    arr: custom.items[k],
+                  }))}
+                  totalLabel={`Total ${custom?.category}`}
+                  totalValue={fv(
+                    Object.values(custom?.items || {}).reduce(
+                      (s, a) => s + (parseFloat(a?.[snapshotMonthIndex]) || 0), 0,
+                    ),
+                  )}
+                  openTrend={openTrend}
+                />
+              ))}
+
               <div className="mt-5 p-4 bg-mediumBrown rounded-md flex justify-between items-center">
-                <span className="text-[#fdfcfb] text-base font-bold">
-                  TOTAL ASSETS
-                </span>
-                <span className="text-[#fdfcfb] text-lg font-bold">
-                  {fv(totalAssets)}
-                </span>
+                <span className="text-[#fdfcfb] text-base font-bold">TOTAL ASSETS</span>
+                <span className="text-[#fdfcfb] text-lg font-bold">{fv(totalAssets)}</span>
               </div>
             </div>
 
             {/* LIABILITIES & EQUITY */}
             <div className="bg-[#fdfcfb] p-5 rounded-lg shadow-md">
-              <h3 className="text-mediumBrown mb-4 text-lg font-bold">
-                LIABILITIES & EQUITY
-              </h3>
+              <h3 className="text-mediumBrown mb-4 text-lg font-bold">LIABILITIES & EQUITY</h3>
+
               <BSTable
                 title="Current Liabilities"
-                rows={bsRows(
-                  balanceSheetData.liabilities?.currentLiabilities || {},
-                  monthIndex,
-                )}
+                rows={bsRows(balanceSheetData.liabilities?.currentLiabilities || {}, snapshotMonthIndex)}
                 totalLabel="Total Current Liabilities"
-                totalValue={fv(
-                  calculateTotal(
-                    balanceSheetData.liabilities?.currentLiabilities || {},
-                    monthIndex,
-                  ),
-                )}
-                monthIndex={monthIndex}
+                totalValue={fv(calculateTotal(balanceSheetData.liabilities?.currentLiabilities || {}, snapshotMonthIndex))}
                 openTrend={openTrend}
                 totalTrendFn={() => openTrend("Total Current Liabilities", "totalCurrentLiabilities")}
               />
+
               <BSTable
                 title="Non-Current Liabilities"
-                rows={bsRows(
-                  balanceSheetData.liabilities?.nonCurrentLiabilities || {},
-                  monthIndex,
-                )}
+                rows={bsRows(balanceSheetData.liabilities?.nonCurrentLiabilities || {}, snapshotMonthIndex)}
                 totalLabel="Total Non-Current Liabilities"
-                totalValue={fv(
-                  calculateTotal(
-                    balanceSheetData.liabilities?.nonCurrentLiabilities || {},
-                    monthIndex,
-                  ),
-                )}
-                monthIndex={monthIndex}
+                totalValue={fv(calculateTotal(balanceSheetData.liabilities?.nonCurrentLiabilities || {}, snapshotMonthIndex))}
                 openTrend={openTrend}
                 totalTrendFn={() => openTrend("Total Non-Current Liabilities", "totalNonCurrentLiabilities")}
               />
+
               <div className="mb-5 p-4 bg-[#8d6e63] rounded-md flex justify-between items-center">
-                <span className="text-[#fdfcfb] text-base font-bold">
-                  TOTAL LIABILITIES
-                </span>
-                <span className="text-[#fdfcfb] text-lg font-bold">
-                  {fv(totalLiabilities)}
-                </span>
+                <span className="text-[#fdfcfb] text-base font-bold">TOTAL LIABILITIES</span>
+                <span className="text-[#fdfcfb] text-lg font-bold">{fv(totalLiabilities)}</span>
               </div>
+
               <BSTable
                 title="Equity"
                 rows={Object.keys(balanceSheetData.equity || {}).map((key) => ({
                   key,
                   arr: balanceSheetData.equity[key],
-                  label:
-                    key === "treasuryShares"
-                      ? "Less: Treasury Shares"
-                      : key
-                          .replace(/([A-Z])/g, " $1")
-                          .replace(/^./, (s) => s.toUpperCase()),
-                  value: fv(
-                    parseFloat(balanceSheetData.equity[key]?.[monthIndex]) || 0,
-                  ),
+                  label: key === "treasuryShares"
+                    ? "Less: Treasury Shares"
+                    : key.replace(/([A-Z])/g, " $1").replace(/^./, (s) => s.toUpperCase()),
+                  value: fv(parseFloat(balanceSheetData.equity[key]?.[snapshotMonthIndex]) || 0),
                   redLabel: key === "treasuryShares",
                 }))}
                 totalLabel="Total Equity"
                 totalValue={fv(totalEquity)}
-                monthIndex={monthIndex}
                 openTrend={openTrend}
                 totalTrendFn={() => openTrend("Total Equity", "totalEquity")}
               />
+
               <div className="mt-5 p-4 bg-mediumBrown rounded-md flex justify-between items-center">
-                <span className="text-[#fdfcfb] text-base font-bold">
-                  TOTAL LIABILITIES & EQUITY
-                </span>
-                <span className="text-[#fdfcfb] text-lg font-bold">
-                  {fv(totalLiabilities + totalEquity)}
-                </span>
+                <span className="text-[#fdfcfb] text-base font-bold">TOTAL LIABILITIES & EQUITY</span>
+                <span className="text-[#fdfcfb] text-lg font-bold">{fv(totalLiabilities + totalEquity)}</span>
               </div>
             </div>
           </div>
 
+          {/* Additional Metrics */}
           {balanceSheetData?.assets?.additionalMetrics && (
             <div className="mt-7 p-5 bg-[#fdfcfb] rounded-lg shadow-md">
-              <h4 className="text-mediumBrown mb-4 text-base font-semibold">
-                Additional Business Metrics
-              </h4>
+              <h4 className="text-mediumBrown mb-4 text-base font-semibold">Additional Business Metrics</h4>
               <div className="grid grid-cols-4 gap-5">
-                {Object.keys(balanceSheetData.assets.additionalMetrics).map(
-                  (key) => (
-                    <div key={key}>
-                      <div className="text-xs text-lightBrown mb-1">
-                        {key
-                          .replace(/([A-Z])/g, " $1")
-                          .replace(/^./, (s) => s.toUpperCase())}
-                      </div>
-                      <div className="text-base font-semibold text-mediumBrown">
-                        {fv(
-                          parseFloat(
-                            balanceSheetData.assets.additionalMetrics[key]?.[
-                              monthIndex
-                            ] || 0,
-                          ),
-                        )}
-                      </div>
+                {Object.keys(balanceSheetData.assets.additionalMetrics).map((key) => (
+                  <div key={key}>
+                    <div className="text-xs text-lightBrown mb-1">
+                      {key.replace(/([A-Z])/g, " $1").replace(/^./, (s) => s.toUpperCase())}
                     </div>
-                  ),
-                )}
+                    <div className="text-base font-semibold text-mediumBrown">
+                      {fv(parseFloat(balanceSheetData.assets.additionalMetrics[key]?.[snapshotMonthIndex] || 0))}
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           )}
         </div>
       )}
 
-      {/* ===== SOLVENCY — NAV + Equity Ratio only (Debt to Equity/Assets moved to Leverage; Interest Coverage removed) ===== */}
+      {/* ===== SOLVENCY ===== */}
       {activeSubTab === "solvency" && (
         <div>
           <KeyQuestionBox
@@ -997,25 +765,13 @@ const CapitalStructure = ({
             decisions="Manage debt levels, improve asset base, consider equity financing"
           />
           <div className="grid grid-cols-2 gap-5">
-            {renderKPICard(
-              "Net Asset Value",
-              solvencyData.nav,
-              "nav",
-              false,
-              "solvencyData.nav",
-            )}
-            {renderKPICard(
-              "Equity Ratio",
-              solvencyData.equityRatio,
-              "equityRatio",
-              true,
-              "solvencyData.equityRatio",
-            )}
+            {renderKPICard("Net Asset Value", solvencyData.nav,       "nav",        false, "solvencyData.nav")}
+            {renderKPICard("Equity Ratio",    solvencyData.equityRatio, "equityRatio", true, "solvencyData.equityRatio")}
           </div>
         </div>
       )}
 
-      {/* ===== LEVERAGE — Debt to Assets + Debt to Equity (moved here from Solvency); removed Total Debt Ratio, Long-term Debt Ratio, Equity Multiplier ===== */}
+      {/* ===== LEVERAGE ===== */}
       {activeSubTab === "leverage" && (
         <div>
           <KeyQuestionBox
@@ -1024,25 +780,13 @@ const CapitalStructure = ({
             decisions="Optimize capital structure, manage risk, refinance high-cost debt"
           />
           <div className="grid grid-cols-2 gap-5">
-            {renderKPICard(
-              "Debt to Assets",
-              solvencyData.debtToAssets,
-              "debtToAssets",
-              false,
-              "solvencyData.debtToAssets",
-            )}
-            {renderKPICard(
-              "Debt to Equity",
-              solvencyData.debtToEquity,
-              "debtToEquity",
-              false,
-              "solvencyData.debtToEquity",
-            )}
+            {renderKPICard("Debt to Assets", solvencyData.debtToAssets, "debtToAssets", false, "solvencyData.debtToAssets")}
+            {renderKPICard("Debt to Equity", solvencyData.debtToEquity, "debtToEquity", false, "solvencyData.debtToEquity")}
           </div>
         </div>
       )}
 
-      {/* ===== EQUITY — KPI cards removed; dividend table only ===== */}
+      {/* ===== EQUITY STRUCTURE — Dividend table ===== */}
       {activeSubTab === "equity" && (
         <div>
           <KeyQuestionBox
@@ -1053,9 +797,7 @@ const CapitalStructure = ({
 
           <div className="bg-[#fdfcfb] p-5 rounded-lg mb-7">
             <div className="flex justify-between items-center mb-4">
-              <h4 className="text-mediumBrown m-0 font-semibold">
-                Dividend Policy & Capital Retention
-              </h4>
+              <h4 className="text-mediumBrown m-0 font-semibold">Dividend Policy & Capital Retention</h4>
               {!isInvestorView && (
                 <button
                   onClick={() => setShowDividendModal(true)}
@@ -1069,36 +811,22 @@ const CapitalStructure = ({
               <thead>
                 <tr className="bg-[#e8ddd4]">
                   {["Date", "Amount (ZAR)", "Type", "Declared By"].map((h) => (
-                    <th
-                      key={h}
-                      className="p-3 text-left text-mediumBrown text-xs font-semibold"
-                    >
-                      {h}
-                    </th>
+                    <th key={h} className="p-3 text-left text-mediumBrown text-xs font-semibold">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {dividendHistory.length === 0 ? (
                   <tr>
-                    <td colSpan="4" className="p-5 text-center text-lightBrown">
-                      No dividend records found
-                    </td>
+                    <td colSpan="4" className="p-5 text-center text-lightBrown">No dividend records found</td>
                   </tr>
                 ) : (
                   dividendHistory.map((d, i) => (
-                    <tr
-                      key={d.id}
-                      className={`border-b border-[#e8ddd4] ${i % 2 === 0 ? "bg-[#fdfcfb]" : "bg-[#f7f3f0]"}`}
-                    >
+                    <tr key={d.id} className={`border-b border-[#e8ddd4] ${i % 2 === 0 ? "bg-[#fdfcfb]" : "bg-[#f7f3f0]"}`}>
                       <td className="p-3 text-mediumBrown text-xs">{d.date}</td>
-                      <td className="p-3 text-right text-mediumBrown text-xs font-semibold">
-                        {formatCurrency(d.amount, "zar", 2)}
-                      </td>
+                      <td className="p-3 text-right text-mediumBrown text-xs font-semibold">{formatCurrency(d.amount, "zar", 2)}</td>
                       <td className="p-3 text-mediumBrown text-xs">{d.type}</td>
-                      <td className="p-3 text-mediumBrown text-xs">
-                        {d.declaredBy}
-                      </td>
+                      <td className="p-3 text-mediumBrown text-xs">{d.declaredBy}</td>
                     </tr>
                   ))
                 )}
@@ -1110,32 +838,21 @@ const CapitalStructure = ({
               {(() => {
                 const oneYearAgo = new Date();
                 oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
-                const total12mo = dividendHistory
+                const total12mo    = dividendHistory
                   .filter((d) => new Date(d.date) >= oneYearAgo)
                   .reduce((s, d) => s + (d.amount || 0), 0);
-                const yieldPct =
-                  totalEquity > 0 ? (total12mo / totalEquity) * 100 : 0;
+                const yieldPct     = totalEquity > 0 ? (total12mo / totalEquity) * 100 : 0;
                 const currYearEarnings =
-                  parseFloat(
-                    balanceSheetData.equity?.currentYearEarnings?.[monthIndex],
-                  ) || 0;
-                const payout =
-                  currYearEarnings > 0
-                    ? (total12mo / currYearEarnings) * 100
-                    : 0;
+                  parseFloat(balanceSheetData.equity?.currentYearEarnings?.[snapshotMonthIndex]) || 0;
+                const payout = currYearEarnings > 0 ? (total12mo / currYearEarnings) * 100 : 0;
                 return [
-                  [
-                    "Total Dividends (12mo)",
-                    formatCurrency(total12mo, "zar", 2),
-                  ],
-                  ["Dividend Yield", `${yieldPct.toFixed(2)}%`],
-                  ["Payout Ratio", `${payout.toFixed(2)}%`],
+                  ["Total Dividends (12mo)", formatCurrency(total12mo, "zar", 2)],
+                  ["Dividend Yield",  `${yieldPct.toFixed(2)}%`],
+                  ["Payout Ratio",    `${payout.toFixed(2)}%`],
                 ].map(([label, val]) => (
                   <div key={label}>
                     <div className="text-xs text-lightBrown mb-1">{label}</div>
-                    <div className="text-lg font-bold text-mediumBrown">
-                      {val}
-                    </div>
+                    <div className="text-lg font-bold text-mediumBrown">{val}</div>
                   </div>
                 ));
               })()}
@@ -1150,51 +867,37 @@ const CapitalStructure = ({
         onClose={() => setShowModal(false)}
         currentTab="capital-structure"
         user={user}
-        onSave={loadCapitalStructureData}
+        onSave={() => loadCapitalStructureData(toDate)}
         loading={loading}
-        financialYearStart={financialYearStart}
+        fromDate={fromDate}
+        toDate={toDate}
       />
 
       {showDividendModal && (
         <div className="fixed inset-0 bg-black/50 flex justify-center items-center z-[1001]">
           <div className="bg-[#fdfcfb] p-7 rounded-lg max-w-lg w-[90%]">
-            <h3 className="text-mediumBrown mb-5 font-semibold">
-              Add Dividend Record
-            </h3>
+            <h3 className="text-mediumBrown mb-5 font-semibold">Add Dividend Record</h3>
             {[
-              ["Date *", "date", "date", ""],
-              ["Amount (ZAR) *", "amount", "number", "0.00"],
-              [
-                "Declared By",
-                "declaredBy",
-                "text",
-                "e.g., Board Resolution #123",
-              ],
+              ["Date *",        "date",       "date",   ""],
+              ["Amount (ZAR) *","amount",     "number", "0.00"],
+              ["Declared By",   "declaredBy", "text",   "e.g., Board Resolution #123"],
             ].map(([label, field, type, ph]) => (
               <div key={field} className="mb-4">
-                <label className="block text-mediumBrown mb-1 text-xs font-semibold">
-                  {label}
-                </label>
+                <label className="block text-mediumBrown mb-1 text-xs font-semibold">{label}</label>
                 <input
                   type={type}
                   placeholder={ph}
                   value={dividendForm[field]}
-                  onChange={(e) =>
-                    setDividendForm((p) => ({ ...p, [field]: e.target.value }))
-                  }
+                  onChange={(e) => setDividendForm((p) => ({ ...p, [field]: e.target.value }))}
                   className="w-full p-2.5 rounded border border-[#e8ddd4] text-sm"
                 />
               </div>
             ))}
             <div className="mb-5">
-              <label className="block text-mediumBrown mb-1 text-xs font-semibold">
-                Type
-              </label>
+              <label className="block text-mediumBrown mb-1 text-xs font-semibold">Type</label>
               <select
                 value={dividendForm.type}
-                onChange={(e) =>
-                  setDividendForm((p) => ({ ...p, type: e.target.value }))
-                }
+                onChange={(e) => setDividendForm((p) => ({ ...p, type: e.target.value }))}
                 className="w-full p-2.5 rounded border border-[#e8ddd4] text-sm"
               >
                 <option value="Interim">Interim</option>
@@ -1206,12 +909,7 @@ const CapitalStructure = ({
               <button
                 onClick={() => {
                   setShowDividendModal(false);
-                  setDividendForm({
-                    date: "",
-                    amount: "",
-                    type: "Interim",
-                    declaredBy: "",
-                  });
+                  setDividendForm({ date: "", amount: "", type: "Interim", declaredBy: "" });
                 }}
                 className="px-5 py-2.5 bg-[#e8ddd4] text-mediumBrown border-0 rounded-md cursor-pointer font-semibold"
               >
@@ -1222,12 +920,7 @@ const CapitalStructure = ({
                   if (!user) return;
                   try {
                     await addDoc(
-                      collection(
-                        db,
-                        "financialData",
-                        `${user.uid}_dividends`,
-                        "dividendHistory",
-                      ),
+                      collection(db, "financialData", `${user.uid}_dividends`, "dividendHistory"),
                       {
                         ...dividendForm,
                         amount: parseFloat(dividendForm.amount),
@@ -1237,12 +930,7 @@ const CapitalStructure = ({
                     );
                     loadDividendHistory();
                     setShowDividendModal(false);
-                    setDividendForm({
-                      date: "",
-                      amount: "",
-                      type: "Interim",
-                      declaredBy: "",
-                    });
+                    setDividendForm({ date: "", amount: "", type: "Interim", declaredBy: "" });
                     alert("Dividend added!");
                   } catch (e) {
                     console.error(e);
@@ -1268,15 +956,12 @@ const CapitalStructure = ({
       {showTrendModal && (
         <TrendModal
           isOpen={showTrendModal}
-          onClose={() => {
-            setShowTrendModal(false);
-            setTrendData(null);
-          }}
+          onClose={() => { setShowTrendModal(false); setTrendData(null); }}
           item={selectedTrendItem}
           trendData={trendData}
           currencyUnit={currencyUnit}
           formatValue={formatValue}
-          activeSection={"capital-structure"}
+          activeSection="capital-structure"
           loading={trendLoading}
         />
       )}

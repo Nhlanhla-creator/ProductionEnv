@@ -1,73 +1,103 @@
 // ==================== CONSTANTS ====================
 
-export const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
+export const MONTHS = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+];
 
-// Always Jan→Dec for month picker dropdowns
-export const getMonthsForYear = (year, financialYearStart = "Jan") => MONTHS
+/** Month picker dropdowns — always Jan→Dec */
+export const getMonthsForYear = () => MONTHS;
 
-// Financial-year ordered months (for data array indexing & column headers in Add Data modal)
-export const getFYMonths = (year, financialYearStart = "Jan") => {
-  const startIndex = MONTHS.indexOf(financialYearStart)
-  if (startIndex === -1) return MONTHS
-  return [...MONTHS.slice(startIndex), ...MONTHS.slice(0, startIndex)]
-}
-
-export const getYearsRange = (startYear = 2021, endYear = 2030) => {
-  const years = []
-  for (let year = startYear; year <= endYear; year++) years.push(year)
-  return years
-}
+export const getYearsRange = (startYear = 2023, endYear = 2026) => {
+  const years = [];
+  for (let year = startYear; year <= endYear; year++) years.push(year);
+  return years;
+};
 
 export const CURRENCY_UNITS = [
   { value: "zar", label: "ZAR" },
   { value: "zar_thousand", label: "R K" },
   { value: "zar_million", label: "R m" },
   { value: "zar_billion", label: "R bn" },
-]
+];
 
 export const VIEW_MODES = [
   { id: "month", label: "Monthly" },
   { id: "quarter", label: "Quarterly" },
   { id: "year", label: "Yearly" },
-]
+];
 
 export const CALCULATION_TEXTS = {
   performance: {
-    sales: "Sales / Revenue: Total income from goods sold or services rendered.\n\nCalculation: Sum of all sales invoices for the period.",
+    sales:
+      "Sales / Revenue: Total income from goods sold or services rendered.\n\nCalculation: Sum of all sales invoices for the period.",
     cogs: "Cost of Goods Sold: Direct costs attributable to production.\n\nCalculation: Opening Inventory + Purchases - Closing Inventory",
     opex: "Operating Expenses: Costs to run daily operations.\n\nCalculation: Salaries + Rent + Utilities + Marketing + Admin + Other",
-    grossProfit: "Gross Profit = Sales - Cost of Goods Sold\n\nShows profitability of core products/services before operating expenses.",
-    ebitda: "EBITDA = Gross Profit - Operating Expenses\n\nEarnings Before Interest, Taxes, Depreciation & Amortization",
+    grossProfit:
+      "Gross Profit = Sales - Cost of Goods Sold\n\nShows profitability of core products/services before operating expenses.",
+    ebitda:
+      "EBITDA = Gross Profit - Operating Expenses\n\nEarnings Before Interest, Taxes, Depreciation & Amortization",
     ebit: "EBIT = EBITDA - Depreciation - Amortization\n\nEarnings Before Interest & Taxes",
-    netProfit: "Net Profit = EBIT + Interest Income - Interest Expense - Tax\n\nBottom-line profit after all expenses.",
-    gpMargin: "Gross Profit Margin = (Gross Profit ÷ Sales) × 100%\n\nMeasures production efficiency and pricing power.",
-    npMargin: "Net Profit Margin = (Net Profit ÷ Sales) × 100%\n\nMeasures overall profitability after all expenses.",
+    netProfit:
+      "Net Profit = EBIT + Interest Income - Interest Expense - Tax\n\nBottom-line profit after all expenses.",
+    gpMargin:
+      "Gross Profit Margin = (Gross Profit ÷ Sales) × 100%\n\nMeasures production efficiency and pricing power.",
+    npMargin:
+      "Net Profit Margin = (Net Profit ÷ Sales) × 100%\n\nMeasures overall profitability after all expenses.",
   },
   costAgility: {
-    fixedCosts: "Fixed Costs: Costs that remain constant regardless of production volume.\n\nExamples: Rent, Salaries, Insurance, Depreciation",
-    variableCosts: "Variable Costs: Costs that vary directly with production volume.\n\nExamples: Raw materials, Direct labor, Sales commissions",
-    discretionaryCosts: "Discretionary Costs: Non-essential costs that can be reduced or eliminated.\n\nExamples: Advertising, R&D, Training, Bonuses",
-    semiVariableCosts: "Semi-Variable Costs: Costs with both fixed and variable components.\n\nExamples: Utilities, Maintenance, Phone bills",
-    lockInDuration: "Lock-in Duration: Average time fixed costs are committed.\n\nCalculation: Weighted average of contract terms (months)",
-    fixedVariableRatio: "Fixed/Variable Ratio = (Fixed Costs ÷ Total Costs) × 100%\n\nHigher ratio indicates less cost flexibility",
-    discretionaryPercentage: "Discretionary % = (Discretionary Costs ÷ Total Costs) × 100%\n\nIndicates capacity to reduce costs quickly",
+    fixedCosts:
+      "Fixed Costs: Costs that remain constant regardless of production volume.\n\nExamples: Rent, Salaries, Insurance, Depreciation",
+    variableCosts:
+      "Variable Costs: Costs that vary directly with production volume.\n\nExamples: Raw materials, Direct labor, Sales commissions",
+    discretionaryCosts:
+      "Discretionary Costs: Non-essential costs that can be reduced or eliminated.\n\nExamples: Advertising, R&D, Training, Bonuses",
+    semiVariableCosts:
+      "Semi-Variable Costs: Costs with both fixed and variable components.\n\nExamples: Utilities, Maintenance, Phone bills",
+    lockInDuration:
+      "Lock-in Duration: Average time fixed costs are committed.\n\nCalculation: Weighted average of contract terms (months)",
+    fixedVariableRatio:
+      "Fixed/Variable Ratio = (Fixed Costs ÷ Total Costs) × 100%\n\nHigher ratio indicates less cost flexibility",
+    discretionaryPercentage:
+      "Discretionary % = (Discretionary Costs ÷ Total Costs) × 100%\n\nIndicates capacity to reduce costs quickly",
   },
   liquidity: {
-    currentRatio: "Current Ratio = Current Assets ÷ Current Liabilities\n\nMeasures ability to pay short-term obligations.\n\nHealthy range: 1.5 - 3.0",
-    quickRatio: "Quick Ratio = (Current Assets - Inventory) ÷ Current Liabilities\n\nMeasures ability to pay immediate obligations.\n\nHealthy range: 1.0 - 2.0",
-    cashRatio: "Cash Ratio = (Cash + Cash Equivalents) ÷ Current Liabilities\n\nMost conservative liquidity measure.\n\nHealthy range: 0.5 - 1.0",
-    burnRate: "Burn Rate = Average monthly cash outflow\n\nHow quickly the company spends cash.\n\nCalculation: (Beginning Cash - Ending Cash) ÷ Months",
-    cashCover: "Cash Cover = Cash Balance ÷ Burn Rate\n\nMonths of operation without additional funding.\n\nTarget: > 6 months",
-    cashflow: "Free Cashflow = Operating Cashflow - Capital Expenditures\n\nCash available for distribution or reinvestment.",
-    monthsRunway: "Months Runway = Cash Balance ÷ Burn Rate\n\nHow many months the company can operate at current burn rate.\n\nTarget: > 12 months",
-    workingCapital: "Working Capital = Current Assets - Current Liabilities\n\nLiquidity available for day-to-day operations.",
+    currentRatio:
+      "Current Ratio = Current Assets ÷ Current Liabilities\n\nMeasures ability to pay short-term obligations.\n\nHealthy range: 1.5 - 3.0",
+    quickRatio:
+      "Quick Ratio = (Current Assets - Inventory) ÷ Current Liabilities\n\nMeasures ability to pay immediate obligations.\n\nHealthy range: 1.0 - 2.0",
+    cashRatio:
+      "Cash Ratio = (Cash + Cash Equivalents) ÷ Current Liabilities\n\nMost conservative liquidity measure.\n\nHealthy range: 0.5 - 1.0",
+    burnRate:
+      "Burn Rate = Average monthly cash outflow\n\nHow quickly the company spends cash.\n\nCalculation: (Beginning Cash - Ending Cash) ÷ Months",
+    cashCover:
+      "Cash Cover = Cash Balance ÷ Burn Rate\n\nMonths of operation without additional funding.\n\nTarget: > 6 months",
+    cashflow:
+      "Free Cashflow = Operating Cashflow - Capital Expenditures\n\nCash available for distribution or reinvestment.",
+    monthsRunway:
+      "Months Runway = Cash Balance ÷ Burn Rate\n\nHow many months the company can operate at current burn rate.\n\nTarget: > 12 months",
+    workingCapital:
+      "Working Capital = Current Assets - Current Liabilities\n\nLiquidity available for day-to-day operations.",
   },
   capitalStructure: {
-    solvency: "Solvency metrics assess long-term financial stability:\n\n• Net Asset Value = Total Assets - Total Liabilities\n• Equity Ratio = Total Equity ÷ Total Assets",
-    leverage: "Leverage metrics measure debt usage:\n\n• Debt to Assets = Total Liabilities ÷ Total Assets\n• Debt to Equity = Total Liabilities ÷ Total Equity",
-    equity: "Equity metrics measure shareholder value:\n\n• Return on Equity = Net Income ÷ Average Shareholders' Equity\n• Book Value per Share = (Total Equity - Preferred Equity) ÷ Number of Shares Outstanding",
+    solvency:
+      "Solvency metrics assess long-term financial stability:\n\n• Net Asset Value = Total Assets - Total Liabilities\n• Equity Ratio = Total Equity ÷ Total Assets",
+    leverage:
+      "Leverage metrics measure debt usage:\n\n• Debt to Assets = Total Liabilities ÷ Total Assets\n• Debt to Equity = Total Liabilities ÷ Total Equity",
+    equity:
+      "Equity metrics measure shareholder value:\n\n• Return on Equity = Net Income ÷ Average Shareholders' Equity\n• Book Value per Share = (Total Equity - Preferred Equity) ÷ Number of Shares Outstanding",
   },
-}
+};
 
 export const EMPTY_BALANCE_SHEET = {
   assets: {
@@ -175,7 +205,7 @@ export const EMPTY_BALANCE_SHEET = {
   },
   customLiabilitiesCategories: [],
   customEquityCategories: [],
-}
+};
 
 export const EMPTY_PNL = {
   sales: Array(12).fill(""),
@@ -213,4 +243,4 @@ export const EMPTY_PNL = {
   netProfit: Array(12).fill(""),
   netProfitBudget: Array(12).fill(""),
   notes: "",
-}
+};

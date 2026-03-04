@@ -1,15 +1,14 @@
 "use client";
 import { useState, useEffect } from "react";
 import { onAuthStateChanged } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
 import { db, auth } from "../../firebaseConfig";
 import Sidebar from "smses/Sidebar/Sidebar";
 import Header from "../DashboardHeader/DashboardHeader";
 
-import CapitalStructure from "./financial/sections/CapitalStructure";
-import PerformanceEngine from "./financial/sections/PerformanceEngine";
-import CostAgility from "./financial/sections/CostAgility";
-import LiquiditySurvival from "./financial/sections/LiquiditySurvival";
+import CapitalStructure    from "./financial/sections/CapitalStructure";
+import PerformanceEngine   from "./financial/sections/PerformanceEngine";
+import CostAgility         from "./financial/sections/CostAgility";
+import LiquiditySurvival   from "./financial/sections/LiquiditySurvival";
 
 import {
   Chart as ChartJS,
@@ -23,59 +22,32 @@ import {
   Legend,
 } from "chart.js";
 ChartJS.register(
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  LineElement,
-  PointElement,
-  Title,
-  Tooltip,
-  Legend,
+  CategoryScale, LinearScale, BarElement, LineElement, PointElement,
+  Title, Tooltip, Legend,
 );
 
-// ==================== HELPERS ====================
-const getFinancialYearStart = async (userId) => {
-  try {
-    const snap = await getDoc(doc(db, "universalProfiles", userId));
-    if (snap.exists()) {
-      const fye = snap.data().entityOverview?.financialYearEnd;
-      if (fye) {
-        const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-        const endIndex = MONTHS.indexOf(
-          new Date(fye + "-01").toLocaleString("default", { month: "short" }),
-        );
-        return MONTHS[(endIndex + 1) % 12];
-      }
-    }
-  } catch (e) {
-    console.error("Error getting financial year start:", e);
-  }
-  return "Jan";
-};
-
 const SECTIONS = [
-  { id: "capital-structure", label: "Capital Structure" },
+  { id: "capital-structure",  label: "Capital Structure"  },
   { id: "performance-engine", label: "Performance Engine" },
-  { id: "cost-agility", label: "Cost Agility" },
+  { id: "cost-agility",       label: "Cost Agility"       },
   { id: "liquidity-survival", label: "Liquidity & Survival" },
 ];
 
 // ==================== MAIN COMPONENT ====================
 const FinancialPerformance = () => {
-  const [activeSection, setActiveSection] = useState("capital-structure");
+  const [activeSection, setActiveSection]   = useState("capital-structure");
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const [user, setUser] = useState(null);
-  const [financialYearStart, setFinancialYearStart] = useState("Jan");
+  const [user, setUser]                     = useState(null);
   const [showFullDescription, setShowFullDescription] = useState(false);
   const [isInvestorView, setIsInvestorView] = useState(false);
-  const [viewingSMEId, setViewingSMEId] = useState(null);
+  const [viewingSMEId, setViewingSMEId]     = useState(null);
   const [viewingSMEName, setViewingSMEName] = useState("");
 
   // Investor view via sessionStorage
   useEffect(() => {
     const investorMode = sessionStorage.getItem("investorViewMode");
-    const smeId = sessionStorage.getItem("viewingSMEId");
-    const smeName = sessionStorage.getItem("viewingSMEName");
+    const smeId        = sessionStorage.getItem("viewingSMEId");
+    const smeName      = sessionStorage.getItem("viewingSMEName");
     if (investorMode === "true" && smeId) {
       setIsInvestorView(true);
       setViewingSMEId(smeId);
@@ -85,13 +57,11 @@ const FinancialPerformance = () => {
 
   // Auth
   useEffect(() => {
-    const unsub = onAuthStateChanged(auth, async (currentUser) => {
+    const unsub = onAuthStateChanged(auth, (currentUser) => {
       if (isInvestorView && viewingSMEId) {
         setUser({ uid: viewingSMEId });
-        setFinancialYearStart(await getFinancialYearStart(viewingSMEId));
       } else if (currentUser) {
         setUser(currentUser);
-        setFinancialYearStart(await getFinancialYearStart(currentUser.uid));
       } else {
         setUser(null);
       }
@@ -102,15 +72,10 @@ const FinancialPerformance = () => {
   // Sidebar collapse observer
   useEffect(() => {
     const check = () =>
-      setIsSidebarCollapsed(
-        document.body.classList.contains("sidebar-collapsed"),
-      );
+      setIsSidebarCollapsed(document.body.classList.contains("sidebar-collapsed"));
     check();
     const obs = new MutationObserver(check);
-    obs.observe(document.body, {
-      attributes: true,
-      attributeFilter: ["class"],
-    });
+    obs.observe(document.body, { attributes: true, attributeFilter: ["class"] });
     return () => obs.disconnect();
   }, []);
 
@@ -127,9 +92,7 @@ const FinancialPerformance = () => {
     <div className="flex min-h-screen">
       <Sidebar />
 
-      <div
-        className={`w-full bg-[#f7f3f0] min-h-screen px-5 pt-[70px] pb-5 transition-all duration-300 ${contentPaddingLeft} box-border`}
-      >
+      <div className={`w-full bg-[#f7f3f0] min-h-screen px-5 pt-[70px] pb-5 transition-all duration-300 ${contentPaddingLeft} box-border`}>
         <Header />
 
         {/* Investor banner */}
@@ -153,9 +116,7 @@ const FinancialPerformance = () => {
         {/* Page header */}
         <div className="px-5 pt-10 ml-5">
           <div className="flex justify-between items-center mb-5">
-            <h1 className="text-mediumBrown text-3xl font-bold m-0">
-              Financial Performance
-            </h1>
+            <h1 className="text-mediumBrown text-3xl font-bold m-0">Financial Performance</h1>
             <button
               onClick={() => setShowFullDescription((v) => !v)}
               className="px-4 py-2 bg-warmBrown text-[#fdfcfb] border-0 rounded-md cursor-pointer font-semibold text-xs whitespace-nowrap hover:opacity-90"
@@ -169,33 +130,17 @@ const FinancialPerformance = () => {
               <div className="pt-2">
                 <div className="grid grid-cols-2 gap-5">
                   <div>
-                    <h3 className="text-warmBrown mt-0 mb-3 text-base font-semibold">
-                      What this dashboard DOES
-                    </h3>
+                    <h3 className="text-warmBrown mt-0 mb-3 text-base font-semibold">What this dashboard DOES</h3>
                     <ul className="text-textBrown text-sm leading-7 m-0 pl-5">
-                      <li>
-                        Assesses solvency, liquidity, and financial
-                        survivability
-                      </li>
-                      <li>
-                        Evaluates capital structure quality and financial risk
-                      </li>
-                      <li>
-                        Monitors cash runway and burn rate for survival planning
-                      </li>
-                      <li>
-                        Tests cost agility and ability to flex under pressure
-                      </li>
-                      <li>
-                        Measures performance engine health and margin
-                        sustainability
-                      </li>
+                      <li>Assesses solvency, liquidity, and financial survivability</li>
+                      <li>Evaluates capital structure quality and financial risk</li>
+                      <li>Monitors cash runway and burn rate for survival planning</li>
+                      <li>Tests cost agility and ability to flex under pressure</li>
+                      <li>Measures performance engine health and margin sustainability</li>
                     </ul>
                   </div>
                   <div>
-                    <h3 className="text-warmBrown mt-0 mb-3 text-base font-semibold">
-                      What this dashboard does NOT do
-                    </h3>
+                    <h3 className="text-warmBrown mt-0 mb-3 text-base font-semibold">What this dashboard does NOT do</h3>
                     <ul className="text-textBrown text-sm leading-7 m-0 pl-5">
                       <li>Bookkeeping, invoicing, or payments processing</li>
                       <li>Payroll management or accounting automation</li>
@@ -216,27 +161,30 @@ const FinancialPerformance = () => {
             <button
               key={btn.id}
               onClick={() => setActiveSection(btn.id)}
-              className={`px-6 py-3 border-0 rounded-md cursor-pointer font-semibold text-sm transition-all shadow-sm min-w-[180px] text-center ${activeSection === btn.id ? "bg-mediumBrown text-[#fdfcfb]" : "bg-[#e8ddd4] text-mediumBrown hover:bg-[#d4c4b8]"}`}
+              className={`px-6 py-3 border-0 rounded-md cursor-pointer font-semibold text-sm transition-all shadow-sm min-w-[180px] text-center ${
+                activeSection === btn.id
+                  ? "bg-mediumBrown text-[#fdfcfb]"
+                  : "bg-[#e8ddd4] text-mediumBrown hover:bg-[#d4c4b8]"
+              }`}
             >
               {btn.label}
             </button>
           ))}
         </div>
 
-        {/* Section renderers - each self-guards with activeSection check */}
+        {/*
+          Each section component:
+          - Guards itself with `activeSection` check internally
+          - Owns its own fromDate / toDate state
+          - No longer receives financialYearStart
+        */}
         <CapitalStructure
           activeSection={activeSection}
-          viewMode="month"
           user={user}
           isInvestorView={isInvestorView}
-          isEmbedded
-          financialYearStart={financialYearStart}
         />
         <PerformanceEngine
           activeSection={activeSection}
-          viewMode="month"
-          financialYearStart={financialYearStart}
-          pnlData={null}
           user={user}
           onUpdateChartData={() => {}}
           isInvestorView={isInvestorView}
@@ -245,13 +193,11 @@ const FinancialPerformance = () => {
           activeSection={activeSection}
           user={user}
           isInvestorView={isInvestorView}
-          financialYearStart={financialYearStart}
         />
         <LiquiditySurvival
           activeSection={activeSection}
           user={user}
           isInvestorView={isInvestorView}
-          financialYearStart={financialYearStart}
         />
       </div>
     </div>
