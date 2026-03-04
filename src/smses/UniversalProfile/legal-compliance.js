@@ -1,11 +1,11 @@
 "use client"
-import { useEffect, useState } from "react"
-import { HelpCircle } from "lucide-react"
+import { useEffect, useState, useRef } from "react"
+import { HelpCircle, ChevronDown, X, Check } from "lucide-react"
 import FormField from "./form-field"
 import FileUpload from "./file-upload"
 import './UniversalProfile.css';
 import { db, auth } from "../../firebaseConfig"
-import { doc, getDoc,updateDoc } from "firebase/firestore"
+import { doc, getDoc, updateDoc } from "firebase/firestore"
 
 const bbbeeOptions = [
   { value: "1", label: "Level 1" },
@@ -31,6 +31,24 @@ const uifStatusOptions = [
   { value: "Registered", label: "Registered with UIF" },
   { value: "Not yet registered", label: "Not yet registered" },
   { value: "In progress / Awaiting confirmation", label: "In progress / Awaiting confirmation" },
+]
+
+const industryAccreditationOptions = [
+  { value: "ISO 9001", label: "ISO 9001 – Quality Management" },
+  { value: "ISO 14001", label: "ISO 14001 – Environmental Management" },
+  { value: "ISO 45001", label: "ISO 45001 – Occupational Health & Safety" },
+  { value: "ISO 27001", label: "ISO 27001 – Information Security" },
+  { value: "CIDB", label: "CIDB – Construction Industry Development Board" },
+  { value: "NHBRC", label: "NHBRC – National Home Builders Registration Council" },
+  { value: "SACPCMP", label: "SACPCMP – SA Council for Project & Construction Management" },
+  { value: "ECSA", label: "ECSA – Engineering Council of South Africa" },
+  { value: "SABS", label: "SABS – South African Bureau of Standards" },
+  { value: "FSCA", label: "FSCA – Financial Sector Conduct Authority" },
+  { value: "PSIRA", label: "PSIRA – Private Security Industry Regulatory Authority" },
+  { value: "SAICA", label: "SAICA – SA Institute of Chartered Accountants" },
+  { value: "SAIPA", label: "SAIPA – SA Institute of Professional Accountants" },
+  { value: "HPCSA", label: "HPCSA – Health Professions Council of SA" },
+  { value: "Other", label: "Other (please specify)" },
 ]
 
 // Tooltip Component
@@ -65,6 +83,108 @@ const Tooltip = ({ children, content, position = "top" }) => {
   )
 }
 
+// Multi-Select Dropdown Component
+const MultiSelectDropdown = ({ options, selected = [], onChange, placeholder = "Select options..." }) => {
+  const [isOpen, setIsOpen] = useState(false)
+  const dropdownRef = useRef(null)
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setIsOpen(false)
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => document.removeEventListener("mousedown", handleClickOutside)
+  }, [])
+
+  const toggleOption = (value) => {
+    if (selected.includes(value)) {
+      onChange(selected.filter((v) => v !== value))
+    } else {
+      onChange([...selected, value])
+    }
+  }
+
+  const removeTag = (e, value) => {
+    e.stopPropagation()
+    onChange(selected.filter((v) => v !== value))
+  }
+
+  const getLabel = (value) => {
+    const opt = options.find((o) => o.value === value)
+    return opt ? opt.label : value
+  }
+
+  return (
+    <div className="relative" ref={dropdownRef}>
+      {/* Trigger */}
+      <div
+        onClick={() => setIsOpen((prev) => !prev)}
+        className="w-full min-h-[42px] px-3 py-2 border border-brown-300 rounded-md cursor-pointer flex flex-wrap items-center gap-1 focus:outline-none focus:ring-2 focus:ring-brown-500 bg-white"
+        style={{ borderColor: "#d6c4a8" }}
+      >
+        {selected.length === 0 ? (
+          <span className="text-gray-400 text-sm">{placeholder}</span>
+        ) : (
+          selected.map((val) => (
+            <span
+              key={val}
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium"
+              style={{ backgroundColor: "#f3ebe0", color: "#6b4c2a", border: "1px solid #d6c4a8" }}
+            >
+              {val === "Other" ? "Other" : val}
+              <button
+                onClick={(e) => removeTag(e, val)}
+                className="hover:opacity-70 transition-opacity"
+                type="button"
+              >
+                <X className="w-3 h-3" />
+              </button>
+            </span>
+          ))
+        )}
+        <ChevronDown
+          className={`w-4 h-4 ml-auto flex-shrink-0 transition-transform ${isOpen ? "rotate-180" : ""}`}
+          style={{ color: "#9c7a5a" }}
+        />
+      </div>
+
+      {/* Dropdown Menu */}
+      {isOpen && (
+        <div
+          className="absolute z-50 w-full mt-1 bg-white border rounded-md shadow-lg max-h-60 overflow-y-auto"
+          style={{ borderColor: "#d6c4a8" }}
+        >
+          {options.map((option) => {
+            const isSelected = selected.includes(option.value)
+            return (
+              <div
+                key={option.value}
+                onClick={() => toggleOption(option.value)}
+                className="flex items-center gap-2 px-3 py-2 cursor-pointer text-sm hover:bg-amber-50 transition-colors"
+                style={{ color: "#3d2b1f" }}
+              >
+                <div
+                  className="w-4 h-4 rounded flex-shrink-0 flex items-center justify-center border"
+                  style={{
+                    borderColor: isSelected ? "#8b5e3c" : "#d6c4a8",
+                    backgroundColor: isSelected ? "#8b5e3c" : "transparent",
+                  }}
+                >
+                  {isSelected && <Check className="w-3 h-3 text-white" />}
+                </div>
+                <span>{option.label}</span>
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function LegalCompliance({ data = {}, updateData }) {
   const [formData, setFormData] = useState({})
   const [isLoading, setIsLoading] = useState(true)
@@ -82,62 +202,34 @@ export default function LegalCompliance({ data = {}, updateData }) {
           return
         }
 
-        // Load from the universalProfiles collection
         const docRef = doc(db, "universalProfiles", userId)
         const docSnap = await getDoc(docRef)
 
         if (docSnap.exists()) {
           const profileData = docSnap.data()
 
-          // Check if legalCompliance data exists
           if (profileData.legalCompliance) {
             const legalData = profileData.legalCompliance
+            // Migrate old string industryAccreditations to array
+            if (typeof legalData.industryAccreditations === "string") {
+              legalData.industryAccreditations = legalData.industryAccreditations
+                ? legalData.industryAccreditations.split(",").map((s) => s.trim()).filter(Boolean)
+                : []
+            }
             setFormData(legalData)
             updateData(legalData)
           } else {
-            // If no data exists, initialize with passed data or default structure
-            const initData = Object.keys(data).length > 0 ? data : {
-              taxNumber: "",
-              vatNumber: "",
-              uifStatus: "",
-              uifNumber: "",
-              payeNumber: "",
-              bbbeeLevel: "",
-              coidaNumber: "",
-              industryAccreditations: "",
-              taxClearanceCert: [],
-              vatCertificate: [],
-              bbbeeCert: [],
-              otherCerts: [],
-              industryAccreditationDocs: [],
-            }
+            const initData = getDefaultData(data)
             setFormData(initData)
             updateData(initData)
           }
         } else {
-          // No profile exists yet, use passed data or default structure
-          const initData = Object.keys(data).length > 0 ? data : {
-            taxNumber: "",
-            vatNumber: "",
-            uifStatus: "",
-            uifNumber: "",
-            payeNumber: "",
-            bbbeeLevel: "",
-            coidaNumber: "",
-            coidaNumber: "",
-            industryAccreditations: "",
-            taxClearanceCert: [],
-            vatCertificate: [],
-            bbbeeCert: [],
-            otherCerts: [],
-            industryAccreditationDocs: [],
-          }
+          const initData = getDefaultData(data)
           setFormData(initData)
           updateData(initData)
         }
       } catch (error) {
         console.error("Error loading legal compliance details:", error)
-        // Fallback to passed data on error
         setFormData(data)
         updateData(data)
       } finally {
@@ -146,9 +238,28 @@ export default function LegalCompliance({ data = {}, updateData }) {
     }
 
     loadLegalCompliance()
-  }, []) // Empty dependency array to run only once on mount
+  }, [])
 
-  // Update form data when data prop changes (but only if not loading from Firebase)
+  const getDefaultData = (passedData) => {
+    if (Object.keys(passedData).length > 0) return passedData
+    return {
+      taxNumber: "",
+      vatNumber: "",
+      uifStatus: "",
+      uifNumber: "",
+      payeNumber: "",
+      bbbeeLevel: "",
+      coidaNumber: "",
+      industryAccreditations: [],
+      industryAccreditationsOther: "",
+      taxClearanceCert: [],
+      vatCertificate: [],
+      bbbeeCert: [],
+      otherCerts: [],
+      industryAccreditationDocs: [],
+    }
+  }
+
   useEffect(() => {
     if (!isLoading && Object.keys(formData).length === 0) {
       setFormData(data)
@@ -159,28 +270,26 @@ export default function LegalCompliance({ data = {}, updateData }) {
     const { name, value } = e.target
     const updatedData = { ...formData, [name]: value }
 
-    // Clear UIF number if status is not "registered"
     if (name === "uifStatus" && value !== "Registered") {
       updatedData.uifNumber = ""
     }
 
-    // Clear document arrays when answer is "No"
-    if (name === "hasAdvisoryStructure" && value === "No") {
-      updatedData.advisoryStructureDocs = []
-    }
-    if (name === "hasPolicyControls" && value === "No") {
-      updatedData.policyControlsDocs = []
-    }
-    if (name === "hasEthicsPolicy" && value === "No") {
-      updatedData.ethicsPolicyDocs = []
-    }
-    if (name === "hasConflictResolution" && value === "No") {
-      updatedData.conflictResolutionDocs = []
-    }
-    if (name === "hasWhistleblowingPolicy" && value === "No") {
-      updatedData.whistleblowingPolicyDocs = []
-    }
+    if (name === "hasAdvisoryStructure" && value === "No") updatedData.advisoryStructureDocs = []
+    if (name === "hasPolicyControls" && value === "No") updatedData.policyControlsDocs = []
+    if (name === "hasEthicsPolicy" && value === "No") updatedData.ethicsPolicyDocs = []
+    if (name === "hasConflictResolution" && value === "No") updatedData.conflictResolutionDocs = []
+    if (name === "hasWhistleblowingPolicy" && value === "No") updatedData.whistleblowingPolicyDocs = []
 
+    setFormData(updatedData)
+    updateData(updatedData)
+  }
+
+  const handleAccreditationsChange = (selectedValues) => {
+    const updatedData = { ...formData, industryAccreditations: selectedValues }
+    // Clear "Other" text if "Other" is deselected
+    if (!selectedValues.includes("Other")) {
+      updatedData.industryAccreditationsOther = ""
+    }
     setFormData(updatedData)
     updateData(updatedData)
   }
@@ -198,7 +307,11 @@ export default function LegalCompliance({ data = {}, updateData }) {
     updateData(updatedData)
   }
 
-  // Show loading state while fetching data
+  const selectedAccreditations = Array.isArray(formData.industryAccreditations)
+    ? formData.industryAccreditations
+    : []
+  const showOtherInput = selectedAccreditations.includes("Other")
+
   if (isLoading) {
     return (
       <div className="legal-compliance-loading">
@@ -214,7 +327,7 @@ export default function LegalCompliance({ data = {}, updateData }) {
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
         <div>
-          <FormField label="Tax Number" >
+          <FormField label="Tax Number">
             <input
               type="text"
               name="taxNumber"
@@ -245,7 +358,7 @@ export default function LegalCompliance({ data = {}, updateData }) {
             />
           </FormField>
 
-          <FormField label="UIF Status" >
+          <FormField label="UIF Status">
             <select
               name="uifStatus"
               value={formData.uifStatus || ""}
@@ -263,7 +376,7 @@ export default function LegalCompliance({ data = {}, updateData }) {
           </FormField>
 
           {formData.uifStatus === "Registered" && (
-            <FormField label="UIF Reference Number" >
+            <FormField label="UIF Reference Number">
               <input
                 type="text"
                 name="uifNumber"
@@ -298,7 +411,7 @@ export default function LegalCompliance({ data = {}, updateData }) {
         </div>
 
         <div>
-          <FormField label="B-BBEE Level" >
+          <FormField label="B-BBEE Level">
             <select
               name="bbbeeLevel"
               value={formData.bbbeeLevel || ""}
@@ -316,15 +429,26 @@ export default function LegalCompliance({ data = {}, updateData }) {
           </FormField>
 
           <FormField label="Industry Accreditations (optional)">
-            <textarea
-              name="industryAccreditations"
-              value={formData.industryAccreditations || ""}
-              onChange={handleChange}
-              rows={2}
-              placeholder="List any industry-specific accreditations"
-              className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
-            ></textarea>
+            <MultiSelectDropdown
+              options={industryAccreditationOptions}
+              selected={selectedAccreditations}
+              onChange={handleAccreditationsChange}
+              placeholder="Select accreditations..."
+            />
           </FormField>
+
+          {showOtherInput && (
+            <FormField label="Please specify other accreditation(s)">
+              <input
+                type="text"
+                name="industryAccreditationsOther"
+                value={formData.industryAccreditationsOther || ""}
+                onChange={handleChange}
+                placeholder="e.g. SETA accreditation, Industry-specific certification..."
+                className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
+              />
+            </FormField>
+          )}
         </div>
       </div>
     </div>

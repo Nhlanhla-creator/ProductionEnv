@@ -1,5 +1,3 @@
-"use client"
-
 import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import { CheckCircle, ChevronRight, ChevronLeft, Save, X, ArrowRight,Users } from "lucide-react"
@@ -14,6 +12,7 @@ import ContactDetails from "./contact-details"
 import LegalCompliance from "./legal-compliance"
 import Governance from "./governance" // Import the Governance component
 import FinancialOverview from "./FinancialOverview" // Import the FinancialOverview component
+import OperationsOverview from "./OperationsOverview" // Import the new OperationsOverview component
 import ProductsServices from "./products-services"
 import HowDidYouHear from "./how-did-you-hear"
 import Documents from "./Documents"
@@ -21,23 +20,22 @@ import DeclarationConsent from "./declaration-consent"
 import ProfileSummary from "./ProfileSummary"
 import { onAuthStateChanged } from "firebase/auth";
 
-
 const sections = [
   { id: "instructions", label: "Instructions" },
   { id: "entityOverview", label: "Entity\nOverview" },
-    { id: "productsServices", label: "Products &\nServices" },
+  { id: "productsServices", label: "Products &\nServices" },
   { id: "ownershipManagement", label: "Ownership &\nManagement" },
   { id: "contactDetails", label: "Contact\nDetails" },
   { id: "legalCompliance", label: "Legal &\nCompliance" },
+  { id: "operationsOverview", label: "Operations\nOverview" }, // Added before financial
   { id: "financialOverview", label: "Financial\nOverview" },
-  { id: "governance", label: "Governance" }, // Added Governance tab
-
+  { id: "governance", label: "Governance" },
   { id: "howDidYouHear", label: "How Did\nYou Hear" },
   { id: "documents", label: "Document\nUpload" },
   { id: "declarationConsent", label: "Declaration &\nConsent" },
 ]
 
-// Section validation functions - Updated to include financialOverview
+// Section validation functions - Updated to include operationsOverview
 const sectionValidations = {
   instructions: () => true, // Always valid
   
@@ -82,6 +80,19 @@ const sectionValidations = {
 
   legalCompliance: () => true, // Always valid
 
+  operationsOverview: (data) => {
+    // Check if all 7 questions have been answered
+    return (
+      data.multipleSuppliers !== undefined && data.multipleSuppliers !== "" &&
+      data.contingencyPlan !== undefined && data.contingencyPlan !== "" &&
+      data.trackPerformanceMetrics !== undefined && data.trackPerformanceMetrics !== "" &&
+      data.threeSuccessfulDeliveries !== undefined && data.threeSuccessfulDeliveries !== "" &&
+      data.hasCapacityToIncrease !== undefined && data.hasCapacityToIncrease !== "" &&
+      data.hasFormalProcedures !== undefined && data.hasFormalProcedures !== "" &&
+      data.hasMajorIncidents !== undefined && data.hasMajorIncidents !== ""
+    );
+  },
+
   financialOverview: () => true, // Always valid - add specific validation if needed
 
   governance: () => true, // Always valid
@@ -124,17 +135,14 @@ const onboardingSteps = [
   {
     title: "Welcome to Universal Profile",
     content: "This profile will help us understand your business better and provide you with tailored services.",
-
   },
   {
     title: "Step 1: Read Instructions",
     content: "Start by reading the instructions carefully to understand what information you'll need to provide.",
-
   },
   {
     title: "Step 2: Fill in Your Details",
     content: "Complete each section with accurate information about your business entity, ownership, and operations.",
-
   },
   {
     title: "Step 3: Upload Documents",
@@ -143,7 +151,6 @@ const onboardingSteps = [
   {
     title: "Step 4: Review & Submit",
     content: "Review your information in the summary page and submit when you're ready. You can always edit later.",
-
   },
 ]
 
@@ -156,15 +163,14 @@ export default function UniversalProfile() {
   const [showSummary, setShowSummary] = useState(false)
   const [profileData, setProfileData] = useState(null)
   const [isEditing, setIsEditing] = useState(false)
-//company ish
 
-const [companyOwnerId, setCompanyOwnerId] = useState(null);
-const [isCompanyMember, setIsCompanyMember] = useState(false);
-const [effectiveUserId, setEffectiveUserId] = useState(null);
-const [userRole, setUserRole] = useState(null);
-const [editPermissions, setEditPermissions] = useState({});
-const [editHistory, setEditHistory] = useState([]);
-const [showEditHistory, setShowEditHistory] = useState(false);
+  const [companyOwnerId, setCompanyOwnerId] = useState(null);
+  const [isCompanyMember, setIsCompanyMember] = useState(false);
+  const [effectiveUserId, setEffectiveUserId] = useState(null);
+  const [userRole, setUserRole] = useState(null);
+  const [editPermissions, setEditPermissions] = useState({});
+  const [editHistory, setEditHistory] = useState([]);
+  const [showEditHistory, setShowEditHistory] = useState(false);
 
   const isProfileComplete = () => {
     return Object.entries(sectionValidations).every(([sectionKey, validate]) => {
@@ -174,46 +180,45 @@ const [showEditHistory, setShowEditHistory] = useState(false);
     });
   };
 
-
   // New state for popups
   const [showWelcomePopup, setShowWelcomePopup] = useState(false)
   const [showCongratulationsPopup, setShowCongratulationsPopup] = useState(false)
   const [currentOnboardingStep, setCurrentOnboardingStep] = useState(0)
-const ROLE_PERMISSIONS = {
-  owner: {
-    canEditAll: true,
-    sections: ['instructions', 'entityOverview', 'ownershipManagement', 'contactDetails', 
-               'legalCompliance', 'financialOverview', 'governance', 'productsServices', 
-               'howDidYouHear', 'documents', 'declarationConsent']
-  },
-  companyadmin: {
-    canEditAll: false,
-    sections: ['entityOverview', 'contactDetails', 'legalCompliance', 'financialOverview', 
-               'governance', 'productsServices', 'documents']
-  },
-  manager: {
-    canEditAll: false,
-    sections: ['contactDetails', 'productsServices', 'documents']
-  },
-  employee: {
-    canEditAll: false,
-    sections: ['contactDetails', 'documents']
-  },
-  viewer: {
-    canEditAll: false,
-    sections: []
-  }
-};
-
-const canEditSection = (sectionId) => {
-  if (!userRole) return false;
   
-  const permissions = ROLE_PERMISSIONS[userRole];
-  if (!permissions) return false;
-  
-  return permissions.canEditAll || permissions.sections.includes(sectionId);
-};
+  const ROLE_PERMISSIONS = {
+    owner: {
+      canEditAll: true,
+      sections: ['instructions', 'entityOverview', 'ownershipManagement', 'contactDetails', 
+                 'legalCompliance', 'operationsOverview', 'financialOverview', 'governance', 
+                 'productsServices', 'howDidYouHear', 'documents', 'declarationConsent']
+    },
+    companyadmin: {
+      canEditAll: false,
+      sections: ['entityOverview', 'contactDetails', 'legalCompliance', 'operationsOverview', 
+                 'financialOverview', 'governance', 'productsServices', 'documents']
+    },
+    manager: {
+      canEditAll: false,
+      sections: ['contactDetails', 'productsServices', 'operationsOverview', 'documents']
+    },
+    employee: {
+      canEditAll: false,
+      sections: ['contactDetails', 'documents']
+    },
+    viewer: {
+      canEditAll: false,
+      sections: []
+    }
+  };
 
+  const canEditSection = (sectionId) => {
+    if (!userRole) return false;
+    
+    const permissions = ROLE_PERMISSIONS[userRole];
+    if (!permissions) return false;
+    
+    return permissions.canEditAll || permissions.sections.includes(sectionId);
+  };
 
   const [completedSections, setCompletedSections] = useState({
     instructions: true,
@@ -221,17 +226,19 @@ const canEditSection = (sectionId) => {
     ownershipManagement: false,
     contactDetails: false,
     legalCompliance: false,
-    financialOverview: false, // Added financialOverview
+    operationsOverview: false, // Added operationsOverview
+    financialOverview: false,
     productsServices: false,
     howDidYouHear: false,
     documents: false,
     declarationConsent: false,
   })
-const [validationModal, setValidationModal] = useState({
-  open: false,
-  title: "",
-  messages: []
-});
+  
+  const [validationModal, setValidationModal] = useState({
+    open: false,
+    title: "",
+    messages: []
+  });
 
   const [formData, setFormData] = useState({
     instructions: {},
@@ -268,7 +275,16 @@ const [validationModal, setValidationModal] = useState({
     legalCompliance: {
       licenseDoc: null,
     },
-    financialOverview: { // Added financialOverview data structure
+    operationsOverview: { // Added operationsOverview data structure
+      multipleSuppliers: "",
+      contingencyPlan: "",
+      trackPerformanceMetrics: "",
+      threeSuccessfulDeliveries: "",
+      hasCapacityToIncrease: "",
+      hasFormalProcedures: "",
+      hasMajorIncidents: ""
+    },
+    financialOverview: {
       generatesRevenue: "",
       annualRevenue: "",
       currentValuation: "",
@@ -311,126 +327,91 @@ const [validationModal, setValidationModal] = useState({
     },
   })
 
-
-
- useEffect(() => {
-  const unsubscribe = onAuthStateChanged(auth, async (user) => {
-    if (user) {
-      try {
-        // Check if user is part of a company
-        const userDocRef = doc(db, "users", user.uid);
-        const userDocSnap = await getDoc(userDocRef);
-        
-        if (userDocSnap.exists()) {
-          const userData = userDocSnap.data();
-          const userCompanyId = userData.companyId;
-          const userCompanyRole = userData.userRole; // Get user's role
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        try {
+          // Check if user is part of a company
+          const userDocRef = doc(db, "users", user.uid);
+          const userDocSnap = await getDoc(userDocRef);
           
-          if (userCompanyId) {
-            // User is part of a company, fetch company details
-            const companyDocRef = doc(db, "companies", userCompanyId);
-            const companyDocSnap = await getDoc(companyDocRef);
+          if (userDocSnap.exists()) {
+            const userData = userDocSnap.data();
+            const userCompanyId = userData.companyId;
+            const userCompanyRole = userData.userRole; // Get user's role
             
-            if (companyDocSnap.exists()) {
-              const companyData = companyDocSnap.data();
-              const ownerId = companyData.createdBy;
+            if (userCompanyId) {
+              // User is part of a company, fetch company details
+              const companyDocRef = doc(db, "companies", userCompanyId);
+              const companyDocSnap = await getDoc(companyDocRef);
               
-              // Set user role
-              setUserRole(userCompanyRole || 'viewer');
-              
-              // Check if current user is the owner
-              if (ownerId === user.uid) {
-                // Current user is the owner
-                setIsCompanyMember(false);
-                setEffectiveUserId(user.uid);
-                setEditPermissions(ROLE_PERMISSIONS.owner);
-              } else {
-                // Current user is a member, use owner's ID for data
-                setIsCompanyMember(true);
-                setCompanyOwnerId(ownerId);
-                setEffectiveUserId(ownerId);
-                setEditPermissions(ROLE_PERMISSIONS[userCompanyRole] || ROLE_PERMISSIONS.viewer);
+              if (companyDocSnap.exists()) {
+                const companyData = companyDocSnap.data();
+                const ownerId = companyData.createdBy;
+                
+                // Set user role
+                setUserRole(userCompanyRole || 'viewer');
+                
+                // Check if current user is the owner
+                if (ownerId === user.uid) {
+                  // Current user is the owner
+                  setIsCompanyMember(false);
+                  setEffectiveUserId(user.uid);
+                  setEditPermissions(ROLE_PERMISSIONS.owner);
+                } else {
+                  // Current user is a member, use owner's ID for data
+                  setIsCompanyMember(true);
+                  setCompanyOwnerId(ownerId);
+                  setEffectiveUserId(ownerId);
+                  setEditPermissions(ROLE_PERMISSIONS[userCompanyRole] || ROLE_PERMISSIONS.viewer);
+                }
               }
+            } else {
+              // No company, use current user as owner
+              setIsCompanyMember(false);
+              setEffectiveUserId(user.uid);
+              setUserRole('owner');
+              setEditPermissions(ROLE_PERMISSIONS.owner);
             }
-          } else {
-            // No company, use current user as owner
-            setIsCompanyMember(false);
-            setEffectiveUserId(user.uid);
-            setUserRole('owner');
-            setEditPermissions(ROLE_PERMISSIONS.owner);
           }
-        }
-        
-        // Load saved data from localStorage
-        const savedData = localStorage.getItem(getUserSpecificKey("universalProfileData"));
-        const savedCompletedSections = localStorage.getItem(getUserSpecificKey("universalProfileCompletedSections"));
-        const savedSubmissionStatus = localStorage.getItem(getUserSpecificKey("profileSubmitted"));
-        const hasSeenWelcomePopup = localStorage.getItem(getUserSpecificKey("hasSeenWelcomePopup")) === "true";
+          
+          // Load saved data from localStorage
+          const savedData = localStorage.getItem(getUserSpecificKey("universalProfileData"));
+          const savedCompletedSections = localStorage.getItem(getUserSpecificKey("universalProfileCompletedSections"));
+          const savedSubmissionStatus = localStorage.getItem(getUserSpecificKey("profileSubmitted"));
+          const hasSeenWelcomePopup = localStorage.getItem(getUserSpecificKey("hasSeenWelcomePopup")) === "true";
 
-        if (savedData) setFormData(JSON.parse(savedData));
-        if (savedCompletedSections) setCompletedSections(JSON.parse(savedCompletedSections));
-        if (savedSubmissionStatus === "true") {
-          setProfileSubmitted(true);
-          setShowSummary(true);
-        }
+          if (savedData) setFormData(JSON.parse(savedData));
+          if (savedCompletedSections) setCompletedSections(JSON.parse(savedCompletedSections));
+          if (savedSubmissionStatus === "true") {
+            setProfileSubmitted(true);
+            setShowSummary(true);
+          }
 
-        if (!hasSeenWelcomePopup) {
-          setShowWelcomePopup(true);
-          localStorage.setItem(getUserSpecificKey("hasSeenWelcomePopup"), "true");
+          if (!hasSeenWelcomePopup) {
+            setShowWelcomePopup(true);
+            localStorage.setItem(getUserSpecificKey("hasSeenWelcomePopup"), "true");
+          }
+        } catch (error) {
+          console.error("Error checking company membership:", error);
+          setEffectiveUserId(user.uid);
+          setUserRole('owner');
+          setEditPermissions(ROLE_PERMISSIONS.owner);
         }
-      } catch (error) {
-        console.error("Error checking company membership:", error);
-        setEffectiveUserId(user.uid);
-        setUserRole('owner');
-        setEditPermissions(ROLE_PERMISSIONS.owner);
+      } else {
+        navigate("/login");
       }
-    } else {
-      navigate("/login");
-    }
-    setLoading(false);
-  });
+      setLoading(false);
+    });
 
-  return () => unsubscribe();
-}, []);
-
+    return () => unsubscribe();
+  }, []);
 
   // Helper function to get user-specific localStorage key
   const getUserSpecificKey = (baseKey) => {
     const userId = auth.currentUser?.uid
     return userId ? `${baseKey}_${userId}` : baseKey
   }
-
-  // Load saved data from localStorage
-  useEffect(() => {
-    const userId = auth.currentUser?.uid
-    if (!userId) {
-      setLoading(false)
-      return
-    }
-
-
-    const savedData = localStorage.getItem(getUserSpecificKey("universalProfileData"))
-    const savedCompletedSections = localStorage.getItem(getUserSpecificKey("universalProfileCompletedSections"))
-    const savedSubmissionStatus = localStorage.getItem(getUserSpecificKey("profileSubmitted"))
-    const hasSeenWelcomePopup = localStorage.getItem(getUserSpecificKey("hasSeenWelcomePopup")) === "true"
-    const hasSeenCongratulationsPopup =
-      localStorage.getItem(getUserSpecificKey("hasSeenCongratulationsPopup")) === "true"
-
-    if (savedData) setFormData(JSON.parse(savedData))
-    if (savedCompletedSections) setCompletedSections(JSON.parse(savedCompletedSections))
-    if (savedSubmissionStatus === "true") {
-      setProfileSubmitted(true)
-      setShowSummary(true)
-    }
-
-    // Show welcome popup only for first-time users
-    if (!hasSeenWelcomePopup) {
-      setShowWelcomePopup(true)
-      localStorage.setItem(getUserSpecificKey("hasSeenWelcomePopup"), "true")
-    }
-
-    setLoading(false)
-  }, [])
 
   // Save to localStorage
   useEffect(() => {
@@ -453,23 +434,22 @@ const [validationModal, setValidationModal] = useState({
   }
 
   const markSectionAsCompleted = async (section) => {
-  const updated = {
-    ...completedSections,
-    [section]: true,
+    const updated = {
+      ...completedSections,
+      [section]: true,
+    }
+
+    setCompletedSections(updated)
+
+    const userId = auth.currentUser?.uid
+    if (userId) {
+      const docRef = doc(db, "universalProfiles", userId)
+      await setDoc(docRef, { completedSections: updated }, { merge: true })
+
+      // Keep localStorage in sync for offline continuity
+      localStorage.setItem(getUserSpecificKey("universalProfileCompletedSections"), JSON.stringify(updated))
+    }
   }
-
-  setCompletedSections(updated)
-
-  const userId = auth.currentUser?.uid
-  if (userId) {
-    const docRef = doc(db, "universalProfiles", userId)
-    await setDoc(docRef, { completedSections: updated }, { merge: true })
-
-    // Keep localStorage in sync for offline continuity
-    localStorage.setItem(getUserSpecificKey("universalProfileCompletedSections"), JSON.stringify(updated))
-  }
-}
-
 
   const navigateToNextSection = () => {
     const index = sections.findIndex((s) => s.id === activeSection)
@@ -516,156 +496,152 @@ const [validationModal, setValidationModal] = useState({
     return await uploadRecursive(data, section)
   }
 
-const saveDataToFirebase = async (section = null, isFinalSubmit = false) => {
-  setLoading(true);
-  
-  // Use effectiveUserId instead of current user
-  const userId = effectiveUserId || auth.currentUser?.uid;
-  const currentUser = auth.currentUser;
-  
-  if (!userId) {
-    setLoading(false);
-    throw new Error("User not logged in.");
-  }
+  const saveDataToFirebase = async (section = null, isFinalSubmit = false) => {
+    setLoading(true);
+    
+    // Use effectiveUserId instead of current user
+    const userId = effectiveUserId || auth.currentUser?.uid;
+    const currentUser = auth.currentUser;
+    
+    if (!userId) {
+      setLoading(false);
+      throw new Error("User not logged in.");
+    }
 
-  // Check if user has permission to edit this section
-  if (section && !canEditSection(section)) {
-    alert(`You don't have permission to edit the ${sections.find(s => s.id === section)?.label.replace(/\n/g, " ")} section. Your role (${userRole}) does not allow this.`);
-    setLoading(false);
-    return;
-  }
+    // Check if user has permission to edit this section
+    if (section && !canEditSection(section)) {
+      alert(`You don't have permission to edit the ${sections.find(s => s.id === section)?.label.replace(/\n/g, " ")} section. Your role (${userRole}) does not allow this.`);
+      setLoading(false);
+      return;
+    }
 
-  const docRef = doc(db, "universalProfiles", userId);
-  const sectionData = section ? formData[section] : formData;
+    const docRef = doc(db, "universalProfiles", userId);
+    const sectionData = section ? formData[section] : formData;
 
-  const uploaded = section
-    ? {
-        ...(section !== "instructions" && {
-          [section]: await uploadFilesAndReplaceWithURLs(sectionData, section),
-        }),
+    const uploaded = section
+      ? {
+          ...(section !== "instructions" && {
+            [section]: await uploadFilesAndReplaceWithURLs(sectionData, section),
+          }),
+        }
+      : await uploadFilesAndReplaceWithURLs(sectionData, "full");
+
+    // Get user details for edit log
+    const userDocRef = doc(db, "users", currentUser.uid);
+    const userDocSnap = await getDoc(userDocRef);
+    const userName = userDocSnap.exists() ? 
+      (userDocSnap.data().username || userDocSnap.data().email || currentUser.email) : 
+      currentUser.email;
+
+    // Create edit log entry
+    const editLogEntry = {
+      editedBy: currentUser.uid,
+      editedByName: userName,
+      editedByEmail: currentUser.email,
+      role: userRole,
+      section: section || 'full_profile',
+      sectionName: section ? sections.find(s => s.id === section)?.label.replace(/\n/g, " ") : 'Full Profile',
+      timestamp: new Date().toISOString(),
+      action: isFinalSubmit ? 'submitted' : 'updated'
+    };
+
+    // Get existing edit history
+    const profileSnap = await getDoc(docRef);
+    const existingHistory = profileSnap.exists() ? (profileSnap.data().editHistory || []) : [];
+
+    const dataToSave = {
+      ...uploaded,
+      completedSections,
+      ...(isFinalSubmit || !section ? { completedSections } : {}),
+      lastEditedBy: currentUser.uid,
+      lastEditedByName: userName,
+      lastEditedAt: new Date().toISOString(),
+      lastEditedByRole: userRole,
+      editHistory: [...existingHistory, editLogEntry]
+    };
+
+    const triggerSectionsFundability = [
+      "enterpriseReadiness",
+      "documentUpload",
+      "entityOverview",
+      "legalCompliance",
+      "governance",
+      "contactDetails",
+      "financialOverview",
+    ];
+
+    const triggerSectionsLegitimacy = [
+      "enterpriseReadiness",
+      "documentUpload",
+      "entityOverview",
+      "legalCompliance",
+      "governance",
+      "contactDetails",
+      "financialOverview",
+    ];
+
+    if (section) {
+      const triggerPayload = {};
+
+      if (triggerSectionsFundability.includes(section)) {
+        triggerPayload.triggerFundabilityEvaluation = true;
       }
-    : await uploadFilesAndReplaceWithURLs(sectionData, "full");
 
-  // Get user details for edit log
-  const userDocRef = doc(db, "users", currentUser.uid);
-  const userDocSnap = await getDoc(userDocRef);
-  const userName = userDocSnap.exists() ? 
-    (userDocSnap.data().username || userDocSnap.data().email || currentUser.email) : 
-    currentUser.email;
+      if (triggerSectionsLegitimacy.includes(section)) {
+        triggerPayload.triggerLegitimacyEvaluation = true;
+      }
 
-  // Create edit log entry
-  const editLogEntry = {
-    editedBy: currentUser.uid,
-    editedByName: userName,
-    editedByEmail: currentUser.email,
-    role: userRole,
-    section: section || 'full_profile',
-    sectionName: section ? sections.find(s => s.id === section)?.label.replace(/\n/g, " ") : 'Full Profile',
-    timestamp: new Date().toISOString(),
-    action: isFinalSubmit ? 'submitted' : 'updated'
+      if (Object.keys(triggerPayload).length > 0) {
+        await setDoc(docRef, triggerPayload, { merge: true });
+      }
+    }
+
+    await setDoc(docRef, dataToSave, { merge: true });
+    
+    // Update local edit history
+    setEditHistory([...existingHistory, editLogEntry]);
+    
+    setLoading(false);
   };
-
-  // Get existing edit history
-  const profileSnap = await getDoc(docRef);
-  const existingHistory = profileSnap.exists() ? (profileSnap.data().editHistory || []) : [];
-
-  const dataToSave = {
-    ...uploaded,
-    completedSections,
-    ...(isFinalSubmit || !section ? { completedSections } : {}),
-    lastEditedBy: currentUser.uid,
-    lastEditedByName: userName,
-    lastEditedAt: new Date().toISOString(),
-    lastEditedByRole: userRole,
-    editHistory: [...existingHistory, editLogEntry]
-  };
-
-  const triggerSectionsFundability = [
-    "enterpriseReadiness",
-    "documentUpload",
-    "entityOverview",
-    "legalCompliance",
-    "governance",
-    "contactDetails",
-    "financialOverview",
-  ];
-
-  const triggerSectionsLegitimacy = [
-    "enterpriseReadiness",
-    "documentUpload",
-    "entityOverview",
-    "legalCompliance",
-    "governance",
-    "contactDetails",
-    "financialOverview",
-  ];
-
-  if (section) {
-    const triggerPayload = {};
-
-    if (triggerSectionsFundability.includes(section)) {
-      triggerPayload.triggerFundabilityEvaluation = true;
-    }
-
-    if (triggerSectionsLegitimacy.includes(section)) {
-      triggerPayload.triggerLegitimacyEvaluation = true;
-    }
-
-    if (Object.keys(triggerPayload).length > 0) {
-      await setDoc(docRef, triggerPayload, { merge: true });
-    }
-  }
-
-  await setDoc(docRef, dataToSave, { merge: true });
-  
-  // Update local edit history
-  setEditHistory([...existingHistory, editLogEntry]);
-  
-  setLoading(false);
-};
-
-
-
 
   const handleSaveSection = async () => {
     await saveDataToFirebase(activeSection)
     alert("Section saved!")
   }
-const handleSaveAndContinue = async () => {
-  const sectionData = formData[activeSection] || {};
-  const isValid = sectionValidations[activeSection]?.(sectionData);
-
-  if (!isValid) {
-    const errors = [];
-
-   
-    if (activeSection === "entityOverview") {
-      errors.push("Entity Overview section is incomplete. Please fill in all required fields.");
-    } else if (activeSection === "contactDetails") {
-      errors.push("Contact Details section is incomplete. Please fill in all required fields.");
-    } else {
-      errors.push(`${sections.find(s => s.id === activeSection)?.label.replace(/\n/g, " ")} is incomplete or contains invalid fields.`);
-    }
- if (activeSection != "instructions") {
-  setValidationModal({
-      open: true,
-      title: "Please review the following issues:",
-      messages: errors
-    });
-    
-    }
   
+  const handleSaveAndContinue = async () => {
+    const sectionData = formData[activeSection] || {};
+    const isValid = sectionValidations[activeSection]?.(sectionData);
 
-    return; // 🚫 Prevents saving and navigation when invalid
-  }
+    if (!isValid) {
+      const errors = [];
 
-  // ✅ Only runs when valid
-  markSectionAsCompleted(activeSection);
-  await saveDataToFirebase(activeSection);
-  navigateToNextSection();
-};
+      if (activeSection === "entityOverview") {
+        errors.push("Entity Overview section is incomplete. Please fill in all required fields.");
+      } else if (activeSection === "contactDetails") {
+        errors.push("Contact Details section is incomplete. Please fill in all required fields.");
+      } else if (activeSection === "operationsOverview") {
+        errors.push("Operations Overview section is incomplete. Please answer all 7 questions.");
+      } else {
+        errors.push(`${sections.find(s => s.id === activeSection)?.label.replace(/\n/g, " ")} is incomplete or contains invalid fields.`);
+      }
+      
+      if (activeSection != "instructions") {
+        setValidationModal({
+          open: true,
+          title: "Please review the following issues:",
+          messages: errors
+        });
+      }
+      
+      return; // 🚫 Prevents saving and navigation when invalid
+    }
 
-
+    // ✅ Only runs when valid
+    markSectionAsCompleted(activeSection);
+    await saveDataToFirebase(activeSection);
+    navigateToNextSection();
+  };
 
   const handleSubmitProfile = async () => {
     markSectionAsCompleted("declarationConsent") 
@@ -673,7 +649,6 @@ const handleSaveAndContinue = async () => {
 
     if (!allValid) {
       const issues = Object.entries(sectionStatus)
-    
         .filter(([_, status]) => !status.valid || !status.completed)
         .map(([_, status]) => `❌ ${status.name.replace(/\n/g, " ")} is incomplete or invalid.`);
 
@@ -682,7 +657,6 @@ const handleSaveAndContinue = async () => {
     }
 
     try {
-
       await saveDataToFirebase()
       // save full form
       setProfileSubmitted(true)
@@ -706,7 +680,6 @@ const handleSaveAndContinue = async () => {
       setProfileSubmitted(false);
     }
   };
-
 
   // Function to handle completion of the registration process
   const handleRegistrationComplete = async () => {
@@ -770,25 +743,27 @@ const handleSaveAndContinue = async () => {
         return <ContactDetails {...commonProps} />
       case "legalCompliance":
         return <LegalCompliance {...commonProps} />
+      case "operationsOverview":
+        return <OperationsOverview {...commonProps} />
       case "financialOverview": {
-  // Adapter lets FinancialOverview call either:
-  //   updateData("financialOverview", patch)  OR  updateData(patch)
-  const updateFinancial = (sectionOrPatch, maybePatch) => {
-    if (typeof sectionOrPatch === "string") {
-      // Signature from FinancialOverview: updateData("financialOverview", patch)
-      return updateFormData(sectionOrPatch, maybePatch);
-    }
-    // Signature without section: updateData(patch)
-    return updateFormData("financialOverview", sectionOrPatch);
-  };
+        // Adapter lets FinancialOverview call either:
+        //   updateData("financialOverview", patch)  OR  updateData(patch)
+        const updateFinancial = (sectionOrPatch, maybePatch) => {
+          if (typeof sectionOrPatch === "string") {
+            // Signature from FinancialOverview: updateData("financialOverview", patch)
+            return updateFormData(sectionOrPatch, maybePatch);
+          }
+          // Signature without section: updateData(patch)
+          return updateFormData("financialOverview", sectionOrPatch);
+        };
 
-  return (
-    <FinancialOverview
-      data={formData.financialOverview || {}}
-      updateData={updateFinancial}
-    />
-  );
-}
+        return (
+          <FinancialOverview
+            data={formData.financialOverview || {}}
+            updateData={updateFinancial}
+          />
+        );
+      }
       case "governance":
         return <Governance data={formData.governance || {}} updateData={(section, data) => updateFormData(section, data)} />
       case "productsServices":
@@ -803,63 +778,64 @@ const handleSaveAndContinue = async () => {
         return <Instructions />
     }
   }
-useEffect(() => {
-  const fetchProfileData = async () => {
-    try {
-      setLoading(true);
-      
-      // Wait for effectiveUserId to be set
-      if (!effectiveUserId) return;
 
-      const docRef = doc(db, "universalProfiles", effectiveUserId);
-      const docSnap = await getDoc(docRef);
+  useEffect(() => {
+    const fetchProfileData = async () => {
+      try {
+        setLoading(true);
+        
+        // Wait for effectiveUserId to be set
+        if (!effectiveUserId) return;
 
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        setProfileData(data);
+        const docRef = doc(db, "universalProfiles", effectiveUserId);
+        const docSnap = await getDoc(docRef);
 
-        if (data.completedSections) {
-          setCompletedSections(prev => ({
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          setProfileData(data);
+
+          if (data.completedSections) {
+            setCompletedSections(prev => ({
+              ...prev,
+              instructions: true,
+              ...data.completedSections,
+            }));
+            localStorage.setItem(getUserSpecificKey("universalProfileCompletedSections"), JSON.stringify(data.completedSections));
+          }
+
+          setFormData(prev => ({
             ...prev,
-            instructions: true,
-            ...data.completedSections,
+            ...data,
           }));
-          localStorage.setItem(getUserSpecificKey("universalProfileCompletedSections"), JSON.stringify(data.completedSections));
-        }
 
-        setFormData(prev => ({
-          ...prev,
-          ...data,
-        }));
+          const isProfileComplete =
+            data?.declarationConsent?.accuracy &&
+            data?.declarationConsent?.dataProcessing &&
+            data?.declarationConsent?.termsConditions;
 
-        const isProfileComplete =
-          data?.declarationConsent?.accuracy &&
-          data?.declarationConsent?.dataProcessing &&
-          data?.declarationConsent?.termsConditions;
-
-        if (isProfileComplete && !isEditing) {
-          setProfileSubmitted(true);
-          setShowSummary(true);
-        }
-      } else {
-        if (isCompanyMember) {
-          setError("Company profile not found. Please contact the company owner to complete the Universal Profile.");
+          if (isProfileComplete && !isEditing) {
+            setProfileSubmitted(true);
+            setShowSummary(true);
+          }
         } else {
-          setError("No profile found. Please complete your Universal Profile first.");
+          if (isCompanyMember) {
+            setError("Company profile not found. Please contact the company owner to complete the Universal Profile.");
+          } else {
+            setError("No profile found. Please complete your Universal Profile first.");
+          }
         }
+      } catch (err) {
+        console.error("Error fetching profile data:", err);
+        setError("Failed to load profile data. Please try again later.");
+      } finally {
+        setLoading(false);
       }
-    } catch (err) {
-      console.error("Error fetching profile data:", err);
-      setError("Failed to load profile data. Please try again later.");
-    } finally {
-      setLoading(false);
-    }
-  };
+    };
 
-  if (effectiveUserId) {
-    fetchProfileData();
-  }
-}, [isEditing, effectiveUserId]);
+    if (effectiveUserId) {
+      fetchProfileData();
+    }
+  }, [isEditing, effectiveUserId]);
 
   // Auto-complete documents section when all required documents are uploaded
   useEffect(() => {
@@ -893,29 +869,28 @@ useEffect(() => {
   return (
     <div className="universal-profile-container">
       
-      
-  {validationModal.open && (
-  <div className="popup-overlay">
-    <div className="validation-popup">
-      <button className="close-popup" onClick={() => setValidationModal({ open: false, title: "", messages: [] })}>
-        <X size={24} />
-      </button>
-      <div className="popup-content">
-        <h2 className="text-lg font-semibold">{validationModal.title}</h2>
-        <ul className="list-disc pl-5 mt-2 text-sm text-red-600">
-          {validationModal.messages.map((msg, idx) => (
-            <li key={idx}>{msg}</li>
-          ))}
-        </ul>
-        <div className="mt-4 flex justify-end">
-          <button className="btn btn-primary" onClick={() => setValidationModal({ open: false, title: "", messages: [] })}>
-            Got it
-          </button>
+      {validationModal.open && (
+        <div className="popup-overlay">
+          <div className="validation-popup">
+            <button className="close-popup" onClick={() => setValidationModal({ open: false, title: "", messages: [] })}>
+              <X size={24} />
+            </button>
+            <div className="popup-content">
+              <h2 className="text-lg font-semibold">{validationModal.title}</h2>
+              <ul className="list-disc pl-5 mt-2 text-sm text-red-600">
+                {validationModal.messages.map((msg, idx) => (
+                  <li key={idx}>{msg}</li>
+                ))}
+              </ul>
+              <div className="mt-4 flex justify-end">
+                <button className="btn btn-primary" onClick={() => setValidationModal({ open: false, title: "", messages: [] })}>
+                  Got it
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
-      </div>
-    </div>
-  </div>
-)}
+      )}
 
       {/* Welcome Popup for first-time users */}
       {showWelcomePopup && (
@@ -980,40 +955,40 @@ useEffect(() => {
       <h1>My Universal Profile</h1>
 
       <div className="profile-tracker">
-{isCompanyMember && (
-  <div style={{
-    backgroundColor: userRole === 'viewer' ? '#fef3c7' : '#e0f2fe',
-    border: `1px solid ${userRole === 'viewer' ? '#f59e0b' : '#0369a1'}`,
-    borderRadius: '8px',
-    padding: '1rem',
-    marginBottom: '1rem',
-  }}>
-    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
-      <Users size={20} color={userRole === 'viewer' ? '#f59e0b' : '#0369a1'} />
-      <p style={{ margin: 0, color: userRole === 'viewer' ? '#f59e0b' : '#0369a1', fontWeight: '600' }}>
-        Company Member - Role: {userRole?.toUpperCase()}
-      </p>
-    </div>
-    <p style={{ margin: 0, color: '#4a5568', fontSize: '0.875rem' }}>
-      {userRole === 'owner' && 'You have full access to edit all sections.'}
-      {userRole === 'companyadmin' && 'You can edit most sections except ownership and final declarations.'}
-      {userRole === 'manager' && 'You can edit contact details, products/services, and documents.'}
-      {userRole === 'employee' && 'You can edit contact details and upload documents.'}
-      {userRole === 'viewer' && 'You have read-only access. Contact the owner for edit permissions.'}
-    </p>
-    {editPermissions?.sections?.length > 0 && (
-      <p style={{ margin: '0.5rem 0 0 0', color: '#4a5568', fontSize: '0.875rem', fontWeight: '500' }}>
-        Editable sections: {editPermissions.sections.map(s => 
-          sections.find(sec => sec.id === s)?.label.replace(/\n/g, " ")
-        ).join(', ')}
-      </p>
-    )}
-  </div>
-)}
+        {isCompanyMember && (
+          <div style={{
+            backgroundColor: userRole === 'viewer' ? '#fef3c7' : '#e0f2fe',
+            border: `1px solid ${userRole === 'viewer' ? '#f59e0b' : '#0369a1'}`,
+            borderRadius: '8px',
+            padding: '1rem',
+            marginBottom: '1rem',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem' }}>
+              <Users size={20} color={userRole === 'viewer' ? '#f59e0b' : '#0369a1'} />
+              <p style={{ margin: 0, color: userRole === 'viewer' ? '#f59e0b' : '#0369a1', fontWeight: '600' }}>
+                Company Member - Role: {userRole?.toUpperCase()}
+              </p>
+            </div>
+            <p style={{ margin: 0, color: '#4a5568', fontSize: '0.875rem' }}>
+              {userRole === 'owner' && 'You have full access to edit all sections.'}
+              {userRole === 'companyadmin' && 'You can edit most sections except ownership and final declarations.'}
+              {userRole === 'manager' && 'You can edit contact details, products/services, operations, and documents.'}
+              {userRole === 'employee' && 'You can edit contact details and upload documents.'}
+              {userRole === 'viewer' && 'You have read-only access. Contact the owner for edit permissions.'}
+            </p>
+            {editPermissions?.sections?.length > 0 && (
+              <p style={{ margin: '0.5rem 0 0 0', color: '#4a5568', fontSize: '0.875rem', fontWeight: '500' }}>
+                Editable sections: {editPermissions.sections.map(s => 
+                  sections.find(sec => sec.id === s)?.label.replace(/\n/g, " ")
+                ).join(', ')}
+              </p>
+            )}
+          </div>
+        )}
+        
         <div className="profile-tracker-inner">
-
           {sections.map((section) => (
-           <button
+            <button
               key={section.id}
               onClick={() => {
                 if (section.id === "documents") {
@@ -1039,7 +1014,7 @@ useEffect(() => {
       </div>
       {!isProfileComplete() && (
         <p className="text-red-600 text-sm mt-2">
-
+          {/* Optional message */}
         </p>
       )}
 

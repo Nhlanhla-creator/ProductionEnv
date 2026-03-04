@@ -3,9 +3,9 @@ import { Info, ChevronDown, ChevronUp, Upload, X } from "lucide-react"
 import { db, auth, storage } from '../../firebaseConfig';
 import { doc, setDoc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
-import { validateDocument } from '../../services/documentValidationService';
+// import { validateDocument } from '../../services/documentValidationService';
 import { uploadDocumentWithSync, deleteDocumentWithSync, getDocumentUrlFromAnyLocation } from '../../utils/documentSyncService';
-
+import { validateDocument, validateCompanyDocument } from '../../services/documentValidationService';
 const entityTypes = [
   { value: "SME", label: "SME" },
   { value: "Social Enterprise", label: "Social Enterprise" },
@@ -288,133 +288,154 @@ export default function EntityOverview({ data = {}, updateData }) {
   const [letterheadFile, setLetterheadFile] = useState(null);
 
   const handleLogoUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+  const file = e.target.files[0];
+  if (!file) return;
 
-    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
-    if (!allowedTypes.includes(file.type)) {
-      alert('Please select a valid image file (JPEG, PNG, GIF, or WebP)');
-      return;
+  const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+  if (!allowedTypes.includes(file.type)) {
+    alert('Please select a valid image file (JPEG, PNG, GIF, or WebP)');
+    return;
+  }
+
+  const maxSize = 5 * 1024 * 1024;
+  if (file.size > maxSize) {
+    alert('Image size must be less than 5MB');
+    return;
+  }
+
+  try {
+    setLogoUploading(true);
+    const currentUser = auth.currentUser;
+
+    if (!currentUser) {
+      throw new Error('User not authenticated');
     }
 
-    const maxSize = 5 * 1024 * 1024;
-    if (file.size > maxSize) {
-      alert('Image size must be less than 5MB');
-      return;
-    }
+    // Create preview
+    const previewURL = URL.createObjectURL(file);
+    setLogoPreview(previewURL);
 
+    const timestamp = Date.now();
+    const fileName = `company_logos/${currentUser.uid}/${timestamp}_${file.name}`;
+    const storageRef = ref(storage, fileName);
+
+    const uploadResult = await uploadBytes(storageRef, file);
+    const downloadURL = await getDownloadURL(uploadResult.ref);
+
+    // ✅ Use validateDocument for logo (optional validation)
     try {
-      setLogoUploading(true);
-      const currentUser = auth.currentUser;
-
-      if (!currentUser) {
-        throw new Error('User not authenticated');
+      const validationResult = await validateDocument('Company Logo', file, "");
+      if (validationResult.isValid) {
+        await uploadDocumentWithSync('Company Logo', downloadURL, validationResult);
+      } else {
+        await uploadDocumentWithSync('Company Logo', downloadURL, {
+          status: 'warning',
+          message: 'Logo uploaded without AI validation'
+        });
       }
-
-      // Create preview
-      const previewURL = URL.createObjectURL(file);
-      setLogoPreview(previewURL);
-
-      const timestamp = Date.now();
-      const fileName = `company_logos/${currentUser.uid}/${timestamp}_${file.name}`;
-      const storageRef = ref(storage, fileName);
-
-      const uploadResult = await uploadBytes(storageRef, file);
-      const downloadURL = await getDownloadURL(uploadResult.ref);
-
-      // ✅ Use sync service for logo
+    } catch (validationError) {
+      // If validation fails, still upload but mark as warning
+      console.warn('Logo validation failed, proceeding with upload:', validationError);
       await uploadDocumentWithSync('Company Logo', downloadURL, {
-        status: 'verified',
-        message: 'Company logo uploaded'
+        status: 'warning',
+        message: 'Logo uploaded without AI validation'
       });
-
-      const userDocRef = doc(db, "universalProfiles", currentUser.uid);
-      const currentProfileDoc = await getDoc(userDocRef);
-      const currentData = currentProfileDoc.exists() ? currentProfileDoc.data() : {};
-
-      const updatedData = {
-        ...currentData,
-        entityOverview: {
-          ...currentData.entityOverview,
-          companyLogo: downloadURL
-        },
-        updatedAt: new Date().toISOString()
-      };
-
-      await updateDoc(userDocRef, updatedData);
-      
-      // Update local form data
-      const newFormData = { ...formData, companyLogo: downloadURL };
-      updateFormData(newFormData);
-
-      // Clean up old logo if it exists and is different
-      if (currentData.entityOverview?.companyLogo &&
-          currentData.entityOverview.companyLogo !== downloadURL &&
-          currentData.entityOverview.companyLogo.includes('firebase')) {
-        try {
-          const oldImageRef = ref(storage, currentData.entityOverview.companyLogo);
-          await deleteObject(oldImageRef);
-        } catch (deleteError) {
-          console.warn('Could not delete old logo:', deleteError);
-        }
-      }
-
-      setShowLogoUpload(false);
-      
-    } catch (error) {
-      console.error('Error uploading logo:', error);
-      let errorMessage = 'Failed to upload logo. Please try again.';
-
-      if (error.code === 'storage/unauthorized') {
-        errorMessage = 'You do not have permission to upload images.';
-      } else if (error.code === 'storage/canceled') {
-        errorMessage = 'Upload was canceled.';
-      } else if (error.code === 'storage/unknown') {
-        errorMessage = 'An unknown error occurred. Please check your internet connection.';
-      }
-
-      alert(errorMessage);
-      setLogoPreview("");
-    } finally {
-      setLogoUploading(false);
     }
-  };
+
+    const userDocRef = doc(db, "universalProfiles", currentUser.uid);
+    const currentProfileDoc = await getDoc(userDocRef);
+    const currentData = currentProfileDoc.exists() ? currentProfileDoc.data() : {};
+
+    const updatedData = {
+      ...currentData,
+      entityOverview: {
+        ...currentData.entityOverview,
+        companyLogo: downloadURL
+      },
+      updatedAt: new Date().toISOString()
+    };
+
+    await updateDoc(userDocRef, updatedData);
+    
+    // Update local form data
+    const newFormData = { ...formData, companyLogo: downloadURL };
+    updateFormData(newFormData);
+
+    // Clean up old logo if it exists and is different
+    if (currentData.entityOverview?.companyLogo &&
+        currentData.entityOverview.companyLogo !== downloadURL &&
+        currentData.entityOverview.companyLogo.includes('firebase')) {
+      try {
+        const oldImageRef = ref(storage, currentData.entityOverview.companyLogo);
+        await deleteObject(oldImageRef);
+      } catch (deleteError) {
+        console.warn('Could not delete old logo:', deleteError);
+      }
+    }
+
+    setShowLogoUpload(false);
+    
+  } catch (error) {
+    console.error('Error uploading logo:', error);
+    let errorMessage = 'Failed to upload logo. Please try again.';
+
+    if (error.code === 'storage/unauthorized') {
+      errorMessage = 'You do not have permission to upload images.';
+    } else if (error.code === 'storage/canceled') {
+      errorMessage = 'Upload was canceled.';
+    } else if (error.code === 'storage/unknown') {
+      errorMessage = 'An unknown error occurred. Please check your internet connection.';
+    }
+
+    alert(errorMessage);
+    setLogoPreview("");
+  } finally {
+    setLogoUploading(false);
+  }
+};
+
 
   const handleRemoveLogo = async () => {
-    try {
-      // ✅ Use sync service for deletion
-      await deleteDocumentWithSync('Company Logo');
-      
-      const currentUser = auth.currentUser;
-      if (!currentUser) return;
+  try {
+    // Show confirmation
+    const confirmDelete = window.confirm('Are you sure you want to delete the Company Logo?');
+    if (!confirmDelete) return;
 
-      const userDocRef = doc(db, "universalProfiles", currentUser.uid);
-      const currentProfileDoc = await getDoc(userDocRef);
-      const currentData = currentProfileDoc.exists() ? currentProfileDoc.data() : {};
+    // ✅ Use sync service for deletion
+    await deleteDocumentWithSync('Company Logo');
+    
+    const currentUser = auth.currentUser;
+    if (!currentUser) return;
 
-      // Update Firestore
-      const updatedData = {
-        ...currentData,
-        entityOverview: {
-          ...currentData.entityOverview,
-          companyLogo: ""
-        },
-        updatedAt: new Date().toISOString()
-      };
+    const userDocRef = doc(db, "universalProfiles", currentUser.uid);
+    const currentProfileDoc = await getDoc(userDocRef);
+    const currentData = currentProfileDoc.exists() ? currentProfileDoc.data() : {};
 
-      await updateDoc(userDocRef, updatedData);
-      
-      // Update local state
-      const newFormData = { ...formData };
-      delete newFormData.companyLogo;
-      updateFormData(newFormData);
-      setLogoPreview("");
+    // Update Firestore
+    const updatedData = {
+      ...currentData,
+      entityOverview: {
+        ...currentData.entityOverview,
+        companyLogo: ""
+      },
+      updatedAt: new Date().toISOString()
+    };
 
-    } catch (error) {
-      console.error('Error removing logo:', error);
-      alert('Failed to remove logo. Please try again.');
-    }
-  };
+    await updateDoc(userDocRef, updatedData);
+    
+    // Update local state
+    const newFormData = { ...formData };
+    delete newFormData.companyLogo;
+    updateFormData(newFormData);
+    setLogoPreview("");
+
+    alert('Company Logo deleted successfully!');
+
+  } catch (error) {
+    console.error('Error removing logo:', error);
+    alert('Failed to remove logo. Please try again.');
+  }
+};
 
   // Update form data and notify parent
   const updateFormData = (newData) => {
@@ -504,78 +525,86 @@ export default function EntityOverview({ data = {}, updateData }) {
     updateFormData(newData)
   }
 
-  const handleLetterheadUpload = async (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
+ const handleLetterheadUpload = async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
 
-    const allowedTypes = ['.pdf', '.doc', '.docx', '.jpg', '.jpeg', '.png'];
-    const fileExtension = file.name.toLowerCase().split('.').pop();
+  const allowedTypes = ['.pdf', '.doc', '.docx', '.jpg', '.jpeg', '.png'];
+  const fileExtension = file.name.toLowerCase().split('.').pop();
+  
+  if (!allowedTypes.includes(`.${fileExtension}`)) {
+    alert(`Please upload only PDF, Word, or Image files. File type .${fileExtension} is not allowed.`);
+    return;
+  }
+
+  const maxSize = 10 * 1024 * 1024;
+  if (file.size > maxSize) {
+    alert('File size exceeds 10MB limit. Please upload a smaller file.');
+    return;
+  }
+
+  try {
+    setLetterheadUploading(true);
+    const currentUser = auth.currentUser;
     
-    if (!allowedTypes.includes(`.${fileExtension}`)) {
-      alert(`Please upload only PDF, Word, or Image files. File type .${fileExtension} is not allowed.`);
-      return;
+    if (!currentUser) {
+      throw new Error('User not authenticated');
     }
 
-    const maxSize = 10 * 1024 * 1024;
-    if (file.size > maxSize) {
-      alert('File size exceeds 10MB limit. Please upload a smaller file.');
-      return;
-    }
+    // Get registered name for validation
+    const userDocRef = doc(db, "universalProfiles", currentUser.uid);
+    const userDoc = await getDoc(userDocRef);
+    const registeredName = userDoc.exists() 
+      ? userDoc.data()?.entityOverview?.registeredName || ""
+      : "";
 
-    try {
-      setLetterheadUploading(true);
-      const currentUser = auth.currentUser;
-      
-      if (!currentUser) {
-        throw new Error('User not authenticated');
-      }
-
-      // Get registered name for validation
-      const userDocRef = doc(db, "universalProfiles", currentUser.uid);
-      const userDoc = await getDoc(userDocRef);
-      const registeredName = userDoc.exists() 
-        ? userDoc.data()?.entityOverview?.registeredName || ""
-        : "";
-
-      // ✅ RUN AI VALIDATION
-      const validationResult = await validateDocument('Company Letterhead', file, registeredName);
-      
-      if (!validationResult.isValid) {
-        alert(`Validation failed: ${validationResult.message}`);
-        setLetterheadUploading(false);
-        return;
-      }
-
-      // Create unique filename
-      const timestamp = Date.now();
-      const fileName = `company_letterhead/${currentUser.uid}/${timestamp}_${file.name}`;
-      const storageRef = ref(storage, fileName);
-
-      // Upload to storage
-      const uploadResult = await uploadBytes(storageRef, file);
-      const downloadURL = await getDownloadURL(uploadResult.ref);
-
-      // ✅ Use sync service for letterhead
-      await uploadDocumentWithSync('Company Letterhead', downloadURL, validationResult);
-
-      // Update local state
-      const newFormData = { 
-        ...formData, 
-        companyLetterhead: downloadURL,
-        companyLetterheadUpdatedAt: new Date().toISOString()
-      };
-      updateFormData(newFormData);
-      
-      setLetterheadFile(file);
-      alert('Company Letterhead uploaded and validated successfully!');
-
-    } catch (error) {
-      console.error('Error uploading letterhead:', error);
-      alert('Failed to upload letterhead. Please try again.');
-    } finally {
+    // ✅ RUN AI VALIDATION using the Firebase function via validateCompanyDocument
+    const validationResult = await validateCompanyDocument('Company Letterhead', file, registeredName);
+    
+    if (!validationResult.isValid) {
+      alert(`Validation failed: ${validationResult.message}`);
       setLetterheadUploading(false);
+      return;
     }
-  };
+
+    // Create unique filename
+    const timestamp = Date.now();
+    const fileName = `company_letterhead/${currentUser.uid}/${timestamp}_${file.name}`;
+    const storageRef = ref(storage, fileName);
+
+    // Upload to storage
+    const uploadResult = await uploadBytes(storageRef, file);
+    const downloadURL = await getDownloadURL(uploadResult.ref);
+
+    // ✅ Use sync service for letterhead
+    await uploadDocumentWithSync('Company Letterhead', downloadURL, validationResult);
+
+    // Update local state
+    const newFormData = { 
+      ...formData, 
+      companyLetterhead: downloadURL,
+      companyLetterheadUpdatedAt: new Date().toISOString()
+    };
+    updateFormData(newFormData);
+    
+    setLetterheadFile(file);
+    alert('Company Letterhead uploaded and validated successfully!');
+
+  } catch (error) {
+    console.error('Error uploading letterhead:', error);
+    
+    // Handle specific error cases
+    if (error.message?.includes('Missing registeredName')) {
+      alert('Please save your Registered Name before uploading a letterhead.');
+    } else if (error.message?.includes('Network error')) {
+      alert('Network error. Please check your connection and try again.');
+    } else {
+      alert('Failed to upload letterhead. Please try again.');
+    }
+  } finally {
+    setLetterheadUploading(false);
+  }
+};
 
   const handleDeleteLetterhead = async () => {
     try {
