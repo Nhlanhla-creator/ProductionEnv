@@ -1,13 +1,13 @@
-"use client"
+"use client";
 
-import { useState, useEffect } from "react"
-import { Bar, Pie, Line } from "react-chartjs-2"
-import { doc, getDoc, setDoc, collection, query, where, getDocs, addDoc, deleteDoc } from "firebase/firestore"
-import { auth, db } from "../../firebaseConfig"
-import { onAuthStateChanged } from "firebase/auth"
-import Sidebar from "smses/Sidebar/Sidebar"
-import { Info, ChevronDown, ChevronUp, Upload, X, Calendar } from "lucide-react"
-import Header from "../DashboardHeader/DashboardHeader"
+import { useState, useEffect } from "react";
+import { Bar, Pie, Line } from "react-chartjs-2";
+import { doc, getDoc, setDoc, collection, query, where, getDocs, addDoc, deleteDoc } from "firebase/firestore";
+import { auth, db } from "../../firebaseConfig";
+import { onAuthStateChanged } from "firebase/auth";
+import Sidebar from "smses/Sidebar/Sidebar";
+import { Info, ChevronDown, ChevronUp, Upload, X, Calendar, TrendingUp, TrendingDown } from "lucide-react";
+import Header from "../DashboardHeader/DashboardHeader";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -19,47 +19,52 @@ import {
   Title,
   Tooltip,
   Legend,
-} from "chart.js"
+} from "chart.js";
 
-ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, PointElement, LineElement, Title, Tooltip, Legend)
+ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, PointElement, LineElement, Title, Tooltip, Legend);
 
 // ==================== HELPER FUNCTIONS ====================
 
 const getMonthsForYear = (year, financialYearStart = "Jan") => {
-  const allMonths = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-  const startIndex = allMonths.indexOf(financialYearStart)
-  if (startIndex === -1) return allMonths
+  const allMonths = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const startIndex = allMonths.indexOf(financialYearStart);
+  if (startIndex === -1) return allMonths;
   
-  return [...allMonths.slice(startIndex), ...allMonths.slice(0, startIndex)]
-}
+  return [...allMonths.slice(startIndex), ...allMonths.slice(0, startIndex)];
+};
 
 const formatNumber = (value) => {
-  const num = Number.parseFloat(value) || 0
-  if (num >= 1e9) return (num / 1e9).toFixed(2) + 'B'
-  if (num >= 1e6) return (num / 1e6).toFixed(2) + 'M'
-  if (num >= 1e3) return (num / 1e3).toFixed(2) + 'K'
-  return num.toFixed(2)
-}
+  const num = Number.parseFloat(value) || 0;
+  if (num >= 1e9) return (num / 1e9).toFixed(2) + 'B';
+  if (num >= 1e6) return (num / 1e6).toFixed(2) + 'M';
+  if (num >= 1e3) return (num / 1e3).toFixed(2) + 'K';
+  return num.toFixed(0);
+};
 
 const formatCurrency = (value) => {
-  const num = Number.parseFloat(value) || 0
-  if (num >= 1e9) return `R${(num / 1e9).toFixed(2)}B`
-  if (num >= 1e6) return `R${(num / 1e6).toFixed(2)}M`
-  if (num >= 1e3) return `R${(num / 1e3).toFixed(2)}K`
-  return `R${num.toFixed(2)}`
-}
+  const num = Number.parseFloat(value) || 0;
+  if (num >= 1e9) return `R${(num / 1e9).toFixed(2)}B`;
+  if (num >= 1e6) return `R${(num / 1e6).toFixed(2)}M`;
+  if (num >= 1e3) return `R${(num / 1e3).toFixed(2)}K`;
+  return `R${num.toFixed(0)}`;
+};
+
+const formatDays = (value) => {
+  const num = Number.parseFloat(value) || 0;
+  return `${num.toFixed(0)} days`;
+};
 
 const formatPercentage = (value) => {
-  const num = Number.parseFloat(value) || 0
-  return `${num.toFixed(1)}%`
-}
+  const num = Number.parseFloat(value) || 0;
+  return `${num.toFixed(1)}%`;
+};
 
 const getMonthIndex = (month) => {
-  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-  return months.indexOf(month)
-}
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  return months.indexOf(month);
+};
 
-// Circle colors - Orange and Green with better visibility
+// Circle colors - Orange and Green theme
 const circleColors = [
   { border: "#FF8C00", background: "#FFB347", text: "#663d00" }, // Orange
   { border: "#32CD32", background: "#90EE90", text: "#1e4d1e" }, // Light Green
@@ -69,18 +74,291 @@ const circleColors = [
   { border: "#2E8B57", background: "#66CDAA", text: "#1e4d33" }, // Sea Green
   { border: "#FF8C69", background: "#FFB6C1", text: "#8b4d39" }, // Coral/Light Pink
   { border: "#006400", background: "#ADFF2F", text: "#003300" }, // Dark Green/Green Yellow
-]
+];
+
+// ==================== TREND ARROW COMPONENT ====================
+
+const TrendArrow = ({ value, goodDirection = "up" }) => {
+  const isPositive = value > 0;
+  const isGood = (goodDirection === "up" && isPositive) || (goodDirection === "down" && !isPositive);
+  
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+      {isPositive ? (
+        <TrendingUp size={16} color={isGood ? "#16a34a" : "#dc2626"} />
+      ) : (
+        <TrendingDown size={16} color={isGood ? "#16a34a" : "#dc2626"} />
+      )}
+      <span style={{ 
+        color: isGood ? "#16a34a" : "#dc2626",
+        fontSize: "12px",
+        fontWeight: "600"
+      }}>
+        {Math.abs(value).toFixed(1)}%
+      </span>
+    </div>
+  );
+};
+
+// ==================== KPI CARD WITH 3 CIRCLES ====================
+
+const KPITripleCard = ({ 
+  title, 
+  actualValue, 
+  budgetValue, 
+  unit = "number",
+  isPercentage = false,
+  onEyeClick,
+  onAddNotes,
+  onAnalysis,
+  onTrend,
+  notes,
+  goodDirection = "up" // "up" means higher is better, "down" means lower is better
+}) => {
+  const [expanded, setExpanded] = useState(false);
+  
+  // Calculate variance
+  const variance = actualValue - budgetValue;
+  const variancePercent = budgetValue !== 0 ? (variance / Math.abs(budgetValue)) * 100 : 0;
+  
+  // Format based on unit type
+  const formatValue = (val) => {
+    if (unit === "currency") return formatCurrency(val);
+    if (unit === "days") return formatDays(val);
+    if (unit === "percentage" || isPercentage) return formatPercentage(val);
+    return formatNumber(val); // default number
+  };
+
+  const colors = circleColors;
+
+  return (
+    <div
+      style={{
+        backgroundColor: "#fdfcfb",
+        padding: "20px",
+        borderRadius: "8px",
+        boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+        marginBottom: "20px",
+        position: "relative",
+        border: "1px solid #e8ddd4",
+      }}
+    >
+      {/* Eye Icon for calculation */}
+      <div
+        onClick={onEyeClick}
+        style={{
+          position: "absolute",
+          top: "10px",
+          right: "10px",
+          cursor: "pointer",
+          width: "32px",
+          height: "32px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          borderRadius: "50%",
+          backgroundColor: "#fdfcfb",
+          boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
+          transition: "all 0.2s ease",
+          zIndex: 10,
+          border: `2px solid ${colors[0].border}`,
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.backgroundColor = "#e8ddd4";
+          e.currentTarget.style.transform = "scale(1.1)";
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.backgroundColor = "#fdfcfb";
+          e.currentTarget.style.transform = "scale(1)";
+        }}
+      >
+        <svg
+          width="18"
+          height="18"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke={colors[0].border}
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <circle cx="12" cy="12" r="2"></circle>
+          <circle cx="12" cy="12" r="5" strokeOpacity="0.5"></circle>
+          <path d="M22 12c0 5.52-4.48 10-10 10S2 17.52 2 12 6.48 2 12 2s10 4.48 10 10z"></path>
+        </svg>
+      </div>
+
+      {/* Title */}
+      <h4 style={{ color: "#5d4037", marginBottom: "20px", fontSize: "16px", textAlign: "center", fontWeight: "600" }}>
+        {title}
+      </h4>
+
+      {/* Three Circles Row */}
+      <div style={{ display: "flex", justifyContent: "space-around", alignItems: "center", marginBottom: "20px" }}>
+        {/* Actual Circle */}
+        <div style={{ textAlign: "center" }}>
+          <div
+            style={{
+              width: "80px",
+              height: "80px",
+              borderRadius: "50%",
+              border: `4px solid ${colors[0].border}`,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              margin: "0 auto 8px",
+              backgroundColor: colors[0].background,
+            }}
+          >
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontSize: "14px", fontWeight: "700", color: colors[0].text }}>
+                {formatValue(actualValue)}
+              </div>
+            </div>
+          </div>
+          <div style={{ fontSize: "11px", color: "#5d4037", fontWeight: "500" }}>Actual</div>
+        </div>
+
+        {/* Budget Circle */}
+        <div style={{ textAlign: "center" }}>
+          <div
+            style={{
+              width: "80px",
+              height: "80px",
+              borderRadius: "50%",
+              border: `4px solid ${colors[1].border}`,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              margin: "0 auto 8px",
+              backgroundColor: colors[1].background,
+            }}
+          >
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontSize: "14px", fontWeight: "700", color: colors[1].text }}>
+                {formatValue(budgetValue)}
+              </div>
+            </div>
+          </div>
+          <div style={{ fontSize: "11px", color: "#5d4037", fontWeight: "500" }}>Budget</div>
+        </div>
+
+        {/* Variance Circle */}
+        <div style={{ textAlign: "center" }}>
+          <div
+            style={{
+              width: "80px",
+              height: "80px",
+              borderRadius: "50%",
+              border: `4px solid ${colors[2].border}`,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              margin: "0 auto 8px",
+              backgroundColor: colors[2].background,
+            }}
+          >
+            <div style={{ textAlign: "center" }}>
+              <TrendArrow value={variancePercent} goodDirection={goodDirection} />
+            </div>
+          </div>
+          <div style={{ fontSize: "11px", color: "#5d4037", fontWeight: "500" }}>Variance</div>
+        </div>
+      </div>
+
+      {/* Action Buttons */}
+      <div style={{ borderTop: "1px solid #e8ddd4", paddingTop: "15px" }}>
+        <div style={{ display: "flex", gap: "10px", justifyContent: "center", marginBottom: "10px" }}>
+          <button
+            onClick={() => setExpanded(!expanded)}
+            style={{
+              padding: "6px 12px",
+              backgroundColor: "#e8ddd4",
+              color: "#5d4037",
+              border: "none",
+              borderRadius: "4px",
+              cursor: "pointer",
+              fontWeight: "600",
+              fontSize: "12px",
+            }}
+          >
+            Add notes
+          </button>
+          <button
+            onClick={onAnalysis}
+            style={{
+              padding: "6px 12px",
+              backgroundColor: "#e8ddd4",
+              color: "#5d4037",
+              border: "none",
+              borderRadius: "4px",
+              cursor: "pointer",
+              fontWeight: "600",
+              fontSize: "12px",
+            }}
+          >
+            AI analysis
+          </button>
+          <button
+            onClick={onTrend}
+            style={{
+              padding: "6px 12px",
+              backgroundColor: "#e8ddd4",
+              color: "#5d4037",
+              border: "none",
+              borderRadius: "4px",
+              cursor: "pointer",
+              fontWeight: "600",
+              fontSize: "12px",
+            }}
+          >
+            View trend
+          </button>
+        </div>
+
+        {expanded && (
+          <div style={{ marginBottom: "10px" }}>
+            <label
+              style={{
+                fontSize: "12px",
+                color: "#5d4037",
+                fontWeight: "600",
+                display: "block",
+                marginBottom: "5px",
+              }}
+            >
+              Notes / Comments:
+            </label>
+            <textarea
+              value={notes || ""}
+              onChange={(e) => onAddNotes(e.target.value)}
+              placeholder="Add notes or comments..."
+              style={{
+                width: "100%",
+                padding: "10px",
+                borderRadius: "4px",
+                border: "1px solid #e8ddd4",
+                minHeight: "60px",
+                fontSize: "13px",
+              }}
+            />
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
 
 // ==================== DATE RANGE PICKER COMPONENT ====================
 
 const DateRangePicker = ({ startDate, endDate, onStartDateChange, onEndDateChange }) => {
-  const [showStartPicker, setShowStartPicker] = useState(false)
-  const [showEndPicker, setShowEndPicker] = useState(false)
-  const [startPickerYear, setStartPickerYear] = useState(startDate?.year || new Date().getFullYear())
-  const [endPickerYear, setEndPickerYear] = useState(endDate?.year || new Date().getFullYear())
+  const [showStartPicker, setShowStartPicker] = useState(false);
+  const [showEndPicker, setShowEndPicker] = useState(false);
+  const [startPickerYear, setStartPickerYear] = useState(startDate?.year || new Date().getFullYear());
+  const [endPickerYear, setEndPickerYear] = useState(endDate?.year || new Date().getFullYear());
   
-  const years = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 2 + i)
-  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+  const years = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - 2 + i);
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
   return (
     <div style={{ display: "flex", gap: "10px", alignItems: "center", position: "relative" }}>
@@ -141,8 +419,8 @@ const DateRangePicker = ({ startDate, endDate, onStartDateChange, onEndDateChang
                   <div
                     key={`${year}-${month}`}
                     onClick={() => {
-                      onStartDateChange({ year, month })
-                      setShowStartPicker(false)
+                      onStartDateChange({ year, month });
+                      setShowStartPicker(false);
                     }}
                     style={{
                       padding: "8px 12px 8px 24px",
@@ -225,8 +503,8 @@ const DateRangePicker = ({ startDate, endDate, onStartDateChange, onEndDateChang
                   <div
                     key={`${year}-${month}`}
                     onClick={() => {
-                      onEndDateChange({ year, month })
-                      setShowEndPicker(false)
+                      onEndDateChange({ year, month });
+                      setShowEndPicker(false);
                     }}
                     style={{
                       padding: "8px 12px 8px 24px",
@@ -250,10 +528,10 @@ const DateRangePicker = ({ startDate, endDate, onStartDateChange, onEndDateChang
         )}
       </div>
     </div>
-  )
-}
+  );
+};
 
-// ==================== COMPONENTS ====================
+// ==================== EYE ICON COMPONENT ====================
 
 const EyeIcon = ({ onClick, title, color = "#5d4037" }) => (
   <div
@@ -276,12 +554,12 @@ const EyeIcon = ({ onClick, title, color = "#5d4037" }) => (
       border: `2px solid ${color}`,
     }}
     onMouseEnter={(e) => {
-      e.currentTarget.style.backgroundColor = "#e8ddd4"
-      e.currentTarget.style.transform = "scale(1.1)"
+      e.currentTarget.style.backgroundColor = "#e8ddd4";
+      e.currentTarget.style.transform = "scale(1.1)";
     }}
     onMouseLeave={(e) => {
-      e.currentTarget.style.backgroundColor = "#fdfcfb"
-      e.currentTarget.style.transform = "scale(1)"
+      e.currentTarget.style.backgroundColor = "#fdfcfb";
+      e.currentTarget.style.transform = "scale(1)";
     }}
   >
     <svg
@@ -299,10 +577,12 @@ const EyeIcon = ({ onClick, title, color = "#5d4037" }) => (
       <path d="M22 12c0 5.52-4.48 10-10 10S2 17.52 2 12 6.48 2 12 2s10 4.48 10 10z"></path>
     </svg>
   </div>
-)
+);
+
+// ==================== CALCULATION MODAL ====================
 
 const CalculationModal = ({ isOpen, onClose, title, calculation }) => {
-  if (!isOpen) return null
+  if (!isOpen) return null;
 
   return (
     <div
@@ -354,16 +634,18 @@ const CalculationModal = ({ isOpen, onClose, title, calculation }) => {
         </div>
       </div>
     </div>
-  )
-}
+  );
+};
+
+// ==================== KEY QUESTION BOX ====================
 
 const KeyQuestionBox = ({ question, signals, decisions, section }) => {
-  const [showMore, setShowMore] = useState(false)
+  const [showMore, setShowMore] = useState(false);
   
   const getFirstSentence = (text) => {
-    const match = text.match(/^[^.!?]+[.!?]/)
-    return match ? match[0] : text.split('.')[0] + '.'
-  }
+    const match = text.match(/^[^.!?]+[.!?]/);
+    return match ? match[0] : text.split('.')[0] + '.';
+  };
   
   return (
     <div
@@ -425,24 +707,24 @@ const KeyQuestionBox = ({ question, signals, decisions, section }) => {
         </>
       )}
     </div>
-  )
-}
+  );
+};
 
-// ==================== TREND MODAL COMPONENT ====================
+// ==================== TREND MODAL ====================
 
-const TrendModal = ({ isOpen, onClose, title, data, labels, isPercentage }) => {
-  if (!isOpen || !data) return null
+const TrendModal = ({ isOpen, onClose, title, data, labels, unit = "number" }) => {
+  if (!isOpen || !data) return null;
 
-  // Format labels to show month and year
-  const formattedLabels = labels.map(label => {
-    if (label.includes(" ")) return label
-    const month = label.substring(0, 3)
-    const year = label.length > 3 ? label.substring(3) : new Date().getFullYear()
-    return `${month} ${year}`
-  })
+  // Format based on unit type
+  const formatTrendValue = (val) => {
+    if (unit === "currency") return formatCurrency(val);
+    if (unit === "days") return formatDays(val);
+    if (unit === "percentage") return formatPercentage(val);
+    return formatNumber(val);
+  };
 
   const chartData = {
-    labels: formattedLabels,
+    labels: labels,
     datasets: [
       {
         label: title,
@@ -454,21 +736,21 @@ const TrendModal = ({ isOpen, onClose, title, data, labels, isPercentage }) => {
         tension: 0.3,
       },
     ]
-  }
+  };
 
-  const validData = data.filter(v => !isNaN(parseFloat(v)) && parseFloat(v) !== 0)
-  const currentValue = validData.length > 0 ? validData[validData.length - 1] : 0
+  const validData = data.filter(v => !isNaN(parseFloat(v)) && parseFloat(v) !== 0);
+  const currentValue = validData.length > 0 ? validData[validData.length - 1] : 0;
   const averageValue = validData.length > 0 
     ? validData.reduce((a, b) => a + parseFloat(b), 0) / validData.length 
-    : 0
+    : 0;
   
-  let trend = "N/A"
+  let trend = "N/A";
   if (validData.length >= 2) {
-    const last = parseFloat(validData[validData.length - 1])
-    const prev = parseFloat(validData[validData.length - 2])
-    if (last > prev) trend = "↗ Increasing"
-    else if (last < prev) trend = "↘ Decreasing"
-    else trend = "→ Stable"
+    const last = parseFloat(validData[validData.length - 1]);
+    const prev = parseFloat(validData[validData.length - 2]);
+    if (last > prev) trend = "↗ Increasing";
+    else if (last < prev) trend = "↘ Decreasing";
+    else trend = "→ Stable";
   }
 
   return (
@@ -528,10 +810,8 @@ const TrendModal = ({ isOpen, onClose, title, data, labels, isPercentage }) => {
                 tooltip: {
                   callbacks: {
                     label: (context) => {
-                      const value = context.raw
-                      return isPercentage
-                        ? `${context.dataset.label}: ${parseFloat(value).toFixed(2)}%`
-                        : `${context.dataset.label}: ${formatCurrency(value)}`
+                      const value = context.raw;
+                      return `${context.dataset.label}: ${formatTrendValue(value)}`;
                     },
                   },
                 },
@@ -541,7 +821,7 @@ const TrendModal = ({ isOpen, onClose, title, data, labels, isPercentage }) => {
                   beginAtZero: true,
                   title: {
                     display: true,
-                    text: isPercentage ? "Percentage (%)" : "Value (R)",
+                    text: unit === "currency" ? "Value (R)" : unit === "days" ? "Days" : unit === "percentage" ? "Percentage (%)" : "Value",
                     color: "#5d4037",
                   },
                 },
@@ -568,13 +848,13 @@ const TrendModal = ({ isOpen, onClose, title, data, labels, isPercentage }) => {
             <div>
               <div style={{ fontSize: "12px", color: "#8d6e63", marginBottom: "5px" }}>Current Value</div>
               <div style={{ fontSize: "16px", fontWeight: "600", color: "#5d4037" }}>
-                {isPercentage ? `${parseFloat(currentValue).toFixed(1)}%` : formatCurrency(currentValue)}
+                {formatTrendValue(currentValue)}
               </div>
             </div>
             <div>
               <div style={{ fontSize: "12px", color: "#8d6e63", marginBottom: "5px" }}>Average</div>
               <div style={{ fontSize: "16px", fontWeight: "600", color: "#5d4037" }}>
-                {isPercentage ? `${parseFloat(averageValue).toFixed(1)}%` : formatCurrency(averageValue)}
+                {formatTrendValue(averageValue)}
               </div>
             </div>
             <div>
@@ -606,8 +886,8 @@ const TrendModal = ({ isOpen, onClose, title, data, labels, isPercentage }) => {
         </div>
       </div>
     </div>
-  )
-}
+  );
+};
 
 // ==================== UNIVERSAL ADD DATA MODAL ====================
 
@@ -620,8 +900,8 @@ const UniversalAddDataModal = ({
   loading,
   initialData = {}
 }) => {
-  const [activeTab, setActiveTab] = useState(currentTab)
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
+  const [activeTab, setActiveTab] = useState(currentTab);
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   
   const tabs = [
     { id: "pipeline-visibility", label: "Pipeline Visibility" },
@@ -629,23 +909,25 @@ const UniversalAddDataModal = ({
     { id: "revenue-concentration", label: "Revenue Concentration" },
     { id: "demand-sustainability", label: "Demand Sustainability" },
     { id: "pipeline-table", label: "Pipeline Table" }
-  ]
+  ];
   
-  // Pipeline Visibility Data (Now with Conversion Rates)
+  // Pipeline Visibility Data (Now with Budgets)
   const [pipelineVisibilityData, setPipelineVisibilityData] = useState({
-    newLeads: Array(12).fill(""),
-    salesVelocity: Array(12).fill(""),
-    conversionRates: Array(12).fill(""),
+    newLeads: { actual: Array(12).fill(""), budget: Array(12).fill("") },
+    salesVelocity: { actual: Array(12).fill(""), budget: Array(12).fill("") },
+    conversionRates: { actual: Array(12).fill(""), budget: Array(12).fill("") },
+    riskAdjustedValue: { actual: Array(12).fill(""), budget: Array(12).fill("") },
     notes: "",
-  })
+  });
 
-  // Pipeline Sufficiency Data
+  // Pipeline Sufficiency Data (with Budgets)
   const [pipelineSufficiencyData, setPipelineSufficiencyData] = useState({
-    totalPipelineValue: "",
-    probability: "",
-    targetRevenue: "",
+    totalDeals: { actual: Array(12).fill(""), budget: Array(12).fill("") },
+    pipelineCoverage: { actual: Array(12).fill(""), budget: Array(12).fill("") },
+    salesVelocity: { actual: Array(12).fill(""), budget: Array(12).fill("") },
+    conversionRates: { actual: Array(12).fill(""), budget: Array(12).fill("") },
     notes: "",
-  })
+  });
 
   // Revenue Concentration Data
   const [revenueConcentrationData, setRevenueConcentrationData] = useState({
@@ -666,12 +948,12 @@ const UniversalAddDataModal = ({
     ],
     revenueByCustomer: [],
     notes: "",
-  })
+  });
 
   // Demand Sustainability Data
   const [demandSustainabilityData, setDemandSustainabilityData] = useState({
-    repeatCustomerRate: "",
-    churnRate: "",
+    repeatCustomerRate: { actual: Array(12).fill(""), budget: Array(12).fill("") },
+    churnRate: { actual: Array(12).fill(""), budget: Array(12).fill("") },
     campaigns: [
       { name: "Q1 Campaign", cost: "", revenue: "" },
       { name: "Q2 Campaign", cost: "", revenue: "" },
@@ -679,7 +961,7 @@ const UniversalAddDataModal = ({
       { name: "Holiday Campaign", cost: "", revenue: "" }
     ],
     notes: "",
-  })
+  });
 
   // Pipeline Table Data
   const [pipelineDealData, setPipelineDealData] = useState({
@@ -694,48 +976,74 @@ const UniversalAddDataModal = ({
     establishedStartDate: "",
     expectedOnboardingDate: "",
     signedDate: "",
-  })
+  });
 
-  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-  const years = Array.from({ length: 5 }, (_, i) => selectedYear - 2 + i)
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const years = Array.from({ length: 5 }, (_, i) => selectedYear - 2 + i);
 
   useEffect(() => {
     if (isOpen && user) {
-      loadDataForTab(activeTab)
+      loadDataForTab(activeTab);
     }
-  }, [isOpen, activeTab, user, selectedYear])
+  }, [isOpen, activeTab, user, selectedYear]);
 
   const loadDataForTab = async (tabId) => {
     try {
       switch(tabId) {
         case "pipeline-visibility":
-          const visibilityDoc = await getDoc(doc(db, "pipelineData", `${user.uid}_visibility_${selectedYear}`))
+          const visibilityDoc = await getDoc(doc(db, "pipelineData", `${user.uid}_visibility_${selectedYear}`));
           if (visibilityDoc.exists()) {
-            const data = visibilityDoc.data()
+            const data = visibilityDoc.data();
             setPipelineVisibilityData({
-              newLeads: data.newLeads?.map(String) || Array(12).fill(""),
-              salesVelocity: data.salesVelocity?.map(String) || Array(12).fill(""),
-              conversionRates: data.conversionRates?.map(String) || Array(12).fill(""),
+              newLeads: { 
+                actual: data.newLeads?.actual?.map(String) || Array(12).fill(""),
+                budget: data.newLeads?.budget?.map(String) || Array(12).fill("")
+              },
+              salesVelocity: { 
+                actual: data.salesVelocity?.actual?.map(String) || Array(12).fill(""),
+                budget: data.salesVelocity?.budget?.map(String) || Array(12).fill("")
+              },
+              conversionRates: { 
+                actual: data.conversionRates?.actual?.map(String) || Array(12).fill(""),
+                budget: data.conversionRates?.budget?.map(String) || Array(12).fill("")
+              },
+              riskAdjustedValue: { 
+                actual: data.riskAdjustedValue?.actual?.map(String) || Array(12).fill(""),
+                budget: data.riskAdjustedValue?.budget?.map(String) || Array(12).fill("")
+              },
               notes: data.notes || "",
-            })
+            });
           }
-          break
+          break;
         case "pipeline-sufficiency":
-          const sufficiencyDoc = await getDoc(doc(db, "pipelineData", `${user.uid}_sufficiency_${selectedYear}`))
+          const sufficiencyDoc = await getDoc(doc(db, "pipelineData", `${user.uid}_sufficiency_${selectedYear}`));
           if (sufficiencyDoc.exists()) {
-            const data = sufficiencyDoc.data()
+            const data = sufficiencyDoc.data();
             setPipelineSufficiencyData({
-              totalPipelineValue: data.totalPipelineValue?.toString() || "",
-              probability: data.probability?.toString() || "",
-              targetRevenue: data.targetRevenue?.toString() || "",
+              totalDeals: { 
+                actual: data.totalDeals?.actual?.map(String) || Array(12).fill(""),
+                budget: data.totalDeals?.budget?.map(String) || Array(12).fill("")
+              },
+              pipelineCoverage: { 
+                actual: data.pipelineCoverage?.actual?.map(String) || Array(12).fill(""),
+                budget: data.pipelineCoverage?.budget?.map(String) || Array(12).fill("")
+              },
+              salesVelocity: { 
+                actual: data.salesVelocity?.actual?.map(String) || Array(12).fill(""),
+                budget: data.salesVelocity?.budget?.map(String) || Array(12).fill("")
+              },
+              conversionRates: { 
+                actual: data.conversionRates?.actual?.map(String) || Array(12).fill(""),
+                budget: data.conversionRates?.budget?.map(String) || Array(12).fill("")
+              },
               notes: data.notes || "",
-            })
+            });
           }
-          break
+          break;
         case "revenue-concentration":
-          const concentrationDoc = await getDoc(doc(db, "pipelineData", `${user.uid}_concentration_${selectedYear}`))
+          const concentrationDoc = await getDoc(doc(db, "pipelineData", `${user.uid}_concentration_${selectedYear}`));
           if (concentrationDoc.exists()) {
-            const data = concentrationDoc.data()
+            const data = concentrationDoc.data();
             setRevenueConcentrationData({
               revenueChannels: data.revenueChannels || [
                 { name: "Social Media", revenue: "", spend: "" },
@@ -754,16 +1062,22 @@ const UniversalAddDataModal = ({
               ],
               revenueByCustomer: data.revenueByCustomer || [],
               notes: data.notes || "",
-            })
+            });
           }
-          break
+          break;
         case "demand-sustainability":
-          const sustainabilityDoc = await getDoc(doc(db, "pipelineData", `${user.uid}_sustainability_${selectedYear}`))
+          const sustainabilityDoc = await getDoc(doc(db, "pipelineData", `${user.uid}_sustainability_${selectedYear}`));
           if (sustainabilityDoc.exists()) {
-            const data = sustainabilityDoc.data()
+            const data = sustainabilityDoc.data();
             setDemandSustainabilityData({
-              repeatCustomerRate: data.repeatCustomerRate?.toString() || "",
-              churnRate: data.churnRate?.toString() || "",
+              repeatCustomerRate: { 
+                actual: data.repeatCustomerRate?.actual?.map(String) || Array(12).fill(""),
+                budget: data.repeatCustomerRate?.budget?.map(String) || Array(12).fill("")
+              },
+              churnRate: { 
+                actual: data.churnRate?.actual?.map(String) || Array(12).fill(""),
+                budget: data.churnRate?.budget?.map(String) || Array(12).fill("")
+              },
               campaigns: data.campaigns || [
                 { name: "Q1 Campaign", cost: "", revenue: "" },
                 { name: "Q2 Campaign", cost: "", revenue: "" },
@@ -771,20 +1085,20 @@ const UniversalAddDataModal = ({
                 { name: "Holiday Campaign", cost: "", revenue: "" }
               ],
               notes: data.notes || "",
-            })
+            });
           }
-          break
+          break;
       }
     } catch (error) {
-      console.error(`Error loading data for ${tabId}:`, error)
+      console.error(`Error loading data for ${tabId}:`, error);
     }
-  }
+  };
 
   const handleSubmit = async (e) => {
-    e.preventDefault()
+    e.preventDefault();
     if (!user) {
-      alert("Please log in to save data")
-      return
+      alert("Please log in to save data");
+      return;
     }
 
     try {
@@ -793,24 +1107,50 @@ const UniversalAddDataModal = ({
           await setDoc(doc(db, "pipelineData", `${user.uid}_visibility_${selectedYear}`), {
             userId: user.uid,
             year: selectedYear,
-            newLeads: pipelineVisibilityData.newLeads.map(v => Number.parseFloat(v) || 0),
-            salesVelocity: pipelineVisibilityData.salesVelocity.map(v => Number.parseFloat(v) || 0),
-            conversionRates: pipelineVisibilityData.conversionRates.map(v => Number.parseFloat(v) || 0),
+            newLeads: {
+              actual: pipelineVisibilityData.newLeads.actual.map(v => Number.parseFloat(v) || 0),
+              budget: pipelineVisibilityData.newLeads.budget.map(v => Number.parseFloat(v) || 0)
+            },
+            salesVelocity: {
+              actual: pipelineVisibilityData.salesVelocity.actual.map(v => Number.parseFloat(v) || 0),
+              budget: pipelineVisibilityData.salesVelocity.budget.map(v => Number.parseFloat(v) || 0)
+            },
+            conversionRates: {
+              actual: pipelineVisibilityData.conversionRates.actual.map(v => Number.parseFloat(v) || 0),
+              budget: pipelineVisibilityData.conversionRates.budget.map(v => Number.parseFloat(v) || 0)
+            },
+            riskAdjustedValue: {
+              actual: pipelineVisibilityData.riskAdjustedValue.actual.map(v => Number.parseFloat(v) || 0),
+              budget: pipelineVisibilityData.riskAdjustedValue.budget.map(v => Number.parseFloat(v) || 0)
+            },
             notes: pipelineVisibilityData.notes,
             lastUpdated: new Date().toISOString(),
-          })
-          break
+          });
+          break;
         case "pipeline-sufficiency":
           await setDoc(doc(db, "pipelineData", `${user.uid}_sufficiency_${selectedYear}`), {
             userId: user.uid,
             year: selectedYear,
-            totalPipelineValue: Number.parseFloat(pipelineSufficiencyData.totalPipelineValue) || 0,
-            probability: Number.parseFloat(pipelineSufficiencyData.probability) || 0,
-            targetRevenue: Number.parseFloat(pipelineSufficiencyData.targetRevenue) || 0,
+            totalDeals: {
+              actual: pipelineSufficiencyData.totalDeals.actual.map(v => Number.parseFloat(v) || 0),
+              budget: pipelineSufficiencyData.totalDeals.budget.map(v => Number.parseFloat(v) || 0)
+            },
+            pipelineCoverage: {
+              actual: pipelineSufficiencyData.pipelineCoverage.actual.map(v => Number.parseFloat(v) || 0),
+              budget: pipelineSufficiencyData.pipelineCoverage.budget.map(v => Number.parseFloat(v) || 0)
+            },
+            salesVelocity: {
+              actual: pipelineSufficiencyData.salesVelocity.actual.map(v => Number.parseFloat(v) || 0),
+              budget: pipelineSufficiencyData.salesVelocity.budget.map(v => Number.parseFloat(v) || 0)
+            },
+            conversionRates: {
+              actual: pipelineSufficiencyData.conversionRates.actual.map(v => Number.parseFloat(v) || 0),
+              budget: pipelineSufficiencyData.conversionRates.budget.map(v => Number.parseFloat(v) || 0)
+            },
             notes: pipelineSufficiencyData.notes,
             lastUpdated: new Date().toISOString(),
-          })
-          break
+          });
+          break;
         case "revenue-concentration":
           await setDoc(doc(db, "pipelineData", `${user.uid}_concentration_${selectedYear}`), {
             userId: user.uid,
@@ -828,14 +1168,20 @@ const UniversalAddDataModal = ({
             revenueByCustomer: revenueConcentrationData.revenueByCustomer,
             notes: revenueConcentrationData.notes,
             lastUpdated: new Date().toISOString(),
-          })
-          break
+          });
+          break;
         case "demand-sustainability":
           await setDoc(doc(db, "pipelineData", `${user.uid}_sustainability_${selectedYear}`), {
             userId: user.uid,
             year: selectedYear,
-            repeatCustomerRate: Number.parseFloat(demandSustainabilityData.repeatCustomerRate) || 0,
-            churnRate: Number.parseFloat(demandSustainabilityData.churnRate) || 0,
+            repeatCustomerRate: {
+              actual: demandSustainabilityData.repeatCustomerRate.actual.map(v => Number.parseFloat(v) || 0),
+              budget: demandSustainabilityData.repeatCustomerRate.budget.map(v => Number.parseFloat(v) || 0)
+            },
+            churnRate: {
+              actual: demandSustainabilityData.churnRate.actual.map(v => Number.parseFloat(v) || 0),
+              budget: demandSustainabilityData.churnRate.budget.map(v => Number.parseFloat(v) || 0)
+            },
             campaigns: demandSustainabilityData.campaigns.map(c => ({
               name: c.name,
               cost: Number.parseFloat(c.cost) || 0,
@@ -843,17 +1189,17 @@ const UniversalAddDataModal = ({
             })),
             notes: demandSustainabilityData.notes,
             lastUpdated: new Date().toISOString(),
-          })
-          break
+          });
+          break;
         case "pipeline-table":
           if (!pipelineDealData.clientName || !pipelineDealData.dealValue) {
-            alert("Please fill in required fields")
-            return
+            alert("Please fill in required fields");
+            return;
           }
-          const riskAdjustedValue = (Number.parseFloat(pipelineDealData.dealValue) * Number.parseFloat(pipelineDealData.probability) / 100) || 0
+          const riskAdjustedValue = (Number.parseFloat(pipelineDealData.dealValue) * Number.parseFloat(pipelineDealData.probability) / 100) || 0;
           
           // Use subcollection for deals
-          const dealsRef = collection(db, "users", user.uid, "pipelineDeals")
+          const dealsRef = collection(db, "users", user.uid, "pipelineDeals");
           await addDoc(dealsRef, {
             year: selectedYear,
             ...pipelineDealData,
@@ -861,58 +1207,66 @@ const UniversalAddDataModal = ({
             dealValue: Number.parseFloat(pipelineDealData.dealValue) || 0,
             riskAdjustedValue,
             createdAt: new Date().toISOString(),
-          })
-          break
+          });
+          break;
       }
       
-      if (onSave) onSave()
-      alert("Data saved successfully!")
+      if (onSave) onSave();
+      alert("Data saved successfully!");
     } catch (error) {
-      console.error("Error saving data:", error)
-      alert("Error saving data. Please try again.")
+      console.error("Error saving data:", error);
+      alert("Error saving data. Please try again.");
     }
-  }
+  };
 
-  const renderMonthlyInputs = (label, dataArray, setDataArray, options = {}) => {
-    const { step = "0.01", unit = "" } = options
+  const renderMonthlyInputs = (label, dataObj, setDataObj, field, options = {}) => {
+    const { step = "0.01", unit = "" } = options;
+    const dataArray = dataObj[field] || [];
     
     return (
-      <div style={{ 
-        marginBottom: "20px",
-        display: "grid",
-        gridTemplateColumns: "repeat(12, 1fr)",
-        gap: "5px",
-      }}>
-        {months.map((month, idx) => (
-          <div key={month}>
-            <label style={{ fontSize: "10px", color: "#8d6e63", display: "block", marginBottom: "2px" }}>
-              {month}
-            </label>
-            <input
-              type="number"
-              step={step}
-              value={dataArray[idx] || ""}
-              onChange={(e) => {
-                const newArray = [...dataArray]
-                newArray[idx] = e.target.value
-                setDataArray(newArray)
-              }}
-              placeholder="0"
-              style={{
-                width: "100%",
-                padding: "6px",
-                borderRadius: "4px",
-                border: "1px solid #e8ddd4",
-                fontSize: "12px",
-              }}
-            />
-          </div>
-        ))}
+      <div style={{ marginBottom: "20px" }}>
+        <label style={{ fontSize: "12px", color: "#5d4037", fontWeight: "600", marginBottom: "10px", display: "block" }}>
+          {label}
+        </label>
+        <div style={{ 
+          display: "grid",
+          gridTemplateColumns: "repeat(12, 1fr)",
+          gap: "5px",
+        }}>
+          {months.map((month, idx) => (
+            <div key={month}>
+              <label style={{ fontSize: "10px", color: "#8d6e63", display: "block", marginBottom: "2px" }}>
+                {month}
+              </label>
+              <input
+                type="number"
+                step={step}
+                value={dataArray[idx] || ""}
+                onChange={(e) => {
+                  const newArray = [...dataArray];
+                  newArray[idx] = e.target.value;
+                  setDataObj({
+                    ...dataObj,
+                    [field]: newArray
+                  });
+                }}
+                placeholder="0"
+                style={{
+                  width: "100%",
+                  padding: "6px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                  fontSize: "12px",
+                }}
+              />
+            </div>
+          ))}
+        </div>
       </div>
-    )
-  }
+    );
+  };
 
-  if (!isOpen) return null
+  if (!isOpen) return null;
 
   return (
     <div
@@ -1019,16 +1373,28 @@ const UniversalAddDataModal = ({
             <h4 style={{ color: "#5d4037", marginBottom: "20px" }}>Pipeline Visibility Data</h4>
             
             <h5 style={{ color: "#5d4037", marginBottom: "15px", fontWeight: "600" }}>New Leads</h5>
-            {renderMonthlyInputs("New Leads", pipelineVisibilityData.newLeads, (val) => 
-              setPipelineVisibilityData({...pipelineVisibilityData, newLeads: val}), { unit: "leads", step: "1" })}
+            {renderMonthlyInputs("Actual", pipelineVisibilityData.newLeads, (val) => 
+              setPipelineVisibilityData({...pipelineVisibilityData, newLeads: val}), "actual", { unit: "leads", step: "1" })}
+            {renderMonthlyInputs("Budget", pipelineVisibilityData.newLeads, (val) => 
+              setPipelineVisibilityData({...pipelineVisibilityData, newLeads: val}), "budget", { unit: "leads", step: "1" })}
             
             <h5 style={{ color: "#5d4037", marginBottom: "15px", fontWeight: "600" }}>Sales Velocity (Days to Close)</h5>
-            {renderMonthlyInputs("Sales Velocity", pipelineVisibilityData.salesVelocity, (val) => 
-              setPipelineVisibilityData({...pipelineVisibilityData, salesVelocity: val}), { unit: "days", step: "1" })}
+            {renderMonthlyInputs("Actual", pipelineVisibilityData.salesVelocity, (val) => 
+              setPipelineVisibilityData({...pipelineVisibilityData, salesVelocity: val}), "actual", { unit: "days", step: "1" })}
+            {renderMonthlyInputs("Budget", pipelineVisibilityData.salesVelocity, (val) => 
+              setPipelineVisibilityData({...pipelineVisibilityData, salesVelocity: val}), "budget", { unit: "days", step: "1" })}
 
             <h5 style={{ color: "#5d4037", marginBottom: "15px", fontWeight: "600" }}>Conversion Rates (%)</h5>
-            {renderMonthlyInputs("Conversion Rates", pipelineVisibilityData.conversionRates, (val) => 
-              setPipelineVisibilityData({...pipelineVisibilityData, conversionRates: val}), { unit: "%", step: "0.1" })}
+            {renderMonthlyInputs("Actual", pipelineVisibilityData.conversionRates, (val) => 
+              setPipelineVisibilityData({...pipelineVisibilityData, conversionRates: val}), "actual", { unit: "%", step: "0.1" })}
+            {renderMonthlyInputs("Budget", pipelineVisibilityData.conversionRates, (val) => 
+              setPipelineVisibilityData({...pipelineVisibilityData, conversionRates: val}), "budget", { unit: "%", step: "0.1" })}
+
+            <h5 style={{ color: "#5d4037", marginBottom: "15px", fontWeight: "600" }}>Risk Adjusted Value (R)</h5>
+            {renderMonthlyInputs("Actual", pipelineVisibilityData.riskAdjustedValue, (val) => 
+              setPipelineVisibilityData({...pipelineVisibilityData, riskAdjustedValue: val}), "actual", { unit: "currency", step: "1000" })}
+            {renderMonthlyInputs("Budget", pipelineVisibilityData.riskAdjustedValue, (val) => 
+              setPipelineVisibilityData({...pipelineVisibilityData, riskAdjustedValue: val}), "budget", { unit: "currency", step: "1000" })}
             
             <div style={{ marginBottom: "20px" }}>
               <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>Notes:</label>
@@ -1054,37 +1420,29 @@ const UniversalAddDataModal = ({
           <div>
             <h4 style={{ color: "#5d4037", marginBottom: "20px" }}>Pipeline Sufficiency Data</h4>
             
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "15px", marginBottom: "30px" }}>
-              <div>
-                <label style={{ fontSize: "12px", color: "#5d4037", fontWeight: "600" }}>Total Pipeline Value (R)</label>
-                <input
-                  type="number"
-                  value={pipelineSufficiencyData.totalPipelineValue}
-                  onChange={(e) => setPipelineSufficiencyData({...pipelineSufficiencyData, totalPipelineValue: e.target.value})}
-                  style={{ width: "100%", padding: "8px", borderRadius: "4px", border: "1px solid #e8ddd4" }}
-                />
-              </div>
-              <div>
-                <label style={{ fontSize: "12px", color: "#5d4037", fontWeight: "600" }}>Overall Probability (%)</label>
-                <input
-                  type="number"
-                  value={pipelineSufficiencyData.probability}
-                  onChange={(e) => setPipelineSufficiencyData({...pipelineSufficiencyData, probability: e.target.value})}
-                  style={{ width: "100%", padding: "8px", borderRadius: "4px", border: "1px solid #e8ddd4" }}
-                  min="0"
-                  max="100"
-                />
-              </div>
-              <div>
-                <label style={{ fontSize: "12px", color: "#5d4037", fontWeight: "600" }}>Target Revenue (R)</label>
-                <input
-                  type="number"
-                  value={pipelineSufficiencyData.targetRevenue}
-                  onChange={(e) => setPipelineSufficiencyData({...pipelineSufficiencyData, targetRevenue: e.target.value})}
-                  style={{ width: "100%", padding: "8px", borderRadius: "4px", border: "1px solid #e8ddd4" }}
-                />
-              </div>
-            </div>
+            <h5 style={{ color: "#5d4037", marginBottom: "15px", fontWeight: "600" }}>Total Deals</h5>
+            {renderMonthlyInputs("Actual", pipelineSufficiencyData.totalDeals, (val) => 
+              setPipelineSufficiencyData({...pipelineSufficiencyData, totalDeals: val}), "actual", { unit: "number", step: "1" })}
+            {renderMonthlyInputs("Budget", pipelineSufficiencyData.totalDeals, (val) => 
+              setPipelineSufficiencyData({...pipelineSufficiencyData, totalDeals: val}), "budget", { unit: "number", step: "1" })}
+            
+            <h5 style={{ color: "#5d4037", marginBottom: "15px", fontWeight: "600" }}>Pipeline Coverage (%)</h5>
+            {renderMonthlyInputs("Actual", pipelineSufficiencyData.pipelineCoverage, (val) => 
+              setPipelineSufficiencyData({...pipelineSufficiencyData, pipelineCoverage: val}), "actual", { unit: "%", step: "1" })}
+            {renderMonthlyInputs("Budget", pipelineSufficiencyData.pipelineCoverage, (val) => 
+              setPipelineSufficiencyData({...pipelineSufficiencyData, pipelineCoverage: val}), "budget", { unit: "%", step: "1" })}
+            
+            <h5 style={{ color: "#5d4037", marginBottom: "15px", fontWeight: "600" }}>Sales Velocity (Days)</h5>
+            {renderMonthlyInputs("Actual", pipelineSufficiencyData.salesVelocity, (val) => 
+              setPipelineSufficiencyData({...pipelineSufficiencyData, salesVelocity: val}), "actual", { unit: "days", step: "1" })}
+            {renderMonthlyInputs("Budget", pipelineSufficiencyData.salesVelocity, (val) => 
+              setPipelineSufficiencyData({...pipelineSufficiencyData, salesVelocity: val}), "budget", { unit: "days", step: "1" })}
+            
+            <h5 style={{ color: "#5d4037", marginBottom: "15px", fontWeight: "600" }}>Conversion Rates (%)</h5>
+            {renderMonthlyInputs("Actual", pipelineSufficiencyData.conversionRates, (val) => 
+              setPipelineSufficiencyData({...pipelineSufficiencyData, conversionRates: val}), "actual", { unit: "%", step: "0.1" })}
+            {renderMonthlyInputs("Budget", pipelineSufficiencyData.conversionRates, (val) => 
+              setPipelineSufficiencyData({...pipelineSufficiencyData, conversionRates: val}), "budget", { unit: "%", step: "0.1" })}
             
             <div style={{ marginBottom: "20px" }}>
               <label style={{ display: "block", marginBottom: "10px", color: "#5d4037", fontWeight: "600" }}>Notes:</label>
@@ -1117,9 +1475,9 @@ const UniversalAddDataModal = ({
                   type="text"
                   value={channel.name}
                   onChange={(e) => {
-                    const newChannels = [...revenueConcentrationData.revenueChannels]
-                    newChannels[index].name = e.target.value
-                    setRevenueConcentrationData({...revenueConcentrationData, revenueChannels: newChannels})
+                    const newChannels = [...revenueConcentrationData.revenueChannels];
+                    newChannels[index].name = e.target.value;
+                    setRevenueConcentrationData({...revenueConcentrationData, revenueChannels: newChannels});
                   }}
                   style={{ padding: "8px", borderRadius: "4px", border: "1px solid #e8ddd4" }}
                 />
@@ -1127,9 +1485,9 @@ const UniversalAddDataModal = ({
                   type="number"
                   value={channel.revenue}
                   onChange={(e) => {
-                    const newChannels = [...revenueConcentrationData.revenueChannels]
-                    newChannels[index].revenue = e.target.value
-                    setRevenueConcentrationData({...revenueConcentrationData, revenueChannels: newChannels})
+                    const newChannels = [...revenueConcentrationData.revenueChannels];
+                    newChannels[index].revenue = e.target.value;
+                    setRevenueConcentrationData({...revenueConcentrationData, revenueChannels: newChannels});
                   }}
                   placeholder="Revenue (R)"
                   style={{ padding: "8px", borderRadius: "4px", border: "1px solid #e8ddd4" }}
@@ -1138,9 +1496,9 @@ const UniversalAddDataModal = ({
                   type="number"
                   value={channel.spend}
                   onChange={(e) => {
-                    const newChannels = [...revenueConcentrationData.revenueChannels]
-                    newChannels[index].spend = e.target.value
-                    setRevenueConcentrationData({...revenueConcentrationData, revenueChannels: newChannels})
+                    const newChannels = [...revenueConcentrationData.revenueChannels];
+                    newChannels[index].spend = e.target.value;
+                    setRevenueConcentrationData({...revenueConcentrationData, revenueChannels: newChannels});
                   }}
                   placeholder="Marketing Spend (R)"
                   style={{ padding: "8px", borderRadius: "4px", border: "1px solid #e8ddd4" }}
@@ -1155,9 +1513,9 @@ const UniversalAddDataModal = ({
                   type="text"
                   value={segment.name}
                   onChange={(e) => {
-                    const newSegments = [...revenueConcentrationData.customerSegments]
-                    newSegments[index].name = e.target.value
-                    setRevenueConcentrationData({...revenueConcentrationData, customerSegments: newSegments})
+                    const newSegments = [...revenueConcentrationData.customerSegments];
+                    newSegments[index].name = e.target.value;
+                    setRevenueConcentrationData({...revenueConcentrationData, customerSegments: newSegments});
                   }}
                   style={{ padding: "8px", borderRadius: "4px", border: "1px solid #e8ddd4" }}
                 />
@@ -1165,9 +1523,9 @@ const UniversalAddDataModal = ({
                   type="number"
                   value={segment.revenue}
                   onChange={(e) => {
-                    const newSegments = [...revenueConcentrationData.customerSegments]
-                    newSegments[index].revenue = e.target.value
-                    setRevenueConcentrationData({...revenueConcentrationData, customerSegments: newSegments})
+                    const newSegments = [...revenueConcentrationData.customerSegments];
+                    newSegments[index].revenue = e.target.value;
+                    setRevenueConcentrationData({...revenueConcentrationData, customerSegments: newSegments});
                   }}
                   placeholder="Revenue (R)"
                   style={{ padding: "8px", borderRadius: "4px", border: "1px solid #e8ddd4" }}
@@ -1176,9 +1534,9 @@ const UniversalAddDataModal = ({
                   type="number"
                   value={segment.customerCount}
                   onChange={(e) => {
-                    const newSegments = [...revenueConcentrationData.customerSegments]
-                    newSegments[index].customerCount = e.target.value
-                    setRevenueConcentrationData({...revenueConcentrationData, customerSegments: newSegments})
+                    const newSegments = [...revenueConcentrationData.customerSegments];
+                    newSegments[index].customerCount = e.target.value;
+                    setRevenueConcentrationData({...revenueConcentrationData, customerSegments: newSegments});
                   }}
                   placeholder="# Customers"
                   style={{ padding: "8px", borderRadius: "4px", border: "1px solid #e8ddd4" }}
@@ -1210,26 +1568,17 @@ const UniversalAddDataModal = ({
           <div>
             <h4 style={{ color: "#5d4037", marginBottom: "20px" }}>Demand Sustainability Data</h4>
             
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px", marginBottom: "30px" }}>
-              <div>
-                <label style={{ fontSize: "12px", color: "#5d4037", fontWeight: "600" }}>Repeat Customer Rate (%)</label>
-                <input
-                  type="number"
-                  value={demandSustainabilityData.repeatCustomerRate}
-                  onChange={(e) => setDemandSustainabilityData({...demandSustainabilityData, repeatCustomerRate: e.target.value})}
-                  style={{ width: "100%", padding: "8px", borderRadius: "4px", border: "1px solid #e8ddd4" }}
-                />
-              </div>
-              <div>
-                <label style={{ fontSize: "12px", color: "#5d4037", fontWeight: "600" }}>Churn Rate (%)</label>
-                <input
-                  type="number"
-                  value={demandSustainabilityData.churnRate}
-                  onChange={(e) => setDemandSustainabilityData({...demandSustainabilityData, churnRate: e.target.value})}
-                  style={{ width: "100%", padding: "8px", borderRadius: "4px", border: "1px solid #e8ddd4" }}
-                />
-              </div>
-            </div>
+            <h5 style={{ color: "#5d4037", marginBottom: "15px", fontWeight: "600" }}>Repeat Customer Rate (%)</h5>
+            {renderMonthlyInputs("Actual", demandSustainabilityData.repeatCustomerRate, (val) => 
+              setDemandSustainabilityData({...demandSustainabilityData, repeatCustomerRate: val}), "actual", { unit: "%", step: "0.1" })}
+            {renderMonthlyInputs("Budget", demandSustainabilityData.repeatCustomerRate, (val) => 
+              setDemandSustainabilityData({...demandSustainabilityData, repeatCustomerRate: val}), "budget", { unit: "%", step: "0.1" })}
+            
+            <h5 style={{ color: "#5d4037", marginBottom: "15px", fontWeight: "600" }}>Churn Rate (%)</h5>
+            {renderMonthlyInputs("Actual", demandSustainabilityData.churnRate, (val) => 
+              setDemandSustainabilityData({...demandSustainabilityData, churnRate: val}), "actual", { unit: "%", step: "0.1" })}
+            {renderMonthlyInputs("Budget", demandSustainabilityData.churnRate, (val) => 
+              setDemandSustainabilityData({...demandSustainabilityData, churnRate: val}), "budget", { unit: "%", step: "0.1" })}
             
             <h5 style={{ color: "#5d4037", marginBottom: "15px", fontWeight: "600" }}>Campaigns</h5>
             {demandSustainabilityData.campaigns.map((campaign, index) => (
@@ -1238,9 +1587,9 @@ const UniversalAddDataModal = ({
                   type="text"
                   value={campaign.name}
                   onChange={(e) => {
-                    const newCampaigns = [...demandSustainabilityData.campaigns]
-                    newCampaigns[index].name = e.target.value
-                    setDemandSustainabilityData({...demandSustainabilityData, campaigns: newCampaigns})
+                    const newCampaigns = [...demandSustainabilityData.campaigns];
+                    newCampaigns[index].name = e.target.value;
+                    setDemandSustainabilityData({...demandSustainabilityData, campaigns: newCampaigns});
                   }}
                   style={{ padding: "8px", borderRadius: "4px", border: "1px solid #e8ddd4" }}
                 />
@@ -1248,9 +1597,9 @@ const UniversalAddDataModal = ({
                   type="number"
                   value={campaign.cost}
                   onChange={(e) => {
-                    const newCampaigns = [...demandSustainabilityData.campaigns]
-                    newCampaigns[index].cost = e.target.value
-                    setDemandSustainabilityData({...demandSustainabilityData, campaigns: newCampaigns})
+                    const newCampaigns = [...demandSustainabilityData.campaigns];
+                    newCampaigns[index].cost = e.target.value;
+                    setDemandSustainabilityData({...demandSustainabilityData, campaigns: newCampaigns});
                   }}
                   placeholder="Cost (R)"
                   style={{ padding: "8px", borderRadius: "4px", border: "1px solid #e8ddd4" }}
@@ -1259,9 +1608,9 @@ const UniversalAddDataModal = ({
                   type="number"
                   value={campaign.revenue}
                   onChange={(e) => {
-                    const newCampaigns = [...demandSustainabilityData.campaigns]
-                    newCampaigns[index].revenue = e.target.value
-                    setDemandSustainabilityData({...demandSustainabilityData, campaigns: newCampaigns})
+                    const newCampaigns = [...demandSustainabilityData.campaigns];
+                    newCampaigns[index].revenue = e.target.value;
+                    setDemandSustainabilityData({...demandSustainabilityData, campaigns: newCampaigns});
                   }}
                   placeholder="Revenue (R)"
                   style={{ padding: "8px", borderRadius: "4px", border: "1px solid #e8ddd4" }}
@@ -1438,16 +1787,16 @@ const UniversalAddDataModal = ({
         </div>
       </div>
     </div>
-  )
-}
+  );
+};
 
 // ==================== PIPELINE TABLE COMPONENT ====================
 
 const PipelineTable = ({ currentUser, isInvestorView, selectedYear, onAddData }) => {
-  const [deals, setDeals] = useState([])
-  const [filteredDeals, setFilteredDeals] = useState([])
-  const [loading, setLoading] = useState(false)
-  const [confirmDialog, setConfirmDialog] = useState({ show: false, dealId: null })
+  const [deals, setDeals] = useState([]);
+  const [filteredDeals, setFilteredDeals] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [confirmDialog, setConfirmDialog] = useState({ show: false, dealId: null });
   
   // Filter states
   const [filters, setFilters] = useState({
@@ -1458,7 +1807,7 @@ const PipelineTable = ({ currentUser, isInvestorView, selectedYear, onAddData })
     owner: "",
     minValue: "",
     maxValue: ""
-  })
+  });
 
   const stageOptions = [
     { value: "initial-contact", label: "Initial Contact" },
@@ -1467,100 +1816,100 @@ const PipelineTable = ({ currentUser, isInvestorView, selectedYear, onAddData })
     { value: "negotiation", label: "Negotiation" },
     { value: "closed-won", label: "Closed Won" },
     { value: "closed-lost", label: "Closed Lost" },
-  ]
+  ];
 
   useEffect(() => {
     if (currentUser) {
-      loadDeals()
+      loadDeals();
     }
-  }, [currentUser, selectedYear])
+  }, [currentUser, selectedYear]);
 
   useEffect(() => {
-    applyFilters()
-  }, [deals, filters])
+    applyFilters();
+  }, [deals, filters]);
 
   const loadDeals = async () => {
-    if (!currentUser) return
-    setLoading(true)
+    if (!currentUser) return;
+    setLoading(true);
     try {
-      const dealsRef = collection(db, "users", currentUser.uid, "pipelineDeals")
-      const q = query(dealsRef, where("year", "==", selectedYear))
-      const querySnapshot = await getDocs(q)
-      const dealsData = []
+      const dealsRef = collection(db, "users", currentUser.uid, "pipelineDeals");
+      const q = query(dealsRef, where("year", "==", selectedYear));
+      const querySnapshot = await getDocs(q);
+      const dealsData = [];
       querySnapshot.forEach((doc) => {
-        dealsData.push({ id: doc.id, ...doc.data() })
-      })
-      setDeals(dealsData)
-      setFilteredDeals(dealsData)
+        dealsData.push({ id: doc.id, ...doc.data() });
+      });
+      setDeals(dealsData);
+      setFilteredDeals(dealsData);
     } catch (error) {
-      console.error("Error loading deals:", error)
+      console.error("Error loading deals:", error);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const applyFilters = () => {
-    let filtered = [...deals]
+    let filtered = [...deals];
     
     if (filters.clientName) {
       filtered = filtered.filter(deal => 
         deal.clientName?.toLowerCase().includes(filters.clientName.toLowerCase())
-      )
+      );
     }
     
     if (filters.segment) {
       filtered = filtered.filter(deal => 
         deal.segment?.toLowerCase().includes(filters.segment.toLowerCase())
-      )
+      );
     }
     
     if (filters.stage) {
-      filtered = filtered.filter(deal => deal.stage === filters.stage)
+      filtered = filtered.filter(deal => deal.stage === filters.stage);
     }
     
     if (filters.source) {
       filtered = filtered.filter(deal => 
         deal.source?.toLowerCase().includes(filters.source.toLowerCase())
-      )
+      );
     }
     
     if (filters.owner) {
       filtered = filtered.filter(deal => 
         deal.owner?.toLowerCase().includes(filters.owner.toLowerCase())
-      )
+      );
     }
     
     if (filters.minValue) {
-      filtered = filtered.filter(deal => (deal.dealValue || 0) >= parseFloat(filters.minValue))
+      filtered = filtered.filter(deal => (deal.dealValue || 0) >= parseFloat(filters.minValue));
     }
     
     if (filters.maxValue) {
-      filtered = filtered.filter(deal => (deal.dealValue || 0) <= parseFloat(filters.maxValue))
+      filtered = filtered.filter(deal => (deal.dealValue || 0) <= parseFloat(filters.maxValue));
     }
     
-    setFilteredDeals(filtered)
-  }
+    setFilteredDeals(filtered);
+  };
 
   const deleteDeal = async (dealId) => {
     if (!currentUser || isInvestorView) {
-      alert("You cannot delete deals in this mode.")
-      return
+      alert("You cannot delete deals in this mode.");
+      return;
     }
-    setConfirmDialog({ show: true, dealId })
-  }
+    setConfirmDialog({ show: true, dealId });
+  };
 
   const handleConfirmDelete = async () => {
     try {
-      const dealsRef = collection(db, "users", currentUser.uid, "pipelineDeals")
-      await deleteDoc(doc(dealsRef, confirmDialog.dealId))
-      loadDeals()
+      const dealsRef = collection(db, "users", currentUser.uid, "pipelineDeals");
+      await deleteDoc(doc(dealsRef, confirmDialog.dealId));
+      loadDeals();
     } catch (error) {
-      console.error("Error deleting deal:", error)
-      alert("Error deleting deal")
+      console.error("Error deleting deal:", error);
+      alert("Error deleting deal");
     } finally {
-      setConfirmDialog({ show: false, dealId: null })
+      setConfirmDialog({ show: false, dealId: null });
     }
-  }
+  };
 
   const clearFilters = () => {
     setFilters({
@@ -1571,11 +1920,11 @@ const PipelineTable = ({ currentUser, isInvestorView, selectedYear, onAddData })
       owner: "",
       minValue: "",
       maxValue: ""
-    })
-  }
+    });
+  };
 
-  const totalPipelineValue = filteredDeals.reduce((sum, deal) => sum + (deal.dealValue || 0), 0)
-  const totalRiskAdjusted = filteredDeals.reduce((sum, deal) => sum + (deal.riskAdjustedValue || 0), 0)
+  const totalPipelineValue = filteredDeals.reduce((sum, deal) => sum + (deal.dealValue || 0), 0);
+  const totalRiskAdjusted = filteredDeals.reduce((sum, deal) => sum + (deal.riskAdjustedValue || 0), 0);
 
   return (
     <div style={{ marginTop: "30px" }}>
@@ -1860,7 +2209,7 @@ const PipelineTable = ({ currentUser, isInvestorView, selectedYear, onAddData })
             </thead>
             <tbody>
               {filteredDeals.map((deal, index) => {
-                const stageLabel = stageOptions.find(option => option.value === deal.stage)?.label || deal.stage
+                const stageLabel = stageOptions.find(option => option.value === deal.stage)?.label || deal.stage;
                 return (
                   <tr
                     key={deal.id}
@@ -1903,7 +2252,7 @@ const PipelineTable = ({ currentUser, isInvestorView, selectedYear, onAddData })
                       </td>
                     )}
                   </tr>
-                )
+                );
               })}
             </tbody>
           </table>
@@ -1940,302 +2289,141 @@ const PipelineTable = ({ currentUser, isInvestorView, selectedYear, onAddData })
         </div>
       </div>
     </div>
-  )
-}
+  );
+};
 
 // ==================== PIPELINE VISIBILITY COMPONENT ====================
 
 const PipelineVisibility = ({ activeSection, currentUser, isInvestorView, onAddData, startDate, endDate }) => {
-  const [loading, setLoading] = useState(false)
-  const [expandedNotes, setExpandedNotes] = useState({})
-  const [kpiNotes, setKpiNotes] = useState({})
-  const [kpiAnalysis, setKpiAnalysis] = useState({})
-  const [showCalculationModal, setShowCalculationModal] = useState(false)
-  const [selectedCalculation, setSelectedCalculation] = useState({ title: "", calculation: "" })
-  const [showTrendModal, setShowTrendModal] = useState(false)
-  const [selectedTrendItem, setSelectedTrendItem] = useState(null)
-  const [financialYearStart, setFinancialYearStart] = useState("Jan")
+  const [loading, setLoading] = useState(false);
+  const [expandedNotes, setExpandedNotes] = useState({});
+  const [kpiNotes, setKpiNotes] = useState({});
+  const [kpiAnalysis, setKpiAnalysis] = useState({});
+  const [showCalculationModal, setShowCalculationModal] = useState(false);
+  const [selectedCalculation, setSelectedCalculation] = useState({ title: "", calculation: "" });
+  const [showTrendModal, setShowTrendModal] = useState(false);
+  const [selectedTrendItem, setSelectedTrendItem] = useState(null);
+  const [financialYearStart, setFinancialYearStart] = useState("Jan");
 
   const [pipelineData, setPipelineData] = useState({
-    newLeads: Array(12).fill(0),
-    salesVelocity: Array(12).fill(0),
-    conversionRates: Array(12).fill(0),
+    newLeads: { actual: Array(12).fill(0), budget: Array(12).fill(0) },
+    salesVelocity: { actual: Array(12).fill(0), budget: Array(12).fill(0) },
+    conversionRates: { actual: Array(12).fill(0), budget: Array(12).fill(0) },
+    riskAdjustedValue: { actual: Array(12).fill(0), budget: Array(12).fill(0) },
     notes: "",
-  })
+  });
 
   useEffect(() => {
     const loadFinancialYear = async () => {
-      if (!currentUser) return
+      if (!currentUser) return;
       try {
-        const docRef = doc(db, "universalProfiles", currentUser.uid)
-        const docSnap = await getDoc(docRef)
+        const docRef = doc(db, "universalProfiles", currentUser.uid);
+        const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
-          const data = docSnap.data()
-          const fyEnd = data.entityOverview?.financialYearEnd
+          const data = docSnap.data();
+          const fyEnd = data.entityOverview?.financialYearEnd;
           if (fyEnd) {
-            const monthNum = parseInt(fyEnd.split('-')[1])
-            const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-            setFinancialYearStart(months[(monthNum % 12)])
+            const monthNum = parseInt(fyEnd.split('-')[1]);
+            const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+            setFinancialYearStart(months[(monthNum % 12)]);
           }
         }
       } catch (error) {
-        console.error("Error loading financial year:", error)
+        console.error("Error loading financial year:", error);
       }
-    }
-    loadFinancialYear()
-  }, [currentUser])
+    };
+    loadFinancialYear();
+  }, [currentUser]);
 
   useEffect(() => {
     if (currentUser && activeSection === "pipeline-visibility") {
-      loadData()
+      loadData();
     }
-  }, [currentUser, activeSection, startDate?.year])
+  }, [currentUser, activeSection, startDate?.year]);
 
   const loadData = async () => {
-    if (!currentUser || !startDate) return
-    setLoading(true)
+    if (!currentUser || !startDate) return;
+    setLoading(true);
     try {
-      const docRef = doc(db, "pipelineData", `${currentUser.uid}_visibility_${startDate.year}`)
-      const docSnap = await getDoc(docRef)
+      const docRef = doc(db, "pipelineData", `${currentUser.uid}_visibility_${startDate.year}`);
+      const docSnap = await getDoc(docRef);
       if (docSnap.exists()) {
-        const data = docSnap.data()
+        const data = docSnap.data();
         setPipelineData({
-          newLeads: data.newLeads || Array(12).fill(0),
-          salesVelocity: data.salesVelocity || Array(12).fill(0),
-          conversionRates: data.conversionRates || Array(12).fill(0),
+          newLeads: { 
+            actual: data.newLeads?.actual || Array(12).fill(0),
+            budget: data.newLeads?.budget || Array(12).fill(0)
+          },
+          salesVelocity: { 
+            actual: data.salesVelocity?.actual || Array(12).fill(0),
+            budget: data.salesVelocity?.budget || Array(12).fill(0)
+          },
+          conversionRates: { 
+            actual: data.conversionRates?.actual || Array(12).fill(0),
+            budget: data.conversionRates?.budget || Array(12).fill(0)
+          },
+          riskAdjustedValue: { 
+            actual: data.riskAdjustedValue?.actual || Array(12).fill(0),
+            budget: data.riskAdjustedValue?.budget || Array(12).fill(0)
+          },
           notes: data.notes || "",
-        })
+        });
       }
     } catch (error) {
-      console.error("Error loading pipeline visibility data:", error)
+      console.error("Error loading pipeline visibility data:", error);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
-  const openTrendModal = (itemName, dataArray, isPercentage = false) => {
-    if (!startDate || !endDate) return
+  const openTrendModal = (itemName, dataArray, unit = "number") => {
+    if (!startDate || !endDate) return;
     
-    const months = getMonthsForYear(startDate.year, financialYearStart)
-    const startMonthIndex = months.indexOf(startDate.month)
-    const endMonthIndex = months.indexOf(endDate.month)
+    const months = getMonthsForYear(startDate.year, financialYearStart);
+    const startMonthIndex = months.indexOf(startDate.month);
+    const endMonthIndex = months.indexOf(endDate.month);
     
     // Get all months from start to end (last 11 months + current)
-    const monthIndices = []
-    let currentIndex = endMonthIndex
+    const monthIndices = [];
+    let currentIndex = endMonthIndex;
     for (let i = 0; i < 12; i++) {
-      monthIndices.unshift(currentIndex)
-      currentIndex = (currentIndex - 1 + 12) % 12
+      monthIndices.unshift(currentIndex);
+      currentIndex = (currentIndex - 1 + 12) % 12;
     }
     
-    const trendData = []
-    const trendLabels = []
+    const trendData = [];
+    const trendLabels = [];
     
     monthIndices.forEach(idx => {
-      trendData.push(dataArray[idx] || 0)
-      trendLabels.push(`${months[idx]} ${startDate.year}`)
-    })
+      trendData.push(dataArray[idx] || 0);
+      trendLabels.push(`${months[idx]} ${startDate.year}`);
+    });
     
     setSelectedTrendItem({ 
       name: itemName, 
       data: trendData,
       labels: trendLabels,
-      isPercentage
-    })
-    setShowTrendModal(true)
-  }
+      unit
+    });
+    setShowTrendModal(true);
+  };
 
   const handleCalculationClick = (title, calculation) => {
-    setSelectedCalculation({ title, calculation })
-    setShowCalculationModal(true)
-  }
+    setSelectedCalculation({ title, calculation });
+    setShowCalculationModal(true);
+  };
 
-  const months = getMonthsForYear(startDate?.year || new Date().getFullYear(), financialYearStart)
-  const monthIndex = startDate ? months.indexOf(startDate.month) : 0
+  const months = getMonthsForYear(startDate?.year || new Date().getFullYear(), financialYearStart);
+  const monthIndex = startDate ? months.indexOf(startDate.month) : 0;
 
-  const renderKPICard = (title, dataKey, calculation = "", isPercentage = false, colorIndex = 0) => {
-    let currentValue = 0
-    let dataArray = []
-    
-    if (dataKey === "newLeads") {
-      dataArray = pipelineData.newLeads || []
-      currentValue = dataArray[monthIndex] || 0
-    } else if (dataKey === "salesVelocity") {
-      dataArray = pipelineData.salesVelocity || []
-      currentValue = dataArray[monthIndex] || 0
-    } else if (dataKey === "conversionRates") {
-      dataArray = pipelineData.conversionRates || []
-      currentValue = dataArray[monthIndex] || 0
-    }
-
-    const displayValue = isPercentage 
-      ? `${currentValue.toFixed(1)}%`
-      : dataKey === "salesVelocity" 
-        ? `${currentValue.toFixed(1)} days`
-        : formatNumber(currentValue)
-
-    const color = circleColors[colorIndex % circleColors.length]
-
-    return (
-      <div
-        style={{
-          backgroundColor: "#fdfcfb",
-          padding: "20px",
-          borderRadius: "8px",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-          marginBottom: "20px",
-          position: "relative",
-        }}
-      >
-        <EyeIcon onClick={() => handleCalculationClick(title, calculation)} color={color.border} />
-        
-        <div style={{ display: "flex", alignItems: "center", marginBottom: "15px" }}>
-          <div
-            style={{
-              width: "100px",
-              height: "100px",
-              borderRadius: "50%",
-              border: `5px solid ${color.border}`,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              marginRight: "20px",
-              backgroundColor: color.background,
-            }}
-          >
-            <div style={{ textAlign: "center" }}>
-              <div style={{ fontSize: "16px", fontWeight: "700", color: color.text }}>
-                {displayValue}
-              </div>
-              <div style={{ fontSize: "11px", color: color.text, opacity: 0.8 }}>Current</div>
-            </div>
-          </div>
-          <div style={{ flex: 1 }}>
-            <h4 style={{ color: "#5d4037", marginBottom: "5px", fontSize: "16px" }}>{title}</h4>
-          </div>
-        </div>
-
-        <div style={{ borderTop: "1px solid #e8ddd4", paddingTop: "15px" }}>
-          <div style={{ display: "flex", gap: "10px", marginBottom: "10px" }}>
-            <button
-              onClick={() => setExpandedNotes(prev => ({ ...prev, [dataKey]: !prev[dataKey] }))}
-              style={{
-                padding: "6px 12px",
-                backgroundColor: "#e8ddd4",
-                color: "#5d4037",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: "600",
-                fontSize: "12px",
-              }}
-            >
-              Add notes
-            </button>
-            <button
-              onClick={() => setExpandedNotes(prev => ({ ...prev, [`${dataKey}_analysis`]: !prev[`${dataKey}_analysis`] }))}
-              style={{
-                padding: "6px 12px",
-                backgroundColor: "#e8ddd4",
-                color: "#5d4037",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: "600",
-                fontSize: "12px",
-              }}
-            >
-              AI analysis
-            </button>
-            <button
-              onClick={() => openTrendModal(title, dataArray, isPercentage)}
-              style={{
-                padding: "6px 12px",
-                backgroundColor: "#e8ddd4",
-                color: "#5d4037",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: "600",
-                fontSize: "12px",
-              }}
-            >
-              View trend
-            </button>
-          </div>
-
-          {expandedNotes[dataKey] && (
-            <div style={{ marginBottom: "10px" }}>
-              <label
-                style={{
-                  fontSize: "12px",
-                  color: "#5d4037",
-                  fontWeight: "600",
-                  display: "block",
-                  marginBottom: "5px",
-                }}
-              >
-                Notes / Comments:
-              </label>
-              <textarea
-                value={kpiNotes[dataKey] || ""}
-                onChange={(e) => setKpiNotes(prev => ({ ...prev, [dataKey]: e.target.value }))}
-                placeholder="Add notes or comments..."
-                style={{
-                  width: "100%",
-                  padding: "10px",
-                  borderRadius: "4px",
-                  border: "1px solid #e8ddd4",
-                  minHeight: "60px",
-                  fontSize: "13px",
-                }}
-              />
-            </div>
-          )}
-
-          {expandedNotes[`${dataKey}_analysis`] && (
-            <div
-              style={{
-                backgroundColor: "#e3f2fd",
-                padding: "15px",
-                borderRadius: "6px",
-                border: "1px solid #90caf9",
-              }}
-            >
-              <label
-                style={{
-                  fontSize: "12px",
-                  color: "#1565c0",
-                  fontWeight: "600",
-                  display: "block",
-                  marginBottom: "8px",
-                }}
-              >
-                AI Analysis:
-              </label>
-              <p style={{ fontSize: "13px", color: "#1565c0", lineHeight: "1.5", margin: 0 }}>
-                {kpiAnalysis[dataKey] ||
-                  `Based on the current ${title.toLowerCase()} of ${displayValue}:
-                  \n\nThis metric indicates your ${title.toLowerCase()} performance.
-                  \n\nRecommended actions:
-                  \n• Monitor this metric monthly
-                  \n• Compare against targets
-                  \n• Investigate significant changes`}
-              </p>
-            </div>
-          )}
-        </div>
-      </div>
-    )
-  }
-
-  if (activeSection !== "pipeline-visibility" || !startDate || !endDate) return null
+  if (activeSection !== "pipeline-visibility" || !startDate || !endDate) return null;
 
   const calculationTexts = {
     newLeads: "New Leads: Number of new leads generated in the period.\n\nCalculation: Count of new leads added to CRM.",
     salesVelocity: "Sales Velocity = (Number of Opportunities × Deal Value × Win Rate) ÷ Sales Cycle Length\n\nMeasures how quickly deals move through the pipeline.",
     conversionRates: "Conversion Rate = (Number of Converted Leads ÷ Total Leads) × 100%\n\nMeasures how effectively leads are converted to customers.",
-  }
+    riskAdjustedValue: "Risk Adjusted Value = Sum of (Deal Value × Probability %) for all deals\n\nShows expected value accounting for win probability.",
+  };
 
   return (
     <div>
@@ -2279,12 +2467,42 @@ const PipelineVisibility = ({ activeSection, currentUser, isInvestorView, onAddD
         </div>
       </div>
 
-      {/* KPI Cards - 3 in a row */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "20px", marginBottom: "30px" }}>
-        {renderKPICard("New Leads", "newLeads", calculationTexts.newLeads, false, 0)}
-        {renderKPICard("Sales Velocity", "salesVelocity", calculationTexts.salesVelocity, false, 1)}
-        {renderKPICard("Conversion Rates", "conversionRates", calculationTexts.conversionRates, true, 2)}
+      {/* KPI Cards - 2 cards per row, each with 3 circles */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "20px", marginBottom: "30px" }}>
+        <KPITripleCard
+          title="New Leads"
+          actualValue={pipelineData.newLeads.actual[monthIndex] || 0}
+          budgetValue={pipelineData.newLeads.budget[monthIndex] || 0}
+          unit="number"
+          goodDirection="up"
+          onEyeClick={() => handleCalculationClick("New Leads", calculationTexts.newLeads)}
+          onAddNotes={(notes) => setKpiNotes({...kpiNotes, newLeads: notes})}
+          onAnalysis={() => setExpandedNotes({...expandedNotes, newLeads_analysis: !expandedNotes.newLeads_analysis})}
+          onTrend={() => openTrendModal("New Leads", pipelineData.newLeads.actual, "number")}
+          notes={kpiNotes.newLeads}
+        />
+        
+        <KPITripleCard
+          title="Risk Adjusted Value"
+          actualValue={pipelineData.riskAdjustedValue.actual[monthIndex] || 0}
+          budgetValue={pipelineData.riskAdjustedValue.budget[monthIndex] || 0}
+          unit="currency"
+          goodDirection="up"
+          onEyeClick={() => handleCalculationClick("Risk Adjusted Value", calculationTexts.riskAdjustedValue)}
+          onAddNotes={(notes) => setKpiNotes({...kpiNotes, riskAdjustedValue: notes})}
+          onAnalysis={() => setExpandedNotes({...expandedNotes, riskAdjustedValue_analysis: !expandedNotes.riskAdjustedValue_analysis})}
+          onTrend={() => openTrendModal("Risk Adjusted Value", pipelineData.riskAdjustedValue.actual, "currency")}
+          notes={kpiNotes.riskAdjustedValue}
+        />
       </div>
+
+      {/* Pipeline Table moved from Sufficiency to Visibility */}
+      <PipelineTable 
+        currentUser={currentUser}
+        isInvestorView={isInvestorView}
+        selectedYear={startDate?.year || new Date().getFullYear()}
+        onAddData={onAddData}
+      />
 
       {/* Calculation Modal */}
       <CalculationModal
@@ -2302,304 +2520,152 @@ const PipelineVisibility = ({ activeSection, currentUser, isInvestorView, onAddD
           title={selectedTrendItem.name}
           data={selectedTrendItem.data}
           labels={selectedTrendItem.labels}
-          isPercentage={selectedTrendItem.isPercentage}
+          unit={selectedTrendItem.unit}
         />
       )}
     </div>
-  )
-}
+  );
+};
 
 // ==================== PIPELINE SUFFICIENCY COMPONENT ====================
 
 const PipelineSufficiency = ({ activeSection, currentUser, isInvestorView, onAddData, startDate, endDate }) => {
-  const [loading, setLoading] = useState(false)
-  const [expandedNotes, setExpandedNotes] = useState({})
-  const [kpiNotes, setKpiNotes] = useState({})
-  const [kpiAnalysis, setKpiAnalysis] = useState({})
-  const [showCalculationModal, setShowCalculationModal] = useState(false)
-  const [selectedCalculation, setSelectedCalculation] = useState({ title: "", calculation: "" })
-  const [showTrendModal, setShowTrendModal] = useState(false)
-  const [selectedTrendItem, setSelectedTrendItem] = useState(null)
-  const [financialYearStart, setFinancialYearStart] = useState("Jan")
+  const [loading, setLoading] = useState(false);
+  const [expandedNotes, setExpandedNotes] = useState({});
+  const [kpiNotes, setKpiNotes] = useState({});
+  const [kpiAnalysis, setKpiAnalysis] = useState({});
+  const [showCalculationModal, setShowCalculationModal] = useState(false);
+  const [selectedCalculation, setSelectedCalculation] = useState({ title: "", calculation: "" });
+  const [showTrendModal, setShowTrendModal] = useState(false);
+  const [selectedTrendItem, setSelectedTrendItem] = useState(null);
+  const [financialYearStart, setFinancialYearStart] = useState("Jan");
 
   const [pipelineData, setPipelineData] = useState({
-    totalPipelineValue: 0,
-    probability: 0,
-    targetRevenue: 0,
+    totalDeals: { actual: Array(12).fill(0), budget: Array(12).fill(0) },
+    pipelineCoverage: { actual: Array(12).fill(0), budget: Array(12).fill(0) },
+    salesVelocity: { actual: Array(12).fill(0), budget: Array(12).fill(0) },
+    conversionRates: { actual: Array(12).fill(0), budget: Array(12).fill(0) },
     notes: "",
-  })
+  });
 
   useEffect(() => {
     const loadFinancialYear = async () => {
-      if (!currentUser) return
+      if (!currentUser) return;
       try {
-        const docRef = doc(db, "universalProfiles", currentUser.uid)
-        const docSnap = await getDoc(docRef)
+        const docRef = doc(db, "universalProfiles", currentUser.uid);
+        const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
-          const data = docSnap.data()
-          const fyEnd = data.entityOverview?.financialYearEnd
+          const data = docSnap.data();
+          const fyEnd = data.entityOverview?.financialYearEnd;
           if (fyEnd) {
-            const monthNum = parseInt(fyEnd.split('-')[1])
-            const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-            setFinancialYearStart(months[(monthNum % 12)])
+            const monthNum = parseInt(fyEnd.split('-')[1]);
+            const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+            setFinancialYearStart(months[(monthNum % 12)]);
           }
         }
       } catch (error) {
-        console.error("Error loading financial year:", error)
+        console.error("Error loading financial year:", error);
       }
-    }
-    loadFinancialYear()
-  }, [currentUser])
+    };
+    loadFinancialYear();
+  }, [currentUser]);
 
   useEffect(() => {
     if (currentUser && activeSection === "pipeline-sufficiency") {
-      loadData()
+      loadData();
     }
-  }, [currentUser, activeSection, startDate?.year])
+  }, [currentUser, activeSection, startDate?.year]);
 
   const loadData = async () => {
-    if (!currentUser || !startDate) return
-    setLoading(true)
+    if (!currentUser || !startDate) return;
+    setLoading(true);
     try {
-      const docRef = doc(db, "pipelineData", `${currentUser.uid}_sufficiency_${startDate.year}`)
-      const docSnap = await getDoc(docRef)
+      const docRef = doc(db, "pipelineData", `${currentUser.uid}_sufficiency_${startDate.year}`);
+      const docSnap = await getDoc(docRef);
       if (docSnap.exists()) {
-        const data = docSnap.data()
+        const data = docSnap.data();
         setPipelineData({
-          totalPipelineValue: data.totalPipelineValue || 0,
-          probability: data.probability || 0,
-          targetRevenue: data.targetRevenue || 0,
+          totalDeals: { 
+            actual: data.totalDeals?.actual || Array(12).fill(0),
+            budget: data.totalDeals?.budget || Array(12).fill(0)
+          },
+          pipelineCoverage: { 
+            actual: data.pipelineCoverage?.actual || Array(12).fill(0),
+            budget: data.pipelineCoverage?.budget || Array(12).fill(0)
+          },
+          salesVelocity: { 
+            actual: data.salesVelocity?.actual || Array(12).fill(0),
+            budget: data.salesVelocity?.budget || Array(12).fill(0)
+          },
+          conversionRates: { 
+            actual: data.conversionRates?.actual || Array(12).fill(0),
+            budget: data.conversionRates?.budget || Array(12).fill(0)
+          },
           notes: data.notes || "",
-        })
+        });
       }
     } catch (error) {
-      console.error("Error loading pipeline sufficiency data:", error)
+      console.error("Error loading pipeline sufficiency data:", error);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
-  const openTrendModal = (itemName, dataValue, isPercentage = false) => {
-    if (!startDate || !endDate) return
+  const openTrendModal = (itemName, dataArray, unit = "number") => {
+    if (!startDate || !endDate) return;
     
-    // For sufficiency metrics, we need historical data
-    // Since we only have current value, we'll create a trend based on monthly data
-    // In a real app, you'd fetch historical data from Firestore
-    const months = getMonthsForYear(startDate.year, financialYearStart)
+    const months = getMonthsForYear(startDate.year, financialYearStart);
+    const startMonthIndex = months.indexOf(startDate.month);
+    const endMonthIndex = months.indexOf(endDate.month);
     
-    // Create sample historical data (in production, fetch from database)
-    const historicalData = []
-    const trendLabels = []
-    
-    const startMonthIndex = months.indexOf(startDate.month)
+    // Get all months from start to end (last 11 months + current)
+    const monthIndices = [];
+    let currentIndex = endMonthIndex;
     for (let i = 0; i < 12; i++) {
-      const monthIdx = (startMonthIndex - 11 + i + 12) % 12
-      // This is where you'd load actual historical values
-      historicalData.push(dataValue * (0.8 + Math.random() * 0.4)) // Placeholder
-      trendLabels.push(`${months[monthIdx]} ${startDate.year}`)
+      monthIndices.unshift(currentIndex);
+      currentIndex = (currentIndex - 1 + 12) % 12;
     }
+    
+    const trendData = [];
+    const trendLabels = [];
+    
+    monthIndices.forEach(idx => {
+      trendData.push(dataArray[idx] || 0);
+      trendLabels.push(`${months[idx]} ${startDate.year}`);
+    });
     
     setSelectedTrendItem({ 
       name: itemName, 
-      data: historicalData,
+      data: trendData,
       labels: trendLabels,
-      isPercentage
-    })
-    setShowTrendModal(true)
-  }
+      unit
+    });
+    setShowTrendModal(true);
+  };
 
   const handleCalculationClick = (title, calculation) => {
-    setSelectedCalculation({ title, calculation })
-    setShowCalculationModal(true)
-  }
+    setSelectedCalculation({ title, calculation });
+    setShowCalculationModal(true);
+  };
 
-  const months = getMonthsForYear(startDate?.year || new Date().getFullYear(), financialYearStart)
-  const monthIndex = startDate ? months.indexOf(startDate.month) : 0
+  const months = getMonthsForYear(startDate?.year || new Date().getFullYear(), financialYearStart);
+  const monthIndex = startDate ? months.indexOf(startDate.month) : 0;
 
-  const renderKPICard = (title, dataKey, calculation = "", isPercentage = false, colorIndex = 2) => {
-    let currentValue = 0
-    
-    if (dataKey === "riskAdjustedValue") {
-      currentValue = (pipelineData.totalPipelineValue * pipelineData.probability) / 100
-    } else if (dataKey === "pipelineCoverage") {
-      currentValue = pipelineData.targetRevenue > 0 ? (pipelineData.totalPipelineValue / pipelineData.targetRevenue) * 100 : 0
-    }
-
-    const displayValue = isPercentage 
-      ? `${currentValue.toFixed(1)}%`
-      : formatCurrency(currentValue)
-
-    const color = circleColors[colorIndex % circleColors.length]
-
-    return (
-      <div
-        style={{
-          backgroundColor: "#fdfcfb",
-          padding: "20px",
-          borderRadius: "8px",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-          marginBottom: "20px",
-          position: "relative",
-        }}
-      >
-        <EyeIcon onClick={() => handleCalculationClick(title, calculation)} color={color.border} />
-        
-        <div style={{ display: "flex", alignItems: "center", marginBottom: "15px" }}>
-          <div
-            style={{
-              width: "100px",
-              height: "100px",
-              borderRadius: "50%",
-              border: `5px solid ${color.border}`,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              marginRight: "20px",
-              backgroundColor: color.background,
-            }}
-          >
-            <div style={{ textAlign: "center" }}>
-              <div style={{ fontSize: "16px", fontWeight: "700", color: color.text }}>
-                {displayValue}
-              </div>
-              <div style={{ fontSize: "11px", color: color.text, opacity: 0.8 }}>Current</div>
-            </div>
-          </div>
-          <div style={{ flex: 1 }}>
-            <h4 style={{ color: "#5d4037", marginBottom: "5px", fontSize: "16px" }}>{title}</h4>
-          </div>
-        </div>
-
-        <div style={{ borderTop: "1px solid #e8ddd4", paddingTop: "15px" }}>
-          <div style={{ display: "flex", gap: "10px", marginBottom: "10px" }}>
-            <button
-              onClick={() => setExpandedNotes(prev => ({ ...prev, [dataKey]: !prev[dataKey] }))}
-              style={{
-                padding: "6px 12px",
-                backgroundColor: "#e8ddd4",
-                color: "#5d4037",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: "600",
-                fontSize: "12px",
-              }}
-            >
-              Add notes
-            </button>
-            <button
-              onClick={() => setExpandedNotes(prev => ({ ...prev, [`${dataKey}_analysis`]: !prev[`${dataKey}_analysis`] }))}
-              style={{
-                padding: "6px 12px",
-                backgroundColor: "#e8ddd4",
-                color: "#5d4037",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: "600",
-                fontSize: "12px",
-              }}
-            >
-              AI analysis
-            </button>
-            <button
-              onClick={() => openTrendModal(title, currentValue, isPercentage)}
-              style={{
-                padding: "6px 12px",
-                backgroundColor: "#e8ddd4",
-                color: "#5d4037",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: "600",
-                fontSize: "12px",
-              }}
-            >
-              View trend
-            </button>
-          </div>
-
-          {expandedNotes[dataKey] && (
-            <div style={{ marginBottom: "10px" }}>
-              <label
-                style={{
-                  fontSize: "12px",
-                  color: "#5d4037",
-                  fontWeight: "600",
-                  display: "block",
-                  marginBottom: "5px",
-                }}
-              >
-                Notes / Comments:
-              </label>
-              <textarea
-                value={kpiNotes[dataKey] || ""}
-                onChange={(e) => setKpiNotes(prev => ({ ...prev, [dataKey]: e.target.value }))}
-                placeholder="Add notes or comments..."
-                style={{
-                  width: "100%",
-                  padding: "10px",
-                  borderRadius: "4px",
-                  border: "1px solid #e8ddd4",
-                  minHeight: "60px",
-                  fontSize: "13px",
-                }}
-              />
-            </div>
-          )}
-
-          {expandedNotes[`${dataKey}_analysis`] && (
-            <div
-              style={{
-                backgroundColor: "#e3f2fd",
-                padding: "15px",
-                borderRadius: "6px",
-                border: "1px solid #90caf9",
-              }}
-            >
-              <label
-                style={{
-                  fontSize: "12px",
-                  color: "#1565c0",
-                  fontWeight: "600",
-                  display: "block",
-                  marginBottom: "8px",
-                }}
-              >
-                AI Analysis:
-              </label>
-              <p style={{ fontSize: "13px", color: "#1565c0", lineHeight: "1.5", margin: 0 }}>
-                {kpiAnalysis[dataKey] ||
-                  `Based on the current ${title.toLowerCase()} of ${displayValue}:
-                  \n\nThis metric indicates your pipeline sufficiency.
-                  \n\nRecommended actions:
-                  \n• Monitor this metric monthly
-                  \n• Compare against targets
-                  \n• Adjust pipeline generation activities`}
-              </p>
-            </div>
-          )}
-        </div>
-      </div>
-    )
-  }
-
-  if (activeSection !== "pipeline-sufficiency" || !startDate || !endDate) return null
-
-  const riskAdjustedValue = (pipelineData.totalPipelineValue * pipelineData.probability) / 100
-  const pipelineCoverage = pipelineData.targetRevenue > 0 ? (pipelineData.totalPipelineValue / pipelineData.targetRevenue) * 100 : 0
+  if (activeSection !== "pipeline-sufficiency" || !startDate || !endDate) return null;
 
   const calculationTexts = {
-    riskAdjustedValue: "Risk Adjusted Pipeline Value = Total Pipeline Value × Probability %\n\nAccounts for deal probability to show expected value.",
-    pipelineCoverage: "Pipeline Coverage Ratio = (Pipeline Value ÷ Target Revenue) × 100%\n\nMeasures if pipeline is sufficient to meet revenue targets.",
-  }
+    totalDeals: "Total Deals: Number of active deals in the pipeline.\n\nShows pipeline volume.",
+    pipelineCoverage: "Pipeline Coverage = (Pipeline Value ÷ Target Revenue) × 100%\n\nMeasures if pipeline is sufficient to meet revenue targets.",
+    salesVelocity: "Sales Velocity = (Number of Opportunities × Deal Value × Win Rate) ÷ Sales Cycle Length\n\nMeasures how quickly deals move through the pipeline.",
+    conversionRates: "Conversion Rate = (Number of Won Deals ÷ Total Deals) × 100%\n\nMeasures sales effectiveness.",
+  };
 
   return (
     <div>
       <KeyQuestionBox
-        question="Is pipeline big enough?"
-        signals="Coverage ratio, lead volume trends"
-        decisions="Increase lead generation, adjust targets"
+        question="Is pipeline big enough? Are we converting effectively?"
+        signals="Coverage ratio, conversion rates, sales velocity"
+        decisions="Increase lead generation, improve sales process, adjust targets"
         section="pipeline-sufficiency"
       />
 
@@ -2636,19 +2702,60 @@ const PipelineSufficiency = ({ activeSection, currentUser, isInvestorView, onAdd
         </div>
       </div>
 
-      {/* KPI Cards - 2 in a row */}
+      {/* KPI Cards - 2 cards per row, each with 3 circles */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "20px", marginBottom: "30px" }}>
-        {renderKPICard("Risk Adjusted Value", "riskAdjustedValue", calculationTexts.riskAdjustedValue, false, 0)}
-        {renderKPICard("Pipeline Coverage", "pipelineCoverage", calculationTexts.pipelineCoverage, true, 1)}
+        <KPITripleCard
+          title="Total Deals"
+          actualValue={pipelineData.totalDeals.actual[monthIndex] || 0}
+          budgetValue={pipelineData.totalDeals.budget[monthIndex] || 0}
+          unit="number"
+          goodDirection="up"
+          onEyeClick={() => handleCalculationClick("Total Deals", calculationTexts.totalDeals)}
+          onAddNotes={(notes) => setKpiNotes({...kpiNotes, totalDeals: notes})}
+          onAnalysis={() => setExpandedNotes({...expandedNotes, totalDeals_analysis: !expandedNotes.totalDeals_analysis})}
+          onTrend={() => openTrendModal("Total Deals", pipelineData.totalDeals.actual, "number")}
+          notes={kpiNotes.totalDeals}
+        />
+        
+        <KPITripleCard
+          title="Pipeline Coverage"
+          actualValue={pipelineData.pipelineCoverage.actual[monthIndex] || 0}
+          budgetValue={pipelineData.pipelineCoverage.budget[monthIndex] || 0}
+          unit="percentage"
+          goodDirection="up"
+          onEyeClick={() => handleCalculationClick("Pipeline Coverage", calculationTexts.pipelineCoverage)}
+          onAddNotes={(notes) => setKpiNotes({...kpiNotes, pipelineCoverage: notes})}
+          onAnalysis={() => setExpandedNotes({...expandedNotes, pipelineCoverage_analysis: !expandedNotes.pipelineCoverage_analysis})}
+          onTrend={() => openTrendModal("Pipeline Coverage", pipelineData.pipelineCoverage.actual, "percentage")}
+          notes={kpiNotes.pipelineCoverage}
+        />
+        
+        <KPITripleCard
+          title="Sales Velocity"
+          actualValue={pipelineData.salesVelocity.actual[monthIndex] || 0}
+          budgetValue={pipelineData.salesVelocity.budget[monthIndex] || 0}
+          unit="days"
+          goodDirection="down" // Lower days is better for velocity
+          onEyeClick={() => handleCalculationClick("Sales Velocity", calculationTexts.salesVelocity)}
+          onAddNotes={(notes) => setKpiNotes({...kpiNotes, salesVelocity: notes})}
+          onAnalysis={() => setExpandedNotes({...expandedNotes, salesVelocity_analysis: !expandedNotes.salesVelocity_analysis})}
+          onTrend={() => openTrendModal("Sales Velocity", pipelineData.salesVelocity.actual, "days")}
+          notes={kpiNotes.salesVelocity}
+        />
+        
+        <KPITripleCard
+          title="Conversion Rates"
+          actualValue={pipelineData.conversionRates.actual[monthIndex] || 0}
+          budgetValue={pipelineData.conversionRates.budget[monthIndex] || 0}
+          unit="percentage"
+          goodDirection="up"
+          onEyeClick={() => handleCalculationClick("Conversion Rates", calculationTexts.conversionRates)}
+          onAddNotes={(notes) => setKpiNotes({...kpiNotes, conversionRates: notes})}
+          onAnalysis={() => setExpandedNotes({...expandedNotes, conversionRates_analysis: !expandedNotes.conversionRates_analysis})}
+          onTrend={() => openTrendModal("Conversion Rates", pipelineData.conversionRates.actual, "percentage")}
+          notes={kpiNotes.conversionRates}
+        />
       </div>
-
-      {/* Pipeline Table inside Pipeline Sufficiency */}
-      <PipelineTable 
-        currentUser={currentUser}
-        isInvestorView={isInvestorView}
-        selectedYear={startDate?.year || new Date().getFullYear()}
-        onAddData={onAddData}
-      />
 
       {/* Calculation Modal */}
       <CalculationModal
@@ -2666,26 +2773,26 @@ const PipelineSufficiency = ({ activeSection, currentUser, isInvestorView, onAdd
           title={selectedTrendItem.name}
           data={selectedTrendItem.data}
           labels={selectedTrendItem.labels}
-          isPercentage={selectedTrendItem.isPercentage}
+          unit={selectedTrendItem.unit}
         />
       )}
     </div>
-  )
-}
+  );
+};
 
 // ==================== REVENUE CONCENTRATION COMPONENT ====================
 
 const RevenueConcentration = ({ activeSection, currentUser, isInvestorView, onAddData, startDate, endDate }) => {
-  const [loading, setLoading] = useState(false)
-  const [expandedNotes, setExpandedNotes] = useState({})
-  const [kpiNotes, setKpiNotes] = useState({})
-  const [kpiAnalysis, setKpiAnalysis] = useState({})
-  const [showCalculationModal, setShowCalculationModal] = useState(false)
-  const [selectedCalculation, setSelectedCalculation] = useState({ title: "", calculation: "" })
-  const [showTrendModal, setShowTrendModal] = useState(false)
-  const [selectedTrendItem, setSelectedTrendItem] = useState(null)
-  const [activeTab, setActiveTab] = useState("channel") // "channel", "customer", "segment"
-  const [financialYearStart, setFinancialYearStart] = useState("Jan")
+  const [loading, setLoading] = useState(false);
+  const [expandedNotes, setExpandedNotes] = useState({});
+  const [kpiNotes, setKpiNotes] = useState({});
+  const [kpiAnalysis, setKpiAnalysis] = useState({});
+  const [showCalculationModal, setShowCalculationModal] = useState(false);
+  const [selectedCalculation, setSelectedCalculation] = useState({ title: "", calculation: "" });
+  const [showTrendModal, setShowTrendModal] = useState(false);
+  const [selectedTrendItem, setSelectedTrendItem] = useState(null);
+  const [activeTab, setActiveTab] = useState("channel");
+  const [financialYearStart, setFinancialYearStart] = useState("Jan");
 
   const [concentrationData, setConcentrationData] = useState({
     revenueChannels: [
@@ -2711,44 +2818,44 @@ const RevenueConcentration = ({ activeSection, currentUser, isInvestorView, onAd
       { name: "Customer E", revenue: 0 },
     ],
     notes: "",
-  })
+  });
 
   useEffect(() => {
     const loadFinancialYear = async () => {
-      if (!currentUser) return
+      if (!currentUser) return;
       try {
-        const docRef = doc(db, "universalProfiles", currentUser.uid)
-        const docSnap = await getDoc(docRef)
+        const docRef = doc(db, "universalProfiles", currentUser.uid);
+        const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
-          const data = docSnap.data()
-          const fyEnd = data.entityOverview?.financialYearEnd
+          const data = docSnap.data();
+          const fyEnd = data.entityOverview?.financialYearEnd;
           if (fyEnd) {
-            const monthNum = parseInt(fyEnd.split('-')[1])
-            const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-            setFinancialYearStart(months[(monthNum % 12)])
+            const monthNum = parseInt(fyEnd.split('-')[1]);
+            const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+            setFinancialYearStart(months[(monthNum % 12)]);
           }
         }
       } catch (error) {
-        console.error("Error loading financial year:", error)
+        console.error("Error loading financial year:", error);
       }
-    }
-    loadFinancialYear()
-  }, [currentUser])
+    };
+    loadFinancialYear();
+  }, [currentUser]);
 
   useEffect(() => {
     if (currentUser && activeSection === "revenue-concentration") {
-      loadData()
+      loadData();
     }
-  }, [currentUser, activeSection, startDate?.year])
+  }, [currentUser, activeSection, startDate?.year]);
 
   const loadData = async () => {
-    if (!currentUser || !startDate) return
-    setLoading(true)
+    if (!currentUser || !startDate) return;
+    setLoading(true);
     try {
-      const docRef = doc(db, "pipelineData", `${currentUser.uid}_concentration_${startDate.year}`)
-      const docSnap = await getDoc(docRef)
+      const docRef = doc(db, "pipelineData", `${currentUser.uid}_concentration_${startDate.year}`);
+      const docSnap = await getDoc(docRef);
       if (docSnap.exists()) {
-        const data = docSnap.data()
+        const data = docSnap.data();
         setConcentrationData({
           revenueChannels: data.revenueChannels || [
             { name: "Social Media", revenue: 0, spend: 0 },
@@ -2773,238 +2880,75 @@ const RevenueConcentration = ({ activeSection, currentUser, isInvestorView, onAd
             { name: "Customer E", revenue: 0 },
           ],
           notes: data.notes || "",
-        })
+        });
       }
     } catch (error) {
-      console.error("Error loading revenue concentration data:", error)
+      console.error("Error loading revenue concentration data:", error);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
-  const openTrendModal = (itemName, dataValue, isPercentage = false) => {
-    if (!startDate || !endDate) return
+  const openTrendModal = (itemName, dataArray, unit = "currency") => {
+    if (!startDate || !endDate) return;
     
-    const months = getMonthsForYear(startDate.year, financialYearStart)
+    const months = getMonthsForYear(startDate.year, financialYearStart);
+    const startMonthIndex = months.indexOf(startDate.month);
+    const endMonthIndex = months.indexOf(endDate.month);
     
-    // Create sample historical data (in production, fetch from database)
-    const historicalData = []
-    const trendLabels = []
-    
-    const startMonthIndex = months.indexOf(startDate.month)
+    const monthIndices = [];
+    let currentIndex = endMonthIndex;
     for (let i = 0; i < 12; i++) {
-      const monthIdx = (startMonthIndex - 11 + i + 12) % 12
-      historicalData.push(dataValue * (0.7 + Math.random() * 0.6)) // Placeholder
-      trendLabels.push(`${months[monthIdx]} ${startDate.year}`)
+      monthIndices.unshift(currentIndex);
+      currentIndex = (currentIndex - 1 + 12) % 12;
     }
+    
+    const trendData = [];
+    const trendLabels = [];
+    
+    monthIndices.forEach(idx => {
+      trendData.push(dataArray[idx] || 0);
+      trendLabels.push(`${months[idx]} ${startDate.year}`);
+    });
     
     setSelectedTrendItem({ 
       name: itemName, 
-      data: historicalData,
+      data: trendData,
       labels: trendLabels,
-      isPercentage
-    })
-    setShowTrendModal(true)
-  }
+      unit
+    });
+    setShowTrendModal(true);
+  };
 
   const handleCalculationClick = (title, calculation) => {
-    setSelectedCalculation({ title, calculation })
-    setShowCalculationModal(true)
-  }
+    setSelectedCalculation({ title, calculation });
+    setShowCalculationModal(true);
+  };
 
-  const months = getMonthsForYear(startDate?.year || new Date().getFullYear(), financialYearStart)
+  const months = getMonthsForYear(startDate?.year || new Date().getFullYear(), financialYearStart);
+  const monthIndex = startDate ? months.indexOf(startDate.month) : 0;
 
-  const renderKPICard = (title, dataKey, calculation = "", isPercentage = false, colorIndex = 4) => {
-    let currentValue = 0
-    
-    if (dataKey === "totalMarketingSpend") {
-      currentValue = concentrationData.revenueChannels.reduce((sum, c) => sum + c.spend, 0)
-    } else if (dataKey === "totalROI") {
-      const totalRevenue = concentrationData.revenueChannels.reduce((sum, c) => sum + c.revenue, 0)
-      const totalSpend = concentrationData.revenueChannels.reduce((sum, c) => sum + c.spend, 0)
-      currentValue = totalSpend > 0 ? ((totalRevenue - totalSpend) / totalSpend) * 100 : 0
-    }
+  if (activeSection !== "revenue-concentration" || !startDate || !endDate) return null;
 
-    const displayValue = isPercentage 
-      ? `${currentValue.toFixed(1)}%`
-      : formatCurrency(currentValue)
-
-    const color = circleColors[colorIndex % circleColors.length]
-
-    return (
-      <div
-        style={{
-          backgroundColor: "#fdfcfb",
-          padding: "20px",
-          borderRadius: "8px",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-          marginBottom: "20px",
-          position: "relative",
-        }}
-      >
-        <EyeIcon onClick={() => handleCalculationClick(title, calculation)} color={color.border} />
-        
-        <div style={{ display: "flex", alignItems: "center", marginBottom: "15px" }}>
-          <div
-            style={{
-              width: "100px",
-              height: "100px",
-              borderRadius: "50%",
-              border: `5px solid ${color.border}`,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              marginRight: "20px",
-              backgroundColor: color.background,
-            }}
-          >
-            <div style={{ textAlign: "center" }}>
-              <div style={{ fontSize: "16px", fontWeight: "700", color: color.text }}>
-                {displayValue}
-              </div>
-              <div style={{ fontSize: "11px", color: color.text, opacity: 0.8 }}>Current</div>
-            </div>
-          </div>
-          <div style={{ flex: 1 }}>
-            <h4 style={{ color: "#5d4037", marginBottom: "5px", fontSize: "16px" }}>{title}</h4>
-          </div>
-        </div>
-
-        <div style={{ borderTop: "1px solid #e8ddd4", paddingTop: "15px" }}>
-          <div style={{ display: "flex", gap: "10px", marginBottom: "10px" }}>
-            <button
-              onClick={() => setExpandedNotes(prev => ({ ...prev, [dataKey]: !prev[dataKey] }))}
-              style={{
-                padding: "6px 12px",
-                backgroundColor: "#e8ddd4",
-                color: "#5d4037",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: "600",
-                fontSize: "12px",
-              }}
-            >
-              Add notes
-            </button>
-            <button
-              onClick={() => setExpandedNotes(prev => ({ ...prev, [`${dataKey}_analysis`]: !prev[`${dataKey}_analysis`] }))}
-              style={{
-                padding: "6px 12px",
-                backgroundColor: "#e8ddd4",
-                color: "#5d4037",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: "600",
-                fontSize: "12px",
-              }}
-            >
-              AI analysis
-            </button>
-            <button
-              onClick={() => openTrendModal(title, currentValue, isPercentage)}
-              style={{
-                padding: "6px 12px",
-                backgroundColor: "#e8ddd4",
-                color: "#5d4037",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: "600",
-                fontSize: "12px",
-              }}
-            >
-              View trend
-            </button>
-          </div>
-
-          {expandedNotes[dataKey] && (
-            <div style={{ marginBottom: "10px" }}>
-              <label
-                style={{
-                  fontSize: "12px",
-                  color: "#5d4037",
-                  fontWeight: "600",
-                  display: "block",
-                  marginBottom: "5px",
-                }}
-              >
-                Notes / Comments:
-              </label>
-              <textarea
-                value={kpiNotes[dataKey] || ""}
-                onChange={(e) => setKpiNotes(prev => ({ ...prev, [dataKey]: e.target.value }))}
-                placeholder="Add notes or comments..."
-                style={{
-                  width: "100%",
-                  padding: "10px",
-                  borderRadius: "4px",
-                  border: "1px solid #e8ddd4",
-                  minHeight: "60px",
-                  fontSize: "13px",
-                }}
-              />
-            </div>
-          )}
-
-          {expandedNotes[`${dataKey}_analysis`] && (
-            <div
-              style={{
-                backgroundColor: "#e3f2fd",
-                padding: "15px",
-                borderRadius: "6px",
-                border: "1px solid #90caf9",
-              }}
-            >
-              <label
-                style={{
-                  fontSize: "12px",
-                  color: "#1565c0",
-                  fontWeight: "600",
-                  display: "block",
-                  marginBottom: "8px",
-                }}
-              >
-                AI Analysis:
-              </label>
-              <p style={{ fontSize: "13px", color: "#1565c0", lineHeight: "1.5", margin: 0 }}>
-                {kpiAnalysis[dataKey] ||
-                  `Based on the current ${title.toLowerCase()} of ${displayValue}:
-                  \n\nThis metric indicates your marketing efficiency.
-                  \n\nRecommended actions:
-                  \n• Monitor spend effectiveness
-                  \n• Optimize channel performance
-                  \n• Focus on high-ROI activities`}
-              </p>
-            </div>
-          )}
-        </div>
-      </div>
-    )
-  }
-
-  if (activeSection !== "revenue-concentration" || !startDate || !endDate) return null
-
-  const totalMarketingSpend = concentrationData.revenueChannels.reduce((sum, c) => sum + c.spend, 0)
-  const totalRevenue = concentrationData.revenueChannels.reduce((sum, c) => sum + c.revenue, 0)
-  const totalROI = totalMarketingSpend > 0 ? ((totalRevenue - totalMarketingSpend) / totalMarketingSpend) * 100 : 0
+  const totalMarketingSpend = concentrationData.revenueChannels.reduce((sum, c) => sum + c.spend, 0);
+  const totalRevenue = concentrationData.revenueChannels.reduce((sum, c) => sum + c.revenue, 0);
+  const totalROI = totalMarketingSpend > 0 ? ((totalRevenue - totalMarketingSpend) / totalMarketingSpend) * 100 : 0;
   
-  const sortedChannels = [...concentrationData.revenueChannels].sort((a, b) => b.revenue - a.revenue)
-  const top3Channels = sortedChannels.slice(0, 3)
-  const top3Revenue = top3Channels.reduce((sum, c) => sum + c.revenue, 0)
-  const top3Percentage = totalRevenue > 0 ? (top3Revenue / totalRevenue) * 100 : 0
+  const sortedChannels = [...concentrationData.revenueChannels].sort((a, b) => b.revenue - a.revenue);
+  const top3Channels = sortedChannels.slice(0, 3);
+  const top3Revenue = top3Channels.reduce((sum, c) => sum + c.revenue, 0);
+  const top3Percentage = totalRevenue > 0 ? (top3Revenue / totalRevenue) * 100 : 0;
 
-  const sortedSegments = [...concentrationData.customerSegments].sort((a, b) => b.revenue - a.revenue)
-  const top3Segments = sortedSegments.slice(0, 3)
+  const sortedSegments = [...concentrationData.customerSegments].sort((a, b) => b.revenue - a.revenue);
+  const top3Segments = sortedSegments.slice(0, 3);
 
-  const sortedCustomers = [...concentrationData.revenueByCustomer].sort((a, b) => b.revenue - a.revenue)
-  const top3Customers = sortedCustomers.slice(0, 3)
+  const sortedCustomers = [...concentrationData.revenueByCustomer].sort((a, b) => b.revenue - a.revenue);
+  const top3Customers = sortedCustomers.slice(0, 3);
 
   const calculationTexts = {
     totalMarketingSpend: "Total Marketing Spend: Sum of marketing spend across all channels.\n\nShows total marketing investment.",
     totalROI: "Return on Investment = (Revenue - Spend) ÷ Spend × 100%\n\nMeasures marketing efficiency.",
-  }
+  };
 
   return (
     <div>
@@ -3097,10 +3041,33 @@ const RevenueConcentration = ({ activeSection, currentUser, isInvestorView, onAd
         </div>
       </div>
 
-      {/* KPI Cards - Only 2 cards (removed Total Revenue and Top 3 Concentration) */}
+      {/* KPI Cards - 2 cards per row */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "20px", marginBottom: "30px" }}>
-        {renderKPICard("Total Marketing Spend", "totalMarketingSpend", calculationTexts.totalMarketingSpend, false, 5)}
-        {renderKPICard("Overall ROI", "totalROI", calculationTexts.totalROI, true, 6)}
+        <KPITripleCard
+          title="Total Marketing Spend"
+          actualValue={totalMarketingSpend}
+          budgetValue={totalMarketingSpend * 1.1} // Placeholder - in real app would come from data
+          unit="currency"
+          goodDirection="down"
+          onEyeClick={() => handleCalculationClick("Total Marketing Spend", calculationTexts.totalMarketingSpend)}
+          onAddNotes={(notes) => setKpiNotes({...kpiNotes, totalMarketingSpend: notes})}
+          onAnalysis={() => setExpandedNotes({...expandedNotes, totalMarketingSpend_analysis: !expandedNotes.totalMarketingSpend_analysis})}
+          onTrend={() => openTrendModal("Total Marketing Spend", [totalMarketingSpend], "currency")}
+          notes={kpiNotes.totalMarketingSpend}
+        />
+        
+        <KPITripleCard
+          title="Overall ROI"
+          actualValue={totalROI}
+          budgetValue={totalROI * 1.2} // Placeholder
+          unit="percentage"
+          goodDirection="up"
+          onEyeClick={() => handleCalculationClick("Overall ROI", calculationTexts.totalROI)}
+          onAddNotes={(notes) => setKpiNotes({...kpiNotes, totalROI: notes})}
+          onAnalysis={() => setExpandedNotes({...expandedNotes, totalROI_analysis: !expandedNotes.totalROI_analysis})}
+          onTrend={() => openTrendModal("Overall ROI", [totalROI], "percentage")}
+          notes={kpiNotes.totalROI}
+        />
       </div>
 
       {/* Top 3 Concentration Table */}
@@ -3244,7 +3211,7 @@ const RevenueConcentration = ({ activeSection, currentUser, isInvestorView, onAd
                 tooltip: {
                   callbacks: {
                     label: (context) => {
-                      return `${context.dataset.label}: ${formatCurrency(context.raw)}`
+                      return `${context.dataset.label}: ${formatCurrency(context.raw)}`;
                     },
                   },
                 },
@@ -3286,9 +3253,9 @@ const RevenueConcentration = ({ activeSection, currentUser, isInvestorView, onAd
             </thead>
             <tbody>
               {concentrationData.revenueChannels.sort((a, b) => b.revenue - a.revenue).map((channel, index) => {
-                const netProfit = channel.revenue - channel.spend
-                const roi = channel.spend > 0 ? (netProfit / channel.spend) * 100 : 0
-                const revenuePercentage = totalRevenue > 0 ? (channel.revenue / totalRevenue) * 100 : 0
+                const netProfit = channel.revenue - channel.spend;
+                const roi = channel.spend > 0 ? (netProfit / channel.spend) * 100 : 0;
+                const revenuePercentage = totalRevenue > 0 ? (channel.revenue / totalRevenue) * 100 : 0;
                 
                 return (
                   <tr
@@ -3329,7 +3296,7 @@ const RevenueConcentration = ({ activeSection, currentUser, isInvestorView, onAd
                       {revenuePercentage.toFixed(1)}%
                     </td>
                   </tr>
-                )
+                );
               })}
             </tbody>
           </table>
@@ -3386,29 +3353,29 @@ const RevenueConcentration = ({ activeSection, currentUser, isInvestorView, onAd
           title={selectedTrendItem.name}
           data={selectedTrendItem.data}
           labels={selectedTrendItem.labels}
-          isPercentage={selectedTrendItem.isPercentage}
+          unit={selectedTrendItem.unit}
         />
       )}
     </div>
-  )
-}
+  );
+};
 
 // ==================== DEMAND SUSTAINABILITY COMPONENT ====================
 
 const DemandSustainability = ({ activeSection, currentUser, isInvestorView, onAddData, startDate, endDate }) => {
-  const [loading, setLoading] = useState(false)
-  const [expandedNotes, setExpandedNotes] = useState({})
-  const [kpiNotes, setKpiNotes] = useState({})
-  const [kpiAnalysis, setKpiAnalysis] = useState({})
-  const [showCalculationModal, setShowCalculationModal] = useState(false)
-  const [selectedCalculation, setSelectedCalculation] = useState({ title: "", calculation: "" })
-  const [showTrendModal, setShowTrendModal] = useState(false)
-  const [selectedTrendItem, setSelectedTrendItem] = useState(null)
-  const [financialYearStart, setFinancialYearStart] = useState("Jan")
+  const [loading, setLoading] = useState(false);
+  const [expandedNotes, setExpandedNotes] = useState({});
+  const [kpiNotes, setKpiNotes] = useState({});
+  const [kpiAnalysis, setKpiAnalysis] = useState({});
+  const [showCalculationModal, setShowCalculationModal] = useState(false);
+  const [selectedCalculation, setSelectedCalculation] = useState({ title: "", calculation: "" });
+  const [showTrendModal, setShowTrendModal] = useState(false);
+  const [selectedTrendItem, setSelectedTrendItem] = useState(null);
+  const [financialYearStart, setFinancialYearStart] = useState("Jan");
 
   const [sustainabilityData, setSustainabilityData] = useState({
-    repeatCustomerRate: 0,
-    churnRate: 0,
+    repeatCustomerRate: { actual: Array(12).fill(0), budget: Array(12).fill(0) },
+    churnRate: { actual: Array(12).fill(0), budget: Array(12).fill(0) },
     campaigns: [
       { name: "Q1 Campaign", cost: 0, revenue: 0 },
       { name: "Q2 Campaign", cost: 0, revenue: 0 },
@@ -3416,47 +3383,53 @@ const DemandSustainability = ({ activeSection, currentUser, isInvestorView, onAd
       { name: "Holiday Campaign", cost: 0, revenue: 0 }
     ],
     notes: "",
-  })
+  });
 
   useEffect(() => {
     const loadFinancialYear = async () => {
-      if (!currentUser) return
+      if (!currentUser) return;
       try {
-        const docRef = doc(db, "universalProfiles", currentUser.uid)
-        const docSnap = await getDoc(docRef)
+        const docRef = doc(db, "universalProfiles", currentUser.uid);
+        const docSnap = await getDoc(docRef);
         if (docSnap.exists()) {
-          const data = docSnap.data()
-          const fyEnd = data.entityOverview?.financialYearEnd
+          const data = docSnap.data();
+          const fyEnd = data.entityOverview?.financialYearEnd;
           if (fyEnd) {
-            const monthNum = parseInt(fyEnd.split('-')[1])
-            const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-            setFinancialYearStart(months[(monthNum % 12)])
+            const monthNum = parseInt(fyEnd.split('-')[1]);
+            const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+            setFinancialYearStart(months[(monthNum % 12)]);
           }
         }
       } catch (error) {
-        console.error("Error loading financial year:", error)
+        console.error("Error loading financial year:", error);
       }
-    }
-    loadFinancialYear()
-  }, [currentUser])
+    };
+    loadFinancialYear();
+  }, [currentUser]);
 
   useEffect(() => {
     if (currentUser && activeSection === "demand-sustainability") {
-      loadData()
+      loadData();
     }
-  }, [currentUser, activeSection, startDate?.year])
+  }, [currentUser, activeSection, startDate?.year]);
 
   const loadData = async () => {
-    if (!currentUser || !startDate) return
-    setLoading(true)
+    if (!currentUser || !startDate) return;
+    setLoading(true);
     try {
-      const docRef = doc(db, "pipelineData", `${currentUser.uid}_sustainability_${startDate.year}`)
-      const docSnap = await getDoc(docRef)
+      const docRef = doc(db, "pipelineData", `${currentUser.uid}_sustainability_${startDate.year}`);
+      const docSnap = await getDoc(docRef);
       if (docSnap.exists()) {
-        const data = docSnap.data()
+        const data = docSnap.data();
         setSustainabilityData({
-          repeatCustomerRate: data.repeatCustomerRate || 0,
-          churnRate: data.churnRate || 0,
+          repeatCustomerRate: { 
+            actual: data.repeatCustomerRate?.actual || Array(12).fill(0),
+            budget: data.repeatCustomerRate?.budget || Array(12).fill(0)
+          },
+          churnRate: { 
+            actual: data.churnRate?.actual || Array(12).fill(0),
+            budget: data.churnRate?.budget || Array(12).fill(0)
+          },
           campaigns: data.campaigns || [
             { name: "Q1 Campaign", cost: 0, revenue: 0 },
             { name: "Q2 Campaign", cost: 0, revenue: 0 },
@@ -3464,258 +3437,68 @@ const DemandSustainability = ({ activeSection, currentUser, isInvestorView, onAd
             { name: "Holiday Campaign", cost: 0, revenue: 0 }
           ],
           notes: data.notes || "",
-        })
+        });
       }
     } catch (error) {
-      console.error("Error loading demand sustainability data:", error)
+      console.error("Error loading demand sustainability data:", error);
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const handleCalculationClick = (title, calculation) => {
-    setSelectedCalculation({ title, calculation })
-    setShowCalculationModal(true)
-  }
+    setSelectedCalculation({ title, calculation });
+    setShowCalculationModal(true);
+  };
 
-  const openTrendModal = (itemName, dataArray, isPercentage = false) => {
-    if (!startDate || !endDate) return
+  const openTrendModal = (itemName, dataArray, unit = "percentage") => {
+    if (!startDate || !endDate) return;
     
-    const months = getMonthsForYear(startDate.year, financialYearStart)
-    const startMonthIndex = months.indexOf(startDate.month)
-    const endMonthIndex = months.indexOf(endDate.month)
+    const months = getMonthsForYear(startDate.year, financialYearStart);
+    const startMonthIndex = months.indexOf(startDate.month);
+    const endMonthIndex = months.indexOf(endDate.month);
     
-    // Get last 11 months + current month
-    const monthIndices = []
-    let currentIndex = endMonthIndex
+    const monthIndices = [];
+    let currentIndex = endMonthIndex;
     for (let i = 0; i < 12; i++) {
-      monthIndices.unshift(currentIndex)
-      currentIndex = (currentIndex - 1 + 12) % 12
+      monthIndices.unshift(currentIndex);
+      currentIndex = (currentIndex - 1 + 12) % 12;
     }
     
-    const trendData = []
-    const trendLabels = []
+    const trendData = [];
+    const trendLabels = [];
     
     monthIndices.forEach(idx => {
-      trendData.push(dataArray[idx] || 0)
-      trendLabels.push(`${months[idx]} ${startDate.year}`)
-    })
+      trendData.push(dataArray[idx] || 0);
+      trendLabels.push(`${months[idx]} ${startDate.year}`);
+    });
     
     setSelectedTrendItem({ 
       name: itemName, 
       data: trendData,
       labels: trendLabels,
-      isPercentage
-    })
-    setShowTrendModal(true)
-  }
+      unit
+    });
+    setShowTrendModal(true);
+  };
 
-  const months = getMonthsForYear(startDate?.year || new Date().getFullYear(), financialYearStart)
-  const monthIndex = startDate ? months.indexOf(startDate.month) : 0
+  const months = getMonthsForYear(startDate?.year || new Date().getFullYear(), financialYearStart);
+  const monthIndex = startDate ? months.indexOf(startDate.month) : 0;
 
-  const renderKPICard = (title, dataKey, calculation = "", isPercentage = false, colorIndex = 0) => {
-    let currentValue = 0
-    let dataArray = []
-    
-    if (dataKey === "repeatCustomerRate") {
-      currentValue = sustainabilityData.repeatCustomerRate
-    } else if (dataKey === "churnRate") {
-      currentValue = sustainabilityData.churnRate
-    } else if (dataKey === "netRetention") {
-      currentValue = sustainabilityData.repeatCustomerRate - sustainabilityData.churnRate
-    } else if (dataKey === "campaignROI") {
-      const totalCost = sustainabilityData.campaigns.reduce((sum, c) => sum + c.cost, 0)
-      const totalRevenue = sustainabilityData.campaigns.reduce((sum, c) => sum + c.revenue, 0)
-      currentValue = totalCost > 0 ? ((totalRevenue - totalCost) / totalCost) * 100 : 0
-    }
+  if (activeSection !== "demand-sustainability" || !startDate || !endDate) return null;
 
-    const displayValue = isPercentage 
-      ? `${currentValue.toFixed(1)}%`
-      : formatCurrency(currentValue)
-
-    const color = circleColors[colorIndex % circleColors.length]
-
-    return (
-      <div
-        style={{
-          backgroundColor: "#fdfcfb",
-          padding: "20px",
-          borderRadius: "8px",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-          marginBottom: "20px",
-          position: "relative",
-        }}
-      >
-        <EyeIcon onClick={() => handleCalculationClick(title, calculation)} color={color.border} />
-        
-        <div style={{ display: "flex", alignItems: "center", marginBottom: "15px" }}>
-          <div
-            style={{
-              width: "100px",
-              height: "100px",
-              borderRadius: "50%",
-              border: `5px solid ${color.border}`,
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              marginRight: "20px",
-              backgroundColor: color.background,
-            }}
-          >
-            <div style={{ textAlign: "center" }}>
-              <div style={{ fontSize: "16px", fontWeight: "700", color: color.text }}>
-                {displayValue}
-              </div>
-              <div style={{ fontSize: "11px", color: color.text, opacity: 0.8 }}>Current</div>
-            </div>
-          </div>
-          <div style={{ flex: 1 }}>
-            <h4 style={{ color: "#5d4037", marginBottom: "5px", fontSize: "16px" }}>{title}</h4>
-          </div>
-        </div>
-
-        <div style={{ borderTop: "1px solid #e8ddd4", paddingTop: "15px" }}>
-          <div style={{ display: "flex", gap: "10px", marginBottom: "10px" }}>
-            <button
-              onClick={() => setExpandedNotes(prev => ({ ...prev, [dataKey]: !prev[dataKey] }))}
-              style={{
-                padding: "6px 12px",
-                backgroundColor: "#e8ddd4",
-                color: "#5d4037",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: "600",
-                fontSize: "12px",
-              }}
-            >
-              Add notes
-            </button>
-            <button
-              onClick={() => setExpandedNotes(prev => ({ ...prev, [`${dataKey}_analysis`]: !prev[`${dataKey}_analysis`] }))}
-              style={{
-                padding: "6px 12px",
-                backgroundColor: "#e8ddd4",
-                color: "#5d4037",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: "600",
-                fontSize: "12px",
-              }}
-            >
-              AI analysis
-            </button>
-            <button
-              onClick={() => {
-                if (dataKey === "campaignROI") {
-                  // For campaign ROI, we need to create a data array
-                  const roiData = sustainabilityData.campaigns.map(c => {
-                    const roi = c.cost > 0 ? ((c.revenue - c.cost) / c.cost) * 100 : 0
-                    return roi
-                  })
-                  openTrendModal(title, roiData, true)
-                } else {
-                  // For other metrics, we need monthly data
-                  // In production, you'd fetch this from Firestore
-                  const monthlyData = Array(12).fill(currentValue * (0.9 + Math.random() * 0.2))
-                  openTrendModal(title, monthlyData, isPercentage)
-                }
-              }}
-              style={{
-                padding: "6px 12px",
-                backgroundColor: "#e8ddd4",
-                color: "#5d4037",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: "600",
-                fontSize: "12px",
-              }}
-            >
-              View trend
-            </button>
-          </div>
-
-          {expandedNotes[dataKey] && (
-            <div style={{ marginBottom: "10px" }}>
-              <label
-                style={{
-                  fontSize: "12px",
-                  color: "#5d4037",
-                  fontWeight: "600",
-                  display: "block",
-                  marginBottom: "5px",
-                }}
-              >
-                Notes / Comments:
-              </label>
-              <textarea
-                value={kpiNotes[dataKey] || ""}
-                onChange={(e) => setKpiNotes(prev => ({ ...prev, [dataKey]: e.target.value }))}
-                placeholder="Add notes or comments..."
-                style={{
-                  width: "100%",
-                  padding: "10px",
-                  borderRadius: "4px",
-                  border: "1px solid #e8ddd4",
-                  minHeight: "60px",
-                  fontSize: "13px",
-                }}
-              />
-            </div>
-          )}
-
-          {expandedNotes[`${dataKey}_analysis`] && (
-            <div
-              style={{
-                backgroundColor: "#e3f2fd",
-                padding: "15px",
-                borderRadius: "6px",
-                border: "1px solid #90caf9",
-              }}
-            >
-              <label
-                style={{
-                  fontSize: "12px",
-                  color: "#1565c0",
-                  fontWeight: "600",
-                  display: "block",
-                  marginBottom: "8px",
-                }}
-              >
-                AI Analysis:
-              </label>
-              <p style={{ fontSize: "13px", color: "#1565c0", lineHeight: "1.5", margin: 0 }}>
-                {kpiAnalysis[dataKey] ||
-                  `Based on the current ${title.toLowerCase()} of ${displayValue}:
-                  \n\nThis metric indicates demand sustainability.
-                  \n\nRecommended actions:
-                  \n• Monitor trends monthly
-                  \n• Focus on customer retention
-                  \n• Optimize campaign ROI`}
-              </p>
-            </div>
-          )}
-        </div>
-      </div>
-    )
-  }
-
-  if (activeSection !== "demand-sustainability" || !startDate || !endDate) return null
-
-  const netRetention = sustainabilityData.repeatCustomerRate - sustainabilityData.churnRate
+  const netRetention = (sustainabilityData.repeatCustomerRate.actual[monthIndex] || 0) - (sustainabilityData.churnRate.actual[monthIndex] || 0);
   
-  const totalCampaignCost = sustainabilityData.campaigns.reduce((sum, c) => sum + c.cost, 0)
-  const totalCampaignRevenue = sustainabilityData.campaigns.reduce((sum, c) => sum + c.revenue, 0)
-  const campaignROI = totalCampaignCost > 0 ? ((totalCampaignRevenue - totalCampaignCost) / totalCampaignCost) * 100 : 0
+  const totalCampaignCost = sustainabilityData.campaigns.reduce((sum, c) => sum + c.cost, 0);
+  const totalCampaignRevenue = sustainabilityData.campaigns.reduce((sum, c) => sum + c.revenue, 0);
+  const campaignROI = totalCampaignCost > 0 ? ((totalCampaignRevenue - totalCampaignCost) / totalCampaignCost) * 100 : 0;
 
   const calculationTexts = {
     repeatCustomerRate: "Repeat Customer Rate = (Repeat Customers ÷ Total Customers) × 100%\n\nMeasures customer loyalty and satisfaction.",
     churnRate: "Churn Rate = (Customers Lost ÷ Total Customers) × 100%\n\nMeasures customer retention.",
     netRetention: "Net Retention Rate = Repeat Customer Rate - Churn Rate\n\nIndicates overall customer retention health.",
     campaignROI: "Campaign ROI = (Revenue - Cost) ÷ Cost × 100%\n\nMeasures marketing campaign effectiveness.",
-  }
+  };
 
   return (
     <div>
@@ -3759,12 +3542,59 @@ const DemandSustainability = ({ activeSection, currentUser, isInvestorView, onAd
         </div>
       </div>
 
-      {/* KPI Cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "20px", marginBottom: "30px" }}>
-        {renderKPICard("Repeat Customer Rate", "repeatCustomerRate", calculationTexts.repeatCustomerRate, true, 0)}
-        {renderKPICard("Churn Rate", "churnRate", calculationTexts.churnRate, true, 1)}
-        {renderKPICard("Net Retention", "netRetention", calculationTexts.netRetention, true, 2)}
-        {renderKPICard("Campaign ROI", "campaignROI", calculationTexts.campaignROI, true, 3)}
+      {/* KPI Cards - 2 cards per row, each with 3 circles */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "20px", marginBottom: "30px" }}>
+        <KPITripleCard
+          title="Repeat Customer Rate"
+          actualValue={sustainabilityData.repeatCustomerRate.actual[monthIndex] || 0}
+          budgetValue={sustainabilityData.repeatCustomerRate.budget[monthIndex] || 0}
+          unit="percentage"
+          goodDirection="up"
+          onEyeClick={() => handleCalculationClick("Repeat Customer Rate", calculationTexts.repeatCustomerRate)}
+          onAddNotes={(notes) => setKpiNotes({...kpiNotes, repeatCustomerRate: notes})}
+          onAnalysis={() => setExpandedNotes({...expandedNotes, repeatCustomerRate_analysis: !expandedNotes.repeatCustomerRate_analysis})}
+          onTrend={() => openTrendModal("Repeat Customer Rate", sustainabilityData.repeatCustomerRate.actual, "percentage")}
+          notes={kpiNotes.repeatCustomerRate}
+        />
+        
+        <KPITripleCard
+          title="Churn Rate"
+          actualValue={sustainabilityData.churnRate.actual[monthIndex] || 0}
+          budgetValue={sustainabilityData.churnRate.budget[monthIndex] || 0}
+          unit="percentage"
+          goodDirection="down" // Lower churn is better
+          onEyeClick={() => handleCalculationClick("Churn Rate", calculationTexts.churnRate)}
+          onAddNotes={(notes) => setKpiNotes({...kpiNotes, churnRate: notes})}
+          onAnalysis={() => setExpandedNotes({...expandedNotes, churnRate_analysis: !expandedNotes.churnRate_analysis})}
+          onTrend={() => openTrendModal("Churn Rate", sustainabilityData.churnRate.actual, "percentage")}
+          notes={kpiNotes.churnRate}
+        />
+        
+        <KPITripleCard
+          title="Net Retention"
+          actualValue={netRetention}
+          budgetValue={netRetention * 1.1} // Placeholder
+          unit="percentage"
+          goodDirection="up"
+          onEyeClick={() => handleCalculationClick("Net Retention", calculationTexts.netRetention)}
+          onAddNotes={(notes) => setKpiNotes({...kpiNotes, netRetention: notes})}
+          onAnalysis={() => setExpandedNotes({...expandedNotes, netRetention_analysis: !expandedNotes.netRetention_analysis})}
+          onTrend={() => openTrendModal("Net Retention", [netRetention], "percentage")}
+          notes={kpiNotes.netRetention}
+        />
+        
+        <KPITripleCard
+          title="Campaign ROI"
+          actualValue={campaignROI}
+          budgetValue={campaignROI * 1.2} // Placeholder
+          unit="percentage"
+          goodDirection="up"
+          onEyeClick={() => handleCalculationClick("Campaign ROI", calculationTexts.campaignROI)}
+          onAddNotes={(notes) => setKpiNotes({...kpiNotes, campaignROI: notes})}
+          onAnalysis={() => setExpandedNotes({...expandedNotes, campaignROI_analysis: !expandedNotes.campaignROI_analysis})}
+          onTrend={() => openTrendModal("Campaign ROI", [campaignROI], "percentage")}
+          notes={kpiNotes.campaignROI}
+        />
       </div>
 
       {/* Campaign Table */}
@@ -3787,7 +3617,7 @@ const DemandSustainability = ({ activeSection, currentUser, isInvestorView, onAd
             </thead>
             <tbody>
               {sustainabilityData.campaigns.map((campaign, index) => {
-                const roi = campaign.cost > 0 ? ((campaign.revenue - campaign.cost) / campaign.cost) * 100 : 0
+                const roi = campaign.cost > 0 ? ((campaign.revenue - campaign.cost) / campaign.cost) * 100 : 0;
                 return (
                   <tr
                     key={index}
@@ -3815,7 +3645,7 @@ const DemandSustainability = ({ activeSection, currentUser, isInvestorView, onAd
                       {roi.toFixed(1)}%
                     </td>
                   </tr>
-                )
+                );
               })}
             </tbody>
           </table>
@@ -3838,64 +3668,64 @@ const DemandSustainability = ({ activeSection, currentUser, isInvestorView, onAd
           title={selectedTrendItem.name}
           data={selectedTrendItem.data}
           labels={selectedTrendItem.labels}
-          isPercentage={selectedTrendItem.isPercentage}
+          unit={selectedTrendItem.unit}
         />
       )}
     </div>
-  )
-}
+  );
+};
 
 // ==================== MAIN MARKETING SALES COMPONENT ====================
 
 export default function MarketingSales() {
-  const [activeSection, setActiveSection] = useState("pipeline-visibility")
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
-  const [user, setUser] = useState(null)
-  const [showFullDescription, setShowFullDescription] = useState(false)
+  const [activeSection, setActiveSection] = useState("pipeline-visibility");
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [user, setUser] = useState(null);
+  const [showFullDescription, setShowFullDescription] = useState(false);
 
-  const [isInvestorView, setIsInvestorView] = useState(false)
-  const [viewingSMEId, setViewingSMEId] = useState(null)
-  const [viewingSMEName, setViewingSMEName] = useState("")
+  const [isInvestorView, setIsInvestorView] = useState(false);
+  const [viewingSMEId, setViewingSMEId] = useState(null);
+  const [viewingSMEName, setViewingSMEName] = useState("");
   
-  const [showAddDataModal, setShowAddDataModal] = useState(false)
-  const [loading, setLoading] = useState(false)
+  const [showAddDataModal, setShowAddDataModal] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   // Date range state
-  const [startDate, setStartDate] = useState({ year: new Date().getFullYear(), month: "Jan" })
-  const [endDate, setEndDate] = useState({ year: new Date().getFullYear(), month: "Dec" })
+  const [startDate, setStartDate] = useState({ year: new Date().getFullYear(), month: "Jan" });
+  const [endDate, setEndDate] = useState({ year: new Date().getFullYear(), month: "Dec" });
 
   useEffect(() => {
-    const investorViewMode = sessionStorage.getItem("investorViewMode")
-    const smeId = sessionStorage.getItem("viewingSMEId")
-    const smeName = sessionStorage.getItem("viewingSMEName")
+    const investorViewMode = sessionStorage.getItem("investorViewMode");
+    const smeId = sessionStorage.getItem("viewingSMEId");
+    const smeName = sessionStorage.getItem("viewingSMEName");
 
     if (investorViewMode === "true" && smeId) {
-      setIsInvestorView(true)
-      setViewingSMEId(smeId)
-      setViewingSMEName(smeName || "SME")
+      setIsInvestorView(true);
+      setViewingSMEId(smeId);
+      setViewingSMEName(smeName || "SME");
     }
-  }, [])
+  }, []);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       if (isInvestorView && viewingSMEId) {
-        setUser({ uid: viewingSMEId })
+        setUser({ uid: viewingSMEId });
       } else {
-        setUser(currentUser)
+        setUser(currentUser);
       }
-    })
-    return () => unsubscribe()
-  }, [isInvestorView, viewingSMEId])
+    });
+    return () => unsubscribe();
+  }, [isInvestorView, viewingSMEId]);
 
   useEffect(() => {
     const checkSidebarState = () => {
-      setIsSidebarCollapsed(document.body.classList.contains("sidebar-collapsed"))
-    }
-    checkSidebarState()
-    const observer = new MutationObserver(checkSidebarState)
-    observer.observe(document.body, { attributes: true, attributeFilter: ["class"] })
-    return () => observer.disconnect()
-  }, [])
+      setIsSidebarCollapsed(document.body.classList.contains("sidebar-collapsed"));
+    };
+    checkSidebarState();
+    const observer = new MutationObserver(checkSidebarState);
+    observer.observe(document.body, { attributes: true, attributeFilter: ["class"] });
+    return () => observer.disconnect();
+  }, []);
 
   const getContentStyles = () => ({
     width: "100%",
@@ -3905,21 +3735,21 @@ export default function MarketingSales() {
     padding: `70px 20px 20px ${isSidebarCollapsed ? "100px" : "270px"}`,
     transition: "padding 0.3s ease",
     boxSizing: "border-box",
-  })
+  });
 
   const sectionButtons = [
     { id: "pipeline-visibility", label: "Pipeline Visibility" },
     { id: "pipeline-sufficiency", label: "Pipeline Sufficiency" },
     { id: "revenue-concentration", label: "Revenue Concentration" },
     { id: "demand-sustainability", label: "Demand Sustainability" },
-  ]
+  ];
 
   const handleExitInvestorView = () => {
-    sessionStorage.removeItem("viewingSMEId")
-    sessionStorage.removeItem("viewingSMEName")
-    sessionStorage.removeItem("investorViewMode")
-    window.location.href = "/my-cohorts"
-  }
+    sessionStorage.removeItem("viewingSMEId");
+    sessionStorage.removeItem("viewingSMEName");
+    sessionStorage.removeItem("investorViewMode");
+    window.location.href = "/my-cohorts";
+  };
 
   return (
     <div style={{ display: "flex", minHeight: "100vh" }}>
@@ -4121,11 +3951,11 @@ export default function MarketingSales() {
         currentTab={activeSection}
         user={user}
         onSave={() => {
-          setLoading(true)
-          setTimeout(() => setLoading(false), 1000)
+          setLoading(true);
+          setTimeout(() => setLoading(false), 1000);
         }}
         loading={loading}
       />
     </div>
-  )
+  );
 }

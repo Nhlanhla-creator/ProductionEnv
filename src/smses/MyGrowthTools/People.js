@@ -19,6 +19,7 @@ import {
   Tooltip,
   Legend,
 } from "chart.js"
+import { Info, ChevronDown, ChevronUp, Upload, X, Calendar, TrendingUp, TrendingDown } from "lucide-react";
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, ArcElement, Title, Tooltip, Legend)
 
@@ -522,9 +523,15 @@ const UnifiedDataEntryModal = ({
   const [activeModalTab, setActiveModalTab] = useState(currentTab)
   const [localData, setLocalData] = useState({})
   const [capabilityTrainingData, setCapabilityTrainingData] = useState({
-    trainingSpendAmount: Array(12).fill(""),
-    trainingSpendPercentage: Array(12).fill(""),
-    trainingFocus: Array(12).fill(""),
+    trainingSpendAmount: { actual: Array(12).fill(""), budget: Array(12).fill("") },
+    trainingSpendPercentage: { actual: Array(12).fill(""), budget: Array(12).fill("") },
+    trainingFocus: { actual: Array(12).fill(""), budget: Array(12).fill("") },
+  })
+  const [productivityData, setProductivityData] = useState({
+    salesVolumePerEmployee: { actual: Array(12).fill(""), budget: Array(12).fill("") },
+    revenuePerEmployee: { actual: Array(12).fill(""), budget: Array(12).fill("") },
+    laborCostPercentage: { actual: Array(12).fill(""), budget: Array(12).fill("") },
+    overtimeHours: { actual: Array(12).fill(""), budget: Array(12).fill("") },
   })
   const [employeeTrackingData, setEmployeeTrackingData] = useState([])
   const [stabilityData, setStabilityData] = useState({
@@ -601,32 +608,6 @@ const UnifiedDataEntryModal = ({
         step: "0.01"
       }
     ],
-    "productivity": [
-      {
-        id: "salesVolumePerEmployee",
-        label: "Sales volume per employee (units)",
-        type: "number",
-        step: "0.01"
-      },
-      {
-        id: "overtimeHours",
-        label: "Overtime (hours)",
-        type: "number",
-        step: "0.01"
-      }
-    ],
-    "capability-training": [
-      {
-        id: "trainingFocus",
-        label: "Training focus",
-        type: "select",
-        options: [
-          { value: "1", label: "Technical" },
-          { value: "2", label: "Leadership" },
-          { value: "3", label: "Compliance" }
-        ]
-      }
-    ],
     "stability-continuity": [
       {
         id: "overallTurnover",
@@ -678,14 +659,27 @@ const UnifiedDataEntryModal = ({
           const prodDoc = await getDoc(doc(db, "peopleData", `${user.uid}_productivity`))
           if (prodDoc.exists()) {
             const data = prodDoc.data()
-            if (data.productivityData) setLocalData(data.productivityData)
+            if (data.productivityData) {
+              setProductivityData({
+                salesVolumePerEmployee: data.productivityData.salesVolumePerEmployee || { actual: Array(12).fill(""), budget: Array(12).fill("") },
+                revenuePerEmployee: data.productivityData.revenuePerEmployee || { actual: Array(12).fill(""), budget: Array(12).fill("") },
+                laborCostPercentage: data.productivityData.laborCostPercentage || { actual: Array(12).fill(""), budget: Array(12).fill("") },
+                overtimeHours: data.productivityData.overtimeHours || { actual: Array(12).fill(""), budget: Array(12).fill("") },
+              })
+            }
           }
           break
         case "capability-training":
           const capDoc = await getDoc(doc(db, "peopleData", `${user.uid}_capabilityTraining`))
           if (capDoc.exists()) {
             const data = capDoc.data()
-            if (data.capabilityData) setCapabilityTrainingData(data.capabilityData)
+            if (data.capabilityData) {
+              setCapabilityTrainingData({
+                trainingSpendAmount: data.capabilityData.trainingSpendAmount || { actual: Array(12).fill(""), budget: Array(12).fill("") },
+                trainingSpendPercentage: data.capabilityData.trainingSpendPercentage || { actual: Array(12).fill(""), budget: Array(12).fill("") },
+                trainingFocus: data.capabilityData.trainingFocus || { actual: Array(12).fill(""), budget: Array(12).fill("") },
+              })
+            }
           }
           
           const empDoc = await getDoc(doc(db, "peopleData", `${user.uid}_employeeTracking`))
@@ -748,7 +742,7 @@ const UnifiedDataEntryModal = ({
         case "productivity":
           await setDoc(doc(db, "peopleData", `${user.uid}_productivity`), {
             userId: user.uid,
-            productivityData: localData,
+            productivityData: productivityData,
             lastUpdated: new Date().toISOString(),
           })
           break
@@ -888,6 +882,180 @@ const UnifiedDataEntryModal = ({
     setEmployeeTrackingData(newData)
   }
 
+  const renderMonthlyInputsWithBudget = (label, dataObj, setDataObj, field, options = {}) => {
+    const { step = "0.01", unit = "" } = options
+    
+    return (
+      <div style={{ marginBottom: "25px", padding: "15px", backgroundColor: "#fff", borderRadius: "6px", border: "1px solid #e8ddd4" }}>
+        <h5 style={{ color: "#5d4037", marginBottom: "15px", fontSize: "14px", fontWeight: "600" }}>{label}</h5>
+        
+        {/* Actual Row */}
+        <div style={{ marginBottom: "15px" }}>
+          <div style={{ display: "flex", alignItems: "center", marginBottom: "8px" }}>
+            <div style={{ width: "60px", height: "20px", backgroundColor: "#FFB347", borderRadius: "4px", marginRight: "10px" }}></div>
+            <label style={{ fontSize: "13px", color: "#5d4037", fontWeight: "600" }}>Actual</label>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(12, 1fr)", gap: "5px" }}>
+            {months.map((month, idx) => (
+              <div key={`actual-${month}`}>
+                <label style={{ fontSize: "10px", color: "#8d6e63", display: "block", marginBottom: "2px" }}>
+                  {month}
+                </label>
+                <input
+                  type="number"
+                  step={step}
+                  value={dataObj[field]?.actual?.[idx] || ""}
+                  onChange={(e) => {
+                    const newData = { ...dataObj }
+                    if (!newData[field]) newData[field] = { actual: Array(12).fill(""), budget: Array(12).fill("") }
+                    if (!newData[field].actual) newData[field].actual = Array(12).fill("")
+                    newData[field].actual[idx] = e.target.value
+                    setDataObj(newData)
+                  }}
+                  placeholder="0"
+                  style={{
+                    width: "100%",
+                    padding: "6px",
+                    borderRadius: "4px",
+                    border: "1px solid #FFB347",
+                    fontSize: "12px",
+                    backgroundColor: "#fff9c4",
+                  }}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Budget Row */}
+        <div>
+          <div style={{ display: "flex", alignItems: "center", marginBottom: "8px" }}>
+            <div style={{ width: "60px", height: "20px", backgroundColor: "#90EE90", borderRadius: "4px", marginRight: "10px" }}></div>
+            <label style={{ fontSize: "13px", color: "#5d4037", fontWeight: "600" }}>Budget</label>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(12, 1fr)", gap: "5px" }}>
+            {months.map((month, idx) => (
+              <div key={`budget-${month}`}>
+                <label style={{ fontSize: "10px", color: "#8d6e63", display: "block", marginBottom: "2px" }}>
+                  {month}
+                </label>
+                <input
+                  type="number"
+                  step={step}
+                  value={dataObj[field]?.budget?.[idx] || ""}
+                  onChange={(e) => {
+                    const newData = { ...dataObj }
+                    if (!newData[field]) newData[field] = { actual: Array(12).fill(""), budget: Array(12).fill("") }
+                    if (!newData[field].budget) newData[field].budget = Array(12).fill("")
+                    newData[field].budget[idx] = e.target.value
+                    setDataObj(newData)
+                  }}
+                  placeholder="0"
+                  style={{
+                    width: "100%",
+                    padding: "6px",
+                    borderRadius: "4px",
+                    border: "1px solid #32CD32",
+                    fontSize: "12px",
+                    backgroundColor: "#f0fff0",
+                  }}
+                />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  const renderMonthlyInputsWithBudgetForSelect = (label, dataObj, setDataObj, field, options = []) => {
+    return (
+      <div style={{ marginBottom: "25px", padding: "15px", backgroundColor: "#fff", borderRadius: "6px", border: "1px solid #e8ddd4" }}>
+        <h5 style={{ color: "#5d4037", marginBottom: "15px", fontSize: "14px", fontWeight: "600" }}>{label}</h5>
+        
+        {/* Actual Row */}
+        <div style={{ marginBottom: "15px" }}>
+          <div style={{ display: "flex", alignItems: "center", marginBottom: "8px" }}>
+            <div style={{ width: "60px", height: "20px", backgroundColor: "#FFB347", borderRadius: "4px", marginRight: "10px" }}></div>
+            <label style={{ fontSize: "13px", color: "#5d4037", fontWeight: "600" }}>Actual</label>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(12, 1fr)", gap: "5px" }}>
+            {months.map((month, idx) => (
+              <div key={`actual-${month}`}>
+                <label style={{ fontSize: "10px", color: "#8d6e63", display: "block", marginBottom: "2px" }}>
+                  {month}
+                </label>
+                <select
+                  value={dataObj[field]?.actual?.[idx] || ""}
+                  onChange={(e) => {
+                    const newData = { ...dataObj }
+                    if (!newData[field]) newData[field] = { actual: Array(12).fill(""), budget: Array(12).fill("") }
+                    if (!newData[field].actual) newData[field].actual = Array(12).fill("")
+                    newData[field].actual[idx] = e.target.value
+                    setDataObj(newData)
+                  }}
+                  style={{
+                    width: "100%",
+                    padding: "6px",
+                    borderRadius: "4px",
+                    border: "1px solid #FFB347",
+                    fontSize: "12px",
+                    backgroundColor: "#fff9c4",
+                  }}
+                >
+                  <option value="">Select</option>
+                  {options.map(option => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Budget Row */}
+        <div>
+          <div style={{ display: "flex", alignItems: "center", marginBottom: "8px" }}>
+            <div style={{ width: "60px", height: "20px", backgroundColor: "#90EE90", borderRadius: "4px", marginRight: "10px" }}></div>
+            <label style={{ fontSize: "13px", color: "#5d4037", fontWeight: "600" }}>Budget</label>
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(12, 1fr)", gap: "5px" }}>
+            {months.map((month, idx) => (
+              <div key={`budget-${month}`}>
+                <label style={{ fontSize: "10px", color: "#8d6e63", display: "block", marginBottom: "2px" }}>
+                  {month}
+                </label>
+                <select
+                  value={dataObj[field]?.budget?.[idx] || ""}
+                  onChange={(e) => {
+                    const newData = { ...dataObj }
+                    if (!newData[field]) newData[field] = { actual: Array(12).fill(""), budget: Array(12).fill("") }
+                    if (!newData[field].budget) newData[field].budget = Array(12).fill("")
+                    newData[field].budget[idx] = e.target.value
+                    setDataObj(newData)
+                  }}
+                  style={{
+                    width: "100%",
+                    padding: "6px",
+                    borderRadius: "4px",
+                    border: "1px solid #32CD32",
+                    fontSize: "12px",
+                    backgroundColor: "#f0fff0",
+                  }}
+                >
+                  <option value="">Select</option>
+                  {options.map(option => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
+                </select>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    )
+  }
+
   if (!isOpen) return null
 
   return (
@@ -910,7 +1078,7 @@ const UnifiedDataEntryModal = ({
           backgroundColor: "#fdfcfb",
           padding: "20px",
           borderRadius: "8px",
-          maxWidth: "1200px",
+          maxWidth: "1400px",
           maxHeight: "90vh",
           overflow: "auto",
           width: "95%",
@@ -1193,8 +1361,8 @@ const UnifiedDataEntryModal = ({
             </div>
           )}
 
-          {/* Execution Capacity & Productivity Tabs */}
-          {["execution-capacity", "productivity", "stability-continuity"].includes(activeModalTab) && tabFields[activeModalTab] && (
+          {/* Execution Capacity & Stability Tabs */}
+          {["execution-capacity", "stability-continuity"].includes(activeModalTab) && tabFields[activeModalTab] && (
             <div style={{ marginBottom: "30px", padding: "15px", backgroundColor: "#f5f0eb", borderRadius: "8px" }}>
               <h4 style={{ color: "#5d4037", marginBottom: "15px" }}>Monthly Values</h4>
               {tabFields[activeModalTab].map((field) => (
@@ -1269,124 +1437,75 @@ const UnifiedDataEntryModal = ({
             </div>
           )}
 
-          {/* Capability & Training Tab */}
+          {/* Productivity Tab - With Actual & Budget */}
+          {activeModalTab === "productivity" && (
+            <div style={{ marginBottom: "30px" }}>
+              {renderMonthlyInputsWithBudget(
+                "Sales Volume per Employee", 
+                productivityData, 
+                setProductivityData, 
+                "salesVolumePerEmployee", 
+                { step: "1", unit: "units" }
+              )}
+              
+              {renderMonthlyInputsWithBudget(
+                "Revenue per Employee (R)", 
+                productivityData, 
+                setProductivityData, 
+                "revenuePerEmployee", 
+                { step: "1000", unit: "currency" }
+              )}
+              
+              {renderMonthlyInputsWithBudget(
+                "Labour Cost % of Revenue", 
+                productivityData, 
+                setProductivityData, 
+                "laborCostPercentage", 
+                { step: "0.1", unit: "percentage" }
+              )}
+              
+              {renderMonthlyInputsWithBudget(
+                "Overtime Hours", 
+                productivityData, 
+                setProductivityData, 
+                "overtimeHours", 
+                { step: "1", unit: "hours" }
+              )}
+            </div>
+          )}
+
+          {/* Capability & Training Tab - With Actual & Budget */}
           {activeModalTab === "capability-training" && (
             <>
               {/* Training Data */}
-              <div style={{ marginBottom: "30px", padding: "15px", backgroundColor: "#f5f0eb", borderRadius: "8px" }}>
-                <h4 style={{ color: "#5d4037", marginBottom: "15px" }}>Training Data - Monthly Values</h4>
+              <div style={{ marginBottom: "30px" }}>
+                {renderMonthlyInputsWithBudget(
+                  "Training Spend (R)", 
+                  capabilityTrainingData, 
+                  setCapabilityTrainingData, 
+                  "trainingSpendAmount", 
+                  { step: "1000", unit: "currency" }
+                )}
                 
-                {/* Training Spend Amount */}
-                <div style={{ marginBottom: "15px" }}>
-                  <label
-                    style={{
-                      display: "block",
-                      color: "#5d4037",
-                      fontWeight: "600",
-                      marginBottom: "8px",
-                      fontSize: "13px",
-                    }}
-                  >
-                    Training Spend (R)
-                  </label>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(12, 1fr)", gap: "5px" }}>
-                    {months.map((month, idx) => (
-                      <div key={month}>
-                        <label style={{ fontSize: "10px", color: "#8d6e63", display: "block", marginBottom: "2px" }}>
-                          {month}
-                        </label>
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={capabilityTrainingData.trainingSpendAmount?.[idx] || ""}
-                          onChange={(e) => {
-                            const newData = { ...capabilityTrainingData }
-                            if (!newData.trainingSpendAmount) newData.trainingSpendAmount = Array(12).fill("")
-                            newData.trainingSpendAmount[idx] = e.target.value
-                            setCapabilityTrainingData(newData)
-                          }}
-                          style={{
-                            width: "100%",
-                            padding: "6px",
-                            borderRadius: "4px",
-                            border: "1px solid #e8ddd4",
-                            fontSize: "12px",
-                          }}
-                        />
-                      </div>
-                    ))}
-                  </div>
-                </div>
+                {renderMonthlyInputsWithBudget(
+                  "Training Spend (% of payroll)", 
+                  capabilityTrainingData, 
+                  setCapabilityTrainingData, 
+                  "trainingSpendPercentage", 
+                  { step: "0.1", unit: "percentage" }
+                )}
                 
-                {tabFields[activeModalTab].map((field) => (
-                  <div key={field.id} style={{ marginBottom: "15px" }}>
-                    <label
-                      style={{
-                        display: "block",
-                        color: "#5d4037",
-                        fontWeight: "600",
-                        marginBottom: "8px",
-                        fontSize: "13px",
-                      }}
-                    >
-                      {field.label}
-                    </label>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(12, 1fr)", gap: "5px" }}>
-                      {months.map((month, idx) => (
-                        <div key={month}>
-                          <label style={{ fontSize: "10px", color: "#8d6e63", display: "block", marginBottom: "2px" }}>
-                            {month}
-                          </label>
-                          {field.type === "select" ? (
-                            <select
-                              value={capabilityTrainingData[field.id]?.[idx] || ""}
-                              onChange={(e) => {
-                                const newData = { ...capabilityTrainingData }
-                                if (!newData[field.id]) newData[field.id] = Array(12).fill("")
-                                newData[field.id][idx] = e.target.value
-                                setCapabilityTrainingData(newData)
-                              }}
-                              style={{
-                                width: "100%",
-                                padding: "6px",
-                                borderRadius: "4px",
-                                border: "1px solid #e8ddd4",
-                                fontSize: "12px",
-                                backgroundColor: "#fff",
-                              }}
-                            >
-                              <option value="">Select</option>
-                              {field.options.map((option) => (
-                                <option key={option.value} value={option.value}>
-                                  {option.label}
-                                </option>
-                              ))}
-                            </select>
-                          ) : (
-                            <input
-                              type="number"
-                              step={field.step || "0.01"}
-                              value={capabilityTrainingData[field.id]?.[idx] || ""}
-                              onChange={(e) => {
-                                const newData = { ...capabilityTrainingData }
-                                if (!newData[field.id]) newData[field.id] = Array(12).fill("")
-                                newData[field.id][idx] = e.target.value
-                                setCapabilityTrainingData(newData)
-                              }}
-                              style={{
-                                width: "100%",
-                                padding: "6px",
-                                borderRadius: "4px",
-                                border: "1px solid #e8ddd4",
-                                fontSize: "12px",
-                              }}
-                            />
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
+                {renderMonthlyInputsWithBudgetForSelect(
+                  "Training Focus", 
+                  capabilityTrainingData, 
+                  setCapabilityTrainingData, 
+                  "trainingFocus", 
+                  [
+                    { value: "1", label: "Technical" },
+                    { value: "2", label: "Leadership" },
+                    { value: "3", label: "Compliance" }
+                  ]
+                )}
               </div>
 
               {/* Employee Tracking */}
@@ -3120,12 +3239,12 @@ const Productivity = ({ activeSection, user, isInvestorView }) => {
   const [selectedCalculation, setSelectedCalculation] = useState({ title: "", calculation: "" })
   const [currencyUnit, setCurrencyUnit] = useState("zar_million")
   
-  // Data structure for productivity KPIs
+  // Data structure for productivity KPIs with Actual & Budget
   const [productivityData, setProductivityData] = useState({
-    salesVolumePerEmployee: Array(12).fill(""),
-    revenuePerEmployee: Array(12).fill(""),
-    laborCostPercentage: Array(12).fill(""),
-    overtimeHours: Array(12).fill(""),
+    salesVolumePerEmployee: { actual: Array(12).fill(""), budget: Array(12).fill("") },
+    revenuePerEmployee: { actual: Array(12).fill(""), budget: Array(12).fill("") },
+    laborCostPercentage: { actual: Array(12).fill(""), budget: Array(12).fill("") },
+    overtimeHours: { actual: Array(12).fill(""), budget: Array(12).fill("") },
   })
   
   // Financial data pulled from Financial Performance
@@ -3135,7 +3254,7 @@ const Productivity = ({ activeSection, user, isInvestorView }) => {
     employeeCount: Array(12).fill(1)
   })
 
-  const months = getMonthsForYear(selectedYear, "month")
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
   const years = Array.from({ length: 5 }, (_, i) => selectedYear - 2 + i)
 
   useEffect(() => {
@@ -3182,8 +3301,14 @@ const Productivity = ({ activeSection, user, isInvestorView }) => {
     
     setProductivityData(prev => ({
       ...prev,
-      revenuePerEmployee: revenuePerEmployee.map(v => v.toString()),
-      laborCostPercentage: laborCostPercentage.map(v => v.toFixed(2).toString())
+      revenuePerEmployee: {
+        actual: revenuePerEmployee.map(v => v.toString()),
+        budget: prev.revenuePerEmployee?.budget || Array(12).fill("")
+      },
+      laborCostPercentage: {
+        actual: laborCostPercentage.map(v => v.toFixed(2).toString()),
+        budget: prev.laborCostPercentage?.budget || Array(12).fill("")
+      }
     }))
   }
 
@@ -3198,50 +3323,99 @@ const Productivity = ({ activeSection, user, isInvestorView }) => {
     }
   }
 
+  const formatNumber = (value) => {
+    const num = Number.parseFloat(value) || 0
+    return num.toFixed(1)
+  }
+
+  const formatPercentage = (value) => {
+    const num = Number.parseFloat(value) || 0
+    return `${num.toFixed(1)}%`
+  }
+
+  const formatHours = (value) => {
+    const num = Number.parseFloat(value) || 0
+    return `${num.toFixed(0)} hrs`
+  }
+
   const handleCalculationClick = (title, calculation) => {
     setSelectedCalculation({ title, calculation })
     setShowCalculationModal(true)
   }
 
-  const openTrendModal = (itemName, dataKey, isPercentage = false) => {
-    let actualData = []
+  const openTrendModal = (itemName, dataArray, unit = "number") => {
+    if (!dataArray) return
     
-    if (dataKey === "revenuePerEmployee") {
-      actualData = productivityData.revenuePerEmployee?.map(v => parseFloat(v) || 0) || []
-    } else if (dataKey === "laborCostPercentage") {
-      actualData = productivityData.laborCostPercentage?.map(v => parseFloat(v) || 0) || []
-    } else if (dataKey === "salesVolumePerEmployee") {
-      actualData = productivityData.salesVolumePerEmployee?.map(v => parseFloat(v) || 0) || []
-    } else if (dataKey === "overtimeHours") {
-      actualData = productivityData.overtimeHours?.map(v => parseFloat(v) || 0) || []
-    }
+    const trendData = dataArray.map(v => parseFloat(v) || 0)
+    const trendLabels = months
     
     setSelectedTrendItem({ 
       name: itemName, 
-      actual: actualData,
-      budget: null,
-      isPercentage 
+      data: trendData,
+      labels: trendLabels,
+      unit
     })
     setShowTrendModal(true)
   }
 
-  const renderKPICard = (title, dataKey, isPercentage = false, isCurrency = false, calculation = "") => {
-    let data = []
-    let currentValue = 0
+  // Circle colors
+  const circleColors = [
+    { border: "#FF8C00", background: "#FFB347", text: "#663d00" },
+    { border: "#32CD32", background: "#90EE90", text: "#1e4d1e" },
+    { border: "#FFA500", background: "#FFD700", text: "#664d00" },
+  ]
+
+  const TrendArrow = ({ value, goodDirection = "up" }) => {
+    const isPositive = value > 0
+    const isGood = (goodDirection === "up" && isPositive) || (goodDirection === "down" && !isPositive)
+    
+    return (
+      <div style={{ display: "flex", alignItems: "center", gap: "4px", justifyContent: "center" }}>
+        {isPositive ? (
+          <TrendingUp size={16} color={isGood ? "#16a34a" : "#dc2626"} />
+        ) : (
+          <TrendingDown size={16} color={isGood ? "#16a34a" : "#dc2626"} />
+        )}
+        <span style={{ 
+          color: isGood ? "#16a34a" : "#dc2626",
+          fontSize: "12px",
+          fontWeight: "600"
+        }}>
+          {Math.abs(value).toFixed(1)}%
+        </span>
+      </div>
+    )
+  }
+
+  const renderTripleCard = (title, dataKey, unit = "number", goodDirection = "up", calculation = "") => {
+    const monthIndex = new Date().getMonth() // Current month
+    
+    let actualValue = 0
+    let budgetValue = 0
+    let formatFn = formatNumber
     
     if (dataKey === "revenuePerEmployee") {
-      data = productivityData.revenuePerEmployee || []
-      currentValue = Number.parseFloat(data[data.length - 1]) || 0
+      actualValue = parseFloat(productivityData.revenuePerEmployee?.actual?.[monthIndex]) || 0
+      budgetValue = parseFloat(productivityData.revenuePerEmployee?.budget?.[monthIndex]) || 0
+      formatFn = formatValue
+      unit = "currency"
     } else if (dataKey === "laborCostPercentage") {
-      data = productivityData.laborCostPercentage || []
-      currentValue = Number.parseFloat(data[data.length - 1]) || 0
+      actualValue = parseFloat(productivityData.laborCostPercentage?.actual?.[monthIndex]) || 0
+      budgetValue = parseFloat(productivityData.laborCostPercentage?.budget?.[monthIndex]) || 0
+      formatFn = formatPercentage
+      unit = "percentage"
     } else if (dataKey === "salesVolumePerEmployee") {
-      data = productivityData.salesVolumePerEmployee || []
-      currentValue = Number.parseFloat(data[data.length - 1]) || 0
+      actualValue = parseFloat(productivityData.salesVolumePerEmployee?.actual?.[monthIndex]) || 0
+      budgetValue = parseFloat(productivityData.salesVolumePerEmployee?.budget?.[monthIndex]) || 0
+      formatFn = formatNumber
     } else if (dataKey === "overtimeHours") {
-      data = productivityData.overtimeHours || []
-      currentValue = Number.parseFloat(data[data.length - 1]) || 0
+      actualValue = parseFloat(productivityData.overtimeHours?.actual?.[monthIndex]) || 0
+      budgetValue = parseFloat(productivityData.overtimeHours?.budget?.[monthIndex]) || 0
+      formatFn = formatHours
     }
+    
+    const variance = actualValue - budgetValue
+    const variancePercent = budgetValue !== 0 ? (variance / Math.abs(budgetValue)) * 100 : 0
     
     return (
       <div
@@ -3252,42 +3426,125 @@ const Productivity = ({ activeSection, user, isInvestorView }) => {
           boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
           marginBottom: "20px",
           position: "relative",
+          border: "1px solid #e8ddd4",
         }}
       >
-        <EyeIcon 
-          onClick={() => handleCalculationClick(title, calculation)} 
-        />
-        
-        <div style={{ display: "flex", alignItems: "center", marginBottom: "15px" }}>
-          <div
-            style={{
-              width: "100px",
-              height: "100px",
-              borderRadius: "50%",
-              border: "5px solid #f9a825",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              marginRight: "20px",
-              backgroundColor: "#fff9c4",
-            }}
-          >
-            <div style={{ textAlign: "center" }}>
-              <div style={{ fontSize: "16px", fontWeight: "700", color: "#5d4037" }}>
-                {isPercentage ? `${currentValue.toFixed(1)}%` : 
-                 isCurrency ? formatValue(currentValue / 1000000, currencyUnit) :
-                 currentValue.toFixed(1)}
+        {/* Eye Icon */}
+        <div
+          onClick={() => handleCalculationClick(title, calculation)}
+          style={{
+            position: "absolute",
+            top: "10px",
+            right: "10px",
+            cursor: "pointer",
+            width: "32px",
+            height: "32px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            borderRadius: "50%",
+            backgroundColor: "#fdfcfb",
+            boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
+            zIndex: 10,
+            border: `2px solid ${circleColors[0].border}`,
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = "#e8ddd4"
+            e.currentTarget.style.transform = "scale(1.1)"
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = "#fdfcfb"
+            e.currentTarget.style.transform = "scale(1)"
+          }}
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={circleColors[0].border} strokeWidth="2">
+            <circle cx="12" cy="12" r="2"></circle>
+            <circle cx="12" cy="12" r="5" strokeOpacity="0.5"></circle>
+            <path d="M22 12c0 5.52-4.48 10-10 10S2 17.52 2 12 6.48 2 12 2s10 4.48 10 10z"></path>
+          </svg>
+        </div>
+
+        {/* Title */}
+        <h4 style={{ color: "#5d4037", marginBottom: "20px", fontSize: "16px", textAlign: "center", fontWeight: "600" }}>
+          {title}
+        </h4>
+
+        {/* Three Circles */}
+        <div style={{ display: "flex", justifyContent: "space-around", alignItems: "center", marginBottom: "20px" }}>
+          {/* Actual Circle */}
+          <div style={{ textAlign: "center" }}>
+            <div
+              style={{
+                width: "80px",
+                height: "80px",
+                borderRadius: "50%",
+                border: `4px solid ${circleColors[0].border}`,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                margin: "0 auto 8px",
+                backgroundColor: circleColors[0].background,
+              }}
+            >
+              <div style={{ textAlign: "center" }}>
+                <div style={{ fontSize: "14px", fontWeight: "700", color: circleColors[0].text }}>
+                  {formatFn(actualValue)}
+                </div>
               </div>
-              <div style={{ fontSize: "11px", color: "#8d6e63" }}>Current</div>
             </div>
+            <div style={{ fontSize: "11px", color: "#5d4037", fontWeight: "500" }}>Actual</div>
           </div>
-          <div style={{ flex: 1 }}>
-            <h4 style={{ color: "#5d4037", marginBottom: "5px", fontSize: "16px" }}>{title}</h4>
+
+          {/* Budget Circle */}
+          <div style={{ textAlign: "center" }}>
+            <div
+              style={{
+                width: "80px",
+                height: "80px",
+                borderRadius: "50%",
+                border: `4px solid ${circleColors[1].border}`,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                margin: "0 auto 8px",
+                backgroundColor: circleColors[1].background,
+              }}
+            >
+              <div style={{ textAlign: "center" }}>
+                <div style={{ fontSize: "14px", fontWeight: "700", color: circleColors[1].text }}>
+                  {formatFn(budgetValue)}
+                </div>
+              </div>
+            </div>
+            <div style={{ fontSize: "11px", color: "#5d4037", fontWeight: "500" }}>Budget</div>
+          </div>
+
+          {/* Variance Circle */}
+          <div style={{ textAlign: "center" }}>
+            <div
+              style={{
+                width: "80px",
+                height: "80px",
+                borderRadius: "50%",
+                border: `4px solid ${circleColors[2].border}`,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                margin: "0 auto 8px",
+                backgroundColor: circleColors[2].background,
+              }}
+            >
+              <div style={{ textAlign: "center" }}>
+                <TrendArrow value={variancePercent} goodDirection={goodDirection} />
+              </div>
+            </div>
+            <div style={{ fontSize: "11px", color: "#5d4037", fontWeight: "500" }}>Variance</div>
           </div>
         </div>
 
+        {/* Action Buttons */}
         <div style={{ borderTop: "1px solid #e8ddd4", paddingTop: "15px" }}>
-          <div style={{ display: "flex", gap: "10px", marginBottom: "10px" }}>
+          <div style={{ display: "flex", gap: "10px", justifyContent: "center", marginBottom: "10px" }}>
             <button
               onClick={() => setExpandedNotes(prev => ({ ...prev, [dataKey]: !prev[dataKey] }))}
               style={{
@@ -3319,7 +3576,14 @@ const Productivity = ({ activeSection, user, isInvestorView }) => {
               AI analysis
             </button>
             <button
-              onClick={() => openTrendModal(title, dataKey, isPercentage)}
+              onClick={() => {
+                let dataArray = []
+                if (dataKey === "revenuePerEmployee") dataArray = productivityData.revenuePerEmployee?.actual || []
+                else if (dataKey === "laborCostPercentage") dataArray = productivityData.laborCostPercentage?.actual || []
+                else if (dataKey === "salesVolumePerEmployee") dataArray = productivityData.salesVolumePerEmployee?.actual || []
+                else if (dataKey === "overtimeHours") dataArray = productivityData.overtimeHours?.actual || []
+                openTrendModal(title, dataArray, unit)
+              }}
               style={{
                 padding: "6px 12px",
                 backgroundColor: "#e8ddd4",
@@ -3337,15 +3601,7 @@ const Productivity = ({ activeSection, user, isInvestorView }) => {
 
           {expandedNotes[dataKey] && (
             <div style={{ marginBottom: "10px" }}>
-              <label
-                style={{
-                  fontSize: "12px",
-                  color: "#5d4037",
-                  fontWeight: "600",
-                  display: "block",
-                  marginBottom: "5px",
-                }}
-              >
+              <label style={{ fontSize: "12px", color: "#5d4037", fontWeight: "600", display: "block", marginBottom: "5px" }}>
                 Notes / Comments:
               </label>
               <textarea
@@ -3365,38 +3621,19 @@ const Productivity = ({ activeSection, user, isInvestorView }) => {
           )}
 
           {expandedNotes[`${dataKey}_analysis`] && (
-            <div
-              style={{
-                backgroundColor: "#e3f2fd",
-                padding: "15px",
-                borderRadius: "6px",
-                border: "1px solid #90caf9",
-              }}
-            >
-              <label
-                style={{
-                  fontSize: "12px",
-                  color: "#1565c0",
-                  fontWeight: "600",
-                  display: "block",
-                  marginBottom: "8px",
-                }}
-              >
+            <div style={{ backgroundColor: "#e3f2fd", padding: "15px", borderRadius: "6px", border: "1px solid #90caf9" }}>
+              <label style={{ fontSize: "12px", color: "#1565c0", fontWeight: "600", display: "block", marginBottom: "8px" }}>
                 AI Analysis:
               </label>
               <p style={{ fontSize: "13px", color: "#1565c0", lineHeight: "1.5", margin: 0 }}>
                 {kpiAnalysis[dataKey] ||
-                  `Based on current ${title.toLowerCase()} of ${isPercentage ? `${currentValue.toFixed(1)}%` : 
-                    isCurrency ? formatValue(currentValue / 1000000, currencyUnit) : currentValue.toFixed(1)}:
-                  \n\nThis metric measures ${title.toLowerCase()}. 
+                  `Based on current ${title.toLowerCase()}:
+                  \n\nActual: ${formatFn(actualValue)} vs Budget: ${formatFn(budgetValue)}
+                  \nVariance: ${variancePercent > 0 ? '+' : ''}${variancePercent.toFixed(1)}%
                   \n\nRecommended actions:
-                  \n• ${dataKey === "revenuePerEmployee" ? "Compare to industry benchmarks and optimize headcount planning" : 
-                       dataKey === "laborCostPercentage" ? "Review salary structures and consider productivity improvements" :
-                       dataKey === "salesVolumePerEmployee" ? "Analyze sales efficiency and training needs" :
-                       dataKey === "overtimeHours" ? "Assess workload distribution and consider hiring" :
-                       "Monitor and optimize this metric"}
-                  \n• Track trend over time
-                  \n• Set improvement targets`}
+                  \n• ${variancePercent > 0 ? 'Exceeding budget - analyze what\'s working well' : 'Below budget - investigate causes and adjust plans'}
+                  \n• Review trends over past months
+                  \n• Set improvement targets for next period`}
               </p>
             </div>
           )}
@@ -3472,13 +3709,13 @@ const Productivity = ({ activeSection, user, isInvestorView }) => {
         </div>
       </div>
 
-      {/* Productivity KPI Cards - 2 per row */}
+      {/* Productivity Triple Cards - 2 per row */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "20px", marginBottom: "30px" }}>
-        {renderKPICard(
+        {renderTripleCard(
           "Revenue per Employee", 
           "revenuePerEmployee", 
-          false, 
-          true,
+          "currency", 
+          "up",
           "Revenue per Employee measures the average revenue generated per employee.\n\n" +
           "Calculation: Total Revenue ÷ Total Number of Employees\n\n" +
           "This metric is automatically calculated from Financial Performance data:\n" +
@@ -3487,11 +3724,11 @@ const Productivity = ({ activeSection, user, isInvestorView }) => {
           "Higher values indicate better productivity and efficiency.\n" +
           "Compare against industry benchmarks and track trends over time."
         )}
-        {renderKPICard(
+        {renderTripleCard(
           "Labour Cost % of Revenue", 
           "laborCostPercentage", 
-          true, 
-          false,
+          "percentage", 
+          "down",
           "Labour Cost as Percentage of Revenue measures the proportion of revenue spent on employee compensation.\n\n" +
           "Calculation: (Total Employee Compensation ÷ Total Revenue) × 100%\n\n" +
           "This metric is automatically calculated from Financial Performance data:\n" +
@@ -3503,11 +3740,11 @@ const Productivity = ({ activeSection, user, isInvestorView }) => {
           "• Retail: 10-20%\n" +
           "• Tech/SaaS: 40-60%"
         )}
-        {renderKPICard(
+        {renderTripleCard(
           "Sales Volume per Employee", 
           "salesVolumePerEmployee", 
-          false, 
-          false,
+          "number", 
+          "up",
           "Sales Volume per Employee measures the average number of units sold per employee.\n\n" +
           "Calculation: Total Units Sold ÷ Total Number of Employees\n\n" +
           "This metric helps assess operational efficiency and sales productivity.\n" +
@@ -3517,11 +3754,11 @@ const Productivity = ({ activeSection, user, isInvestorView }) => {
           "• Plan seasonal staffing needs\n" +
           "• Benchmark sales team performance"
         )}
-        {renderKPICard(
+        {renderTripleCard(
           "Overtime Hours", 
           "overtimeHours", 
-          false, 
-          false,
+          "hours", 
+          "down",
           "Overtime Hours measures the average overtime hours worked per period.\n\n" +
           "Calculation: Total overtime hours recorded\n\n" +
           "High or increasing overtime may indicate:\n" +
@@ -3555,19 +3792,19 @@ const Productivity = ({ activeSection, user, isInvestorView }) => {
       />
 
       {/* Trend Modal */}
-      {showTrendModal && (
+      {showTrendModal && selectedTrendItem && (
         <TrendModal
           isOpen={showTrendModal}
           onClose={() => setShowTrendModal(false)}
-          item={selectedTrendItem}
-          currencyUnit={currencyUnit}
-          formatValue={formatValue}
+          title={selectedTrendItem.name}
+          data={selectedTrendItem.data}
+          labels={selectedTrendItem.labels}
+          unit={selectedTrendItem.unit}
         />
       )}
     </div>
   )
 }
-
 // ==================== CAPABILITY & TRAINING COMPONENT ====================
 
 const CapabilityTraining = ({ activeSection, user, isInvestorView }) => {
@@ -3586,11 +3823,11 @@ const CapabilityTraining = ({ activeSection, user, isInvestorView }) => {
   // Data structure for detailed employee tracking
   const [employeeTrackingData, setEmployeeTrackingData] = useState([])
   
-  // Data structure for capability & training KPIs
+  // Data structure for capability & training KPIs with Actual & Budget
   const [capabilityData, setCapabilityData] = useState({
-    trainingSpendAmount: Array(12).fill(""),
-    trainingSpendPercentage: Array(12).fill(""),
-    trainingFocus: Array(12).fill(""),
+    trainingSpendAmount: { actual: Array(12).fill(""), budget: Array(12).fill("") },
+    trainingSpendPercentage: { actual: Array(12).fill(""), budget: Array(12).fill("") },
+    trainingFocus: { actual: Array(12).fill(""), budget: Array(12).fill("") },
   })
   
   // Financial data pulled from Financial Performance
@@ -3599,7 +3836,7 @@ const CapabilityTraining = ({ activeSection, user, isInvestorView }) => {
     trainingSpend: Array(12).fill(0)
   })
 
-  const months = getMonthsForYear(selectedYear, "month")
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
   const years = Array.from({ length: 5 }, (_, i) => selectedYear - 2 + i)
 
   useEffect(() => {
@@ -3657,8 +3894,14 @@ const CapabilityTraining = ({ activeSection, user, isInvestorView }) => {
     
     setCapabilityData(prev => ({
       ...prev,
-      trainingSpendAmount: data.trainingSpend.map(v => v.toString()),
-      trainingSpendPercentage: trainingSpendPercentage.map(v => v.toFixed(2).toString())
+      trainingSpendAmount: {
+        actual: data.trainingSpend.map(v => v.toString()),
+        budget: prev.trainingSpendAmount?.budget || Array(12).fill("")
+      },
+      trainingSpendPercentage: {
+        actual: trainingSpendPercentage.map(v => v.toFixed(2).toString()),
+        budget: prev.trainingSpendPercentage?.budget || Array(12).fill("")
+      }
     }))
   }
 
@@ -3673,29 +3916,325 @@ const CapabilityTraining = ({ activeSection, user, isInvestorView }) => {
     }
   }
 
+  const formatPercentage = (value) => {
+    const num = Number.parseFloat(value) || 0
+    return `${num.toFixed(1)}%`
+  }
+
   const handleCalculationClick = (title, calculation) => {
     setSelectedCalculation({ title, calculation })
     setShowCalculationModal(true)
   }
 
-  const openTrendModal = (itemName, dataKey, isPercentage = false) => {
-    let actualData = []
+  const openTrendModal = (itemName, dataArray, unit = "number") => {
+    if (!dataArray) return
     
-    if (dataKey === "trainingSpendAmount") {
-      actualData = capabilityData.trainingSpendAmount?.map(v => parseFloat(v) || 0) || []
-    } else if (dataKey === "trainingSpendPercentage") {
-      actualData = capabilityData.trainingSpendPercentage?.map(v => parseFloat(v) || 0) || []
-    } else if (dataKey === "trainingFocus") {
-      actualData = capabilityData.trainingFocus?.map(v => parseFloat(v) || 0) || []
-    }
+    const trendData = dataArray.map(v => parseFloat(v) || 0)
+    const trendLabels = months
     
     setSelectedTrendItem({ 
       name: itemName, 
-      actual: actualData,
-      budget: null,
-      isPercentage 
+      data: trendData,
+      labels: trendLabels,
+      unit
     })
     setShowTrendModal(true)
+  }
+
+  // Circle colors
+  const circleColors = [
+    { border: "#FF8C00", background: "#FFB347", text: "#663d00" },
+    { border: "#32CD32", background: "#90EE90", text: "#1e4d1e" },
+    { border: "#FFA500", background: "#FFD700", text: "#664d00" },
+  ]
+
+  const TrendArrow = ({ value, goodDirection = "up" }) => {
+    const isPositive = value > 0
+    const isGood = (goodDirection === "up" && isPositive) || (goodDirection === "down" && !isPositive)
+    
+    return (
+      <div style={{ display: "flex", alignItems: "center", gap: "4px", justifyContent: "center" }}>
+        {isPositive ? (
+          <TrendingUp size={16} color={isGood ? "#16a34a" : "#dc2626"} />
+        ) : (
+          <TrendingDown size={16} color={isGood ? "#16a34a" : "#dc2626"} />
+        )}
+        <span style={{ 
+          color: isGood ? "#16a34a" : "#dc2626",
+          fontSize: "12px",
+          fontWeight: "600"
+        }}>
+          {Math.abs(value).toFixed(1)}%
+        </span>
+      </div>
+    )
+  }
+
+  const renderTripleCard = (title, dataKey, unit = "number", goodDirection = "up", calculation = "") => {
+    const monthIndex = new Date().getMonth() // Current month
+    
+    let actualValue = 0
+    let budgetValue = 0
+    let formatFn = formatValue
+    
+    if (dataKey === "trainingSpendAmount") {
+      actualValue = parseFloat(capabilityData.trainingSpendAmount?.actual?.[monthIndex]) || 0
+      budgetValue = parseFloat(capabilityData.trainingSpendAmount?.budget?.[monthIndex]) || 0
+      formatFn = (val) => formatValue(val, "zar_million")
+      unit = "currency"
+    } else if (dataKey === "trainingSpendPercentage") {
+      actualValue = parseFloat(capabilityData.trainingSpendPercentage?.actual?.[monthIndex]) || 0
+      budgetValue = parseFloat(capabilityData.trainingSpendPercentage?.budget?.[monthIndex]) || 0
+      formatFn = formatPercentage
+      unit = "percentage"
+    } else if (dataKey === "trainingFocus") {
+      const actualVal = capabilityData.trainingFocus?.actual?.[monthIndex] || ""
+      const budgetVal = capabilityData.trainingFocus?.budget?.[monthIndex] || ""
+      
+      // Convert numeric values to labels for display
+      const getFocusLabel = (val) => {
+        if (val === "1") return "Technical"
+        if (val === "2") return "Leadership"
+        if (val === "3") return "Compliance"
+        return "Not Set"
+      }
+      
+      actualValue = getFocusLabel(actualVal)
+      budgetValue = getFocusLabel(budgetVal)
+      formatFn = (val) => val
+    }
+    
+    // For training focus, variance is not applicable
+    const showVariance = dataKey !== "trainingFocus"
+    const variance = showVariance ? actualValue - budgetValue : 0
+    const variancePercent = showVariance && budgetValue !== 0 ? (variance / Math.abs(budgetValue)) * 100 : 0
+    
+    return (
+      <div
+        style={{
+          backgroundColor: "#fdfcfb",
+          padding: "20px",
+          borderRadius: "8px",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+          marginBottom: "20px",
+          position: "relative",
+          border: "1px solid #e8ddd4",
+        }}
+      >
+        {/* Eye Icon */}
+        <div
+          onClick={() => handleCalculationClick(title, calculation)}
+          style={{
+            position: "absolute",
+            top: "10px",
+            right: "10px",
+            cursor: "pointer",
+            width: "32px",
+            height: "32px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            borderRadius: "50%",
+            backgroundColor: "#fdfcfb",
+            boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
+            zIndex: 10,
+            border: `2px solid ${circleColors[0].border}`,
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = "#e8ddd4"
+            e.currentTarget.style.transform = "scale(1.1)"
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = "#fdfcfb"
+            e.currentTarget.style.transform = "scale(1)"
+          }}
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={circleColors[0].border} strokeWidth="2">
+            <circle cx="12" cy="12" r="2"></circle>
+            <circle cx="12" cy="12" r="5" strokeOpacity="0.5"></circle>
+            <path d="M22 12c0 5.52-4.48 10-10 10S2 17.52 2 12 6.48 2 12 2s10 4.48 10 10z"></path>
+          </svg>
+        </div>
+
+        {/* Title */}
+        <h4 style={{ color: "#5d4037", marginBottom: "20px", fontSize: "16px", textAlign: "center", fontWeight: "600" }}>
+          {title}
+        </h4>
+
+        {/* Three Circles */}
+        <div style={{ display: "flex", justifyContent: "space-around", alignItems: "center", marginBottom: "20px" }}>
+          {/* Actual Circle */}
+          <div style={{ textAlign: "center" }}>
+            <div
+              style={{
+                width: "80px",
+                height: "80px",
+                borderRadius: "50%",
+                border: `4px solid ${circleColors[0].border}`,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                margin: "0 auto 8px",
+                backgroundColor: circleColors[0].background,
+              }}
+            >
+              <div style={{ textAlign: "center" }}>
+                <div style={{ fontSize: "14px", fontWeight: "700", color: circleColors[0].text }}>
+                  {formatFn(actualValue)}
+                </div>
+              </div>
+            </div>
+            <div style={{ fontSize: "11px", color: "#5d4037", fontWeight: "500" }}>Actual</div>
+          </div>
+
+          {/* Budget Circle */}
+          <div style={{ textAlign: "center" }}>
+            <div
+              style={{
+                width: "80px",
+                height: "80px",
+                borderRadius: "50%",
+                border: `4px solid ${circleColors[1].border}`,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                margin: "0 auto 8px",
+                backgroundColor: circleColors[1].background,
+              }}
+            >
+              <div style={{ textAlign: "center" }}>
+                <div style={{ fontSize: "14px", fontWeight: "700", color: circleColors[1].text }}>
+                  {formatFn(budgetValue)}
+                </div>
+              </div>
+            </div>
+            <div style={{ fontSize: "11px", color: "#5d4037", fontWeight: "500" }}>Budget</div>
+          </div>
+
+          {/* Variance Circle */}
+          <div style={{ textAlign: "center" }}>
+            <div
+              style={{
+                width: "80px",
+                height: "80px",
+                borderRadius: "50%",
+                border: `4px solid ${circleColors[2].border}`,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                margin: "0 auto 8px",
+                backgroundColor: circleColors[2].background,
+              }}
+            >
+              <div style={{ textAlign: "center" }}>
+                {showVariance ? (
+                  <TrendArrow value={variancePercent} goodDirection={goodDirection} />
+                ) : (
+                  <span style={{ fontSize: "12px", color: circleColors[2].text }}>N/A</span>
+                )}
+              </div>
+            </div>
+            <div style={{ fontSize: "11px", color: "#5d4037", fontWeight: "500" }}>Variance</div>
+          </div>
+        </div>
+
+        {/* Action Buttons */}
+        <div style={{ borderTop: "1px solid #e8ddd4", paddingTop: "15px" }}>
+          <div style={{ display: "flex", gap: "10px", justifyContent: "center", marginBottom: "10px" }}>
+            <button
+              onClick={() => setExpandedNotes(prev => ({ ...prev, [dataKey]: !prev[dataKey] }))}
+              style={{
+                padding: "6px 12px",
+                backgroundColor: "#e8ddd4",
+                color: "#5d4037",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontWeight: "600",
+                fontSize: "12px",
+              }}
+            >
+              Add notes
+            </button>
+            <button
+              onClick={() => setExpandedNotes(prev => ({ ...prev, [`${dataKey}_analysis`]: !prev[`${dataKey}_analysis`] }))}
+              style={{
+                padding: "6px 12px",
+                backgroundColor: "#e8ddd4",
+                color: "#5d4037",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontWeight: "600",
+                fontSize: "12px",
+              }}
+            >
+              AI analysis
+            </button>
+            <button
+              onClick={() => {
+                let dataArray = []
+                if (dataKey === "trainingSpendAmount") dataArray = capabilityData.trainingSpendAmount?.actual || []
+                else if (dataKey === "trainingSpendPercentage") dataArray = capabilityData.trainingSpendPercentage?.actual || []
+                else if (dataKey === "trainingFocus") dataArray = capabilityData.trainingFocus?.actual || []
+                openTrendModal(title, dataArray, unit)
+              }}
+              style={{
+                padding: "6px 12px",
+                backgroundColor: "#e8ddd4",
+                color: "#5d4037",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontWeight: "600",
+                fontSize: "12px",
+              }}
+            >
+              View trend
+            </button>
+          </div>
+
+          {expandedNotes[dataKey] && (
+            <div style={{ marginBottom: "10px" }}>
+              <label style={{ fontSize: "12px", color: "#5d4037", fontWeight: "600", display: "block", marginBottom: "5px" }}>
+                Notes / Comments:
+              </label>
+              <textarea
+                value={kpiNotes[dataKey] || ""}
+                onChange={(e) => setKpiNotes(prev => ({ ...prev, [dataKey]: e.target.value }))}
+                placeholder="Add notes or comments..."
+                style={{
+                  width: "100%",
+                  padding: "10px",
+                  borderRadius: "4px",
+                  border: "1px solid #e8ddd4",
+                  minHeight: "60px",
+                  fontSize: "13px",
+                }}
+              />
+            </div>
+          )}
+
+          {expandedNotes[`${dataKey}_analysis`] && (
+            <div style={{ backgroundColor: "#e3f2fd", padding: "15px", borderRadius: "6px", border: "1px solid #90caf9" }}>
+              <label style={{ fontSize: "12px", color: "#1565c0", fontWeight: "600", display: "block", marginBottom: "8px" }}>
+                AI Analysis:
+              </label>
+              <p style={{ fontSize: "13px", color: "#1565c0", lineHeight: "1.5", margin: 0 }}>
+                {kpiAnalysis[dataKey] ||
+                  `Based on current ${title.toLowerCase()}:
+                  \n\nActual: ${formatFn(actualValue)} vs Budget: ${formatFn(budgetValue)}
+                  \n${showVariance ? `Variance: ${variancePercent > 0 ? '+' : ''}${variancePercent.toFixed(1)}%` : ''}
+                  \n\nRecommended actions:
+                  \n• ${variancePercent > 0 ? 'Exceeding budget - consider reallocating excess' : 'Below budget - identify barriers to investment'}
+                  \n• Compare against industry benchmarks
+                  \n• Link training outcomes to business results`}
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
+    )
   }
 
   const renderEmployeeTrackingTable = () => {
@@ -3909,193 +4448,6 @@ const CapabilityTraining = ({ activeSection, user, isInvestorView }) => {
     )
   }
 
-  const renderKPICard = (title, dataKey, isPercentage = false, isCurrency = false, calculation = "") => {
-    let data = []
-    let currentValue = 0
-    
-    if (dataKey === "trainingSpendAmount") {
-      data = capabilityData.trainingSpendAmount || []
-      currentValue = Number.parseFloat(data[data.length - 1]) || 0
-    } else if (dataKey === "trainingSpendPercentage") {
-      data = capabilityData.trainingSpendPercentage || []
-      currentValue = Number.parseFloat(data[data.length - 1]) || 0
-    } else if (dataKey === "trainingFocus") {
-      data = capabilityData.trainingFocus || []
-      const lastValue = data[data.length - 1]
-      currentValue = lastValue === "1" ? "Technical" : lastValue === "2" ? "Leadership" : lastValue === "3" ? "Compliance" : "Not Set"
-    }
-    
-    return (
-      <div
-        style={{
-          backgroundColor: "#fdfcfb",
-          padding: "20px",
-          borderRadius: "8px",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-          marginBottom: "20px",
-          position: "relative",
-        }}
-      >
-        <EyeIcon 
-          onClick={() => handleCalculationClick(title, calculation)} 
-        />
-        
-        <div style={{ display: "flex", alignItems: "center", marginBottom: "15px" }}>
-          <div
-            style={{
-              width: "100px",
-              height: "100px",
-              borderRadius: "50%",
-              border: "5px solid #f9a825",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              marginRight: "20px",
-              backgroundColor: "#fff9c4",
-            }}
-          >
-            <div style={{ textAlign: "center" }}>
-              <div style={{ fontSize: "16px", fontWeight: "700", color: "#5d4037" }}>
-                {dataKey === "trainingFocus" ? currentValue :
-                 isPercentage ? `${Number.parseFloat(currentValue).toFixed(1)}%` : 
-                 isCurrency ? formatValue(currentValue / 1000000, currencyUnit) :
-                 currentValue}
-              </div>
-              <div style={{ fontSize: "11px", color: "#8d6e63" }}>Current</div>
-            </div>
-          </div>
-          <div style={{ flex: 1 }}>
-            <h4 style={{ color: "#5d4037", marginBottom: "5px", fontSize: "16px" }}>{title}</h4>
-          </div>
-        </div>
-
-        <div style={{ borderTop: "1px solid #e8ddd4", paddingTop: "15px" }}>
-          <div style={{ display: "flex", gap: "10px", marginBottom: "10px" }}>
-            <button
-              onClick={() => setExpandedNotes(prev => ({ ...prev, [dataKey]: !prev[dataKey] }))}
-              style={{
-                padding: "6px 12px",
-                backgroundColor: "#e8ddd4",
-                color: "#5d4037",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: "600",
-                fontSize: "12px",
-              }}
-            >
-              Add notes
-            </button>
-            <button
-              onClick={() => setExpandedNotes(prev => ({ ...prev, [`${dataKey}_analysis`]: !prev[`${dataKey}_analysis`] }))}
-              style={{
-                padding: "6px 12px",
-                backgroundColor: "#e8ddd4",
-                color: "#5d4037",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: "600",
-                fontSize: "12px",
-              }}
-            >
-              AI analysis
-            </button>
-            <button
-              onClick={() => openTrendModal(title, dataKey, isPercentage)}
-              style={{
-                padding: "6px 12px",
-                backgroundColor: "#e8ddd4",
-                color: "#5d4037",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: "600",
-                fontSize: "12px",
-              }}
-            >
-              View trend
-            </button>
-          </div>
-
-          {expandedNotes[dataKey] && (
-            <div style={{ marginBottom: "10px" }}>
-              <label
-                style={{
-                  fontSize: "12px",
-                  color: "#5d4037",
-                  fontWeight: "600",
-                  display: "block",
-                  marginBottom: "5px",
-                }}
-              >
-                Notes / Comments:
-              </label>
-              <textarea
-                value={kpiNotes[dataKey] || ""}
-                onChange={(e) => setKpiNotes(prev => ({ ...prev, [dataKey]: e.target.value }))}
-                placeholder="Add notes or comments..."
-                style={{
-                  width: "100%",
-                  padding: "10px",
-                  borderRadius: "4px",
-                  border: "1px solid #e8ddd4",
-                  minHeight: "60px",
-                  fontSize: "13px",
-                }}
-              />
-            </div>
-          )}
-
-          {expandedNotes[`${dataKey}_analysis`] && (
-            <div
-              style={{
-                backgroundColor: "#e3f2fd",
-                padding: "15px",
-                borderRadius: "6px",
-                border: "1px solid #90caf9",
-              }}
-            >
-              <label
-                style={{
-                  fontSize: "12px",
-                  color: "#1565c0",
-                  fontWeight: "600",
-                  display: "block",
-                  marginBottom: "8px",
-                }}
-              >
-                AI Analysis:
-              </label>
-              <p style={{ fontSize: "13px", color: "#1565c0", lineHeight: "1.5", margin: 0 }}>
-                {kpiAnalysis[dataKey] ||
-                  `Based on current ${title.toLowerCase()}:
-                  \n\n${dataKey === "trainingSpendAmount" ? 
-                    `Training investment of ${formatValue(currentValue / 1000000, currencyUnit)}. ` +
-                    `Benchmark: Best-in-class companies invest 3-5% of payroll in training.` :
-                   dataKey === "trainingSpendPercentage" ? 
-                    `Training spend is ${currentValue.toFixed(1)}% of payroll. ` +
-                    `Target range: 2-5% for effective capability building.` :
-                   dataKey === "trainingFocus" ? 
-                    `Current focus: ${currentValue}. ` +
-                    `Consider a balanced approach across technical, leadership, and compliance training.` :
-                    `Monitor this metric for trends.`
-                  }
-                  \n\nRecommended actions:
-                  \n• ${dataKey === "trainingSpendAmount" ? "Evaluate ROI of training programs" :
-                       dataKey === "trainingSpendPercentage" ? currentValue < 2 ? "Consider increasing training investment" : "Maintain current investment levels" :
-                       dataKey === "trainingFocus" ? "Assess if training mix aligns with strategic needs" :
-                       "Track and optimize this metric"}
-                  \n• Compare against industry benchmarks
-                  \n• Link training outcomes to business results`}
-              </p>
-            </div>
-          )}
-        </div>
-      </div>
-    )
-  }
-
   if (activeSection !== "capability-training") return null
 
   return (
@@ -4166,13 +4518,13 @@ const CapabilityTraining = ({ activeSection, user, isInvestorView }) => {
       {/* Employee Tracking Table */}
       {renderEmployeeTrackingTable()}
 
-      {/* KPI Cards - 3 per row */}
+      {/* Capability Triple Cards - 3 per row */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "20px", marginBottom: "30px" }}>
-        {renderKPICard(
+        {renderTripleCard(
           "Training Spend (R)", 
           "trainingSpendAmount", 
-          false, 
-          true,
+          "currency", 
+          "up",
           "Training Spend measures the total investment in employee training and development.\n\n" +
           "This metric is automatically pulled from Financial Performance:\n" +
           "• Source: Balance Sheet - Additional Metrics\n\n" +
@@ -4185,11 +4537,11 @@ const CapabilityTraining = ({ activeSection, user, isInvestorView }) => {
           "• Innovation capability\n" +
           "• Time-to-productivity for new hires"
         )}
-        {renderKPICard(
+        {renderTripleCard(
           "Training Spend (% of payroll)", 
           "trainingSpendPercentage", 
-          true, 
-          false,
+          "percentage", 
+          "up",
           "Training Spend as Percentage of Payroll measures training investment relative to total compensation.\n\n" +
           "Calculation: (Training Spend ÷ Total Payroll) × 100%\n\n" +
           "This metric is automatically calculated from Financial Performance data:\n" +
@@ -4202,11 +4554,11 @@ const CapabilityTraining = ({ activeSection, user, isInvestorView }) => {
           "• >5%: High investment - Transformation phase\n\n" +
           "Target: 3%+ for organizations prioritizing capability building"
         )}
-        {renderKPICard(
+        {renderTripleCard(
           "Training Focus", 
           "trainingFocus", 
-          false, 
-          false,
+          "text", 
+          "up",
           "Training Focus indicates the primary area of training investment.\n\n" +
           "Categories:\n" +
           "• Technical: Job-specific skills, tools, and methodologies\n" +
@@ -4243,13 +4595,14 @@ const CapabilityTraining = ({ activeSection, user, isInvestorView }) => {
       />
 
       {/* Trend Modal */}
-      {showTrendModal && (
+      {showTrendModal && selectedTrendItem && (
         <TrendModal
           isOpen={showTrendModal}
           onClose={() => setShowTrendModal(false)}
-          item={selectedTrendItem}
-          currencyUnit={currencyUnit}
-          formatValue={formatValue}
+          title={selectedTrendItem.name}
+          data={selectedTrendItem.data}
+          labels={selectedTrendItem.labels}
+          unit={selectedTrendItem.unit}
         />
       )}
     </div>
