@@ -1,4 +1,4 @@
-"use client";
+"use client"
 
 import { useState, useEffect } from "react"
 import { Bar, Pie } from "react-chartjs-2"
@@ -27,9 +27,9 @@ import {
   Title,
   Tooltip,
   Legend,
-} from "chart.js";
+} from "chart.js"
 
-ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, PointElement, LineElement, Title, Tooltip, Legend);
+ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, PointElement, LineElement, Title, Tooltip, Legend)
 
 // ==================== HELPER FUNCTIONS ====================
 
@@ -41,35 +41,30 @@ const getMonthsForYear = (year, financialYearStart = "Jan") => {
 }
 
 const formatNumber = (value) => {
-  const num = Number.parseFloat(value) || 0;
-  if (num >= 1e9) return (num / 1e9).toFixed(2) + 'B';
-  if (num >= 1e6) return (num / 1e6).toFixed(2) + 'M';
-  if (num >= 1e3) return (num / 1e3).toFixed(2) + 'K';
-  return num.toFixed(0);
-};
+  const num = Number.parseFloat(value) || 0
+  if (num >= 1e9) return (num / 1e9).toFixed(2) + 'B'
+  if (num >= 1e6) return (num / 1e6).toFixed(2) + 'M'
+  if (num >= 1e3) return (num / 1e3).toFixed(2) + 'K'
+  return num.toFixed(2)
+}
 
 const formatCurrency = (value) => {
-  const num = Number.parseFloat(value) || 0;
-  if (num >= 1e9) return `R${(num / 1e9).toFixed(2)}B`;
-  if (num >= 1e6) return `R${(num / 1e6).toFixed(2)}M`;
-  if (num >= 1e3) return `R${(num / 1e3).toFixed(2)}K`;
-  return `R${num.toFixed(0)}`;
-};
-
-const formatDays = (value) => {
-  const num = Number.parseFloat(value) || 0;
-  return `${num.toFixed(0)} days`;
-};
+  const num = Number.parseFloat(value) || 0
+  if (num >= 1e9) return `R${(num / 1e9).toFixed(2)}B`
+  if (num >= 1e6) return `R${(num / 1e6).toFixed(2)}M`
+  if (num >= 1e3) return `R${(num / 1e3).toFixed(2)}K`
+  return `R${num.toFixed(2)}`
+}
 
 const formatPercentage = (value) => {
-  const num = Number.parseFloat(value) || 0;
-  return `${num.toFixed(1)}%`;
-};
+  const num = Number.parseFloat(value) || 0
+  return `${num.toFixed(1)}%`
+}
 
 const getMonthIndex = (month) => {
-  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-  return months.indexOf(month);
-};
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+  return months.indexOf(month)
+}
 
 // Returns [{year, monthIdx (0-based), label "Mon YYYY"}] for every month in a YYYY-MM range
 const getRangeMonths = (fromYM, toYM) => {
@@ -212,7 +207,7 @@ const UniversalAddDataModal = ({ isOpen, onClose, currentTab, user, onSave, load
             const d = suffDoc.data()
             setPipelineSufficiencyData({ totalPipelineValue: d.totalPipelineValue?.toString() || "", probability: d.probability?.toString() || "", targetRevenue: d.targetRevenue?.toString() || "", notes: d.notes || "" })
           }
-          break;
+          break
         case "revenue-concentration":
           const concDoc = await getDoc(doc(db, "pipelineData", `${user.uid}_concentration_${selectedYear}`))
           if (concDoc.exists()) {
@@ -224,7 +219,7 @@ const UniversalAddDataModal = ({ isOpen, onClose, currentTab, user, onSave, load
               notes: d.notes || "",
             })
           }
-          break;
+          break
         case "demand-sustainability":
           const sustDoc = await getDoc(doc(db, "pipelineData", `${user.uid}_sustainability_${selectedYear}`))
           if (sustDoc.exists()) {
@@ -235,12 +230,12 @@ const UniversalAddDataModal = ({ isOpen, onClose, currentTab, user, onSave, load
               notes: d.notes || "",
             })
           }
-          break;
+          break
       }
     } catch (error) {
-      console.error(`Error loading data for ${tabId}:`, error);
+      console.error(`Error loading data for ${tabId}:`, error)
     }
-  };
+  }
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -297,10 +292,10 @@ const UniversalAddDataModal = ({ isOpen, onClose, currentTab, user, onSave, load
       if (onSave) onSave()
       alert("Data saved successfully!")
     } catch (error) {
-      console.error("Error saving data:", error);
-      alert("Error saving data. Please try again.");
+      console.error("Error saving data:", error)
+      alert("Error saving data. Please try again.")
     }
-  };
+  }
 
   const inputCls = "w-full p-2 rounded border border-[#e8ddd4] text-sm"
   const labelCls = "text-xs text-mediumBrown font-semibold"
@@ -313,7 +308,7 @@ const UniversalAddDataModal = ({ isOpen, onClose, currentTab, user, onSave, load
       <div className="mb-5 grid gap-1" style={{ gridTemplateColumns: `repeat(${visibleIndices.length}, minmax(0, 1fr))` }}>
         {visibleIndices.map(idx => (
           <div key={idx}>
-            <label className="text-[10px] text-lightBrown block mb-0.5">{MONTH_NAMES[idx] + " " + selectedYear}</label>
+            <label className="text-[10px] text-lightBrown block mb-0.5">{MONTH_NAMES[idx]}</label>
             <input
               type="number" step={step}
               value={dataArray[idx] || ""}
@@ -537,8 +532,8 @@ const UniversalAddDataModal = ({ isOpen, onClose, currentTab, user, onSave, load
         </div>
       </div>
     </div>
-  );
-};
+  )
+}
 
 // ==================== PIPELINE TABLE COMPONENT ====================
 
@@ -556,14 +551,14 @@ const PipelineTable = ({ currentUser, isInvestorView, selectedYear, onAddData })
     { value: "negotiation", label: "Negotiation" },
     { value: "closed-won", label: "Closed Won" },
     { value: "closed-lost", label: "Closed Lost" },
-  ];
+  ]
 
   useEffect(() => { if (currentUser) loadDeals() }, [currentUser, selectedYear])
   useEffect(() => { applyFilters() }, [deals, filters])
 
   const loadDeals = async () => {
-    if (!currentUser) return;
-    setLoading(true);
+    if (!currentUser) return
+    setLoading(true)
     try {
       const dealsRef = collection(db, "users", currentUser.uid, "pipelineDeals")
       const q = query(dealsRef, where("year", "==", selectedYear))
@@ -573,11 +568,11 @@ const PipelineTable = ({ currentUser, isInvestorView, selectedYear, onAddData })
       setDeals(dealsData)
       setFilteredDeals(dealsData)
     } catch (error) {
-      console.error("Error loading deals:", error);
+      console.error("Error loading deals:", error)
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  };
+  }
 
   const applyFilters = () => {
     let filtered = [...deals]
@@ -598,16 +593,16 @@ const PipelineTable = ({ currentUser, isInvestorView, selectedYear, onAddData })
 
   const handleConfirmDelete = async () => {
     try {
-      const dealsRef = collection(db, "users", currentUser.uid, "pipelineDeals");
-      await deleteDoc(doc(dealsRef, confirmDialog.dealId));
-      loadDeals();
+      const dealsRef = collection(db, "users", currentUser.uid, "pipelineDeals")
+      await deleteDoc(doc(dealsRef, confirmDialog.dealId))
+      loadDeals()
     } catch (error) {
-      console.error("Error deleting deal:", error);
-      alert("Error deleting deal");
+      console.error("Error deleting deal:", error)
+      alert("Error deleting deal")
     } finally {
-      setConfirmDialog({ show: false, dealId: null });
+      setConfirmDialog({ show: false, dealId: null })
     }
-  };
+  }
 
   const clearFilters = () => setFilters({ clientName: "", segment: "", stage: "", source: "", owner: "", minValue: "", maxValue: "" })
 
@@ -685,7 +680,7 @@ const PipelineTable = ({ currentUser, isInvestorView, selectedYear, onAddData })
             </thead>
             <tbody>
               {filteredDeals.map((deal, index) => {
-                const stageLabel = stageOptions.find(option => option.value === deal.stage)?.label || deal.stage;
+                const stageLabel = stageOptions.find(option => option.value === deal.stage)?.label || deal.stage
                 return (
                   <tr key={deal.id} className={`border-b border-[#e8ddd4] ${index % 2 === 0 ? "bg-[#fdfcfb]" : "bg-[#f5f0eb]"}`}>
                     <td className="p-2.5 text-[13px] text-mediumBrown">{deal.clientName}</td>
@@ -703,7 +698,7 @@ const PipelineTable = ({ currentUser, isInvestorView, selectedYear, onAddData })
                       </td>
                     )}
                   </tr>
-                );
+                )
               })}
             </tbody>
           </table>
@@ -897,8 +892,7 @@ const PipelineVisibility = ({ activeSection, currentUser, isInvestorView, onAddD
     newLeads: "New Leads: Number of new leads generated in the period.\n\nCalculation: Count of new leads added to CRM.",
     salesVelocity: "Sales Velocity = (Number of Opportunities × Deal Value × Win Rate) ÷ Sales Cycle Length\n\nMeasures how quickly deals move through the pipeline.",
     conversionRates: "Conversion Rate = (Number of Converted Leads ÷ Total Leads) × 100%\n\nMeasures how effectively leads are converted to customers.",
-    riskAdjustedValue: "Risk Adjusted Value = Sum of (Deal Value × Probability %) for all deals\n\nShows expected value accounting for win probability.",
-  };
+  }
 
   return (
     <div>
@@ -909,11 +903,11 @@ const PipelineVisibility = ({ activeSection, currentUser, isInvestorView, onAddD
         showAddData={!isInvestorView}
         showViewMode={false}
       />
-      <KpiGrid2>
+      <KpiGrid3>
         {renderKPICard("New Leads", "newLeads", calculationTexts.newLeads, "number", "up")}
         {renderKPICard("Sales Velocity", "salesVelocity", calculationTexts.salesVelocity, "days", "down")}
         {renderKPICard("Conversion Rates", "conversionRates", calculationTexts.conversionRates, "percentage", "up")}
-      </KpiGrid2>
+      </KpiGrid3>
       <CalculationModal isOpen={showCalculationModal} onClose={() => setShowCalculationModal(false)} title={selectedCalculation.title} calculation={selectedCalculation.calculation} />
       {showTrendModal && selectedTrendItem && (
         <TrendModal
@@ -926,8 +920,8 @@ const PipelineVisibility = ({ activeSection, currentUser, isInvestorView, onAddD
         />
       )}
     </div>
-  );
-};
+  )
+}
 
 // ==================== PIPELINE SUFFICIENCY COMPONENT ====================
 
@@ -1002,11 +996,9 @@ const PipelineSufficiency = ({ activeSection, currentUser, isInvestorView, onAdd
   if (activeSection !== "pipeline-sufficiency") return null
 
   const calculationTexts = {
-    totalDeals: "Total Deals: Number of active deals in the pipeline.\n\nShows pipeline volume.",
-    pipelineCoverage: "Pipeline Coverage = (Pipeline Value ÷ Target Revenue) × 100%\n\nMeasures if pipeline is sufficient to meet revenue targets.",
-    salesVelocity: "Sales Velocity = (Number of Opportunities × Deal Value × Win Rate) ÷ Sales Cycle Length\n\nMeasures how quickly deals move through the pipeline.",
-    conversionRates: "Conversion Rate = (Number of Won Deals ÷ Total Deals) × 100%\n\nMeasures sales effectiveness.",
-  };
+    riskAdjustedValue: "Risk Adjusted Pipeline Value = Total Pipeline Value × Probability %\n\nAccounts for deal probability to show expected value.",
+    pipelineCoverage: "Pipeline Coverage Ratio = (Pipeline Value ÷ Target Revenue) × 100%\n\nMeasures if pipeline is sufficient to meet revenue targets.",
+  }
 
   return (
     <div>
@@ -1034,8 +1026,8 @@ const PipelineSufficiency = ({ activeSection, currentUser, isInvestorView, onAdd
         />
       )}
     </div>
-  );
-};
+  )
+}
 
 // ==================== REVENUE CONCENTRATION COMPONENT ====================
 
@@ -1066,7 +1058,7 @@ const RevenueConcentration = ({ activeSection, currentUser, isInvestorView, onAd
       { name: "Customer E", revenue: 0 },
     ],
     notes: "",
-  });
+  })
 
   const toYear = toDate ? parseInt(toDate.split("-")[0]) : new Date().getFullYear()
 
@@ -1080,7 +1072,7 @@ const RevenueConcentration = ({ activeSection, currentUser, isInvestorView, onAd
     try {
       const docSnap = await getDoc(doc(db, "pipelineData", `${currentUser.uid}_concentration_${toYear}`))
       if (docSnap.exists()) {
-        const data = docSnap.data();
+        const data = docSnap.data()
         setConcentrationData({
           revenueChannels: data.revenueChannels || concentrationData.revenueChannels,
           customerSegments: data.customerSegments || concentrationData.customerSegments,
@@ -1257,7 +1249,7 @@ const RevenueConcentration = ({ activeSection, currentUser, isInvestorView, onAd
                     <td className={`p-2.5 text-[13px] text-right font-semibold ${roi >= 0 ? "text-green-600" : "text-red-600"}`}>{roi.toFixed(1)}%</td>
                     <td className="p-2.5 text-[13px] text-mediumBrown text-right">{revenuePercentage.toFixed(1)}%</td>
                   </tr>
-                );
+                )
               })}
             </tbody>
           </table>
@@ -1296,8 +1288,8 @@ const RevenueConcentration = ({ activeSection, currentUser, isInvestorView, onAd
         />
       )}
     </div>
-  );
-};
+  )
+}
 
 // ==================== DEMAND SUSTAINABILITY COMPONENT ====================
 
@@ -1317,7 +1309,7 @@ const DemandSustainability = ({ activeSection, currentUser, isInvestorView, onAd
       { name: "Summer Sale", cost: 0, revenue: 0 }, { name: "Holiday Campaign", cost: 0, revenue: 0 }
     ],
     notes: "",
-  });
+  })
 
   const toYear = toDate ? parseInt(toDate.split("-")[0]) : new Date().getFullYear()
 
@@ -1331,7 +1323,7 @@ const DemandSustainability = ({ activeSection, currentUser, isInvestorView, onAd
     try {
       const docSnap = await getDoc(doc(db, "pipelineData", `${currentUser.uid}_sustainability_${toYear}`))
       if (docSnap.exists()) {
-        const data = docSnap.data();
+        const data = docSnap.data()
         setSustainabilityData({
           repeatCustomerRate: data.repeatCustomerRate || 0, churnRate: data.churnRate || 0,
           campaigns: data.campaigns || sustainabilityData.campaigns,
@@ -1408,7 +1400,7 @@ const DemandSustainability = ({ activeSection, currentUser, isInvestorView, onAd
     churnRate: "Churn Rate = (Customers Lost ÷ Total Customers) × 100%\n\nMeasures customer retention.",
     netRetention: "Net Retention Rate = Repeat Customer Rate - Churn Rate\n\nIndicates overall customer retention health.",
     campaignROI: "Campaign ROI = (Revenue - Cost) ÷ Cost × 100%\n\nMeasures marketing campaign effectiveness.",
-  };
+  }
 
   return (
     <div>
@@ -1419,12 +1411,12 @@ const DemandSustainability = ({ activeSection, currentUser, isInvestorView, onAd
         showAddData={!isInvestorView}
         showViewMode={false}
       />
-      <KpiGrid2>
+      <div className="grid grid-cols-4 gap-5 mb-7">
         {renderKPICard("Repeat Customer Rate", "repeatCustomerRate", calculationTexts.repeatCustomerRate, "percentage", "up")}
         {renderKPICard("Churn Rate", "churnRate", calculationTexts.churnRate, "percentage", "down")}
         {renderKPICard("Net Retention", "netRetention", calculationTexts.netRetention, "percentage", "up")}
         {renderKPICard("Campaign ROI", "campaignROI", calculationTexts.campaignROI, "percentage", "up")}
-      </KpiGrid2>
+      </div>
 
       {/* Campaign Table */}
       <div className="bg-[#f5f0eb] p-[15px] rounded-md mb-5">
@@ -1441,7 +1433,7 @@ const DemandSustainability = ({ activeSection, currentUser, isInvestorView, onAd
             </thead>
             <tbody>
               {sustainabilityData.campaigns.map((campaign, index) => {
-                const roi = campaign.cost > 0 ? ((campaign.revenue - campaign.cost) / campaign.cost) * 100 : 0;
+                const roi = campaign.cost > 0 ? ((campaign.revenue - campaign.cost) / campaign.cost) * 100 : 0
                 return (
                   <tr key={index} className={`border-b border-[#e8ddd4] ${index % 2 === 0 ? "bg-[#fdfcfb]" : "bg-[#f5f0eb]"}`}>
                     <td className="p-2.5 text-[13px] text-mediumBrown font-semibold">{campaign.name}</td>
@@ -1449,7 +1441,7 @@ const DemandSustainability = ({ activeSection, currentUser, isInvestorView, onAd
                     <td className="p-2.5 text-[13px] text-mediumBrown text-right">{formatCurrency(campaign.revenue)}</td>
                     <td className={`p-2.5 text-[13px] text-right font-semibold ${roi >= 0 ? "text-green-600" : "text-red-600"}`}>{roi.toFixed(1)}%</td>
                   </tr>
-                );
+                )
               })}
             </tbody>
           </table>
@@ -1468,8 +1460,8 @@ const DemandSustainability = ({ activeSection, currentUser, isInvestorView, onAd
         />
       )}
     </div>
-  );
-};
+  )
+}
 
 // ==================== MAIN MARKETING SALES COMPONENT ====================
 
@@ -1625,5 +1617,5 @@ export default function MarketingSales() {
         toDate={toDate}
       />
     </div>
-  );
+  )
 }
