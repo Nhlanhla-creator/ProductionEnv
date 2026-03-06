@@ -375,24 +375,8 @@ export const TrendModal = ({
   const chartData = {
     labels,
     datasets: [
-      activeSection === "capital-structure"
+      hasBudget
         ? {
-            type: "line",
-            label: `${item.name} – Actual`,
-            data: actual,
-            borderColor: "#5d4037",
-            backgroundColor: "transparent",
-            borderWidth: 2,
-            pointRadius: 4,
-            pointBackgroundColor: "#5d4037",
-            pointBorderColor: "#fff",
-            pointBorderWidth: 1.5,
-            fill: false,
-            tension: 0.3,
-            spanGaps: true,
-            order: 1,
-          }
-        : {
             type: "bar",
             label: `${item.name} – Actual`,
             data: actual,
@@ -402,6 +386,22 @@ export const TrendModal = ({
             borderRadius: 4,
             borderSkipped: false,
             order: 2,
+          }
+        : {
+            type: "line",
+            label: item.name,
+            data: actual,
+            borderColor: "#5d4037",
+            backgroundColor: "rgba(93,64,55,0.08)",
+            borderWidth: 2.5,
+            pointRadius: 4,
+            pointBackgroundColor: "#5d4037",
+            pointBorderColor: "#fff",
+            pointBorderWidth: 1.5,
+            fill: false,
+            tension: 0.3,
+            spanGaps: true,
+            order: 1,
           },
       ...(hasBudget
         ? [
