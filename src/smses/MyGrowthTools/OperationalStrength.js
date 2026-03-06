@@ -2059,10 +2059,8 @@ const OperationalPerformance = () => {
 
   return (
     <div style={{ display: "flex", minHeight: "100vh" }}>
-      <Sidebar />
 
       <div style={getContentStyles()}>
-        <Header />
 
         {isInvestorView && (
           <div

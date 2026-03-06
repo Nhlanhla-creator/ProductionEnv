@@ -90,11 +90,7 @@ const FinancialPerformance = () => {
 
   return (
     <div className="flex min-h-screen">
-      <Sidebar />
-
       <div className={`w-full bg-[#f7f3f0] min-h-screen px-5 pt-[70px] pb-5 transition-all duration-300 ${contentPaddingLeft} box-border`}>
-        <Header />
-
         {/* Investor banner */}
         {isInvestorView && (
           <div className="bg-green-50 px-5 py-4 mt-[50px] mb-5 rounded-lg border-2 border-green-500 flex justify-between items-center">
