@@ -328,30 +328,30 @@ For each category provide improvements in this exact format:
 
 PLATFORM ACTIONS REFERENCE:
 
-Team Management platform actions (Executive Management):
-- Ownership & Management section → add executive team members with their positions
-- Ownership & Management section → upload CVs for each executive
-- Ownership & Management section → add LinkedIn profiles for executives
-- Ownership & Management section → complete demographic data for executives (race, gender, youth, disability)
-- Ownership & Management section → add department information for executives
-
-Leadership Experience platform actions (Directors):
+Leadership Credentials platform actions (Directors):
 - Ownership & Management section → add directors with their positions
 - Ownership & Management section → upload CVs for each director
 - Ownership & Management section → add LinkedIn profiles for directors
 - Ownership & Management section → complete executive/non-executive designation
 - Ownership & Management section → add nationality for directors
 - Ownership & Management section → complete demographic data for directors (race, gender, youth, disability)
-
-Recognition & Education platform actions:
 - Documents section → upload certifications, qualifications, awards
 - Documents section → upload professional memberships and accreditations
-- Enterprise Readiness section → confirm qualifications and experience
 
-Team & Leadership platform actions:
-- Ownership & Management section → ensure all directors have LinkedIn profiles
-- Ownership & Management section → ensure all executives have complete profiles
+Leadership Structure platform actions (Executive Management):
+- Ownership & Management section → add executive team members with their positions
+- Ownership & Management section → upload CVs for each executive
+- Ownership & Management section → add LinkedIn profiles for executives
+- Ownership & Management section → complete demographic data for executives (race, gender, youth, disability)
+- Ownership & Management section → add department information for executives
 - Enterprise Readiness section → confirm leadership team structure and roles
+
+Leadership Behaviour platform actions:
+- Leadership Behaviour section → complete ambition assessment questions
+- Leadership Behaviour section → complete commitment assessment questions
+- Leadership Behaviour section → complete learning mindset assessment questions
+- Leadership Behaviour section → complete execution discipline assessment questions
+- Enterprise Readiness section → provide evidence of strategic planning and execution
 
 SCORING RUBRIC (use strictly):
 - 0 = No evidence or very poor
@@ -363,44 +363,33 @@ SCORING RUBRIC (use strictly):
 
 OUTPUT FORMAT - YOU MUST FOLLOW THIS EXACTLY:
 
-### 1. Leadership Experience
+### 1. Leadership Credentials
 **Score:** [0-5]
-**Evidence:** [Cite specific KPI: Directors Count = X, CVs uploaded = Y, LinkedIn profiles = Z]
+**Evidence:** [Cite specific KPI: Directors Count = X, CVs uploaded = Y, LinkedIn profiles = Z, Certifications Count = W, Professional track record evidence]
 **Confidence:** [High/Medium/Low]
-**Rationale:** [2-3 sentences explaining how the data supports this score]
+**Rationale:** [2-3 sentences explaining how the data supports this score based on directors' experience, professional track record, education, certifications and recognition]
 **How to Improve:** 
 - → [Platform Section Name]: [specific action with measurable goal]
 - → [Platform Section Name]: [specific action with measurable goal]
 - → [Platform Section Name]: [specific action with measurable goal]
 - 💡 [General real-world guidance for obtaining/creating missing items if critical gaps exist]
 
-### 2. Team Management
+### 2. Leadership Structure
 **Score:** [0-5]
-**Evidence:** [Cite specific KPI: Executives Count = X, CVs uploaded = Y, LinkedIn profiles = Z, Positions filled = W]
+**Evidence:** [Cite specific KPI: Executives Count = X, CVs uploaded = Y, LinkedIn profiles = Z, Positions filled = W, Team composition details]
 **Confidence:** [High/Medium/Low]
-**Rationale:** [2-3 sentences explaining how the data supports this score]
+**Rationale:** [2-3 sentences explaining how the data supports this score based on executive management capability, team composition and leadership roles]
 **How to Improve:** 
 - → [Platform Section Name]: [specific action with measurable goal]
 - → [Platform Section Name]: [specific action with measurable goal]
 - → [Platform Section Name]: [specific action with measurable goal]
 - 💡 [General real-world guidance for obtaining/creating missing items if critical gaps exist]
 
-### 3. Recognition & Education
+### 3. Leadership Behaviour
 **Score:** [0-5]
-**Evidence:** [Cite specific KPI: Certifications Count = X]
+**Evidence:** [Cite specific indicators: Ambition indicators, Commitment evidence, Learning mindset demonstration, Execution discipline examples]
 **Confidence:** [High/Medium/Low]
-**Rationale:** [2-3 sentences]
-**How to Improve:** 
-- → [Platform Section Name]: [specific action with measurable goal]
-- → [Platform Section Name]: [specific action with measurable goal]
-- → [Platform Section Name]: [specific action with measurable goal]
-- 💡 [General real-world guidance for obtaining/creating missing items if critical gaps exist]
-
-### 4. Team & Leadership
-**Score:** [0-5]
-**Evidence:** [Cite specific KPI: Directors with LinkedIn = X of Y, Executives with LinkedIn = Z of W]
-**Confidence:** [High/Medium/Low]
-**Rationale:** [2-3 sentences]
+**Rationale:** [2-3 sentences explaining how the data supports this score based on ambition, commitment, learning mindset and execution discipline]
 **How to Improve:** 
 - → [Platform Section Name]: [specific action with measurable goal]
 - → [Platform Section Name]: [specific action with measurable goal]
@@ -410,10 +399,17 @@ OUTPUT FORMAT - YOU MUST FOLLOW THIS EXACTLY:
 ### Overall Assessment
 **Total Score:** [X]/20
 **Normalized to 100:** [Y]%
-**Leadership Band:** [Band Name]
+**Leadership Band:** [Band Name - based on the leadership behaviour assessment below]
 **Overall Confidence:** [High/Medium/Low]
 **Evidence Summary:** [Brief summary of key data points supporting overall score]
-**Final Analysis:** [Brief overall assessment with key recommendations, referencing specific data points]`
+**Final Analysis:** [Brief overall assessment with key recommendations, referencing specific data points]
+
+### Leadership Behaviour Score Interpretation
+**Scaler (26–30):** High ambition + high execution - Demonstrates exceptional drive combined with proven ability to execute effectively
+**Builder (21–25):** High commitment + strong execution - Shows strong dedication and consistent delivery of results
+**Visionary (16–20):** High ambition but weaker execution - Ambitious vision but needs to strengthen execution capability
+**Survivalist (11–15):** Moderate commitment, limited ambition - Operating with minimal strategic direction or growth focus
+**Passenger (6–10):** Low commitment / passive leadership - Limited engagement or contribution to organizational growth`
 
       const result = await sendMessageToChatGPT(combinedMessage)
 
@@ -447,8 +443,8 @@ OUTPUT FORMAT - YOU MUST FOLLOW THIS EXACTLY:
   const prepareDataForAiEvaluation = (data) => {
     let evaluationData = ""
 
-    // Leadership Experience - DIRECTORS from ownership-management
-    evaluationData += `\n=== LEADERSHIP EXPERIENCE (DIRECTORS) ===\n`
+    // Leadership Credentials - DIRECTORS from ownership-management
+    evaluationData += `\n=== LEADERSHIP CREDENTIALS (DIRECTORS) ===\n`
     const directors = data?.ownershipManagement?.directors || []
     evaluationData += `Directors Count: ${directors.length}\n`
     
@@ -466,8 +462,8 @@ OUTPUT FORMAT - YOU MUST FOLLOW THIS EXACTLY:
     evaluationData += `\nDirectors with LinkedIn: ${directors.filter(d => d?.linkedin).length || 0}\n`
     evaluationData += `Directors with CVs: ${directors.filter(d => d?.cv).length || 0}\n`
 
-    // Team Management - EXECUTIVES from ownership-management
-    evaluationData += `\n=== TEAM MANAGEMENT (EXECUTIVES) ===\n`
+    // Leadership Structure - EXECUTIVES from ownership-management
+    evaluationData += `\n=== LEADERSHIP STRUCTURE (EXECUTIVES) ===\n`
     const executives = data?.ownershipManagement?.executives || []
     evaluationData += `Executives Count: ${executives.length}\n`
     
@@ -485,21 +481,23 @@ OUTPUT FORMAT - YOU MUST FOLLOW THIS EXACTLY:
     evaluationData += `\nExecutives with LinkedIn: ${executives.filter(e => e?.linkedin).length || 0}\n`
     evaluationData += `Executives with CVs: ${executives.filter(e => e?.cv).length || 0}\n`
 
-    // Team & Leadership - Combined visibility
-    evaluationData += `\n=== TEAM & LEADERSHIP ===\n`
-    evaluationData += `Total Leadership Team: ${directors.length + executives.length}\n`
-    evaluationData += `Total with LinkedIn: ${directors.filter(d => d?.linkedin).length + executives.filter(e => e?.linkedin).length}\n`
-    evaluationData += `Total with CVs: ${directors.filter(d => d?.cv).length + executives.filter(e => e?.cv).length}\n`
-
-    // Recognition & Education - CERTIFICATIONS
-    evaluationData += `\n=== RECOGNITION & EDUCATION ===\n`
+    // Recognition & Education - CERTIFICATIONS (part of Leadership Credentials)
+    evaluationData += `\n=== RECOGNITION & EDUCATION (CERTIFICATIONS) ===\n`
     evaluationData += `Certifications Count: ${data?.documents?.otherCerts?.length || 0}\n`
     
     if (data?.documents?.otherCerts?.length > 0) {
       evaluationData += `Certifications Available: Yes\n`
+      data?.documents?.otherCerts?.forEach((cert, index) => {
+        evaluationData += `Cert ${index + 1}: ${cert.name || "Unnamed"} (${cert.issuedDate || "Date unknown"})\n`
+      })
     } else {
       evaluationData += `Certifications Available: No\n`
     }
+
+    // Leadership Behaviour - Placeholder for now (will be updated when behaviour questions are implemented)
+    evaluationData += `\n=== LEADERSHIP BEHAVIOUR ===\n`
+    evaluationData += `Note: Leadership behaviour assessment will be based on ambition, commitment, learning mindset, and execution discipline questions\n`
+    evaluationData += `Current Behaviour Data Available: Limited - awaiting completion of leadership behaviour assessment\n`
 
     return evaluationData
   }
@@ -512,34 +510,31 @@ OUTPUT FORMAT - YOU MUST FOLLOW THIS EXACTLY:
     return "#B71C1C" // Dark red
   }
 
-  // UPDATED WEIGHTINGS
+  // UPDATED WEIGHTINGS based on new structure
   const calculateLeadershipScore = (data, aiEvaluationResult = "") => {
     console.log("Calculating leadership score with AI result:", !!aiEvaluationResult)
     const weightings = { 
-      experience: 32,      // Directors analysis
-      team: 28,            // Executives analysis
-      recognition: 20,      // Certifications
-      team_leadership: 20   // Combined LinkedIn/CV presence
+      credentials: 40,      // Leadership Credentials - Directors' experience, track record, education, certifications, recognition
+      structure: 30,        // Leadership Structure - Executive management capability, team composition, leadership roles
+      behaviour: 30         // Leadership Behaviour - Ambition, Commitment, Learning Mindset, Execution Discipline
     }
 
     const parsed = aiEvaluationResult ? parseAiEvaluationScores(aiEvaluationResult) : null
     const ai = parsed?.scores || parsed || {}
 
     const keyMap = {
-      experience: ["leadership_experience"],
-      team: ["team_management"],
-      recognition: ["leadership_recognition"],
-      team_leadership: ["team_leadership"],
+      credentials: ["leadership_experience", "leadership_recognition"],
+      structure: ["team_management"],
+      behaviour: ["team_leadership"],
     }
 
     const categoryNames = {
-      experience: "Leadership experience (Directors)",
-      team: "Team management (Executives)",
-      recognition: "Recognition & education",
-      team_leadership: "Team & leadership",
+      credentials: "Leadership Credentials",
+      structure: "Leadership Structure", 
+      behaviour: "Leadership Behaviour"
     }
 
-    const colors = ["#8D6E63", "#6D4C41", "#A67C52", "#D7CCC8"]
+    const colors = ["#8D6E63", "#6D4C41", "#A67C52"]
 
     const breakdown = Object.entries(categoryNames).map(([key, label], i) => {
       const raw =
@@ -568,37 +563,37 @@ OUTPUT FORMAT - YOU MUST FOLLOW THIS EXACTLY:
   const getScoreLevel = (score) => {
     if (score >= 91)
       return {
-        level: "Visionary Leadership",
+        level: "Scaler",
         color: "#1B5E20",
         icon: CheckCircle,
-        description: "Proven ability to lead complex organizations with strategic foresight.",
+        description: "High ambition + high execution",
       }
     if (score >= 81)
       return {
-        level: "Seasoned Leadership",
+        level: "Builder",
         color: "#4CAF50",
         icon: CheckCircle,
-        description: "Excellent management strength and inspiring organizational leadership.",
+        description: "High commitment + strong execution",
       }
     if (score >= 61)
       return {
-        level: "Rising Leadership",
+        level: "Visionary",
         color: "#FF9800",
         icon: TrendingUp,
-        description: "Strong foundations with clear potential for scaling influence and impact.",
+        description: "High ambition but weaker execution",
       }
     if (score >= 41)
       return {
-        level: "Developing Leadership",
+        level: "Survivalist",
         color: "#F44336",
         icon: AlertCircle,
-        description: "Growing experience with opportunities to strengthen leadership depth.",
+        description: "Moderate commitment, limited ambition",
       }
     return {
-      level: "Foundational Stage Leadership",
+      level: "Passenger",
       color: "#B71C1C",
       icon: AlertCircle,
-      description: "Building the capabilities and credibility needed to inspire teams and investors.",
+      description: "Low commitment / passive leadership",
     }
   }
 
@@ -1055,21 +1050,13 @@ OUTPUT FORMAT - YOU MUST FOLLOW THIS EXACTLY:
                 </div>
                 <div
                   style={{
-                    fontSize: "16px",
+                    fontSize: "14px",
                     color: "#6d4c41",
                     marginBottom: "15px",
+                    fontWeight: "500",
                   }}
                 >
-                  <span>Leadership status: </span>
-                  <span
-                    style={{
-                      fontWeight: "600",
-                      color: "#5d4037",
-                      textTransform: "capitalize",
-                    }}
-                  >
-                    {profileData?.ownershipManagement?.position || "Business leader"}
-                  </span>
+                  {scoreLevel.description}
                 </div>
 
                 {isEvaluating && (
@@ -1142,7 +1129,7 @@ OUTPUT FORMAT - YOU MUST FOLLOW THIS EXACTLY:
                 )}
               </div>
 
-              {/* About the Leadership Score section */}
+              {/* About the Leadership Score section - UPDATED */}
               <div
                 style={{
                   marginTop: "20px",
@@ -1197,20 +1184,17 @@ OUTPUT FORMAT - YOU MUST FOLLOW THIS EXACTLY:
                       }}
                     >
                       <p style={{ fontWeight: "bold", marginBottom: "8px", color: "#6d4c41" }}>
-                        Four key assessment areas:
+                        Three key assessment areas:
                       </p>
                       <ul style={{ margin: "0", paddingLeft: "20px", color: "#5d4037" }}>
                         <li style={{ marginBottom: "6px" }}>
-                          <strong>Leadership experience (32%):</strong> Analysis of directors - their positions, CVs, and professional presence
+                          <strong>Leadership Credentials – 40%:</strong> Directors' experience, professional track record, education, certifications and recognition
                         </li>
                         <li style={{ marginBottom: "6px" }}>
-                          <strong>Team management (28%):</strong> Analysis of executive management - team composition, roles, and qualifications
+                          <strong>Leadership Structure – 30%:</strong> Executive management capability, team composition and leadership roles
                         </li>
                         <li style={{ marginBottom: "6px" }}>
-                          <strong>Recognition & education (20%):</strong> Educational qualifications, certifications, awards, and industry recognition
-                        </li>
-                        <li style={{ marginBottom: "6px" }}>
-                          <strong>Team & leadership (20%):</strong> Combined leadership visibility through LinkedIn profiles and CV documentation
+                          <strong>Leadership Behaviour – 30%:</strong> Assessed through Ambition, Commitment, Learning Mindset and Execution Discipline
                         </li>
                       </ul>
                     </div>
@@ -1227,24 +1211,19 @@ OUTPUT FORMAT - YOU MUST FOLLOW THIS EXACTLY:
                       <p style={{ fontWeight: "bold", marginBottom: "8px", color: "#6d4c41" }}>Score interpretation:</p>
                       <ul style={{ margin: "0", paddingLeft: "20px", color: "#5d4037" }}>
                         <li style={{ marginBottom: "4px" }}>
-                          <strong>91-100% (Visionary Leadership):</strong> Proven ability to lead complex organizations
-                          with strategic foresight.
+                          <strong>Scaler (26–30):</strong> High ambition + high execution
                         </li>
                         <li style={{ marginBottom: "4px" }}>
-                          <strong>81-90% (Seasoned Leadership):</strong> Excellent management strength and inspiring
-                          organizational leadership.
+                          <strong>Builder (21–25):</strong> High commitment + strong execution
                         </li>
                         <li style={{ marginBottom: "4px" }}>
-                          <strong>61-80% (Rising Leadership):</strong> Strong foundations with clear potential for
-                          scaling influence and impact.
+                          <strong>Visionary (16–20):</strong> High ambition but weaker execution
                         </li>
                         <li style={{ marginBottom: "4px" }}>
-                          <strong>41-60% (Developing Leadership):</strong> Growing experience with opportunities to
-                          strengthen leadership depth.
+                          <strong>Survivalist (11–15):</strong> Moderate commitment, limited ambition
                         </li>
                         <li style={{ marginBottom: "4px" }}>
-                          <strong>0-40% (Foundational Stage Leadership):</strong> Building the capabilities and
-                          credibility needed to inspire teams and investors.
+                          <strong>Passenger (6–10):</strong> Low commitment / passive leadership
                         </li>
                       </ul>
                     </div>
@@ -1279,7 +1258,7 @@ OUTPUT FORMAT - YOU MUST FOLLOW THIS EXACTLY:
                 )}
               </div>
 
-              {/* Score Breakdown Section */}
+              {/* Score Breakdown Section - UPDATED */}
               <div
                 style={{
                   marginTop: "20px",
@@ -1368,7 +1347,7 @@ OUTPUT FORMAT - YOU MUST FOLLOW THIS EXACTLY:
                                 fontStyle: "italic",
                               }}
                             >
-                              {item.rawScore}/{item.maxScore} items × {item.weight}% weight = {item.weightedScore}%
+                              {item.rawScore}/{item.maxScore} × {item.weight}% weight = {item.weightedScore}%
                             </div>
                           </div>
                         </div>
@@ -1417,7 +1396,7 @@ OUTPUT FORMAT - YOU MUST FOLLOW THIS EXACTLY:
                 )}
               </div>
 
-              {/* Detailed Analysis Section */}
+              {/* Detailed Analysis Section - UPDATED */}
               <div
                 style={{
                   marginTop: "20px",
@@ -1472,38 +1451,54 @@ OUTPUT FORMAT - YOU MUST FOLLOW THIS EXACTLY:
                     ) : (
                       <div style={{ color: "#5d4037", lineHeight: "1.6" }}>
                         {leadershipScore >= 91 && (
-                          <p style={{ margin: "0" }}>
-                            <strong>Visionary Leadership achieved.</strong> {scoreLevel.description} You demonstrate
-                            outstanding leadership experience with proven ability to manage complex organizations, lead
-                            large teams, and drive significant business results.
-                          </p>
+                          <div>
+                            <p style={{ margin: "0 0 10px 0" }}>
+                              <strong>Scaler: High ambition + high execution</strong>
+                            </p>
+                            <p style={{ margin: "0" }}>
+                              You demonstrate exceptional drive combined with proven ability to execute effectively. This leadership profile is characteristic of founders and CEOs who have successfully scaled businesses and attract significant investment.
+                            </p>
+                          </div>
                         )}
                         {leadershipScore >= 81 && leadershipScore <= 90 && (
-                          <p style={{ margin: "0" }}>
-                            <strong>Seasoned Leadership demonstrated.</strong> {scoreLevel.description} Your leadership
-                            profile demonstrates the competence needed for business growth and would inspire confidence
-                            from investors and stakeholders.
-                          </p>
+                          <div>
+                            <p style={{ margin: "0 0 10px 0" }}>
+                              <strong>Builder: High commitment + strong execution</strong>
+                            </p>
+                            <p style={{ margin: "0" }}>
+                              You show strong dedication and consistent delivery of results. Your leadership profile demonstrates the commitment and execution capability needed to build sustainable organizations.
+                            </p>
+                          </div>
                         )}
                         {leadershipScore >= 61 && leadershipScore <= 80 && (
-                          <p style={{ margin: "0" }}>
-                            <strong>Rising Leadership with growth potential.</strong> {scoreLevel.description} Continued
-                            development in areas like team scale, industry recognition, or educational advancement could
-                            significantly enhance your leadership profile.
-                          </p>
+                          <div>
+                            <p style={{ margin: "0 0 10px 0" }}>
+                              <strong>Visionary: High ambition but weaker execution</strong>
+                            </p>
+                            <p style={{ margin: "0" }}>
+                              You have ambitious vision but need to strengthen execution capability. Focus on building operational excellence and delivery mechanisms to complement your strategic thinking.
+                            </p>
+                          </div>
                         )}
                         {leadershipScore >= 41 && leadershipScore <= 60 && (
-                          <p style={{ margin: "0" }}>
-                            <strong>Developing Leadership requiring growth.</strong> {scoreLevel.description} Focus on
-                            building management experience and gradually taking on larger leadership responsibilities.
-                          </p>
+                          <div>
+                            <p style={{ margin: "0 0 10px 0" }}>
+                              <strong>Survivalist: Moderate commitment, limited ambition</strong>
+                            </p>
+                            <p style={{ margin: "0" }}>
+                              You're operating with minimal strategic direction or growth focus. Consider developing clearer growth ambitions and strengthening your leadership commitment to drive organizational success.
+                            </p>
+                          </div>
                         )}
                         {leadershipScore <= 40 && (
-                          <p style={{ margin: "0" }}>
-                            <strong>Foundational Stage Leadership development essential.</strong>{" "}
-                            {scoreLevel.description} Focus on building management experience, pursuing relevant
-                            education, and gradually taking on larger leadership responsibilities.
-                          </p>
+                          <div>
+                            <p style={{ margin: "0 0 10px 0" }}>
+                              <strong>Passenger: Low commitment / passive leadership</strong>
+                            </p>
+                            <p style={{ margin: "0" }}>
+                              Your current leadership approach shows limited engagement or contribution to organizational growth. Focus on developing active leadership capabilities, setting clear goals, and demonstrating commitment to business success.
+                            </p>
+                          </div>
                         )}
                       </div>
                     )}

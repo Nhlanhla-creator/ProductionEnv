@@ -213,7 +213,14 @@ const labelStyle = {
 
 // ─── MultiSelect ───────────────────────────────────────────────────────────────
 
-function MultiSelect({ options, selected = [], onChange, placeholder = "Select options...", includeSelectAll = true }) {
+function MultiSelect({ options, selected: _selected, onChange, placeholder = "Select options...", includeSelectAll = true }) {
+  // Normalise: could arrive as a string (legacy), array, or undefined
+  const selected = Array.isArray(_selected)
+    ? _selected
+    : typeof _selected === "string" && _selected
+      ? [_selected]
+      : []
+
   const [isOpen, setIsOpen] = useState(false)
   const allSelected = selected.length === options.length
 
