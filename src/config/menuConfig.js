@@ -92,10 +92,10 @@ export const catalystMenuItems = [
     route: "/support-profile",
   },
   {
-    id: "insights",
-    label: "BIG Insights",
-    icon: <Lightbulb size={18} />,
-    route: "/support-insights",
+    id: "matches",
+    label: "My Matches",
+    icon: <HeartHandshake size={18} />,
+    route: "/support-matches",
   },
   {
     id: "cohorts",
@@ -105,15 +105,15 @@ export const catalystMenuItems = [
   },
   {
     id: "investments",
-    label: "My Investments",
+    label: "My Portfolio",
     icon: <PieChart size={18} />,
     route: "/catalyst/investments",
   },
   {
-    id: "matches",
-    label: "My Matches",
-    icon: <HeartHandshake size={18} />,
-    route: "/support-matches",
+    id: "insights",
+    label: "BIG Insights",
+    icon: <Lightbulb size={18} />,
+    route: "/support-insights",
   },
   {
     id: "documents",
@@ -167,7 +167,6 @@ export const catalystMenuItems = [
     route: "/support-settings",
   },
 ];
-
 export const internMenuItems = [
   {
     id: "home",

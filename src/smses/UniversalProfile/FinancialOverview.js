@@ -13,6 +13,50 @@ const formatCurrency = (value) => {
   return `R ${parseInt(numericValue, 10).toLocaleString()}`;
 };
 
+// Year multi-select component
+const YearMultiSelect = ({ selected = [], onChange, fromYear = 2015 }) => {
+  const currentYear = new Date().getFullYear();
+  const years = [];
+  for (let y = currentYear; y >= fromYear; y--) {
+    years.push(y.toString());
+  }
+
+  const toggle = (year) => {
+    if (selected.includes(year)) {
+      onChange(selected.filter((y) => y !== year));
+    } else {
+      onChange([...selected, year].sort((a, b) => b - a));
+    }
+  };
+
+  return (
+    <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginTop: "6px" }}>
+      {years.map((year) => {
+        const isSelected = selected.includes(year);
+        return (
+          <button
+            key={year}
+            type="button"
+            onClick={() => toggle(year)}
+            style={{
+              padding: "4px 12px",
+              borderRadius: "20px",
+              border: isSelected ? "1px solid #8b5e3c" : "1px solid #d6c4a8",
+              backgroundColor: isSelected ? "#8b5e3c" : "white",
+              color: isSelected ? "white" : "#3d2b1f",
+              fontSize: "13px",
+              cursor: "pointer",
+              transition: "all 0.15s ease",
+            }}
+          >
+            {year}
+          </button>
+        );
+      })}
+    </div>
+  );
+};
+
 const FinancialOverview = ({ data, updateData }) => {
   const [currencyValues, setCurrencyValues] = useState({
     annualRevenue: data.annualRevenue || '',
@@ -20,26 +64,22 @@ const FinancialOverview = ({ data, updateData }) => {
     existingDebt: data.existingDebt || ''
   });
 
-  // Simple handler for all inputs
   const handleInputChange = (field, value) => {
     updateData("financialOverview", { [field]: value });
   };
 
-  // Handler for currency fields
   const handleCurrencyChange = (field, value) => {
     setCurrencyValues(prev => ({ ...prev, [field]: value }));
     const formattedValue = formatCurrency(value);
     updateData("financialOverview", { [field]: formattedValue });
   };
 
-  // Handler for currency blur
   const handleCurrencyBlur = (field, value) => {
     const formattedValue = formatCurrency(value);
     setCurrencyValues(prev => ({ ...prev, [field]: formattedValue }));
     updateData("financialOverview", { [field]: formattedValue });
   };
 
-  // Handler for currency focus
   const handleCurrencyFocus = (field, value) => {
     const rawValue = value.replace(/[^\d]/g, '');
     setCurrencyValues(prev => ({ ...prev, [field]: rawValue }));
@@ -161,7 +201,7 @@ const FinancialOverview = ({ data, updateData }) => {
         </div>
 
         <div>
-          <FormField label="Profitability Status" >
+          <FormField label="Profitability Status">
             <select
               name="profitabilityStatus"
               value={data.profitabilityStatus || ""}
@@ -202,7 +242,18 @@ const FinancialOverview = ({ data, updateData }) => {
               rows={3}
             ></textarea>
           </FormField>
+        </div>
+      </div>
 
+      {/* Financial Documentation Section */}
+      <div className="section-divider">
+        <h3>Financial Documentation</h3>
+      </div>
+
+      <div className="grid-container">
+        <div>
+
+          {/* 1. Are your books up to date and clean? */}
           <FormField label="Are your books up to date and clean?" required>
             <div className="radio-group">
               <label className="form-radio-label">
@@ -241,16 +292,119 @@ const FinancialOverview = ({ data, updateData }) => {
               </div>
             )}
           </FormField>
+
+          {/* 2. Do you have management accounts? */}
+          <FormField label="Do you have management accounts in place?" required>
+            <div className="radio-group">
+              <label className="form-radio-label">
+                <input
+                  type="radio"
+                  name="hasManagementAccounts"
+                  value="yes"
+                  checked={data.hasManagementAccounts === "yes"}
+                  onChange={(e) => handleInputChange("hasManagementAccounts", e.target.value)}
+                  className="form-radio"
+                />
+                <span>Yes</span>
+              </label>
+              <label className="form-radio-label">
+                <input
+                  type="radio"
+                  name="hasManagementAccounts"
+                  value="no"
+                  checked={data.hasManagementAccounts === "no"}
+                  onChange={(e) => {
+                    handleInputChange("hasManagementAccounts", e.target.value);
+                    handleInputChange("latestManagementAccounts", "");
+                    handleFileChange("managementAccountsDocs", []);
+                  }}
+                  className="form-radio"
+                />
+                <span>No</span>
+              </label>
+            </div>
+          </FormField>
+
+          {data.hasManagementAccounts === "yes" && (
+            <>
+              <FormField label="What are the latest management accounts available?">
+                <input
+                  type="text"
+                  name="latestManagementAccounts"
+                  value={data.latestManagementAccounts || ""}
+                  onChange={(e) => handleInputChange("latestManagementAccounts", e.target.value)}
+                  className="form-input"
+                  placeholder="e.g. March 2025, Q1 2025"
+                />
+              </FormField>
+              <div style={{ marginTop: "1rem" }}>
+                <FileUpload
+                  label="Upload Management Accounts"
+                  accept=".pdf,.xlsx,.xls"
+                  onChange={(files) => handleFileChange("managementAccountsDocs", files)}
+                  value={data.managementAccountsDocs || []}
+                  tooltip="Upload your most recent management accounts"
+                />
+              </div>
+            </>
+          )}
         </div>
-      </div>
 
-      {/* Audited Financials Section */}
-      <div className="section-divider">
-        <h3>Financial Documentation</h3>
-      </div>
-
-      <div className="grid-container">
         <div>
+
+          {/* 3. Do you have financial statements? Which years? */}
+          <FormField label="Do you have financial statements available?" required>
+            <div className="radio-group">
+              <label className="form-radio-label">
+                <input
+                  type="radio"
+                  name="hasFinancialStatements"
+                  value="yes"
+                  checked={data.hasFinancialStatements === "yes"}
+                  onChange={(e) => handleInputChange("hasFinancialStatements", e.target.value)}
+                  className="form-radio"
+                />
+                <span>Yes</span>
+              </label>
+              <label className="form-radio-label">
+                <input
+                  type="radio"
+                  name="hasFinancialStatements"
+                  value="no"
+                  checked={data.hasFinancialStatements === "no"}
+                  onChange={(e) => {
+                    handleInputChange("hasFinancialStatements", e.target.value);
+                    handleInputChange("financialStatementsYears", []);
+                    handleFileChange("financialStatementsDocs", []);
+                  }}
+                  className="form-radio"
+                />
+                <span>No</span>
+              </label>
+            </div>
+          </FormField>
+
+          {data.hasFinancialStatements === "yes" && (
+            <>
+              <FormField label="Which years are available?">
+                <YearMultiSelect
+                  selected={data.financialStatementsYears || []}
+                  onChange={(years) => handleInputChange("financialStatementsYears", years)}
+                />
+              </FormField>
+              <div style={{ marginTop: "1rem" }}>
+                <FileUpload
+                  label="Upload Financial Statements"
+                  accept=".pdf,.xlsx,.xls"
+                  onChange={(files) => handleFileChange("financialStatementsDocs", files)}
+                  value={data.financialStatementsDocs || []}
+                  tooltip="Upload your available financial statements"
+                />
+              </div>
+            </>
+          )}
+
+          {/* 4. Are your financials audited? */}
           <FormField label="Are your financials audited?" required>
             <div className="radio-group">
               <label className="form-radio-label">
@@ -259,9 +413,7 @@ const FinancialOverview = ({ data, updateData }) => {
                   name="financialsAudited"
                   value="yes"
                   checked={data.financialsAudited === "yes"}
-                  onChange={(e) => {
-                    handleInputChange("financialsAudited", e.target.value);
-                  }}
+                  onChange={(e) => handleInputChange("financialsAudited", e.target.value)}
                   className="form-radio"
                 />
                 <span>Yes</span>
@@ -297,9 +449,7 @@ const FinancialOverview = ({ data, updateData }) => {
               />
             </div>
           )}
-        </div>
 
-        <div>
           <FormField label="Additional Financial Notes">
             <textarea
               name="additionalFinancialNotes"
@@ -308,6 +458,23 @@ const FinancialOverview = ({ data, updateData }) => {
               className="form-textarea"
               placeholder="Any additional financial information you'd like to share"
               rows={3}
+            ></textarea>
+          </FormField>
+
+        </div>
+      </div>
+
+      {/* Financial Challenges */}
+      <div className="grid-container" style={{ marginTop: "1.5rem" }}>
+        <div style={{ gridColumn: "1 / -1" }}>
+          <FormField label="What are your current financial challenges?">
+            <textarea
+              name="financialChallenges"
+              value={data.financialChallenges || ""}
+              onChange={(e) => handleInputChange("financialChallenges", e.target.value)}
+              className="form-textarea"
+              placeholder="Describe any financial challenges your business is currently facing (e.g. cash flow, access to funding, debt management, profitability)"
+              rows={4}
             ></textarea>
           </FormField>
         </div>

@@ -4,10 +4,9 @@ import { useState, useEffect } from "react"
 import { CheckCircle, ChevronRight, ChevronLeft, Save } from "lucide-react"
 import CatalystInstructions from "./catalyst-instructions"
 import CatalystEntityOverview from "./catalyst-entity-overview"
-import CatalystProgramDetails from "./catalyst-program-details"
 import CatalystContactDetails from "./catalyst-contact-details"
 import CatalystApplicationBrief from "./catalyst-application-brief"
-import CatalystMatchingPreference from "./catalyst-matching-preference"
+import CatalystProgramBriefMatchingPreference from "./CatalystProgramBriefMatchingPreference"
 import CatalystDocumentUpload from "./catalyst-document-upload"
 import CatalystDeclarationConsent from "./catalyst-declaration-consent"
 import CatalystProfileSummary from "./catalyst-profile-summary"
@@ -21,9 +20,8 @@ const sections = [
   { id: "instructions", label: "Instructions" },
   { id: "entityOverview", label: "Entity\nOverview" },
   { id: "contactDetails", label: "Contact\nDetails" },
-  { id: "generalMatchingPreference", label: "General Matching\nPreference" },
-  { id: "programmeDetails", label: "Programme \nDetails" },
-  { id: "applicationBrief", label: "Application Brief" },
+  { id: "programBriefMatchingPreference", label: "Program Brief &\nMatching Preference" },
+  { id: "applicationBrief", label: "Application\nBrief" },
   { id: "documentUpload", label: "Document\nUpload" },
   { id: "declarationConsent", label: "Declaration &\nConsent" },
 ]
@@ -37,43 +35,46 @@ export default function CatalystUniversalProfile() {
   const [completedSections, setCompletedSections] = useState({
     instructions: true,
     entityOverview: false,
-    programmeDetails: false,
     contactDetails: false,
+    programBriefMatchingPreference: false,
     applicationBrief: false,
-    generalMatchingPreference: false,
     documentUpload: false,
     declarationConsent: false,
   })
 
   const [formData, setFormData] = useState({
     entityOverview: {},
-    programmeDetails: {
-      programs: [
-        {
-          name: "",
-          budget: "",
-          targetBeneficiaries: [],
-          governmentBacked: false,
-          fundingSources: "",
-          programStructure: "",
-          programLegalStructure: "",
-          programLegalStructureOther: "",
-          programBudgetCategory: "",
-          averageSupportAmount: "",
-          minimumSupport: "",
-          maximumSupport: "",
-          providesFollowUp: false,
-          followUpPercentage: "",
-          continuedSupport: false,
-          businessStage: "",
-        },
-      ],
-    },
     contactDetails: {
       sameAsPhysical: false,
     },
+    // Merged section — holds both program details and matching preferences
+    programBriefMatchingPreference: {
+      // Section 1 — Program Details
+      programName: "",
+      programWebsite: "",
+      programDuration: "",
+      aboutProgram: "",
+      programGoals: "",
+      supportFramework: "",
+      // Section 2 — Support Focus
+      supportFocus: [],
+      supportFocusSubtype: [],
+      targetBusinessStage: [],
+      minimumSupportTicket: "",
+      maximumSupportTicket: "",
+      // Section 3 — Target Beneficiaries
+      demographics: [],
+      bbbeeLevel: [],
+      // Section 4 — General Preferences
+      legalEntity: [],
+      businessLifecycleStage: [],
+      sectorFocus: [],
+      sectorExclusions: [],
+      geographicFocus: [],
+      selectedCountries: [],
+      selectedProvinces: [],
+    },
     applicationBrief: {},
-    generalMatchingPreference: {},
     documentUpload: {},
     declarationConsent: {
       accuracy: false,
@@ -118,25 +119,37 @@ export default function CatalystUniversalProfile() {
 
           if (docSnap.exists()) {
             const data = docSnap.data()
-            if (data?.formData) setFormData(data.formData)
-            if (data?.completedSections) setCompletedSections(data.completedSections)
-
-            // Check if declarationConsent is completed to show summary
+            if (data?.formData) {
+              // Migrate legacy separate sections into merged section if needed
+              const merged = data.formData.programBriefMatchingPreference || {}
+              if (data.formData.generalMatchingPreference && !data.formData.programBriefMatchingPreference) {
+                Object.assign(merged, data.formData.generalMatchingPreference)
+              }
+              if (data.formData.programmeDetails && !data.formData.programBriefMatchingPreference) {
+                Object.assign(merged, data.formData.programmeDetails)
+              }
+              setFormData({ ...data.formData, programBriefMatchingPreference: merged })
+            }
+            if (data?.completedSections) {
+              // Migrate legacy completed section keys
+              const cs = { ...data.completedSections }
+              if (cs.generalMatchingPreference || cs.programmeDetails) {
+                cs.programBriefMatchingPreference = cs.generalMatchingPreference || cs.programmeDetails || false
+              }
+              setCompletedSections(cs)
+            }
             if (data?.completedSections?.declarationConsent) {
               setShowSummary(true)
             }
           } else {
-            // Fallback to localStorage if no Firebase data
+            // Fallback to localStorage
             const savedData = localStorage.getItem("catalystProfileData")
             const savedCompletedSections = localStorage.getItem("catalystProfileCompletedSections")
             if (savedData) setFormData(JSON.parse(savedData))
             if (savedCompletedSections) {
               const parsedCompleted = JSON.parse(savedCompletedSections)
               setCompletedSections(parsedCompleted)
-              // Check localStorage for completion
-              if (parsedCompleted.declarationConsent) {
-                setShowSummary(true)
-              }
+              if (parsedCompleted.declarationConsent) setShowSummary(true)
             }
           }
           setLoading(false)
@@ -149,7 +162,7 @@ export default function CatalystUniversalProfile() {
     loadProfileData()
   }, [])
 
-  // Save data to localStorage
+  // Persist to localStorage
   useEffect(() => {
     localStorage.setItem("catalystProfileData", JSON.stringify(formData))
   }, [formData])
@@ -169,10 +182,7 @@ export default function CatalystUniversalProfile() {
   }
 
   const markSectionAsCompleted = (section) => {
-    setCompletedSections((prev) => ({
-      ...prev,
-      [section]: true,
-    }))
+    setCompletedSections((prev) => ({ ...prev, [section]: true }))
   }
 
   const navigateToNextSection = () => {
@@ -193,6 +203,7 @@ export default function CatalystUniversalProfile() {
 
   const handleSaveSection = async () => {
     localStorage.setItem("catalystProfileData", JSON.stringify(formData))
+    if (activeSection === "instructions") return
     if (!user) {
       alert("You must be logged in to save.")
       return
@@ -203,16 +214,12 @@ export default function CatalystUniversalProfile() {
       await setDoc(
         doc(db, "catalystProfiles", user.uid),
         {
-          formData: {
-            ...formData,
-            [activeSection]: uploadedData,
-          },
+          formData: { ...formData, [activeSection]: uploadedData },
           completedSections,
           lastUpdated: new Date().toISOString(),
         },
-        { merge: true },
+        { merge: true }
       )
-      
     } catch (error) {
       console.error("Error saving section:", error)
       alert("Failed to save.")
@@ -226,7 +233,7 @@ export default function CatalystUniversalProfile() {
   }
 
   const handleSubmitProfile = async () => {
-    markSectionAsCompleted("declarationConsent") // Mark declaration as complete
+    markSectionAsCompleted("declarationConsent")
     if (!user) {
       alert("You must be logged in to submit the profile.")
       return
@@ -238,13 +245,12 @@ export default function CatalystUniversalProfile() {
         {
           formData: uploadedFormData,
           completedSections: { ...completedSections, declarationConsent: true },
-          submittedAt: new Date().toISOString(), // Mark submission time
+          submittedAt: new Date().toISOString(),
         },
-        { merge: true },
+        { merge: true }
       )
       alert("Profile submitted successfully!")
-      console.log("Submitted profile data:", uploadedFormData)
-      setShowSummary(true) // Show summary after submission
+      setShowSummary(true)
     } catch (error) {
       console.error("Error submitting profile:", error)
       alert("Failed to submit profile.")
@@ -253,26 +259,26 @@ export default function CatalystUniversalProfile() {
 
   const handleEditFromSummary = () => {
     setShowSummary(false)
-    setActiveSection("instructions") // Or any other starting section you prefer
+    setActiveSection("instructions")
   }
 
   const renderActiveSection = () => {
     const sectionData = formData[activeSection] || {}
-    const updateDataForSection = (data) => updateFormData(activeSection, data)
-    const commonProps = { data: sectionData, updateData: updateDataForSection }
+    const commonProps = {
+      data: sectionData,
+      updateData: (data) => updateFormData(activeSection, data),
+    }
     switch (activeSection) {
       case "instructions":
         return <CatalystInstructions />
       case "entityOverview":
         return <CatalystEntityOverview {...commonProps} />
-      case "programmeDetails":
-        return <CatalystProgramDetails {...commonProps} />
       case "contactDetails":
         return <CatalystContactDetails {...commonProps} />
+      case "programBriefMatchingPreference":
+        return <CatalystProgramBriefMatchingPreference {...commonProps} />
       case "applicationBrief":
         return <CatalystApplicationBrief {...commonProps} />
-      case "generalMatchingPreference":
-        return <CatalystMatchingPreference {...commonProps} />
       case "documentUpload":
         return <CatalystDocumentUpload {...commonProps} />
       case "declarationConsent":
@@ -286,7 +292,6 @@ export default function CatalystUniversalProfile() {
     return <div className="flex justify-center items-center h-screen text-lg">Loading profile...</div>
   }
 
-  // Conditionally render the summary page
   if (showSummary) {
     return <CatalystProfileSummary formData={formData} onEdit={handleEditFromSummary} />
   }
@@ -300,7 +305,9 @@ export default function CatalystUniversalProfile() {
             <button
               key={section.id}
               onClick={() => setActiveSection(section.id)}
-              className={`${styles.profileTrackerButton} profile-tracker-button ${activeSection === section.id ? "active" : completedSections[section.id] ? "completed" : "pending"}`}
+              className={`${styles.profileTrackerButton} profile-tracker-button ${
+                activeSection === section.id ? "active" : completedSections[section.id] ? "completed" : "pending"
+              }`}
             >
               {section.label.split("\n").map((line, i) => (
                 <span key={i} className={`${styles.trackerLabelLine} tracker-label-line`}>
@@ -312,6 +319,7 @@ export default function CatalystUniversalProfile() {
           ))}
         </div>
       </div>
+
       <div className={`${styles.contentCard} content-card`}>
         {renderActiveSection()}
         <div className={`${styles.actionButtons} action-buttons`}>

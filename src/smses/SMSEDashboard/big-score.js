@@ -110,7 +110,7 @@ useEffect(() => {
   }
 }, [bigScore])
 
-  // Generate smart recommendations based on scores - UPDATED
+  // Generate smart recommendations based on scores
   const getRecommendations = () => {
     const recommendations = []
 
@@ -202,24 +202,24 @@ useEffect(() => {
   const calculateBigScore = (compliance, legitimacy, fundability, pis, leadership, data) => {
     const stage = data?.entityOverview?.operationStage?.toLowerCase() || "ideation"
     const stageWeights = {
-      ideation: { compliance: 0.32, legitimacy: 0.13, fundability: 0.32, pis: 0.13, leadership: 0.1 },
-      prototype: { compliance: 0.32, legitimacy: 0.13, fundability: 0.32, pis: 0.13, leadership: 0.1 },
-      startup: { compliance: 0.32, legitimacy: 0.13, fundability: 0.32, pis: 0.13, leadership: 0.1 },
-      "early-growth": { compliance: 0.32, legitimacy: 0.13, fundability: 0.32, pis: 0.13, leadership: 0.1 },
-      growth: { compliance: 0.32, legitimacy: 0.13, fundability: 0.32, pis: 0.13, leadership: 0.1 },
-      "scale-up": { compliance: 0.32, legitimacy: 0.13, fundability: 0.32, pis: 0.13, leadership: 0.1 },
-      mature: { compliance: 0.32, legitimacy: 0.13, fundability: 0.32, pis: 0.13, leadership: 0.1 },
+      ideation: { compliance: 0.32, legitimacy: 0.13, leadership: 0.1, pis: 0.13, fundability: 0.32 },
+      prototype: { compliance: 0.32, legitimacy: 0.13, leadership: 0.1, pis: 0.13, fundability: 0.32 },
+      startup: { compliance: 0.32, legitimacy: 0.13, leadership: 0.1, pis: 0.13, fundability: 0.32 },
+      "early-growth": { compliance: 0.32, legitimacy: 0.13, leadership: 0.1, pis: 0.13, fundability: 0.32 },
+      growth: { compliance: 0.32, legitimacy: 0.13, leadership: 0.1, pis: 0.13, fundability: 0.32 },
+      "scale-up": { compliance: 0.32, legitimacy: 0.13, leadership: 0.1, pis: 0.13, fundability: 0.32 },
+      mature: { compliance: 0.32, legitimacy: 0.13, leadership: 0.1, pis: 0.13, fundability: 0.32 },
     }
     const weights = stageWeights[stage] || stageWeights.ideation
 
     const complianceWeighted = compliance * weights.compliance
     const legitimacyWeighted = legitimacy * weights.legitimacy
-    const fundabilityWeighted = fundability * weights.fundability
     const leadershipWeighted = leadership * weights.leadership
     const pisWeighted = pis * weights.pis
+    const fundabilityWeighted = fundability * weights.fundability
 
     const totalScore = Math.round(
-      complianceWeighted + legitimacyWeighted + fundabilityWeighted + pisWeighted + leadershipWeighted,
+      complianceWeighted + legitimacyWeighted + leadershipWeighted + pisWeighted + fundabilityWeighted,
     )
 
     const breakdown = [
@@ -238,11 +238,11 @@ useEffect(() => {
         color: "#6D4C41",
       },
       {
-        name: "Capital appeal score",
-        score: fundability,
-        weight: Math.round(weights.fundability * 100),
-        weightedScore: Math.round(fundabilityWeighted),
-        color: "#A67C52",
+        name: "Leadership score",
+        score: leadership,
+        weight: Math.round(weights.leadership * 100),
+        weightedScore: Math.round(leadershipWeighted),
+        color: "#A0522D",
       },
       {
         name: "Governance score",
@@ -252,11 +252,11 @@ useEffect(() => {
         color: "#B8860B",
       },
       {
-        name: "Leadership score",
-        score: leadership,
-        weight: Math.round(weights.leadership * 100),
-        weightedScore: Math.round(leadershipWeighted),
-        color: "#A0522D",
+        name: "Capital appeal score",
+        score: fundability,
+        weight: Math.round(weights.fundability * 100),
+        weightedScore: Math.round(fundabilityWeighted),
+        color: "#A67C52",
       },
     ]
 
@@ -534,9 +534,7 @@ useEffect(() => {
             </button>
             <button
               onClick={() => {
-                if (setActiveTab) {
-                  setActiveTab("tools")
-                }
+                setShowBoostScoreModal(true)
               }}
               disabled={bigScore === null}
               style={{
@@ -736,7 +734,7 @@ useEffect(() => {
                 </div>
               </div>
 
-              {/* About the BIG Score section */}
+              {/* About the BIG Score section - UPDATED */}
               <div
                 style={{
                   marginTop: "20px",
@@ -800,15 +798,15 @@ useEffect(() => {
                           presence
                         </li>
                         <li style={{ marginBottom: "6px" }}>
-                          <strong>Fundability score (32%):</strong> Investment readiness, financial health, and growth
-                          potential
+                          <strong>Leadership score (10%):</strong> Evaluates the team capabilities and experience of business
+                          owners and key executives
                         </li>
                         <li style={{ marginBottom: "6px" }}>
                           <strong>Governance score (13%):</strong> Board readiness and governance maturity indicators
                         </li>
                         <li style={{ marginBottom: "6px" }}>
-                          <strong>Team score (10%):</strong> Evaluates the team capabilities and experience of business
-                          owners and key executives
+                          <strong>Capital Appeal score (32%):</strong> Investment readiness, financial health, and growth
+                          potential
                         </li>
                       </ul>
                     </div>
@@ -856,7 +854,7 @@ useEffect(() => {
                     >
                       <p style={{ fontWeight: "bold", marginBottom: "8px", color: "#6d4c41" }}>Weighted assessment:</p>
                       <p style={{ margin: "0", color: "#5d4037" }}>
-                        Compliance and fundability receive the highest weights (32% each) as they represent the
+                        Compliance and Capital Appeal receive the highest weights (32% each) as they represent the
                         fundamental legal foundation and investment attractiveness that drive business opportunities and
                         partnerships.
                       </p>
@@ -869,7 +867,7 @@ useEffect(() => {
                 )}
               </div>
 
-              {/* Score Breakdown Section */}
+              {/* Score Breakdown Section - UPDATED ORDER */}
               <div
                 style={{
                   marginTop: "20px",
@@ -1050,7 +1048,7 @@ useEffect(() => {
                       {bigScore >= 91 && (
                         <p style={{ margin: "0" }}>
                           <strong>Outstanding business readiness.</strong> Your organization demonstrates excellence
-                          across all critical dimensions - compliance, legitimacy, fundability, and governance. You're
+                          across all critical dimensions - compliance, legitimacy, team, governance, and capital appeal. You're
                           exceptionally well-positioned for major funding opportunities, strategic partnerships, and
                           rapid scaling. This level of business maturity places you in the top tier of investment-ready
                           companies.
@@ -1059,7 +1057,7 @@ useEffect(() => {
                       {bigScore >= 81 && bigScore <= 90 && (
                         <p style={{ margin: "0" }}>
                           <strong>Strong overall business position.</strong> Your company shows solid performance across
-                          most areas with good compliance, credibility, and fundability foundations. You're
+                          most areas with good compliance, credibility, leadership, and capital appeal foundations. You're
                           well-prepared for growth opportunities and would be attractive to most investors and partners.
                           Minor improvements in weaker areas could elevate you to exceptional status.
                         </p>
@@ -1069,14 +1067,14 @@ useEffect(() => {
                           <strong>Fair business readiness with improvement opportunities.</strong> While you have
                           established foundations in several areas, significant gaps remain that may limit access to
                           premium opportunities. Focus on strengthening your weakest scores - particularly compliance
-                          and fundability - to improve your overall market position.
+                          and capital appeal - to improve your overall market position.
                         </p>
                       )}
                       {bigScore >= 41 && bigScore <= 60 && (
                         <p style={{ margin: "0" }}>
                           <strong>Basic foundation requiring substantial development.</strong> Your business shows some
                           positive elements but lacks the comprehensive readiness needed for major opportunities.
-                          Systematic improvements across compliance, legitimacy, and operational areas are essential
+                          Systematic improvements across compliance, legitimacy, leadership, and capital appeal are essential
                           before pursuing significant funding or partnerships.
                         </p>
                       )}
@@ -1084,8 +1082,8 @@ useEffect(() => {
                         <p style={{ margin: "0" }}>
                           <strong>Fundamental improvements urgently needed.</strong> Your business requires
                           comprehensive strengthening across multiple critical areas. Focus immediately on achieving
-                          basic compliance, establishing professional legitimacy, and building fundamental operational
-                          capabilities before pursuing external opportunities.
+                          basic compliance, establishing professional legitimacy, building leadership capabilities, and developing
+                          fundamental operational capabilities before pursuing external opportunities.
                         </p>
                       )}
                     </div>

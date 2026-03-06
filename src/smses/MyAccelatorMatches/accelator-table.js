@@ -695,7 +695,7 @@ useEffect(() => {
 
 useEffect(() => {
   if (!effectiveUserId) return
-  
+
   const loadStatusFromFirestore = async () => {
     const snapshot = await getDocs(collection(db, "smeCatalystApplications"))
     const statusMap = {}
@@ -704,41 +704,20 @@ useEffect(() => {
     snapshot.docs.forEach((docSnap) => {
       const data = docSnap.data()
       if (data.smeId === effectiveUserId) {
-          const acceleratorId = `${data.catalystId}_${data.programIndex || 0}`
-          statusMap[acceleratorId] = "Sent"
-          stageMap[acceleratorId] = data.pipelineStage || "Application Sent"
-        }
-      })
+        // This must match accelerator.id = `${catalystId}_${programIndex}`
+        const key = `${data.catalystId}_${data.programIndex ?? 0}`
+        statusMap[key] = "Sent"
+        stageMap[key] = data.status || "Application Sent"
+      }
+    })
 
-      setStatuses(statusMap)
-      setPipelineStages(stageMap)
-    }
+    setStatuses(statusMap)
+    setPipelineStages(stageMap)
+  }
 
-    loadStatusFromFirestore()
-  }, [accelerators, effectiveUserId])
+  loadStatusFromFirestore()
+}, [effectiveUserId, accelerators])
 
- useEffect(() => {
-  if (!effectiveUserId) return
-  
-  const loadStatusFromFirestore = async () => {
-    const snapshot = await getDocs(collection(db, "smeCatalystApplications"))
-    const statusMap = {}
-    const stageMap = {}
-
-    snapshot.docs.forEach((docSnap) => {
-      const data = docSnap.data()
-      if (data.smeId === effectiveUserId) {
-          statusMap[data.catalystId] = "Sent"
-          stageMap[data.catalystId] = data.pipelineStage || "Application Sent"
-        }
-      })
-
-      setStatuses(statusMap)
-      setPipelineStages(stageMap)
-    }
-
-    loadStatusFromFirestore()
- }, [effectiveUserId])
 
   const calculateMatchScore = (smeData, acceleratorData, program = null) => {
     const totalFields = 8
@@ -1473,7 +1452,7 @@ useEffect(() => {
               <col style={{ width: "100px" }} />
               <col style={{ width: "90px" }} />
               <col style={{ width: "100px" }} />
-              <col style={{ width: "120px" }} />
+              <col style={{ width: "160px" }} />
               <col style={{ width: "130px" }} />
             </colgroup>
             <thead>
