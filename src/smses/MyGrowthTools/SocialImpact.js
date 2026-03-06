@@ -3182,18 +3182,11 @@ const renderCommunityESD = () => {
       hdiPercentage: localUserData?.hdiPercentage || 0,
       hasMonthlyHdiData: financialData?.balanceSheetData?.assets?.additionalMetrics?.hdiSpent ? true : false,
       monthlyHdiData: financialData?.balanceSheetData?.assets?.additionalMetrics?.hdiSpent || [],
-      
-      // Procurement from financial data
-      totalProcurementSpend: localUserData?.totalProcurementSpend || 0,
-      procurementPercentage: localUserData?.procurementPercentage || 0,
-      hasMonthlyProcurementData: financialData?.balanceSheetData?.assets?.additionalMetrics?.totalProcurementSpend ? true : false,
-      monthlyProcurementData: financialData?.balanceSheetData?.assets?.additionalMetrics?.totalProcurementSpend || [],
     }
 
     // Log the data to debug
     console.log('Monthly CSI Data:', csiData.monthlyCsiData);
     console.log('Monthly HDI Data:', csiData.monthlyHdiData);
-    console.log('Monthly Procurement Data:', csiData.monthlyProcurementData);
     console.log('Months:', months);
 
     return (
@@ -3241,8 +3234,7 @@ const renderCommunityESD = () => {
             <strong>📊 Monthly Data Available:</strong>{' '}
             {csiData.hasMonthlyCsiData && 'CSI ✓ '}
             {csiData.hasMonthlyHdiData && 'HDI ✓ '}
-            {csiData.hasMonthlyProcurementData && 'Procurement ✓ '}
-            {!csiData.hasMonthlyCsiData && !csiData.hasMonthlyHdiData && !csiData.hasMonthlyProcurementData && 'Annual only'}
+            {!csiData.hasMonthlyCsiData && !csiData.hasMonthlyHdiData && 'Annual only'}
           </div>
 
           {/* CSI/HDI Spend Selection */}
@@ -3293,22 +3285,42 @@ const renderCommunityESD = () => {
           </div>
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "20px" }}>
-            {/* CSI/CSR Spend Chart - Monthly if available */}
+            {/* CSI/CSR Combined Chart - Amount (Bar) + Percentage (Line) */}
             {activeSpendTab === "csi" && (
               <ESGChartCard
-                title={csiData.hasMonthlyCsiData ? "CSI/CSR Spend (Monthly)" : "CSI/CSR Spend (Annual)"}
+                title={csiData.hasMonthlyCsiData ? "CSI/CSR Spend & % of Revenue (Monthly)" : "CSI/CSR Spend & % of Revenue (Annual)"}
                 chartType="bar"
                 data={{
                   labels: csiData.hasMonthlyCsiData ? months : ["Annual Total"],
                   datasets: [
                     {
-                      label: "CSI Spend",
+                      label: "CSI Spend (R millions)",
+                      type: 'bar',
                       data: csiData.hasMonthlyCsiData 
                         ? csiData.monthlyCsiData.map(v => v / 1000000)
                         : [csiData.csiSpend / 1000000],
                       backgroundColor: "#5d4037",
                       borderColor: "#5d4037",
                       borderWidth: 2,
+                      yAxisID: 'y-axis-amount',
+                    },
+                    {
+                      label: "CSI % of Revenue",
+                      type: 'line',
+                      data: csiData.hasMonthlyCsiData 
+                        ? months.map(() => csiData.csiPercentage)
+                        : [csiData.csiPercentage],
+                      backgroundColor: "#9e9e9e",
+                      borderColor: "#9e9e9e",
+                      borderWidth: 3,
+                      pointBackgroundColor: "#9e9e9e",
+                      pointBorderColor: "#fff",
+                      pointBorderWidth: 2,
+                      pointRadius: 5,
+                      pointHoverRadius: 7,
+                      fill: false,
+                      tension: 0.1,
+                      yAxisID: 'y-axis-percentage',
                     },
                   ],
                 }}
@@ -3316,11 +3328,29 @@ const renderCommunityESD = () => {
                   responsive: true,
                   maintainAspectRatio: false,
                   scales: {
-                    y: {
+                    'y-axis-amount': {
+                      type: 'linear',
+                      position: 'left',
                       beginAtZero: true,
                       title: {
                         display: true,
                         text: "Amount (R millions)",
+                      },
+                      grid: {
+                        drawOnChartArea: false,
+                      },
+                    },
+                    'y-axis-percentage': {
+                      type: 'linear',
+                      position: 'right',
+                      beginAtZero: true,
+                      max: 100,
+                      title: {
+                        display: true,
+                        text: "Percentage (%)",
+                      },
+                      grid: {
+                        drawOnChartArea: false,
                       },
                     },
                   },
@@ -3329,7 +3359,11 @@ const renderCommunityESD = () => {
                       enabled: true,
                       callbacks: {
                         label: (context) => {
-                          return `CSI Spend: R ${(context.raw * 1000000).toLocaleString()}`;
+                          if (context.dataset.label === "CSI Spend (R millions)") {
+                            return `CSI Spend: R ${(context.raw * 1000000).toLocaleString()}`;
+                          } else {
+                            return `CSI % of Revenue: ${context.raw.toFixed(2)}%`;
+                          }
                         }
                       }
                     },
@@ -3344,22 +3378,42 @@ const renderCommunityESD = () => {
               />
             )}
 
-            {/* HDI Spend Chart - Monthly if available */}
+            {/* HDI Combined Chart - Amount (Bar) + Percentage (Line) */}
             {activeSpendTab === "hdi" && (
               <ESGChartCard
-                title={csiData.hasMonthlyHdiData ? "HDI Spend (Monthly)" : "HDI Spend (Annual)"}
+                title={csiData.hasMonthlyHdiData ? "HDI Spend & % of Revenue (Monthly)" : "HDI Spend & % of Revenue (Annual)"}
                 chartType="bar"
                 data={{
                   labels: csiData.hasMonthlyHdiData ? months : ["Annual Total"],
                   datasets: [
                     {
-                      label: "HDI Spend",
+                      label: "HDI Spend (R millions)",
+                      type: 'bar',
                       data: csiData.hasMonthlyHdiData 
                         ? csiData.monthlyHdiData.map(v => v / 1000000)
                         : [csiData.hdiVendorSpend / 1000000],
                       backgroundColor: "#8d6e63",
                       borderColor: "#8d6e63",
                       borderWidth: 2,
+                      yAxisID: 'y-axis-amount',
+                    },
+                    {
+                      label: "HDI % of Revenue",
+                      type: 'line',
+                      data: csiData.hasMonthlyHdiData 
+                        ? months.map(() => csiData.hdiPercentage)
+                        : [csiData.hdiPercentage],
+                      backgroundColor: "#9e9e9e",
+                      borderColor: "#9e9e9e",
+                      borderWidth: 3,
+                      pointBackgroundColor: "#9e9e9e",
+                      pointBorderColor: "#fff",
+                      pointBorderWidth: 2,
+                      pointRadius: 5,
+                      pointHoverRadius: 7,
+                      fill: false,
+                      tension: 0.1,
+                      yAxisID: 'y-axis-percentage',
                     },
                   ],
                 }}
@@ -3367,11 +3421,29 @@ const renderCommunityESD = () => {
                   responsive: true,
                   maintainAspectRatio: false,
                   scales: {
-                    y: {
+                    'y-axis-amount': {
+                      type: 'linear',
+                      position: 'left',
                       beginAtZero: true,
                       title: {
                         display: true,
                         text: "Amount (R millions)",
+                      },
+                      grid: {
+                        drawOnChartArea: false,
+                      },
+                    },
+                    'y-axis-percentage': {
+                      type: 'linear',
+                      position: 'right',
+                      beginAtZero: true,
+                      max: 100,
+                      title: {
+                        display: true,
+                        text: "Percentage (%)",
+                      },
+                      grid: {
+                        drawOnChartArea: false,
                       },
                     },
                   },
@@ -3380,7 +3452,11 @@ const renderCommunityESD = () => {
                       enabled: true,
                       callbacks: {
                         label: (context) => {
-                          return `HDI Spend: R ${(context.raw * 1000000).toLocaleString()}`;
+                          if (context.dataset.label === "HDI Spend (R millions)") {
+                            return `HDI Spend: R ${(context.raw * 1000000).toLocaleString()}`;
+                          } else {
+                            return `HDI % of Revenue: ${context.raw.toFixed(2)}%`;
+                          }
                         }
                       }
                     },
@@ -3394,217 +3470,6 @@ const renderCommunityESD = () => {
                 isInvestorView={isInvestorView}
               />
             )}
-
-            {/* CSI/CSR % - Monthly if data available */}
-            {activeSpendTab === "csi" && (
-              <ESGChartCard
-                title={csiData.hasMonthlyCsiData ? "CSI Spend as % of Revenue (Monthly)" : "CSI Spend as % of Revenue (Annual)"}
-                chartType="bar"
-                data={{
-                  labels: csiData.hasMonthlyCsiData ? months : ["Annual"],
-                  datasets: [
-                    {
-                      label: "CSI %",
-                      data: csiData.hasMonthlyCsiData 
-                        ? months.map(() => csiData.csiPercentage)
-                        : [csiData.csiPercentage],
-                      backgroundColor: "#5d4037",
-                      borderColor: "#5d4037",
-                      borderWidth: 2,
-                    },
-                  ],
-                }}
-                options={{
-                  responsive: true,
-                  maintainAspectRatio: false,
-                  scales: {
-                    y: {
-                      beginAtZero: true,
-                      max: 100,
-                      title: {
-                        display: true,
-                        text: "Percentage (%)",
-                      },
-                    },
-                  },
-                  plugins: {
-                    tooltip: {
-                      enabled: true,
-                      callbacks: {
-                        label: (context) => {
-                          return `CSI % of Revenue: ${context.raw.toFixed(2)}%`;
-                        }
-                      }
-                    },
-                    datalabels: {
-                      display: false
-                    }
-                  }
-                }}
-                kpiKey="csiPercentage"
-                unit="%"
-                isInvestorView={isInvestorView}
-              />
-            )}
-
-            {/* HDI % - Monthly if data available */}
-            {activeSpendTab === "hdi" && (
-              <ESGChartCard
-                title={csiData.hasMonthlyHdiData ? "HDI Spend as % of Revenue (Monthly)" : "HDI Spend as % of Revenue (Annual)"}
-                chartType="bar"
-                data={{
-                  labels: csiData.hasMonthlyHdiData ? months : ["Annual"],
-                  datasets: [
-                    {
-                      label: "HDI %",
-                      data: csiData.hasMonthlyHdiData 
-                        ? months.map(() => csiData.hdiPercentage)
-                        : [csiData.hdiPercentage],
-                      backgroundColor: "#8d6e63",
-                      borderColor: "#8d6e63",
-                      borderWidth: 2,
-                    },
-                  ],
-                }}
-                options={{
-                  responsive: true,
-                  maintainAspectRatio: false,
-                  scales: {
-                    y: {
-                      beginAtZero: true,
-                      max: 100,
-                      title: {
-                        display: true,
-                        text: "Percentage (%)",
-                      },
-                    },
-                  },
-                  plugins: {
-                    tooltip: {
-                      enabled: true,
-                      callbacks: {
-                        label: (context) => {
-                          return `HDI % of Revenue: ${context.raw.toFixed(2)}%`;
-                        }
-                      }
-                    },
-                    datalabels: {
-                      display: false
-                    }
-                  }
-                }}
-                kpiKey="hdiPercentage"
-                unit="%"
-                isInvestorView={isInvestorView}
-              />
-            )}
-
-            {/* Procurement Spend */}
-            <div>
-              {/* Procurement Tabs */}
-              <div style={{ 
-                display: "flex", 
-                gap: "10px", 
-                marginBottom: "15px"
-              }}>
-                <button
-                  onClick={() => setActiveProcurementTab("amount")}
-                  style={{
-                    padding: "8px 12px",
-                    backgroundColor: activeProcurementTab === "amount" ? "#5d4037" : "#e8ddd4",
-                    color: activeProcurementTab === "amount" ? "#fdfcfb" : "#5d4037",
-                    border: "none",
-                    borderRadius: "4px",
-                    cursor: "pointer",
-                    fontWeight: "600",
-                    fontSize: "13px",
-                    transition: "all 0.3s ease",
-                    flex: 1
-                  }}
-                >
-                  Total Procurement Spend
-                </button>
-                <button
-                  onClick={() => setActiveProcurementTab("percentage")}
-                  style={{
-                    padding: "8px 12px",
-                    backgroundColor: activeProcurementTab === "percentage" ? "#5d4037" : "#e8ddd4",
-                    color: activeProcurementTab === "percentage" ? "#fdfcfb" : "#5d4037",
-                    border: "none",
-                    borderRadius: "4px",
-                    cursor: "pointer",
-                    fontWeight: "600",
-                    fontSize: "13px",
-                    transition: "all 0.3s ease",
-                    flex: 1
-                  }}
-                >
-                  Procurement % to HDI
-                </button>
-              </div>
-
-              {/* Procurement Chart */}
-              <ESGChartCard
-                title={activeProcurementTab === "amount" 
-                  ? (csiData.hasMonthlyProcurementData ? "Procurement Spend (Monthly)" : "Procurement Spend (Annual)")
-                  : (csiData.hasMonthlyProcurementData ? "Procurement % to HDI (Monthly)" : "Procurement % to HDI (Annual)")}
-                chartType="bar"
-                data={{
-                  labels: (activeProcurementTab === "amount" && csiData.hasMonthlyProcurementData) || 
-                         (activeProcurementTab === "percentage" && csiData.hasMonthlyProcurementData) 
-                         ? months 
-                         : ["Annual Total"],
-                  datasets: [
-                    {
-                      label: activeProcurementTab === "amount" ? "Procurement Spend" : "Procurement % to HDI",
-                      data: activeProcurementTab === "amount"
-                        ? (csiData.hasMonthlyProcurementData 
-                            ? csiData.monthlyProcurementData.map(v => v / 1000000)
-                            : [csiData.totalProcurementSpend / 1000000])
-                        : (csiData.hasMonthlyProcurementData
-                            ? months.map(() => csiData.procurementPercentage)
-                            : [csiData.procurementPercentage]),
-                      backgroundColor: "#3e2723",
-                      borderColor: "#3e2723",
-                      borderWidth: 2,
-                    },
-                  ],
-                }}
-                options={{
-                  responsive: true,
-                  maintainAspectRatio: false,
-                  scales: {
-                    y: {
-                      beginAtZero: true,
-                      title: {
-                        display: true,
-                        text: activeProcurementTab === "amount" ? "Amount (R millions)" : "Percentage (%)",
-                      },
-                    },
-                  },
-                  plugins: {
-                    tooltip: {
-                      enabled: true,
-                      callbacks: {
-                        label: (context) => {
-                          if (activeProcurementTab === "amount") {
-                            return `Procurement Spend: R ${(context.raw * 1000000).toLocaleString()}`;
-                          } else {
-                            return `Procurement % to HDI: ${context.raw.toFixed(2)}%`;
-                          }
-                        }
-                      }
-                    },
-                    datalabels: {
-                      display: false
-                    }
-                  }
-                }}
-                kpiKey={activeProcurementTab === "amount" ? "totalProcurementSpend" : "procurementPercentage"}
-                unit={activeProcurementTab === "amount" ? "R" : "%"}
-                isInvestorView={isInvestorView}
-              />
-            </div>
           </div>
 
           {/* CSI/CSR Projects Table */}

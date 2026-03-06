@@ -8,6 +8,7 @@ import { ref, uploadBytes, getDownloadURL } from "firebase/storage"
 import { storage } from "../../firebaseConfig"
 import { DayPicker } from "react-day-picker"
 import "react-day-picker/dist/style.css"
+import { Eye } from "lucide-react"
 
 const formatLabel = (value) => {
   if (!value) return ""
@@ -196,6 +197,8 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded  }) {
   const [timeSlot, setTimeSlot] = useState({ start: "09:00", end: "17:00" })
   const [timeZone, setTimeZone] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone)
 
+const [showMatchBreakdown, setShowMatchBreakdown] = useState(false)
+const [selectedAcceleratorForBreakdown, setSelectedAcceleratorForBreakdown] = useState(null)
   
   const [bigScoreData, setBigScoreData] = useState({
     pis: { score: 0, color: "#4E342E" }, // PIS first as requested
@@ -365,6 +368,233 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded  }) {
     return sme.availableDates && sme.availableDates.length > 0
   }
 
+  const calculateMatchScore = (smeProfileData, catalystFormData, program = null) => {
+  const totalFields = 8
+  let matched = 0
+
+  const breakdown = {
+    fundingStage:     { score: 0, maxScore: 12.5, matched: false, description: "", details: {} },
+    ticketSize:       { score: 0, maxScore: 12.5, matched: false, description: "", details: {} },
+    geographicFit:    { score: 0, maxScore: 12.5, matched: false, description: "", details: {} },
+    sectorMatch:      { score: 0, maxScore: 12.5, matched: false, description: "", details: {} },
+    instrumentFit:    { score: 0, maxScore: 12.5, matched: false, description: "", details: {} },
+    supportMatch:     { score: 0, maxScore: 12.5, matched: false, description: "", details: {} },
+    legalEntityFit:   { score: 0, maxScore: 12.5, matched: false, description: "", details: {} },
+    revenueThreshold: { score: 0, maxScore: 12.5, matched: false, description: "", details: {} },
+  }
+
+  const toArray = (v) => {
+    if (v == null) return []
+    if (Array.isArray(v)) return v
+    return v.toString().split(/[,|/]+/g).map(s => s.trim()).filter(Boolean)
+  }
+
+  const splitSectorTokens = (v) =>
+    toArray(v)
+      .flatMap(item => item.split(/[,|/]+/g))
+      .flatMap(item => item.split(/[_/\-\s]+/g))
+      .map(s => s.replace(/\(.*?\)/g, ""))
+      .map(s => s.trim())
+      .filter(Boolean)
+
+  const canon = (s) => s.toLowerCase().replace(/[^a-z]/g, "")
+
+  const SECTOR_ALIASES = {
+    it: "informationtechnology", ict: "informationtechnology",
+    informationtechnology: "informationtechnology",
+    technology: "informationtechnology", software: "informationtechnology",
+    agri: "agriculture", agriculture: "agriculture",
+    forestry: "forestry", fishing: "fishing",
+  }
+
+  const COMPOSITE_EXPANSIONS = {
+    agricultureforestryfishing: ["agriculture", "forestry", "fishing"],
+  }
+
+  const mapAlias = (t) => SECTOR_ALIASES[t] || t
+
+  const normalizeSectors = (v) =>
+    splitSectorTokens(v)
+      .map(canon).map(mapAlias)
+      .flatMap(t => COMPOSITE_EXPANSIONS[t] ? COMPOSITE_EXPANSIONS[t] : [t])
+      .filter(Boolean)
+
+  const hasOverlap = (a, b) => {
+    const A = new Set(normalizeSectors(a))
+    for (const t of normalizeSectors(b)) if (A.has(t)) return true
+    return false
+  }
+
+  const normalizeToken = (s) => s.toString().toLowerCase().trim().replace(/[_\-\s]+/g, "")
+  const normalizeList = (v) =>
+    toArray(v).flatMap(item => item.split(/\s*,\s*/)).map(normalizeToken).filter(Boolean)
+
+  const normalize = (val) =>
+    Array.isArray(val) ? val.map(v => v.toLowerCase().trim()) : val?.toLowerCase().trim()
+
+  const cleanCurrency = (value) => {
+    if (!value) return 0
+    return parseFloat(value.toString().replace(/[^0-9.]/g, "")) || 0
+  }
+
+  const cleanString = (input) => {
+    if (Array.isArray(input)) return input.map(str => typeof str === "string" ? str.replace(/[_-]/g, " ").toLowerCase() : str)
+    if (typeof input === "string") return input.replace(/[_-]/g, " ").toLowerCase()
+    return input
+  }
+
+  const checkGeographicMatch = (smeLocation, acceleratorGeoData) => {
+    const smeProvince = normalize(smeProfileData.entityOverview?.province)
+    const smeCountry = cleanString(smeProfileData.entityOverview?.location) || "not specified"
+    const accelGeoFocus = acceleratorGeoData.geographicFocus || []
+    const accelSelectedCountries = cleanString(acceleratorGeoData.selectedCountries) || []
+    const accelSelectedProvinces = cleanString(acceleratorGeoData.selectedProvinces) || []
+
+    if (accelGeoFocus.includes("global")) return true
+    if (accelGeoFocus.includes("regional_emea") || accelGeoFocus.includes("regional_na") || accelGeoFocus.includes("regional_apac")) return true
+    if (accelGeoFocus.includes("country_specific")) return accelSelectedCountries.includes(smeCountry) || accelSelectedCountries.includes(smeLocation)
+    if (accelGeoFocus.includes("province_specific")) return accelSelectedProvinces.includes(smeProvince)
+    return false
+  }
+
+  const programData = program || catalystFormData?.programmeDetails?.programs?.[0] || {}
+  const matchPrefs = catalystFormData?.generalMatchingPreference || {}
+
+  // 1. Funding Stage
+  const smeStage = smeProfileData.entityOverview?.operationStage
+  const accelStage = matchPrefs.programStage
+  const stageMatch = normalize(smeStage) === normalize(accelStage)
+  breakdown.fundingStage.details = { smeValue: smeStage, accelValue: accelStage }
+  breakdown.fundingStage.matched = stageMatch
+  if (stageMatch) {
+    breakdown.fundingStage.score = 12.5
+    breakdown.fundingStage.description = `Perfect match: Your ${smeStage} stage aligns with their ${accelStage} focus`
+    matched++
+  } else {
+    breakdown.fundingStage.description = `Stage mismatch: SME is ${smeStage || "unspecified"}, catalyst focuses on ${accelStage || "unspecified"}`
+  }
+
+  // 2. Ticket Size
+  const smeAmountRequested = cleanCurrency(smeProfileData.useOfFunds?.amountRequested)
+  const accelMinTicket = cleanCurrency(programData.minimumSupport || 0)
+  const accelMaxTicket = cleanCurrency(programData.maximumSupport || 0)
+  const ticketMatch = smeAmountRequested >= accelMinTicket && smeAmountRequested <= accelMaxTicket
+  breakdown.ticketSize.details = { smeValue: smeAmountRequested, accelValue: `${accelMinTicket}-${accelMaxTicket}` }
+  breakdown.ticketSize.matched = ticketMatch
+  if (ticketMatch) {
+    breakdown.ticketSize.score = 12.5
+    breakdown.ticketSize.description = `Perfect fit: SME funding need (${smeAmountRequested}) fits range (${accelMinTicket}-${accelMaxTicket})`
+    matched++
+  } else {
+    breakdown.ticketSize.description = `Size mismatch: SME needs ${smeAmountRequested || "unspecified"}, catalyst offers ${accelMinTicket}-${accelMaxTicket}`
+  }
+
+  // 3. Geographic Fit
+  const smeLocation = cleanString(smeProfileData.entityOverview?.location)
+  const accelGeoData = matchPrefs
+  const geoMatch = checkGeographicMatch(smeLocation, accelGeoData)
+  breakdown.geographicFit.details = { smeValue: smeLocation, accelValue: accelGeoData.geographicFocus }
+  breakdown.geographicFit.matched = geoMatch
+  if (geoMatch) {
+    breakdown.geographicFit.score = 12.5
+    breakdown.geographicFit.description = `Geographic compatibility: SME location (${smeLocation}) fits their focus areas`
+    matched++
+  } else {
+    breakdown.geographicFit.description = `Geographic mismatch: SME location (${smeLocation}) doesn't align with their focus areas`
+  }
+
+  // 4. Sector Match
+  const smeSectors = smeProfileData.entityOverview?.economicSectors
+  const accelSectors = matchPrefs.sectorFocus
+  const sectorMatch = hasOverlap(smeSectors, accelSectors)
+  breakdown.sectorMatch.details = {
+    smeValue: normalizeSectors(smeSectors).join(", "),
+    accelValue: normalizeSectors(accelSectors).join(", "),
+  }
+  breakdown.sectorMatch.matched = sectorMatch
+  if (sectorMatch) {
+    breakdown.sectorMatch.score = 12.5
+    breakdown.sectorMatch.description = `Sector alignment: overlap found (${breakdown.sectorMatch.details.smeValue} ↔ ${breakdown.sectorMatch.details.accelValue})`
+    matched++
+  } else {
+    breakdown.sectorMatch.description = `Sector mismatch: SME [${breakdown.sectorMatch.details.smeValue || "unspecified"}] vs catalyst [${breakdown.sectorMatch.details.accelValue || "unspecified"}]`
+  }
+
+  // 5. Instrument Fit
+  const smeInstrumentRaw = smeProfileData.useOfFunds?.fundingInstruments
+  const accelInstrumentRaw = programData.supportType || matchPrefs.supportFocusSubtype || matchPrefs.supportFocusType
+  const instrumentMatch = hasOverlap(smeInstrumentRaw, accelInstrumentRaw)
+  breakdown.instrumentFit.details = {
+    smeValue: normalizeList(smeInstrumentRaw).join(", "),
+    accelValue: normalizeList(accelInstrumentRaw).join(", "),
+  }
+  breakdown.instrumentFit.matched = instrumentMatch
+  if (instrumentMatch) {
+    breakdown.instrumentFit.score = 12.5
+    breakdown.instrumentFit.description = `Instrument match: overlap found (${breakdown.instrumentFit.details.smeValue} ↔ ${breakdown.instrumentFit.details.accelValue})`
+    matched++
+  } else {
+    breakdown.instrumentFit.description = `Instrument mismatch: SME [${breakdown.instrumentFit.details.smeValue || "unspecified"}] vs catalyst [${breakdown.instrumentFit.details.accelValue || "unspecified"}]`
+  }
+
+  // 6. Support Match
+  const smeSupportCategory = smeProfileData.useOfFunds?.additionalSupportFocus
+  const smeSupportSubtype = smeProfileData.useOfFunds?.additionalSupportFocusSubtype
+  const accelSupportCategory = programData.supportFocusType || matchPrefs.supportFocus
+  const accelSupportSubtype = programData.supportFocusSubtype || matchPrefs.supportFocusSubtype
+
+  let supportMatchScore = 0, supportMatched = false, supportDescription = ""
+  if (smeSupportSubtype && accelSupportSubtype && smeSupportSubtype === accelSupportSubtype) {
+    supportMatchScore = 12.5; supportMatched = true; matched++
+    supportDescription = `Perfect support match: ${smeSupportSubtype} aligns with ${accelSupportSubtype}`
+  } else if (smeSupportCategory && accelSupportCategory && smeSupportCategory === accelSupportCategory) {
+    supportMatchScore = 6.25; supportMatched = true
+    supportDescription = `Partial support match: ${smeSupportCategory} category aligns, subtypes may differ`
+  } else {
+    supportDescription = `Support mismatch: SME needs ${smeSupportCategory || "unspecified"}, catalyst offers ${accelSupportCategory || "unspecified"}`
+  }
+  breakdown.supportMatch.details = {
+    smeValue: smeSupportSubtype ? `${smeSupportCategory} - ${smeSupportSubtype}` : smeSupportCategory,
+    accelValue: accelSupportSubtype ? `${accelSupportCategory} - ${accelSupportSubtype}` : accelSupportCategory,
+  }
+  breakdown.supportMatch.score = supportMatchScore
+  breakdown.supportMatch.matched = supportMatched
+  breakdown.supportMatch.description = supportDescription
+
+  // 7. Legal Entity Fit
+  const smeLegal = smeProfileData.entityOverview?.legalStructure
+  const accelLegal = matchPrefs.legalEntityFit
+  const legalMatch = normalize(smeLegal) === normalize(accelLegal)
+  breakdown.legalEntityFit.details = { smeValue: smeLegal, accelValue: accelLegal }
+  breakdown.legalEntityFit.matched = legalMatch
+  if (legalMatch) {
+    breakdown.legalEntityFit.score = 12.5
+    breakdown.legalEntityFit.description = `Legal structure compatibility: Both work with ${smeLegal}`
+    matched++
+  } else {
+    breakdown.legalEntityFit.description = `Legal structure mismatch: SME is ${smeLegal || "unspecified"}, catalyst works with ${accelLegal || "unspecified"}`
+  }
+
+  // 8. Revenue Threshold
+  const smeRevenue = cleanCurrency(smeProfileData.financialOverview?.annualRevenue)
+  const accelThreshold = cleanCurrency(programData.minimumSupport || "0")
+  const revenueMatch = smeRevenue >= accelThreshold
+  breakdown.revenueThreshold.details = { smeValue: smeRevenue, accelValue: accelThreshold }
+  breakdown.revenueThreshold.matched = revenueMatch
+  if (revenueMatch) {
+    breakdown.revenueThreshold.score = 12.5
+    breakdown.revenueThreshold.description = `Revenue meets requirements: SME ${smeRevenue} exceeds ${accelThreshold} threshold`
+    matched++
+  } else {
+    breakdown.revenueThreshold.description = `Revenue below threshold: SME ${smeRevenue || "unspecified"} is below ${accelThreshold} requirement`
+  }
+
+  return {
+    score: Math.round((matched / totalFields) * 100),
+    breakdown,
+  }
+}
+
   // ✅ Updated to use stage action instead of action change
   const handleStageAction = (sme) => {
     setSelectedSMEForStage(sme)
@@ -503,12 +733,44 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded  }) {
     fetchCatalystApplications()
   }, [stageFilter])
 
+useEffect(() => {
+  if (smes.length === 0) return
+
+  const recalculateAllScores = async () => {
+    const catalystId = auth.currentUser?.uid
+    if (!catalystId) return
+
+    const catalystDoc = await getDoc(doc(db, "catalystProfiles", catalystId))
+    const catalystFormData = catalystDoc.exists() ? catalystDoc.data().formData || {} : {}
+    const programs = catalystFormData?.programmeDetails?.programs || []
+
+    const updated = await Promise.all(
+      smes.map(async (sme) => {
+        try {
+          const smeDoc = await getDoc(doc(db, "universalProfiles", sme.id))
+          const smeProfileData = smeDoc.exists() ? smeDoc.data() : {}
+          const program = programs[parseInt(sme.programIndex)] || programs[0] || null
+          const matchResult = calculateMatchScore(smeProfileData, catalystFormData, program)
+          return { ...sme, matchPercentage: matchResult.score, matchBreakdown: matchResult.breakdown }
+        } catch {
+          return sme // keep original if fetch fails
+        }
+      })
+    )
+
+    setSmes(updated)
+  }
+
+  recalculateAllScores()
+}, [smes.length]) // runs once when smes first populate
+
     useEffect(() => {
     if (smes.length > 0 && onSMEsLoaded) {
       onSMEsLoaded(smes);
     }
   }, [smes, onSMEsLoaded]);
 
+  
   const handleFilterChange = (key, value) => {
     setLocalFilters((prev) => ({ ...prev, [key]: value }))
   }
@@ -782,6 +1044,44 @@ const handleStageUpdate = async () => {
     const { compliance, legitimacy, fundability, pis } = bigScoreData
     return Math.round(compliance.score * 0.35 + legitimacy.score * 0.15 + fundability.score * 0.35 + pis.score * 0.15)
   }
+
+ const handleViewMatchBreakdown = async (sme) => {
+  try {
+    // Fetch fresh SME profile data
+    const smeDoc = await getDoc(doc(db, "universalProfiles", sme.id))
+    const smeProfileData = smeDoc.exists() ? smeDoc.data() : {}
+
+    // Fetch catalyst form data
+    const catalystId = auth.currentUser.uid
+    const catalystDoc = await getDoc(doc(db, "catalystProfiles", catalystId))
+    const catalystFormData = catalystDoc.exists() ? catalystDoc.data().formData || {} : {}
+
+    // Get specific program if applicable
+    const programs = catalystFormData?.programmeDetails?.programs || []
+    const program = programs[parseInt(sme.programIndex)] || programs[0] || null
+
+    const matchResult = calculateMatchScore(smeProfileData, catalystFormData, program)
+
+    // Sync the table row's displayed % to the freshly calculated score
+    setSmes((prev) =>
+      prev.map((s) =>
+        s.id === sme.id && s.programIndex === sme.programIndex
+          ? { ...s, matchPercentage: matchResult.score }
+          : s
+      )
+    )
+
+    setSelectedAcceleratorForBreakdown({
+      ...sme,
+      matchPercentage: matchResult.score,
+      matchBreakdown: matchResult.breakdown,
+    })
+    setShowMatchBreakdown(true)
+  } catch (err) {
+    console.error("Error computing match breakdown:", err)
+    setNotification({ type: "error", message: "Failed to load match breakdown." })
+  }
+}
 
   // Enhanced Modal Overlay Style with animation
   const modalOverlayStyle = {
@@ -1082,13 +1382,20 @@ const handleStageUpdate = async () => {
                       </div>
                     </td>
                     <td style={tableCellStyle}>
-                      <div style={matchContainerStyle}>
-                        <div style={progressBarStyle}>
-                          <div style={{ ...progressFillStyle, width: `${sme.matchPercentage}%` }} />
-                        </div>
-                        <span style={matchScoreStyle}>{sme.matchPercentage}%</span>
-                      </div>
-                    </td>
+  <div style={matchContainerStyle}>
+    <div style={progressBarStyle}>
+      <div style={{ ...progressFillStyle, width: `${sme.matchPercentage}%` }} />
+    </div>
+    <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+      <span style={matchScoreStyle}>{sme.matchPercentage}%</span>
+      <Eye
+        size={12}
+        style={{ cursor: "pointer", color: "#a67c52", flexShrink: 0 }}
+        onClick={() => handleViewMatchBreakdown(sme)}
+      />
+    </div>
+  </div>
+</td>
                     <td style={tableCellStyle}>
                       <div style={matchContainerStyle}>
                         <div style={progressBarStyle}>
@@ -2017,6 +2324,131 @@ const handleStageUpdate = async () => {
           </div>
         </div>
       )}
+      {showMatchBreakdown && selectedAcceleratorForBreakdown && (
+  <div
+    style={{
+      position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
+      backgroundColor: "rgba(0,0,0,0.5)",
+      display: "flex", alignItems: "center", justifyContent: "center",
+      zIndex: 1200,
+    }}
+    onClick={() => setShowMatchBreakdown(false)}
+  >
+    <div
+      style={{
+        background: "white", borderRadius: "12px",
+        maxWidth: "800px", width: "95%",
+        maxHeight: "90vh", overflowY: "auto",
+        boxShadow: "0 20px 40px rgba(0,0,0,0.15)",
+      }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      {/* Header */}
+      <div style={{
+        display: "flex", justifyContent: "space-between", alignItems: "center",
+        padding: "1.5rem", borderBottom: "1px solid #E8D5C4", background: "#F5EBE0",
+      }}>
+        <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: "600", color: "#5D2A0A" }}>
+          Match Breakdown — {selectedAcceleratorForBreakdown.name}
+        </h3>
+        <button
+          onClick={() => setShowMatchBreakdown(false)}
+          style={{ background: "none", border: "none", fontSize: "1.5rem", cursor: "pointer", color: "#5D2A0A" }}
+        >
+          ✖
+        </button>
+      </div>
+
+      {/* Body */}
+      <div style={{ padding: "1.5rem" }}>
+        {/* Overall score */}
+        <div style={{
+          textAlign: "center", marginBottom: "2rem",
+          paddingBottom: "1rem", borderBottom: "2px solid #E8D5C4",
+        }}>
+          <div style={{
+            fontSize: "3rem", fontWeight: "bold", marginBottom: "0.5rem",
+            color: selectedAcceleratorForBreakdown.matchPercentage >= 80 ? "#388E3C"
+              : selectedAcceleratorForBreakdown.matchPercentage >= 60 ? "#F57C00" : "#D32F2F",
+          }}>
+            {selectedAcceleratorForBreakdown.matchPercentage || 0}%
+          </div>
+          <p style={{ fontSize: "1rem", color: "#8D6E63", margin: 0 }}>Overall Match Score</p>
+        </div>
+
+        {/* Breakdown cards */}
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(350px, 1fr))",
+          gap: "1rem", marginBottom: "2rem",
+        }}>
+          {selectedAcceleratorForBreakdown.matchBreakdown &&
+            Object.entries(selectedAcceleratorForBreakdown.matchBreakdown).map(([key, breakdown]) => {
+              if (!breakdown || typeof breakdown !== "object") return null
+              const scoreColor = breakdown.matched ? "#388E3C" : "#D32F2F"
+              const titles = {
+                fundingStage: "Funding Stage Match",
+                ticketSize: "Ticket Size Compatibility",
+                geographicFit: "Geographic Fit",
+                sectorMatch: "Sector Match",
+                instrumentFit: "Instrument Fit",
+                supportMatch: "Support Match",
+                legalEntityFit: "Legal Entity Fit",
+                revenueThreshold: "Revenue Threshold",
+              }
+              return (
+                <div key={key} style={{
+                  background: "#FEFCFA", border: "1px solid #E8D5C4",
+                  borderRadius: "8px", padding: "1.25rem",
+                  borderLeft: `4px solid ${scoreColor}`,
+                }}>
+                  <div style={{
+                    display: "flex", justifyContent: "space-between",
+                    alignItems: "flex-start", marginBottom: "0.75rem",
+                  }}>
+                    <h4 style={{
+                      fontSize: "0.875rem", fontWeight: "600",
+                      color: "#5D2A0A", margin: 0, lineHeight: "1.3", flex: 1,
+                    }}>
+                      {titles[key] || key}
+                    </h4>
+                    <span style={{ fontSize: "0.75rem", fontWeight: "600", color: scoreColor, marginLeft: "0.5rem" }}>
+                      {breakdown.matched ? "✓ Match" : "✗ No Match"}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: "0.75rem", color: "#666", lineHeight: "1.4" }}>
+                    <div style={{ marginBottom: "0.5rem" }}>
+                      <strong>SME Value:</strong> {breakdown.details?.smeValue || "N/A"}
+                    </div>
+                    <div>
+                      <strong>Catalyst Offers:</strong> {breakdown.details?.accelValue || "N/A"}
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div style={{
+        display: "flex", justifyContent: "flex-end",
+        padding: "1.5rem", borderTop: "1px solid #E8D5C4",
+      }}>
+        <button
+          onClick={() => setShowMatchBreakdown(false)}
+          style={{
+            background: "#F5EBE0", color: "#5D2A0A", border: "none",
+            padding: "0.5rem 1rem", borderRadius: "6px",
+            cursor: "pointer", fontSize: "0.8rem",
+          }}
+        >
+          Close
+        </button>
+      </div>
+    </div>
+  </div>
+)}
 
       <style>{`
         @keyframes fadeIn {
