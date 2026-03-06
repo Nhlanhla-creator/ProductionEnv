@@ -7,43 +7,81 @@ const OperationsOverview = ({ data, updateData }) => {
     updateData("operationsOverview", { [field]: value });
   };
 
-  const renderRadioGroup = (name, label, value) => (
-    <div style={{ display: 'flex', gap: '20px', marginTop: '5px' }}>
-      <label style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-        <input
-          type="radio"
-          name={name}
-          value="yes"
-          checked={value === "yes"}
-          onChange={(e) => handleInputChange(name, e.target.value)}
-          style={{ width: '16px', height: '16px' }}
-        />
-        <span>Yes</span>
-      </label>
-      <label style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-        <input
-          type="radio"
-          name={name}
-          value="no"
-          checked={value === "no"}
-          onChange={(e) => handleInputChange(name, e.target.value)}
-          style={{ width: '16px', height: '16px' }}
-        />
-        <span>No</span>
-      </label>
+  // Custom radio group — bypasses any CSS that suppresses native radio inputs
+  const renderRadioGroup = (name, currentValue) => (
+    <div style={{ display: 'flex', gap: '24px', marginTop: '6px' }}>
+      {["yes", "no"].map((val) => (
+        <label
+          key={val}
+          onClick={() => handleInputChange(name, val)}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            cursor: 'pointer',
+            userSelect: 'none',
+            fontSize: '14px',
+            fontWeight: '500',
+            color: '#3d2b1f',
+          }}
+        >
+          <div
+            style={{
+              width: '18px',
+              height: '18px',
+              borderRadius: '50%',
+              border: `2px solid ${currentValue === val ? '#8B4513' : '#ccc'}`,
+              backgroundColor: currentValue === val ? '#8B4513' : 'white',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+              transition: 'all 0.15s ease',
+              boxShadow: currentValue === val ? '0 0 0 3px rgba(139,69,19,0.12)' : 'none',
+            }}
+          >
+            {currentValue === val && (
+              <div style={{
+                width: '7px',
+                height: '7px',
+                borderRadius: '50%',
+                backgroundColor: 'white',
+              }} />
+            )}
+          </div>
+          <span style={{ textTransform: 'capitalize' }}>{val}</span>
+        </label>
+      ))}
+    </div>
+  );
+
+  const SectionHeading = ({ number, title }) => (
+    <div style={{
+      borderBottom: '2px solid #C19A6B',
+      marginBottom: '1.25rem',
+      paddingBottom: '6px',
+    }}>
+      <h3 style={{
+        fontSize: '15px',
+        fontWeight: '700',
+        color: '#6B3410',
+        margin: 0,
+        letterSpacing: '0.3px',
+      }}>
+        {number}. {title}
+      </h3>
     </div>
   );
 
   return (
     <>
       <h2>Operations Overview</h2>
-    
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '30px' }}>
-        {/* Section 1 */}
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
+
+        {/* Section 1 – Supplier & Continuity Risk */}
         <div>
-          <h3 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '15px' }}>
-            1. Supplier & Continuity Risk
-          </h3>
+          <SectionHeading number="1" title="Supplier & Continuity Risk" />
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
             <FormField label="Q1. Do you rely on more than one key supplier for critical inputs or services?" required>
               {renderRadioGroup("multipleSuppliers", data.multipleSuppliers)}
@@ -54,11 +92,9 @@ const OperationsOverview = ({ data, updateData }) => {
           </div>
         </div>
 
-        {/* Section 2 */}
+        {/* Section 2 – Delivery */}
         <div>
-          <h3 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '15px' }}>
-            2. Delivery (Productivity & Reliability)
-          </h3>
+          <SectionHeading number="2" title="Delivery (Productivity & Reliability)" />
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
             <FormField label="Q3. Do you track operational performance metrics?" required>
               {renderRadioGroup("trackPerformanceMetrics", data.trackPerformanceMetrics)}
@@ -72,11 +108,9 @@ const OperationsOverview = ({ data, updateData }) => {
           </div>
         </div>
 
-        {/* Section 3 */}
+        {/* Section 3 – Safety */}
         <div>
-          <h3 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '15px' }}>
-            3. Safety (Risk & Compliance)
-          </h3>
+          <SectionHeading number="3" title="Safety (Risk & Compliance)" />
           <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
             <FormField label="Q6. Do you have formal safety, risk, or compliance procedures?" required>
               {renderRadioGroup("hasFormalProcedures", data.hasFormalProcedures)}
@@ -86,6 +120,31 @@ const OperationsOverview = ({ data, updateData }) => {
             </FormField>
           </div>
         </div>
+
+        {/* Section 4 – Operational Challenges */}
+        <div>
+          <SectionHeading number="4" title="Operational Challenges" />
+          <FormField label="What are your current operational challenges?">
+            <textarea
+              name="operationalChallenges"
+              value={data.operationalChallenges || ""}
+              onChange={(e) => handleInputChange("operationalChallenges", e.target.value)}
+              rows={4}
+              placeholder="Describe any operational challenges your business is currently facing (e.g. supply chain disruptions, capacity constraints, skills gaps, technology limitations)"
+              style={{
+                width: '100%',
+                padding: '10px 12px',
+                border: '1px solid #ccc',
+                borderRadius: '4px',
+                fontSize: '14px',
+                resize: 'vertical',
+                fontFamily: 'inherit',
+                lineHeight: '1.5',
+              }}
+            />
+          </FormField>
+        </div>
+
       </div>
     </>
   );

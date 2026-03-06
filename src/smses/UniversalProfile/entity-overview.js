@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react"
-import { Info, ChevronDown, ChevronUp, Upload, X } from "lucide-react"
+import { Info, ChevronDown, ChevronUp, Upload, X, Check } from "lucide-react"
 import { db, auth, storage } from '../../firebaseConfig';
 import { doc, setDoc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage";
-// import { validateDocument } from '../../services/documentValidationService';
 import { uploadDocumentWithSync, deleteDocumentWithSync, getDocumentUrlFromAnyLocation } from '../../utils/documentSyncService';
 import { validateDocument, validateCompanyDocument } from '../../services/documentValidationService';
+
 const entityTypes = [
   { value: "SME", label: "SME" },
   { value: "Social Enterprise", label: "Social Enterprise" },
@@ -44,7 +44,7 @@ const operationStages = [
 ]
 
 const economicSectors = [
- { value: "Generalist", label: "Generalist" },
+  { value: "Generalist", label: "Generalist" },
   { value: "Agriculture", label: "Agriculture" },
   { value: "Automotive", label: "Automotive" },
   { value: "Banking, Finance & Insurance", label: "Banking, Finance & Insurance" },
@@ -140,17 +140,17 @@ const africanCountries = [
   { value: "Zimbabwe", label: "Zimbabwe" },
 ]
 
-// City mapping for each country (truncated for brevity)
-const citiesByCountry = {
-  "Algeria": ["Algiers", "Oran", "Constantine", "Annaba", "Batna"],
-  "Angola": ["Luanda", "Huambo", "Lobito", "Benguela", "Lubango"],
-  "South Africa": [
-    "Johannesburg", "Cape Town", "Durban", "Pretoria", "Port Elizabeth",
-    "Bloemfontein", "East London", "Nelspruit", "Polokwane", "Kimberley",
-    "Pietermaritzburg", "Rustenburg", "George", "Middelburg", "Witbank"
-  ],
-  // ... other countries
-}
+const southAfricanProvinces = [
+  { value: "Eastern Cape", label: "Eastern Cape" },
+  { value: "Free State", label: "Free State" },
+  { value: "Gauteng", label: "Gauteng" },
+  { value: "KwaZulu-Natal", label: "KwaZulu-Natal" },
+  { value: "Limpopo", label: "Limpopo" },
+  { value: "Mpumalanga", label: "Mpumalanga" },
+  { value: "Northern Cape", label: "Northern Cape" },
+  { value: "North West", label: "North West" },
+  { value: "Western Cape", label: "Western Cape" },
+]
 
 // Simple FormField component
 function FormField({ label, required, tooltip, children }) {
@@ -165,55 +165,95 @@ function FormField({ label, required, tooltip, children }) {
   )
 }
 
-// MultiSelect component
-function MultiSelect({ options, selected, onChange, label }) {
+// Section heading component
+function SectionHeading({ title }) {
+  return (
+    <div style={{
+      borderBottom: '2px solid #C19A6B',
+      marginBottom: '1.25rem',
+      marginTop: '1.75rem',
+      paddingBottom: '6px',
+    }}>
+      <h3 style={{ fontSize: '15px', fontWeight: '700', color: '#6B3410', margin: 0, letterSpacing: '0.3px' }}>
+        {title}
+      </h3>
+    </div>
+  )
+}
+
+// Reusable MultiSelect Dropdown
+function MultiSelectDropdown({ options, selected = [], onChange, placeholder = "Select options..." }) {
   const [isOpen, setIsOpen] = useState(false)
 
-  const toggleDropdown = () => setIsOpen(!isOpen)
-  const closeDropdown = () => setIsOpen(false)
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (!e.target.closest(`[data-multiselect]`)) setIsOpen(false)
+    }
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => document.removeEventListener("mousedown", handleClickOutside)
+  }, [])
 
-  const handleSelect = (value) => {
-    const newSelected = selected.includes(value) 
-      ? selected.filter((item) => item !== value) 
-      : [...selected, value]
-    onChange(newSelected)
+  const toggle = (value) => {
+    if (selected.includes(value)) {
+      onChange(selected.filter((v) => v !== value))
+    } else {
+      onChange([...selected, value])
+    }
   }
 
+  const removeTag = (e, value) => {
+    e.stopPropagation()
+    onChange(selected.filter((v) => v !== value))
+  }
+
+  const getLabel = (value) => options.find((o) => o.value === value)?.label || value
+
   return (
-    <div style={{ position: 'relative' }}>
-      <div 
-        onClick={toggleDropdown}
+    <div style={{ position: 'relative' }} data-multiselect="true">
+      <div
+        onClick={() => setIsOpen((p) => !p)}
         style={{
           border: '1px solid #ccc',
           borderRadius: '4px',
-          padding: '8px 12px',
+          padding: '6px 10px',
           cursor: 'pointer',
           display: 'flex',
-          justifyContent: 'space-between',
+          flexWrap: 'wrap',
           alignItems: 'center',
-          minHeight: '40px'
+          gap: '4px',
+          minHeight: '40px',
+          backgroundColor: 'white',
+          fontSize: '14px',
         }}
       >
-        {selected.length > 0 ? (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-            {selected.map((sector) => (
-              <span 
-                key={sector}
-                style={{
-                  backgroundColor: '#e0e0e0',
-                  padding: '2px 8px',
-                  borderRadius: '12px',
-                  fontSize: '14px'
-                }}
-              >
-                {options.find((opt) => opt.value === sector)?.label || sector}
-              </span>
-            ))}
-          </div>
+        {selected.length === 0 ? (
+          <span style={{ color: '#999' }}>{placeholder}</span>
         ) : (
-          <span style={{ color: '#999' }}>Select {label}</span>
+          selected.map((val) => (
+            <span
+              key={val}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                backgroundColor: '#f3ebe0',
+                border: '1px solid #d6c4a8',
+                color: '#6b4c2a',
+                borderRadius: '12px',
+                padding: '2px 10px',
+                fontSize: '13px',
+                fontWeight: '500',
+              }}
+            >
+              {getLabel(val)}
+              <span
+                onClick={(e) => removeTag(e, val)}
+                style={{ cursor: 'pointer', lineHeight: 1, opacity: 0.7, fontSize: '12px' }}
+              >✕</span>
+            </span>
+          ))
         )}
-        {isOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+        <span style={{ marginLeft: 'auto', color: '#999', fontSize: '12px' }}>{isOpen ? '▲' : '▼'}</span>
       </div>
 
       {isOpen && (
@@ -227,45 +267,50 @@ function MultiSelect({ options, selected, onChange, label }) {
           borderRadius: '4px',
           marginTop: '4px',
           zIndex: 1000,
-          maxHeight: '300px',
-          overflow: 'auto'
+          maxHeight: '260px',
+          overflowY: 'auto',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
         }}>
-          <div style={{ padding: '8px' }}>
-            {options.map((option) => (
+          {options.map((option) => {
+            const isSel = selected.includes(option.value)
+            return (
               <div
                 key={option.value}
-                onClick={() => handleSelect(option.value)}
+                onClick={() => toggle(option.value)}
                 style={{
-                  padding: '8px',
+                  padding: '9px 12px',
                   cursor: 'pointer',
-                  backgroundColor: selected.includes(option.value) ? '#f0f0f0' : 'white',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: '8px'
+                  gap: '10px',
+                  backgroundColor: isSel ? '#fdf6ee' : 'white',
+                  fontSize: '14px',
+                  color: '#3d2b1f',
                 }}
+                onMouseEnter={(e) => { if (!isSel) e.currentTarget.style.backgroundColor = '#faf5ef' }}
+                onMouseLeave={(e) => { if (!isSel) e.currentTarget.style.backgroundColor = 'white' }}
               >
-                <input
-                  type="checkbox"
-                  checked={selected.includes(option.value)}
-                  onChange={() => {}}
-                  style={{ cursor: 'pointer' }}
-                />
+                <div style={{
+                  width: '16px', height: '16px', borderRadius: '3px', flexShrink: 0,
+                  border: `1px solid ${isSel ? '#8b5e3c' : '#ccc'}`,
+                  backgroundColor: isSel ? '#8b5e3c' : 'transparent',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  {isSel && <span style={{ color: 'white', fontSize: '10px', fontWeight: 'bold' }}>✓</span>}
+                </div>
                 <span>{option.label}</span>
               </div>
-            ))}
-          </div>
-          <div style={{ padding: '8px', borderTop: '1px solid #ccc' }}>
-            <button 
+            )
+          })}
+          <div style={{ padding: '8px', borderTop: '1px solid #eee', position: 'sticky', bottom: 0, backgroundColor: 'white' }}>
+            <button
               type="button"
-              onClick={closeDropdown}
+              onClick={() => setIsOpen(false)}
               style={{
-                width: '100%',
-                padding: '8px',
-                backgroundColor: '#007bff',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer'
+                width: '100%', padding: '8px',
+                backgroundColor: '#8B4513', color: 'white',
+                border: 'none', borderRadius: '4px',
+                cursor: 'pointer', fontSize: '13px', fontWeight: '600',
               }}
             >
               Done
@@ -286,174 +331,126 @@ export default function EntityOverview({ data = {}, updateData }) {
   const [logoPreview, setLogoPreview] = useState("");
   const [letterheadUploading, setLetterheadUploading] = useState(false);
   const [letterheadFile, setLetterheadFile] = useState(null);
+  const [orgStructureUploading, setOrgStructureUploading] = useState(false);
 
   const handleLogoUpload = async (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
+    const file = e.target.files[0];
+    if (!file) return;
 
-  const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
-  if (!allowedTypes.includes(file.type)) {
-    alert('Please select a valid image file (JPEG, PNG, GIF, or WebP)');
-    return;
-  }
-
-  const maxSize = 5 * 1024 * 1024;
-  if (file.size > maxSize) {
-    alert('Image size must be less than 5MB');
-    return;
-  }
-
-  try {
-    setLogoUploading(true);
-    const currentUser = auth.currentUser;
-
-    if (!currentUser) {
-      throw new Error('User not authenticated');
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      alert('Please select a valid image file (JPEG, PNG, GIF, or WebP)');
+      return;
     }
 
-    // Create preview
-    const previewURL = URL.createObjectURL(file);
-    setLogoPreview(previewURL);
+    const maxSize = 5 * 1024 * 1024;
+    if (file.size > maxSize) {
+      alert('Image size must be less than 5MB');
+      return;
+    }
 
-    const timestamp = Date.now();
-    const fileName = `company_logos/${currentUser.uid}/${timestamp}_${file.name}`;
-    const storageRef = ref(storage, fileName);
-
-    const uploadResult = await uploadBytes(storageRef, file);
-    const downloadURL = await getDownloadURL(uploadResult.ref);
-
-    // ✅ Use validateDocument for logo (optional validation)
     try {
-      const validationResult = await validateDocument('Company Logo', file, "");
-      if (validationResult.isValid) {
-        await uploadDocumentWithSync('Company Logo', downloadURL, validationResult);
-      } else {
-        await uploadDocumentWithSync('Company Logo', downloadURL, {
-          status: 'warning',
-          message: 'Logo uploaded without AI validation'
-        });
-      }
-    } catch (validationError) {
-      // If validation fails, still upload but mark as warning
-      console.warn('Logo validation failed, proceeding with upload:', validationError);
-      await uploadDocumentWithSync('Company Logo', downloadURL, {
-        status: 'warning',
-        message: 'Logo uploaded without AI validation'
-      });
-    }
+      setLogoUploading(true);
+      const currentUser = auth.currentUser;
+      if (!currentUser) throw new Error('User not authenticated');
 
-    const userDocRef = doc(db, "universalProfiles", currentUser.uid);
-    const currentProfileDoc = await getDoc(userDocRef);
-    const currentData = currentProfileDoc.exists() ? currentProfileDoc.data() : {};
+      const previewURL = URL.createObjectURL(file);
+      setLogoPreview(previewURL);
 
-    const updatedData = {
-      ...currentData,
-      entityOverview: {
-        ...currentData.entityOverview,
-        companyLogo: downloadURL
-      },
-      updatedAt: new Date().toISOString()
-    };
+      const timestamp = Date.now();
+      const fileName = `company_logos/${currentUser.uid}/${timestamp}_${file.name}`;
+      const storageRef = ref(storage, fileName);
+      const uploadResult = await uploadBytes(storageRef, file);
+      const downloadURL = await getDownloadURL(uploadResult.ref);
 
-    await updateDoc(userDocRef, updatedData);
-    
-    // Update local form data
-    const newFormData = { ...formData, companyLogo: downloadURL };
-    updateFormData(newFormData);
-
-    // Clean up old logo if it exists and is different
-    if (currentData.entityOverview?.companyLogo &&
-        currentData.entityOverview.companyLogo !== downloadURL &&
-        currentData.entityOverview.companyLogo.includes('firebase')) {
       try {
-        const oldImageRef = ref(storage, currentData.entityOverview.companyLogo);
-        await deleteObject(oldImageRef);
-      } catch (deleteError) {
-        console.warn('Could not delete old logo:', deleteError);
+        const validationResult = await validateDocument('Company Logo', file, "");
+        if (validationResult.isValid) {
+          await uploadDocumentWithSync('Company Logo', downloadURL, validationResult);
+        } else {
+          await uploadDocumentWithSync('Company Logo', downloadURL, { status: 'warning', message: 'Logo uploaded without AI validation' });
+        }
+      } catch (validationError) {
+        console.warn('Logo validation failed, proceeding with upload:', validationError);
+        await uploadDocumentWithSync('Company Logo', downloadURL, { status: 'warning', message: 'Logo uploaded without AI validation' });
       }
+
+      const userDocRef = doc(db, "universalProfiles", currentUser.uid);
+      const currentProfileDoc = await getDoc(userDocRef);
+      const currentData = currentProfileDoc.exists() ? currentProfileDoc.data() : {};
+
+      await updateDoc(userDocRef, {
+        ...currentData,
+        entityOverview: { ...currentData.entityOverview, companyLogo: downloadURL },
+        updatedAt: new Date().toISOString()
+      });
+
+      const newFormData = { ...formData, companyLogo: downloadURL };
+      updateFormData(newFormData);
+
+      if (currentData.entityOverview?.companyLogo &&
+          currentData.entityOverview.companyLogo !== downloadURL &&
+          currentData.entityOverview.companyLogo.includes('firebase')) {
+        try {
+          const oldImageRef = ref(storage, currentData.entityOverview.companyLogo);
+          await deleteObject(oldImageRef);
+        } catch (deleteError) {
+          console.warn('Could not delete old logo:', deleteError);
+        }
+      }
+
+      setShowLogoUpload(false);
+    } catch (error) {
+      console.error('Error uploading logo:', error);
+      alert('Failed to upload logo. Please try again.');
+      setLogoPreview("");
+    } finally {
+      setLogoUploading(false);
     }
-
-    setShowLogoUpload(false);
-    
-  } catch (error) {
-    console.error('Error uploading logo:', error);
-    let errorMessage = 'Failed to upload logo. Please try again.';
-
-    if (error.code === 'storage/unauthorized') {
-      errorMessage = 'You do not have permission to upload images.';
-    } else if (error.code === 'storage/canceled') {
-      errorMessage = 'Upload was canceled.';
-    } else if (error.code === 'storage/unknown') {
-      errorMessage = 'An unknown error occurred. Please check your internet connection.';
-    }
-
-    alert(errorMessage);
-    setLogoPreview("");
-  } finally {
-    setLogoUploading(false);
-  }
-};
-
+  };
 
   const handleRemoveLogo = async () => {
-  try {
-    // Show confirmation
-    const confirmDelete = window.confirm('Are you sure you want to delete the Company Logo?');
-    if (!confirmDelete) return;
+    try {
+      const confirmDelete = window.confirm('Are you sure you want to delete the Company Logo?');
+      if (!confirmDelete) return;
 
-    // ✅ Use sync service for deletion
-    await deleteDocumentWithSync('Company Logo');
-    
-    const currentUser = auth.currentUser;
-    if (!currentUser) return;
+      await deleteDocumentWithSync('Company Logo');
 
-    const userDocRef = doc(db, "universalProfiles", currentUser.uid);
-    const currentProfileDoc = await getDoc(userDocRef);
-    const currentData = currentProfileDoc.exists() ? currentProfileDoc.data() : {};
+      const currentUser = auth.currentUser;
+      if (!currentUser) return;
 
-    // Update Firestore
-    const updatedData = {
-      ...currentData,
-      entityOverview: {
-        ...currentData.entityOverview,
-        companyLogo: ""
-      },
-      updatedAt: new Date().toISOString()
-    };
+      const userDocRef = doc(db, "universalProfiles", currentUser.uid);
+      const currentProfileDoc = await getDoc(userDocRef);
+      const currentData = currentProfileDoc.exists() ? currentProfileDoc.data() : {};
 
-    await updateDoc(userDocRef, updatedData);
-    
-    // Update local state
-    const newFormData = { ...formData };
-    delete newFormData.companyLogo;
-    updateFormData(newFormData);
-    setLogoPreview("");
+      await updateDoc(userDocRef, {
+        ...currentData,
+        entityOverview: { ...currentData.entityOverview, companyLogo: "" },
+        updatedAt: new Date().toISOString()
+      });
 
-    alert('Company Logo deleted successfully!');
+      const newFormData = { ...formData };
+      delete newFormData.companyLogo;
+      updateFormData(newFormData);
+      setLogoPreview("");
+      alert('Company Logo deleted successfully!');
+    } catch (error) {
+      console.error('Error removing logo:', error);
+      alert('Failed to remove logo. Please try again.');
+    }
+  };
 
-  } catch (error) {
-    console.error('Error removing logo:', error);
-    alert('Failed to remove logo. Please try again.');
-  }
-};
-
-  // Update form data and notify parent
   const updateFormData = (newData) => {
     setFormData(newData)
     updateData(newData)
   }
 
-  // Load data from Firebase
   useEffect(() => {
     const loadEntityOverview = async () => {
       try {
         setIsLoading(true);
         const userId = auth.currentUser?.uid;
-        
-        if (!userId) {
-          setIsLoading(false);
-          return;
-        }
+        if (!userId) { setIsLoading(false); return; }
 
         const docRef = doc(db, "universalProfiles", userId);
         const docSnap = await getDoc(docRef);
@@ -461,38 +458,22 @@ export default function EntityOverview({ data = {}, updateData }) {
         if (docSnap.exists()) {
           const profileData = docSnap.data();
           let entityData = profileData.entityOverview || {};
-          
-          // ✅ Get letterhead URL using sync service helper
-          const companyLetterhead = getDocumentUrlFromAnyLocation(
-            'Company Letterhead', 
-            profileData
-          );
-          
-          // Get company logo from any location
+
+          const companyLetterhead = getDocumentUrlFromAnyLocation('Company Letterhead', profileData);
           const companyLogo = getDocumentUrlFromAnyLocation('Company Logo', profileData);
-          
-          // Find timestamps
-          let companyLetterheadUpdatedAt = null;
-          let companyLogoUpdatedAt = null;
-          
-          if (companyLetterhead) {
-            companyLetterheadUpdatedAt = profileData.documents?.companyLetterheadUpdatedAt || 
-                                        profileData.entityOverview?.companyLetterheadUpdatedAt ||
-                                        new Date().toISOString();
-          }
-          
-          if (companyLogo) {
-            companyLogoUpdatedAt = profileData.documents?.companyLogoUpdatedAt || 
-                                  profileData.entityOverview?.companyLogoUpdatedAt ||
-                                  new Date().toISOString();
-          }
-          
+          const orgStructure = getDocumentUrlFromAnyLocation('Org Structure', profileData);
+
           updateFormData({
             ...entityData,
             companyLetterhead,
-            companyLetterheadUpdatedAt,
+            companyLetterheadUpdatedAt: companyLetterhead
+              ? profileData.documents?.companyLetterheadUpdatedAt || profileData.entityOverview?.companyLetterheadUpdatedAt || new Date().toISOString()
+              : null,
             companyLogo,
-            companyLogoUpdatedAt
+            companyLogoUpdatedAt: companyLogo
+              ? profileData.documents?.companyLogoUpdatedAt || profileData.entityOverview?.companyLogoUpdatedAt || new Date().toISOString()
+              : null,
+            orgStructure,
           });
         } else {
           updateFormData(data);
@@ -511,120 +492,131 @@ export default function EntityOverview({ data = {}, updateData }) {
   const handleChange = (e) => {
     const { name, value } = e.target
     const newData = { ...formData, [name]: value }
-    
-    // If country changes, clear city selection
-    if (name === "location") {
-      newData.city = ""
-    }
-    
     updateFormData(newData)
   }
 
   const handleMultiSelectChange = (field, value) => {
-    const newData = { ...formData, [field]: value }
-    updateFormData(newData)
+    updateFormData({ ...formData, [field]: value })
   }
 
- const handleLetterheadUpload = async (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
+  const handleLetterheadUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
 
-  const allowedTypes = ['.pdf', '.doc', '.docx', '.jpg', '.jpeg', '.png'];
-  const fileExtension = file.name.toLowerCase().split('.').pop();
-  
-  if (!allowedTypes.includes(`.${fileExtension}`)) {
-    alert(`Please upload only PDF, Word, or Image files. File type .${fileExtension} is not allowed.`);
-    return;
-  }
-
-  const maxSize = 10 * 1024 * 1024;
-  if (file.size > maxSize) {
-    alert('File size exceeds 10MB limit. Please upload a smaller file.');
-    return;
-  }
-
-  try {
-    setLetterheadUploading(true);
-    const currentUser = auth.currentUser;
-    
-    if (!currentUser) {
-      throw new Error('User not authenticated');
+    const allowedTypes = ['.pdf', '.doc', '.docx', '.jpg', '.jpeg', '.png'];
+    const fileExtension = file.name.toLowerCase().split('.').pop();
+    if (!allowedTypes.includes(`.${fileExtension}`)) {
+      alert(`Please upload only PDF, Word, or Image files.`);
+      return;
     }
-
-    // Get registered name for validation
-    const userDocRef = doc(db, "universalProfiles", currentUser.uid);
-    const userDoc = await getDoc(userDocRef);
-    const registeredName = userDoc.exists() 
-      ? userDoc.data()?.entityOverview?.registeredName || ""
-      : "";
-
-    // ✅ RUN AI VALIDATION using the Firebase function via validateCompanyDocument
-    const validationResult = await validateCompanyDocument('Company Letterhead', file, registeredName);
-    
-    if (!validationResult.isValid) {
-      alert(`Validation failed: ${validationResult.message}`);
-      setLetterheadUploading(false);
+    if (file.size > 10 * 1024 * 1024) {
+      alert('File size exceeds 10MB limit.');
       return;
     }
 
-    // Create unique filename
-    const timestamp = Date.now();
-    const fileName = `company_letterhead/${currentUser.uid}/${timestamp}_${file.name}`;
-    const storageRef = ref(storage, fileName);
+    try {
+      setLetterheadUploading(true);
+      const currentUser = auth.currentUser;
+      if (!currentUser) throw new Error('User not authenticated');
 
-    // Upload to storage
-    const uploadResult = await uploadBytes(storageRef, file);
-    const downloadURL = await getDownloadURL(uploadResult.ref);
+      const userDocRef = doc(db, "universalProfiles", currentUser.uid);
+      const userDoc = await getDoc(userDocRef);
+      const registeredName = userDoc.exists() ? userDoc.data()?.entityOverview?.registeredName || "" : "";
 
-    // ✅ Use sync service for letterhead
-    await uploadDocumentWithSync('Company Letterhead', downloadURL, validationResult);
+      const validationResult = await validateCompanyDocument('Company Letterhead', file, registeredName);
+      if (!validationResult.isValid) {
+        alert(`Validation failed: ${validationResult.message}`);
+        setLetterheadUploading(false);
+        return;
+      }
 
-    // Update local state
-    const newFormData = { 
-      ...formData, 
-      companyLetterhead: downloadURL,
-      companyLetterheadUpdatedAt: new Date().toISOString()
-    };
-    updateFormData(newFormData);
-    
-    setLetterheadFile(file);
-    alert('Company Letterhead uploaded and validated successfully!');
+      const timestamp = Date.now();
+      const storageRef = ref(storage, `company_letterhead/${currentUser.uid}/${timestamp}_${file.name}`);
+      const uploadResult = await uploadBytes(storageRef, file);
+      const downloadURL = await getDownloadURL(uploadResult.ref);
 
-  } catch (error) {
-    console.error('Error uploading letterhead:', error);
-    
-    // Handle specific error cases
-    if (error.message?.includes('Missing registeredName')) {
-      alert('Please save your Registered Name before uploading a letterhead.');
-    } else if (error.message?.includes('Network error')) {
-      alert('Network error. Please check your connection and try again.');
-    } else {
+      await uploadDocumentWithSync('Company Letterhead', downloadURL, validationResult);
+
+      updateFormData({ ...formData, companyLetterhead: downloadURL, companyLetterheadUpdatedAt: new Date().toISOString() });
+      setLetterheadFile(file);
+      alert('Company Letterhead uploaded and validated successfully!');
+    } catch (error) {
+      console.error('Error uploading letterhead:', error);
       alert('Failed to upload letterhead. Please try again.');
+    } finally {
+      setLetterheadUploading(false);
     }
-  } finally {
-    setLetterheadUploading(false);
-  }
-};
+  };
 
   const handleDeleteLetterhead = async () => {
     try {
       const confirmDelete = window.confirm('Are you sure you want to delete the Company Letterhead?');
       if (!confirmDelete) return;
-
-      // ✅ Use sync service for deletion
       await deleteDocumentWithSync('Company Letterhead');
-      
-      // Update local state
       const newFormData = { ...formData };
       delete newFormData.companyLetterhead;
       delete newFormData.companyLetterheadUpdatedAt;
       updateFormData(newFormData);
       setLetterheadFile(null);
-      
       alert('Company Letterhead deleted successfully!');
     } catch (error) {
       console.error('Error deleting letterhead:', error);
       alert('Failed to delete letterhead. Please try again.');
+    }
+  };
+
+  // Org Structure upload
+  const handleOrgStructureUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const allowedTypes = ['.pdf', '.doc', '.docx', '.jpg', '.jpeg', '.png', '.xlsx', '.xls'];
+    const fileExtension = file.name.toLowerCase().split('.').pop();
+    if (!allowedTypes.includes(`.${fileExtension}`)) {
+      alert('Please upload a PDF, Word, Excel, or Image file.');
+      return;
+    }
+    if (file.size > 10 * 1024 * 1024) {
+      alert('File size exceeds 10MB limit.');
+      return;
+    }
+
+    try {
+      setOrgStructureUploading(true);
+      const currentUser = auth.currentUser;
+      if (!currentUser) throw new Error('User not authenticated');
+
+      const timestamp = Date.now();
+      const storageRef = ref(storage, `org_structure/${currentUser.uid}/${timestamp}_${file.name}`);
+      const uploadResult = await uploadBytes(storageRef, file);
+      const downloadURL = await getDownloadURL(uploadResult.ref);
+
+      await uploadDocumentWithSync('Org Structure', downloadURL, { status: 'ok', message: 'Org structure uploaded' });
+
+      updateFormData({ ...formData, orgStructure: downloadURL, orgStructureFileName: file.name, orgStructureUpdatedAt: new Date().toISOString() });
+      alert('Org structure uploaded successfully!');
+    } catch (error) {
+      console.error('Error uploading org structure:', error);
+      alert('Failed to upload org structure. Please try again.');
+    } finally {
+      setOrgStructureUploading(false);
+    }
+  };
+
+  const handleDeleteOrgStructure = async () => {
+    try {
+      const confirmDelete = window.confirm('Are you sure you want to delete the Org Structure?');
+      if (!confirmDelete) return;
+      await deleteDocumentWithSync('Org Structure');
+      const newFormData = { ...formData };
+      delete newFormData.orgStructure;
+      delete newFormData.orgStructureFileName;
+      delete newFormData.orgStructureUpdatedAt;
+      updateFormData(newFormData);
+      alert('Org structure deleted successfully!');
+    } catch (error) {
+      console.error('Error deleting org structure:', error);
+      alert('Failed to delete org structure. Please try again.');
     }
   };
 
@@ -633,7 +625,15 @@ export default function EntityOverview({ data = {}, updateData }) {
     padding: '8px 12px',
     border: '1px solid #ccc',
     borderRadius: '4px',
-    fontSize: '14px'
+    fontSize: '14px',
+  }
+
+  const spinnerStyle = {
+    width: '16px', height: '16px',
+    border: '2px solid transparent',
+    borderTop: '2px solid white',
+    borderRadius: '50%',
+    animation: 'spin 1s linear infinite',
   }
 
   if (isLoading) {
@@ -645,409 +645,287 @@ export default function EntityOverview({ data = {}, updateData }) {
     )
   }
 
+  const selectedCountries = Array.isArray(formData.operatingCountries) ? formData.operatingCountries : []
+  const showProvinces = selectedCountries.includes("South Africa")
+
   return (
     <div style={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       <h2 style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '24px' }}>Entity Overview</h2>
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+        {/* LEFT COLUMN */}
         <div>
           <FormField label="Registered Name" required>
-            <input
-              type="text"
-              name="registeredName"
-              value={formData.registeredName || ""}
-              onChange={handleChange}
-              style={inputStyle}
-              required
-            />
+            <input type="text" name="registeredName" value={formData.registeredName || ""} onChange={handleChange} style={inputStyle} required />
           </FormField>
 
           <FormField label="Trading Name (if different)">
-            <input
-              type="text"
-              name="tradingName"
-              value={formData.tradingName || ""}
-              onChange={handleChange}
-              style={inputStyle}
-            />
+            <input type="text" name="tradingName" value={formData.tradingName || ""} onChange={handleChange} style={inputStyle} />
           </FormField>
 
           <FormField label="Registration Number" required>
-            <input
-              type="text"
-              name="registrationNumber"
-              value={formData.registrationNumber || ""}
-              onChange={handleChange}
-              style={inputStyle}
-              required
-            />
+            <input type="text" name="registrationNumber" value={formData.registrationNumber || ""} onChange={handleChange} style={inputStyle} required />
           </FormField>
 
           <FormField label="Entity Type" required>
-            <select
-              name="entityType"
-              value={formData.entityType || ""}
-              onChange={handleChange}
-              style={inputStyle}
-              required
-            >
+            <select name="entityType" value={formData.entityType || ""} onChange={handleChange} style={inputStyle} required>
               <option value="">Select Entity Type</option>
-              {entityTypes.map((type) => (
-                <option key={type.value} value={type.value}>
-                  {type.label}
-                </option>
-              ))}
+              {entityTypes.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
             </select>
           </FormField>
 
           <FormField label="Legal Structure" required>
-            <select
-              name="legalStructure"
-              value={formData.legalStructure || ""}
-              onChange={handleChange}
-              style={inputStyle}
-              required
-            >
+            <select name="legalStructure" value={formData.legalStructure || ""} onChange={handleChange} style={inputStyle} required>
               <option value="">Select Legal Structure</option>
-              {legalStructures.map((structure) => (
-                <option key={structure.value} value={structure.value}>
-                  {structure.label}
-                </option>
-              ))}
+              {legalStructures.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
             </select>
           </FormField>
 
           <FormField label="Entity Size" required>
-            <select
-              name="entitySize"
-              value={formData.entitySize || ""}
-              onChange={handleChange}
-              style={inputStyle}
-              required
-            >
+            <select name="entitySize" value={formData.entitySize || ""} onChange={handleChange} style={inputStyle} required>
               <option value="">Select Entity Size</option>
-              {entitySizes.map((size) => (
-                <option key={size.value} value={size.value}>
-                  {size.label}
-                </option>
-              ))}
+              {entitySizes.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
             </select>
           </FormField>
 
           <FormField label="Financial Year End" required>
-            <input
-              type="month"
-              name="financialYearEnd"
-              value={formData.financialYearEnd || ""}
-              onChange={handleChange}
-              style={inputStyle}
-              required
-            />
-          </FormField>
-
-          <FormField label="No. of Employees" required>
-            <input
-              type="number"
-              name="employeeCount"
-              value={formData.employeeCount || ""}
-              onChange={handleChange}
-              min="0"
-              style={inputStyle}
-              required
-            />
+            <input type="month" name="financialYearEnd" value={formData.financialYearEnd || ""} onChange={handleChange} style={inputStyle} required />
           </FormField>
 
           <FormField label="Years in Operation" required>
+            <input type="number" name="yearsInOperation" value={formData.yearsInOperation || ""} onChange={handleChange} min="0" step="0.5" style={inputStyle} required />
+          </FormField>
+
+          {/* ── EMPLOYEES ── */}
+          <SectionHeading title="Number of Employees" />
+
+          <FormField label="Full-Time Employees" required>
             <input
               type="number"
-              name="yearsInOperation"
-              value={formData.yearsInOperation || ""}
+              name="fullTimeEmployees"
+              value={formData.fullTimeEmployees || ""}
               onChange={handleChange}
               min="0"
-              step="0.5"
               style={inputStyle}
+              placeholder="0"
               required
             />
           </FormField>
+
+          <FormField label="Part-Time Employees">
+            <input
+              type="number"
+              name="partTimeEmployees"
+              value={formData.partTimeEmployees || ""}
+              onChange={handleChange}
+              min="0"
+              style={inputStyle}
+              placeholder="0"
+            />
+          </FormField>
+
+          {/* Org Structure Upload */}
+          <FormField label="Organisational Structure (optional)">
+            <div style={{
+              border: '2px dashed #C19A6B',
+              borderRadius: '8px',
+              padding: '16px',
+              backgroundColor: '#FAF8F5',
+              maxWidth: '400px',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                {/* Icon */}
+                <div style={{
+                  width: '72px', height: '72px', borderRadius: '8px',
+                  border: '3px solid #8B6F47', backgroundColor: 'white',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  boxShadow: '0 4px 12px rgba(139,111,71,0.2)', flexShrink: 0,
+                }}>
+                  {formData.orgStructure ? (
+                    <div style={{ textAlign: 'center', padding: '6px' }}>
+                      <div style={{ fontSize: '28px', lineHeight: 1 }}>🗂️</div>
+                      <div style={{ fontSize: '9px', fontWeight: '600', color: '#8B6F47', marginTop: '2px' }}>Uploaded</div>
+                    </div>
+                  ) : (
+                    <div style={{ textAlign: 'center', padding: '6px' }}>
+                      <div style={{ fontSize: '28px', lineHeight: 1 }}>📊</div>
+                      <div style={{ fontSize: '9px', fontWeight: '600', color: '#8B6F47', marginTop: '2px' }}>No File</div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Controls */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
+                  <div style={{ display: 'flex', gap: '8px' }}>
+                    <label
+                      htmlFor="org-structure-upload"
+                      style={{
+                        padding: '10px 14px',
+                        background: orgStructureUploading
+                          ? 'linear-gradient(135deg, #A0826D 0%, #8B6F47 100%)'
+                          : 'linear-gradient(135deg, #8B4513 0%, #6B3410 100%)',
+                        color: 'white', border: 'none', borderRadius: '5px',
+                        fontSize: '13px', fontWeight: '600',
+                        cursor: orgStructureUploading ? 'not-allowed' : 'pointer',
+                        display: 'inline-flex', alignItems: 'center', gap: '6px',
+                        transition: 'all 0.3s ease',
+                        opacity: orgStructureUploading ? 0.7 : 1,
+                      }}
+                    >
+                      {orgStructureUploading ? (
+                        <><div style={spinnerStyle}></div> Uploading...</>
+                      ) : (
+                        <><Upload size={14} />{formData.orgStructure ? 'Replace' : 'Upload'}</>
+                      )}
+                      <input
+                        id="org-structure-upload"
+                        type="file"
+                        accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.xlsx,.xls"
+                        onChange={handleOrgStructureUpload}
+                        disabled={orgStructureUploading}
+                        style={{ display: 'none' }}
+                      />
+                    </label>
+
+                    {formData.orgStructure && (
+                      <button
+                        type="button"
+                        onClick={handleDeleteOrgStructure}
+                        style={{
+                          padding: '10px',
+                          background: 'linear-gradient(135deg, #B8860B 0%, #996515 100%)',
+                          color: 'white', border: 'none', borderRadius: '5px',
+                          cursor: 'pointer', display: 'inline-flex', alignItems: 'center',
+                          justifyContent: 'center', width: '40px', height: '40px',
+                        }}
+                        title="Delete org structure"
+                      >
+                        <X size={16} />
+                      </button>
+                    )}
+                  </div>
+
+                  <div style={{
+                    fontSize: '11px', color: '#8B6F47', lineHeight: '1.4',
+                    backgroundColor: 'rgba(139,111,71,0.08)', padding: '8px 10px',
+                    borderRadius: '5px', border: '1px solid rgba(139,111,71,0.15)',
+                  }}>
+                    {formData.orgStructure ? (
+                      <>
+                        <div style={{ fontWeight: '600', marginBottom: '4px' }}>✅ Org Structure Uploaded</div>
+                        <a href={formData.orgStructure} target="_blank" rel="noopener noreferrer"
+                          style={{ color: '#8B4513', textDecoration: 'underline' }}>
+                          View Document ↗
+                        </a>
+                      </>
+                    ) : (
+                      <>
+                        <div style={{ fontWeight: '600', marginBottom: '2px' }}>📋 Accepted formats</div>
+                        <div>PDF, Word, Excel, Image • Max 10MB</div>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </FormField>
         </div>
 
+        {/* RIGHT COLUMN */}
         <div>
           <FormField label="Business Stage" required>
-            <select
-              name="operationStage"
-              value={formData.operationStage || ""}
-              onChange={handleChange}
-              style={inputStyle}
-              required
-            >
+            <select name="operationStage" value={formData.operationStage || ""} onChange={handleChange} style={inputStyle} required>
               <option value="">Select Operation Stage</option>
-              {operationStages.map((stage) => (
-                <option key={stage.value} value={stage.value}>
-                  {stage.label}
-                </option>
-              ))}
+              {operationStages.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
             </select>
           </FormField>
 
           <FormField label="Economic Sector" required>
-            <MultiSelect
+            <MultiSelectDropdown
               options={economicSectors}
               selected={formData.economicSectors || []}
               onChange={(value) => handleMultiSelectChange("economicSectors", value)}
-              label="Economic Sectors"
+              placeholder="Select economic sectors..."
             />
           </FormField>
-
-          <FormField label="Country" required>
-            <select
-              name="location"
-              value={formData.location || ""}
-              onChange={handleChange}
-              style={inputStyle}
-              required
-            >
-              <option value="">Select Country</option>
-              {africanCountries.map((country) => (
-                <option key={country.value} value={country.value}>
-                  {country.label}
-                </option>
-              ))}
-            </select>
-          </FormField>
-
-          {/* City dropdown - shows when country is selected */}
-          {formData.location && citiesByCountry[formData.location] && (
-            <FormField label="City" required>
-              <select
-                name="city"
-                value={formData.city || ""}
-                onChange={handleChange}
-                style={inputStyle}
-                required
-              >
-                <option value="">Select City</option>
-                {citiesByCountry[formData.location].map((city) => (
-                  <option key={city} value={city}>
-                    {city}
-                  </option>
-                ))}
-              </select>
-            </FormField>
-          )}
-
-          {formData.location === "South Africa" && (
-            <FormField label="Province" required>
-              <select
-                name="province"
-                value={formData.province || ""}
-                onChange={handleChange}
-                style={inputStyle}
-                required
-              >
-                <option value="">Select Province</option>
-                <option value="eastern_cape">Eastern Cape</option>
-                <option value="free_state">Free State</option>
-                <option value="gauteng">Gauteng</option>
-                <option value="kwazulu_natal">KwaZulu-Natal</option>
-                <option value="limpopo">Limpopo</option>
-                <option value="mpumalanga">Mpumalanga</option>
-                <option value="northern_cape">Northern Cape</option>
-                <option value="north_west">North West</option>
-                <option value="western_cape">Western Cape</option>
-              </select>
-            </FormField>
-          )}
 
           <FormField label="Brief Business Description" required>
-            <textarea
-              name="businessDescription"
-              value={formData.businessDescription || ""}
-              onChange={handleChange}
-              rows={4}
-              style={{...inputStyle, resize: 'vertical'}}
-              required
+            <textarea name="businessDescription" value={formData.businessDescription || ""} onChange={handleChange} rows={4} style={{ ...inputStyle, resize: 'vertical' }} required />
+          </FormField>
+
+          {/* ── GEOGRAPHIC REACH ── */}
+          <SectionHeading title="Geographic Reach" />
+
+          <FormField label="Countries of Operation" required>
+            <MultiSelectDropdown
+              options={africanCountries}
+              selected={selectedCountries}
+              onChange={(value) => handleMultiSelectChange("operatingCountries", value)}
+              placeholder="Select countries..."
             />
           </FormField>
 
+          {showProvinces && (
+            <FormField label="Provinces (South Africa)" required>
+              <MultiSelectDropdown
+                options={southAfricanProvinces}
+                selected={Array.isArray(formData.operatingProvinces) ? formData.operatingProvinces : []}
+                onChange={(value) => handleMultiSelectChange("operatingProvinces", value)}
+                placeholder="Select provinces..."
+              />
+            </FormField>
+          )}
+
+          {/* Company Logo */}
+          <SectionHeading title="Brand Assets" />
+
           <FormField label="Company Logo">
-            <div style={{ 
-              border: '2px dashed #C19A6B', 
-              borderRadius: '8px', 
-              padding: '16px',
-              backgroundColor: '#FAF8F5',
-              transition: 'all 0.3s ease',
-              maxWidth: '400px'
+            <div style={{
+              border: '2px dashed #C19A6B', borderRadius: '8px', padding: '16px',
+              backgroundColor: '#FAF8F5', maxWidth: '400px',
             }}>
-              <style>
-                {`
-                  @keyframes spin {
-                    to { transform: rotate(360deg); }
-                  }
-                `}
-              </style>
-              <div style={{ 
-                display: 'flex', 
-                alignItems: 'center', 
-                gap: '16px',
-                justifyContent: 'flex-start'
-              }}>
-                {/* Circular Logo Preview */}
-                <div style={{ 
-                  width: '80px', 
-                  height: '80px', 
-                  borderRadius: '50%', 
-                  overflow: 'hidden', 
-                  border: '3px solid #8B6F47',
-                  backgroundColor: 'white',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  boxShadow: '0 4px 12px rgba(139, 111, 71, 0.2)',
-                  flexShrink: 0,
-                  background: 'linear-gradient(135deg, #ffffff 0%, #f5f5f5 100%)'
+              <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                <div style={{
+                  width: '80px', height: '80px', borderRadius: '50%', overflow: 'hidden',
+                  border: '3px solid #8B6F47', backgroundColor: 'white',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  boxShadow: '0 4px 12px rgba(139,111,71,0.2)', flexShrink: 0,
                 }}>
                   {formData.companyLogo || logoPreview ? (
-                    <img 
-                      src={logoPreview || formData.companyLogo} 
-                      alt="Company Logo" 
-                      style={{ 
-                        width: '100%', 
-                        height: '100%', 
-                        objectFit: 'cover' 
-                      }}
-                    />
+                    <img src={logoPreview || formData.companyLogo} alt="Company Logo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   ) : (
-                    <div style={{ 
-                      color: '#A0826D', 
-                      fontSize: '10px', 
-                      textAlign: 'center',
-                      padding: '6px',
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      gap: '2px'
-                    }}>
-                      <div style={{ 
-                        fontSize: '28px', 
-                        lineHeight: '1',
-                        filter: 'grayscale(0.3)'
-                      }}>🏢</div>
-                      <div style={{ 
-                        fontWeight: '600',
-                        letterSpacing: '0.2px',
-                        color: '#8B6F47',
-                        fontSize: '9px'
-                      }}>No Logo</div>
+                    <div style={{ color: '#A0826D', fontSize: '10px', textAlign: 'center', padding: '6px' }}>
+                      <div style={{ fontSize: '28px', lineHeight: '1' }}>🏢</div>
+                      <div style={{ fontWeight: '600', color: '#8B6F47', fontSize: '9px' }}>No Logo</div>
                     </div>
                   )}
                 </div>
-                
-                {/* Upload Controls */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
                   <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                    <label 
-                      htmlFor="logo-upload"
-                      title="Upload Logo"
-                      style={{
-                        padding: '10px',
-                        background: logoUploading 
-                          ? 'linear-gradient(135deg, #A0826D 0%, #8B6F47 100%)' 
-                          : 'linear-gradient(135deg, #8B4513 0%, #6B3410 100%)',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '5px',
-                        fontSize: '13px',
-                        fontWeight: '600',
-                        cursor: logoUploading ? 'not-allowed' : 'pointer',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        transition: 'all 0.3s ease',
-                        boxShadow: '0 2px 8px rgba(139, 69, 19, 0.25)',
-                        opacity: logoUploading ? 0.7 : 1,
-                        width: '40px',
-                        height: '40px'
-                      }}
-                      onMouseOver={(e) => {
-                        if (!logoUploading) {
-                          e.target.style.transform = 'translateY(-1px)';
-                          e.target.style.boxShadow = '0 4px 12px rgba(139, 69, 19, 0.35)';
-                        }
-                      }}
-                      onMouseOut={(e) => {
-                        if (!logoUploading) {
-                          e.target.style.transform = 'translateY(0)';
-                          e.target.style.boxShadow = '0 2px 8px rgba(139, 69, 19, 0.25)';
-                        }
-                      }}
-                    >
-                      {logoUploading ? (
-                        <div style={{
-                          width: '16px',
-                          height: '16px',
-                          border: '2px solid transparent',
-                          borderTop: '2px solid white',
-                          borderRadius: '50%',
-                          animation: 'spin 1s linear infinite'
-                        }}></div>
-                      ) : (
-                        <Upload size={18} />
-                      )}
-                      <input
-                        id="logo-upload"
-                        type="file"
-                        accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
-                        onChange={handleLogoUpload}
-                        disabled={logoUploading}
-                        style={{ display: 'none' }}
-                      />
+                    <label htmlFor="logo-upload" title="Upload Logo" style={{
+                      padding: '10px', background: logoUploading ? 'linear-gradient(135deg,#A0826D,#8B6F47)' : 'linear-gradient(135deg,#8B4513,#6B3410)',
+                      color: 'white', border: 'none', borderRadius: '5px', fontSize: '13px', fontWeight: '600',
+                      cursor: logoUploading ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center',
+                      justifyContent: 'center', width: '40px', height: '40px', opacity: logoUploading ? 0.7 : 1,
+                    }}>
+                      {logoUploading ? <div style={spinnerStyle}></div> : <Upload size={18} />}
+                      <input id="logo-upload" type="file" accept="image/jpeg,image/jpg,image/png,image/gif,image/webp" onChange={handleLogoUpload} disabled={logoUploading} style={{ display: 'none' }} />
                     </label>
-                    
                     {(formData.companyLogo || logoPreview) && (
-                      <button
-                        type="button"
-                        onClick={handleRemoveLogo}
-                        title="Remove Logo"
-                        style={{
-                          padding: '10px',
-                          background: 'linear-gradient(135deg, #B8860B 0%, #996515 100%)',
-                          color: 'white',
-                          border: 'none',
-                          borderRadius: '5px',
-                          fontSize: '13px',
-                          fontWeight: '600',
-                          cursor: 'pointer',
-                          transition: 'all 0.3s ease',
-                          boxShadow: '0 2px 8px rgba(184, 134, 11, 0.25)',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          width: '40px',
-                          height: '40px'
-                        }}
-                        onMouseOver={(e) => {
-                          e.target.style.transform = 'translateY(-1px)';
-                          e.target.style.boxShadow = '0 4px 12px rgba(184, 134, 11, 0.35)';
-                        }}
-                        onMouseOut={(e) => {
-                          e.target.style.transform = 'translateY(0)';
-                          e.target.style.boxShadow = '0 2px 8px rgba(184, 134, 11, 0.25)';
-                        }}
-                      >
+                      <button type="button" onClick={handleRemoveLogo} title="Remove Logo" style={{
+                        padding: '10px', background: 'linear-gradient(135deg,#B8860B,#996515)', color: 'white',
+                        border: 'none', borderRadius: '5px', cursor: 'pointer',
+                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '40px', height: '40px',
+                      }}>
                         <X size={18} />
                       </button>
                     )}
                   </div>
-                  
-                  {/* File Info */}
-                  <div style={{ 
-                    fontSize: '11px', 
-                    color: '#8B6F47',
-                    lineHeight: '1.4',
-                    backgroundColor: 'rgba(139, 111, 71, 0.08)',
-                    padding: '8px 10px',
-                    borderRadius: '5px',
-                    border: '1px solid rgba(139, 111, 71, 0.15)'
+                  <div style={{
+                    fontSize: '11px', color: '#8B6F47', lineHeight: '1.4',
+                    backgroundColor: 'rgba(139,111,71,0.08)', padding: '8px 10px',
+                    borderRadius: '5px', border: '1px solid rgba(139,111,71,0.15)',
                   }}>
                     <div style={{ fontWeight: '600', marginBottom: '2px' }}>📋 Requirements</div>
                     <div>JPG, PNG, GIF, WebP • Max 5MB</div>
@@ -1056,203 +934,65 @@ export default function EntityOverview({ data = {}, updateData }) {
               </div>
             </div>
           </FormField>
-          
+
+          {/* Company Letterhead */}
           <FormField label="Company Letterhead">
-            <div style={{ 
-              border: '2px dashed #C19A6B', 
-              borderRadius: '8px', 
-              padding: '16px',
-              backgroundColor: '#FAF8F5',
-              maxWidth: '400px'
+            <div style={{
+              border: '2px dashed #C19A6B', borderRadius: '8px', padding: '16px',
+              backgroundColor: '#FAF8F5', maxWidth: '400px',
             }}>
-              <div style={{ 
-                display: 'flex', 
-                alignItems: 'center', 
-                gap: '16px',
-                justifyContent: 'flex-start'
-              }}>
-                {/* Letterhead Preview/Icon */}
-                <div style={{ 
-                  width: '80px', 
-                  height: '80px', 
-                  borderRadius: '8px', 
-                  overflow: 'hidden', 
-                  border: '3px solid #8B6F47',
-                  backgroundColor: 'white',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  boxShadow: '0 4px 12px rgba(139, 111, 71, 0.2)',
-                  flexShrink: 0,
-                  background: 'linear-gradient(135deg, #ffffff 0%, #f5f5f5 100%)'
+              <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                <div style={{
+                  width: '80px', height: '80px', borderRadius: '8px', overflow: 'hidden',
+                  border: '3px solid #8B6F47', backgroundColor: 'white',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  boxShadow: '0 4px 12px rgba(139,111,71,0.2)', flexShrink: 0,
                 }}>
                   {formData.companyLetterhead ? (
-                    <div style={{ 
-                      padding: '8px',
-                      textAlign: 'center'
-                    }}>
-                      <div style={{ 
-                        fontSize: '32px', 
-                        lineHeight: '1',
-                        marginBottom: '4px'
-                      }}>📄</div>
-                      <div style={{ 
-                        fontSize: '9px', 
-                        fontWeight: '600',
-                        color: '#8B6F47'
-                      }}>Letterhead</div>
+                    <div style={{ padding: '8px', textAlign: 'center' }}>
+                      <div style={{ fontSize: '32px', lineHeight: '1', marginBottom: '4px' }}>📄</div>
+                      <div style={{ fontSize: '9px', fontWeight: '600', color: '#8B6F47' }}>Letterhead</div>
                     </div>
                   ) : (
-                    <div style={{ 
-                      color: '#A0826D', 
-                      fontSize: '10px', 
-                      textAlign: 'center',
-                      padding: '6px'
-                    }}>
-                      <div style={{ 
-                        fontSize: '28px', 
-                        lineHeight: '1',
-                        marginBottom: '2px'
-                      }}>📋</div>
-                      <div style={{ 
-                        fontWeight: '600',
-                        letterSpacing: '0.2px',
-                        color: '#8B6F47',
-                        fontSize: '9px'
-                      }}>No Letterhead</div>
+                    <div style={{ color: '#A0826D', fontSize: '10px', textAlign: 'center', padding: '6px' }}>
+                      <div style={{ fontSize: '28px', lineHeight: '1', marginBottom: '2px' }}>📋</div>
+                      <div style={{ fontWeight: '600', color: '#8B6F47', fontSize: '9px' }}>No Letterhead</div>
                     </div>
                   )}
                 </div>
-                
-                {/* Upload Controls */}
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
                   <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                    <label 
-                      htmlFor="letterhead-upload"
-                      title="Upload Company Letterhead"
-                      style={{
-                        padding: '10px 16px',
-                        background: letterheadUploading 
-                          ? 'linear-gradient(135deg, #A0826D 0%, #8B6F47 100%)' 
-                          : 'linear-gradient(135deg, #8B4513 0%, #6B3410 100%)',
-                        color: 'white',
-                        border: 'none',
-                        borderRadius: '5px',
-                        fontSize: '13px',
-                        fontWeight: '600',
-                        cursor: letterheadUploading ? 'not-allowed' : 'pointer',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '8px',
-                        transition: 'all 0.3s ease',
-                        boxShadow: '0 2px 8px rgba(139, 69, 19, 0.25)',
-                        opacity: letterheadUploading ? 0.7 : 1
-                      }}
-                      onMouseOver={(e) => {
-                        if (!letterheadUploading) {
-                          e.target.style.transform = 'translateY(-1px)';
-                          e.target.style.boxShadow = '0 4px 12px rgba(139, 69, 19, 0.35)';
-                        }
-                      }}
-                      onMouseOut={(e) => {
-                        if (!letterheadUploading) {
-                          e.target.style.transform = 'translateY(0)';
-                          e.target.style.boxShadow = '0 2px 8px rgba(139, 69, 19, 0.25)';
-                        }
-                      }}
-                    >
-                      {letterheadUploading ? (
-                        <>
-                          <div style={{
-                            width: '16px',
-                            height: '16px',
-                            border: '2px solid transparent',
-                            borderTop: '2px solid white',
-                            borderRadius: '50%',
-                            animation: 'spin 1s linear infinite'
-                          }}></div>
-                          Uploading...
-                        </>
-                      ) : (
-                        <>
-                          <Upload size={16} />
-                          {formData.companyLetterhead ? 'Replace' : 'Upload'}
-                        </>
-                      )}
-                      <input
-                        id="letterhead-upload"
-                        type="file"
-                        accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-                        onChange={handleLetterheadUpload}
-                        disabled={letterheadUploading}
-                        style={{ display: 'none' }}
-                      />
+                    <label htmlFor="letterhead-upload" style={{
+                      padding: '10px 16px',
+                      background: letterheadUploading ? 'linear-gradient(135deg,#A0826D,#8B6F47)' : 'linear-gradient(135deg,#8B4513,#6B3410)',
+                      color: 'white', border: 'none', borderRadius: '5px', fontSize: '13px', fontWeight: '600',
+                      cursor: letterheadUploading ? 'not-allowed' : 'pointer',
+                      display: 'inline-flex', alignItems: 'center', gap: '8px',
+                      opacity: letterheadUploading ? 0.7 : 1,
+                    }}>
+                      {letterheadUploading ? <><div style={spinnerStyle}></div>Uploading...</> : <><Upload size={16} />{formData.companyLetterhead ? 'Replace' : 'Upload'}</>}
+                      <input id="letterhead-upload" type="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" onChange={handleLetterheadUpload} disabled={letterheadUploading} style={{ display: 'none' }} />
                     </label>
-                    
                     {formData.companyLetterhead && (
-                      <button
-                        type="button"
-                        onClick={handleDeleteLetterhead}
-                        title="Delete Letterhead"
-                        style={{
-                          padding: '10px 16px',
-                          background: 'linear-gradient(135deg, #B8860B 0%, #996515 100%)',
-                          color: 'white',
-                          border: 'none',
-                          borderRadius: '5px',
-                          fontSize: '13px',
-                          fontWeight: '600',
-                          cursor: 'pointer',
-                          transition: 'all 0.3s ease',
-                          boxShadow: '0 2px 8px rgba(184, 134, 11, 0.25)',
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: '8px'
-                        }}
-                        onMouseOver={(e) => {
-                          e.target.style.transform = 'translateY(-1px)';
-                          e.target.style.boxShadow = '0 4px 12px rgba(184, 134, 11, 0.35)';
-                        }}
-                        onMouseOut={(e) => {
-                          e.target.style.transform = 'translateY(0)';
-                          e.target.style.boxShadow = '0 2px 8px rgba(184, 134, 11, 0.25)';
-                        }}
-                      >
-                        <X size={16} />
-                        Delete
+                      <button type="button" onClick={handleDeleteLetterhead} style={{
+                        padding: '10px 16px', background: 'linear-gradient(135deg,#B8860B,#996515)', color: 'white',
+                        border: 'none', borderRadius: '5px', fontSize: '13px', fontWeight: '600', cursor: 'pointer',
+                        display: 'inline-flex', alignItems: 'center', gap: '8px',
+                      }}>
+                        <X size={16} />Delete
                       </button>
                     )}
                   </div>
-                  
-                  {/* File Info and Status */}
-                  <div style={{ 
-                    fontSize: '11px', 
-                    color: '#8B6F47',
-                    lineHeight: '1.4',
-                    backgroundColor: 'rgba(139, 111, 71, 0.08)',
-                    padding: '8px 10px',
-                    borderRadius: '5px',
-                    border: '1px solid rgba(139, 111, 71, 0.15)'
+                  <div style={{
+                    fontSize: '11px', color: '#8B6F47', lineHeight: '1.4',
+                    backgroundColor: 'rgba(139,111,71,0.08)', padding: '8px 10px',
+                    borderRadius: '5px', border: '1px solid rgba(139,111,71,0.15)',
                   }}>
                     {formData.companyLetterhead ? (
                       <>
                         <div style={{ fontWeight: '600', marginBottom: '4px' }}>✅ Letterhead Uploaded</div>
-                        <a 
-                          href={formData.companyLetterhead} 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          style={{ 
-                            color: '#8B4513', 
-                            textDecoration: 'underline',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '4px'
-                          }}
-                        >
-                          View Document ↗
-                        </a>
+                        <a href={formData.companyLetterhead} target="_blank" rel="noopener noreferrer"
+                          style={{ color: '#8B4513', textDecoration: 'underline' }}>View Document ↗</a>
                       </>
                     ) : (
                       <>
