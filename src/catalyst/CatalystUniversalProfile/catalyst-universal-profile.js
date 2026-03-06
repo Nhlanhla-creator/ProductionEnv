@@ -191,8 +191,11 @@ export default function CatalystUniversalProfile() {
     }
   }
 
-  const handleSaveSection = async () => {
+ const handleSaveSection = async () => {
     localStorage.setItem("catalystProfileData", JSON.stringify(formData))
+    
+    if (activeSection === "instructions") return
+    
     if (!user) {
       alert("You must be logged in to save.")
       return
