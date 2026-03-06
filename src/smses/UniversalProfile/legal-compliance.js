@@ -20,13 +20,6 @@ const bbbeeOptions = [
   { value: "None", label: "None" },
 ]
 
-const cipcStatusOptions = [
-  { value: "Current", label: "Current" },
-  { value: "Pending", label: "Pending" },
-  { value: "Overdue", label: "Overdue" },
-  { value: "N/A", label: "Not Applicable" },
-]
-
 const uifStatusOptions = [
   { value: "Registered", label: "Registered with UIF" },
   { value: "Not yet registered", label: "Not yet registered" },
@@ -54,7 +47,6 @@ const industryAccreditationOptions = [
 // Tooltip Component
 const Tooltip = ({ children, content, position = "top" }) => {
   const [isVisible, setIsVisible] = useState(false)
-
   return (
     <div
       className="relative inline-block"
@@ -64,18 +56,20 @@ const Tooltip = ({ children, content, position = "top" }) => {
       {children}
       {isVisible && (
         <div
-          className={`absolute z-50 px-3 py-2 text-sm text-white bg-gray-800 rounded-lg shadow-lg whitespace-nowrap max-w-xs ${position === "top"
-            ? "bottom-full left-1/2 transform -translate-x-1/2 mb-2"
-            : "top-full left-1/2 transform -translate-x-1/2 mt-2"
-            }`}
+          className={`absolute z-50 px-3 py-2 text-sm text-white bg-gray-800 rounded-lg shadow-lg whitespace-nowrap max-w-xs ${
+            position === "top"
+              ? "bottom-full left-1/2 transform -translate-x-1/2 mb-2"
+              : "top-full left-1/2 transform -translate-x-1/2 mt-2"
+          }`}
           style={{ width: "max-content", maxWidth: "300px", whiteSpace: "normal" }}
         >
           {content}
           <div
-            className={`absolute w-2 h-2 bg-gray-800 transform rotate-45 ${position === "top"
-              ? "top-full left-1/2 -translate-x-1/2 -mt-1"
-              : "bottom-full left-1/2 -translate-x-1/2 -mb-1"
-              }`}
+            className={`absolute w-2 h-2 bg-gray-800 transform rotate-45 ${
+              position === "top"
+                ? "top-full left-1/2 -translate-x-1/2 -mt-1"
+                : "bottom-full left-1/2 -translate-x-1/2 -mb-1"
+            }`}
           />
         </div>
       )}
@@ -88,7 +82,6 @@ const MultiSelectDropdown = ({ options, selected = [], onChange, placeholder = "
   const [isOpen, setIsOpen] = useState(false)
   const dropdownRef = useRef(null)
 
-  // Close dropdown when clicking outside
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
@@ -112,14 +105,8 @@ const MultiSelectDropdown = ({ options, selected = [], onChange, placeholder = "
     onChange(selected.filter((v) => v !== value))
   }
 
-  const getLabel = (value) => {
-    const opt = options.find((o) => o.value === value)
-    return opt ? opt.label : value
-  }
-
   return (
     <div className="relative" ref={dropdownRef}>
-      {/* Trigger */}
       <div
         onClick={() => setIsOpen((prev) => !prev)}
         className="w-full min-h-[42px] px-3 py-2 border border-brown-300 rounded-md cursor-pointer flex flex-wrap items-center gap-1 focus:outline-none focus:ring-2 focus:ring-brown-500 bg-white"
@@ -135,11 +122,7 @@ const MultiSelectDropdown = ({ options, selected = [], onChange, placeholder = "
               style={{ backgroundColor: "#f3ebe0", color: "#6b4c2a", border: "1px solid #d6c4a8" }}
             >
               {val === "Other" ? "Other" : val}
-              <button
-                onClick={(e) => removeTag(e, val)}
-                className="hover:opacity-70 transition-opacity"
-                type="button"
-              >
+              <button onClick={(e) => removeTag(e, val)} className="hover:opacity-70 transition-opacity" type="button">
                 <X className="w-3 h-3" />
               </button>
             </span>
@@ -151,7 +134,6 @@ const MultiSelectDropdown = ({ options, selected = [], onChange, placeholder = "
         />
       </div>
 
-      {/* Dropdown Menu */}
       {isOpen && (
         <div
           className="absolute z-50 w-full mt-1 bg-white border rounded-md shadow-lg max-h-60 overflow-y-auto"
@@ -185,32 +167,68 @@ const MultiSelectDropdown = ({ options, selected = [], onChange, placeholder = "
   )
 }
 
+// CSS-safe custom Yes/No radio — avoids global stylesheet suppression of native inputs
+const YesNoRadio = ({ value, onChange }) => (
+  <div style={{ display: "flex", gap: "24px", marginTop: "6px" }}>
+    {["Yes", "No"].map((val) => (
+      <label
+        key={val}
+        onClick={() => onChange(val)}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "8px",
+          cursor: "pointer",
+          userSelect: "none",
+          fontSize: "14px",
+          fontWeight: "500",
+          color: "#3d2b1f",
+        }}
+      >
+        <div
+          style={{
+            width: "18px",
+            height: "18px",
+            borderRadius: "50%",
+            border: `2px solid ${value === val ? "#8B4513" : "#ccc"}`,
+            backgroundColor: value === val ? "#8B4513" : "white",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexShrink: 0,
+            transition: "all 0.15s ease",
+            boxShadow: value === val ? "0 0 0 3px rgba(139,69,19,0.12)" : "none",
+          }}
+        >
+          {value === val && (
+            <div style={{ width: "7px", height: "7px", borderRadius: "50%", backgroundColor: "white" }} />
+          )}
+        </div>
+        <span>{val}</span>
+      </label>
+    ))}
+  </div>
+)
+
 export default function LegalCompliance({ data = {}, updateData }) {
   const [formData, setFormData] = useState({})
   const [isLoading, setIsLoading] = useState(true)
-  const [uploadingDocs, setUploadingDocs] = useState({});
+  const [uploadingDocs, setUploadingDocs] = useState({})
 
-  // Load data from Firebase when component mounts
   useEffect(() => {
     const loadLegalCompliance = async () => {
       try {
         setIsLoading(true)
         const userId = auth.currentUser?.uid
-
-        if (!userId) {
-          setIsLoading(false)
-          return
-        }
+        if (!userId) { setIsLoading(false); return }
 
         const docRef = doc(db, "universalProfiles", userId)
         const docSnap = await getDoc(docRef)
 
         if (docSnap.exists()) {
           const profileData = docSnap.data()
-
           if (profileData.legalCompliance) {
             const legalData = profileData.legalCompliance
-            // Migrate old string industryAccreditations to array
             if (typeof legalData.industryAccreditations === "string") {
               legalData.industryAccreditations = legalData.industryAccreditations
                 ? legalData.industryAccreditations.split(",").map((s) => s.trim()).filter(Boolean)
@@ -236,7 +254,6 @@ export default function LegalCompliance({ data = {}, updateData }) {
         setIsLoading(false)
       }
     }
-
     loadLegalCompliance()
   }, [])
 
@@ -244,6 +261,7 @@ export default function LegalCompliance({ data = {}, updateData }) {
     if (Object.keys(passedData).length > 0) return passedData
     return {
       taxNumber: "",
+      taxClearancePin: "",
       vatNumber: "",
       uifStatus: "",
       uifNumber: "",
@@ -252,6 +270,8 @@ export default function LegalCompliance({ data = {}, updateData }) {
       coidaNumber: "",
       industryAccreditations: [],
       industryAccreditationsOther: "",
+      pendingLegalJudgments: "",
+      pendingLegalJudgmentsDetails: "",
       taxClearanceCert: [],
       vatCertificate: [],
       bbbeeCert: [],
@@ -269,26 +289,22 @@ export default function LegalCompliance({ data = {}, updateData }) {
   const handleChange = (e) => {
     const { name, value } = e.target
     const updatedData = { ...formData, [name]: value }
-
-    if (name === "uifStatus" && value !== "Registered") {
-      updatedData.uifNumber = ""
-    }
-
-    if (name === "hasAdvisoryStructure" && value === "No") updatedData.advisoryStructureDocs = []
-    if (name === "hasPolicyControls" && value === "No") updatedData.policyControlsDocs = []
-    if (name === "hasEthicsPolicy" && value === "No") updatedData.ethicsPolicyDocs = []
-    if (name === "hasConflictResolution" && value === "No") updatedData.conflictResolutionDocs = []
-    if (name === "hasWhistleblowingPolicy" && value === "No") updatedData.whistleblowingPolicyDocs = []
-
+    if (name === "uifStatus" && value !== "Registered") updatedData.uifNumber = ""
     setFormData(updatedData)
     updateData(updatedData)
   }
 
   const handleAccreditationsChange = (selectedValues) => {
     const updatedData = { ...formData, industryAccreditations: selectedValues }
-    // Clear "Other" text if "Other" is deselected
-    if (!selectedValues.includes("Other")) {
-      updatedData.industryAccreditationsOther = ""
+    if (!selectedValues.includes("Other")) updatedData.industryAccreditationsOther = ""
+    setFormData(updatedData)
+    updateData(updatedData)
+  }
+
+  const handleYesNo = (field, value) => {
+    const updatedData = { ...formData, [field]: value }
+    if (field === "pendingLegalJudgments" && value === "No") {
+      updatedData.pendingLegalJudgmentsDetails = ""
     }
     setFormData(updatedData)
     updateData(updatedData)
@@ -296,13 +312,6 @@ export default function LegalCompliance({ data = {}, updateData }) {
 
   const handleFileChange = (name, files) => {
     const updatedData = { ...formData, [name]: files }
-    setFormData(updatedData)
-    updateData(updatedData)
-  }
-
-  const handleDateChange = (e) => {
-    const { name, value } = e.target
-    const updatedData = { ...formData, [name]: value }
     setFormData(updatedData)
     updateData(updatedData)
   }
@@ -326,6 +335,8 @@ export default function LegalCompliance({ data = {}, updateData }) {
       <h2 className="text-2xl font-bold text-brown-800 mb-6">Legal & Compliance</h2>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+
+        {/* LEFT COLUMN */}
         <div>
           <FormField label="Tax Number">
             <input
@@ -336,6 +347,25 @@ export default function LegalCompliance({ data = {}, updateData }) {
               className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
               required
             />
+          </FormField>
+
+          <FormField label="Tax Clearance Number / PIN">
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <input
+                type="text"
+                name="taxClearancePin"
+                value={formData.taxClearancePin || ""}
+                onChange={handleChange}
+                placeholder="e.g. 0000000000000"
+                className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
+              />
+              <Tooltip
+                content="Your Tax Clearance PIN is issued by SARS and can be verified on eFiling. It confirms your business's tax compliance status."
+                position="top"
+              >
+                <HelpCircle className="w-4 h-4 text-brown-400 cursor-help hover:text-brown-600 transition-colors flex-shrink-0" />
+              </Tooltip>
+            </div>
           </FormField>
 
           <FormField label="PAYE Number">
@@ -368,9 +398,7 @@ export default function LegalCompliance({ data = {}, updateData }) {
             >
               <option value="">Select UIF Status</option>
               {uifStatusOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
+                <option key={option.value} value={option.value}>{option.label}</option>
               ))}
             </select>
           </FormField>
@@ -394,7 +422,7 @@ export default function LegalCompliance({ data = {}, updateData }) {
                 COIDA No. (if applicable)
               </label>
               <Tooltip
-                content="Compensation for Occupational Injuries and Diseases Act number. This is required if you have employees and need to register for workplace injury compensation insurance. Only applicable to businesses with employees."
+                content="Compensation for Occupational Injuries and Diseases Act number. Required if you have employees and need to register for workplace injury compensation insurance."
                 position="top"
               >
                 <HelpCircle className="w-3.5 h-3.5 text-brown-400 cursor-help hover:text-brown-600 transition-colors" />
@@ -410,6 +438,7 @@ export default function LegalCompliance({ data = {}, updateData }) {
           </div>
         </div>
 
+        {/* RIGHT COLUMN */}
         <div>
           <FormField label="B-BBEE Level">
             <select
@@ -421,9 +450,7 @@ export default function LegalCompliance({ data = {}, updateData }) {
             >
               <option value="">Select Level</option>
               {bbbeeOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
+                <option key={option.value} value={option.value}>{option.label}</option>
               ))}
             </select>
           </FormField>
@@ -446,6 +473,28 @@ export default function LegalCompliance({ data = {}, updateData }) {
                 onChange={handleChange}
                 placeholder="e.g. SETA accreditation, Industry-specific certification..."
                 className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
+              />
+            </FormField>
+          )}
+
+          {/* Pending Legal Judgments */}
+          <FormField label="Are there any pending legal judgments against directors / shareholders?">
+            <YesNoRadio
+              value={formData.pendingLegalJudgments || ""}
+              onChange={(val) => handleYesNo("pendingLegalJudgments", val)}
+            />
+          </FormField>
+
+          {formData.pendingLegalJudgments === "Yes" && (
+            <FormField label="Please elaborate">
+              <textarea
+                name="pendingLegalJudgmentsDetails"
+                value={formData.pendingLegalJudgmentsDetails || ""}
+                onChange={handleChange}
+                rows={3}
+                placeholder="Describe the nature of the pending judgment(s), parties involved, and current status..."
+                className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
+                style={{ resize: "vertical", fontFamily: "inherit", fontSize: "14px" }}
               />
             </FormField>
           )}

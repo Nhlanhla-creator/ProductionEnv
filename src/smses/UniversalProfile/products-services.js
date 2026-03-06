@@ -5,7 +5,6 @@ import FormField from "./form-field"
 import './UniversalProfile.css';
 import {deliveryModes} from '../ProductApplication/applicationOptions'
 
-// Complete category options for Products and Services (matching industry sectors)
 const categoryOptions = [
   { value: "Generalist", label: "Generalist" },
   { value: "Agriculture", label: "Agriculture" },
@@ -46,10 +45,9 @@ const categoryOptions = [
   { value: "Utilities (Water, Electricity, Waste)", label: "Utilities (Water, Electricity, Waste)" },
 ]
 
-// Industry options for Key Clients/Customers (same as categories for consistency)
 const industryOptions = categoryOptions
 
-// MultiSelect component for categories
+// MultiSelect component
 function MultiSelect({ options, selected, onChange, label }) {
   const [isOpen, setIsOpen] = useState(false)
 
@@ -57,15 +55,15 @@ function MultiSelect({ options, selected, onChange, label }) {
   const closeDropdown = () => setIsOpen(false)
 
   const handleSelect = (value) => {
-    const newSelected = selected.includes(value) 
-      ? selected.filter((item) => item !== value) 
+    const newSelected = selected.includes(value)
+      ? selected.filter((item) => item !== value)
       : [...selected, value]
     onChange(newSelected)
   }
 
   return (
     <div style={{ position: 'relative' }}>
-      <div 
+      <div
         onClick={toggleDropdown}
         style={{
           border: '1px solid #ccc',
@@ -82,14 +80,9 @@ function MultiSelect({ options, selected, onChange, label }) {
         {selected.length > 0 ? (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
             {selected.map((cat) => (
-              <span 
+              <span
                 key={cat}
-                style={{
-                  backgroundColor: '#e0e0e0',
-                  padding: '2px 8px',
-                  borderRadius: '12px',
-                  fontSize: '14px'
-                }}
+                style={{ backgroundColor: '#e0e0e0', padding: '2px 8px', borderRadius: '12px', fontSize: '14px' }}
               >
                 {options.find((opt) => opt.value === cat)?.label || cat}
               </span>
@@ -103,17 +96,9 @@ function MultiSelect({ options, selected, onChange, label }) {
 
       {isOpen && (
         <div style={{
-          position: 'absolute',
-          top: '100%',
-          left: 0,
-          right: 0,
-          backgroundColor: 'white',
-          border: '1px solid #ccc',
-          borderRadius: '4px',
-          marginTop: '4px',
-          zIndex: 1000,
-          maxHeight: '300px',
-          overflow: 'auto'
+          position: 'absolute', top: '100%', left: 0, right: 0,
+          backgroundColor: 'white', border: '1px solid #ccc', borderRadius: '4px',
+          marginTop: '4px', zIndex: 1000, maxHeight: '300px', overflow: 'auto'
         }}>
           <div style={{ padding: '8px' }}>
             {options.map((option) => (
@@ -121,38 +106,21 @@ function MultiSelect({ options, selected, onChange, label }) {
                 key={option.value}
                 onClick={() => handleSelect(option.value)}
                 style={{
-                  padding: '8px',
-                  cursor: 'pointer',
+                  padding: '8px', cursor: 'pointer',
                   backgroundColor: selected.includes(option.value) ? '#f0f0f0' : 'white',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px'
+                  display: 'flex', alignItems: 'center', gap: '8px'
                 }}
               >
-                <input
-                  type="checkbox"
-                  checked={selected.includes(option.value)}
-                  onChange={() => {}}
-                  style={{ cursor: 'pointer' }}
-                />
+                <input type="checkbox" checked={selected.includes(option.value)} onChange={() => {}} style={{ cursor: 'pointer' }} />
                 <span>{option.label}</span>
               </div>
             ))}
           </div>
           <div style={{ padding: '8px', borderTop: '1px solid #ccc' }}>
-            <button 
-              type="button"
-              onClick={closeDropdown}
-              style={{
-                width: '100%',
-                padding: '8px',
-                backgroundColor: '#8B4513',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer'
-              }}
-            >
+            <button type="button" onClick={closeDropdown} style={{
+              width: '100%', padding: '8px', backgroundColor: '#8B4513',
+              color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer'
+            }}>
               Done
             </button>
           </div>
@@ -161,6 +129,35 @@ function MultiSelect({ options, selected, onChange, label }) {
     </div>
   )
 }
+
+// CSS-safe Yes/No radio
+const YesNoRadio = ({ value, onChange }) => (
+  <div style={{ display: 'flex', gap: '24px' }}>
+    {['Yes', 'No'].map((val) => (
+      <label
+        key={val}
+        onClick={() => onChange(val)}
+        style={{
+          display: 'flex', alignItems: 'center', gap: '8px',
+          cursor: 'pointer', userSelect: 'none',
+          fontSize: '14px', fontWeight: '500', color: '#3d2b1f',
+        }}
+      >
+        <div style={{
+          width: '18px', height: '18px', borderRadius: '50%',
+          border: `2px solid ${value === val ? '#8B4513' : '#ccc'}`,
+          backgroundColor: value === val ? '#8B4513' : 'white',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          flexShrink: 0, transition: 'all 0.15s ease',
+          boxShadow: value === val ? '0 0 0 3px rgba(139,69,19,0.12)' : 'none',
+        }}>
+          {value === val && <div style={{ width: '7px', height: '7px', borderRadius: '50%', backgroundColor: 'white' }} />}
+        </div>
+        <span>{val}</span>
+      </label>
+    ))}
+  </div>
+)
 
 export default function ProductsServices({ data = {}, updateData }) {
   const [showExplanation, setShowExplanation] = useState(false)
@@ -175,166 +172,132 @@ export default function ProductsServices({ data = {}, updateData }) {
     const newValues = currentValues.includes(value)
       ? currentValues.filter((v) => v !== value)
       : [...currentValues, value]
-
     updateData({ [name]: newValues })
   }
 
   const handleOfferingTypeChange = (e) => {
     const value = e.target.value
-    updateData({ 
+    updateData({
       offeringType: value,
-      // Clear categories that are no longer relevant
       ...(!value.includes('products') && { productCategories: [] }),
       ...(!value.includes('services') && { serviceCategories: [] })
     })
   }
 
-  const handleMultiSelect = (name, value) => {
-    const currentValues = data[name] || []
-    const newValues = currentValues.includes(value)
-      ? currentValues.filter((v) => v !== value)
-      : [...currentValues, value]
-
-    updateData({ [name]: newValues })
-  }
-
+  // Products
   const addProductCategory = () => {
     const productCategories = data.productCategories || []
     updateData({ productCategories: [...productCategories, { categories: [], products: [] }] })
   }
-
   const updateProductCategory = (index, field, value) => {
     const productCategories = [...(data.productCategories || [])]
     productCategories[index] = { ...productCategories[index], [field]: value }
     updateData({ productCategories })
   }
-
   const removeProductCategory = (index) => {
     const productCategories = [...(data.productCategories || [])]
     productCategories.splice(index, 1)
     updateData({ productCategories })
   }
-
   const addProduct = (categoryIndex) => {
     const productCategories = [...(data.productCategories || [])]
-    const products = productCategories[categoryIndex].products || []
-    productCategories[categoryIndex].products = [...products, { name: "", description: "" }]
+    productCategories[categoryIndex].products = [...(productCategories[categoryIndex].products || []), { name: "", description: "" }]
     updateData({ productCategories })
   }
-
   const updateProduct = (categoryIndex, productIndex, field, value) => {
     const productCategories = [...(data.productCategories || [])]
-    productCategories[categoryIndex].products[productIndex] = {
-      ...productCategories[categoryIndex].products[productIndex],
-      [field]: value,
-    }
+    productCategories[categoryIndex].products[productIndex] = { ...productCategories[categoryIndex].products[productIndex], [field]: value }
     updateData({ productCategories })
   }
-
   const removeProduct = (categoryIndex, productIndex) => {
     const productCategories = [...(data.productCategories || [])]
     productCategories[categoryIndex].products.splice(productIndex, 1)
     updateData({ productCategories })
   }
 
+  // Services
   const addServiceCategory = () => {
     const serviceCategories = data.serviceCategories || []
     updateData({ serviceCategories: [...serviceCategories, { categories: [], services: [] }] })
   }
-
   const updateServiceCategory = (index, field, value) => {
     const serviceCategories = [...(data.serviceCategories || [])]
     serviceCategories[index] = { ...serviceCategories[index], [field]: value }
     updateData({ serviceCategories })
   }
-
   const removeServiceCategory = (index) => {
     const serviceCategories = [...(data.serviceCategories || [])]
     serviceCategories.splice(index, 1)
     updateData({ serviceCategories })
   }
-
   const addService = (categoryIndex) => {
     const serviceCategories = [...(data.serviceCategories || [])]
-    const services = serviceCategories[categoryIndex].services || []
-    serviceCategories[categoryIndex].services = [...services, { name: "", description: "" }]
+    serviceCategories[categoryIndex].services = [...(serviceCategories[categoryIndex].services || []), { name: "", description: "" }]
     updateData({ serviceCategories })
   }
-
   const updateService = (categoryIndex, serviceIndex, field, value) => {
     const serviceCategories = [...(data.serviceCategories || [])]
-    serviceCategories[categoryIndex].services[serviceIndex] = {
-      ...serviceCategories[categoryIndex].services[serviceIndex],
-      [field]: value,
-    }
+    serviceCategories[categoryIndex].services[serviceIndex] = { ...serviceCategories[categoryIndex].services[serviceIndex], [field]: value }
     updateData({ serviceCategories })
   }
-
   const removeService = (categoryIndex, serviceIndex) => {
     const serviceCategories = [...(data.serviceCategories || [])]
     serviceCategories[categoryIndex].services.splice(serviceIndex, 1)
     updateData({ serviceCategories })
   }
 
+  // Clients
   const addClient = () => {
     const keyClients = data.keyClients || []
-    updateData({ keyClients: [...keyClients, { name: "", industries: [] }] })
+    updateData({ keyClients: [...keyClients, { name: "", industries: [], revenuePercentage: "", revenueGrowthPotential: "" }] })
   }
-
   const updateClient = (index, field, value) => {
     const keyClients = [...(data.keyClients || [])]
     keyClients[index] = { ...keyClients[index], [field]: value }
     updateData({ keyClients })
   }
-
   const removeClient = (index) => {
     const keyClients = [...(data.keyClients || [])]
     keyClients.splice(index, 1)
     updateData({ keyClients })
   }
 
+  // Total revenue % validation
+  const totalRevenuePercent = (data.keyClients || []).reduce((sum, c) => {
+    const val = parseFloat(c.revenuePercentage) || 0
+    return sum + val
+  }, 0)
+  const revenueOver100 = totalRevenuePercent > 100
+
   const showProducts = data.offeringType === 'products' || data.offeringType === 'both'
   const showServices = data.offeringType === 'services' || data.offeringType === 'both'
 
   return (
     <div>
-      {/* Header with Eye Icon */}
+      {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '24px' }}>
         <h2 className="text-2xl font-bold text-brown-800" style={{ margin: 0 }}>Products & Services</h2>
         <button
           type="button"
           onClick={() => setShowExplanation(!showExplanation)}
           style={{
-            padding: '4px',
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            borderRadius: '4px',
-            transition: 'background-color 0.2s'
+            padding: '4px', background: 'none', border: 'none', cursor: 'pointer',
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            borderRadius: '4px', transition: 'background-color 0.2s'
           }}
           onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f5f5f5'}
           onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
           title={showExplanation ? "Hide explanation" : "Show explanation"}
         >
-          {showExplanation ? (
-            <EyeOff size={18} color="#654321" strokeWidth={2.5} />
-          ) : (
-            <Eye size={18} color="#654321" strokeWidth={2.5} />
-          )}
+          {showExplanation ? <EyeOff size={18} color="#654321" strokeWidth={2.5} /> : <Eye size={18} color="#654321" strokeWidth={2.5} />}
         </button>
       </div>
 
-      {/* Explanation Box */}
       {showExplanation && (
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-6 mb-8">
-          <h3 className="text-lg font-semibold text-blue-800 mb-4">
-            📋 Products & Services Section - Guidance
-          </h3>
+          <h3 className="text-lg font-semibold text-blue-800 mb-4">📋 Products & Services Section - Guidance</h3>
           <p className="text-blue-700 mb-4">
-            This section helps us <strong>match your business with the right funders, corporates, and service providers</strong>. 
+            This section helps us <strong>match your business with the right funders, corporates, and service providers</strong>.
             Please provide clear and structured information about what your company offers.
           </p>
           <ul className="list-disc list-inside space-y-2 text-blue-700">
@@ -346,128 +309,66 @@ export default function ProductsServices({ data = {}, updateData }) {
         </div>
       )}
 
-      {/* Section 1: Add Product or Service */}
+      {/* Section 1 */}
       <div className="mb-8 p-6 bg-brown-50 rounded-lg border-2 border-brown-200">
         <h3 className="text-xl font-semibold text-brown-800 mb-4">Section 1: Add Product or Service</h3>
-        
-        {/* Offering Type Selection */}
+
         <FormField label="What does your business offer?" required>
           <div className="space-y-3">
-            <label className="flex items-center">
-              <input
-                type="radio"
-                name="offeringType"
-                value="products"
-                checked={data.offeringType === 'products'}
-                onChange={handleOfferingTypeChange}
-                className="mr-3 h-4 w-4 text-brown-600 focus:ring-brown-500 border-brown-300"
-                required
-              />
-              <span className="text-brown-700">Products only</span>
-            </label>
-            <label className="flex items-center">
-              <input
-                type="radio"
-                name="offeringType"
-                value="services"
-                checked={data.offeringType === 'services'}
-                onChange={handleOfferingTypeChange}
-                className="mr-3 h-4 w-4 text-brown-600 focus:ring-brown-500 border-brown-300"
-                required
-              />
-              <span className="text-brown-700">Services only</span>
-            </label>
-            <label className="flex items-center">
-              <input
-                type="radio"
-                name="offeringType"
-                value="both"
-                checked={data.offeringType === 'both'}
-                onChange={handleOfferingTypeChange}
-                className="mr-3 h-4 w-4 text-brown-600 focus:ring-brown-500 border-brown-300"
-                required
-              />
-              <span className="text-brown-700">Both products and services</span>
-            </label>
+            {[
+              { value: 'products', label: 'Products only' },
+              { value: 'services', label: 'Services only' },
+              { value: 'both', label: 'Both products and services' },
+            ].map(({ value, label }) => (
+              <label key={value} className="flex items-center">
+                <input
+                  type="radio"
+                  name="offeringType"
+                  value={value}
+                  checked={data.offeringType === value}
+                  onChange={handleOfferingTypeChange}
+                  className="mr-3 h-4 w-4 text-brown-600 focus:ring-brown-500 border-brown-300"
+                  required
+                />
+                <span className="text-brown-700">{label}</span>
+              </label>
+            ))}
           </div>
         </FormField>
 
-        {/* Product Categories */}
         {showProducts && (
           <div className="mt-6">
             <div className="flex justify-between items-center mb-4">
               <h4 className="text-lg font-semibold text-brown-700">Product Categories</h4>
-              <button
-                type="button"
-                onClick={addProductCategory}
-                className="flex items-center gap-2 px-4 py-2 bg-brown-600 text-white rounded-md hover:bg-brown-700 transition-colors"
-              >
-                <Plus className="w-4 h-4" />
-                Add Category
+              <button type="button" onClick={addProductCategory} className="flex items-center gap-2 px-4 py-2 bg-brown-600 text-white rounded-md hover:bg-brown-700 transition-colors">
+                <Plus className="w-4 h-4" /> Add Category
               </button>
             </div>
-
             {(data.productCategories || []).map((category, categoryIndex) => (
               <div key={categoryIndex} className="mb-6 p-4 bg-white rounded-lg border border-brown-200">
                 <div className="flex justify-between items-start mb-4">
                   <div className="flex-1">
-                    <label className="block text-sm font-medium text-brown-700 mb-2">
-                      Category Name(s) *
-                    </label>
-                    <MultiSelect
-                      options={categoryOptions}
-                      selected={category.categories || []}
-                      onChange={(value) => updateProductCategory(categoryIndex, "categories", value)}
-                      label="categories"
-                    />
+                    <label className="block text-sm font-medium text-brown-700 mb-2">Category Name(s) *</label>
+                    <MultiSelect options={categoryOptions} selected={category.categories || []} onChange={(value) => updateProductCategory(categoryIndex, "categories", value)} label="categories" />
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => removeProductCategory(categoryIndex)}
-                    className="ml-4 p-2 text-red-600 hover:bg-red-50 rounded-md transition-colors"
-                  >
+                  <button type="button" onClick={() => removeProductCategory(categoryIndex)} className="ml-4 p-2 text-red-600 hover:bg-red-50 rounded-md transition-colors">
                     <Trash2 className="w-5 h-5" />
                   </button>
                 </div>
-
                 <div className="space-y-3">
                   <div className="flex justify-between items-center">
                     <label className="text-sm font-medium text-brown-700">Products</label>
-                    <button
-                      type="button"
-                      onClick={() => addProduct(categoryIndex)}
-                      className="flex items-center gap-1 px-3 py-1 text-sm bg-brown-100 text-brown-700 rounded-md hover:bg-brown-200 transition-colors"
-                    >
-                      <Plus className="w-3 h-3" />
-                      Add Product
+                    <button type="button" onClick={() => addProduct(categoryIndex)} className="flex items-center gap-1 px-3 py-1 text-sm bg-brown-100 text-brown-700 rounded-md hover:bg-brown-200 transition-colors">
+                      <Plus className="w-3 h-3" /> Add Product
                     </button>
                   </div>
-
                   {(category.products || []).map((product, productIndex) => (
                     <div key={productIndex} className="flex gap-3 items-start p-3 bg-brown-50 rounded-md">
                       <div className="flex-1 space-y-3">
-                        <input
-                          type="text"
-                          value={product.name}
-                          onChange={(e) => updateProduct(categoryIndex, productIndex, "name", e.target.value)}
-                          placeholder="Product name"
-                          className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
-                          required
-                        />
-                        <textarea
-                          value={product.description}
-                          onChange={(e) => updateProduct(categoryIndex, productIndex, "description", e.target.value)}
-                          placeholder="Brief description of the product, its features, and benefits"
-                          rows={3}
-                          className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500 resize-vertical"
-                          required
-                        />
+                        <input type="text" value={product.name} onChange={(e) => updateProduct(categoryIndex, productIndex, "name", e.target.value)} placeholder="Product name" className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500" required />
+                        <textarea value={product.description} onChange={(e) => updateProduct(categoryIndex, productIndex, "description", e.target.value)} placeholder="Brief description of the product, its features, and benefits" rows={3} className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500 resize-vertical" required />
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => removeProduct(categoryIndex, productIndex)}
-                        className="p-2 text-red-600 hover:bg-red-100 rounded-md transition-colors"
-                      >
+                      <button type="button" onClick={() => removeProduct(categoryIndex, productIndex)} className="p-2 text-red-600 hover:bg-red-100 rounded-md transition-colors">
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
@@ -478,82 +379,39 @@ export default function ProductsServices({ data = {}, updateData }) {
           </div>
         )}
 
-        {/* Service Categories */}
         {showServices && (
           <div className="mt-6">
             <div className="flex justify-between items-center mb-4">
               <h4 className="text-lg font-semibold text-brown-700">Service Categories</h4>
-              <button
-                type="button"
-                onClick={addServiceCategory}
-                className="flex items-center gap-2 px-4 py-2 bg-brown-600 text-white rounded-md hover:bg-brown-700 transition-colors"
-              >
-                <Plus className="w-4 h-4" />
-                Add Category
+              <button type="button" onClick={addServiceCategory} className="flex items-center gap-2 px-4 py-2 bg-brown-600 text-white rounded-md hover:bg-brown-700 transition-colors">
+                <Plus className="w-4 h-4" /> Add Category
               </button>
             </div>
-
             {(data.serviceCategories || []).map((category, categoryIndex) => (
               <div key={categoryIndex} className="mb-6 p-4 bg-white rounded-lg border border-brown-200">
                 <div className="flex justify-between items-start mb-4">
                   <div className="flex-1">
-                    <label className="block text-sm font-medium text-brown-700 mb-2">
-                      Category Name(s) *
-                    </label>
-                    <MultiSelect
-                      options={categoryOptions}
-                      selected={category.categories || []}
-                      onChange={(value) => updateServiceCategory(categoryIndex, "categories", value)}
-                      label="categories"
-                    />
+                    <label className="block text-sm font-medium text-brown-700 mb-2">Category Name(s) *</label>
+                    <MultiSelect options={categoryOptions} selected={category.categories || []} onChange={(value) => updateServiceCategory(categoryIndex, "categories", value)} label="categories" />
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => removeServiceCategory(categoryIndex)}
-                    className="ml-4 p-2 text-red-600 hover:bg-red-50 rounded-md transition-colors"
-                  >
+                  <button type="button" onClick={() => removeServiceCategory(categoryIndex)} className="ml-4 p-2 text-red-600 hover:bg-red-50 rounded-md transition-colors">
                     <Trash2 className="w-5 h-5" />
                   </button>
                 </div>
-
                 <div className="space-y-3">
                   <div className="flex justify-between items-center">
                     <label className="text-sm font-medium text-brown-700">Services</label>
-                    <button
-                      type="button"
-                      onClick={() => addService(categoryIndex)}
-                      className="flex items-center gap-1 px-3 py-1 text-sm bg-brown-100 text-brown-700 rounded-md hover:bg-brown-200 transition-colors"
-                    >
-                      <Plus className="w-3 h-3" />
-                      Add Service
+                    <button type="button" onClick={() => addService(categoryIndex)} className="flex items-center gap-1 px-3 py-1 text-sm bg-brown-100 text-brown-700 rounded-md hover:bg-brown-200 transition-colors">
+                      <Plus className="w-3 h-3" /> Add Service
                     </button>
                   </div>
-
                   {(category.services || []).map((service, serviceIndex) => (
                     <div key={serviceIndex} className="flex gap-3 items-start p-3 bg-brown-50 rounded-md">
                       <div className="flex-1 space-y-3">
-                        <input
-                          type="text"
-                          value={service.name}
-                          onChange={(e) => updateService(categoryIndex, serviceIndex, "name", e.target.value)}
-                          placeholder="Service name"
-                          className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
-                          required
-                        />
-                        <textarea
-                          value={service.description}
-                          onChange={(e) => updateService(categoryIndex, serviceIndex, "description", e.target.value)}
-                          placeholder="Brief description of the service, what it includes, and its value proposition"
-                          rows={3}
-                          className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500 resize-vertical"
-                          required
-                        />
+                        <input type="text" value={service.name} onChange={(e) => updateService(categoryIndex, serviceIndex, "name", e.target.value)} placeholder="Service name" className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500" required />
+                        <textarea value={service.description} onChange={(e) => updateService(categoryIndex, serviceIndex, "description", e.target.value)} placeholder="Brief description of the service, what it includes, and its value proposition" rows={3} className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500 resize-vertical" required />
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => removeService(categoryIndex, serviceIndex)}
-                        className="p-2 text-red-600 hover:bg-red-100 rounded-md transition-colors"
-                      >
+                      <button type="button" onClick={() => removeService(categoryIndex, serviceIndex)} className="p-2 text-red-600 hover:bg-red-100 rounded-md transition-colors">
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
@@ -565,19 +423,15 @@ export default function ProductsServices({ data = {}, updateData }) {
         )}
       </div>
 
-      {/* Section 2: Delivery Standards */}
+      {/* Section 2 */}
       <div className="mb-8 p-6 bg-brown-50 rounded-lg border-2 border-brown-200">
         <h3 className="text-xl font-semibold text-brown-800 mb-4">Section 2: Delivery Standards</h3>
-        
+
         <FormField label="Preferred Delivery Mode" required>
           <div className="checkbox-group">
             {deliveryModes.map(mode => (
               <label key={mode} className="checkbox-item">
-                <input
-                  type="checkbox"
-                  checked={(data.deliveryModes || []).includes(mode)}
-                  onChange={() => handleCheckboxChange('deliveryModes', mode)}
-                />
+                <input type="checkbox" checked={(data.deliveryModes || []).includes(mode)} onChange={() => handleCheckboxChange('deliveryModes', mode)} />
                 {mode}
               </label>
             ))}
@@ -588,25 +442,10 @@ export default function ProductsServices({ data = {}, updateData }) {
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-brown-700 mb-1">
-                  Minimum Time
-                </label>
+                <label className="block text-sm font-medium text-brown-700 mb-1">Minimum Time</label>
                 <div className="flex">
-                  <input
-                    type="number"
-                    name="minLeadTime"
-                    value={data.minLeadTime || ""}
-                    onChange={handleChange}
-                    placeholder="e.g., 2"
-                    min="0"
-                    className="w-full px-3 py-2 border border-brown-300 rounded-l-md focus:outline-none focus:ring-2 focus:ring-brown-500"
-                  />
-                  <select
-                    name="minLeadTimeUnit"
-                    value={data.minLeadTimeUnit || "days"}
-                    onChange={handleChange}
-                    className="px-3 py-2 border border-brown-300 border-l-0 rounded-r-md focus:outline-none focus:ring-2 focus:ring-brown-500 bg-white"
-                  >
+                  <input type="number" name="minLeadTime" value={data.minLeadTime || ""} onChange={handleChange} placeholder="e.g., 2" min="0" className="w-full px-3 py-2 border border-brown-300 rounded-l-md focus:outline-none focus:ring-2 focus:ring-brown-500" />
+                  <select name="minLeadTimeUnit" value={data.minLeadTimeUnit || "days"} onChange={handleChange} className="px-3 py-2 border border-brown-300 border-l-0 rounded-r-md focus:outline-none focus:ring-2 focus:ring-brown-500 bg-white">
                     <option value="hours">Hours</option>
                     <option value="days">Days</option>
                     <option value="weeks">Weeks</option>
@@ -614,27 +453,11 @@ export default function ProductsServices({ data = {}, updateData }) {
                   </select>
                 </div>
               </div>
-              
               <div>
-                <label className="block text-sm font-medium text-brown-700 mb-1">
-                  Maximum Time
-                </label>
+                <label className="block text-sm font-medium text-brown-700 mb-1">Maximum Time</label>
                 <div className="flex">
-                  <input
-                    type="number"
-                    name="maxLeadTime"
-                    value={data.maxLeadTime || ""}
-                    onChange={handleChange}
-                    placeholder="e.g., 5"
-                    min="0"
-                    className="w-full px-3 py-2 border border-brown-300 rounded-l-md focus:outline-none focus:ring-2 focus:ring-brown-500"
-                  />
-                  <select
-                    name="maxLeadTimeUnit"
-                    value={data.maxLeadTimeUnit || "days"}
-                    onChange={handleChange}
-                    className="px-3 py-2 border border-brown-300 border-l-0 rounded-r-md focus:outline-none focus:ring-2 focus:ring-brown-500 bg-white"
-                  >
+                  <input type="number" name="maxLeadTime" value={data.maxLeadTime || ""} onChange={handleChange} placeholder="e.g., 5" min="0" className="w-full px-3 py-2 border border-brown-300 rounded-l-md focus:outline-none focus:ring-2 focus:ring-brown-500" />
+                  <select name="maxLeadTimeUnit" value={data.maxLeadTimeUnit || "days"} onChange={handleChange} className="px-3 py-2 border border-brown-300 border-l-0 rounded-r-md focus:outline-none focus:ring-2 focus:ring-brown-500 bg-white">
                     <option value="hours">Hours</option>
                     <option value="days">Days</option>
                     <option value="weeks">Weeks</option>
@@ -643,13 +466,11 @@ export default function ProductsServices({ data = {}, updateData }) {
                 </div>
               </div>
             </div>
-            
-            {/* Display summary */}
             {(data.minLeadTime || data.maxLeadTime) && (
               <div className="bg-blue-50 p-3 rounded-md">
                 <p className="text-sm text-blue-700">
                   <strong>Delivery timeframe:</strong> {
-                    data.minLeadTime && data.maxLeadTime 
+                    data.minLeadTime && data.maxLeadTime
                       ? `${data.minLeadTime} ${data.minLeadTimeUnit} - ${data.maxLeadTime} ${data.maxLeadTimeUnit}`
                       : data.minLeadTime
                         ? `Minimum ${data.minLeadTime} ${data.minLeadTimeUnit}`
@@ -661,72 +482,116 @@ export default function ProductsServices({ data = {}, updateData }) {
           </div>
         </FormField>
       </div>
-      
-      {/* Section 3: Target Market */}
+
+      {/* Section 3 */}
       <div className="mb-8 p-6 bg-brown-50 rounded-lg border-2 border-brown-200">
         <h3 className="text-xl font-semibold text-brown-800 mb-4">Section 3: Target Market</h3>
-        
         <FormField label="Target Market" required>
           <textarea
             name="targetMarket"
             value={data.targetMarket || ""}
             onChange={handleChange}
             rows={4}
-            placeholder="e.g., NGO Contracts and youth development programs, Corporate / IAD departments seeking online training delivery, Government departments, education and youth development, NGOs and foundations involved in educational access"
+            placeholder="e.g., NGO Contracts and youth development programs, Corporate / IAD departments seeking online training delivery, Government departments, education and youth development..."
             className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
             required
           />
         </FormField>
       </div>
-      
-      {/* Section 4: Key Clients/Customers */}
+
+      {/* Section 4: Key Clients */}
       <div className="mb-8 p-6 bg-brown-50 rounded-lg border-2 border-brown-200">
-        <h3 className="text-xl font-semibold text-brown-800 mb-4">Section 4: Key Clients/Customers (Optional)</h3>
-        
-        <div className="flex justify-between items-center mb-4">
-          <p className="text-sm text-brown-600">List your notable clients or customers</p>
-          <button
-            type="button"
-            onClick={addClient}
-            className="flex items-center gap-2 px-4 py-2 bg-brown-600 text-white rounded-md hover:bg-brown-700 transition-colors"
+        <h3 className="text-xl font-semibold text-brown-800 mb-1">Section 4: Key Clients / Customers</h3>
+        <p className="text-sm text-brown-500 mb-4">Optional — list your current notable clients and their revenue contribution.</p>
+
+        {/* Revenue total indicator */}
+        {(data.keyClients || []).length > 0 && (
+          <div
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '8px 14px',
+              borderRadius: '6px',
+              marginBottom: '-26px',
+              fontSize: '13px',
+              fontWeight: '600',
+              backgroundColor: revenueOver100 ? '#fff1f0' : totalRevenuePercent === 100 ? '#f0faf0' : '#fdf6ee',
+              border: `1px solid ${revenueOver100 ? '#ffccc7' : totalRevenuePercent === 100 ? '#b7eb8f' : '#d6c4a8'}`,
+              color: revenueOver100 ? '#cf1322' : totalRevenuePercent === 100 ? '#389e0d' : '#8B4513',
+            }}
           >
-            <Plus className="w-4 h-4" />
-            Add Client
-          </button>
+            <span>
+              {revenueOver100
+                ? `⚠️ Total revenue exceeds 100% (${totalRevenuePercent}%)`
+                : totalRevenuePercent === 100
+                  ? `✅ Total revenue allocation: ${totalRevenuePercent}%`
+                  : `Revenue allocated: ${totalRevenuePercent}% of 100%`}
+            </span>
+          </div>
+        )}
+
+        <div className="flex justify-end mb-4">
+      <button
+  type="button"
+  onClick={addClient}
+  className="flex items-center gap-2 px-4 py-2 bg-stone-600 text-white rounded-md hover:bg-stone-700 transition-colors"
+>
+  <Plus className="w-4 h-4" /> Add Client
+</button>
         </div>
 
         <div className="space-y-4">
           {(data.keyClients || []).map((client, index) => (
             <div key={index} className="p-4 bg-white rounded-md border border-brown-200">
-              <div className="flex justify-between items-start mb-3">
+
+              {/* Client header */}
+              <div className="flex justify-between items-center mb-4">
                 <h4 className="text-sm font-semibold text-brown-700">Client {index + 1}</h4>
-                <button
-                  type="button"
-                  onClick={() => removeClient(index)}
-                  className="p-2 text-red-600 hover:bg-red-50 rounded-md transition-colors"
-                >
+                <button type="button" onClick={() => removeClient(index)} className="p-2 text-red-600 hover:bg-red-50 rounded-md transition-colors">
                   <Trash2 className="w-5 h-5" />
                 </button>
               </div>
 
-              <div className="space-y-3">
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+
+                {/* Client name */}
                 <div>
-                  <label className="block text-sm font-medium text-brown-700 mb-1">
-                    Client/Customer Name
-                  </label>
+                  <label className="block text-sm font-medium text-brown-700 mb-1">Client / Customer Name</label>
                   <input
                     type="text"
-                    value={client.name}
+                    value={client.name || ""}
                     onChange={(e) => updateClient(index, "name", e.target.value)}
                     placeholder="e.g., ABC Corporation"
                     className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
                   />
                 </div>
-                
+
+                {/* Revenue % */}
                 <div>
                   <label className="block text-sm font-medium text-brown-700 mb-1">
-                    Industry (Select all that apply)
+                    % of Total Revenue from this Client
                   </label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <input
+                      type="number"
+                      value={client.revenuePercentage || ""}
+                      onChange={(e) => {
+                        const val = Math.min(100, Math.max(0, Number(e.target.value)))
+                        updateClient(index, "revenuePercentage", val === 0 ? "" : String(val))
+                      }}
+                      placeholder="e.g., 25"
+                      min="0"
+                      max="100"
+                      className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
+                    />
+                    <span style={{ fontWeight: '600', color: '#8B4513', flexShrink: 0 }}>%</span>
+                  </div>
+                </div>
+
+                {/* Industry */}
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <label className="block text-sm font-medium text-brown-700 mb-1">Industry (select all that apply)</label>
                   <MultiSelect
                     options={industryOptions}
                     selected={client.industries || []}
@@ -734,6 +599,35 @@ export default function ProductsServices({ data = {}, updateData }) {
                     label="industries"
                   />
                 </div>
+
+                {/* Revenue growth potential */}
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <label className="block text-sm font-medium text-brown-700 mb-2">
+                    Is there potential to increase revenue from this client?
+                  </label>
+                  <YesNoRadio
+                    value={client.revenueGrowthPotential || ""}
+                    onChange={(val) => updateClient(index, "revenueGrowthPotential", val)}
+                  />
+                </div>
+
+                {/* If yes — elaborate */}
+                {client.revenueGrowthPotential === "Yes" && (
+                  <div style={{ gridColumn: '1 / -1' }}>
+                    <label className="block text-sm font-medium text-brown-700 mb-1">
+                      Please elaborate on the growth opportunity
+                    </label>
+                    <textarea
+                      value={client.revenueGrowthDetails || ""}
+                      onChange={(e) => updateClient(index, "revenueGrowthDetails", e.target.value)}
+                      placeholder="e.g., Expanding into new product lines, upcoming contract renewal, additional departments to onboard..."
+                      rows={2}
+                      className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500 resize-vertical"
+                      style={{ fontFamily: 'inherit', fontSize: '14px' }}
+                    />
+                  </div>
+                )}
+
               </div>
             </div>
           ))}
