@@ -3,7 +3,6 @@ import React from "react"
 import FormField from "./FormField"
 import styles from "./catalyst-universal-profile.module.css"
 
-// Core Documents options
 const coreDocumentsOptions = [
   { value: "business_profile", label: "Business Profile / Overview" },
   { value: "company_registration", label: "Company Registration (CIPC)" },
@@ -15,6 +14,25 @@ const coreDocumentsOptions = [
   { value: "previous_program_reports", label: "Previous Program Participation Reports" },
   { value: "recommendation_letters", label: "Recommendation Letters / References" },
   { value: "other", label: "Other" },
+]
+
+// Documents that can be requested from the SME document vault
+const smeVaultDocumentOptions = [
+  { value: "signed_nda", label: "Signed NDA" },
+  { value: "signed_contracts", label: "Signed Contracts" },
+  { value: "registration_certificate", label: "Company Registration Certificate" },
+  { value: "certified_ids", label: "Certified IDs (Directors/Shareholders)" },
+  { value: "share_register", label: "Share Register" },
+  { value: "proof_of_address_vault", label: "Proof of Address" },
+  { value: "tax_clearance_vault", label: "Tax Clearance Certificate" },
+  { value: "vat_certificate", label: "VAT Certificate" },
+  { value: "bbbee_cert_vault", label: "B-BBEE Certificate" },
+  { value: "financial_statements_vault", label: "Financial Statements" },
+  { value: "management_accounts", label: "Management Accounts" },
+  { value: "bank_statements_vault", label: "Bank Statements" },
+  { value: "company_profile_vault", label: "Company Profile" },
+  { value: "org_structure", label: "Organisational Structure" },
+  { value: "client_references", label: "Client References" },
 ]
 
 export default function CatalystApplicationBrief({ data = {}, updateData }) {
@@ -31,14 +49,13 @@ export default function CatalystApplicationBrief({ data = {}, updateData }) {
     updateData({ [category]: newValues })
   }
 
-  // Checkbox styling
   const checkboxStyle = {
-    width: "18px",
-    height: "18px",
+    width: "16px",
+    height: "16px",
     accentColor: "#8b4513",
-    marginRight: "12px",
+    marginRight: "10px",
     cursor: "pointer",
-    borderRadius: "4px",
+    flexShrink: 0,
   }
 
   const checkboxLabelStyle = {
@@ -47,7 +64,7 @@ export default function CatalystApplicationBrief({ data = {}, updateData }) {
     fontSize: "14px",
     color: "#5d4037",
     cursor: "pointer",
-    padding: "8px 0",
+    padding: "6px 0",
     lineHeight: "1.4",
   }
 
@@ -64,10 +81,19 @@ export default function CatalystApplicationBrief({ data = {}, updateData }) {
   const headerStyle = {
     backgroundColor: "#372c27",
     color: "white",
-    padding: "16px",
+    padding: "14px 16px",
     fontWeight: "600",
-    fontSize: "16px",
+    fontSize: "14px",
     textAlign: "left",
+    letterSpacing: "0.04em",
+  }
+
+  const headerSubStyle = {
+    fontSize: "12px",
+    fontWeight: "normal",
+    marginTop: "3px",
+    opacity: "0.85",
+    letterSpacing: "0.02em",
   }
 
   const cellStyle = {
@@ -76,33 +102,26 @@ export default function CatalystApplicationBrief({ data = {}, updateData }) {
     verticalAlign: "top",
   }
 
+  const subHeadingStyle = {
+    fontWeight: "600",
+    fontSize: "13px",
+    marginBottom: "10px",
+    paddingBottom: "6px",
+    borderBottom: "2px solid #dca06d",
+  }
+
+  const requestedVaultDocs = Array.isArray(data.cohortVaultDocuments) ? data.cohortVaultDocuments : []
+
   return (
     <div>
       <h2 className={styles.sectionTitle}>Application Brief</h2>
       <div className={styles.formWrapper}>
-        {/* 1. Overview and Objectives */}
-        <div className={styles.section}>
-          <h3 className={styles.subSectionTitle}>1. Program Overview and Objectives</h3>
-          <p className={styles.helperText}>
-            (A short paragraph on what support you provide (e.g., "We support early-stage South African entrepreneurs
-            with grants, mentorship, and training. Our focus is on scalable businesses with social impact in underserved
-            communities.")
-          </p>
-          <FormField label="">
-            <textarea
-              name="overviewObjectives"
-              value={data.overviewObjectives || ""}
-              onChange={handleChange}
-              rows={4}
-              className={styles.input}
-              placeholder="Enter your program's overview and objectives..."
-            />
-          </FormField>
-        </div>
 
-        {/* 2. Instructions for Applying */}
+        {/* ── Section 1 REMOVED (now lives in Program Brief & Matching Preference) ── */}
+
+        {/* 2. Instructions for Applicants */}
         <div className={styles.section}>
-          <h3 className={styles.subSectionTitle}>2. Instructions for Applicants</h3>
+          <h3 className={styles.subSectionTitle}>1. Instructions for Applicants</h3>
           <FormField label="">
             <textarea
               name="instructionsForApplying"
@@ -117,7 +136,7 @@ export default function CatalystApplicationBrief({ data = {}, updateData }) {
 
         {/* 3. Application Timelines */}
         <div className={styles.section}>
-          <h3 className={styles.subSectionTitle}>3. Application Timelines</h3>
+          <h3 className={styles.subSectionTitle}>2. Application Timelines</h3>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", marginBottom: "1rem" }}>
             <FormField label="Estimated Review Time" required>
               <input
@@ -158,199 +177,127 @@ export default function CatalystApplicationBrief({ data = {}, updateData }) {
 
         {/* 4. Required Documents for Program Application */}
         <div className={styles.section}>
-          <h3 className={styles.subSectionTitle}>4. Required Documents for Program Application</h3>
+          <h3 className={styles.subSectionTitle}>3. Required Documents for Program Application</h3>
           <table style={tableStyle}>
             <thead>
               <tr>
                 <th style={headerStyle}>
-                  Core Documents
-                  <div style={{ fontSize: "13px", fontWeight: "normal", marginTop: "4px", opacity: "0.9" }}>
-                    Required for all applications
-                  </div>
+                  CORE DOCUMENTS
+                  <div style={headerSubStyle}>Required for all applications</div>
                 </th>
                 <th style={headerStyle}>
-                  Additional Documents
-                  <div style={{ fontSize: "13px", fontWeight: "normal", marginTop: "4px", opacity: "0.9" }}>
-                    Based on program type and stage
-                  </div>
+                  ADDITIONAL DOCUMENTS
+                  <div style={headerSubStyle}>Based on program type and stage</div>
                 </th>
               </tr>
             </thead>
             <tbody>
               <tr>
                 <td style={{ ...cellStyle, width: "50%", verticalAlign: "top" }}>
-                  {/* Core Documents Checkboxes */}
-                  <div>
-                    {coreDocumentsOptions.map((option) => (
-                      <label key={option.value} style={checkboxLabelStyle}>
-                        <input
-                          type="checkbox"
-                          checked={(data.coreDocuments || []).includes(option.value)}
-                          onChange={() => handleCheckboxChange("coreDocuments", option.value)}
-                          style={checkboxStyle}
-                        />
-                        <span>{option.label}</span>
-                      </label>
-                    ))}
-                    {(data.coreDocuments || []).includes("other") && (
-                      <div style={{ marginTop: "12px", marginLeft: "30px" }}>
-                        <input
-                          type="text"
-                          name="coreDocumentsOther"
-                          value={data.coreDocumentsOther || ""}
-                          onChange={handleChange}
-                          className={styles.input}
-                          placeholder="Please specify other core documents..."
-                          style={{ width: "100%", maxWidth: "280px" }}
-                        />
-                      </div>
-                    )}
-                  </div>
-                </td>
-                <td style={{ ...cellStyle, width: "50%", verticalAlign: "top" }}>
-                  {/* Grant/Funding Programs */}
-                  <div style={{ marginBottom: "24px" }}>
-                    <div
-                      style={{
-                        fontWeight: "600",
-                        color: "#8b4513",
-                        fontSize: "14px",
-                        marginBottom: "12px",
-                        paddingBottom: "6px",
-                        borderBottom: "2px solid #dca06d",
-                      }}
-                    >
-                      If Grant/Funding Program:
-                    </div>
-                    <div>
-                      <label style={checkboxLabelStyle}>
-                        <input
-                          type="checkbox"
-                          checked={(data.grantDocuments || []).includes("financial_statements")}
-                          onChange={() => handleCheckboxChange("grantDocuments", "financial_statements")}
-                          style={checkboxStyle}
-                        />
-                        <span>Financial Statements</span>
-                      </label>
-                      <label style={checkboxLabelStyle}>
-                        <input
-                          type="checkbox"
-                          checked={(data.grantDocuments || []).includes("bank_statements")}
-                          onChange={() => handleCheckboxChange("grantDocuments", "bank_statements")}
-                          style={checkboxStyle}
-                        />
-                        <span>Bank Statements (3-6 months)</span>
-                      </label>
-                      <label style={checkboxLabelStyle}>
-                        <input
-                          type="checkbox"
-                          checked={(data.grantDocuments || []).includes("bank_details")}
-                          onChange={() => handleCheckboxChange("grantDocuments", "bank_details")}
-                          style={checkboxStyle}
-                        />
-                        <span>Bank Details Confirmation</span>
-                      </label>
-                    </div>
-                  </div>
-
-                  {/* Training/Mentorship Programs */}
-                  <div style={{ marginBottom: "24px" }}>
-                    <div
-                      style={{
-                        fontWeight: "600",
-                        color: "#372c27",
-                        fontSize: "14px",
-                        marginBottom: "12px",
-                        paddingBottom: "6px",
-                        borderBottom: "2px solid #dca06d",
-                      }}
-                    >
-                      If Training/Mentorship Program:
-                    </div>
-                    <div>
-                      <label style={checkboxLabelStyle}>
-                        <input
-                          type="checkbox"
-                          checked={(data.trainingDocuments || []).includes("skills_assessment")}
-                          onChange={() => handleCheckboxChange("trainingDocuments", "skills_assessment")}
-                          style={checkboxStyle}
-                        />
-                        <span>Skills Assessment / CV</span>
-                      </label>
-                      <label style={checkboxLabelStyle}>
-                        <input
-                          type="checkbox"
-                          checked={(data.trainingDocuments || []).includes("business_licenses")}
-                          onChange={() => handleCheckboxChange("trainingDocuments", "business_licenses")}
-                          style={checkboxStyle}
-                        />
-                        <span>Business Licenses / Permits</span>
-                      </label>
-                    </div>
-                  </div>
-
-                  {/* Impact/Social Programs */}
-                  <div style={{ marginBottom: "24px" }}>
-                    <div
-                      style={{
-                        fontWeight: "600",
-                        color: "#2d5a3d",
-                        fontSize: "14px",
-                        marginBottom: "12px",
-                        paddingBottom: "6px",
-                        borderBottom: "2px solid #dca06d",
-                      }}
-                    >
-                      If Impact/Social Program:
-                    </div>
-                    <div>
-                      <label style={checkboxLabelStyle}>
-                        <input
-                          type="checkbox"
-                          checked={(data.impactDocuments || []).includes("impact_measurement")}
-                          onChange={() => handleCheckboxChange("impactDocuments", "impact_measurement")}
-                          style={checkboxStyle}
-                        />
-                        <span>Impact Measurement Reports</span>
-                      </label>
-                    </div>
-                  </div>
-
-                  {/* Additional Documents */}
-                  <div>
-                    <div
-                      style={{
-                        fontWeight: "600",
-                        color: "#666",
-                        fontSize: "14px",
-                        marginBottom: "12px",
-                        paddingBottom: "6px",
-                        borderBottom: "2px solid #ccc",
-                      }}
-                    >
-                      Additional Documents:
-                    </div>
-                    <div>
+                  {coreDocumentsOptions.map((option) => (
+                    <label key={option.value} style={checkboxLabelStyle}>
+                      <input
+                        type="checkbox"
+                        checked={(data.coreDocuments || []).includes(option.value)}
+                        onChange={() => handleCheckboxChange("coreDocuments", option.value)}
+                        style={checkboxStyle}
+                      />
+                      <span>{option.label}</span>
+                    </label>
+                  ))}
+                  {(data.coreDocuments || []).includes("other") && (
+                    <div style={{ marginTop: "10px", marginLeft: "26px" }}>
                       <input
                         type="text"
-                        name="otherAdditionalDocuments"
-                        value={data.otherAdditionalDocuments || ""}
+                        name="coreDocumentsOther"
+                        value={data.coreDocumentsOther || ""}
                         onChange={handleChange}
                         className={styles.input}
-                        placeholder="Please specify any additional documents..."
+                        placeholder="Please specify other core documents..."
                         style={{ width: "100%", maxWidth: "280px" }}
                       />
                     </div>
+                  )}
+                </td>
+                <td style={{ ...cellStyle, width: "50%", verticalAlign: "top" }}>
+
+                  {/* Grant/Funding */}
+                  <div style={{ marginBottom: "20px" }}>
+                    <div style={{ ...subHeadingStyle, color: "#8b4513" }}>If Grant/Funding Program:</div>
+                    {[
+                      { key: "financial_statements", label: "Financial Statements" },
+                      { key: "bank_statements", label: "Bank Statements (3-6 months)" },
+                      { key: "bank_details", label: "Bank Details Confirmation" },
+                    ].map(({ key, label }) => (
+                      <label key={key} style={checkboxLabelStyle}>
+                        <input
+                          type="checkbox"
+                          checked={(data.grantDocuments || []).includes(key)}
+                          onChange={() => handleCheckboxChange("grantDocuments", key)}
+                          style={checkboxStyle}
+                        />
+                        <span>{label}</span>
+                      </label>
+                    ))}
                   </div>
+
+                  {/* Training/Mentorship */}
+                  <div style={{ marginBottom: "20px" }}>
+                    <div style={{ ...subHeadingStyle, color: "#372c27" }}>If Training/Mentorship Program:</div>
+                    {[
+                      { key: "skills_assessment", label: "Skills Assessment / CV" },
+                      { key: "business_licenses", label: "Business Licenses / Permits" },
+                    ].map(({ key, label }) => (
+                      <label key={key} style={checkboxLabelStyle}>
+                        <input
+                          type="checkbox"
+                          checked={(data.trainingDocuments || []).includes(key)}
+                          onChange={() => handleCheckboxChange("trainingDocuments", key)}
+                          style={checkboxStyle}
+                        />
+                        <span>{label}</span>
+                      </label>
+                    ))}
+                  </div>
+
+                  {/* Impact/Social */}
+                  <div style={{ marginBottom: "20px" }}>
+                    <div style={{ ...subHeadingStyle, color: "#2d5a3d" }}>If Impact/Social Program:</div>
+                    <label style={checkboxLabelStyle}>
+                      <input
+                        type="checkbox"
+                        checked={(data.impactDocuments || []).includes("impact_measurement")}
+                        onChange={() => handleCheckboxChange("impactDocuments", "impact_measurement")}
+                        style={checkboxStyle}
+                      />
+                      <span>Impact Measurement Reports</span>
+                    </label>
+                  </div>
+
+                  {/* Additional */}
+                  <div>
+                    <div style={{ ...subHeadingStyle, color: "#666" }}>Additional Documents:</div>
+                    <input
+                      type="text"
+                      name="otherAdditionalDocuments"
+                      value={data.otherAdditionalDocuments || ""}
+                      onChange={handleChange}
+                      className={styles.input}
+                      placeholder="Please specify any additional documents..."
+                      style={{ width: "100%", maxWidth: "280px" }}
+                    />
+                  </div>
+
                 </td>
               </tr>
             </tbody>
           </table>
         </div>
 
-        {/* 5. Evaluation Criteria */}
+       
+        {/* 5. Evaluation / Selection Criteria */}
         <div className={styles.section}>
-          <h3 className={styles.subSectionTitle}>5. Selection Criteria</h3>
+          <h3 className={styles.subSectionTitle}>4. Selection Criteria</h3>
           <FormField label="">
             <textarea
               name="evaluationCriteria"
@@ -363,9 +310,9 @@ export default function CatalystApplicationBrief({ data = {}, updateData }) {
           </FormField>
         </div>
 
-        {/* 6. Impact alignment */}
+        {/* 6. Impact Alignment */}
         <div className={styles.section}>
-          <h3 className={styles.subSectionTitle}>6. Impact Alignment</h3>
+          <h3 className={styles.subSectionTitle}>5. Impact Alignment</h3>
           <FormField label="">
             <textarea
               name="impactAlignment"
@@ -377,6 +324,7 @@ export default function CatalystApplicationBrief({ data = {}, updateData }) {
             />
           </FormField>
         </div>
+
       </div>
     </div>
   )
