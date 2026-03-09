@@ -16,7 +16,7 @@ import { useCapitalStructureData } from "../../../hooks/useFinancialData";
 import {
   getYearsRange,
   CALCULATION_TEXTS,
-} from "../financialConstants";
+} from "../data_utils/financialConstants";
 import {
   calculateTotal,
   formatCurrency,
@@ -28,7 +28,7 @@ import {
   computeCapitalStructureChartData,
   formatSmartNumber,
   getSmartUnit,
-} from "../financialUtils";
+} from "../data_utils/financialUtils";
 
 // ==================== HELPERS ====================
 

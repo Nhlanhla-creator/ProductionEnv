@@ -19,11 +19,11 @@ import {
   getRangeComputed,
   getRangeMonthsMeta,
   getFirstDataMonth,
-} from "../MyGrowthTools/financial/financialUtils";
+} from "../MyGrowthTools/financial/data_utils/financialUtils";
 import {
   EMPTY_BALANCE_SHEET,
   EMPTY_PNL,
-} from "../MyGrowthTools/financial/financialConstants";
+} from "../MyGrowthTools/financial/data_utils/financialConstants";
 
 // ─── Internal helpers ─────────────────────────────────────────────────────────
 

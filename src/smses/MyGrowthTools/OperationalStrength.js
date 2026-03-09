@@ -7,6 +7,7 @@ import { db, auth } from "../../firebaseConfig"
 import { onAuthStateChanged } from "firebase/auth"
 import Sidebar from "smses/Sidebar/Sidebar"
 import Header from "../DashboardHeader/DashboardHeader"
+import { DateRangePicker } from "./financial/components/SharedComponents"
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -140,9 +141,33 @@ const EyeIcon = ({ size = 16 }) => (
 
 // Chart View Modal Component with AI Analysis Section
 const ChartViewModal = ({ isOpen, onClose, kpiData, historicalData = [] }) => {
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
+  const _now = new Date()
+  const _toDefault = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, "0")}`
+  const _fromDefault = (() => {
+    const d = new Date(_now.getFullYear(), _now.getMonth() - 11, 1)
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
+  })()
+  const [filterMode, setFilterMode] = useState("range")
+  const [fromDate, setFromDate] = useState(_fromDefault)
+  const [toDate, setToDate] = useState(_toDefault)
   const [aiAnalysis, setAiAnalysis] = useState("")
   const [generatingAnalysis, setGeneratingAnalysis] = useState(false)
+
+  // Build ordered "Mon YYYY" labels between fromDate and toDate
+  const buildRangeLabels = () => {
+    if (!fromDate || !toDate) return []
+    const allMonths = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
+    const [fy, fm] = fromDate.split("-").map(Number)
+    const [ty, tm] = toDate.split("-").map(Number)
+    const labels = []
+    let y = fy, m = fm
+    while (y < ty || (y === ty && m <= tm)) {
+      labels.push(`${allMonths[m - 1]} ${y}`)
+      m++
+      if (m > 12) { m = 1; y++ }
+    }
+    return labels
+  }
   
   // Brown color shades for charts
   const brownShades = [
@@ -196,25 +221,22 @@ const ChartViewModal = ({ isOpen, onClose, kpiData, historicalData = [] }) => {
   }
   
   if (!isOpen || !kpiData) return null
-  
-  const years = Array.from({ length: 5 }, (_, i) => selectedYear - 2 + i)
-  const months = getMonthsForYear(selectedYear, "month")
-  
-  // Generate chart data with different values for each year
+
+  const rangeLabels = buildRangeLabels()
+
+  // Generate chart data for each label in the selected range
   const generateChartData = () => {
-    const chartData = months.map(() => {
-      // Adjust base value based on selected year
-      const yearMultiplier = 1 + (selectedYear - new Date().getFullYear()) * 0.1
-      const baseValue = kpiData.currentValue || 50
-      const variation = Math.random() * 20 - 10
-      return Math.max(0, parseToTwoDecimals((baseValue * yearMultiplier) + variation))
+    const baseValue = kpiData.currentValue || 50
+    const chartData = rangeLabels.map((_, i) => {
+      const trend = 1 + (i / Math.max(rangeLabels.length - 1, 1)) * 0.05
+      const variation = (Math.random() - 0.5) * baseValue * 0.3
+      return Math.max(0, parseToTwoDecimals(baseValue * trend + variation))
     })
-      const labelsWithYear = months.map(month => `${month} ${selectedYear}`)
 
     return {
-        labels: labelsWithYear,     
-         datasets: [{
-        label: `${kpiData.kpi} - ${selectedYear}`,
+      labels: rangeLabels,
+      datasets: [{
+        label: `${kpiData.kpi}`,
         data: chartData,
         backgroundColor: brownShades[1] + "80", // 80 = 50% opacity
         borderColor: brownShades[0],
@@ -391,30 +413,17 @@ const ChartViewModal = ({ isOpen, onClose, kpiData, historicalData = [] }) => {
         </div>
         
         <div style={{ marginBottom: "20px" }}>
+          <div style={{ marginBottom: "12px" }}>
+            <DateRangePicker
+              filterMode={filterMode}
+              setFilterMode={setFilterMode}
+              fromDate={fromDate}
+              setFromDate={setFromDate}
+              toDate={toDate}
+              setToDate={setToDate}
+            />
+          </div>
           <div style={{ display: "flex", gap: "15px", alignItems: "center", flexWrap: "wrap" }}>
-            <div style={{ display: "flex", gap: "5px", alignItems: "center" }}>
-              <span style={{ color: "#5d4037", fontSize: "14px", fontWeight: "600" }}>Year:</span>
-              <select
-                value={selectedYear}
-                onChange={(e) => setSelectedYear(Number.parseInt(e.target.value))}
-                style={{
-                  padding: "8px 12px",
-                  borderRadius: "6px",
-                  border: "1px solid #d7ccc8",
-                  fontSize: "14px",
-                  color: "#5d4037",
-                  minWidth: "100px",
-                  backgroundColor: "#fff",
-                  cursor: "pointer",
-                }}
-              >
-                {years.map((year) => (
-                  <option key={year} value={year}>
-                    {year}
-                  </option>
-                ))}
-              </select>
-            </div>
             <button
               onClick={generateAiAnalysis}
               disabled={generatingAnalysis}
@@ -1994,6 +2003,7 @@ const OperationalPerformance = () => {
   const [isInvestorView, setIsInvestorView] = useState(false)
   const [viewingSMEId, setViewingSMEId] = useState(null)
   const [viewingSMEName, setViewingSMEName] = useState("")
+
 
   useEffect(() => {
     const investorViewMode = sessionStorage.getItem("investorViewMode")

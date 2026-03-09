@@ -12,13 +12,13 @@ import {
 } from "../components/SharedComponents";
 import UniversalAddDataModal from "../components/UniversalAddDataModal";
 import { useCostAgilityData } from "../../../hooks/useFinancialData";
-import { CALCULATION_TEXTS } from "../financialConstants";
+import { CALCULATION_TEXTS } from "../data_utils/financialConstants";
 import {
   makeFormatValue,
   getRangeLabels,
   getRangeComputed,
   computeCostChartData,
-} from "../financialUtils";
+} from "../data_utils/financialUtils";
 
 const _now        = new Date();
 const _defaultTo  = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, "0")}`;

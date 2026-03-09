@@ -749,11 +749,31 @@ const KPITripleCard = ({ title, actualValue, budgetValue, unit = "number", isPer
   const variance = actualValue - budgetValue
   const variancePercent = budgetValue !== 0 ? (variance / Math.abs(budgetValue)) * 100 : 0
   const colors = circleColors
+
+  // Derive currency scale from the larger of actual/budget so label stays consistent
+  const getCurrencyScale = (val) => {
+    const n = Math.abs(Number.parseFloat(val) || 0)
+    if (n >= 1e9) return { label: "R b", divisor: 1e9 }
+    if (n >= 1e6) return { label: "R m", divisor: 1e6 }
+    if (n >= 1e3) return { label: "R k", divisor: 1e3 }
+    return { label: "R", divisor: 1 }
+  }
+  const currencyScale = getCurrencyScale(Math.max(Math.abs(actualValue), Math.abs(budgetValue)))
+
+  // Unit label shown next to heading only; circles show plain numbers
+  const unitLabel = unit === "currency"
+    ? currencyScale.label
+    : unit === "days" ? "days"
+    : (unit === "percentage" || isPercentage) ? "%"
+    : null
+
+  // Circle values: plain numbers, no unit suffix
   const formatValue = (val) => {
-    if (unit === "currency") return formatCurrency(val)
-    if (unit === "days") return formatDays(val)
-    if (unit === "percentage" || isPercentage) return formatPercentage(val)
-    return formatNumber(val)
+    const n = Number.parseFloat(val) || 0
+    if (unit === "currency") return (n / currencyScale.divisor).toFixed(2)
+    if (unit === "days") return n.toFixed(0)
+    if (unit === "percentage" || isPercentage) return n.toFixed(1)
+    return formatNumber(n)
   }
   return (
     <div style={{ backgroundColor: "#fdfcfb", padding: "20px", borderRadius: "8px", boxShadow: "0 2px 8px rgba(0,0,0,0.1)", marginBottom: "20px", position: "relative", border: "1px solid #e8ddd4" }}>
@@ -767,8 +787,10 @@ const KPITripleCard = ({ title, actualValue, budgetValue, unit = "number", isPer
           <path d="M22 12c0 5.52-4.48 10-10 10S2 17.52 2 12 6.48 2 12 2s10 4.48 10 10z"></path>
         </svg>
       </div>
-      {/* Title */}
-      <h4 style={{ color: "#5d4037", marginBottom: "20px", fontSize: "16px", textAlign: "center", fontWeight: "600" }}>{title}</h4>
+      {/* Title with optional unit label */}
+      <h4 style={{ color: "#5d4037", marginBottom: "20px", fontSize: "16px", textAlign: "center", fontWeight: "600" }}>
+        {title}{unitLabel && ` (${unitLabel})`}
+      </h4>
       {/* Three circles */}
       <div style={{ display: "flex", justifyContent: "space-around", alignItems: "center", marginBottom: "20px" }}>
         <div style={{ textAlign: "center" }}>
@@ -903,11 +925,11 @@ const PipelineVisibility = ({ activeSection, currentUser, isInvestorView, onAddD
         showAddData={!isInvestorView}
         showViewMode={false}
       />
-      <KpiGrid3>
+      <KpiGrid2>
         {renderKPICard("New Leads", "newLeads", calculationTexts.newLeads, "number", "up")}
         {renderKPICard("Sales Velocity", "salesVelocity", calculationTexts.salesVelocity, "days", "down")}
         {renderKPICard("Conversion Rates", "conversionRates", calculationTexts.conversionRates, "percentage", "up")}
-      </KpiGrid3>
+      </KpiGrid2>
       <CalculationModal isOpen={showCalculationModal} onClose={() => setShowCalculationModal(false)} title={selectedCalculation.title} calculation={selectedCalculation.calculation} />
       {showTrendModal && selectedTrendItem && (
         <TrendModal
@@ -1411,12 +1433,12 @@ const DemandSustainability = ({ activeSection, currentUser, isInvestorView, onAd
         showAddData={!isInvestorView}
         showViewMode={false}
       />
-      <div className="grid grid-cols-4 gap-5 mb-7">
+      <KpiGrid2>
         {renderKPICard("Repeat Customer Rate", "repeatCustomerRate", calculationTexts.repeatCustomerRate, "percentage", "up")}
         {renderKPICard("Churn Rate", "churnRate", calculationTexts.churnRate, "percentage", "down")}
         {renderKPICard("Net Retention", "netRetention", calculationTexts.netRetention, "percentage", "up")}
         {renderKPICard("Campaign ROI", "campaignROI", calculationTexts.campaignROI, "percentage", "up")}
-      </div>
+      </KpiGrid2>
 
       {/* Campaign Table */}
       <div className="bg-[#f5f0eb] p-[15px] rounded-md mb-5">

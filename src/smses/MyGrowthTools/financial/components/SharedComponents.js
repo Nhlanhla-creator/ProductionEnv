@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { Bar } from "react-chartjs-2";
-import { formatPercentage } from "../financialUtils";
+import { formatPercentage } from "../data_utils/financialUtils";
 
 // ==================== EYE ICON ====================
 export const EyeIcon = ({ onClick }) => (
@@ -475,7 +475,7 @@ export const TrendModal = ({
               {item.name} – Trend Analysis
             </h3>
             <p className="text-xs text-lightBrown mt-1">
-              Last 12 months — {labels[0]} to {labels.at(-1)}
+              From {labels[0]} to {labels.at(-1)}
             </p>
           </div>
           <button

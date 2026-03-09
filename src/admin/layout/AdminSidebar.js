@@ -194,22 +194,10 @@ function AdminSidebar() {
           route: "/admin/notion/product-platform",
         },
         {
-          id: "tech-architecture",
-          label: "Tech Architecture",
-          icon: <Cpu size={16} />,
-          route: "/admin/notion/tech-architecture",
-        },
-        {
           id: "delivery",
           label: "Delivery",
           icon: <Truck size={16} />,
           route: "/admin/notion/delivery",
-        },
-        {
-          id: "qa-testing",
-          label: "QA & Testing",
-          icon: <Bug size={16} />,
-          route: "/admin/notion/qa-testing",
         },
         {
           id: "operations-internal",

@@ -854,8 +854,8 @@ function App() {
         <Route path="/admin/notion/growth" element={withAdminProtection(Growth)} />
         <Route path="/admin/notion/partners-ecosystem" element={withAdminProtection(PartnersEcosystem)} />
         <Route path="/admin/notion/product-platform" element={withAdminProtection(ProductPlatform)} />
-        <Route path="/admin/notion/tech-architecture" element={withAdminProtection(TechArchitecture)} />
-        <Route path="/admin/notion/qa-testing" element={withAdminProtection(QATesting)} />
+        <Route path="/admin/notion/tech-architecture" element={<Navigate to="/admin/notion/product-platform" replace />} />
+        <Route path="/admin/notion/qa-testing" element={<Navigate to="/admin/notion/product-platform" replace />} />
         <Route path="/admin/notion/operations-internal" element={withAdminProtection(OperationsInternal)} />
         <Route path="/admin/notion/users-marketplace" element={withAdminProtection(UsersMarketplace)} />
         <Route path="/admin/notion/pilots-case-studies" element={withAdminProtection(PilotsCaseStudies)} />
