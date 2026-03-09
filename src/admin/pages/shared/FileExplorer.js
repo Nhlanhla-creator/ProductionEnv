@@ -6,7 +6,8 @@ import {
   FolderOpen,
   FileText,
   File,
-  ClipboardList
+  ClipboardList,
+  Table
 } from 'lucide-react';
 
 const FileExplorerItem = memo(({
@@ -25,14 +26,14 @@ const FileExplorerItem = memo(({
   const isExpanded  = expandedFolders[pathKey];
   const isSelected  = selectedPath?.join(' > ') === pathKey;
   const isFolder    = item.type === 'folder';
-  const isChecklist = item.type === 'checklist';
+  const isChecklist  = item.type === 'checklist';
+  const isQATable    = item.type === 'qa-table';
   const hasContent  = contentStatus[pathKey];
 
   const handleClick = () => {
     if (isFolder) {
       onToggleFolder(currentPath);
     } else {
-      // file or checklist — both open the right panel
       onSelectItem(currentPath, item);
     }
   };
@@ -77,6 +78,8 @@ const FileExplorerItem = memo(({
             : <Folder    size={18} color={isSelected ? 'white' : 'var(--primary-brown)'} />
         ) : isChecklist ? (
           <ClipboardList size={18} color={isSelected ? 'white' : '#a67c52'} />
+        ) : isQATable ? (
+          <Table size={18} color={isSelected ? 'white' : '#a67c52'} />
         ) : item.type === 'text' ? (
           <FileText size={18} color={isSelected ? 'white' : 'var(--accent-brown)'} />
         ) : (
@@ -89,7 +92,7 @@ const FileExplorerItem = memo(({
         </span>
 
         {/* Dot indicator for file content */}
-        {!isFolder && !isChecklist && hasContent && (
+        {!isFolder && !isChecklist && !isQATable && hasContent && (
           <div style={{ width: 6, height: 6, borderRadius: '50%', background: isSelected ? 'white' : 'var(--primary-brown)' }} />
         )}
       </div>

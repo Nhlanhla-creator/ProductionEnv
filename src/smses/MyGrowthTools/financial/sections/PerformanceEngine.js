@@ -14,7 +14,7 @@ import {
 } from "../components/SharedComponents";
 import UniversalAddDataModal from "../components/UniversalAddDataModal";
 import { usePerformanceEngineData } from "../../../hooks/useFinancialData";
-import { CALCULATION_TEXTS } from "../financialConstants";
+import { CALCULATION_TEXTS } from "../data_utils/financialConstants";
 import {
   aggregateDataForView,
   makeFormatValue,
@@ -24,7 +24,7 @@ import {
   formatSmartNumber,
   getSmartUnit,
   getDefaultRange,
-} from "../financialUtils";
+} from "../data_utils/financialUtils";
 
 // Default range helpers (same as other sections)
 const _now        = new Date();

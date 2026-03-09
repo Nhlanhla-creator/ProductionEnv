@@ -13,7 +13,7 @@ import {
 } from "../components/SharedComponents";
 import UniversalAddDataModal from "../components/UniversalAddDataModal";
 import { useLiquidityData } from "../../../hooks/useFinancialData";
-import { CALCULATION_TEXTS, getYearsRange } from "../financialConstants";
+import { CALCULATION_TEXTS, getYearsRange } from "../data_utils/financialConstants";
 import {
   makeFormatValue,
   getRangeLabels,
@@ -22,7 +22,7 @@ import {
   formatSmartNumber,
   getSmartUnit,
   formatCurrency,
-} from "../financialUtils";
+} from "../data_utils/financialUtils";
 
 const _now        = new Date();
 const _defaultTo  = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, "0")}`;
