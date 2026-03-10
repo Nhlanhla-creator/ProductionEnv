@@ -4,16 +4,15 @@ import FormField from "./form-field";
 
 const OperationsOverview = ({ data, updateData }) => {
   const handleInputChange = (field, value) => {
-    updateData("operationsOverview", { [field]: value });
+    updateData({ [field]: value });
   };
 
-  // Custom radio group — bypasses any CSS that suppresses native radio inputs
+  // Proper radio group with actual input elements
   const renderRadioGroup = (name, currentValue) => (
     <div style={{ display: 'flex', gap: '24px', marginTop: '6px' }}>
       {["yes", "no"].map((val) => (
         <label
           key={val}
-          onClick={() => handleInputChange(name, val)}
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -25,6 +24,20 @@ const OperationsOverview = ({ data, updateData }) => {
             color: '#3d2b1f',
           }}
         >
+          <input
+            type="radio"
+            name={name}
+            value={val}
+            checked={currentValue === val}
+            onChange={(e) => handleInputChange(name, e.target.value)}
+            style={{
+              position: 'absolute',
+              opacity: 0,
+              width: 0,
+              height: 0,
+              margin: 0,
+            }}
+          />
           <div
             style={{
               width: '18px',

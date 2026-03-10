@@ -37,10 +37,9 @@ export function LeadershipScoreCard({ styles, profileData, onScoreUpdate, apiKey
 
   const parseAiEvaluationScores = (text) => {
     const categories = {
-      leadership_experience: ["Leadership Experience"],
-      team_management: ["Team Management"],
-      leadership_recognition: ["Recognition & Education"],
-      team_leadership: ["Team & Leadership"]
+      leadership_credentials: ["Leadership Credentials"],
+      leadership_structure: ["Leadership Structure"],
+      leadership_behaviour: ["Leadership Behaviour"]
     }
 
     const cleanedText = text.replace(/\*\*(.*?)\*\*/g, "$1")
@@ -308,108 +307,79 @@ INPUT DATA:
 ${evaluationData}
 
 INSTRUCTIONS:
-For each of the 4 categories below, provide:
-
-1. Score (0-5) based ONLY on provided data
-2. Evidence line citing specific KPI values
-3. Confidence level (High/Medium/Low)
-4. Rationale explaining how data supports this score
-5. For "How to Improve" - CRITICAL: Follow the EXACT format below with platform-specific actions
-
-IMPROVEMENT ACTIONS RULES - CRITICAL:
-For each category provide improvements in this exact format:
-
-**How to Improve:**
-- → [Platform Section Name]: [specific action]
-- → [Platform Section Name]: [specific action]
-- → [Platform Section Name]: [specific action]
-- 💡 [General real-world guidance for obtaining/creating missing items if critical gaps exist]
-- 💡 [Second general guidance point if needed]
-
-PLATFORM ACTIONS REFERENCE:
-
-Leadership Credentials platform actions (Directors):
-- Ownership & Management section → add directors with their positions
-- Ownership & Management section → upload CVs for each director
-- Ownership & Management section → add LinkedIn profiles for directors
-- Ownership & Management section → complete executive/non-executive designation
-- Ownership & Management section → add nationality for directors
-- Ownership & Management section → complete demographic data for directors (race, gender, youth, disability)
-- Documents section → upload certifications, qualifications, awards
-- Documents section → upload professional memberships and accreditations
-
-Leadership Structure platform actions (Executive Management):
-- Ownership & Management section → add executive team members with their positions
-- Ownership & Management section → upload CVs for each executive
-- Ownership & Management section → add LinkedIn profiles for executives
-- Ownership & Management section → complete demographic data for executives (race, gender, youth, disability)
-- Ownership & Management section → add department information for executives
-- Enterprise Readiness section → confirm leadership team structure and roles
-
-Leadership Behaviour platform actions:
-- Leadership Behaviour section → complete ambition assessment questions
-- Leadership Behaviour section → complete commitment assessment questions
-- Leadership Behaviour section → complete learning mindset assessment questions
-- Leadership Behaviour section → complete execution discipline assessment questions
-- Enterprise Readiness section → provide evidence of strategic planning and execution
+Score each of the 3 categories below based ONLY on the provided data.
 
 SCORING RUBRIC (use strictly):
 - 0 = No evidence or very poor
-- 1 = Minimal/poor evidence
+- 1 = Minimal/poor evidence  
 - 2 = Below average
 - 3 = Average/acceptable
 - 4 = Good/strong evidence
 - 5 = Excellent/outstanding
 
+IMPORTANT: Leadership Credentials and Leadership Structure scores must be derived 
+from the behaviour band only (BIG Score column). Leadership Behaviour is scored 
+directly from the Q1–Q6 total out of 30.
+
+SCORING RULES:
+- Leadership Behaviour Score (0-5): Map Total Behaviour Score directly:
+  26-30 = 5 (Scaler), 21-25 = 4 (Builder), 16-20 = 3 (Visionary), 
+  11-15 = 2 (Survivalist), 6-10 = 1 (Passenger), 0-5 = 0
+- Leadership Credentials Score (0-5): Based on the leadership band signal - 
+  high behaviour scores indicate credentialed, experienced leadership
+- Leadership Structure Score (0-5): Based on the leadership band signal - 
+  high behaviour scores indicate well-structured management teams
+
 OUTPUT FORMAT - YOU MUST FOLLOW THIS EXACTLY:
 
 ### 1. Leadership Credentials
 **Score:** [0-5]
-**Evidence:** [Cite specific KPI: Directors Count = X, CVs uploaded = Y, LinkedIn profiles = Z, Certifications Count = W, Professional track record evidence]
+**Evidence:** [Cite: Leadership Band = X, Total Behaviour Score = Y/30, BIG Score = Z]
 **Confidence:** [High/Medium/Low]
-**Rationale:** [2-3 sentences explaining how the data supports this score based on directors' experience, professional track record, education, certifications and recognition]
+**Rationale:** [2-3 sentences based solely on the leadership behaviour band and what it implies about director credentials and track record]
 **How to Improve:** 
-- → [Platform Section Name]: [specific action with measurable goal]
-- → [Platform Section Name]: [specific action with measurable goal]
-- → [Platform Section Name]: [specific action with measurable goal]
-- 💡 [General real-world guidance for obtaining/creating missing items if critical gaps exist]
+- → Profile Questions section: answer all 6 leadership behaviour questions fully
+- → Profile Questions section: aim for higher motivation and ambition answers (Q2, Q3)
+- 💡 Directors with stronger credentials typically demonstrate scale ambition and board-level governance
+- 💡 Professional certifications and industry recognition correlate with higher leadership bands
 
 ### 2. Leadership Structure
 **Score:** [0-5]
-**Evidence:** [Cite specific KPI: Executives Count = X, CVs uploaded = Y, LinkedIn profiles = Z, Positions filled = W, Team composition details]
+**Evidence:** [Cite: Leadership Band = X, Total Behaviour Score = Y/30, Governance answer = Q6 response]
 **Confidence:** [High/Medium/Low]
-**Rationale:** [2-3 sentences explaining how the data supports this score based on executive management capability, team composition and leadership roles]
+**Rationale:** [2-3 sentences based on Q6 governance structure and what the band implies about team composition and management roles]
 **How to Improve:** 
-- → [Platform Section Name]: [specific action with measurable goal]
-- → [Platform Section Name]: [specific action with measurable goal]
-- → [Platform Section Name]: [specific action with measurable goal]
-- 💡 [General real-world guidance for obtaining/creating missing items if critical gaps exist]
+- → Profile Questions section: answer Q6 governance question to reflect actual management structure
+- → Profile Questions section: answer Q1 owner structure to clarify leadership model
+- 💡 Moving from founder-only decisions (Q6a) to board governance (Q6d) indicates stronger structure
+- 💡 A Founder + management team structure (Q1b) signals better leadership distribution
 
 ### 3. Leadership Behaviour
 **Score:** [0-5]
-**Evidence:** [Cite specific indicators: Ambition indicators, Commitment evidence, Learning mindset demonstration, Execution discipline examples]
+**Evidence:** [Cite: Total Behaviour Score = X/30, Band = Y, Q1=X pts, Q2=X pts, Q3=X pts, Q4=X pts, Q5=X pts, Q6=X pts]
 **Confidence:** [High/Medium/Low]
-**Rationale:** [2-3 sentences explaining how the data supports this score based on ambition, commitment, learning mindset and execution discipline]
+**Rationale:** [2-3 sentences explaining the score based on the 6 profile questions: owner structure, motivation, growth ambition, founder involvement, openness to advice, and governance]
 **How to Improve:** 
-- → [Platform Section Name]: [specific action with measurable goal]
-- → [Platform Section Name]: [specific action with measurable goal]
-- → [Platform Section Name]: [specific action with measurable goal]
-- 💡 [General real-world guidance for obtaining/creating missing items if critical gaps exist]
+- → Profile Questions section: answer Q2 with scale ambition (c = 5pts) instead of lower options
+- → Profile Questions section: answer Q3 with significant expansion or build to sell (c/d = 4-5pts)
+- → Profile Questions section: answer Q5 with "very open" to advice (a = 5pts)
+- 💡 The fastest score improvement comes from Q2 (motivation) and Q3 (growth ambition)
+- 💡 Governance structure (Q6) moving to board-led adds maximum points
 
 ### Overall Assessment
 **Total Score:** [X]/20
 **Normalized to 100:** [Y]%
-**Leadership Band:** [Band Name - based on the leadership behaviour assessment below]
+**Leadership Band:** [Scaler/Builder/Visionary/Survivalist/Passenger - based on behaviour score]
 **Overall Confidence:** [High/Medium/Low]
-**Evidence Summary:** [Brief summary of key data points supporting overall score]
-**Final Analysis:** [Brief overall assessment with key recommendations, referencing specific data points]
+**Evidence Summary:** [Brief summary referencing only the Q1-Q6 scores and total behaviour score]
+**Final Analysis:** [Brief overall assessment referencing only the behaviour band and specific question answers]
 
 ### Leadership Behaviour Score Interpretation
-**Scaler (26–30):** High ambition + high execution - Demonstrates exceptional drive combined with proven ability to execute effectively
-**Builder (21–25):** High commitment + strong execution - Shows strong dedication and consistent delivery of results
-**Visionary (16–20):** High ambition but weaker execution - Ambitious vision but needs to strengthen execution capability
-**Survivalist (11–15):** Moderate commitment, limited ambition - Operating with minimal strategic direction or growth focus
-**Passenger (6–10):** Low commitment / passive leadership - Limited engagement or contribution to organizational growth`
+**Scaler (26–30):** High ambition + high execution
+**Builder (21–25):** High commitment + strong execution
+**Visionary (16–20):** High ambition but weaker execution
+**Survivalist (11–15):** Moderate commitment, limited ambition
+**Passenger (6–10):** Low commitment / passive leadership`
 
       const result = await sendMessageToChatGPT(combinedMessage)
 
@@ -443,61 +413,84 @@ OUTPUT FORMAT - YOU MUST FOLLOW THIS EXACTLY:
   const prepareDataForAiEvaluation = (data) => {
     let evaluationData = ""
 
-    // Leadership Credentials - DIRECTORS from ownership-management
-    evaluationData += `\n=== LEADERSHIP CREDENTIALS (DIRECTORS) ===\n`
-    const directors = data?.ownershipManagement?.directors || []
-    evaluationData += `Directors Count: ${directors.length}\n`
-    
-    // Detailed director information
-    directors.forEach((director, index) => {
-      evaluationData += `\n--- Director ${index + 1} ---\n`
-      evaluationData += `Name: ${director.name || "Not specified"}\n`
-      evaluationData += `Position: ${director.position === "Other" ? director.customPosition || "Other" : director.position || "Not specified"}\n`
-      evaluationData += `Executive Type: ${director.execType || "Not specified"}\n`
-      evaluationData += `LinkedIn: ${director.linkedin ? "Provided" : "Not provided"}\n`
-      evaluationData += `CV Uploaded: ${director.cv ? "Yes" : "No"}\n`
-      evaluationData += `Nationality: ${director.nationality || "Not specified"}\n`
-    })
+    const behaviour = data?.ownershipManagement?.businessLeadership || {}
 
-    evaluationData += `\nDirectors with LinkedIn: ${directors.filter(d => d?.linkedin).length || 0}\n`
-    evaluationData += `Directors with CVs: ${directors.filter(d => d?.cv).length || 0}\n`
-
-    // Leadership Structure - EXECUTIVES from ownership-management
-    evaluationData += `\n=== LEADERSHIP STRUCTURE (EXECUTIVES) ===\n`
-    const executives = data?.ownershipManagement?.executives || []
-    evaluationData += `Executives Count: ${executives.length}\n`
-    
-    // Detailed executive information
-    executives.forEach((executive, index) => {
-      evaluationData += `\n--- Executive ${index + 1} ---\n`
-      evaluationData += `Name: ${executive.name || "Not specified"}\n`
-      evaluationData += `Position: ${executive.position === "Other" ? executive.customPosition || "Other" : executive.position || "Not specified"}\n`
-      evaluationData += `Department: ${executive.department || "Not specified"}\n`
-      evaluationData += `LinkedIn: ${executive.linkedin ? "Provided" : "Not provided"}\n`
-      evaluationData += `CV Uploaded: ${executive.cv ? "Yes" : "No"}\n`
-      evaluationData += `Nationality: ${executive.nationality || "Not specified"}\n`
-    })
-
-    evaluationData += `\nExecutives with LinkedIn: ${executives.filter(e => e?.linkedin).length || 0}\n`
-    evaluationData += `Executives with CVs: ${executives.filter(e => e?.cv).length || 0}\n`
-
-    // Recognition & Education - CERTIFICATIONS (part of Leadership Credentials)
-    evaluationData += `\n=== RECOGNITION & EDUCATION (CERTIFICATIONS) ===\n`
-    evaluationData += `Certifications Count: ${data?.documents?.otherCerts?.length || 0}\n`
-    
-    if (data?.documents?.otherCerts?.length > 0) {
-      evaluationData += `Certifications Available: Yes\n`
-      data?.documents?.otherCerts?.forEach((cert, index) => {
-        evaluationData += `Cert ${index + 1}: ${cert.name || "Unnamed"} (${cert.issuedDate || "Date unknown"})\n`
-      })
-    } else {
-      evaluationData += `Certifications Available: No\n`
+    const behaviourScoring = {
+      ownerLed: {
+        founder_led: 3,
+        founder_plus_management: 5,
+        professionally_managed: 4,
+      },
+      primaryMotivation: {
+        secure_income: 1,
+        stable_long_term: 3,
+        scale_nationally: 5,
+        build_to_sell: 4,
+        procurement_contracts: 2,
+      },
+      growthAmbition: {
+        maintain_current: 1,
+        moderate_growth: 3,
+        significant_expansion: 5,
+        build_to_sell_investors: 4,
+      },
+      founderFullTime: {
+        yes_full_time: 5,
+        yes_multiple_businesses: 3,
+        no_not_daily: 1,
+      },
+      opennessToAdvice: {
+        very_open: 5,
+        open_evaluate: 4,
+        sometimes_open: 3,
+        prefer_own: 2,
+      },
+      decisionGovernance: {
+        founder_all: 2,
+        founder_with_team: 4,
+        management_founder_oversight: 5,
+        board_led: 5,
+      },
     }
 
-    // Leadership Behaviour - Placeholder for now (will be updated when behaviour questions are implemented)
-    evaluationData += `\n=== LEADERSHIP BEHAVIOUR ===\n`
-    evaluationData += `Note: Leadership behaviour assessment will be based on ambition, commitment, learning mindset, and execution discipline questions\n`
-    evaluationData += `Current Behaviour Data Available: Limited - awaiting completion of leadership behaviour assessment\n`
+    const q1Score = behaviourScoring.ownerLed[behaviour.ownerLed] ?? 0
+    const q2Score = behaviourScoring.primaryMotivation[behaviour.primaryMotivation] ?? 0
+    const q3Score = behaviourScoring.growthAmbition[behaviour.growthAmbition] ?? 0
+    const q4Score = behaviourScoring.founderFullTime[behaviour.founderFullTime] ?? 0
+    const q5Score = behaviourScoring.opennessToAdvice[behaviour.opennessToAdvice] ?? 0
+    const q6Score = behaviourScoring.decisionGovernance[behaviour.decisionGovernance] ?? 0
+    const totalBehaviourScore = q1Score + q2Score + q3Score + q4Score + q5Score + q6Score
+
+    const getBehaviourBand = (score) => {
+      if (score >= 26) return "Scaler"
+      if (score >= 21) return "Builder"
+      if (score >= 16) return "Visionary"
+      if (score >= 11) return "Survivalist"
+      if (score >= 6) return "Passenger"
+      return "Passenger"
+    }
+
+    const getBIGScore = (score) => {
+      if (score >= 26) return 5
+      if (score >= 21) return 4
+      if (score >= 16) return 3
+      if (score >= 11) return 2
+      if (score >= 6) return 1
+      return 0
+    }
+
+    evaluationData += `=== LEADERSHIP BEHAVIOUR ASSESSMENT (Q1–Q6) ===\n`
+    evaluationData += `Q1 Owner Structure: ${behaviour.ownerLed || "Not answered"} → ${q1Score} pts\n`
+    evaluationData += `Q2 Motivation: ${behaviour.primaryMotivation || "Not answered"} → ${q2Score} pts\n`
+    evaluationData += `Q3 Growth Ambition: ${behaviour.growthAmbition || "Not answered"} → ${q3Score} pts\n`
+    evaluationData += `Q4 Founder Involvement: ${behaviour.founderFullTime || "Not answered"} → ${q4Score} pts\n`
+    evaluationData += `Q5 Openness to Advice: ${behaviour.opennessToAdvice || "Not answered"} → ${q5Score} pts\n`
+    evaluationData += `Q6 Governance: ${behaviour.decisionGovernance || "Not answered"} → ${q6Score} pts\n`
+    evaluationData += `\nTotal Behaviour Score: ${totalBehaviourScore}/30\n`
+    evaluationData += `Leadership Band: ${getBehaviourBand(totalBehaviourScore)}\n`
+    evaluationData += `BIG Score: ${getBIGScore(totalBehaviourScore)}/5\n`
+    evaluationData += `\nNOTE: All three category scores (Credentials, Structure, Behaviour) must be \n`
+    evaluationData += `derived from this behaviour data only. No other data sources exist.\n`
 
     return evaluationData
   }
@@ -513,7 +506,7 @@ OUTPUT FORMAT - YOU MUST FOLLOW THIS EXACTLY:
   // UPDATED WEIGHTINGS based on new structure
   const calculateLeadershipScore = (data, aiEvaluationResult = "") => {
     console.log("Calculating leadership score with AI result:", !!aiEvaluationResult)
-    const weightings = { 
+    const weightings = {
       credentials: 40,      // Leadership Credentials - Directors' experience, track record, education, certifications, recognition
       structure: 30,        // Leadership Structure - Executive management capability, team composition, leadership roles
       behaviour: 30         // Leadership Behaviour - Ambition, Commitment, Learning Mindset, Execution Discipline
@@ -523,14 +516,14 @@ OUTPUT FORMAT - YOU MUST FOLLOW THIS EXACTLY:
     const ai = parsed?.scores || parsed || {}
 
     const keyMap = {
-      credentials: ["leadership_experience", "leadership_recognition"],
-      structure: ["team_management"],
-      behaviour: ["team_leadership"],
+      credentials: ["leadership_credentials"],
+      structure: ["leadership_structure"],
+      behaviour: ["leadership_behaviour"],
     }
 
     const categoryNames = {
       credentials: "Leadership Credentials",
-      structure: "Leadership Structure", 
+      structure: "Leadership Structure",
       behaviour: "Leadership Behaviour"
     }
 
