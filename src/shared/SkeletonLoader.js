@@ -26,7 +26,7 @@ export default function SkeletonLoader() {
     <div className="flex h-screen w-screen overflow-hidden bg-backgroundBrown font-serif">
 
       {/* ── SIDEBAR ── */}
-      <aside className="flex flex-col items-center py-5 px-3 gap-5 w-[280px] shrink-0 bg-sidebar-gradient shadow-2xl z-10">
+      <aside className="flex flex-col items-center py-5 px-3 gap-5 w-16 shrink-0 bg-sidebar-gradient shadow-2xl z-10">
         {/* Logo mark */}
         <div className={`w-10 h-10 rounded-xl bg-shimmer-dark bg-shimmer ${delayClass(0)} mb-2`} />
 
