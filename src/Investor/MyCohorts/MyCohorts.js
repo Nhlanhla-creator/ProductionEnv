@@ -2,7 +2,7 @@
 import { useState, useRef, useEffect } from "react"
 import { collection, query, where, getDocs, doc, getDoc } from "firebase/firestore"
 import { db, auth } from "../../firebaseConfig"
-import { Trophy, Users, TrendingUp, Building, MapPin, DollarSign, Calendar, Eye, Wrench, Loader, RefreshCw, X, BarChart3, ChevronDown } from "lucide-react"
+import { Trophy, Users, TrendingUp, Building, MapPin, DollarSign, Calendar, Eye, Wrench, Loader, RefreshCw, X, BarChart3 } from "lucide-react"
 import { useNavigate } from "react-router-dom"
 import Upsell from "../../components/Upsell/Upsell"
 import useSubscriptionPlan from "../../hooks/useSubscriptionPlan" 
@@ -54,7 +54,6 @@ function MyCohorts() {
   const navigate = useNavigate()
 
   useEffect(() => {
-    // Note: do NOT fetch cohorts here. We wait for subscription check first to prioritize the upsell or subscription UI.
     // Check sidebar state from localStorage or a global state
     const checkSidebarState = () => {
       const sidebarState = localStorage.getItem('sidebarOpen')
@@ -223,11 +222,13 @@ function MyCohorts() {
     setRefreshing(false)
   }
 
+  // UPDATED: Added origin tracking for Investor view
   const handleViewGrowthSuite = (cohort) => {
     sessionStorage.setItem('viewingSMEId', cohort.smeId)
     sessionStorage.setItem('viewingSMEName', cohort.smeName)
     sessionStorage.setItem('investorViewMode', 'true')
-    window.location.href = '/Strategy'
+    sessionStorage.setItem('viewOrigin', 'investor') // Set origin as investor
+    window.location.href = '/overall-company-health'
   }
 
   const handleViewDetails = (cohort) => {

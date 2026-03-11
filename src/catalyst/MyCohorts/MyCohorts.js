@@ -1,6 +1,6 @@
 "use client"
 import { useState, useEffect } from "react"
-import { Trophy, Users, TrendingUp, Building, MapPin, DollarSign, Calendar, Eye, Wrench, RefreshCw, X, BarChart3 } from "lucide-react"
+import { Trophy, Users, TrendingUp, Building, MapPin, DollarSign, Calendar, Eye, Wrench, Loader, RefreshCw, X, BarChart3 } from "lucide-react"
 import { collection, query, where, getDocs, doc, getDoc } from "firebase/firestore"
 import { db, auth } from "../../firebaseConfig"
 
@@ -255,7 +255,6 @@ function MyCohorts() {
                 guarantees: guarantees,
                 servicesRequired: data.servicesRequired || "Not specified",
               },
-              // Additional fields from successful deals
               guarantees: guarantees,
               servicesRequired: data.servicesRequired || "Not specified",
               applicationDate: data.createdAt ? new Date(data.createdAt.toDate()).toLocaleDateString() : "Not specified",
@@ -283,11 +282,13 @@ function MyCohorts() {
     setRefreshing(false)
   }
 
+  // UPDATED: Added origin tracking for Catalyst view
   const handleViewGrowthSuite = (cohort) => {
     sessionStorage.setItem('viewingSMEId', cohort.smeId)
     sessionStorage.setItem('viewingSMEName', cohort.smeName)
     sessionStorage.setItem('investorViewMode', 'true')
-    window.location.href = '/Strategy'
+    sessionStorage.setItem('viewOrigin', 'catalyst') // Set origin as catalyst
+    window.location.href = '/overall-company-health'
   }
 
   const handleViewDetails = (cohort) => {

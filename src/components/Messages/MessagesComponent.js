@@ -10,6 +10,7 @@ import {
   getDoc,
   addDoc,
   updateDoc,
+  getDocs,
 } from "firebase/firestore";
 import { getAuth } from "firebase/auth";
 import { db } from "../../firebaseConfig";
@@ -390,6 +391,81 @@ const MessagesComponent = ({ config = {} }) => {
       attachments: [...prev.attachments, ...files.map((file) => file.name)],
     }));
   };
+
+  // In your MessagesComponent, add this function to handle termsheet acceptance
+
+const handleTermsheetResponse = async (messageId, accepted, termsheetUrl) => {
+  const auth = getAuth();
+  const user = auth.currentUser;
+  if (!user) return;
+
+  try {
+    // Update the message to show it's been responded to
+    await updateDoc(doc(db, "messages", messageId), {
+      termsheetResponse: {
+        accepted: accepted,
+        respondedAt: new Date().toISOString(),
+        respondedBy: user.uid
+      }
+    });
+
+    // Also update the application with the termsheet status
+    const messageDoc = await getDoc(doc(db, "messages", messageId));
+    const messageData = messageDoc.data();
+    
+    if (messageData.applicationId) {
+      // Update investor application
+      const investorAppRef = doc(db, "investorApplications", messageData.applicationId);
+      await updateDoc(investorAppRef, {
+        termsheetStatus: accepted ? "accepted" : "declined",
+        termsheetRespondedAt: new Date().toISOString(),
+        termsheetUrl: termsheetUrl
+      });
+
+      // Update SME application
+      const smeQuery = query(
+        collection(db, "smeApplications"),
+        where("smeId", "==", user.uid),
+        where("funderId", "==", messageData.from)
+      );
+      const smeSnapshot = await getDocs(smeQuery);
+      
+      if (!smeSnapshot.empty) {
+        const smeDocRef = smeSnapshot.docs[0].ref;
+        await updateDoc(smeDocRef, {
+          termsheetStatus: accepted ? "accepted" : "declined",
+          termsheetRespondedAt: new Date().toISOString(),
+          termsheetUrl: termsheetUrl
+        });
+      }
+    }
+
+    // Send confirmation message to investor
+    await addDoc(collection(db, "messages"), {
+      from: user.uid,
+      fromName: "SME",
+      to: messageData.from,
+      subject: `Termsheet ${accepted ? 'Accepted' : 'Declined'}: ${messageData.subject}`,
+      content: `The termsheet has been ${accepted ? 'accepted' : 'declined'}.${!accepted ? ' Please find our feedback below.' : ''}`,
+      date: new Date().toISOString(),
+      type: "inbox",
+      read: false,
+      applicationId: messageData.applicationId,
+      termsheetResponse: {
+        accepted: accepted,
+        respondedAt: new Date().toISOString()
+      }
+    });
+
+    alert(`Termsheet ${accepted ? 'accepted' : 'declined'} successfully!`);
+    
+    // Refresh messages
+    window.location.reload();
+  } catch (error) {
+    console.error("Error responding to termsheet:", error);
+    alert("Failed to process termsheet response. Please try again.");
+  }
+};
 
   const handleSaveDraft = () => {
     const draft = {
@@ -848,6 +924,61 @@ const MessagesComponent = ({ config = {} }) => {
                         </div>
                       );
                     })()}
+
+                    {selectedMessage.subject?.includes("Termsheet Shared") && 
+ !selectedMessage.termsheetResponse && (
+  <div className="termsheet-actions">
+    <h4>Termsheet Response Required</h4>
+    <p>Please review the attached termsheet and indicate your decision:</p>
+    
+    {selectedMessage.attachments && selectedMessage.attachments.length > 0 && (
+      <div className="termsheet-document">
+        <a 
+          href={selectedMessage.attachments[0]} 
+          target="_blank" 
+          rel="noopener noreferrer"
+          className="document-link"
+        >
+          <FileText size={20} />
+          View Termsheet Document
+        </a>
+      </div>
+    )}
+    
+    <div className="termsheet-response-buttons">
+      <button
+        className="accept-btn"
+        onClick={() => handleTermsheetResponse(
+          selectedMessage.id, 
+          true, 
+          selectedMessage.attachments?.[0]
+        )}
+      >
+        ✓ Accept Termsheet
+      </button>
+      <button
+        className="decline-btn"
+        onClick={() => {
+          const feedback = prompt("Please provide feedback on why you're declining the termsheet:");
+          if (feedback !== null) {
+            handleTermsheetResponse(selectedMessage.id, false, selectedMessage.attachments?.[0]);
+          }
+        }}
+      >
+        ✗ Decline Termsheet
+      </button>
+    </div>
+  </div>
+)}
+
+{selectedMessage.termsheetResponse && (
+  <div className={`termsheet-status ${selectedMessage.termsheetResponse.accepted ? 'accepted' : 'declined'}`}>
+    <h4>
+      {selectedMessage.termsheetResponse.accepted ? '✓ Termsheet Accepted' : '✗ Termsheet Declined'}
+    </h4>
+    <p>Responded: {new Date(selectedMessage.termsheetResponse.respondedAt).toLocaleString()}</p>
+  </div>
+)}
 
                   {supportAttachments &&
                     selectedMessage.attachments &&

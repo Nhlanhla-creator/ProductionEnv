@@ -4103,6 +4103,8 @@ const ESG = () => {
   const [isInvestorView, setIsInvestorView] = useState(false)
   const [viewingSMEId, setViewingSMEId] = useState(null)
   const [viewingSMEName, setViewingSMEName] = useState("")
+  // NEW: Add state for view origin
+  const [viewOrigin, setViewOrigin] = useState("investor")
   const [showFullDescription, setShowFullDescription] = useState(false)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [modalSection, setModalSection] = useState("")
@@ -4111,15 +4113,18 @@ const ESG = () => {
   const [financialData, setFinancialData] = useState(null)
   const [financialYearEnd, setFinancialYearEnd] = useState("2026-03")
 
+  // UPDATED: Check investor view mode and origin
   useEffect(() => {
     const investorViewMode = sessionStorage.getItem("investorViewMode")
     const smeId = sessionStorage.getItem("viewingSMEId")
     const smeName = sessionStorage.getItem("viewingSMEName")
+    const origin = sessionStorage.getItem("viewOrigin") // Get the origin
 
     if (investorViewMode === "true" && smeId) {
       setIsInvestorView(true)
       setViewingSMEId(smeId)
       setViewingSMEName(smeName || "SME")
+      setViewOrigin(origin || "investor") // Default to investor if not specified
     }
     
     // Get financial year end from user profile or set default
@@ -4207,11 +4212,20 @@ const ESG = () => {
     setIsModalOpen(true)
   }
 
+  // UPDATED: Enhanced exit function with origin-based navigation
   const handleExitInvestorView = () => {
+    // Clear all session storage items
     sessionStorage.removeItem("viewingSMEId")
     sessionStorage.removeItem("viewingSMEName")
     sessionStorage.removeItem("investorViewMode")
-    window.location.href = "/my-cohorts"
+    sessionStorage.removeItem("viewOrigin")
+    
+    // Navigate based on origin
+    if (viewOrigin === "catalyst") {
+      window.location.href = "/catalyst/cohorts" // Go back to Catalyst cohorts
+    } else {
+      window.location.href = "/my-cohorts" // Go back to Investor cohorts
+    }
   }
 
   const getContentStyles = () => ({
@@ -4247,7 +4261,10 @@ const ESG = () => {
             <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
               <span style={{ fontSize: "20px" }}>👁️</span>
               <span style={{ color: "#2e7d32", fontWeight: "600", fontSize: "15px" }}>
-                Investor View: Viewing {viewingSMEName}'s ESG Impact
+                {viewOrigin === "catalyst" 
+                  ? `Catalyst View: Viewing ${viewingSMEName}'s ESG Impact`
+                  : `Investor View: Viewing ${viewingSMEName}'s ESG Impact`
+                }
               </span>
             </div>
             <button
@@ -4262,6 +4279,9 @@ const ESG = () => {
                 fontWeight: "600",
                 fontSize: "14px",
                 transition: "background-color 0.3s ease",
+                display: "flex",
+                alignItems: "center",
+                gap: "8px"
               }}
               onMouseEnter={(e) => {
                 e.target.style.backgroundColor = "#45a049"
@@ -4270,7 +4290,11 @@ const ESG = () => {
                 e.target.style.backgroundColor = "#4caf50"
               }}
             >
-              Back to My Cohorts
+              <span>←</span>
+              {viewOrigin === "catalyst" 
+                ? "Back to Catalyst Cohorts"
+                : "Back to My Cohorts"
+              }
             </button>
           </div>
         )}

@@ -7736,22 +7736,41 @@ const Strategy = () => {
   const [milestoneData, setMilestoneData] = useState([])
   const [currentUser, setCurrentUser] = useState(null)
   const [isInvestorView, setIsInvestorView] = useState(false)
+  const [viewOrigin, setViewOrigin] = useState("investor") // ADD THIS LINE
   const [viewingSMEId, setViewingSMEId] = useState(null)
   const [viewingSMEName, setViewingSMEName] = useState("")
   const [selectedCohort, setSelectedCohort] = useState(null)
   const [showFullDescription, setShowFullDescription] = useState(false)
 
-  useEffect(() => {
-    const investorViewMode = sessionStorage.getItem("investorViewMode")
-    const smeId = sessionStorage.getItem("viewingSMEId")
-    const smeName = sessionStorage.getItem("viewingSMEName")
+ useEffect(() => {
+  const investorViewMode = sessionStorage.getItem("investorViewMode")
+  const smeId = sessionStorage.getItem("viewingSMEId")
+  const smeName = sessionStorage.getItem("viewingSMEName")
+  const origin = sessionStorage.getItem("viewOrigin") // Get the origin
 
-    if (investorViewMode === "true" && smeId) {
-      setIsInvestorView(true)
-      setViewingSMEId(smeId)
-      setViewingSMEName(smeName || "SME")
-      console.log("Investor view mode activated for SME:", smeId)
+  if (investorViewMode === "true" && smeId) {
+    setIsInvestorView(true)
+    setViewingSMEId(smeId)
+    setViewingSMEName(smeName || "SME")
+    setViewOrigin(origin || "investor") // Set origin
+    console.log("Investor view mode activated for SME:", smeId, "Origin:", origin)
+  }
+}, [])
+
+  useEffect(() => {
+    const checkSidebarState = () => {
+      setIsSidebarCollapsed(document.body.classList.contains("sidebar-collapsed"))
     }
+
+    checkSidebarState()
+
+    const observer = new MutationObserver(checkSidebarState)
+    observer.observe(document.body, {
+      attributes: true,
+      attributeFilter: ["class"],
+    })
+
+    return () => observer.disconnect()
   }, [])
 
   useEffect(() => {
@@ -7794,12 +7813,20 @@ const Strategy = () => {
     overflowX: "hidden",
   })
 
-  const handleExitInvestorView = () => {
-    sessionStorage.removeItem("viewingSMEId")
-    sessionStorage.removeItem("viewingSMEName")
-    sessionStorage.removeItem("investorViewMode")
-    window.location.href = "/my-cohorts"
+ const handleExitInvestorView = () => {
+  // Clear all session storage items
+  sessionStorage.removeItem("viewingSMEId")
+  sessionStorage.removeItem("viewingSMEName")
+  sessionStorage.removeItem("investorViewMode")
+  sessionStorage.removeItem("viewOrigin")
+  
+  // Navigate based on origin
+  if (viewOrigin === "catalyst") {
+    window.location.href = "/catalyst/cohorts" // Go back to Catalyst cohorts
+  } else {
+    window.location.href = "/my-cohorts" // Go back to Investor cohorts
   }
+}
 
   const sectionButtons = [
     { id: "strategic-clarity", label: "Strategic Clarity" },
@@ -7812,26 +7839,62 @@ const Strategy = () => {
   return (
     <div style={{ display: "flex", minHeight: "100vh", overflow: "hidden" }}>
       <div style={getContentStyles()}>
-        {isInvestorView && (
-          <div style={{ padding: "20px", borderBottom: "1px solid #e0d5c7" }}>
-            <button
-              onClick={handleExitInvestorView}
-              style={{
-                padding: "10px 20px",
-                backgroundColor: "#7d5a50",
-                color: "white",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: "500",
-              }}
-            >
-              Back to My Cohorts
-            </button>
-          </div>
-        )}
+        <Header />
 
-        <div>
+{isInvestorView && (
+  <div
+    style={{
+      backgroundColor: "#e8f5e9",
+      padding: "16px 20px",
+      margin: "80px 20px 20px 20px",
+      borderRadius: "8px",
+      border: "2px solid #4caf50",
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center",
+    }}
+  >
+    <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+      <span style={{ fontSize: "20px" }}>👁️</span>
+      <span style={{ color: "#2e7d32", fontWeight: "600", fontSize: "15px" }}>
+        {viewOrigin === "catalyst" 
+          ? `Catalyst View: Viewing ${viewingSMEName}'s Strategy & Execution`
+          : `Investor View: Viewing ${viewingSMEName}'s Strategy & Execution`
+        }
+      </span>
+    </div>
+    <button
+      onClick={handleExitInvestorView}
+      style={{
+        padding: "8px 16px",
+        backgroundColor: "#4caf50",
+        color: "white",
+        border: "none",
+        borderRadius: "6px",
+        cursor: "pointer",
+        fontWeight: "600",
+        fontSize: "14px",
+        transition: "background-color 0.3s ease",
+        display: "flex",
+        alignItems: "center",
+        gap: "8px"
+      }}
+      onMouseEnter={(e) => {
+        e.target.style.backgroundColor = "#45a049";
+      }}
+      onMouseLeave={(e) => {
+        e.target.style.backgroundColor = "#4caf50";
+      }}
+    >
+      <span>←</span>
+      {viewOrigin === "catalyst" 
+        ? "Back to Catalyst Cohorts"
+        : "Back to My Cohorts"
+      }
+    </button>
+  </div>
+)}
+        <div style={{ padding: "50px", paddingTop: "100px" }}>
           {/* UPDATED: Moved the "See more about dashboard" button under the heading */}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
             <h1 style={{ color: "#5d4037", fontSize: "32px", fontWeight: "700", margin: 0 }}>
