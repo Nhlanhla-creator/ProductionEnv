@@ -704,32 +704,12 @@ const DisasterRecovery = ({ activeSection }) => {
 // Main RiskManagement Component
 const RiskManagement = () => {
   const [activeSection, setActiveSection] = useState('red-flags');
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-
-  useEffect(() => {
-    const checkSidebarState = () => {
-      setIsSidebarCollapsed(document.body.classList.contains("sidebar-collapsed"));
-    }
-
-    // Check initial state
-    checkSidebarState();
-
-    // Watch for changes
-    const observer = new MutationObserver(checkSidebarState);
-    observer.observe(document.body, {
-      attributes: true,
-      attributeFilter: ["class"],
-    });
-
-    return () => observer.disconnect();
-  }, []);
 
   const getContentStyles = () => ({
     width: '100%',
     marginLeft: '0',
     backgroundColor: '#f7f3f0',
     minHeight: '100vh',
-    padding: `70px 20px 20px ${isSidebarCollapsed ? "100px" : "270px"}`,
     transition: 'padding 0.3s ease',
     boxSizing: 'border-box'
   });

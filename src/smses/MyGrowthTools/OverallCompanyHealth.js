@@ -9,22 +9,6 @@ function OverallCompanyHealth() {
   const [viewOrigin, setViewOrigin] = useState("investor");
 
   useEffect(() => {
-    const checkSidebarState = () => {
-      setIsSidebarCollapsed(document.body.classList.contains("sidebar-collapsed"));
-    };
-
-    checkSidebarState();
-
-    const observer = new MutationObserver(checkSidebarState);
-    observer.observe(document.body, {
-      attributes: true,
-      attributeFilter: ["class"],
-    });
-
-    return () => observer.disconnect();
-  }, []);
-
-  useEffect(() => {
     // Check for investor/catalyst view mode
     const investorViewMode = sessionStorage.getItem("investorViewMode");
     const smeId = sessionStorage.getItem("viewingSMEId");

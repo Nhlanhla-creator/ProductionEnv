@@ -2029,22 +2029,6 @@ const OperationalPerformance = () => {
     return () => unsubscribe()
   }, [isInvestorView, viewingSMEId])
 
-  useEffect(() => {
-    const checkSidebarState = () => {
-      setIsSidebarCollapsed(document.body.classList.contains("sidebar-collapsed"))
-    }
-
-    checkSidebarState()
-
-    const observer = new MutationObserver(checkSidebarState)
-    observer.observe(document.body, {
-      attributes: true,
-      attributeFilter: ["class"],
-    })
-
-    return () => observer.disconnect()
-  }, [])
-
  const handleExitInvestorView = () => {
   // Clear all session storage items
   sessionStorage.removeItem("viewingSMEId")
