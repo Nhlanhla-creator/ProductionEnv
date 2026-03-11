@@ -1494,6 +1494,7 @@ export default function MarketingSales() {
   const [isInvestorView, setIsInvestorView] = useState(false)
   const [viewingSMEId, setViewingSMEId] = useState(null)
   const [viewingSMEName, setViewingSMEName] = useState("")
+  const [viewOrigin, setViewOrigin] = useState("investor") // ADD THIS LINE
   const [showAddDataModal, setShowAddDataModal] = useState(false)
   const [loading, setLoading] = useState(false)
 
@@ -1507,11 +1508,17 @@ export default function MarketingSales() {
   const [toDate, setToDate] = useState(_toYM)
 
   useEffect(() => {
-    const investorViewMode = sessionStorage.getItem("investorViewMode")
-    const smeId = sessionStorage.getItem("viewingSMEId")
-    const smeName = sessionStorage.getItem("viewingSMEName")
-    if (investorViewMode === "true" && smeId) { setIsInvestorView(true); setViewingSMEId(smeId); setViewingSMEName(smeName || "SME") }
-  }, [])
+  const investorViewMode = sessionStorage.getItem("investorViewMode")
+  const smeId = sessionStorage.getItem("viewingSMEId")
+  const smeName = sessionStorage.getItem("viewingSMEName")
+  const origin = sessionStorage.getItem("viewOrigin") // ADD THIS
+  if (investorViewMode === "true" && smeId) { 
+    setIsInvestorView(true); 
+    setViewingSMEId(smeId); 
+    setViewingSMEName(smeName || "SME");
+    setViewOrigin(origin || "investor"); // ADD THIS
+  }
+}, [])
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -1520,12 +1527,28 @@ export default function MarketingSales() {
     return () => unsubscribe()
   }, [isInvestorView, viewingSMEId])
 
-  const handleExitInvestorView = () => {
-    sessionStorage.removeItem("viewingSMEId")
-    sessionStorage.removeItem("viewingSMEName")
-    sessionStorage.removeItem("investorViewMode")
-    window.location.href = "/my-cohorts"
+  useEffect(() => {
+    const checkSidebarState = () => setIsSidebarCollapsed(document.body.classList.contains("sidebar-collapsed"))
+    checkSidebarState()
+    const observer = new MutationObserver(checkSidebarState)
+    observer.observe(document.body, { attributes: true, attributeFilter: ["class"] })
+    return () => observer.disconnect()
+  }, [])
+
+ const handleExitInvestorView = () => {
+  // Clear all session storage items
+  sessionStorage.removeItem("viewingSMEId")
+  sessionStorage.removeItem("viewingSMEName")
+  sessionStorage.removeItem("investorViewMode")
+  sessionStorage.removeItem("viewOrigin") // ADD THIS
+  
+  // Navigate based on origin
+  if (viewOrigin === "catalyst") {
+    window.location.href = "/catalyst/cohorts" // Go back to Catalyst cohorts
+  } else {
+    window.location.href = "/my-cohorts" // Go back to Investor cohorts
   }
+}
 
   const sectionButtons = [
     { id: "pipeline-visibility", label: "Pipeline Visibility" },
@@ -1536,16 +1559,30 @@ export default function MarketingSales() {
 
   return (
     <div className="flex min-h-screen">
-      <div style={{ width: "100%", marginLeft: 0, minHeight: "100vh", transition: "padding 0.3s ease", boxSizing: "border-box" }}>
-        {isInvestorView && (
-          <div className="bg-[#e8f5e9] px-5 py-4 mt-[50px] mb-5 rounded-lg border-2 border-[#4caf50] flex justify-between items-center">
-            <div className="flex items-center gap-3">
-              <span className="text-xl">👁️</span>
-              <span className="text-[#2e7d32] font-semibold text-[15px]">Investor View: Viewing {viewingSMEName}'s Marketing & Sales Data</span>
-            </div>
-            <button onClick={handleExitInvestorView} className="px-4 py-2 bg-[#4caf50] text-white border-0 rounded-md cursor-pointer font-semibold text-sm">Back to My Cohorts</button>
-          </div>
-        )}
+      <div style={{ width: "100%", marginLeft: 0, minHeight: "100vh", padding: `70px 20px 20px ${isSidebarCollapsed ? "100px" : "270px"}`, transition: "padding 0.3s ease", boxSizing: "border-box" }}>
+      {isInvestorView && (
+  <div className="bg-[#e8f5e9] px-5 py-4 mt-[50px] mb-5 rounded-lg border-2 border-[#4caf50] flex justify-between items-center">
+    <div className="flex items-center gap-3">
+      <span className="text-xl">👁️</span>
+      <span className="text-[#2e7d32] font-semibold text-[15px]">
+        {viewOrigin === "catalyst" 
+          ? `Catalyst View: Viewing ${viewingSMEName}'s Marketing & Sales Data`
+          : `Investor View: Viewing ${viewingSMEName}'s Marketing & Sales Data`
+        }
+      </span>
+    </div>
+    <button 
+      onClick={handleExitInvestorView} 
+      className="px-4 py-2 bg-[#4caf50] text-white border-0 rounded-md cursor-pointer font-semibold text-sm flex items-center gap-2"
+    >
+      <span>←</span>
+      {viewOrigin === "catalyst" 
+        ? "Back to Catalyst Cohorts"
+        : "Back to My Cohorts"
+      }
+    </button>
+  </div>
+)}
 
         <div>
           <div className="flex justify-between items-center mb-5">

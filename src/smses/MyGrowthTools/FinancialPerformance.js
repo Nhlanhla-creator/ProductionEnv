@@ -41,60 +41,90 @@ const FinancialPerformance = () => {
   const [isInvestorView, setIsInvestorView] = useState(false);
   const [viewingSMEId, setViewingSMEId]     = useState(null);
   const [viewingSMEName, setViewingSMEName] = useState("");
+  const [viewOrigin, setViewOrigin] = useState("investor"); // ADD THIS LINE
 
-  // Investor view via sessionStorage
-  useEffect(() => {
-    const investorMode = sessionStorage.getItem("investorViewMode");
-    const smeId        = sessionStorage.getItem("viewingSMEId");
-    const smeName      = sessionStorage.getItem("viewingSMEName");
-    if (investorMode === "true" && smeId) {
-      setIsInvestorView(true);
-      setViewingSMEId(smeId);
-      setViewingSMEName(smeName || "SME");
+// Investor view via sessionStorage
+// Investor view via sessionStorage
+useEffect(() => {
+  const investorMode = sessionStorage.getItem("investorViewMode");
+  const smeId        = sessionStorage.getItem("viewingSMEId");
+  const smeName      = sessionStorage.getItem("viewingSMEName");
+  const origin       = sessionStorage.getItem("viewOrigin"); // ADD THIS
+
+  if (investorMode === "true" && smeId) {
+    setIsInvestorView(true);
+    setViewingSMEId(smeId);
+    setViewingSMEName(smeName || "SME");
+    setViewOrigin(origin || "investor"); // ADD THIS
+  }
+}, []);
+// Auth - FIXED to match working pattern
+useEffect(() => {
+  const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+    if (isInvestorView && viewingSMEId) {
+      // In investor view, set user with the SME ID
+      setUser({ uid: viewingSMEId });
+    } else {
+      // Normal view - set the actual authenticated user
+      setUser(currentUser);
     }
+  });
+
+  return () => unsubscribe();
+}, [isInvestorView, viewingSMEId]); // Keep both dependencies
+
+  // Sidebar collapse observer
+  useEffect(() => {
+    const check = () =>
+      setIsSidebarCollapsed(document.body.classList.contains("sidebar-collapsed"));
+    check();
+    const obs = new MutationObserver(check);
+    obs.observe(document.body, { attributes: true, attributeFilter: ["class"] });
+    return () => obs.disconnect();
   }, []);
 
-  // Auth
-  useEffect(() => {
-    const unsub = onAuthStateChanged(auth, (currentUser) => {
-      if (isInvestorView && viewingSMEId) {
-        setUser({ uid: viewingSMEId });
-      } else if (currentUser) {
-        setUser(currentUser);
-      } else {
-        setUser(null);
-      }
-    });
-    return () => unsub();
-  }, [isInvestorView, viewingSMEId]);
-
-  const handleExitInvestorView = () => {
-    ["viewingSMEId", "viewingSMEName", "investorViewMode"].forEach((k) =>
-      sessionStorage.removeItem(k),
-    );
-    window.location.href = "/my-cohorts";
-  };
+ const handleExitInvestorView = () => {
+  // Clear all session storage items
+  ["viewingSMEId", "viewingSMEName", "investorViewMode", "viewOrigin"].forEach((k) =>
+    sessionStorage.removeItem(k),
+  );
+  
+  // Navigate based on origin
+  if (viewOrigin === "catalyst") {
+    window.location.href = "/catalyst/cohorts"; // Go back to Catalyst cohorts
+  } else {
+    window.location.href = "/my-cohorts"; // Go back to Investor cohorts
+  }
+};
+  const contentPaddingLeft = isSidebarCollapsed ? "pl-[100px]" : "pl-[270px]";
 
   return (
     <div className="flex min-h-screen">
       <div className={`w-full min-h-screen px-5 pb-5 transition-all duration-300 box-border`}>
         {/* Investor banner */}
-        {isInvestorView && (
-          <div className="bg-green-50 py-4 mt-[50px] mb-5 rounded-lg border-2 border-green-500 flex justify-between items-center">
-            <div className="flex items-center gap-3">
-              <span className="text-xl">👁️</span>
-              <span className="text-green-800 font-semibold text-sm">
-                Investor View: Viewing {viewingSMEName}'s Financial Performance
-              </span>
-            </div>
-            <button
-              onClick={handleExitInvestorView}
-              className="px-4 py-2 bg-green-500 text-white border-0 rounded-md cursor-pointer font-semibold text-sm hover:bg-green-600"
-            >
-              Back to My Cohorts
-            </button>
-          </div>
-        )}
+       {isInvestorView && (
+  <div className="bg-green-50 px-5 py-4 mt-[50px] mb-5 rounded-lg border-2 border-green-500 flex justify-between items-center">
+    <div className="flex items-center gap-3">
+      <span className="text-xl">👁️</span>
+      <span className="text-green-800 font-semibold text-sm">
+        {viewOrigin === "catalyst" 
+          ? `Catalyst View: Viewing ${viewingSMEName}'s Financial Performance`
+          : `Investor View: Viewing ${viewingSMEName}'s Financial Performance`
+        }
+      </span>
+    </div>
+    <button
+      onClick={handleExitInvestorView}
+      className="px-4 py-2 bg-green-500 text-white border-0 rounded-md cursor-pointer font-semibold text-sm hover:bg-green-600 flex items-center gap-2"
+    >
+      <span>←</span>
+      {viewOrigin === "catalyst" 
+        ? "Back to Catalyst Cohorts"
+        : "Back to My Cohorts"
+      }
+    </button>
+  </div>
+)}
 
         {/* Page header */}
         <div className="">
