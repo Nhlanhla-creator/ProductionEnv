@@ -5,6 +5,7 @@ import { onAuthStateChanged } from "firebase/auth"
 import { auth } from "../../firebaseConfig"
 import { X, ArrowRight } from "lucide-react"
 import { SupportDealFlowPipeline } from "./support-deal-flow"
+import { PortfolioProvider } from "../../context/PortfolioContext"
 
 import SupportTabbedTables from "./support-tabbed-tables"
 import styles from "./support-funding.module.css"
@@ -37,17 +38,7 @@ const onboardingSteps = [
   },
 ]
 
-// Consistent header styles with underline
-const headerStyle = {
-  fontSize: 'clamp(1.2rem, 3vw, 1.5rem)',
-  color: '#3e2723', // Dark brown
-  fontWeight: '600',
-  margin: '0 0 20px 0',
-  fontFamily: 'inherit',
-  paddingBottom: '8px',
-}
-
-export default function SupportDashboardPage() {
+function SupportDashboardContent() {
   const [user, setUser] = useState(null)
   const [authChecked, setAuthChecked] = useState(false)
   const [showWelcomePopup, setShowWelcomePopup] = useState(false)
@@ -115,33 +106,13 @@ export default function SupportDashboardPage() {
   if (!authChecked) {
     return (
       <div 
-        style={{
-          width: '100%',
-          minHeight: '100vh',
-          maxWidth: '100vw',
-          overflowX: 'hidden',
-          padding: '80px 10px 20px 280px',
-          margin: '0',
-          boxSizing: 'border-box',
-          position: 'relative',
+        className="w-full min-h-screen max-w-screen overflow-hidden m-0 relative bg-cover bg-center bg-no-repeat bg-fixed"
+        style={{ 
           backgroundImage: "url('../../assets/BiGBackround.png')",
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-          backgroundRepeat: 'no-repeat',
-          backgroundAttachment: 'fixed'
+          boxSizing: 'border-box'
         }}
-        className={styles.loadingContainer}
       >
-        <div 
-          style={{
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            minHeight: '200px',
-            fontSize: 'clamp(1rem, 2vw, 1.2rem)',
-            color: '#666'
-          }}
-        >
+        <div className="flex justify-center items-center min-h-[200px] text-[clamp(1rem,2vw,1.2rem)] text-gray-600">
           <p>Loading...</p>
         </div>
       </div>
@@ -150,37 +121,14 @@ export default function SupportDashboardPage() {
 
   return (
     <div 
-      style={{
-        width: '100%',
-        minHeight: '100vh',
-        maxWidth: '100vw',
-        overflowX: 'hidden',
-        padding: '80px 10px 20px 280px',
-        marginLeft: '-20px',
-        boxSizing: 'border-box',
-        position: 'relative',
+      className="w-full min-h-screen max-w-screen overflow-hidden relative bg-cover bg-center bg-no-repeat bg-fixed"
+      style={{ 
         backgroundImage: "url('../../assets/BiGBackround.png')",
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-        backgroundRepeat: 'no-repeat',
-        backgroundAttachment: 'fixed'
+        boxSizing: 'border-box'
       }}
-      className={styles.pageContainer}
     >
-      {/* Global styles for consistent headers and animations */}
+      {/* Global styles for animations (kept as style tag since they're keyframes) */}
       <style>{`
-        :global(.${styles.sectionCard} h1),
-        :global(.${styles.sectionCard} h2),
-        :global(.${styles.sectionCard} h3),
-        :global(.${styles.sectionCard} h4),
-        :global(.${styles.sectionCard} h5),
-        :global(.${styles.sectionCard} h6) {
-          font-size: clamp(1.2rem, 3vw, 1.5rem) !important;
-          color: #3e2723 !important;
-          font-weight: 600 !important;
-          margin: 0 0 16px 0 !important;
-        }
-
         @keyframes fadeIn {
           from { opacity: 0; }
           to { opacity: 1; }
@@ -201,179 +149,52 @@ export default function SupportDashboardPage() {
           from { transform: translateY(0px); }
           to { transform: translateY(-5px); }
         }
-        
-        .popup-overlay {
-          position: fixed;
-          top: 0;
-          left: 0;
-          width: 100%;
-          height: 100%;
-          background-color: rgba(0, 0, 0, 0.7);
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          z-index: 1000;
-          animation: fadeIn 0.3s ease-out;
-          padding: 20px;
-          box-sizing: border-box;
-        }
-        
-        .popup-content {
-          background-color: white;
-          border-radius: 12px;
-          box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
-          width: 90%;
-          max-width: 500px;
-          position: relative;
-          overflow: hidden;
-          animation: slideUp 0.4s ease-out;
-        }
-        
-        .close-button {
-          position: absolute;
-          top: 15px;
-          right: 15px;
-          background: none;
-          border: none;
-          cursor: pointer;
-          color: #666;
-          z-index: 10;
-          transition: color 0.2s;
-          padding: 5px;
-        }
-        
-        .close-button:hover {
-          color: #333;
-        }
-        
-        .popup-inner {
-          padding: clamp(20px, 5vw, 40px) clamp(15px, 4vw, 30px);
-          text-align: center;
-          background: linear-gradient(135deg, #efebe9 0%, #d7ccc8 100%);
-        }
-        
-        .popup-icon {
-          font-size: clamp(32px, 6vw, 48px);
-          margin-bottom: 20px;
-          animation: bounce 1s ease infinite alternate;
-        }
-        
-        .progress-dots {
-          display: flex;
-          justify-content: center;
-          margin: 30px 0;
-          gap: 8px;
-        }
-        
-        .progress-dot {
-          width: 10px;
-          height: 10px;
-          border-radius: 50%;
-          background-color: #e0e0e0;
-          transition: background-color 0.3s, transform 0.3s;
-        }
-        
-        .progress-dot.active {
-          background-color: #8d6e63;
-          transform: scale(1.3);
-        }
-        
-        .button-container {
-          display: flex;
-          justify-content: space-between;
-          margin-top: 20px;
-          gap: 10px;
-          flex-wrap: wrap;
-        }
-        
-        .btn {
-          padding: 12px 24px;
-          border-radius: 8px;
-          cursor: pointer;
-          font-size: clamp(0.8rem, 2vw, 0.9rem);
-          font-weight: 500;
-          transition: all 0.2s;
-          flex: 1;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          gap: 8px;
-          min-width: 120px;
-        }
-        
-        .btn-secondary {
-          border: 2px solid #8d6e63;
-          background: transparent;
-          color: #8d6e63;
-        }
-        
-        .btn-secondary:hover {
-          background: #8d6e63;
-          color: white;
-        }
-        
-        .btn-primary {
-          border: none;
-          background: #8d6e63;
-          color: white;
-        }
-        
-        .btn-primary:hover {
-          background: #6d4c41;
-          transform: translateY(-1px);
-        }
-
-        @media (max-width: 480px) {
-          .button-container {
-            flex-direction: column;
-          }
-          
-          .btn {
-            flex: none;
-            width: 100%;
-          }
-        }
       `}</style>
 
       {showWelcomePopup && (
-        <div className="popup-overlay">
-          <div className="popup-content">
-            <button className="close-button" onClick={closePopup}>
+        <div className="fixed inset-0 bg-black/70 flex justify-center items-center z-[1000] animate-[fadeIn_0.3s_ease-out] p-5 box-border">
+          <div className="bg-white rounded-xl shadow-2xl w-[90%] max-w-[500px] relative overflow-hidden animate-[slideUp_0.4s_ease-out]">
+            <button 
+              className="absolute top-[15px] right-[15px] bg-none border-none cursor-pointer text-gray-600 z-10 transition-colors duration-200 p-1 hover:text-gray-800"
+              onClick={closePopup}
+            >
               <X size={24} />
             </button>
-            <div className="popup-inner">
-              <div className="popup-icon">
+            <div className="p-[clamp(20px,5vw,40px)_clamp(15px,4vw,30px)] text-center bg-gradient-to-br from-cream to-lightTan">
+              <div className="text-[clamp(32px,6vw,48px)] mb-5 animate-[bounce_1s_ease_infinite_alternate]">
                 {onboardingSteps[currentOnboardingStep].icon}
               </div>
-              <h2 style={{
-                ...headerStyle,
-                marginBottom: '15px'
-              }}>
+              <h2 className="text-[clamp(1.2rem,3vw,1.5rem)] text-[#3e2723] font-semibold mb-[15px] pb-2">
                 {onboardingSteps[currentOnboardingStep].title}
               </h2>
-              <p style={{
-                marginBottom: '15px',
-                color: '#3e2723',
-                lineHeight: '1.6',
-                margin: '0 0 15px 0',
-                fontSize: 'clamp(0.9rem, 2vw, 1rem)'
-              }}>
+              <p className="mb-[15px] text-[#3e2723] leading-relaxed text-[clamp(0.9rem,2vw,1rem)]">
                 {onboardingSteps[currentOnboardingStep].content}
               </p>
-              <div className="progress-dots">
+              <div className="flex justify-center my-[30px] gap-2">
                 {onboardingSteps.map((_, index) => (
                   <div
                     key={index}
-                    className={`progress-dot ${index === currentOnboardingStep ? 'active' : ''}`}
+                    className={`w-2.5 h-2.5 rounded-full transition-all duration-300 ${
+                      index === currentOnboardingStep 
+                        ? 'bg-lightBrown scale-130' 
+                        : 'bg-gray-300'
+                    }`}
                   />
                 ))}
               </div>
-              <div className="button-container">
-                <button className="btn btn-secondary" onClick={closePopup}>
+              <div className="flex justify-between mt-5 gap-2 flex-wrap">
+                <button 
+                  className="flex-1 min-w-[120px] py-3 px-6 rounded-lg cursor-pointer text-[clamp(0.8rem,2vw,0.9rem)] font-medium transition-all duration-200 border-2 border-lightBrown bg-transparent text-lightBrown hover:bg-lightBrown hover:text-white"
+                  onClick={closePopup}
+                >
                   Skip
                 </button>
-                <button className="btn btn-primary" onClick={handleNextStep}>
-                  {currentOnboardingStep < onboardingSteps.length - 1 ? "Next" : "Get Started"} <ArrowRight size={16} />
+                <button 
+                  className="flex-1 min-w-[120px] py-3 px-6 rounded-lg cursor-pointer text-[clamp(0.8rem,2vw,0.9rem)] font-medium transition-all duration-200 border-none bg-lightBrown text-white hover:bg-mediumBrown hover:-translate-y-0.5 flex items-center justify-center gap-2"
+                  onClick={handleNextStep}
+                >
+                  {currentOnboardingStep < onboardingSteps.length - 1 ? "Next" : "Get Started"} 
+                  <ArrowRight size={16} />
                 </button>
               </div>
             </div>
@@ -381,56 +202,17 @@ export default function SupportDashboardPage() {
         </div>
       )}
 
-      <div 
-        style={{
-          width: '100%',
-          maxWidth: '100%',
-          padding: '0',
-          margin: '0',
-          boxSizing: 'border-box'
-        }}
-        className={styles.contentWrapper}
-      >
+      <div className="w-full max-w-full p-0 px-8 m-0 box-border">
+        {/* Pipeline Section */}
         <div 
-          style={{
-            width: '100%',
-            maxWidth: '100%',
-            padding: '5px 20px 2px 20px', // Same compact padding as intern
-            margin: '0 0 5px 0', // Same compact margin as intern
-            backgroundColor: 'rgba(255, 255, 255, 0.95)',
-            borderRadius: '8px',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-            boxSizing: 'border-box',
-            backdropFilter: 'blur(10px)'
-          }}
-          className={`${styles.sectionCard} ${styles.pipelineSection} ${styles.pipelineCard}`}
+          className="w-full max-w-full mb-1 bg-white/95 rounded-lg shadow-md box-border backdrop-blur-md"
         >
-          <div 
-            style={{
-              width: '100%',
-              overflow: 'hidden' // Hide scrollbars like intern
-            }}
-            className={styles.sectionContent}
-          >
-            <h2 style={{...headerStyle, margin: '0 0 5px 0'}}>DealFlow Pipeline</h2>
             <SupportDealFlowPipeline onStageClick={setStageFilter} />
-          </div>
         </div>
 
-
+        {/* Tables Section */}
         <div 
-          style={{
-            width: '100%',
-            maxWidth: '100%',
-            padding: '20px',
-            margin: '0 0 20px 0',
-            backgroundColor: 'rgba(255, 255, 255, 0.95)',
-            borderRadius: '8px',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-            boxSizing: 'border-box',
-            backdropFilter: 'blur(10px)'
-          }}
-          className={`${styles.sectionCard} ${styles.tableSection} ${styles.tableCard}`}
+          className="w-full max-w-full p-5 mb-5 bg-white/95 rounded-lg shadow-md box-border backdrop-blur-md"
         >
           <SupportTabbedTables 
             filters={filters} 
@@ -440,5 +222,13 @@ export default function SupportDashboardPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function SupportDashboardPage() {
+  return (
+    <PortfolioProvider>
+      <SupportDashboardContent />
+    </PortfolioProvider>
   )
 }

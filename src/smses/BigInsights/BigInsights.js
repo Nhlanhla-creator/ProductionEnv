@@ -16,32 +16,12 @@ import "../MyFunderMatches/funding-insights.css"
 
 export function BigInsights() {
   const [activeInsightTab, setActiveInsightTab] = useState("customers")
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
-
-  useEffect(() => {
-    const checkSidebarState = () => {
-      setIsSidebarCollapsed(document.body.classList.contains("sidebar-collapsed"))
-    }
-
-    // Check initial state
-    checkSidebarState()
-
-    // Watch for changes
-    const observer = new MutationObserver(checkSidebarState)
-    observer.observe(document.body, {
-      attributes: true,
-      attributeFilter: ["class"],
-    })
-
-    return () => observer.disconnect()
-  }, [])
 
   const getContainerStyles = () => ({
     width: "100%",
     minHeight: "100vh",
     maxWidth: "100vw",
     overflowX: "hidden",
-    padding: `70px 20px 20px ${isSidebarCollapsed ? "100px" : "270px"}`,
     margin: "0",
     boxSizing: "border-box",
     position: "relative",

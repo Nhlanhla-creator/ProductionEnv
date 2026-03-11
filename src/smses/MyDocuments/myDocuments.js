@@ -51,7 +51,6 @@ const MyDocuments = () => {
   const [statusFilter, setStatusFilter] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(true);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [isOverlayVisible, setIsOverlayVisible] = useState(false);
   const [validationResults, setValidationResults] = useState({});
@@ -105,25 +104,6 @@ const functions = getFunctions();
 
     return () => unsubscribe();
   }, []);
-
-  // Add sidebar detection
-  useEffect(() => {
-    const checkSidebarState = () => {
-      setIsSidebarCollapsed(document.body.classList.contains("sidebar-collapsed"))
-    }
-
-    // Check initial state
-    checkSidebarState()
-
-    // Watch for changes
-    const observer = new MutationObserver(checkSidebarState)
-    observer.observe(document.body, {
-      attributes: true,
-      attributeFilter: ["class"],
-    })
-
-    return () => observer.disconnect()
-  }, [])
 
   // Add this useEffect to MyDocuments component
   useEffect(() => {
@@ -1365,7 +1345,6 @@ const badgeStyles = (status) => {
     minHeight: "100vh",
     maxWidth: "100vw",
     overflowX: "hidden",
-    padding: `80px 20px 20px ${isSidebarCollapsed ? "100px" : "290px"}`,
     margin: "0",
     boxSizing: "border-box",
     position: "relative",

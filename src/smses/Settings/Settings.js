@@ -65,7 +65,6 @@ export default function Settings() {
 const [show2FASetup, setShow2FASetup] = useState(false);
 const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
 const [disabling2FA, setDisabling2FA] = useState(false);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
 // Add these with your existing state declarations
 const [companyMembers, setCompanyMembers] = useState([]);
 const [showAddMemberModal, setShowAddMemberModal] = useState(false);
@@ -161,30 +160,9 @@ useEffect(() => {
   }
 }, [companyId]);
 
-
-  useEffect(() => {
-    const checkSidebarState = () => {
-      setIsSidebarCollapsed(document.body.classList.contains("sidebar-collapsed"))
-    }
-
-    // Check initial state
-    checkSidebarState()
-
-    // Watch for changes
-    const observer = new MutationObserver(checkSidebarState)
-    observer.observe(document.body, {
-      attributes: true,
-      attributeFilter: ["class"],
-    })
-
-    return () => observer.disconnect()
-  }, [])
-
   const getContainerStyles = () => ({
-    backgroundColor: colors.backgroundBrown,
     minHeight: "100vh",
-    padding: "2rem",
-    marginLeft: isSidebarCollapsed ? "100px" : "270px",
+    padding: "0 2rem",
     fontFamily: "'Inter', system-ui, -apple-system, sans-serif",
     transition: "margin-left 0.3s ease",
     boxSizing: "border-box",
@@ -855,7 +833,6 @@ const handleUpdateRole = async (memberId, newRole) => {
             fontSize: "2.5rem",
             fontWeight: "700",
             margin: 0,
-            marginTop: "3rem",
             color: colors.textBrown,
             letterSpacing: "-0.025em",
           }}

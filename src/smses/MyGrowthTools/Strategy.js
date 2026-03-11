@@ -2,8 +2,6 @@
 
 import { useState, useEffect } from "react"
 import { Bar, Scatter } from "react-chartjs-2"
-import Sidebar from "smses/Sidebar/Sidebar"
-import Header from "../DashboardHeader/DashboardHeader"
 import { db, auth, storage } from "../../firebaseConfig"
 import { onAuthStateChanged } from "firebase/auth"
 import { FaChevronDown, FaChevronUp, FaRobot, FaSpinner, FaDownload } from "react-icons/fa"
@@ -876,8 +874,6 @@ const StrategicClarity = ({ activeSection, currentUser, isInvestorView }) => {
     <div
       style={{
         backgroundColor: "#fdfcfb",
-        padding: "20px",
-        margin: "20px 0",
         borderRadius: "8px",
         boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
       }}
@@ -1950,8 +1946,6 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
     <div
       style={{
         backgroundColor: "#fdfcfb",
-        padding: "20px",
-        margin: "20px 0",
         borderRadius: "8px",
         boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
       }}
@@ -3317,9 +3311,6 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
   return (
     <div
       style={{
-        backgroundColor: "#faf7f2",
-        padding: "20px",
-        margin: "20px 0",
         borderRadius: "8px",
         boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
       }}
@@ -5028,9 +5019,6 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
   return (
     <div
       style={{
-        backgroundColor: "#faf7f2",
-        padding: "20px",
-        margin: "20px 0",
         borderRadius: "8px",
         boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
       }}
@@ -6658,9 +6646,6 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
   return (
     <div
       style={{
-        backgroundColor: "#fdfcfb",
-        padding: "20px",
-        margin: "20px 0",
         borderRadius: "8px",
         boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
       }}
@@ -6686,6 +6671,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
             color: "#4a352f",
             cursor: "pointer",
             fontSize: "14px",
+            paddingRight: "40px",
           }}
         >
           <option value="">All Months</option>
@@ -6707,6 +6693,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
             color: "#4a352f",
             cursor: "pointer",
             fontSize: "14px",
+            paddingRight: "40px",
           }}
         >
           <option value="">All Years</option>
@@ -7746,7 +7733,6 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
 
 const Strategy = () => {
   const [activeSection, setActiveSection] = useState("strategic-clarity")
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const [milestoneData, setMilestoneData] = useState([])
   const [currentUser, setCurrentUser] = useState(null)
   const [isInvestorView, setIsInvestorView] = useState(false)
@@ -7766,22 +7752,6 @@ const Strategy = () => {
       setViewingSMEName(smeName || "SME")
       console.log("Investor view mode activated for SME:", smeId)
     }
-  }, [])
-
-  useEffect(() => {
-    const checkSidebarState = () => {
-      setIsSidebarCollapsed(document.body.classList.contains("sidebar-collapsed"))
-    }
-
-    checkSidebarState()
-
-    const observer = new MutationObserver(checkSidebarState)
-    observer.observe(document.body, {
-      attributes: true,
-      attributeFilter: ["class"],
-    })
-
-    return () => observer.disconnect()
   }, [])
 
   useEffect(() => {
@@ -7818,7 +7788,6 @@ const Strategy = () => {
 
   const getContentStyles = () => ({
     flex: 1,
-    paddingLeft: isSidebarCollapsed ? "80px" : "250px",
     transition: "padding 0.3s ease",
     boxSizing: "border-box",
     width: "100%",
@@ -7841,12 +7810,8 @@ const Strategy = () => {
   ]
 
   return (
-    <div style={{ display: "flex", minHeight: "100vh", width: "100vw", overflow: "hidden" }}>
-      <Sidebar />
-
+    <div style={{ display: "flex", minHeight: "100vh", overflow: "hidden" }}>
       <div style={getContentStyles()}>
-        <Header />
-
         {isInvestorView && (
           <div style={{ padding: "20px", borderBottom: "1px solid #e0d5c7" }}>
             <button
@@ -7866,7 +7831,7 @@ const Strategy = () => {
           </div>
         )}
 
-        <div style={{ padding: "50px", paddingTop: "100px" }}>
+        <div>
           {/* UPDATED: Moved the "See more about dashboard" button under the heading */}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
             <h1 style={{ color: "#5d4037", fontSize: "32px", fontWeight: "700", margin: 0 }}>
@@ -7949,7 +7914,6 @@ const Strategy = () => {
               display: "flex",
               gap: "10px",
               marginBottom: "20px",
-              padding: "15px",
               backgroundColor: "#fdfcfb",
               borderRadius: "8px",
               boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
