@@ -394,7 +394,7 @@ export const programSponsorMenuItems = [
 ];
 
 export const smeMenuItems = [
-  // { id: "home", label: "Home", icon: <Home size={18} />, route: "/HomePage" },
+  { id: "home", label: "Home", icon: <Home size={18} />, route: "/HomePage" },
   {
     id: "profile",
     label: "My Profile",

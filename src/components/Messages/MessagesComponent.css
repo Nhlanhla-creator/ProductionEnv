@@ -13,7 +13,6 @@
 .messages-page {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 80px);
   background-color: var(--brown-1);
   font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
   color: var(--brown-8);

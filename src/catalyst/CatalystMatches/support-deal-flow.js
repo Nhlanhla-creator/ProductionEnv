@@ -1,268 +1,153 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { MessageCircle, X, ChevronRight, Info, FileText } from 'lucide-react';
-import styles from "./DealFlowPipeline.module.css";
-import { db } from "../../firebaseConfig";
-import { collection, query, where, getDocs } from "firebase/firestore";
-import { getAuth } from "firebase/auth";
+import { useState } from "react";
+import { Info } from "lucide-react";
+import { usePortfolio } from "../../context/PortfolioContext";
 
-export function SupportDealFlowPipeline({ onStageClick }) {
-  const [hoveredStage, setHoveredStage] = useState(null);
-  const [showRejectionModal, setShowRejectionModal] = useState(false);
-  const [rejectionDetails, setRejectionDetails] = useState({});
-  const [stageCounts, setStageCounts] = useState({});
-  const [loading, setLoading] = useState(true);
+// ─── Skeleton ─────────────────────────────────────────────────────────────────
+const SHIMMER_DELAYS = [
+  "animate-shimmer",    "animate-shimmer-d1", "animate-shimmer-d2",
+  "animate-shimmer-d3", "animate-shimmer-d4", "animate-shimmer-d5",
+  "animate-shimmer",    "animate-shimmer-d1", "animate-shimmer-d2",
+];
 
-  const fetchStageCounts = async () => {
-    const auth = getAuth();
-    const user = auth.currentUser;
-    if (!user) return;
-
-    const counts = {
-      initial: 0,        // Total SMEs
-      application: 0,    // Applications received
-      review: 0,         // Under Review
-      approved: 0,       // Support Approved
-      funding: 0,        // Funding Approved
-      active: 0,         // Active Support
-      termsheet: 0,      // Term Sheet
-      closed: 0,         // Deal Closed
-      rejected: 0        // Rejected/Withdrawn
-    };
-
-    try {
-      // 1. Count all SMEs in universalProfiles
-      const smeSnapshot = await getDocs(collection(db, "universalProfiles"));
-      counts.initial = smeSnapshot.size;
-
-      // 2. Get all acceleratorApplications for the current accelerator
-      const appQuery = query(collection(db, "acceleratorApplications"), where("acceleratorId", "==", user.uid));
-      const appSnapshot = await getDocs(appQuery);
-
-      counts.application = appSnapshot.size;
-
-      appSnapshot.forEach((doc) => {
-        const pipelineStage = doc.data().pipelineStage?.toLowerCase();
-
-        if (pipelineStage === "under review") counts.review++;
-        if (pipelineStage === "support approved") counts.approved++;
-        if (pipelineStage === "funding approved") counts.funding++;
-        if (pipelineStage === "active support") counts.active++;
-        if (pipelineStage === "term sheet") counts.termsheet++;
-        if (pipelineStage === "deal closed") counts.closed++;
-        if (pipelineStage === "rejected" || pipelineStage === "withdrawn") counts.rejected++;
-      });
-
-      setStageCounts(counts);
-    } catch (err) {
-      console.error("Error fetching support flow counts:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchStageCounts();
-  }, []);
-
-  const stages = [
-    {
-      id: "initial",
-      name: "Matching",
-
-      colorClass: styles.stageInitial,
-      iconColor: "#8d6e63"
-    },
-    {
-      id: "application",
-      name: "Application",
-    
-      colorClass: styles.stageApplication,
-      iconColor: "#795548"
-    },
-    {
-      id: "review",
-      name: "Evaluation",
-
-      colorClass: styles.stageReview,
-      iconColor: "#6d4c41"
-    },
-    {
-      id: "approved",
-      name: "Due diligence",
-
-      colorClass: styles.stageApproved,
-      iconColor: "#5d4037"
-    },
-    {
-      id: "funding",
-      name: "Decision",
-     
-      hasMessages: true,
-      colorClass: styles.stageFeedback,
-      iconColor: "#4e342e"
-    },
-    {
-      id: "termsheet",
-      name: "Term sheet",
-  
-      colorClass: styles.stageDeals,
-      iconColor: "#3e2723"
-    },
-    {
-      id: "closed",
-      name: "Deal closed",
-  
-      colorClass: styles.stageDeals,
-      iconColor: "#2e1b13"
-    },
-    {
-      id: "rejected",
-      name: "Withdrawn/Declined",
-
-      showRejectionInfo: true,
-      colorClass: styles.stageWithdrawn,
-      iconColor: "#1e0e09"
-    },
-  ];
-
-  const handleStageClick = async (stage) => {
-    if (!stage || !stage.id) return;
-
-    // Trigger the filtering
-    if (onStageClick) {
-      onStageClick(stage.id === "all" ? null : stage.id);
-    }
-
-    // Handle rejection modal
-    if (stage.id === "rejected" && stage.showRejectionInfo) {
-      const auth = getAuth();
-      const user = auth.currentUser;
-
-      if (!user) return;
-
-      const q = query(
-        collection(db, "acceleratorApplications"),
-        where("acceleratorId", "==", user.uid),
-        where("status", "==", "Rejected")
-      );
-
-      const snapshot = await getDocs(q);
-      if (!snapshot.empty) {
-        const app = snapshot.docs[0].data();
-        setRejectionDetails({
-          smse: app.smseName || "Unknown SMSE",
-          date: new Date(app.updatedAt).toLocaleDateString(),
-          reason: app.responseMessage || "No reason provided.",
-          appId: snapshot.docs[0].id,
-        });
-        setShowRejectionModal(true);
-      }
-    }
-  };
-
-  if (loading) {
-    return (
-      <div style={{ padding: '1rem', textAlign: 'center', color: '#5D2A0A' }}>
-        Loading pipeline data...
-      </div>
-    );
-  }
-
-  return (
-    <div className={styles.dealflowPipelineContainer}>
-      <div className={styles.pipelineHeader}>
-        {/* Optional header content */}
-      </div>
-
-      <div className={styles.pipelineStagesContainer}>
-        <div className={styles.pipelineConnectionLine}></div>
-
-        <div className={styles.pipelineStagesRow}>
-          {stages.map((stage) => (
-            <div
-              key={stage.id}
-              className={`${styles.pipelineStage} ${stage.colorClass}`}
-              onMouseEnter={() => setHoveredStage(stage.id)}
-              onMouseLeave={() => setHoveredStage(null)}
-              onClick={() => handleStageClick(stage)}
-            >
-              <div className={styles.stageCard}>
-                <div className={styles.stageContent}>
-                  <div className={styles.stageHeader}>
-                    <h3 className={styles.stageName}>{stage.name}</h3>
-                    <div
-                      className={styles.stageIcon}
-                      style={{ color: stage.iconColor }}
-                    >
-                      <Info size={14} />
-                    </div>
-                  </div>
-                  <p className={styles.stageCount}>
-                    {loading ? "..." : stageCounts[stage.id] || 0}
-                  </p>
-                </div>
-              </div>
-
-              {/* Tooltip for stage description */}
-              <div className={styles.stageTooltip}>
-                {stage.description}
-              </div>
-            </div>
-          ))}
+const PipelineSkeleton = () => (
+  <div className="flex gap-3 overflow-x-auto pb-2 px-1">
+    {SHIMMER_DELAYS.map((delay, i) => (
+      <div
+        key={i}
+        className={`bg-shimmer-dark bg-shimmer rounded-2xl flex-shrink-0 ${delay}`}
+        style={{ width: "125px", height: "110px" }}
+      >
+        <div className="p-3 flex flex-col h-full justify-between">
+          <div className="h-2.5 w-14 rounded bg-white/20" />
+          <div className="h-6 w-10 rounded bg-white/20 mx-auto" />
         </div>
       </div>
+    ))}
+  </div>
+);
 
-      {showRejectionModal && (
-        <div
-          className={styles.pipelineModalOverlay}
-          onClick={() => setShowRejectionModal(false)}
-        >
-          <div
-            className={styles.pipelineModal}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className={styles.modalHeader}>
-              <h3 className={styles.modalTitle}>Application Status</h3>
-              <button
-                className={styles.modalCloseBtn}
-                onClick={() => setShowRejectionModal(false)}
+// ─── Stage definitions ────────────────────────────────────────────────────────
+const STAGES = [
+  { id: "initial",     name: "Matching",             description: "Total SMEs matched to this programme" },
+  { id: "application", name: "Application",          description: "Formal applications received" },
+  { id: "review",      name: "Evaluation",           description: "Applications currently under review" },
+  { id: "approved",    name: "Due Diligence",        description: "SMEs progressed to due diligence" },
+  { id: "supported",   name: "Support Approved",     description: "Applications with support approved" },
+  { id: "active",      name: "Active Support",       description: "SMEs actively receiving support" },
+  { id: "funding",     name: "Decision",             description: "Awaiting final funding decision" },
+  { id: "termsheet",   name: "Term Sheet",           description: "Term sheet issued" },
+  { id: "closed",      name: "Deal Closed",          description: "Deals successfully closed" },
+  { id: "rejected",    name: "Withdrawn / Declined", description: "Applications withdrawn or declined" },
+];
+
+// ─── Component ────────────────────────────────────────────────────────────────
+export function SupportDealFlowPipeline({ onStageClick }) {
+  const { metrics, enriched, loading } = usePortfolio();
+  const [hoveredStage, setHoveredStage] = useState(null);
+  const counts = metrics?.pipeline || {};
+
+  const handleStageClick = (stage) => {
+    console.log("Matches rendered", enriched, metrics);
+    if (!stage?.id) return;
+    if (onStageClick) onStageClick(stage.id === "all" ? null : stage.id);
+  };
+
+  return (
+    <div className="w-full bg-white rounded-[20px] p-5 shadow-lg font-['Comic_Sans_MS','Segoe_UI',cursive,sans-serif]">
+      <h2 className="text-2xl text-[#3e2723] font-semibold pb-4">
+        DealFlow Pipeline
+      </h2>
+      {loading ? (
+        <PipelineSkeleton />
+      ) : (
+        <div className="flex gap-3 overflow-x-auto pb-2">
+          {STAGES.map((stage) => {
+            const isHovered = hoveredStage === stage.id;
+            return (
+              <div
+                key={stage.id}
+                className="relative flex-shrink-0 cursor-pointer transition-transform duration-200"
+                // onMouseEnter={() => setHoveredStage(stage.id)}
+                // onMouseLeave={() => setHoveredStage(null)}
+                onClick={() => handleStageClick(stage)}
               >
-                <X size={16} />
-              </button>
-            </div>
-
-            <div className={styles.modalBody}>
-              <div className={styles.statusIndicator}>
+                {/* Stage card */}
                 <div
-                  className={styles.statusDot}
-                  style={{ backgroundColor: "#dc3545" }}
-                ></div>
-                <span className={styles.statusText}>Rejected</span>
-              </div>
+                  className={`
+                    w-[125px] h-[110px] rounded-2xl p-3 relative overflow-hidden
+                    flex flex-col justify-between transition-all duration-300
+                    ${isHovered ? "shadow-lg -translate-y-1" : "shadow-md"}
+                  `}
+                  style={{
+                    background:
+                      "linear-gradient(135deg, #140905 0%, #8D6E63 100%)",
+                  }}
+                >
+                  {/* Shine overlay */}
+                  <div
+                    className="absolute inset-0 pointer-events-none z-10"
+                    style={{
+                      background:
+                        "linear-gradient(135deg, rgba(255,255,255,0.2) 0%, rgba(255,255,255,0) 50%)",
+                    }}
+                  />
 
-              <div className={styles.rejectionContent}>
-                <h4 className={styles.rejectionTitle}>Reason for Rejection:</h4>
-                <p className={styles.rejectionReason}>{rejectionDetails.reason}</p>
-              </div>
+                  {/* Content */}
+                  <div className="relative z-20 flex flex-col h-full">
+                    {/* Header row: name + icon */}
+                    <div className="flex justify-between items-center mb-1">
+                      <h3
+                        className="text-[11px] font-bold text-white m-0 leading-tight"
+                        style={{ textShadow: "1px 1px 2px rgba(0,0,0,0.3)" }}
+                      >
+                        {stage.name}
+                      </h3>
+                      <Info
+                        size={14}
+                        className="text-white opacity-90 flex-shrink-0"
+                        style={{ textShadow: "1px 1px 2px rgba(0,0,0,0.3)" }}
+                      />
+                    </div>
 
-              <div className={styles.detailsSection}>
-                <div className={styles.detailRow}>
-                  <span className={styles.detailLabel}>SMSE:</span>
-                  <span className={styles.detailValue}>{rejectionDetails.smse}</span>
+                    {/* Count */}
+                    <p
+                      className="text-2xl font-extrabold text-white text-center mt-auto mb-0"
+                      style={{ textShadow: "1px 1px 3px rgba(0,0,0,0.3)" }}
+                    >
+                      {counts[stage.id] ?? 0}
+                    </p>
+                  </div>
+
+                  {/* Decorative circle */}
+                  <div
+                    className={`
+                      absolute w-10 h-10 rounded-full bg-white/10
+                      -bottom-2.5 -right-2.5 transition-transform duration-300
+                      ${isHovered ? "scale-110" : "scale-100"}
+                    `}
+                  />
                 </div>
-                <div className={styles.detailRow}>
-                  <span className={styles.detailLabel}>Date:</span>
-                  <span className={styles.detailValue}>{rejectionDetails.date}</span>
-                </div>
-                <div className={styles.detailRow}>
-                  <span className={styles.detailLabel}>Application ID:</span>
-                  <span className={styles.detailValue}>{rejectionDetails.appId}</span>
-                </div>
+
+                {/* Tooltip */}
+                {isHovered && (
+                  <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 z-50 text-center pointer-events-none">
+                    <div
+                      className="bg-[#3e2723] text-white text-[11px] rounded-lg px-3 py-2 w-[140px] shadow-lg leading-tight"
+                      style={{ boxShadow: "0 4px 12px rgba(0,0,0,0.2)" }}
+                    >
+                      {stage.description}
+                    </div>
+                    {/* Tooltip arrow */}
+                    <div className="absolute top-full left-1/2 -translate-x-1/2">
+                      <div className="border-4 border-transparent border-t-[#3e2723]" />
+                    </div>
+                  </div>
+                )}
               </div>
-            </div>
-          </div>
+            );
+          })}
         </div>
       )}
     </div>

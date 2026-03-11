@@ -2,8 +2,6 @@
 
 import { useState, useEffect } from "react"
 import { Bar, Line, Pie } from "react-chartjs-2"
-import Sidebar from "smses/Sidebar/Sidebar"
-import Header from "../DashboardHeader/DashboardHeader"
 import { db, auth } from "../../firebaseConfig"
 import { collection, getDocs, doc, getDoc, query, where, setDoc, addDoc, deleteDoc, orderBy } from "firebase/firestore"
 import { onAuthStateChanged } from "firebase/auth"
@@ -5570,7 +5568,6 @@ const StabilityContinuity = ({ activeSection, user, isInvestorView }) => {
 
 const PeoplePerformance = () => {
   const [activeSection, setActiveSection] = useState("employee-composition") // Changed default to employee-composition
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const [user, setUser] = useState(null)
   const [showFullDescription, setShowFullDescription] = useState(false)
   const [showDataEntryModal, setShowDataEntryModal] = useState(false)
@@ -5634,28 +5631,10 @@ const PeoplePerformance = () => {
     }
   }
 
-  useEffect(() => {
-    const checkSidebarState = () => {
-      setIsSidebarCollapsed(document.body.classList.contains("sidebar-collapsed"))
-    }
-
-    checkSidebarState()
-
-    const observer = new MutationObserver(checkSidebarState)
-    observer.observe(document.body, {
-      attributes: true,
-      attributeFilter: ["class"],
-    })
-
-    return () => observer.disconnect()
-  }, [])
-
   const getContentStyles = () => ({
     width: "100%",
     marginLeft: "0",
-    backgroundColor: "#f7f3f0",
     minHeight: "100vh",
-    padding: `70px 20px 20px ${isSidebarCollapsed ? "100px" : "270px"}`,
     transition: "padding 0.3s ease",
     boxSizing: "border-box",
   })
@@ -5681,11 +5660,7 @@ const PeoplePerformance = () => {
 
   return (
     <div style={{ display: "flex", minHeight: "100vh" }}>
-      <Sidebar />
-
       <div style={getContentStyles()}>
-        <Header />
-
         {isInvestorView && (
           <div
             style={{
@@ -5730,7 +5705,7 @@ const PeoplePerformance = () => {
           </div>
         )}
 
-        <div style={{ padding: "20px", paddingTop: "40px", marginLeft: "20px" }}>
+        <div>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
             <h1 style={{ color: "#5d4037", fontSize: "32px", fontWeight: "700", margin: 0 }}>
               People Performance
@@ -5804,7 +5779,6 @@ const PeoplePerformance = () => {
             display: "flex",
             gap: "15px",
             marginBottom: "30px",
-            padding: "15px",
             backgroundColor: "#fdfcfb",
             borderRadius: "8px",
             boxShadow: "0 2px 4px rgba(0,0,0,0.05)",

@@ -48,7 +48,6 @@ export default function SupportProgramsPage() {
   const [authChecked, setAuthChecked] = useState(false)
   const [showWelcomePopup, setShowWelcomePopup] = useState(false)
   const [currentOnboardingStep, setCurrentOnboardingStep] = useState(0)
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const [accelerators, setAccelerators] = useState([]);
   const [applications, setApplications] = useState([]);
 
@@ -97,25 +96,6 @@ export default function SupportProgramsPage() {
     };
     fetchApplications();
   }, [user]);
-
-  // Add sidebar detection
-  useEffect(() => {
-    const checkSidebarState = () => {
-      setIsSidebarCollapsed(document.body.classList.contains("sidebar-collapsed"))
-    }
-
-    // Check initial state
-    checkSidebarState()
-
-    // Watch for changes
-    const observer = new MutationObserver(checkSidebarState)
-    observer.observe(document.body, {
-      attributes: true,
-      attributeFilter: ["class"],
-    })
-
-    return () => observer.disconnect()
-  }, [])
 
   const getUserSpecificKey = (baseKey) => {
     const userId = user?.uid || "guest"
@@ -172,7 +152,6 @@ export default function SupportProgramsPage() {
     minHeight: "100vh",
     maxWidth: "100vw",
     overflowX: "hidden",
-    padding: `80px 10px 20px ${isSidebarCollapsed ? "100px" : "250px"}`,
     margin: "0",
     boxSizing: "border-box",
     position: "relative",

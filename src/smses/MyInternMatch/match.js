@@ -50,7 +50,6 @@ export default function InternMatchesPage() {
   const [showWelcomePopup, setShowWelcomePopup] = useState(false)
   const [currentOnboardingStep, setCurrentOnboardingStep] = useState(0)
   const [loading, setLoading] = useState(false)
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const [profileMatchesCount, setProfileMatchesCount] = useState(0)
   const [activeTab, setActiveTab] = useState("my-matches")
   
@@ -69,25 +68,6 @@ export default function InternMatchesPage() {
       setAuthChecked(true)
     })
     return () => unsubscribe()
-  }, [])
-
-  // Add sidebar detection
-  useEffect(() => {
-    const checkSidebarState = () => {
-      setIsSidebarCollapsed(document.body.classList.contains("sidebar-collapsed"))
-    }
-
-    // Check initial state
-    checkSidebarState()
-
-    // Watch for changes
-    const observer = new MutationObserver(checkSidebarState)
-    observer.observe(document.body, {
-      attributes: true,
-      attributeFilter: ["class"],
-    })
-
-    return () => observer.disconnect()
   }, [])
 
   const getUserSpecificKey = (baseKey) => {
@@ -131,7 +111,6 @@ export default function InternMatchesPage() {
     minHeight: "100vh",
     maxWidth: "100vw",
     overflowX: "hidden",
-    padding: `72px 10px 20px ${isSidebarCollapsed ? "80px" : "280px"}`,
     margin: "0",
     boxSizing: "border-box",
     position: "relative",

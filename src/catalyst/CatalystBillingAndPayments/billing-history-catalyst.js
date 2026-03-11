@@ -171,8 +171,6 @@ const billingStyles = {
   },
   billingContainer: {
     maxWidth: "none",
-    margin: "5rem 2rem 2rem 280px", // Left margin for sidebar space
-    padding: "0",
     backgroundColor: colors.offWhite,
     borderRadius: "1.25rem",
     boxShadow: `0 10px 25px ${colors.darkBrown}1A`,
@@ -869,7 +867,7 @@ const BillingHistoryCatalyst = ({
   }, [])
 
   return (
-    <div style={{ minHeight: "100vh", backgroundColor: colors.offWhite }}>
+    <div style={{ minHeight: "100vh", padding: "1rem 2rem" }}>
       <style>{`
         @keyframes spin {
           0% {

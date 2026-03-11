@@ -1489,7 +1489,6 @@ const DemandSustainability = ({ activeSection, currentUser, isInvestorView, onAd
 
 export default function MarketingSales() {
   const [activeSection, setActiveSection] = useState("pipeline-visibility")
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const [user, setUser] = useState(null)
   const [showFullDescription, setShowFullDescription] = useState(false)
   const [isInvestorView, setIsInvestorView] = useState(false)
@@ -1521,14 +1520,6 @@ export default function MarketingSales() {
     return () => unsubscribe()
   }, [isInvestorView, viewingSMEId])
 
-  useEffect(() => {
-    const checkSidebarState = () => setIsSidebarCollapsed(document.body.classList.contains("sidebar-collapsed"))
-    checkSidebarState()
-    const observer = new MutationObserver(checkSidebarState)
-    observer.observe(document.body, { attributes: true, attributeFilter: ["class"] })
-    return () => observer.disconnect()
-  }, [])
-
   const handleExitInvestorView = () => {
     sessionStorage.removeItem("viewingSMEId")
     sessionStorage.removeItem("viewingSMEName")
@@ -1545,7 +1536,7 @@ export default function MarketingSales() {
 
   return (
     <div className="flex min-h-screen">
-      <div style={{ width: "100%", marginLeft: 0, minHeight: "100vh", padding: `70px 20px 20px ${isSidebarCollapsed ? "100px" : "270px"}`, transition: "padding 0.3s ease", boxSizing: "border-box" }}>
+      <div style={{ width: "100%", marginLeft: 0, minHeight: "100vh", transition: "padding 0.3s ease", boxSizing: "border-box" }}>
         {isInvestorView && (
           <div className="bg-[#e8f5e9] px-5 py-4 mt-[50px] mb-5 rounded-lg border-2 border-[#4caf50] flex justify-between items-center">
             <div className="flex items-center gap-3">
@@ -1556,7 +1547,7 @@ export default function MarketingSales() {
           </div>
         )}
 
-        <div className="p-5 pt-10 ml-5">
+        <div>
           <div className="flex justify-between items-center mb-5">
             <h1 className="text-mediumBrown text-[32px] font-bold m-0">Marketing & Pipeline Performance</h1>
           </div>
@@ -1608,7 +1599,7 @@ export default function MarketingSales() {
           </div>
 
           {/* Section Buttons */}
-          <div className="flex gap-[15px] mb-7 p-[15px] bg-[#fdfcfb] rounded-lg shadow-sm flex-wrap">
+          <div className="flex gap-[15px] mb-7 bg-[#fdfcfb] rounded-lg shadow-sm flex-wrap">
             {sectionButtons.map((button) => (
               <button
                 key={button.id}

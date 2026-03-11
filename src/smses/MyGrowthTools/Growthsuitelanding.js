@@ -2,31 +2,10 @@ import { Info, CheckCircle, XCircle, Target, Shield, Zap } from "lucide-react";
 import { useState, useEffect } from "react";
 
 function GrowthSuiteLanding() {
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-
-  useEffect(() => {
-    const checkSidebarState = () => {
-      setIsSidebarCollapsed(document.body.classList.contains("sidebar-collapsed"));
-    };
-
-    // Check initial state
-    checkSidebarState();
-
-    // Watch for changes
-    const observer = new MutationObserver(checkSidebarState);
-    observer.observe(document.body, {
-      attributes: true,
-      attributeFilter: ["class"],
-    });
-
-    return () => observer.disconnect();
-  }, []);
-
   return (
     <div style={{
       minHeight: '100vh',
       backgroundColor: '#f7f3f0',
-      padding: `70px 20px 20px ${isSidebarCollapsed ? "100px" : "270px"}`,
       margin: "0",
       width: '100%',
       boxSizing: 'border-box',

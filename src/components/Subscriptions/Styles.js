@@ -1,12 +1,11 @@
 import { colors } from "../../shared/theme";
 
-const getSubStyles = (currentSidebarOpen, currentSidebarWidth) => ({
+const getSubStyles = () => ({
   container: {
     minHeight: "100vh",
     padding: "1rem",
     fontFamily: "'Inter', 'Segoe UI', 'Roboto', sans-serif",
     boxSizing: "border-box",
-    marginLeft: currentSidebarOpen ? `${currentSidebarWidth}px` : "0px",
     transition: "all 0.3s ease",
   },
   mainCard: {
@@ -537,18 +536,14 @@ const getSubStyles = (currentSidebarOpen, currentSidebarWidth) => ({
   },
 });
 
-const getBillingHistoryStyles = (
-  isSidebarCollapsed = false,
-  userType = "investor",
-) => {
+const getBillingHistoryStyles = (userType = "investor") => {
   // Base styles common to all user types
   const baseStyles = {
     // Container styles
     billingContainer: {
       maxWidth: "none",
-      margin: "5rem 2rem 2rem 280px",
       padding: "0",
-      backgroundColor: colors.offWhite,
+      backgroundColor: "red",
       borderRadius: "1.25rem",
       boxShadow: `0 10px 25px ${colors.darkBrown}1A`,
       border: `1px solid ${colors.lightTan}`,
@@ -557,11 +552,9 @@ const getBillingHistoryStyles = (
 
     billingContainerDynamic: {
       maxWidth: "none",
-      marginLeft: isSidebarCollapsed ? "80px" : "280px",
-      marginTop: "72px",
       marginBottom: "2rem",
       padding: "0",
-      backgroundColor: colors.offWhite,
+      backgroundColor: "blue",
       borderRadius: "1.25rem",
       boxShadow: `0 10px 25px ${colors.darkBrown}1A`,
       border: `1px solid ${colors.lightTan}`,
@@ -891,13 +884,11 @@ const getBillingHistoryStyles = (
   };
 };
 
-const getBillingInfoStyles = (isSidebarCollapsed, userType) => ({
+const getBillingInfoStyles = (userType) => ({
   fullPageContainer: {
     display: "flex",
     justifyContent: "center",
     maxWidth: "none",
-    marginLeft: isSidebarCollapsed ? "80px" : "280px",
-    marginTop: "72px",
     marginBottom: "2rem",
     padding: "0",
     backgroundColor: colors.offWhite,

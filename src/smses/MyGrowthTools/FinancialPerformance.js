@@ -36,7 +36,6 @@ const SECTIONS = [
 // ==================== MAIN COMPONENT ====================
 const FinancialPerformance = () => {
   const [activeSection, setActiveSection]   = useState("capital-structure");
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [user, setUser]                     = useState(null);
   const [showFullDescription, setShowFullDescription] = useState(false);
   const [isInvestorView, setIsInvestorView] = useState(false);
@@ -69,16 +68,6 @@ const FinancialPerformance = () => {
     return () => unsub();
   }, [isInvestorView, viewingSMEId]);
 
-  // Sidebar collapse observer
-  useEffect(() => {
-    const check = () =>
-      setIsSidebarCollapsed(document.body.classList.contains("sidebar-collapsed"));
-    check();
-    const obs = new MutationObserver(check);
-    obs.observe(document.body, { attributes: true, attributeFilter: ["class"] });
-    return () => obs.disconnect();
-  }, []);
-
   const handleExitInvestorView = () => {
     ["viewingSMEId", "viewingSMEName", "investorViewMode"].forEach((k) =>
       sessionStorage.removeItem(k),
@@ -86,14 +75,12 @@ const FinancialPerformance = () => {
     window.location.href = "/my-cohorts";
   };
 
-  const contentPaddingLeft = isSidebarCollapsed ? "pl-[100px]" : "pl-[270px]";
-
   return (
     <div className="flex min-h-screen">
-      <div className={`w-full bg-[#f7f3f0] min-h-screen px-5 pt-[70px] pb-5 transition-all duration-300 ${contentPaddingLeft} box-border`}>
+      <div className={`w-full min-h-screen px-5 pb-5 transition-all duration-300 box-border`}>
         {/* Investor banner */}
         {isInvestorView && (
-          <div className="bg-green-50 px-5 py-4 mt-[50px] mb-5 rounded-lg border-2 border-green-500 flex justify-between items-center">
+          <div className="bg-green-50 py-4 mt-[50px] mb-5 rounded-lg border-2 border-green-500 flex justify-between items-center">
             <div className="flex items-center gap-3">
               <span className="text-xl">👁️</span>
               <span className="text-green-800 font-semibold text-sm">
@@ -110,7 +97,7 @@ const FinancialPerformance = () => {
         )}
 
         {/* Page header */}
-        <div className="px-5 pt-10 ml-5">
+        <div className="">
           <div className="flex justify-between items-center mb-5">
             <h1 className="text-mediumBrown text-3xl font-bold m-0">Financial Performance</h1>
             <button
@@ -152,12 +139,12 @@ const FinancialPerformance = () => {
         </div>
 
         {/* Section tabs */}
-        <div className="flex gap-4 mb-7 p-4 bg-[#fdfcfb] rounded-lg shadow-sm flex-wrap">
+        <div className="flex gap-4 mb-7 bg-[#fdfcfb] rounded-lg shadow-sm flex-wrap">
           {SECTIONS.map((btn) => (
             <button
               key={btn.id}
               onClick={() => setActiveSection(btn.id)}
-              className={`px-6 py-3 border-0 rounded-md cursor-pointer font-semibold text-sm transition-all shadow-sm min-w-[180px] text-center ${
+              className={`py-3 border-0 rounded-md cursor-pointer font-semibold text-sm transition-all shadow-sm min-w-[180px] text-center ${
                 activeSection === btn.id
                   ? "bg-mediumBrown text-[#fdfcfb]"
                   : "bg-[#e8ddd4] text-mediumBrown hover:bg-[#d4c4b8]"

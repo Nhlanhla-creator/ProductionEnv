@@ -211,10 +211,7 @@ const CatalystProfileSummary = ({ formData, onEdit }) => {
         className="application-summary-container"
         style={{
           minHeight: "100vh",
-          background: "linear-gradient(135deg, #faf7f2 0%, #f5f0e1 50%, #f0e6d9 100%)",
           padding: "24px",
-          paddingLeft: "280px",
-          marginTop: "60px",
           width: "100%",
           boxSizing: "border-box",
           overflowX: "hidden",
@@ -223,7 +220,7 @@ const CatalystProfileSummary = ({ formData, onEdit }) => {
         <div
           style={{
             width: "100%",
-            maxWidth: "1200px",
+            padding: "0 32px",
             margin: "0 auto",
           }}
         >

@@ -192,11 +192,6 @@ const ProfileSummary = ({ data, onEdit }) => {
           }
         }
         
-        /* ADD THIS NEW RULE */
-        body.sidebar-collapsed .main-container {
-          padding-left: var(--sidebar-collapsed-width) !important;
-        }
-        
         /* Responsive adjustments for mobile/tablet */
         @media (max-width: 1024px) {
           .main-container {
@@ -219,8 +214,6 @@ const ProfileSummary = ({ data, onEdit }) => {
           minHeight: "100vh",
           width: "100%",
           padding: "16px",
-          paddingLeft: "calc(var(--sidebar-width) + 24px)",
-          paddingTop: "80px",
           boxSizing: "border-box",
           transition: "all 0.3s ease",
         }}
