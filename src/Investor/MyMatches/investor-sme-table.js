@@ -76,6 +76,7 @@ export function InvestorSMETable(filters, stageFilter, onDealComplete) {
   const [showMatchBreakdownModal, setShowMatchBreakdownModal] = useState(false)
   const [currentMatchBreakdown, setCurrentMatchBreakdown] = useState(null)
   const [investorProfile, setInvestorProfile] = useState(null)
+  const [termsheetStatuses, setTermsheetStatuses] = useState({});
   const [defaultMessages, setDefaultMessages] = useState({
     "Under Review":
       "Dear Valued Partner,\n\nWe are pleased to inform you that your funding application has progressed to our comprehensive review stage. Our investment committee will conduct a thorough evaluation of your business proposal, financial projections, and growth potential.\n\nWe appreciate your patience during this critical assessment period and will keep you informed of our progress.\n\nBest regards,\nInvestment Review Team",
@@ -370,6 +371,71 @@ export function InvestorSMETable(filters, stageFilter, onDealComplete) {
       setAvailabilities([])
     }
   }
+useEffect(() => {
+  const fetchTermsheetStatuses = async () => {
+    const statusMap = {};
+    
+    for (const sme of smes) {
+      if (sme.id) {
+        try {
+          const docSnap = await getDoc(doc(db, "investorApplications", sme.id));
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            if (data.termsheetStatus) {
+              statusMap[sme.id] = data.termsheetStatus;
+            }
+          }
+        } catch (error) {
+          console.error("Error fetching termsheet status:", error);
+        }
+      }
+    }
+    
+    setTermsheetStatuses(statusMap);
+  };
+  
+  if (smes.length > 0) {
+    fetchTermsheetStatuses();
+  }
+}, [smes]);
+
+// Add this function to render the termsheet status
+const renderTermsheetStatus = (sme) => {
+  const status = termsheetStatuses[sme.id];
+  
+  if (!status) {
+    return (
+      <div className={styles.termsheetStatus}>
+        <span className={styles.statusWaiting}>⏳ Awaiting Response</span>
+      </div>
+    );
+  }
+  
+  switch(status) {
+    case 'accepted':
+      return (
+        <div className={styles.termsheetStatus}>
+          <span className={styles.statusAccepted}>
+            ✓ Accepted
+          </span>
+        </div>
+      );
+    case 'declined':
+      return (
+        <div className={styles.termsheetStatus}>
+          <span className={styles.statusDeclined}>
+            ✗ Declined
+          </span>
+        </div>
+      );
+    default:
+      return (
+        <div className={styles.termsheetStatus}>
+          <span className={styles.statusPending}>⏳ Pending</span>
+        </div>
+      );
+  }
+};
 
   useEffect(() => {
     setLoading(true)
@@ -945,6 +1011,7 @@ export function InvestorSMETable(filters, stageFilter, onDealComplete) {
           investorRequiredDocuments: sme.documentURLs || [],
 
         })
+
         setModalType("view")
       } else {
         setSelectedSME(sme)
@@ -1402,7 +1469,7 @@ const handleNextStageChange = (sme) => {
       "Funding Approved": ["Termsheet", "Deal Declined"],
       "Termsheet": ["Deal Complete", "Deal Declined"],
       "Deal Complete": ["Closed"],
-      "Deal Declined": ["Closed"]
+      "Deal Declined": ["Closed","Termsheet"]
     }
 
     const allowedNextStages = validProgressions[currentStage] || []
@@ -1944,6 +2011,7 @@ const handleNextStageChange = (sme) => {
               <th>Application Date</th>
               <th>% Match</th>
               <th>Big Score</th>
+            
               <th>Status/Actions</th>
             </tr>
           </thead>
@@ -2037,7 +2105,10 @@ const handleNextStageChange = (sme) => {
                       onViewClick={() => handleBigScoreClick(sme)}
                     />
                   </td>
-                  <td style={{ whiteSpace: "nowrap" }}>
+    
+               <td style={{ whiteSpace: "nowrap" }}>
+  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+ 
                     {/* Subscription-based gating for stage updates */}
                     {subscriptionLoading ? (
                       // While we check subscription, show disabled buttons
@@ -2224,6 +2295,25 @@ const handleNextStageChange = (sme) => {
                         </>
                       )
                     )}
+                       {/* Termsheet accepted/declined icon — only shows at Termsheet stage */}
+    {(updatedStages[sme.id] || sme.pipelineStage) === "Termsheet" && termsheetStatuses[sme.id] && (
+      termsheetStatuses[sme.id] === "accepted" ? (
+        <span title="Termsheet Accepted" style={{
+          display: "inline-flex", alignItems: "center", justifyContent: "center",
+          width: "20px", height: "20px", borderRadius: "50%",
+          backgroundColor: "#4caf50", color: "white", fontSize: "12px", fontWeight: "bold",
+          flexShrink: 0
+        }}>✓</span>
+      ) : termsheetStatuses[sme.id] === "declined" ? (
+        <span title="Termsheet Declined" style={{
+          display: "inline-flex", alignItems: "center", justifyContent: "center",
+          width: "20px", height: "20px", borderRadius: "50%",
+          backgroundColor: "#f44336", color: "white", fontSize: "12px", fontWeight: "bold",
+          flexShrink: 0
+        }}>✗</span>
+      ) : null
+    )}
+                     </div>
                   </td>
                 </tr>
               ))
@@ -3811,7 +3901,7 @@ const handleNextStageChange = (sme) => {
                       </div>
                     </div>
 
-                    <div
+                    {/* <div
                       style={{
                         marginBottom: "40px",
                         backgroundColor: "#fff",
@@ -3834,123 +3924,68 @@ const handleNextStageChange = (sme) => {
                         Submitted Documents
                       </h2>
 
-                      {selectedSME.documents && selectedSME.documents.length > 0 ? (
-                        <div
-                          style={{
-                            display: "grid",
-                            gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
-                            gap: "24px",
-                          }}
-                        >
-                          {selectedSME.documents.map((docType, index) => (
-                            <div key={index}>
-                              <span
-                                style={{
-                                  display: "block",
-                                  fontSize: "16px",
-                                  fontWeight: "600",
-                                  color: "#5d4037",
-                                  marginBottom: "8px",
-                                }}
-                              >
-                                {formatLabel(docType)}
-                              </span>
-                              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                                <Check size={16} color="#388e3c" />
-                                <span style={{ fontSize: "16px", color: "#333" }}>Submitted</span>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div
-                          style={{
-                            padding: "16px",
-                            backgroundColor: "#fff3e0",
-                            borderRadius: "8px",
-                            border: "1px solid #ffb74d",
-                            display: "flex",
-                            alignItems: "center",
-                            gap: "12px",
-                          }}
-                        >
-                          <AlertTriangle size={20} color="#5d4037" />
-                          <span style={{ fontSize: "16px", color: "#5d4037" }}>
-                            No documents have been submitted yet
-                          </span>
-                        </div>
-                      )}
-                    </div>
+                     {selectedSME.documents && typeof selectedSME.documents === 'object' && Object.keys(selectedSME.documents).filter(k => !k.endsWith('UpdatedAt') && !k.endsWith('_multiple') && !k.endsWith('_count') && !k.endsWith('_multiple_updated')).length > 0 ? (
+  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "24px" }}>
+    {Object.entries(selectedSME.documents)
+      .filter(([key]) => !key.endsWith('UpdatedAt') && !key.endsWith('_multiple') && !key.endsWith('_count') && !key.endsWith('_multiple_updated') && !key.endsWith('UpdatedAt'))
+      .map(([key, url]) => (
+        <div key={key}>
+          <span style={{ display: "block", fontSize: "16px", fontWeight: "600", color: "#5d4037", marginBottom: "8px" }}>
+            {formatLabel(key)}
+          </span>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <Check size={16} color="#388e3c" />
+            <span style={{ fontSize: "16px", color: "#333" }}>Submitted</span>
+            {typeof url === 'string' && url.startsWith('http') && (
+              <a href={url} target="_blank" rel="noopener noreferrer"
+                style={{ fontSize: "14px", color: "#5d4037", textDecoration: "underline", marginLeft: "8px" }}>
+                View
+              </a>
+            )}
+          </div>
+        </div>
+    ))}
+  </div>
+) : (
+  <div style={{ padding: "16px", backgroundColor: "#fff3e0", borderRadius: "8px", border: "1px solid #ffb74d", display: "flex", alignItems: "center", gap: "12px" }}>
+    <AlertTriangle size={20} color="#5d4037" />
+    <span style={{ fontSize: "16px", color: "#5d4037" }}>No documents have been submitted yet</span>
+  </div>
+)}
+                    </div> */}
 
-                    {selectedSME.investorRequiredDocuments && selectedSME.investorRequiredDocuments.length > 0 && (
-                      <div
-                        style={{
-                          marginBottom: "40px",
-                          backgroundColor: "#fff",
-                          borderRadius: "16px",
-                          padding: "32px",
-                          boxShadow: "0 8px 24px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04)",
-                          border: "1px solid #e8e8e8",
-                        }}
-                      >
-                        <h2
-                          style={{
-                            margin: "0 0 24px 0",
-                            fontSize: "24px",
-                            fontWeight: "700",
-                            color: "#3e2723",
-                            paddingBottom: "16px",
-                            borderBottom: "3px solid #8d6e63",
-                          }}
-                        >
-                          Required Documents
-                        </h2>
-                        <div
-                          style={{
-                            display: "grid",
-                            gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
-                            gap: "24px",
-                          }}
-                        >
-                          {selectedSME.investorRequiredDocuments.map((docType, index) => (
-                            <div key={index}>
-                              <span
-                                style={{
-                                  display: "block",
-                                  fontSize: "16px",
-                                  fontWeight: "600",
-                                  color: "#5d4037",
-                                  marginBottom: "8px",
-                                }}
-                              >
-                                {formatLabel(docType)}:
-                              </span>
-                              <span style={{ fontSize: "16px", color: "#333" }}>
-                                {selectedSME.documents && selectedSME.documents[docType]
-                                  ? "Submitted"
-                                  : "Not submitted"}
-                              </span>
-                              {selectedSME.documents && selectedSME.documents[docType] && (
-                                <a
-                                  href={selectedSME.documents[docType]}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  style={{
-                                    display: "inline-block",
-                                    marginTop: "8px",
-                                    color: "#5d4037",
-                                    textDecoration: "underline",
-                                    fontSize: "14px",
-                                  }}
-                                >
-                                  View Document
-                                </a>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    )}
+                    {selectedSME.investorRequiredDocuments && 
+ typeof selectedSME.investorRequiredDocuments === 'object' && 
+ Object.keys(selectedSME.investorRequiredDocuments).length > 0 && (
+  <div style={{ marginBottom: "40px", backgroundColor: "#fff", borderRadius: "16px", padding: "32px", boxShadow: "0 8px 24px rgba(0,0,0,0.08)", border: "1px solid #e8e8e8" }}>
+    <h2 style={{ margin: "0 0 24px 0", fontSize: "24px", fontWeight: "700", color: "#3e2723", paddingBottom: "16px", borderBottom: "3px solid #8d6e63" }}>
+      Required Documents
+    </h2>
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "24px" }}>
+      {Object.entries(selectedSME.investorRequiredDocuments).map(([key, url]) => (
+        <div key={key}>
+          <span style={{ display: "block", fontSize: "16px", fontWeight: "600", color: "#5d4037", marginBottom: "8px" }}>
+            {formatLabel(key)}
+          </span>
+          {typeof url === 'string' && url.startsWith('http') ? (
+            <>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <Check size={16} color="#388e3c" />
+                <span style={{ fontSize: "16px", color: "#333" }}>Submitted</span>
+              </div>
+              <a href={url} target="_blank" rel="noopener noreferrer"
+                style={{ display: "inline-block", marginTop: "8px", color: "#5d4037", textDecoration: "underline", fontSize: "14px" }}>
+                View Document
+              </a>
+            </>
+          ) : (
+            <span style={{ fontSize: "16px", color: "#999" }}>Not submitted</span>
+          )}
+        </div>
+      ))}
+    </div>
+  </div>
+)}
                   </div>
 
                   <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "40px" }}>

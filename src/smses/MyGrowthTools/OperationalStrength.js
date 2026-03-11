@@ -2003,19 +2003,22 @@ const OperationalPerformance = () => {
   const [isInvestorView, setIsInvestorView] = useState(false)
   const [viewingSMEId, setViewingSMEId] = useState(null)
   const [viewingSMEName, setViewingSMEName] = useState("")
+  const [viewOrigin, setViewOrigin] = useState("investor") // ADD THIS LINE
 
 
-  useEffect(() => {
-    const investorViewMode = sessionStorage.getItem("investorViewMode")
-    const smeId = sessionStorage.getItem("viewingSMEId")
-    const smeName = sessionStorage.getItem("viewingSMEName")
+ useEffect(() => {
+  const investorViewMode = sessionStorage.getItem("investorViewMode")
+  const smeId = sessionStorage.getItem("viewingSMEId")
+  const smeName = sessionStorage.getItem("viewingSMEName")
+  const origin = sessionStorage.getItem("viewOrigin") // ADD THIS
 
-    if (investorViewMode === "true" && smeId) {
-      setIsInvestorView(true)
-      setViewingSMEId(smeId)
-      setViewingSMEName(smeName || "SME")
-    }
-  }, [])
+  if (investorViewMode === "true" && smeId) {
+    setIsInvestorView(true)
+    setViewingSMEId(smeId)
+    setViewingSMEName(smeName || "SME")
+    setViewOrigin(origin || "investor") // ADD THIS
+  }
+}, [])
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -2045,12 +2048,20 @@ const OperationalPerformance = () => {
     return () => observer.disconnect()
   }, [])
 
-  const handleExitInvestorView = () => {
-    sessionStorage.removeItem("viewingSMEId")
-    sessionStorage.removeItem("viewingSMEName")
-    sessionStorage.removeItem("investorViewMode")
-    window.location.href = "/my-cohorts"
+ const handleExitInvestorView = () => {
+  // Clear all session storage items
+  sessionStorage.removeItem("viewingSMEId")
+  sessionStorage.removeItem("viewingSMEName")
+  sessionStorage.removeItem("investorViewMode")
+  sessionStorage.removeItem("viewOrigin") // ADD THIS
+  
+  // Navigate based on origin
+  if (viewOrigin === "catalyst") {
+    window.location.href = "/catalyst/cohorts" // Go back to Catalyst cohorts
+  } else {
+    window.location.href = "/my-cohorts" // Go back to Investor cohorts
   }
+}
 
   const getContentStyles = () => ({
     width: "100%",
@@ -2072,49 +2083,59 @@ const OperationalPerformance = () => {
 
       <div style={getContentStyles()}>
 
-        {isInvestorView && (
-          <div
-            style={{
-              backgroundColor: "#e8f5e9",
-              padding: "16px 20px",
-              margin: "50px 0 20px 0",
-              borderRadius: "8px",
-              border: "2px solid #4caf50",
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-              <span style={{ fontSize: "20px" }}>👁️</span>
-              <span style={{ color: "#2e7d32", fontWeight: "600", fontSize: "15px" }}>
-                Investor View: Viewing {viewingSMEName}'s Operational Performance
-              </span>
-            </div>
-            <button
-              onClick={handleExitInvestorView}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#4caf50",
-                color: "white",
-                border: "none",
-                borderRadius: "6px",
-                cursor: "pointer",
-                fontWeight: "600",
-                fontSize: "14px",
-                transition: "background-color 0.3s ease",
-              }}
-              onMouseEnter={(e) => {
-                e.target.style.backgroundColor = "#45a049"
-              }}
-              onMouseLeave={(e) => {
-                e.target.style.backgroundColor = "#4caf50"
-              }}
-            >
-              Back to My Cohorts
-            </button>
-          </div>
-        )}
+      {isInvestorView && (
+  <div
+    style={{
+      backgroundColor: "#e8f5e9",
+      padding: "16px 20px",
+      margin: "50px 0 20px 0",
+      borderRadius: "8px",
+      border: "2px solid #4caf50",
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center",
+    }}
+  >
+    <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+      <span style={{ fontSize: "20px" }}>👁️</span>
+      <span style={{ color: "#2e7d32", fontWeight: "600", fontSize: "15px" }}>
+        {viewOrigin === "catalyst" 
+          ? `Catalyst View: Viewing ${viewingSMEName}'s Operational Performance`
+          : `Investor View: Viewing ${viewingSMEName}'s Operational Performance`
+        }
+      </span>
+    </div>
+    <button
+      onClick={handleExitInvestorView}
+      style={{
+        padding: "8px 16px",
+        backgroundColor: "#4caf50",
+        color: "white",
+        border: "none",
+        borderRadius: "6px",
+        cursor: "pointer",
+        fontWeight: "600",
+        fontSize: "14px",
+        transition: "background-color 0.3s ease",
+        display: "flex",
+        alignItems: "center",
+        gap: "8px"
+      }}
+      onMouseEnter={(e) => {
+        e.target.style.backgroundColor = "#45a049"
+      }}
+      onMouseLeave={(e) => {
+        e.target.style.backgroundColor = "#4caf50"
+      }}
+    >
+      <span>←</span>
+      {viewOrigin === "catalyst" 
+        ? "Back to Catalyst Cohorts"
+        : "Back to My Cohorts"
+      }
+    </button>
+  </div>
+)}
 
         <div style={{ padding: "20px", paddingTop: "40px", marginLeft: "20px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>

@@ -4,6 +4,10 @@ function OverallCompanyHealth() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [aiInsights, setAiInsights] = useState({});
   const [loading, setLoading] = useState({});
+  const [isInvestorView, setIsInvestorView] = useState(false);
+  const [viewingSMEId, setViewingSMEId] = useState(null);
+  const [viewingSMEName, setViewingSMEName] = useState("");
+  const [viewOrigin, setViewOrigin] = useState("investor");
 
   useEffect(() => {
     const checkSidebarState = () => {
@@ -20,6 +24,36 @@ function OverallCompanyHealth() {
 
     return () => observer.disconnect();
   }, []);
+
+  useEffect(() => {
+    // Check for investor/catalyst view mode
+    const investorViewMode = sessionStorage.getItem("investorViewMode");
+    const smeId = sessionStorage.getItem("viewingSMEId");
+    const smeName = sessionStorage.getItem("viewingSMEName");
+    const origin = sessionStorage.getItem("viewOrigin");
+
+    if (investorViewMode === "true" && smeId) {
+      setIsInvestorView(true);
+      setViewingSMEId(smeId);
+      setViewingSMEName(smeName || "SME");
+      setViewOrigin(origin || "investor");
+    }
+  }, []);
+
+  const handleExitInvestorView = () => {
+    // Clear all session storage items
+    sessionStorage.removeItem("viewingSMEId");
+    sessionStorage.removeItem("viewingSMEName");
+    sessionStorage.removeItem("investorViewMode");
+    sessionStorage.removeItem("viewOrigin");
+    
+    // Navigate based on origin
+    if (viewOrigin === "catalyst") {
+      window.location.href = "/catalyst/cohorts"; // Go back to Catalyst cohorts
+    } else {
+      window.location.href = "/my-cohorts"; // Go back to Investor cohorts
+    }
+  };
 
   // Demo data matching the screenshot structure
   const healthData = [
@@ -279,6 +313,57 @@ function OverallCompanyHealth() {
       transition: 'padding 0.3s ease'
     }}>
       <div style={{ maxWidth: '100%', margin: '0 auto', width: '100%' }}>
+        {/* Investor/Catalyst View Banner */}
+        {isInvestorView && (
+          <div
+            style={{
+              backgroundColor: "#e8f5e9",
+              padding: "16px 20px",
+              margin: "0 20px 20px 20px",
+              borderRadius: "8px",
+              border: "2px solid #4caf50",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+              <span style={{ fontSize: "20px" }}>👁️</span>
+              <span style={{ color: "#2e7d32", fontWeight: "600", fontSize: "15px" }}>
+                {viewOrigin === "catalyst" 
+                  ? `Catalyst View: Viewing ${viewingSMEName}'s Company Health`
+                  : `Investor View: Viewing ${viewingSMEName}'s Company Health`
+                }
+              </span>
+            </div>
+            <button
+              onClick={handleExitInvestorView}
+              style={{
+                padding: "8px 16px",
+                backgroundColor: "#4caf50",
+                color: "white",
+                border: "none",
+                borderRadius: "6px",
+                cursor: "pointer",
+                fontWeight: "600",
+                fontSize: "14px",
+                transition: "background-color 0.3s ease",
+                display: "flex",
+                alignItems: "center",
+                gap: "8px"
+              }}
+              onMouseEnter={(e) => e.target.style.backgroundColor = "#45a049"}
+              onMouseLeave={(e) => e.target.style.backgroundColor = "#4caf50"}
+            >
+              <span>←</span>
+              {viewOrigin === "catalyst" 
+                ? "Back to Catalyst Cohorts"
+                : "Back to My Cohorts"
+              }
+            </button>
+          </div>
+        )}
+
         {/* Page Header */}
         <div style={{ marginBottom: '30px', paddingLeft: '20px' }}>
           <h1 style={{
