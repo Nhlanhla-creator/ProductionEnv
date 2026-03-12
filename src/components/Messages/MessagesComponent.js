@@ -117,11 +117,17 @@ const MessagesComponent = ({ config = {} }) => {
   }, [hasRecipientDropdown, recipientsLoader]);
 
   const getContainerStyles = () => {
+    const expandedLeft = 280;
+    const collapsedLeft = 80;
+
     return {
+      minHeight: "calc(100vh - 80px)",
       maxWidth: "100vw",
       overflowX: "hidden",
-      marginTop: 0,
-      marginLeft: 0,
+      padding: "10px 0",
+      marginLeft: isSidebarCollapsed
+        ? `${collapsedLeft}px`
+        : `${expandedLeft}px`,
       boxSizing: "border-box",
       position: "relative",
       transition: "margin-left 0.3s ease",
