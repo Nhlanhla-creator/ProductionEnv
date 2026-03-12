@@ -4,7 +4,6 @@ const BillingHistorySMSE = () => {
   return (
     <ReusableBillingHistory 
       userType="sme"
-      showSidebarSpacing={true}
     />
   )
 }

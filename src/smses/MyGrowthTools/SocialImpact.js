@@ -2,8 +2,6 @@
 
 import { useState, useEffect } from "react"
 import { Bar, Line, Pie, Doughnut } from "react-chartjs-2"
-import Sidebar from "smses/Sidebar/Sidebar"
-import Header from "../DashboardHeader/DashboardHeader"
 import { db, auth } from "../../firebaseConfig"
 import { collection, addDoc, getDocs, updateDoc, deleteDoc, doc, query, where, onSnapshot, getDoc, setDoc } from "firebase/firestore"
 import { onAuthStateChanged } from "firebase/auth"
@@ -4101,7 +4099,6 @@ const GovernanceTab = ({ userData, onSave, isInvestorView }) => {
 const ESG = () => {
   const [activeMainTab, setActiveMainTab] = useState("environmental")
   const [activeSubTab, setActiveSubTab] = useState("workforce-demographics")
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const [currentUser, setCurrentUser] = useState(null)
   const [isInvestorView, setIsInvestorView] = useState(false)
   const [viewingSMEId, setViewingSMEId] = useState(null)
@@ -4156,22 +4153,6 @@ const ESG = () => {
 
     return () => unsubscribe()
   }, [isInvestorView, viewingSMEId])
-
-  useEffect(() => {
-    const checkSidebarState = () => {
-      setIsSidebarCollapsed(document.body.classList.contains("sidebar-collapsed"))
-    }
-
-    checkSidebarState()
-
-    const observer = new MutationObserver(checkSidebarState)
-    observer.observe(document.body, {
-      attributes: true,
-      attributeFilter: ["class"],
-    })
-
-    return () => observer.disconnect()
-  }, [])
 
   const fetchUserData = async (userId) => {
     try {
@@ -4250,9 +4231,7 @@ const ESG = () => {
   const getContentStyles = () => ({
     width: "100%",
     marginLeft: "0",
-    backgroundColor: "#f7f3f0",
     minHeight: "100vh",
-    padding: `70px 20px 20px ${isSidebarCollapsed ? "100px" : "270px"}`,
     transition: "padding 0.3s ease",
     boxSizing: "border-box",
   })
@@ -4265,11 +4244,7 @@ const ESG = () => {
 
   return (
     <div style={{ display: "flex", minHeight: "100vh" }}>
-      <Sidebar />
-
       <div style={getContentStyles()}>
-        <Header />
-
         {isInvestorView && (
           <div
             style={{
@@ -4324,175 +4299,174 @@ const ESG = () => {
           </div>
         )}
 
-       <div style={{ padding: "20px", paddingTop: "40px", marginLeft: "20px" }}>
-  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-    <h1 style={{ color: "#5d4037", fontSize: "32px", fontWeight: "700", margin: 0 }}>
-      ESG Impact
-    </h1>
-    
-    <button
-      onClick={() => setShowFullDescription(!showFullDescription)}
-      style={{
-        padding: "8px 16px",
-        backgroundColor: "#5d4037",
-        color: "#fdfcfb",
-        border: "none",
-        borderRadius: "6px",
-        cursor: "pointer",
-        fontWeight: "600",
-        fontSize: "13px",
-        whiteSpace: "nowrap",
-      }}
-    >
-      {showFullDescription ? "See less" : "See more about dashboard"}
-    </button>
-  </div>
-
-  {/* ESG Description */}
-  {showFullDescription && (
-    <div
-      style={{
-        backgroundColor: "#fdfcfb",
-        padding: "20px",
-        borderRadius: "8px",
-        boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
-        marginBottom: "30px",
-      }}
-    >
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
-        <div>
-          <h3 style={{ color: "#5d4037", marginTop: 0, marginBottom: "12px", fontSize: "16px" }}>
-            What this dashboard DOES
-          </h3>
-          <ul style={{ color: "#4a352f", fontSize: "14px", lineHeight: "1.7", margin: 0, paddingLeft: "20px" }}>
-            <li>Confirms ESG factors are tracked and governed</li>
-            <li>Signals readiness for disclosure to funders, corporates, DFIs</li>
-            <li>Assesses external trustworthiness and credibility</li>
-            <li>Feeds into BIG Score (Governance, Compliance, Capital Appeal)</li>
-            <li>Monitors ESG framework implementation and oversight</li>
-          </ul>
-        </div>
-
-        <div>
-          <h3 style={{ color: "#5d4037", marginTop: 0, marginBottom: "12px", fontSize: "16px" }}>
-            What this dashboard does NOT do
-          </h3>
-          <ul style={{ color: "#4a352f", fontSize: "14px", lineHeight: "1.7", margin: 0, paddingLeft: "20px" }}>
-            <li>Measure internal execution performance</li>
-            <li>Provide sustainability reporting or SDG mapping</li>
-            <li>Calculate carbon footprints or create ESG narratives</li>
-            <li>Optimize impact or operational performance</li>
-            <li>Replace audits, certifications, or statutory disclosures</li>
-          </ul>
-        </div>
+       <div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+        <h1 style={{ color: "#5d4037", fontSize: "32px", fontWeight: "700", margin: 0 }}>
+          ESG Impact
+        </h1>
+        
+        <button
+          onClick={() => setShowFullDescription(!showFullDescription)}
+          style={{
+            padding: "8px 16px",
+            backgroundColor: "#5d4037",
+            color: "#fdfcfb",
+            border: "none",
+            borderRadius: "6px",
+            cursor: "pointer",
+            fontWeight: "600",
+            fontSize: "13px",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {showFullDescription ? "See less" : "See more about dashboard"}
+        </button>
       </div>
 
-      <div style={{ marginTop: "30px", paddingTop: "20px", borderTop: "1px solid #e8ddd4" }}>
-        <h3 style={{ color: "#5d4037", marginTop: 0, marginBottom: "12px", fontSize: "16px" }}>
-          Key ESG Impact Dimensions
-        </h3>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "20px" }}>
-          <div>
-            <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "8px", fontSize: "14px", fontWeight: "600" }}>
-              Environmental
-            </h4>
-            <p style={{ color: "#4a352f", fontSize: "13px", lineHeight: "1.6", margin: 0 }}>
-              Track exposure, compliance, incidents, and controls to manage environmental risks
-            </p>
+      {/* ESG Description */}
+      {showFullDescription && (
+        <div
+          style={{
+            backgroundColor: "#fdfcfb",
+            padding: "20px",
+            borderRadius: "8px",
+            boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
+            marginBottom: "30px",
+          }}
+        >
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
+            <div>
+              <h3 style={{ color: "#5d4037", marginTop: 0, marginBottom: "12px", fontSize: "16px" }}>
+                What this dashboard DOES
+              </h3>
+              <ul style={{ color: "#4a352f", fontSize: "14px", lineHeight: "1.7", margin: 0, paddingLeft: "20px" }}>
+                <li>Confirms ESG factors are tracked and governed</li>
+                <li>Signals readiness for disclosure to funders, corporates, DFIs</li>
+                <li>Assesses external trustworthiness and credibility</li>
+                <li>Feeds into BIG Score (Governance, Compliance, Capital Appeal)</li>
+                <li>Monitors ESG framework implementation and oversight</li>
+              </ul>
+            </div>
+
+            <div>
+              <h3 style={{ color: "#5d4037", marginTop: 0, marginBottom: "12px", fontSize: "16px" }}>
+                What this dashboard does NOT do
+              </h3>
+              <ul style={{ color: "#4a352f", fontSize: "14px", lineHeight: "1.7", margin: 0, paddingLeft: "20px" }}>
+                <li>Measure internal execution performance</li>
+                <li>Provide sustainability reporting or SDG mapping</li>
+                <li>Calculate carbon footprints or create ESG narratives</li>
+                <li>Optimize impact or operational performance</li>
+                <li>Replace audits, certifications, or statutory disclosures</li>
+              </ul>
+            </div>
           </div>
-          <div>
-            <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "8px", fontSize: "14px", fontWeight: "600" }}>
-              Social
-            </h4>
-            <p style={{ color: "#4a352f", fontSize: "13px", lineHeight: "1.6", margin: 0 }}>
-              Monitor workforce demographics, ownership inclusion, and community development
-            </p>
-          </div>
-          <div>
-            <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "8px", fontSize: "14px", fontWeight: "600" }}>
-              Governance
-            </h4>
-            <p style={{ color: "#4a352f", fontSize: "13px", lineHeight: "1.6", margin: 0 }}>
-              Assess ownership structures, oversight mechanisms, policies, and risk management
+
+          <div style={{ marginTop: "30px", paddingTop: "20px", borderTop: "1px solid #e8ddd4" }}>
+            <h3 style={{ color: "#5d4037", marginTop: 0, marginBottom: "12px", fontSize: "16px" }}>
+              Key ESG Impact Dimensions
+            </h3>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "20px" }}>
+              <div>
+                <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "8px", fontSize: "14px", fontWeight: "600" }}>
+                  Environmental
+                </h4>
+                <p style={{ color: "#4a352f", fontSize: "13px", lineHeight: "1.6", margin: 0 }}>
+                  Track exposure, compliance, incidents, and controls to manage environmental risks
+                </p>
+              </div>
+              <div>
+                <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "8px", fontSize: "14px", fontWeight: "600" }}>
+                  Social
+                </h4>
+                <p style={{ color: "#4a352f", fontSize: "13px", lineHeight: "1.6", margin: 0 }}>
+                  Monitor workforce demographics, ownership inclusion, and community development
+                </p>
+              </div>
+              <div>
+                <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "8px", fontSize: "14px", fontWeight: "600" }}>
+                  Governance
+                </h4>
+                <p style={{ color: "#4a352f", fontSize: "13px", lineHeight: "1.6", margin: 0 }}>
+                  Assess ownership structures, oversight mechanisms, policies, and risk management
+                </p>
+              </div>
+            </div>
+            <p style={{ color: "#4a352f", fontSize: "13px", lineHeight: "1.6", marginTop: "15px" }}>
+              Dashboards show the data. ESG confirms it exists, is governed, and is credible for external stakeholders.
             </p>
           </div>
         </div>
-        <p style={{ color: "#4a352f", fontSize: "13px", lineHeight: "1.6", marginTop: "15px" }}>
-          Dashboards show the data. ESG confirms it exists, is governed, and is credible for external stakeholders.
-        </p>
-      </div>
-    </div>
-  )}
+      )}
 
-  {/* Main Tab Buttons */}
-  <div
-    style={{
-      display: "flex",
-      gap: "15px",
-      margin: "30px 0",
-      padding: "15px",
-      backgroundColor: "#fdfcfb",
-      borderRadius: "8px",
-      boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
-      flexWrap: "wrap",
-    }}
-  >
-    {mainTabs.map((tab) => (
-      <button
-        key={tab.id}
-        onClick={() => {
-          setActiveMainTab(tab.id)
-          if (tab.id === "social") setActiveSubTab("workforce-demographics")
-        }}
-        style={{
-          padding: "12px 24px",
-          backgroundColor: activeMainTab === tab.id ? "#5d4037" : "#e8ddd4",
-          color: activeMainTab === tab.id ? "#fdfcfb" : "#5d4037",
-          border: "none",
-          borderRadius: "6px",
-          cursor: "pointer",
-          fontWeight: "600",
-          fontSize: "15px",
-          transition: "all 0.3s ease",
-          boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
-          minWidth: "150px",
-          textAlign: "center",
-        }}
-      >
-        {tab.label}
-      </button>
-    ))}
-  </div>
+          {/* Main Tab Buttons */}
+          <div
+            style={{
+              display: "flex",
+              gap: "15px",
+              margin: "30px 0",
+              backgroundColor: "#fdfcfb",
+              borderRadius: "8px",
+              boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
+              flexWrap: "wrap",
+            }}
+          >
+            {mainTabs.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => {
+                  setActiveMainTab(tab.id)
+                  if (tab.id === "social") setActiveSubTab("workforce-demographics")
+                }}
+                style={{
+                  padding: "12px 24px",
+                  backgroundColor: activeMainTab === tab.id ? "#5d4037" : "#e8ddd4",
+                  color: activeMainTab === tab.id ? "#fdfcfb" : "#5d4037",
+                  border: "none",
+                  borderRadius: "6px",
+                  cursor: "pointer",
+                  fontWeight: "600",
+                  fontSize: "15px",
+                  transition: "all 0.3s ease",
+                  boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
+                  minWidth: "150px",
+                  textAlign: "center",
+                }}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
 
-  {/* Tab Content */}
-  {activeMainTab === "environmental" && (
-    <EnvironmentalTab 
-      userData={userData}
-      onSave={handleSaveData}
-      isInvestorView={isInvestorView}
-    />
-  )}
+          {/* Tab Content */}
+          {activeMainTab === "environmental" && (
+            <EnvironmentalTab 
+              userData={userData}
+              onSave={handleSaveData}
+              isInvestorView={isInvestorView}
+            />
+          )}
 
-  {activeMainTab === "social" && (
-    <SocialTab 
-      activeSubTab={activeSubTab}
-      setActiveSubTab={setActiveSubTab}
-      userData={userData}
-      onSave={handleSaveData}
-      isInvestorView={isInvestorView}
-      fundingAppData={fundingAppData}
-      financialData={financialData}
-    />
-  )}
+          {activeMainTab === "social" && (
+            <SocialTab 
+              activeSubTab={activeSubTab}
+              setActiveSubTab={setActiveSubTab}
+              userData={userData}
+              onSave={handleSaveData}
+              isInvestorView={isInvestorView}
+              fundingAppData={fundingAppData}
+              financialData={financialData}
+            />
+          )}
 
-  {activeMainTab === "governance" && (
-    <GovernanceTab 
-      userData={userData}
-      onSave={handleSaveData}
-      isInvestorView={isInvestorView}
-    />
-  )}
-</div>
+          {activeMainTab === "governance" && (
+            <GovernanceTab 
+              userData={userData}
+              onSave={handleSaveData}
+              isInvestorView={isInvestorView}
+            />
+          )}
+        </div>
       </div>
 
       <DataEntryModal

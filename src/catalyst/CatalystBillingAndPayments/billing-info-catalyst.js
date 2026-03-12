@@ -130,8 +130,7 @@ const BillingInfoCatalyst = () => {
       display: "flex",
       justifyContent: "center",
       alignItems: "flex-start",
-      paddingTop: "2rem",
-      paddingBottom: "2rem",
+      padding: "2rem 4rem"
     },
     contentWrapper: {
       borderRadius: "24px",
@@ -140,7 +139,6 @@ const BillingInfoCatalyst = () => {
       border: `1px solid ${colors.lightTan}`,
       position: "relative",
       overflow: "hidden",
-      maxWidth: "800px",
       width: "100%",
       backgroundColor: colors.offWhite,
     },

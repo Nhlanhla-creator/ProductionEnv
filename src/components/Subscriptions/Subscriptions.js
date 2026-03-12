@@ -118,9 +118,6 @@ const validate = (email, fullName) => {
 
 const ReusableSubscription = ({ 
   userType = "investor",
-  sidebarOpen = true, 
-  sidebarWidth = 280, 
-  onSidebarToggle,
   showAddOns = false,
   customTitle = null,
   customSubtitle = null
@@ -161,30 +158,7 @@ const ReusableSubscription = ({
   const [history, setHistory] = useState([])
   const [errors, setErrors] = useState({})
 
-  // Internal sidebar state
-  const [internalSidebarOpen, setInternalSidebarOpen] = useState(true)
-  const [internalSidebarWidth, setInternalSidebarWidth] = useState(280)
-
-  // Detect whether the global sidebar is collapsed (body class)
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
-  useEffect(() => {
-    const checkSidebarState = () => {
-      setIsSidebarCollapsed(document.body.classList.contains("sidebar-collapsed"))
-    }
-
-    checkSidebarState()
-
-    const observer = new MutationObserver(checkSidebarState)
-    observer.observe(document.body, { attributes: true, attributeFilter: ["class"] })
-
-    return () => observer.disconnect()
-  }, [])
-
-  // Use props if provided, otherwise use internal state
-  const currentSidebarOpen = sidebarOpen !== undefined ? sidebarOpen : internalSidebarOpen
-  const currentSidebarWidth = sidebarWidth !== undefined ? sidebarWidth : internalSidebarWidth
-
-  const styles = getSubStyles(currentSidebarOpen, currentSidebarWidth)
+  const styles = getSubStyles()
 
   // Helper function to check if user is new (for trial eligibility)
   const isNewUser = () => {
@@ -865,16 +839,9 @@ const ReusableSubscription = ({
     loadUserData()
   }, [user])
 
-  // Dynamic container style to respect sidebar collapse and header spacer
-  const containerStyle = {
-    ...styles.container,
-    marginLeft: isSidebarCollapsed ? "80px" : (currentSidebarOpen ? `${currentSidebarWidth}px` : "0px"),
-    paddingTop: "72px",
-  }
-
   if (isLoading) {
     return (
-      <div style={containerStyle}>
+      <div style={styles.container}>
         <div style={styles.mainCard}>
           <div style={{ textAlign: "center", padding: "4rem 0" }}>
             <div
@@ -898,7 +865,7 @@ const ReusableSubscription = ({
   }
 
   return (
-    <div style={containerStyle}>
+    <div style={styles.container}>
       <div style={styles.mainCard}>
         <div style={styles.decorativeElement}></div>
 
@@ -1696,28 +1663,6 @@ const ReusableSubscription = ({
         @keyframes progressSlide {
           0% { transform: translateX(-100%); }
           100% { transform: translateX(300%); }
-        }
-
-        /* Sidebar responsive adjustments */
-        @media (max-width: 1400px) {
-          .subscription-container {
-            margin-left: ${currentSidebarOpen ? "250px" : "0px"} !important;
-            width: ${currentSidebarOpen ? "calc(100% - 250px)" : "100%"} !important;
-          }
-        }
-
-        @media (max-width: 1200px) {
-          .subscription-container {
-            margin-left: ${currentSidebarOpen ? "220px" : "0px"} !important;
-            width: ${currentSidebarOpen ? "calc(100% - 220px)" : "100%"} !important;
-          }
-        }
-
-        @media (max-width: 1024px) {
-          .subscription-container {
-            margin-left: ${currentSidebarOpen ? "200px" : "0px"} !important;
-            width: ${currentSidebarOpen ? "calc(100% - 200px)" : "100%"} !important;
-          }
         }
 
         @media (max-width: 768px) {

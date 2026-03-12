@@ -54,7 +54,6 @@ export default function CustomerMatchesPage() {
   const [applications, setApplications] = useState([])
   const [loading, setLoading] = useState(true)
   const [successfulDeals, setSuccessfulDeals] = useState([])
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
@@ -62,25 +61,6 @@ export default function CustomerMatchesPage() {
       setAuthChecked(true)
     })
     return () => unsubscribe()
-  }, [])
-
-  // Add sidebar detection
-  useEffect(() => {
-    const checkSidebarState = () => {
-      setIsSidebarCollapsed(document.body.classList.contains("sidebar-collapsed"))
-    }
-
-    // Check initial state
-    checkSidebarState()
-
-    // Watch for changes
-    const observer = new MutationObserver(checkSidebarState)
-    observer.observe(document.body, {
-      attributes: true,
-      attributeFilter: ["class"],
-    })
-
-    return () => observer.disconnect()
   }, [])
 
   // Fetch applications when user changes
@@ -202,7 +182,6 @@ export default function CustomerMatchesPage() {
     minHeight: "100vh",
     maxWidth: "100vw",
     overflowX: "hidden",
-    padding: `80px 10px 20px ${isSidebarCollapsed ? "100px" : "250px"}`,
     margin: "0",
     boxSizing: "border-box",
     position: "relative",

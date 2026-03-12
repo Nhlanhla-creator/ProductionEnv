@@ -293,7 +293,11 @@ import { AcceleratorInsights as CatalystInsights } from "./catalyst/CatalystInsi
 import { InvestorInsights } from "./Investor/InvestorInsights/investorInsights"
 import MyCohorts from "./Investor/MyCohorts/MyCohorts"
 
-import SkeletonLoader from "shared/SkeletonLoader"
+import SkeletonLoader from "./shared/SkeletonLoader"
+import CatalystMessages from "./catalyst/CatalystMessages/Messages"
+import BillingInfoCatalyst from "catalyst/CatalystBillingAndPayments/billing-info-catalyst"
+import CatalystSubscriptions from "catalyst/CatalystBillingAndPayments/catalyst-subscription"
+import BillingHistoryCatalyst from "catalyst/CatalystBillingAndPayments/billing-history-catalyst"
 
 // Initial Data States
 const initialFormData = {
@@ -457,7 +461,7 @@ function App() {
 
   // Admin Protected Layout
   const AdminLayout = ({ children }) => {
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(true);
 
   useEffect(() => {
     const updateSidebarState = () => {
@@ -517,10 +521,23 @@ function App() {
   // SME Protected Layout
   const SMELayout = ({ children }) => {
     const location = useLocation()
+    const [collapsed, setCollapsed] = useState(true);
+
+    useEffect(() => {
+      const check = () => setCollapsed(document.body.classList.contains("sidebar-collapsed"));
+      check();
+      const obs = new MutationObserver(check);
+      obs.observe(document.body, {
+        attributes: true,
+        attributeFilter: ["class"],
+      });
+      return () => obs.disconnect();
+    }, []);
+
     return (
       <div className="app-layout">
         <SMESidebar companyName={companyName} />
-        <div className="main-content">
+        <div className={`${styles.mainContent} ${collapsed ? styles.sidebarCollapsed : styles.sidebarExpanded}`}>
           <SMSEHeader companyName={companyName} profileImage={profileImage} setProfileImage={setProfileImage} />
           <div className="page-content">{children}</div>
         </div>
@@ -546,16 +563,29 @@ function App() {
   // Support Program Protected Layout
   const SupportProgramLayout = ({ children }) => {
     const location = useLocation()
+    const [collapsed, setCollapsed] = useState(true);
+
+    useEffect(() => {
+      const check = () => setCollapsed(document.body.classList.contains("sidebar-collapsed"));
+      check();
+      const obs = new MutationObserver(check);
+      obs.observe(document.body, {
+        attributes: true,
+        attributeFilter: ["class"],
+      });
+      return () => obs.disconnect();
+    }, []);
+
     return (
       <div className="app-layout">
         <SupportProgramSidebar companyName={companyName} />
-        <div className="main-content">
+        <div className={`${styles.mainContent} ${collapsed ? styles.sidebarCollapsed : styles.sidebarExpanded}`}>
           <SupportProgramHeader
             companyName={companyName}
             profileImage={profileImage}
             setProfileImage={setProfileImage}
           />
-          <div className="page-content">{children}</div>
+          <div>{children}</div>
         </div>
       </div>
     )
@@ -601,7 +631,7 @@ function App() {
             profileImage={profileImage}
             setProfileImage={setProfileImage}
           />
-          <div className="page-content">{children}</div>
+          <div>{children}</div>
         </div>
       </div>
     )
@@ -962,12 +992,15 @@ function App() {
         <Route path="/support-beneficiaries" element={withProtection(FindMatches, {}, renderSupportProgramRoute)} />
         <Route path="/support-matches" element={withProtection(SupportMatchesPage, {}, renderSupportProgramRoute)} />
         <Route path="/support-documents" element={withProtection(CatalystDocuments, {}, renderSupportProgramRoute)} />
-        <Route path="/support-messages" element={withProtection(Messages, {}, renderSupportProgramRoute)} />
+        <Route path="/support-messages" element={withProtection(CatalystMessages, {}, renderSupportProgramRoute)} />
         <Route path="/support-calendar" element={withProtection(Calendar, {}, renderSupportProgramRoute)} />
         <Route path="/support-analytics" element={withProtection(GrowthEnabler, {}, renderSupportProgramRoute)} />
         <Route path="/support-settings" element={withProtection(CatalystSettings, {}, renderSupportProgramRoute)} />
         <Route path="/catalyst/cohorts" element={withProtection(CatalystCohorts, {}, renderSupportProgramRoute)} />
         <Route path="/catalyst/investments" element={withProtection(CatalystInvestments, {}, renderSupportProgramRoute)} />
+        <Route path="support/billing/info" element={withProtection(BillingInfoCatalyst, {}, renderSupportProgramRoute)} />
+        <Route path="support/billing/subscriptions" element={withProtection(CatalystSubscriptions, {}, renderSupportProgramRoute)} />
+        <Route path="support/billing/history" element={withProtection(BillingHistoryCatalyst, {}, renderSupportProgramRoute)} />
 
         {/* Protected Advisor Routes */}
         <Route path="/advisor-dashboard" element={withProtection(AdvisorDashboardPage, {}, renderAdvisorRoute)} />

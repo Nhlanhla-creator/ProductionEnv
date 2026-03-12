@@ -500,6 +500,7 @@ function MyCohorts() {
                         </span>
                       </td>
 
+<<<<<<< HEAD
                     {/* Actions */}
 <td style={{ padding: "8px", minWidth: "150px" }}>
 <div style={{ 
@@ -600,6 +601,28 @@ function MyCohorts() {
     </button>
   </div>
 </td>
+=======
+                      {/* Actions */}
+                      <td className="p-5 min-w-[200px]">
+                        <div className="flex gap-2 justify-center flex-wrap">
+                          <button
+                            onClick={() => handleViewGrowthSuite(cohort)}
+                            className="bg-[#a67c52] text-white border-none rounded-md px-3 py-2 text-xs font-semibold cursor-pointer flex items-center gap-1 transition-all duration-200 hover:bg-[#8d6e63] hover:-translate-y-0.5 whitespace-nowrap"
+                          >
+                            <Wrench size={13} />
+                            Growth Suite
+                          </button>
+
+                          <button
+                            onClick={() => handleViewDetails(cohort)}
+                            className="bg-white text-[#a67c52] border border-[#a67c52] rounded-md px-3 py-2 text-xs font-semibold cursor-pointer flex items-center gap-1 transition-all duration-200 hover:bg-[#faf7f2] whitespace-nowrap"
+                          >
+                            <Eye size={13} />
+                            Details
+                          </button>
+                        </div>
+                      </td>
+>>>>>>> 49fcab455ac41a533d470f1da96f4b5ecdd1ad35
                     </tr>
                   ))}
                 </tbody>

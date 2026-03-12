@@ -53,7 +53,6 @@ export default function FundingMatchesPage() {
   const [insightsData, setInsightsData] = useState(null)
   const [primaryMatchCount, setPrimaryMatchCount] = useState(0)
   const [selectedPipelineStage, setSelectedPipelineStage] = useState(null)
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const [activeTab, setActiveTab] = useState("matches")
   
   // Use subscription hook
@@ -67,25 +66,6 @@ export default function FundingMatchesPage() {
       setAuthChecked(true)
     })
     return () => unsubscribe()
-  }, [])
-
-  // Add sidebar detection
-  useEffect(() => {
-    const checkSidebarState = () => {
-      setIsSidebarCollapsed(document.body.classList.contains("sidebar-collapsed"))
-    }
-
-    // Check initial state
-    checkSidebarState()
-
-    // Watch for changes
-    const observer = new MutationObserver(checkSidebarState)
-    observer.observe(document.body, {
-      attributes: true,
-      attributeFilter: ["class"],
-    })
-
-    return () => observer.disconnect()
   }, [])
 
   const handleFilterChange = (newFilters) => {
@@ -152,7 +132,6 @@ export default function FundingMatchesPage() {
     minHeight: "100vh",
     maxWidth: "100vw",
     overflowX: "hidden",
-    padding: `72px 10px 20px ${isSidebarCollapsed ? "80px" : "280px"}`,
     margin: "0",
     boxSizing: "border-box",
     position: "relative",

@@ -1,195 +1,207 @@
-import React, { useState } from 'react';
-import { Bar, Line } from 'react-chartjs-2';
-import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, LineElement, PointElement, Tooltip, Legend } from 'chart.js';
-ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, Tooltip, Legend);
+import React, { useState } from "react";
+import { Bar } from "react-chartjs-2";
+import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Tooltip, Legend } from "chart.js";
+import { usePortfolio } from "../../context/PortfolioContext";
+ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend);
 
-const B = { darkest:'#3b2409', dark:'#5e3f26', medium:'#7d5a36', warm:'#9c7c54', light:'#b8a082', pale:'#d4c4b0', offwhite:'#f0e8de' };
-const C = ['#3b2409','#5e3f26','#7d5a36','#9c7c54','#b8a082','#c2a882'];
+const B = { darkest: "#3b2409", dark: "#5e3f26", medium: "#7d5a36", warm: "#9c7c54", light: "#b8a082", pale: "#d4c4b0", offwhite: "#f0e8de" };
+const C = ["#3b2409", "#5e3f26", "#7d5a36", "#9c7c54", "#b8a082", "#c2a882"];
 
 const Card = ({ title, subLabel, children }) => (
-  <div style={{ background:'#fff', borderRadius:'10px', padding:'20px', minHeight:'320px',
-    boxShadow:'0 2px 10px rgba(59,36,9,0.07)', border:`1px solid ${B.pale}`, display:'flex', flexDirection:'column' }}>
-    <div style={{ paddingBottom:'10px', borderBottom:`1px solid ${B.offwhite}`, marginBottom:'10px' }}>
-      <h3 style={{ fontSize:'14px', fontWeight:'700', color:B.dark, margin:0 }}>{title}</h3>
+  <div style={{ background: "#fff", borderRadius: "10px", padding: "20px", minHeight: "320px", boxShadow: "0 2px 10px rgba(59,36,9,0.07)", border: `1px solid ${B.pale}`, display: "flex", flexDirection: "column" }}>
+    <div style={{ paddingBottom: "10px", borderBottom: `1px solid ${B.offwhite}`, marginBottom: "10px" }}>
+      <h3 style={{ fontSize: "14px", fontWeight: "700", color: B.dark, margin: 0 }}>{title}</h3>
     </div>
-    {subLabel && <div style={{ fontSize:'11px', color:B.warm, background:B.offwhite, padding:'4px 9px',
-      borderRadius:'4px', borderLeft:`3px solid ${B.medium}`, marginBottom:'12px', fontWeight:'500' }}>{subLabel}</div>}
-    <div style={{ flex:1, display:'flex', flexDirection:'column' }}>{children}</div>
+    {subLabel && <div style={{ fontSize: "11px", color: B.warm, background: B.offwhite, padding: "4px 9px", borderRadius: "4px", borderLeft: `3px solid ${B.medium}`, marginBottom: "12px", fontWeight: "500" }}>{subLabel}</div>}
+    <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>{children}</div>
   </div>
 );
 
 const Pill = ({ label, active, onClick }) => (
-  <button onClick={onClick} style={{ padding:'5px 14px', borderRadius:'20px', cursor:'pointer', fontSize:'11px',
-    border:`1.5px solid ${active ? B.medium : B.pale}`, fontWeight: active ? 700 : 500,
-    background: active ? B.medium : '#fff', color: active ? '#fff' : B.medium }}>
+  <button onClick={onClick} style={{ padding: "5px 14px", borderRadius: "20px", cursor: "pointer", fontSize: "11px", border: `1.5px solid ${active ? B.medium : B.pale}`, fontWeight: active ? 700 : 500, background: active ? B.medium : "#fff", color: active ? "#fff" : B.medium }}>
     {label}
   </button>
 );
 
-const comboOpts = (yCb) => ({
-  responsive:true, maintainAspectRatio:false, animation:false,
-  plugins:{ legend:{ position:'bottom', labels:{ color:B.dark, font:{size:11}, boxWidth:12 } } },
-  scales:{
-    x:{ grid:{display:false}, ticks:{color:B.dark, font:{size:11}} },
-    y:{ beginAtZero:true, grid:{color:B.offwhite}, ticks:{ color:B.dark, callback: yCb || (v=>v) } },
+const EmptyState = ({ message }) => (
+  <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: B.light, fontSize: "12px", fontStyle: "italic", textAlign: "center", padding: "1rem" }}>
+    {message || "No data yet"}
+  </div>
+);
+
+const barOpts = (yCb) => ({
+  responsive: true, maintainAspectRatio: false, animation: false,
+  plugins: { legend: { position: "bottom", labels: { color: B.dark, font: { size: 11 }, boxWidth: 12 } }, datalabels: { display: false } },
+  scales: {
+    x: { grid: { display: false }, ticks: { color: B.dark, font: { size: 10 } } },
+    y: { beginAtZero: true, grid: { color: B.offwhite }, ticks: { color: B.dark, callback: yCb || (v => v) } },
   },
 });
 
-const COHORTS = ['Cohort A','Cohort B','Cohort C','Cohort D','Cohort E'];
+// ── Revenue per SME ───────────────────────────────────────────────────────────
+const RevenuePerSME = () => {
+  const { metrics } = usePortfolio();
+  const perSME = (metrics?.revenue?.perSME || []).filter(s => s.revenue > 0);
 
-/* ── 1. Revenue Growth ── */
-const RevenueGrowth = () => {
-  const [view, setView] = useState('bar');
-  const baseline = [820,640,1100,520,900];
-  const actual   = [1250,980,1620,740,1380];
-  const post     = [1540,1210,2050,890,1700];
-  const barData = { labels:COHORTS, datasets:[
-    { label:'Baseline (R\'000)', data:baseline, backgroundColor:C[4] },
-    { label:'Actual (R\'000)',   data:actual,   backgroundColor:C[2] },
-    { label:'Post (R\'000)',     data:post,     backgroundColor:C[0] },
-  ]};
-  const lineData = { labels:COHORTS, datasets:[
-    { label:'Baseline', data:baseline, borderColor:C[4], backgroundColor:'transparent', tension:0.4, pointBackgroundColor:C[4] },
-    { label:'Actual',   data:actual,   borderColor:C[2], backgroundColor:'transparent', tension:0.4, pointBackgroundColor:C[2] },
-    { label:'Post',     data:post,     borderColor:C[0], backgroundColor:'transparent', tension:0.4, pointBackgroundColor:C[0] },
-  ]};
   return (
-    <Card title="Revenue Growth" subLabel="Baseline → Actual → Post-programme (R'000)">
-      <div style={{ display:'flex', gap:'6px', marginBottom:'10px' }}>
-        <Pill label="Bar" active={view==='bar'} onClick={()=>setView('bar')} />
-        <Pill label="Line" active={view==='line'} onClick={()=>setView('line')} />
-      </div>
-      <div style={{ flex:1, minHeight:'210px' }}>
-        {view==='bar'
-          ? <Bar options={comboOpts(v=>'R'+v+'k')} data={barData} />
-          : <Line options={comboOpts(v=>'R'+v+'k')} data={lineData} />}
-      </div>
+    <Card title="Annual Revenue per SME" subLabel="Actual revenue from SME profiles (R)">
+      {perSME.length > 0 ? (
+        <>
+          <div style={{ flex: 1, minHeight: "240px" }}>
+            <Bar options={barOpts(v => "R" + (v / 1000000).toFixed(1) + "M")} data={{
+              labels: perSME.map(s => s.name),
+              datasets: [{ label: "Annual Revenue (R)", data: perSME.map(s => s.revenue), backgroundColor: C.slice(0, perSME.length) }],
+            }} />
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", marginTop: "10px", padding: "8px 12px", background: B.offwhite, borderRadius: "6px" }}>
+            <span style={{ fontSize: "12px", color: B.dark, fontWeight: 600 }}>Portfolio Total: <strong>R{(metrics.revenue.total / 1000000).toFixed(1)}M</strong></span>
+            <span style={{ fontSize: "12px", color: B.warm }}>Avg: R{(metrics.revenue.avg / 1000000).toFixed(1)}M / SME</span>
+          </div>
+        </>
+      ) : <EmptyState message="Revenue data not yet available in profiles" />}
     </Card>
   );
 };
 
-/* ── 2. Profitability Growth ── */
-const ProfitabilityGrowth = () => {
-  const [view, setView] = useState('bar');
-  const baseline = [12,8,18,6,14];
-  const actual   = [19,14,26,10,21];
-  const post     = [24,18,33,13,27];
-  const barData = { labels:COHORTS, datasets:[
-    { label:'Baseline (%)', data:baseline, backgroundColor:C[4] },
-    { label:'Actual (%)',   data:actual,   backgroundColor:C[2] },
-    { label:'Post (%)',     data:post,     backgroundColor:C[0] },
-  ]};
-  const lineData = { labels:COHORTS, datasets:[
-    { label:'Baseline', data:baseline, borderColor:C[4], backgroundColor:'transparent', tension:0.4, pointBackgroundColor:C[4] },
-    { label:'Actual',   data:actual,   borderColor:C[2], backgroundColor:'transparent', tension:0.4, pointBackgroundColor:C[2] },
-    { label:'Post',     data:post,     borderColor:C[0], backgroundColor:'transparent', tension:0.4, pointBackgroundColor:C[0] },
-  ]};
-  return (
-    <Card title="Profitability Growth" subLabel="Net margin % — baseline → actual → post-programme">
-      <div style={{ display:'flex', gap:'6px', marginBottom:'10px' }}>
-        <Pill label="Bar" active={view==='bar'} onClick={()=>setView('bar')} />
-        <Pill label="Line" active={view==='line'} onClick={()=>setView('line')} />
-      </div>
-      <div style={{ flex:1, minHeight:'210px' }}>
-        {view==='bar'
-          ? <Bar options={comboOpts(v=>v+'%')} data={barData} />
-          : <Line options={comboOpts(v=>v+'%')} data={lineData} />}
-      </div>
-    </Card>
-  );
-};
+// ── Profitability Status ──────────────────────────────────────────────────────
+const ProfitabilityStatus = () => {
+  const { metrics } = usePortfolio();
+  const perSME = metrics?.revenue?.perSME || [];
+  const statuses = perSME.filter(s => s.profitability && s.profitability !== "Unknown");
 
-/* ── 3. Capital Raise ── */
-const CapitalRaise = () => (
-  <Card title="Capital Raise" subLabel="Total capital raised per cohort (R'000)">
-    <div style={{ flex:1, minHeight:'240px' }}>
-      <Bar options={comboOpts(v=>'R'+v+'k')} data={{ labels:COHORTS, datasets:[
-        { label:"Capital Raised (R'000)", data:[3200,2400,4800,1800,3900], backgroundColor:C.slice(0,5) },
-      ]}} />
-    </div>
-  </Card>
-);
+  const statusCounts = statuses.reduce((acc, s) => {
+    acc[s.profitability] = (acc[s.profitability] || 0) + 1;
+    return acc;
+  }, {});
+  const labels = Object.keys(statusCounts);
+  const values = labels.map(k => statusCounts[k]);
+  const statusColors = { Profitable: "#7d5a36", "Break-even": "#b8a082", "Pre-revenue": "#d4c4b0", Unprofitable: "#9b3a1a" };
 
-/* ── 4. ROI Gauge ── */
-const ROI = () => {
-  const ROI_VAL = 3.4;
-  const R=54, CIRC=2*Math.PI*R;
-  const offset = CIRC - (CIRC * Math.min(ROI_VAL, 10)) / 10;
   return (
-    <Card title="ROI" subLabel="Blended return on investment across cohort">
-      <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:'12px' }}>
-        <svg width="160" height="160" viewBox="0 0 160 160">
-          <circle cx="80" cy="80" r={R} stroke={B.pale} strokeWidth="11" fill="none" />
-          <circle cx="80" cy="80" r={R} stroke={B.dark} strokeWidth="11" fill="none" strokeLinecap="round"
-            strokeDasharray={CIRC} strokeDashoffset={offset} transform="rotate(-90 80 80)" />
-          <text x="80" y="72" textAnchor="middle" fill={B.darkest} fontSize="26" fontWeight="800">{ROI_VAL}x</text>
-          <text x="80" y="92" textAnchor="middle" fill={B.warm} fontSize="12">return</text>
-        </svg>
-        <div style={{ display:'flex', gap:'24px' }}>
-          {[['Portfolio Avg','3.4x',B.dark],['Best Cohort','4.8x',B.medium],['Worst Cohort','1.9x',B.warm]].map(([l,v,col])=>(
-            <div key={l} style={{ textAlign:'center' }}>
-              <div style={{ fontSize:'10px', color:B.warm, marginBottom:'3px' }}>{l}</div>
-              <div style={{ fontSize:'16px', fontWeight:'700', color:col }}>{v}</div>
+    <Card title="Profitability Status" subLabel="Distribution across portfolio SMEs">
+      {labels.length > 0 ? (
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "10px", justifyContent: "center" }}>
+          {labels.map((l, i) => (
+            <div key={l} style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <div style={{ width: "12px", height: "12px", borderRadius: "2px", background: statusColors[l] || C[i], flexShrink: 0 }} />
+              <div style={{ flex: 1, background: B.offwhite, borderRadius: "4px", height: "24px", overflow: "hidden" }}>
+                <div style={{ width: `${(values[i] / statuses.length) * 100}%`, background: statusColors[l] || C[i], height: "100%", display: "flex", alignItems: "center", paddingLeft: "8px" }}>
+                  <span style={{ fontSize: "11px", color: "#fff", fontWeight: 600 }}>{values[i]}</span>
+                </div>
+              </div>
+              <span style={{ fontSize: "12px", color: B.dark, minWidth: "90px" }}>{l}</span>
             </div>
           ))}
         </div>
+      ) : <EmptyState message="Profitability data not yet in profiles" />}
+    </Card>
+  );
+};
+
+// ── Capital Required ──────────────────────────────────────────────────────────
+const CapitalRequired = () => {
+  const { metrics } = usePortfolio();
+  const perSME = (metrics?.revenue?.perSME || []).filter(s => s.fundingRequired > 0);
+
+  return (
+    <Card title="Capital Required per SME" subLabel="Funding requested per SME (R)">
+      {perSME.length > 0 ? (
+        <div style={{ flex: 1, minHeight: "240px" }}>
+          <Bar options={barOpts(v => "R" + (v / 1000000).toFixed(1) + "M")} data={{
+            labels: perSME.map(s => s.name),
+            datasets: [{ label: "Funding Required (R)", data: perSME.map(s => s.fundingRequired), backgroundColor: C.slice(0, perSME.length) }],
+          }} />
+        </div>
+      ) : <EmptyState />}
+    </Card>
+  );
+};
+
+// ── BIG Score as proxy for portfolio quality ──────────────────────────────────
+const PortfolioQualityGauge = () => {
+  const { metrics } = usePortfolio();
+  const avg = metrics?.bigScore?.avg || 0;
+  const R = 54, CIRC = 2 * Math.PI * R;
+  const offset = CIRC - (CIRC * Math.min(avg, 100)) / 100;
+
+  return (
+    <Card title="Portfolio Quality (BIG Score Avg)" subLabel="Blended average BIG score across all SMEs">
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "12px" }}>
+        {avg > 0 ? (
+          <>
+            <svg width="160" height="160" viewBox="0 0 160 160">
+              <circle cx="80" cy="80" r={R} stroke={B.pale} strokeWidth="11" fill="none" />
+              <circle cx="80" cy="80" r={R} stroke={B.dark} strokeWidth="11" fill="none" strokeLinecap="round"
+                strokeDasharray={CIRC} strokeDashoffset={offset} transform="rotate(-90 80 80)" />
+              <text x="80" y="72" textAnchor="middle" fill={B.darkest} fontSize="26" fontWeight="800">{avg}</text>
+              <text x="80" y="92" textAnchor="middle" fill={B.warm} fontSize="12">/ 100</text>
+            </svg>
+            <div style={{ display: "flex", gap: "24px" }}>
+              {[["Avg", avg, B.dark], ["Min", metrics.bigScore.min, B.warm], ["Max", metrics.bigScore.max, B.medium]].map(([l, v, col]) => (
+                <div key={l} style={{ textAlign: "center" }}>
+                  <div style={{ fontSize: "10px", color: B.warm, marginBottom: "3px" }}>{l}</div>
+                  <div style={{ fontSize: "16px", fontWeight: "700", color: col }}>{v}</div>
+                </div>
+              ))}
+            </div>
+          </>
+        ) : <EmptyState />}
       </div>
     </Card>
   );
 };
 
-/* ── 5. Client Count ── */
-const ClientCount = () => (
-  <Card title="# Clients" subLabel="Bar Chart — total clients per cohort">
-    <div style={{ flex:1, minHeight:'240px' }}>
-      <Bar options={comboOpts()} data={{ labels:COHORTS, datasets:[
-        { label:'# Clients', data:[284,196,412,148,320], backgroundColor:C.slice(0,5) },
-      ]}} />
-    </div>
-  </Card>
-);
+// ── Client Count (from profile keyClients) ────────────────────────────────────
+const ClientsPerSME = () => {
+  const { metrics, enriched } = usePortfolio();
+  const smeClients = enriched.map(a => ({
+    name: a.smeName || "Unknown",
+    count: (a.profile?.productsServices?.keyClients || []).length,
+  })).filter(s => s.count > 0);
 
-/* ── 6. Average Revenue Per Client ── */
-const AverageRevenuePerClient = () => (
-  <Card title="Average Revenue Per Client" subLabel="KPI Card — portfolio average">
-    <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center', gap:'10px' }}>
-      <div style={{ fontSize:'48px', fontWeight:'800', color:B.darkest, lineHeight:1 }}>R 4 820</div>
-      <div style={{ fontSize:'14px', color:B.medium, fontWeight:600 }}>per client / month</div>
-      <div style={{ display:'flex', gap:'20px', marginTop:'12px' }}>
-        {[['Highest','R8 400',B.dark],['Lowest','R1 200',B.warm],['Target','R5 500',B.medium]].map(([l,v,col])=>(
-          <div key={l} style={{ textAlign:'center' }}>
-            <div style={{ fontSize:'10px', color:B.light, marginBottom:'3px' }}>{l}</div>
-            <div style={{ fontSize:'15px', fontWeight:'700', color:col }}>{v}</div>
-          </div>
-        ))}
-      </div>
-    </div>
-  </Card>
-);
+  return (
+    <Card title="# Key Clients per SME" subLabel="Key clients listed in SME profiles">
+      {smeClients.length > 0 ? (
+        <div style={{ flex: 1, minHeight: "240px" }}>
+          <Bar options={barOpts()} data={{
+            labels: smeClients.map(s => s.name),
+            datasets: [{ label: "# Key Clients", data: smeClients.map(s => s.count), backgroundColor: C.slice(0, smeClients.length) }],
+          }} />
+        </div>
+      ) : <EmptyState message="Key client data not yet available in profiles" />}
+    </Card>
+  );
+};
 
-/* ── Main Tab ── */
 const SUBS = [
-  { id:'financial',          label:'Financial' },
-  { id:'market-penetration', label:'Market Penetration' },
+  { id: "financial",          label: "Financial" },
+  { id: "market-penetration", label: "Market Penetration" },
 ];
 
 const Performance = () => {
-  const [sub, setSub] = useState('financial');
+  const [sub, setSub] = useState("financial");
+  const { loading } = usePortfolio();
+
+  if (loading) return <div style={{ padding: "2rem", textAlign: "center", color: B.warm }}>Loading performance data…</div>;
+
   return (
-    <div style={{ width:'100%' }}>
-      <div style={{ display:'flex', gap:'8px', flexWrap:'wrap', marginBottom:'20px' }}>
-        {SUBS.map(s => <Pill key={s.id} label={s.label} active={sub===s.id} onClick={()=>setSub(s.id)} />)}
+    <div style={{ width: "100%" }}>
+      <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "20px" }}>
+        {SUBS.map(s => <Pill key={s.id} label={s.label} active={sub === s.id} onClick={() => setSub(s.id)} />)}
       </div>
 
-      {sub==='financial' && (
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(380px, 1fr))', gap:'20px' }}>
-          <RevenueGrowth /><ProfitabilityGrowth /><CapitalRaise /><ROI />
+      {sub === "financial" && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(380px, 1fr))", gap: "20px" }}>
+          <RevenuePerSME />
+          <ProfitabilityStatus />
+          <CapitalRequired />
+          <PortfolioQualityGauge />
         </div>
       )}
 
-      {sub==='market-penetration' && (
-        <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(380px, 1fr))', gap:'20px' }}>
-          <ClientCount /><AverageRevenuePerClient />
+      {sub === "market-penetration" && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(380px, 1fr))", gap: "20px" }}>
+          <ClientsPerSME />
         </div>
       )}
     </div>

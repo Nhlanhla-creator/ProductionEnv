@@ -155,7 +155,7 @@ const CatalystDocuments = () => {
 
   return (
     <>
-      <style jsx global>{`
+      <style>{`
         html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
         body { touch-action: manipulation; min-width: 100vw; overflow-x: hidden; }
         @media (max-width: 1024px) {
@@ -176,13 +176,11 @@ const CatalystDocuments = () => {
         style={{
           fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
           minHeight: "100vh", backgroundColor: "#faf8f6",
-          padding: "24px", paddingLeft: "280px", marginTop: "60px",
-          width: "100%", boxSizing: "border-box", overflowX: "hidden",
+          padding: "0 40px 0 20px",
+          width: "100%", boxSizing: "border-box",
         }}
       >
-        <div className="sidebar-space" style={{ width: "280px", height: "100vh", position: "fixed", left: 0, top: 0, pointerEvents: "none" }} />
-
-        <div style={{ width: "100%", maxWidth: "1400px", margin: "0 auto" }}>
+        <div style={{ width: "100%", margin: "0 auto" }}>
 
           {/* Header */}
           <div style={{
@@ -190,7 +188,7 @@ const CatalystDocuments = () => {
             background: "linear-gradient(135deg, #f5f2f0 0%, #faf8f6 100%)",
             borderRadius: "16px", boxShadow: "0 4px 6px rgba(0,0,0,0.1)", border: "2px solid #d7ccc8",
           }}>
-            <h1 style={{ fontSize: "2.5rem", fontWeight: "700", color: "#5d4037", margin: "0 0 8px 0" }}>
+            <h1 style={{ fontSize: "2rem", fontWeight: "700", color: "#5d4037" }}>
               Catalyst Profile Documents
             </h1>
             <p style={{ fontSize: "1.125rem", color: "#6d4c41", margin: 0 }}>

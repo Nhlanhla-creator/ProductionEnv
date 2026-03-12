@@ -341,10 +341,6 @@ function Header({
     year: "numeric",
   })
 
-  if (loading) {
-    return <div className={styles.loading}>Loading user data...</div>
-  }
-
   if (error) {
     return <div className={styles.error}>{error}</div>
   }

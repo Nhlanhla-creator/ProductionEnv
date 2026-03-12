@@ -289,7 +289,7 @@ export default function CatalystUniversalProfile() {
   }
 
   if (loading) {
-    return <div className="flex justify-center items-center h-screen text-lg">Loading profile...</div>
+    return <div className="flex justify-center items-center h-screen text-lg"></div>
   }
 
   if (showSummary) {

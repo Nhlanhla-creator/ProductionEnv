@@ -138,6 +138,7 @@ useEffect(() => {
         console.error("Failed to load user documents:", err);
         setLoading(false);
       }
+<<<<<<< HEAD
     } else {
       setLoading(false);
     }
@@ -145,6 +146,12 @@ useEffect(() => {
 
   return () => unsubscribe();
 }, [isInvestorView, viewingSMEId]);
+=======
+    });
+
+    return () => unsubscribe();
+  }, []);
+>>>>>>> 49fcab455ac41a533d470f1da96f4b5ecdd1ad35
 
   // Add this useEffect to MyDocuments component
   useEffect(() => {
