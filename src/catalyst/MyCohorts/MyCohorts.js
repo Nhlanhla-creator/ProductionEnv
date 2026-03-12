@@ -1,7 +1,7 @@
 "use client"
 import { useState, useEffect } from "react"
-import { Trophy, Users, TrendingUp, Building, MapPin, DollarSign, Calendar, Eye, Wrench, Loader, RefreshCw, X, BarChart3 } from "lucide-react"
-import { collection, query, where, getDocs, doc, getDoc } from "firebase/firestore"
+import { Trophy, Users, TrendingUp, Building, MapPin, DollarSign, Calendar, Eye, Wrench, Loader, RefreshCw, X, BarChart3, ChevronDown, FileText } from "lucide-react"
+import { collection, query, where, getDocs, doc, getDoc, orderBy } from "firebase/firestore"
 import { db, auth } from "../../firebaseConfig"
 
 const formatLabel = (value) => {
@@ -36,30 +36,126 @@ const formatDate = (dateString) => {
   })
 }
 
+// Skeleton Components
+const StatCardSkeleton = () => (
+  <div className="bg-white p-5 rounded-xl shadow-md border-2 border-[#e6d7c3]">
+    <div className="flex items-center gap-3 mb-2">
+      <div className="w-5 h-5 rounded bg-shimmer-mid bg-shimmer animate-shimmer" />
+      <div className="w-24 h-4 bg-shimmer-light bg-shimmer animate-shimmer-d1 rounded" />
+    </div>
+    <div className="w-16 h-8 bg-shimmer-dark bg-shimmer animate-shimmer-d2 rounded mt-2" />
+  </div>
+)
+
+const TableHeaderSkeleton = () => (
+  <thead>
+    <tr className="bg-[#faf7f2] border-b-2 border-[#e6d7c3]">
+      {[1,2,3,4,5,6].map((i) => (
+        <th key={i} className="p-5">
+          <div className="w-20 h-3 bg-shimmer-mid bg-shimmer animate-shimmer rounded" />
+        </th>
+      ))}
+    </tr>
+  </thead>
+)
+
+const TableRowSkeleton = ({ index }) => {
+  const delays = ['animate-shimmer', 'animate-shimmer-d1', 'animate-shimmer-d2', 'animate-shimmer-d3', 'animate-shimmer-d4']
+  
+  return (
+    <tr className="border-b border-[#f0e6d9]">
+      {/* Company */}
+      <td className="p-5">
+        <div className="space-y-2">
+          <div className={`w-32 h-4 bg-shimmer-dark bg-shimmer ${delays[0]} rounded`} />
+          <div className={`w-24 h-3 bg-shimmer-mid bg-shimmer ${delays[1]} rounded`} />
+          <div className={`w-20 h-3 bg-shimmer-light bg-shimmer ${delays[2]} rounded`} />
+        </div>
+      </td>
+      
+      {/* Support Value */}
+      <td className="p-5">
+        <div className={`w-20 h-5 bg-shimmer-dark bg-shimmer ${delays[1]} rounded`} />
+      </td>
+      
+      {/* Sector & Location */}
+      <td className="p-5">
+        <div className="space-y-2">
+          <div className={`w-24 h-3 bg-shimmer-mid bg-shimmer ${delays[2]} rounded`} />
+          <div className={`w-20 h-3 bg-shimmer-light bg-shimmer ${delays[3]} rounded`} />
+        </div>
+      </td>
+      
+      {/* Start Date */}
+      <td className="p-5">
+        <div className={`w-16 h-3 bg-shimmer-mid bg-shimmer ${delays[2]} rounded`} />
+      </td>
+      
+      {/* Status */}
+      <td className="p-5">
+        <div className={`w-20 h-6 bg-shimmer-light bg-shimmer ${delays[3]} rounded-full`} />
+      </td>
+      
+      {/* Actions */}
+      <td className="p-5">
+        <div className="flex gap-2 justify-center">
+          <div className={`w-20 h-8 bg-shimmer-dark bg-shimmer ${delays[4]} rounded`} />
+          <div className={`w-16 h-8 bg-shimmer-mid bg-shimmer ${delays[0]} rounded`} />
+        </div>
+      </td>
+    </tr>
+  )
+}
+
+const LoadingSkeleton = () => (
+  <div className="min-h-screen box-border transition-[margin-left] duration-300">
+    <div className="mx-auto px-8 w-full">
+      {/* Header */}
+      <div className="flex justify-between items-start mb-8 flex-wrap gap-4">
+        <div className="space-y-2">
+          <div className="w-48 h-7 bg-shimmer-dark bg-shimmer animate-shimmer rounded" />
+          <div className="w-64 h-4 bg-shimmer-mid bg-shimmer animate-shimmer-d1 rounded" />
+        </div>
+        <div className="w-32 h-9 bg-shimmer-light bg-shimmer animate-shimmer-d2 rounded" />
+      </div>
+
+      {/* Stat Cards */}
+      <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-5 mb-8">
+        <StatCardSkeleton />
+        <StatCardSkeleton />
+        <StatCardSkeleton />
+      </div>
+
+      {/* Table */}
+      <div className="bg-white rounded-2xl shadow-md overflow-hidden w-full border border-[#e6d7c3]">
+        <div className="p-5 border-b-2 border-[#e6d7c3] bg-[#f5f0e1] flex justify-between items-center">
+          <div className="w-40 h-5 bg-shimmer-dark bg-shimmer animate-shimmer rounded" />
+          <div className="w-20 h-6 bg-shimmer-mid bg-shimmer animate-shimmer-d1 rounded" />
+        </div>
+        
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse text-sm">
+            <TableHeaderSkeleton />
+            <tbody>
+              {[1,2,3,4].map((i) => (
+                <TableRowSkeleton key={i} index={i} />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+)
+
 function MyCohorts() {
   const [cohorts, setCohorts] = useState([])
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [selectedCohort, setSelectedCohort] = useState(null)
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true)
 
   useEffect(() => {
     fetchCohorts()
-    
-    const checkSidebarState = () => {
-      const sidebarState = localStorage.getItem('sidebarOpen')
-      setIsSidebarOpen(sidebarState !== 'false')
-    }
-    
-    checkSidebarState()
-    
-    window.addEventListener('sidebarToggle', checkSidebarState)
-    window.addEventListener('storage', checkSidebarState)
-    
-    return () => {
-      window.removeEventListener('sidebarToggle', checkSidebarState)
-      window.removeEventListener('storage', checkSidebarState)
-    }
   }, [])
 
   // Fetch successful support deals from Firestore
@@ -195,6 +291,13 @@ function MyCohorts() {
     window.location.href = '/overall-company-health'
   }
 
+    const handleViewDocuments = (cohort) => {
+    sessionStorage.setItem('viewingSMEId', cohort.smeId)
+    sessionStorage.setItem('viewingSMEName', cohort.smeName)
+    sessionStorage.setItem('investorViewMode', 'true')
+    window.location.href = '/my-documents'
+  }
+
   const handleViewDetails = (cohort) => {
     setSelectedCohort(cohort)
   }
@@ -221,81 +324,20 @@ function MyCohorts() {
     return "#f44336"
   }
 
-  const modalOverlayStyle = {
-    position: "fixed",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "rgba(62, 39, 35, 0.85)",
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
-    zIndex: 1000,
-    animation: "fadeIn 0.3s ease-out",
-    backdropFilter: "blur(4px)",
-  }
-
-  const modalContentStyle = {
-    backgroundColor: "#ffffff",
-    borderRadius: "20px",
-    padding: "40px",
-    maxWidth: "900px",
-    width: "95%",
-    maxHeight: "90vh",
-    overflowY: "auto",
-    boxShadow: "0 20px 60px rgba(62, 39, 35, 0.5), 0 0 0 1px rgba(141, 110, 99, 0.1)",
-    animation: "slideUp 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)",
-  }
-
-  const mainMarginLeft = isSidebarOpen ? "250px" : "80px"
-
   if (loading) {
-    return (
-      <div style={{
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-        minHeight: "100vh",
-        flexDirection: "column",
-        gap: "16px",
-        marginLeft: mainMarginLeft,
-        padding: "20px",
-        transition: "margin-left 0.3s ease"
-      }}>
-        <Loader size={48} style={{ color: "#a67c52", animation: "spin 1s linear infinite" }} />
-        <p style={{ color: "#7d5a50", fontSize: "16px" }}>Loading your portfolio...</p>
-      </div>
-    )
+    return <LoadingSkeleton />
   }
 
   return (
-    <div style={{ 
-      marginLeft: mainMarginLeft,
-      padding: "60px",
-      backgroundColor: "#faf7f2", 
-      minHeight: "100vh",
-      boxSizing: "border-box",
-      transition: "margin-left 0.3s ease"
-    }}>
-      <div style={{ 
-        maxWidth: "1400px", 
-        margin: "0 auto",
-        width: "100%"
-      }}>
-        <div style={{ 
-          display: "flex", 
-          justifyContent: "space-between", 
-          alignItems: "flex-start",
-          marginBottom: "32px",
-          flexWrap: "wrap",
-          gap: "16px"
-        }}>
+    <div className="min-h-screen box-border transition-[margin-left] duration-300">
+      <div className="mx-auto px-8 w-full">
+        {/* Header */}
+        <div className="flex justify-between items-start mb-8 flex-wrap gap-4">
           <div>
-            <h1 style={{ fontSize: "28px", fontWeight: "700", color: "#4a352f", marginBottom: "8px" }}>
+            <h1 className="text-[28px] font-bold text-[#4a352f] mb-2">
               My Support Portfolio
             </h1>
-            <p style={{ color: "#7d5a50", fontSize: "16px" }}>
+            <p className="text-[#7d5a50] text-base">
               View and manage your portfolio of successful SME support deals
             </p>
           </div>
@@ -303,209 +345,84 @@ function MyCohorts() {
           <button
             onClick={handleRefresh}
             disabled={refreshing}
-            style={{
-              backgroundColor: "white",
-              color: "#a67c52",
-              border: "2px solid #a67c52",
-              borderRadius: "8px",
-              padding: "10px 16px",
-              fontSize: "13px",
-              fontWeight: "600",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: "6px",
-              transition: "all 0.3s ease",
-              opacity: refreshing ? 0.6 : 1
-            }}
-            onMouseEnter={(e) => {
-              if (!refreshing) {
-                e.target.style.backgroundColor = "#f5f0e1"
-              }
-            }}
-            onMouseLeave={(e) => {
-              if (!refreshing) {
-                e.target.style.backgroundColor = "white"
-              }
-            }}
+            className={`bg-white text-[#a67c52] border-2 border-[#a67c52] rounded-lg px-4 py-2.5 text-xs font-semibold cursor-pointer flex items-center gap-1.5 transition-all duration-300 hover:bg-[#f5f0e1] ${refreshing ? 'opacity-60' : ''}`}
           >
-            <RefreshCw size={16} className={refreshing ? "spinning" : ""} />
+            <RefreshCw size={16} className={refreshing ? "animate-spin" : ""} />
             {refreshing ? "Refreshing..." : "Refresh Data"}
           </button>
         </div>
 
-        <div style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-          gap: "20px",
-          marginBottom: "32px"
-        }}>
-          <div style={{
-            backgroundColor: "white",
-            padding: "20px",
-            borderRadius: "12px",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-            border: "2px solid #e6d7c3"
-          }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "8px" }}>
-              <Trophy size={20} style={{ color: "#a67c52" }} />
-              <h3 style={{ fontSize: "14px", fontWeight: "600", color: "#7d5a50", margin: 0 }}>
+        {/* Stats Cards */}
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-5 mb-8">
+          <div className="bg-white p-5 rounded-xl shadow-md border-2 border-[#e6d7c3]">
+            <div className="flex items-center gap-3 mb-2">
+              <Trophy size={20} className="text-[#a67c52]" />
+              <h3 className="text-sm font-semibold text-[#7d5a50] m-0">
                 Total Support Deals
               </h3>
             </div>
-            <p style={{ fontSize: "32px", fontWeight: "700", color: "#a67c52", margin: 0 }}>
+            <p className="text-3xl font-bold text-[#a67c52] m-0">
               {cohorts.length}
             </p>
           </div>
 
-          <div style={{
-            backgroundColor: "white",
-            padding: "20px",
-            borderRadius: "12px",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-            border: "2px solid #e6d7c3"
-          }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "8px" }}>
-              <TrendingUp size={20} style={{ color: "#4caf50" }} />
-              <h3 style={{ fontSize: "14px", fontWeight: "600", color: "#7d5a50", margin: 0 }}>
+          <div className="bg-white p-5 rounded-xl shadow-md border-2 border-[#e6d7c3]">
+            <div className="flex items-center gap-3 mb-2">
+              <TrendingUp size={20} className="text-green-600" />
+              <h3 className="text-sm font-semibold text-[#7d5a50] m-0">
                 Active Support
               </h3>
             </div>
-            <p style={{ fontSize: "32px", fontWeight: "700", color: "#4caf50", margin: 0 }}>
+            <p className="text-3xl font-bold text-green-600 m-0">
               {cohorts.filter(c => c.currentStatus === "Active Support").length}
             </p>
           </div>
 
-          <div style={{
-            backgroundColor: "white",
-            padding: "20px",
-            borderRadius: "12px",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-            border: "2px solid #e6d7c3"
-          }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "8px" }}>
-              <Building size={20} style={{ color: "#2196f3" }} />
-              <h3 style={{ fontSize: "14px", fontWeight: "600", color: "#7d5a50", margin: 0 }}>
+          <div className="bg-white p-5 rounded-xl shadow-md border-2 border-[#e6d7c3]">
+            <div className="flex items-center gap-3 mb-2">
+              <Building size={20} className="text-blue-500" />
+              <h3 className="text-sm font-semibold text-[#7d5a50] m-0">
                 Portfolio Companies
               </h3>
             </div>
-            <p style={{ fontSize: "32px", fontWeight: "700", color: "#2196f3", margin: 0 }}>
+            <p className="text-3xl font-bold text-blue-500 m-0">
               {cohorts.length}
             </p>
           </div>
         </div>
 
         {cohorts.length > 0 ? (
-          <div style={{ 
-            backgroundColor: "white", 
-            borderRadius: "16px", 
-            boxShadow: "0 4px 12px rgba(0,0,0,0.1)", 
-            overflow: "hidden",
-            width: "100%",
-            border: "1px solid #e6d7c3"
-          }}>
-            <div style={{
-              padding: "20px 24px",
-              borderBottom: "2px solid #e6d7c3",
-              backgroundColor: "#f5f0e1",
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center"
-            }}>
-              <h2 style={{ fontSize: "20px", fontWeight: "600", color: "#4a352f", margin: 0 }}>
+          <div className="bg-white rounded-2xl shadow-md overflow-hidden w-full border border-[#e6d7c3]">
+            <div className="p-5 border-b-2 border-[#e6d7c3] bg-[#f5f0e1] flex justify-between items-center">
+              <h2 className="text-xl font-semibold text-[#4a352f] m-0">
                 Portfolio Companies
               </h2>
-              <span style={{ 
-                fontSize: "12px", 
-                color: "#7d5a50",
-                backgroundColor: "rgba(166, 124, 82, 0.15)",
-                padding: "6px 12px",
-                borderRadius: "6px",
-                fontWeight: "600"
-              }}>
+              <span className="text-xs text-[#7d5a50] bg-[#a67c52]/15 px-3 py-1.5 rounded-md font-semibold">
                 {cohorts.length} {cohorts.length === 1 ? 'company' : 'companies'}
               </span>
             </div>
 
             {/* Table */}
-            <div style={{ overflowX: "auto" }}>
-              <table style={{ 
-                width: "100%", 
-                borderCollapse: "collapse",
-                fontSize: "14px"
-              }}>
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse text-sm">
                 <thead>
-                  <tr style={{ backgroundColor: "#faf7f2", borderBottom: "2px solid #e6d7c3" }}>
-                    <th style={{ 
-                      padding: "16px 20px", 
-                      textAlign: "left", 
-                      fontWeight: "600", 
-                      color: "#4a352f",
-                      fontSize: "13px",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.5px",
-                      whiteSpace: "nowrap"
-                    }}>
+                  <tr className="bg-[#faf7f2] border-b-2 border-[#e6d7c3]">
+                    <th className="p-5 text-left font-semibold text-[#4a352f] text-xs uppercase tracking-wide whitespace-nowrap">
                       Company
                     </th>
-                    <th style={{ 
-                      padding: "16px 20px", 
-                      textAlign: "left", 
-                      fontWeight: "600", 
-                      color: "#4a352f",
-                      fontSize: "13px",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.5px",
-                      whiteSpace: "nowrap"
-                    }}>
+                    <th className="p-5 text-left font-semibold text-[#4a352f] text-xs uppercase tracking-wide whitespace-nowrap">
                       Support Value
                     </th>
-                    <th style={{ 
-                      padding: "16px 20px", 
-                      textAlign: "left", 
-                      fontWeight: "600", 
-                      color: "#4a352f",
-                      fontSize: "13px",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.5px",
-                      whiteSpace: "nowrap"
-                    }}>
+                    <th className="p-5 text-left font-semibold text-[#4a352f] text-xs uppercase tracking-wide whitespace-nowrap">
                       Sector & Location
                     </th>
-                    <th style={{ 
-                      padding: "16px 20px", 
-                      textAlign: "left", 
-                      fontWeight: "600", 
-                      color: "#4a352f",
-                      fontSize: "13px",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.5px",
-                      whiteSpace: "nowrap"
-                    }}>
+                    <th className="p-5 text-left font-semibold text-[#4a352f] text-xs uppercase tracking-wide whitespace-nowrap">
                       Start Date
                     </th>
-                    <th style={{ 
-                      padding: "16px 20px", 
-                      textAlign: "left", 
-                      fontWeight: "600", 
-                      color: "#4a352f",
-                      fontSize: "13px",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.5px",
-                      whiteSpace: "nowrap"
-                    }}>
+                    <th className="p-5 text-left font-semibold text-[#4a352f] text-xs uppercase tracking-wide whitespace-nowrap">
                       Status
                     </th>
-                    <th style={{ 
-                      padding: "16px 20px", 
-                      textAlign: "center", 
-                      fontWeight: "600", 
-                      color: "#4a352f",
-                      fontSize: "13px",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.5px",
-                      whiteSpace: "nowrap"
-                    }}>
+                    <th className="p-5 text-center font-semibold text-[#4a352f] text-xs uppercase tracking-wide whitespace-nowrap">
                       Actions
                     </th>
                   </tr>
@@ -514,41 +431,23 @@ function MyCohorts() {
                   {cohorts.map((cohort, index) => (
                     <tr 
                       key={cohort.id}
-                      style={{
-                        borderBottom: index < cohorts.length - 1 ? "1px solid #f0e6d9" : "none",
-                        transition: "background-color 0.2s ease"
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.backgroundColor = "#faf7f2"
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.backgroundColor = "transparent"
-                      }}
+                      className={`border-b border-[#f0e6d9] last:border-b-0 hover:bg-[#faf7f2] transition-colors duration-200`}
                     >
                       {/* Company Name & Type */}
-                      <td style={{ padding: "20px", minWidth: "220px" }}>
-                        <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
-                          <div style={{ 
-                            fontSize: "15px", 
-                            fontWeight: "600", 
-                            color: "#4a352f",
-                            marginBottom: "4px"
-                          }}>
+                      <td className="p-5 min-w-[220px]">
+                        <div className="flex flex-col gap-1.5">
+                          <div className="text-base font-semibold text-[#4a352f] mb-1">
                             {cohort.smeName}
                           </div>
-                          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                            <Trophy size={13} style={{ color: "#a67c52" }} />
-                            <span style={{ 
-                              fontSize: "12px", 
-                              color: "#7d5a50",
-                              textTransform: "capitalize"
-                            }}>
+                          <div className="flex items-center gap-1.5">
+                            <Trophy size={13} className="text-[#a67c52]" />
+                            <span className="text-xs text-[#7d5a50] capitalize">
                               {cohort.dealType}
                             </span>
                           </div>
-                          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                            <Users size={13} style={{ color: "#a67c52" }} />
-                            <span style={{ fontSize: "12px", color: "#7d5a50" }}>
+                          <div className="flex items-center gap-1.5">
+                            <Users size={13} className="text-[#a67c52]" />
+                            <span className="text-xs text-[#7d5a50]">
                               {cohort.teamSize} employees
                             </span>
                           </div>
@@ -556,31 +455,24 @@ function MyCohorts() {
                       </td>
 
                       {/* Investment Amount */}
-                      <td style={{ padding: "20px", minWidth: "140px" }}>
-                        <div style={{ 
-                          fontSize: "16px", 
-                          fontWeight: "700", 
-                          color: "#4a352f",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "4px"
-                        }}>
+                      <td className="p-5 min-w-[140px]">
+                        <div className="text-base font-bold text-[#4a352f] flex items-center gap-1">
                           {formatCurrency(cohort.dealAmount)}
                         </div>
                       </td>
 
                       {/* Sector & Location */}
-                      <td style={{ padding: "20px", minWidth: "200px" }}>
-                        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                            <Building size={13} style={{ color: "#a67c52" }} />
-                            <span style={{ fontSize: "13px", color: "#5d4037" }}>
+                      <td className="p-5 min-w-[200px]">
+                        <div className="flex flex-col gap-2">
+                          <div className="flex items-center gap-1.5">
+                            <Building size={13} className="text-[#a67c52]" />
+                            <span className="text-sm text-[#5d4037]">
                               {cohort.sector}
                             </span>
                           </div>
-                          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                            <MapPin size={13} style={{ color: "#a67c52" }} />
-                            <span style={{ fontSize: "13px", color: "#5d4037" }}>
+                          <div className="flex items-center gap-1.5">
+                            <MapPin size={13} className="text-[#a67c52]" />
+                            <span className="text-sm text-[#5d4037]">
                               {cohort.location}
                             </span>
                           </div>
@@ -588,98 +480,126 @@ function MyCohorts() {
                       </td>
 
                       {/* Date */}
-                      <td style={{ padding: "20px", minWidth: "130px" }}>
-                        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                          <Calendar size={14} style={{ color: "#a67c52" }} />
-                          <span style={{ fontSize: "13px", color: "#5d4037" }}>
+                      <td className="p-5 min-w-[130px]">
+                        <div className="flex items-center gap-1.5">
+                          <Calendar size={14} className="text-[#a67c52]" />
+                          <span className="text-sm text-[#5d4037]">
                             {formatDate(cohort.completionDate)}
                           </span>
                         </div>
                       </td>
 
                       {/* Status */}
-                      <td style={{ padding: "20px", minWidth: "150px" }}>
-                        <span style={{
-                          backgroundColor: getStatusColor(cohort.currentStatus) + "20",
-                          color: getStatusColor(cohort.currentStatus),
-                          padding: "6px 12px",
-                          borderRadius: "20px",
-                          fontSize: "12px",
-                          fontWeight: "600",
-                          display: "inline-block",
-                          whiteSpace: "nowrap"
-                        }}>
+                      <td className="p-5 min-w-[150px]">
+                        <span className="px-3 py-1.5 rounded-full text-xs font-semibold inline-block whitespace-nowrap"
+                          style={{
+                            backgroundColor: getStatusColor(cohort.currentStatus) + "20",
+                            color: getStatusColor(cohort.currentStatus)
+                          }}>
                           {cohort.currentStatus}
                         </span>
                       </td>
 
-                      {/* Actions */}
-                      <td style={{ padding: "20px", minWidth: "200px" }}>
-                        <div style={{ 
-                          display: "flex", 
-                          gap: "8px",
-                          justifyContent: "center",
-                          flexWrap: "wrap"
-                        }}>
-                          <button
-                            onClick={() => handleViewGrowthSuite(cohort)}
-                            style={{
-                              backgroundColor: "#a67c52",
-                              color: "white",
-                              border: "none",
-                              borderRadius: "6px",
-                              padding: "8px 12px",
-                              fontSize: "12px",
-                              fontWeight: "600",
-                              cursor: "pointer",
-                              display: "flex",
-                              alignItems: "center",
-                              gap: "4px",
-                              transition: "all 0.2s ease",
-                              whiteSpace: "nowrap"
-                            }}
-                            onMouseEnter={(e) => {
-                              e.target.style.backgroundColor = "#8d6e63"
-                              e.target.style.transform = "translateY(-1px)"
-                            }}
-                            onMouseLeave={(e) => {
-                              e.target.style.backgroundColor = "#a67c52"
-                              e.target.style.transform = "translateY(0)"
-                            }}
-                          >
-                            <Wrench size={13} />
-                            Growth Suite
-                          </button>
+                    {/* Actions */}
+<td style={{ padding: "8px", minWidth: "150px" }}>
+<div style={{ 
+  display: "flex", 
+  flexDirection: "column",
+  gap: "6px",
+  alignItems: "center"
+}}>
+    <button
+      onClick={() => handleViewGrowthSuite(cohort)}
+      style={{
+        backgroundColor: "#a67c52",
+        color: "white",
+        border: "none",
+        borderRadius: "6px",
+        padding: "6px 8px",
+        fontSize: "11px",
+        fontWeight: "600",
+        cursor: "pointer",
+        display: "flex",
+        alignItems: "center",
+        gap: "3px",
+        transition: "all 0.2s ease",
+        whiteSpace: "nowrap",
+        flex: "0 1 auto"
+      }}
+      onMouseEnter={(e) => {
+        e.target.style.backgroundColor = "#8d6e63"
+        e.target.style.transform = "translateY(-1px)"
+      }}
+      onMouseLeave={(e) => {
+        e.target.style.backgroundColor = "#a67c52"
+        e.target.style.transform = "translateY(0)"
+      }}
+    >
+      <Wrench size={11} />
+     Growth Suite
+    </button>
 
-                          <button
-                            onClick={() => handleViewDetails(cohort)}
-                            style={{
-                              backgroundColor: "white",
-                              color: "#a67c52",
-                              border: "1.5px solid #a67c52",
-                              borderRadius: "6px",
-                              padding: "8px 12px",
-                              fontSize: "12px",
-                              fontWeight: "600",
-                              cursor: "pointer",
-                              display: "flex",
-                              alignItems: "center",
-                              gap: "4px",
-                              transition: "all 0.2s ease",
-                              whiteSpace: "nowrap"
-                            }}
-                            onMouseEnter={(e) => {
-                              e.target.style.backgroundColor = "#faf7f2"
-                            }}
-                            onMouseLeave={(e) => {
-                              e.target.style.backgroundColor = "white"
-                            }}
-                          >
-                            <Eye size={13} />
-                            Details
-                          </button>
-                        </div>
-                      </td>
+    <button
+      onClick={() => handleViewDocuments(cohort)}
+      style={{
+        backgroundColor: "#74635b",
+        color: "white",
+        border: "none",
+        borderRadius: "6px",
+        padding: "6px 8px",
+        fontSize: "11px",
+        fontWeight: "600",
+        cursor: "pointer",
+        display: "flex",
+        alignItems: "center",
+        gap: "3px",
+        transition: "all 0.2s ease",
+        whiteSpace: "nowrap",
+        flex: "0 1 auto"
+      }}
+      onMouseEnter={(e) => {
+        e.target.style.backgroundColor = "#357abd"
+        e.target.style.transform = "translateY(-1px)"
+      }}
+      onMouseLeave={(e) => {
+        e.target.style.backgroundColor = "#4a90e2"
+        e.target.style.transform = "translateY(0)"
+      }}
+    >
+      <FileText size={11} />
+      Documents
+    </button>
+
+    <button
+      onClick={() => handleViewDetails(cohort)}
+      style={{
+        backgroundColor: "white",
+        color: "#a67c52",
+        border: "1.5px solid #a67c52",
+        borderRadius: "6px",
+        padding: "6px 8px",
+        fontSize: "11px",
+        fontWeight: "600",
+        cursor: "pointer",
+        display: "flex",
+        alignItems: "center",
+        gap: "3px",
+        transition: "all 0.2s ease",
+        whiteSpace: "nowrap",
+        flex: "0 1 auto"
+      }}
+      onMouseEnter={(e) => {
+        e.target.style.backgroundColor = "#faf7f2"
+      }}
+      onMouseLeave={(e) => {
+        e.target.style.backgroundColor = "white"
+      }}
+    >
+      <Eye size={11} />
+      View Summary
+    </button>
+  </div>
+</td>
                     </tr>
                   ))}
                 </tbody>
@@ -687,23 +607,15 @@ function MyCohorts() {
             </div>
           </div>
         ) : (
-          <div style={{
-            textAlign: "center",
-            padding: "60px 20px",
-            backgroundColor: "white",
-            borderRadius: "16px",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-            border: "1px solid #e6d7c3",
-            width: "100%"
-          }}>
-            <Trophy size={60} style={{ color: "#c8b6a6", marginBottom: "20px" }} />
-            <h3 style={{ fontSize: "22px", fontWeight: "600", color: "#4a352f", marginBottom: "12px" }}>
+          <div className="text-center p-[60px_20px] bg-white rounded-2xl shadow-md border border-[#e6d7c3] w-full">
+            <Trophy size={60} className="text-[#c8b6a6] mx-auto mb-5" />
+            <h3 className="text-2xl font-semibold text-[#4a352f] mb-3">
               No Support Portfolio Yet
             </h3>
-            <p style={{ color: "#7d5a50", fontSize: "15px", maxWidth: "500px", margin: "0 auto" }}>
+            <p className="text-[#7d5a50] text-base max-w-[500px] mx-auto">
               Your successful support deals will appear here once you approve support for SMEs.
               <br />
-              <span style={{ fontSize: "13px", color: "#a67c52" }}>
+              <span className="text-xs text-[#a67c52]">
                 Current statuses that appear: "Support Approved", "Active Support", "Deal Closed"
               </span>
             </p>
@@ -713,137 +625,64 @@ function MyCohorts() {
 
       {/* Detailed View Modal */}
       {selectedCohort && (
-        <div style={modalOverlayStyle} onClick={() => setSelectedCohort(null)}>
-          <div style={modalContentStyle} onClick={(e) => e.stopPropagation()}>
+        <div 
+          className="fixed inset-0 bg-[#3e2723]/85 flex justify-center items-center z-[1000] animate-[fadeIn_0.3s_ease-out] backdrop-blur-sm"
+          onClick={() => setSelectedCohort(null)}
+        >
+          <div 
+            className="bg-white rounded-2xl p-10 max-w-[900px] w-[95%] max-h-[90vh] overflow-y-auto shadow-2xl border border-[#8d6e63]/10 animate-[slideUp_0.4s_cubic-bezier(0.34,1.56,0.64,1)]"
+            onClick={(e) => e.stopPropagation()}
+          >
             {/* Modal Header */}
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: "32px",
-                paddingBottom: "24px",
-                borderBottom: "3px solid #8d6e63",
-              }}
-            >
-              <h2
-                style={{
-                  fontSize: "28px",
-                  fontWeight: "700",
-                  color: "#3e2723",
-                  margin: 0,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "12px",
-                }}
-              >
-                <Trophy size={32} style={{ color: "#ffd700" }} />
+            <div className="flex justify-between items-center mb-8 pb-6 border-b-3 border-[#8d6e63]">
+              <h2 className="text-[28px] font-bold text-[#3e2723] m-0 flex items-center gap-3">
+                <Trophy size={32} className="text-yellow-400" />
                 Support Deal Details: {selectedCohort.smeName}
               </h2>
               <button
                 onClick={() => setSelectedCohort(null)}
-                style={{
-                  background: "none",
-                  border: "none",
-                  fontSize: "24px",
-                  cursor: "pointer",
-                  color: "#666",
-                  padding: "8px",
-                }}
+                className="bg-none border-none text-2xl cursor-pointer text-gray-600 p-2"
               >
                 <X size={24} />
               </button>
             </div>
 
             {/* Support Deal Overview Cards */}
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-                gap: "24px",
-                marginBottom: "32px",
-              }}
-            >
-              <div
-                style={{
-                  backgroundColor: "#f8f9fa",
-                  padding: "24px",
-                  borderRadius: "12px",
-                  border: "1px solid #e9ecef",
-                }}
-              >
-                <h3
-                  style={{
-                    color: "#3e2723",
-                    marginBottom: "16px",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                  }}
-                >
+            <div className="grid grid-cols-[repeat(auto-fit,minmax(280px,1fr))] gap-6 mb-8">
+              <div className="bg-[#f8f9fa] p-6 rounded-xl border border-gray-200">
+                <h3 className="text-[#3e2723] mb-4 flex items-center gap-2">
                   <DollarSign size={20} />
                   Financial Details
                 </h3>
-                <div style={{ display: "grid", gap: "12px" }}>
-                  <div>
-                    <strong>Funding Required:</strong> {formatCurrency(selectedCohort.dealAmount)}
-                  </div>
-                  <div>
-                    <strong>Equity Offered:</strong> {selectedCohort.dealType}
-                  </div>
-                  <div>
-                    <strong>Guarantees:</strong> {selectedCohort.guarantees || "Not specified"}
-                  </div>
-                  <div>
-                    <strong>Deal Structure:</strong> {selectedCohort.dealStructure}
-                  </div>
+                <div className="grid gap-3">
+                  <div><strong>Funding Required:</strong> {formatCurrency(selectedCohort.dealAmount)}</div>
+                  <div><strong>Equity Offered:</strong> {selectedCohort.dealType}</div>
+                  <div><strong>Guarantees:</strong> {selectedCohort.guarantees || "Not specified"}</div>
+                  <div><strong>Deal Structure:</strong> {selectedCohort.dealStructure}</div>
                 </div>
               </div>
 
-              <div
-                style={{
-                  backgroundColor: "#f8f9fa",
-                  padding: "24px",
-                  borderRadius: "12px",
-                  border: "1px solid #e9ecef",
-                }}
-              >
-                <h3
-                  style={{
-                    color: "#3e2723",
-                    marginBottom: "16px",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                  }}
-                >
+              <div className="bg-[#f8f9fa] p-6 rounded-xl border border-gray-200">
+                <h3 className="text-[#3e2723] mb-4 flex items-center gap-2">
                   <Calendar size={20} />
                   Timeline & Performance
                 </h3>
-                <div style={{ display: "grid", gap: "12px" }}>
-                  <div>
-                    <strong>Start Date:</strong> {formatDate(selectedCohort.completionDate)}
-                  </div>
-                  <div>
-                    <strong>Support Duration:</strong> {selectedCohort.dealDuration}
-                  </div>
+                <div className="grid gap-3">
+                  <div><strong>Start Date:</strong> {formatDate(selectedCohort.completionDate)}</div>
+                  <div><strong>Support Duration:</strong> {selectedCohort.dealDuration}</div>
                   <div>
                     <strong>ROI:</strong>
-                    <span style={{ color: getRoiColor(selectedCohort.roi), fontWeight: "700", marginLeft: "8px" }}>
+                    <span className="font-bold ml-2" style={{ color: getRoiColor(selectedCohort.roi) }}>
                       {selectedCohort.roi}
                     </span>
                   </div>
                   <div>
                     <strong>Current Status:</strong>
                     <span
+                      className="ml-2 px-2 py-1 rounded-lg text-xs font-semibold"
                       style={{
                         backgroundColor: getStatusColor(selectedCohort.currentStatus) + "20",
                         color: getStatusColor(selectedCohort.currentStatus),
-                        padding: "4px 8px",
-                        borderRadius: "8px",
-                        fontSize: "12px",
-                        fontWeight: "600",
-                        marginLeft: "8px",
                       }}
                     >
                       {selectedCohort.currentStatus}
@@ -852,139 +691,62 @@ function MyCohorts() {
                 </div>
               </div>
 
-              <div
-                style={{
-                  backgroundColor: "#f8f9fa",
-                  padding: "24px",
-                  borderRadius: "12px",
-                  border: "1px solid #e9ecef",
-                }}
-              >
-                <h3
-                  style={{
-                    color: "#3e2723",
-                    marginBottom: "16px",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                  }}
-                >
+              <div className="bg-[#f8f9fa] p-6 rounded-xl border border-gray-200">
+                <h3 className="text-[#3e2723] mb-4 flex items-center gap-2">
                   <Users size={20} />
                   Company Details
                 </h3>
-                <div style={{ display: "grid", gap: "12px" }}>
-                  <div>
-                    <strong>Sector:</strong> {selectedCohort.sector}
-                  </div>
-                  <div>
-                    <strong>Location:</strong> {selectedCohort.location}
-                  </div>
-                  <div>
-                    <strong>Team Size:</strong> {selectedCohort.teamSize}
-                  </div>
-                  <div>
-                    <strong>Description:</strong> {selectedCohort.description}
-                  </div>
+                <div className="grid gap-3">
+                  <div><strong>Sector:</strong> {selectedCohort.sector}</div>
+                  <div><strong>Location:</strong> {selectedCohort.location}</div>
+                  <div><strong>Team Size:</strong> {selectedCohort.teamSize}</div>
+                  <div><strong>Description:</strong> {selectedCohort.description}</div>
                 </div>
               </div>
             </div>
 
             {/* Support Provided Section */}
-            <div
-              style={{
-                backgroundColor: "#f8f9fa",
-                padding: "24px",
-                borderRadius: "12px",
-                border: "1px solid #e9ecef",
-                marginBottom: "24px",
-              }}
-            >
-              <h3
-                style={{
-                  color: "#3e2723",
-                  marginBottom: "16px",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                }}
-              >
+            <div className="bg-[#f8f9fa] p-6 rounded-xl border border-gray-200 mb-6">
+              <h3 className="text-[#3e2723] mb-4 flex items-center gap-2">
                 <Wrench size={20} />
                 Support Services Provided
               </h3>
-              <p style={{ fontSize: "16px", color: "#333", lineHeight: "1.6", margin: 0 }}>
+              <p className="text-base text-gray-800 leading-relaxed m-0">
                 {selectedCohort.supportProvided}
               </p>
             </div>
 
             {/* Key Metrics Summary */}
-            <div
-              style={{
-                backgroundColor: "#e8f5e9",
-                padding: "24px",
-                borderRadius: "12px",
-                border: "1px solid #4caf50",
-                marginBottom: "24px",
-              }}
-            >
-              <h3
-                style={{
-                  color: "#2e7d32",
-                  marginBottom: "16px",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                }}
-              >
+            <div className="bg-green-50 p-6 rounded-xl border border-green-600 mb-6">
+              <h3 className="text-green-800 mb-4 flex items-center gap-2">
                 <BarChart3 size={20} />
                 Support Program Summary
               </h3>
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
-                  gap: "16px",
-                }}
-              >
-                <div style={{ textAlign: "center" }}>
-                  <div style={{ fontSize: "24px", fontWeight: "700", color: getRoiColor(selectedCohort.roi) }}>
+              <div className="grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-4">
+                <div className="text-center">
+                  <div className="text-2xl font-bold" style={{ color: getRoiColor(selectedCohort.roi) }}>
                     {selectedCohort.roi}
                   </div>
-                  <div style={{ fontSize: "14px", color: "#666" }}>Return on Investment</div>
+                  <div className="text-sm text-gray-600">Return on Investment</div>
                 </div>
-                <div style={{ textAlign: "center" }}>
-                  <div style={{ fontSize: "24px", fontWeight: "700", color: "#2196f3" }}>{formatCurrency(selectedCohort.dealAmount)}</div>
-                  <div style={{ fontSize: "14px", color: "#666" }}>Support Value</div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-blue-500">{formatCurrency(selectedCohort.dealAmount)}</div>
+                  <div className="text-sm text-gray-600">Support Value</div>
                 </div>
-                <div style={{ textAlign: "center" }}>
-                  <div style={{ fontSize: "24px", fontWeight: "700", color: getRoiColor(selectedCohort.revenueGrowth) }}>
+                <div className="text-center">
+                  <div className="text-2xl font-bold" style={{ color: getRoiColor(selectedCohort.revenueGrowth) }}>
                     {selectedCohort.revenueGrowth}
                   </div>
-                  <div style={{ fontSize: "14px", color: "#666" }}>Revenue Growth</div>
+                  <div className="text-sm text-gray-600">Revenue Growth</div>
                 </div>
               </div>
             </div>
 
             {/* Close Button */}
-            <div style={{ display: "flex", justifyContent: "flex-end" }}>
+            <div className="flex justify-end">
               <button
                 onClick={() => setSelectedCohort(null)}
-                style={{
-                  backgroundColor: "#5d4037",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "12px",
-                  padding: "16px 32px",
-                  fontSize: "16px",
-                  fontWeight: "600",
-                  cursor: "pointer",
-                  transition: "all 0.3s ease",
-                }}
-                onMouseEnter={(e) => {
-                  e.target.style.backgroundColor = "#4a352f"
-                }}
-                onMouseLeave={(e) => {
-                  e.target.style.backgroundColor = "#5d4037"
-                }}
+                className="bg-[#5d4037] text-white border-none rounded-xl px-8 py-4 text-base font-semibold cursor-pointer transition-all duration-300 hover:bg-[#4a352f]"
               >
                 Close
               </button>
@@ -994,12 +756,6 @@ function MyCohorts() {
       )}
 
       <style>{`
-        @keyframes spin {
-          to { transform: rotate(360deg); }
-        }
-        .spinning {
-          animation: spin 1s linear infinite;
-        }
         @keyframes fadeIn {
           from { opacity: 0; }
           to { opacity: 1; }

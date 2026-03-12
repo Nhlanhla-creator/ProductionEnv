@@ -200,6 +200,8 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded  }) {
 const [showMatchBreakdown, setShowMatchBreakdown] = useState(false)
 const [selectedAcceleratorForBreakdown, setSelectedAcceleratorForBreakdown] = useState(null)
   
+const [supportAgreementStatuses, setSupportAgreementStatuses] = useState({})
+
   const [bigScoreData, setBigScoreData] = useState({
     pis: { score: 0, color: "#4E342E" }, // PIS first as requested
     compliance: { score: 0, color: "#8D6E63" },
@@ -281,89 +283,95 @@ const [selectedAcceleratorForBreakdown, setSelectedAcceleratorForBreakdown] = us
     setTimeSlot((prev) => ({ ...prev, [field]: value }))
   }
 
-  const saveSelectedDates = async () => {
-    const newAvailabilities = [
-      ...availabilities,
-      ...tempDates
-        .filter((date) => !availabilities.some((a) => a.date.getTime() === date.getTime()))
-        .map((date) => ({
-          date,
-          timeSlots: [{ ...timeSlot }],
-          timeZone,
-          status: "available",
-        })),
-    ]
-    setAvailabilities(newAvailabilities)
+ const saveSelectedDates = async () => {
+  const newAvailabilities = [
+    ...availabilities,
+    ...tempDates
+      .filter((date) => !availabilities.some((a) => a.date.getTime() === date.getTime()))
+      .map((date) => ({
+        date,
+        timeSlots: [{ ...timeSlot }],
+        timeZone,
+        status: "available",
+      })),
+  ]
+  setAvailabilities(newAvailabilities)
 
-    if (selectedSMEForStage) {
+  if (selectedSMEForStage) {
+    try {
+      const availabilityData = newAvailabilities.map((avail) => ({
+        date: avail.date.toISOString(),
+        timeSlots: avail.timeSlots,
+        timeZone: avail.timeZone,
+        status: avail.status,
+      }))
+
+      const catalystId = auth.currentUser.uid
+      const smeId = selectedSMEForStage.id
+      const programIndex = selectedSMEForStage.programIndex || '0'
+      const documentId = `${catalystId}_${smeId}_${programIndex}`
+      const smeDocumentId = `${smeId}_${catalystId}_${programIndex}`
+
+      await updateDoc(doc(db, "catalystApplications", documentId), {
+        availableDates: availabilityData,
+        updatedAt: new Date().toISOString(),
+      })
+
       try {
-        const availabilityData = newAvailabilities.map((avail) => ({
-          date: avail.date.toISOString(),
-          timeSlots: avail.timeSlots,
-          timeZone: avail.timeZone,
-          status: avail.status,
-        }))
-
-        // Update catalystApplications collection
-        const docId = `${auth.currentUser.uid}_${selectedSMEForStage.id}`
-        await updateDoc(doc(db, "catalystApplications", docId), {
+        await updateDoc(doc(db, "smeCatalystApplications", smeDocumentId), {
           availableDates: availabilityData,
           updatedAt: new Date().toISOString(),
         })
-
-        // Also update smeCatalystApplications collection
-        const smeDocRef = doc(db, "smeCatalystApplications", docId)
-        await updateDoc(smeDocRef, {
-          availableDates: availabilityData,
-          updatedAt: new Date().toISOString(),
-        })
-      } catch (error) {
-        console.error("Error updating availabilities:", error)
-        setNotification({
-          type: "error",
-          message: "Failed to update availability dates",
-        })
+      } catch (smeError) {
+        console.warn("Could not update smeCatalystApplications:", smeError.message)
       }
+    } catch (error) {
+      console.error("Error updating availabilities:", error)
+      setNotification({ type: "error", message: "Failed to update availability dates" })
     }
-
-    setTempDates([])
-    setShowCalendarModal(false)
   }
+
+  setTempDates([])
+  setShowCalendarModal(false)
+}
 
   const removeAvailability = async (dateToRemove) => {
-    const updatedAvailabilities = availabilities.filter((item) => item.date.getTime() !== dateToRemove.getTime())
-    setAvailabilities(updatedAvailabilities)
+  const updatedAvailabilities = availabilities.filter((item) => item.date.getTime() !== dateToRemove.getTime())
+  setAvailabilities(updatedAvailabilities)
 
-    if (selectedSMEForStage) {
+  if (selectedSMEForStage) {
+    try {
+      const availabilityData = updatedAvailabilities.map((avail) => ({
+        date: avail.date.toISOString(),
+        timeSlots: avail.timeSlots,
+        timeZone: avail.timeZone,
+      }))
+
+      const catalystId = auth.currentUser.uid
+      const smeId = selectedSMEForStage.id
+      const programIndex = selectedSMEForStage.programIndex || '0'
+      const documentId = `${catalystId}_${smeId}_${programIndex}`
+      const smeDocumentId = `${smeId}_${catalystId}_${programIndex}`
+
+      await updateDoc(doc(db, "catalystApplications", documentId), {
+        availableDates: availabilityData,
+        updatedAt: new Date().toISOString(),
+      })
+
       try {
-        const availabilityData = updatedAvailabilities.map((avail) => ({
-          date: avail.date.toISOString(),
-          timeSlots: avail.timeSlots,
-          timeZone: avail.timeZone,
-        }))
-
-        // Update both collections
-        const docId = `${auth.currentUser.uid}_${selectedSMEForStage.id}`
-        await updateDoc(doc(db, "catalystApplications", docId), {
+        await updateDoc(doc(db, "smeCatalystApplications", smeDocumentId), {
           availableDates: availabilityData,
           updatedAt: new Date().toISOString(),
         })
-
-        const smeDocRef = doc(db, "smeCatalystApplications", docId)
-        await updateDoc(smeDocRef, {
-          availableDates: availabilityData,
-          updatedAt: new Date().toISOString(),
-        })
-      } catch (error) {
-        console.error("Error updating availabilities:", error)
-        setNotification({
-          type: "error",
-          message: "Failed to update availability dates",
-        })
+      } catch (smeError) {
+        console.warn("Could not update smeCatalystApplications:", smeError.message)
       }
+    } catch (error) {
+      console.error("Error updating availabilities:", error)
+      setNotification({ type: "error", message: "Failed to update availability dates" })
     }
   }
-
+}
   const hasAvailability = (sme) => {
     return sme.availableDates && sme.availableDates.length > 0
   }
@@ -770,6 +778,31 @@ useEffect(() => {
     }
   }, [smes, onSMEsLoaded]);
 
+  useEffect(() => {
+  const fetchSupportAgreementStatuses = async () => {
+    const statusMap = {}
+    for (const sme of smes) {
+      if (sme.file_id) {
+        try {
+          const docSnap = await getDoc(doc(db, "catalystApplications", sme.file_id))
+          if (docSnap.exists()) {
+            const data = docSnap.data()
+            if (data.supportAgreementStatus) {
+              statusMap[sme.file_id] = data.supportAgreementStatus
+            }
+          }
+        } catch (error) {
+          console.error("Error fetching support agreement status:", error)
+        }
+      }
+    }
+    setSupportAgreementStatuses(statusMap)
+  }
+
+  if (smes.length > 0) {
+    fetchSupportAgreementStatuses()
+  }
+}, [smes])
   
   const handleFilterChange = (key, value) => {
     setLocalFilters((prev) => ({ ...prev, [key]: value }))
@@ -798,216 +831,213 @@ useEffect(() => {
 
   // ✅ Updated stage update function to match advisor code structure
 const handleStageUpdate = async () => {
-    const stageFields = getStageFields(nextStage)
-    const errors = {}
+  const stageFields = getStageFields(nextStage)
+  const errors = {}
 
-    if (!nextStage) {
-      errors.nextStage = "Please select a stage"
-    }
-    if (stageFields.showMessage && !message.trim()) {
-      errors.message = "Please provide a message"
-    }
-    if (stageFields.showMeeting) {
-      if (!meetingLocation.trim()) {
-        errors.meetingLocation = "Please provide a meeting location"
-      }
-      if (!meetingPurpose.trim()) {
-        errors.meetingPurpose = "Please provide a meeting purpose"
-      }
-    }
+  if (!nextStage) {
+    errors.nextStage = "Please select a stage"
+  }
 
-    if (stageFields.showAvailability && !availabilities.length) {
+  if (!message.trim()) {
+    errors.message = "Please provide a message"
+  }
+
+  // Only require meeting fields for Support Approved stage
+  if (nextStage === "Support Approved") {
+    if (!meetingLocation.trim()) {
+      errors.meetingLocation = "Please provide a meeting location"
+    }
+    if (!meetingPurpose.trim()) {
+      errors.meetingPurpose = "Please provide a meeting purpose"
+    }
+    if (!availabilities.length) {
       errors.availabilities = "Please select at least one available date"
     }
+  }
 
-    if (Object.keys(errors).length > 0) {
-      setFormErrors(errors)
-      return
-    }
-
-    setIsSubmitting(true)
-
-    try {
-      const user = auth.currentUser
-      if (!user) throw new Error("User not authenticated")
-
-      const catalystId = user.uid
-      const smeId = selectedSMEForStage.id
-      const programIndex = selectedSMEForStage.programIndex || '0'
-
-      // Use the full document ID including program index
-      const documentId = `${catalystId}_${smeId}_${programIndex}`
-      const documentsmeId = `${smeId}_${catalystId}_${programIndex}`
-
-      let attachmentUrl = null
-      if (termSheetFile) {
-        const storageRef = ref(storage, `support_termsheets/${selectedSMEForStage.id}/${termSheetFile.name}`)
-        const snapshot = await uploadBytes(storageRef, termSheetFile)
-        attachmentUrl = await getDownloadURL(snapshot.ref)
-      }
-
-      const computedNextStage = getNextStage(nextStage)
-
-      const updateData = {
-        status: nextStage,
-        pipelineStage: nextStage,
-        nextStage: computedNextStage,
-        updatedAt: serverTimestamp(),
-        ...(message && { lastMessage: message }),
-        ...(stageFields.showMeeting && {
-          meetingDetails: {
-            time: meetingTime,
-            location: meetingLocation,
-            purpose: meetingPurpose,
-          },
-        }),
-      }
-
-      if (stageFields.showAvailability && availabilities.length > 0) {
-        const availabilityData = availabilities.map((avail) => ({
-          date: avail.date.toISOString(),
-          timeSlots: avail.timeSlots,
-          timeZone: avail.timeZone,
-          status: avail.status,
-        }))
-        updateData.availableDates = availabilityData
-      }
-
-      const docRef = doc(db, "catalystApplications", documentId)
-      const docSnapshot = await getDoc(docRef)
-      if (!docSnapshot.exists()) {
-        throw new Error(`Document with ID ${documentId} does not exist in catalystApplications`)
-      }
-
-      await updateDoc(docRef, updateData)
-
-      try {
-        const smeDocRef = doc(db, "smeCatalystApplications", documentsmeId)
-        await updateDoc(smeDocRef, {
-          status: nextStage,
-          nextStage: computedNextStage,
-          ...(updateData.availableDates && { availableDates: updateData.availableDates }),
-        })
-      } catch (matchError) {
-        console.warn("Could not update related collections:", matchError.message)
-      }
-
-      if (stageFields.showMeeting && meetingLocation && meetingPurpose) {
-        try {
-          await addDoc(collection(db, "smeCalendarEvents"), {
-            smeId: smeId,
-            catalystId: catalystId,
-            title: meetingPurpose,
-            date: meetingTime,
-            location: meetingLocation,
-            type: "support_meeting",
-            createdAt: new Date().toISOString(),
-            ...(updateData.availableDates && { availableDates: updateData.availableDates }),
-          })
-        } catch (calendarError) {
-          console.error("Error creating calendar event:", calendarError)
-        }
-      }
-
-      setSmes((prevSmes) =>
-        prevSmes.map((sme) =>
-          sme.id === smeId && sme.programIndex === programIndex
-            ? {
-                ...sme,
-                status: nextStage,
-                nextStage: computedNextStage,
-                pipelineStage: nextStage,
-                ...(message && { lastMessage: message }),
-                ...(stageFields.showMeeting && {
-                  meetingDetails: {
-                    time: meetingTime,
-                    location: meetingLocation,
-                    purpose: meetingPurpose,
-                  },
-                }),
-                ...(updateData.availableDates && { availableDates: updateData.availableDates }),
-              }
-            : sme,
-        ),
-      )
-
-      setUpdatedStages((prev) => ({ ...prev, [`${smeId}_${programIndex}`]: nextStage }))
-
-      setNotification({
-        type: "success",
-        message: `Application status updated to ${nextStage} successfully`,
-      })
-
-      setShowStageModal(false)
-      resetStageModal()
-
-      const subject = `Update: ${nextStage} Stage for Your Application`
-      let content = `Dear ${selectedSMEForStage.name},\n\nWe are pleased to inform you that your application has progressed to the "${nextStage}" stage.\n\n${message}`
-
-      if (stageFields.showMeeting) {
-        content += `\n\nMeeting Details:\n- Location: ${meetingLocation}\n- Purpose: ${meetingPurpose}`
-      }
-
-      if (stageFields.showAvailability && availabilities.length > 0) {
-        content += `\n\nAvailable Meeting Times:\n`
-        content += availabilities
-          .map((avail, idx) => {
-            const dateStr = avail.date.toLocaleDateString("en-US", {
-              weekday: "long",
-              year: "numeric",
-              month: "long",
-              day: "numeric",
-            })
-            const timeStr = avail.timeSlots?.[0]
-              ? `${avail.timeSlots[0].start} - ${avail.timeSlots[0].end} ${avail.timeZone}`
-              : "Time not specified"
-            return `${idx + 1}. ${dateStr} (${timeStr})`
-          })
-          .join("\n")
-
-        content += `\n\nPlease reply with your preferred meeting time from the above options.`
-      }
-
-      content += `\n\nBest regards,\nSupport Team`
-
-      const messagePayload = {
-        to: smeId,
-        from: catalystId,
-        subject,
-        content,
-        date: new Date().toISOString(),
-        read: false,
-        type: "inbox",
-        applicationId: `${catalystId}_${smeId}_${programIndex}`,
-        attachments: attachmentUrl ? [attachmentUrl] : [],
-        ...(updateData.availableDates && { availableDates: updateData.availableDates }),
-      }
-
-      const sentMessagePayload = {
-        ...messagePayload,
-        read: true,
-        type: "sent",
-      }
-
-      await Promise.all([
-        addDoc(collection(db, "messages"), messagePayload),
-        addDoc(collection(db, "messages"), sentMessagePayload),
-      ])
-    } catch (error) {
-      console.error("Detailed error:", {
-        message: error.message,
-        code: error.code,
-        stack: error.stack,
-      })
-
-      setNotification({
-        type: "error",
-        message: `Failed to update status: ${error.message}`,
-      })
-    } finally {
-      setIsSubmitting(false)
+  // Require availability for Evaluation, Due Diligence, Decision
+  if (["Evaluation", "Due Diligence", "Decision"].includes(nextStage)) {
+    if (!availabilities.length) {
+      errors.availabilities = "Please select at least one available date"
     }
   }
+
+  if (Object.keys(errors).length > 0) {
+    setFormErrors(errors)
+    return
+  }
+
+  setIsSubmitting(true)
+
+  try {
+    const user = auth.currentUser
+    if (!user) throw new Error("User not authenticated")
+
+    const catalystId = user.uid
+    const smeId = selectedSMEForStage.id
+    const programIndex = selectedSMEForStage.programIndex || '0'
+
+    const documentId = `${catalystId}_${smeId}_${programIndex}`
+    const documentsmeId = `${smeId}_${catalystId}_${programIndex}`
+
+    let attachmentUrl = null
+    if (termSheetFile) {
+      const storageRef = ref(storage, `support_termsheets/${selectedSMEForStage.id}/${termSheetFile.name}`)
+      const snapshot = await uploadBytes(storageRef, termSheetFile)
+      attachmentUrl = await getDownloadURL(snapshot.ref)
+    }
+
+    const computedNextStage = getNextStage(nextStage)
+
+    // Build updateData cleanly — only include fields that are relevant
+    const updateData = {
+      status: nextStage,
+      pipelineStage: nextStage,
+      nextStage: computedNextStage,
+      updatedAt: serverTimestamp(),
+      ...(message && { lastMessage: message }),
+    }
+
+    // Only add meeting details if stage requires it and fields are filled
+    if (nextStage === "Support Approved" && meetingLocation && meetingPurpose) {
+      updateData.meetingDetails = {
+        location: meetingLocation,
+        purpose: meetingPurpose,
+      }
+    }
+
+    // Add availability if present
+    if (availabilities.length > 0) {
+      updateData.availableDates = availabilities.map((avail) => ({
+        date: avail.date.toISOString(),
+        timeSlots: avail.timeSlots,
+        timeZone: avail.timeZone,
+        status: avail.status,
+      }))
+    }
+
+    // Add attachment URL if uploaded
+    if (attachmentUrl) {
+      updateData.supportAgreementUrl = attachmentUrl
+    }
+
+    const docRef = doc(db, "catalystApplications", documentId)
+    const docSnapshot = await getDoc(docRef)
+    if (!docSnapshot.exists()) {
+      throw new Error(`Document ${documentId} does not exist in catalystApplications`)
+    }
+
+    await updateDoc(docRef, updateData)
+
+    try {
+      const smeDocRef = doc(db, "smeCatalystApplications", documentsmeId)
+      await updateDoc(smeDocRef, {
+        status: nextStage,
+        nextStage: computedNextStage,
+        ...(updateData.availableDates && { availableDates: updateData.availableDates }),
+      })
+    } catch (matchError) {
+      console.warn("Could not update smeCatalystApplications:", matchError.message)
+    }
+
+    // Create calendar event only when meeting details are present
+    if (nextStage === "Support Approved" && meetingLocation && meetingPurpose) {
+      try {
+        await addDoc(collection(db, "smeCalendarEvents"), {
+          smeId,
+          catalystId,
+          title: meetingPurpose,
+          location: meetingLocation,
+          type: "support_meeting",
+          createdAt: new Date().toISOString(),
+          ...(updateData.availableDates && { availableDates: updateData.availableDates }),
+        })
+      } catch (calendarError) {
+        console.error("Error creating calendar event:", calendarError)
+      }
+    }
+
+    setSmes((prevSmes) =>
+      prevSmes.map((sme) =>
+        sme.id === smeId && sme.programIndex === programIndex
+          ? {
+              ...sme,
+              status: nextStage,
+              nextStage: computedNextStage,
+              pipelineStage: nextStage,
+              ...(message && { lastMessage: message }),
+              ...(updateData.availableDates && { availableDates: updateData.availableDates }),
+            }
+          : sme,
+      ),
+    )
+
+    setUpdatedStages((prev) => ({ ...prev, [`${smeId}_${programIndex}`]: nextStage }))
+
+    setNotification({
+      type: "success",
+      message: `Application status updated to ${nextStage} successfully`,
+    })
+
+    // Build message content
+    let content = `Dear ${selectedSMEForStage.name},\n\nYour application has progressed to the "${nextStage}" stage.\n\n${message}`
+
+   if (nextStage === "Support Approved" && meetingLocation && meetingPurpose) {
+  content += `\n\nMeeting Details:\n- Location: ${meetingLocation}\n- Purpose: ${meetingPurpose}`
+}
+
+if (attachmentUrl) {
+  content += `\n\nSupport Agreement Document:\nPlease review the attached support agreement document using the link below:\n${attachmentUrl}\n\nKindly review and respond with your acceptance or decline of the agreement terms.`
+}
+
+    if (updateData.availableDates?.length > 0) {
+      content += `\n\nAvailable Meeting Times:\n`
+      content += availabilities.map((avail, idx) => {
+        const dateStr = avail.date.toLocaleDateString("en-US", {
+          weekday: "long", year: "numeric", month: "long", day: "numeric",
+        })
+        const timeStr = avail.timeSlots?.[0]
+          ? `${avail.timeSlots[0].start} - ${avail.timeSlots[0].end} ${avail.timeZone}`
+          : "Time not specified"
+        return `${idx + 1}. ${dateStr} (${timeStr})`
+      }).join("\n")
+      content += `\n\nPlease reply with your preferred meeting time.`
+    }
+
+    content += `\n\nBest regards,\nSupport Team`
+
+    const messagePayload = {
+  to: smeId,
+  from: catalystId,
+  subject: `Update: ${nextStage} Stage for Your Application`,
+  content,
+  date: new Date().toISOString(),
+  read: false,
+  type: "inbox",
+  applicationId: documentId,
+  attachments: attachmentUrl ? [attachmentUrl] : [],
+  ...(attachmentUrl && { documentUrl: attachmentUrl, documentType: "support_agreement" }),
+  ...(updateData.availableDates && { availableDates: updateData.availableDates }),
+}
+
+    await Promise.all([
+      addDoc(collection(db, "messages"), messagePayload),
+      addDoc(collection(db, "messages"), { ...messagePayload, read: true, type: "sent" }),
+    ])
+
+    setShowStageModal(false)
+    resetStageModal()
+
+  } catch (error) {
+    console.error("Stage update error:", error)
+    setNotification({
+      type: "error",
+      message: `Failed to update status: ${error.message}`,
+    })
+  } finally {
+    setIsSubmitting(false)
+  }
+}
 
   const handleViewDetails = (sme) => {
     setSelectedSME(sme)
@@ -1032,6 +1062,40 @@ const handleStageUpdate = async () => {
     setModalType("bigScore")
   }
 
+  const renderSupportAgreementStatus = (sme) => {
+  const currentStage = updatedStages[`${sme.id}_${sme.programIndex}`] || sme.pipelineStage
+  if (currentStage !== "Support Approved") return null
+
+  const status = supportAgreementStatuses[sme.file_id]
+  if (!status) return (
+    <span title="Awaiting SME response" style={{
+      display: "inline-flex", alignItems: "center", justifyContent: "center",
+      width: "16px", height: "16px", borderRadius: "50%",
+      backgroundColor: "#9e9e9e", color: "white", fontSize: "10px",
+      flexShrink: 0, marginLeft: "4px"
+    }}>?</span>
+  )
+
+  if (status === "accepted") return (
+    <span title="Support Agreement Accepted" style={{
+      display: "inline-flex", alignItems: "center", justifyContent: "center",
+      width: "16px", height: "16px", borderRadius: "50%",
+      backgroundColor: "#4caf50", color: "white", fontSize: "10px", fontWeight: "bold",
+      flexShrink: 0, marginLeft: "4px"
+    }}>✓</span>
+  )
+
+  if (status === "declined") return (
+    <span title="Support Agreement Declined" style={{
+      display: "inline-flex", alignItems: "center", justifyContent: "center",
+      width: "16px", height: "16px", borderRadius: "50%",
+      backgroundColor: "#f44336", color: "white", fontSize: "10px", fontWeight: "bold",
+      flexShrink: 0, marginLeft: "4px"
+    }}>✗</span>
+  )
+
+  return null
+}
   const resetModal = () => {
     setSelectedSME(null)
     setModalType(null)
@@ -1428,16 +1492,17 @@ const handleStageUpdate = async () => {
                       </div>
                     </td>
                     <td style={tableCellStyle}>
-                      <span
-                        style={{
-                          ...statusBadgeStyle,
-                          backgroundColor: statusStyle.color,
-                          color: statusStyle.textColor,
-                        }}
-                      >
-                        {currentStatus}
-                      </span>
-                    </td>
+  <div style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: "2px" }}>
+    <span style={{
+      ...statusBadgeStyle,
+      backgroundColor: statusStyle.color,
+      color: statusStyle.textColor,
+    }}>
+      {currentStatus}
+    </span>
+    {renderSupportAgreementStatus(sme)}
+  </div>
+</td>
                     <td style={{ ...tableCellStyle, borderRight: "none" }}>
                       <button
                         onClick={() => handleStageAction(sme)}
@@ -2157,7 +2222,7 @@ const handleStageUpdate = async () => {
                 )}
 
                 {/* Meeting Details - Show for most stages */}
-                {currentStageFields.showMeeting && (
+                {currentStageFields.showMeeting && nextStage !== "Support Declined" && (
                   <div
                     style={{ backgroundColor: "#f8f5f3", padding: "20px", borderRadius: "12px", marginBottom: "24px" }}
                   >
@@ -2244,7 +2309,7 @@ const handleStageUpdate = async () => {
                 )}
 
                 {/* Term Sheet Upload - Only show for specific stages */}
-                {currentStageFields.showTermSheet && (
+                {currentStageFields.showTermSheet && nextStage === "Support Approved" && (
                   <div style={{ marginBottom: "24px" }}>
                     <label
                       style={{

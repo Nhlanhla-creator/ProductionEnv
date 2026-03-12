@@ -1,9 +1,9 @@
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { getAuth } from "firebase/auth";
 import { getDoc, doc, updateDoc, serverTimestamp, onSnapshot } from "firebase/firestore";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db, auth } from "../../firebaseConfig";
-import { FileText, ExternalLink, Upload, Filter, ChevronDown, ChevronUp, Trash2, Plus, Minus } from "lucide-react";
+import { FileText, ExternalLink, Upload, Filter, ChevronDown, ChevronUp, Trash2, Plus, Minus, Eye } from "lucide-react";
 import { onAuthStateChanged } from "firebase/auth";
 import { GoogleGenAI } from "@google/genai";
 import { 
@@ -20,8 +20,6 @@ import {
   getSyncConfig
 } from "../../utils/documentSyncService";
 import { getFunctions, httpsCallable } from "firebase/functions";
-
-
 
 const DOCUMENTS = [
   "5 Year Budget",
@@ -45,13 +43,24 @@ const DOCUMENTS = [
   "Tax Clearance Certificate"
 ].sort((a, b) => a.localeCompare(b));
 
+// Core documents that catalysts can view
+const CORE_DOCUMENTS = [
+  "Company Profile / Brochure",
+  "Company Registration Certificate",
+  "Business Plan",
+  "Proof of Address",
+  "Tax Clearance Certificate",
+  "B-BBEE Certificate",
+  "COIDA Letter of Good Standing",
+  "Client References & Support Letters"
+].sort((a, b) => a.localeCompare(b));
+
 const MyDocuments = () => {
   const [profileData, setProfileData] = useState({});
   const [filter, setFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(true);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [isOverlayVisible, setIsOverlayVisible] = useState(false);
   const [validationResults, setValidationResults] = useState({});
@@ -64,6 +73,10 @@ const MyDocuments = () => {
   const [expandedGuarantees, setExpandedGuarantees] = useState(false);
   const [expandedAccreditations, setExpandedAccreditations] = useState(false);
   const [expandedLoanAgreements, setExpandedLoanAgreements] = useState(false);
+  const [isInvestorView, setIsInvestorView] = useState(false);
+  const [viewingSMEId, setViewingSMEId] = useState(null);
+  const [viewingSMEName, setViewingSMEName] = useState("");
+
   const [activeSection, setActiveSection] = useState('documents');
 const functions = getFunctions();
   // Use the synchronization hook
@@ -76,54 +89,62 @@ const functions = getFunctions();
     });
   };
 
-  useEffect(() => {
-    const auth = getAuth();
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      if (user) {
-        try {
-          const profileRef = doc(db, "universalProfiles", user.uid);
-          
-          const unsubscribeSnapshot = onSnapshot(profileRef, (docSnap) => {
-            if (docSnap.exists()) {
-              const data = docSnap.data();
-              setProfileData(data);
-              const submitted = checkSubmittedDocs(DOCUMENTS, data);
-              setSubmittedDocuments(submitted);
-            }
-            setLoading(false);
-          });
+// Check for investor view mode on mount
+useEffect(() => {
+  const investorViewMode = sessionStorage.getItem("investorViewMode") === "true";
+  const smeId = sessionStorage.getItem("viewingSMEId");
+  const smeName = sessionStorage.getItem("viewingSMEName");
 
-          return () => unsubscribeSnapshot(); 
-        } catch (err) {
-          console.error("Failed to load user documents:", err);
-          setLoading(false);
+  if (investorViewMode && smeId) {
+    setIsInvestorView(true);
+    setViewingSMEId(smeId);
+    setViewingSMEName(smeName || "SME");
+    console.log("Investor view mode active, viewing SME:", smeId);
+  }
+}, []);
+
+useEffect(() => {
+  const auth = getAuth();
+  const unsubscribe = onAuthStateChanged(auth, async (user) => {
+    if (user) {
+      try {
+        // Determine which profile to load
+        let profileId = user.uid;
+        
+        // If in investor view mode, use the viewing SME ID instead
+        if (isInvestorView && viewingSMEId) {
+          profileId = viewingSMEId;
+          console.log("Loading documents for SME:", viewingSMEId);
+        } else {
+          console.log("Loading documents for logged-in user:", user.uid);
         }
-      } else {
+        
+        const profileRef = doc(db, "universalProfiles", profileId);
+        
+        const unsubscribeSnapshot = onSnapshot(profileRef, (docSnap) => {
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            setProfileData(data);
+            const submitted = checkSubmittedDocs(DOCUMENTS, data);
+            setSubmittedDocuments(submitted);
+          } else {
+            console.log("No profile found for ID:", profileId);
+          }
+          setLoading(false);
+        });
+
+        return () => unsubscribeSnapshot(); 
+      } catch (err) {
+        console.error("Failed to load user documents:", err);
         setLoading(false);
       }
-    });
-
-    return () => unsubscribe();
-  }, []);
-
-  // Add sidebar detection
-  useEffect(() => {
-    const checkSidebarState = () => {
-      setIsSidebarCollapsed(document.body.classList.contains("sidebar-collapsed"))
+    } else {
+      setLoading(false);
     }
+  });
 
-    // Check initial state
-    checkSidebarState()
-
-    // Watch for changes
-    const observer = new MutationObserver(checkSidebarState)
-    observer.observe(document.body, {
-      attributes: true,
-      attributeFilter: ["class"],
-    })
-
-    return () => observer.disconnect()
-  }, [])
+  return () => unsubscribe();
+}, [isInvestorView, viewingSMEId]);
 
   // Add this useEffect to MyDocuments component
   useEffect(() => {
@@ -187,15 +208,12 @@ const validateDocumentWithAI = async (docLabel, file, registeredName) => {
   }
 };
 
-
-
-
   const getMultipleDocumentData = (docLabel, profileData) => {
     const documentId = getDocumentId(docLabel);
     
     const multiUploadDocuments = [
       "IDs of Directors & Shareholders",
-      "Client references & Support Letters",
+      "Client References & Support Letters",
       "Guarantee/Contract",
       "Industry Accreditations",
       "Loan Agreements"
@@ -371,10 +389,6 @@ const validateDocumentWithAI = async (docLabel, file, registeredName) => {
     }
   };
 
-
-
-
-
   const handleDeleteIndividualDocument = async (docLabel, displayIndex) => {
     const auth = getAuth();
     const user = auth.currentUser;
@@ -530,6 +544,28 @@ const validateDocumentWithAI = async (docLabel, file, registeredName) => {
   };
 
 const renderIndividualDocumentActions = (docLabel, docIndex, doc) => {
+  // For investor view - show read-only indicator
+  if (isInvestorView) {
+    return (
+      <div style={{ display: "flex", gap: "8px", justifyContent: "center" }}>
+        <span style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: "4px",
+          padding: "4px 8px",
+          backgroundColor: "#f5f2f0",
+          color: "#8d6e63",
+          borderRadius: "4px",
+          fontSize: "10px",
+          fontWeight: "500"
+        }}>
+          <Eye size={12} />
+          Read only
+        </span>
+      </div>
+    );
+  }
+
   // For CVs from ownership management, show delete button only
   if (docLabel === "CV" && doc.source === "ownership_management") {
     return (
@@ -657,7 +693,7 @@ const renderIndividualDocumentActions = (docLabel, docIndex, doc) => {
   const renderDocumentLink = (label) => {
     const multiUploadDocuments = [
       "IDs of Directors & Shareholders", 
-      "Client references& Support Letters",
+      "Client References & Support Letters",
       "Guarantee/Contract",
       "Industry Accreditations",
       "Loan Agreements"
@@ -683,7 +719,7 @@ const renderIndividualDocumentActions = (docLabel, docIndex, doc) => {
         switch(label) {
           case "IDs of Directors & Shareholders":
             return { isExpanded: expandedIDs, setExpanded: setExpandedIDs };
-          case "Client references& Support Letters":
+          case "Client References & Support Letters":
             return { isExpanded: expandedClientReferences, setExpanded: setExpandedClientReferences };
           case "Guarantee/Contract":
             return { isExpanded: expandedGuarantees, setExpanded: setExpandedGuarantees };
@@ -942,7 +978,7 @@ const renderIndividualDocumentActions = (docLabel, docIndex, doc) => {
   const getDocumentStatus = (docLabel) => {
   const multiUploadDocuments = [
     "IDs of Directors & Shareholders",
-    "Client references & Support Letters",
+    "Client References & Support Letters",
     "Guarantee/Contract",
     "Industry Accreditations",
     "Loan Agreements"
@@ -1034,7 +1070,7 @@ const renderIndividualDocumentActions = (docLabel, docIndex, doc) => {
   const hasDocumentMatchingStatusFilter = (docLabel, statusFilter) => {
     const multiUploadDocuments = [
       "IDs of Directors & Shareholders",
-      "Client references & Support Letters",
+      "Client References & Support Letters",
       "Guarantee/Contract",
       "Industry Accreditations",
       "Loan Agreements"
@@ -1096,7 +1132,7 @@ const renderIndividualDocumentActions = (docLabel, docIndex, doc) => {
   const getIndividualDocumentsMatchingFilter = (docLabel, statusFilter) => {
     const multiUploadDocuments = [
       "IDs of Directors & Shareholders",
-      "Client references & Support Letters",
+      "Client References & Support Letters",
       "Guarantee/Contract",
       "Industry Accreditations",
       "Loan Agreements"
@@ -1148,8 +1184,10 @@ const renderIndividualDocumentActions = (docLabel, docIndex, doc) => {
     });
   };
 
+  // Determine which documents to display based on view mode
+  const documentsToDisplay = isInvestorView ? CORE_DOCUMENTS : DOCUMENTS;
 
-  const filteredDocuments = DOCUMENTS.filter((docLabel) => {
+  const filteredDocuments = documentsToDisplay.filter((docLabel) => {
     const documentId = getDocumentId(docLabel);
     
     const fundingDocuments = [
@@ -1242,7 +1280,7 @@ const renderIndividualDocumentActions = (docLabel, docIndex, doc) => {
  const getStatusBadge = (docLabel, individualDoc = null, docIndex = null) => {
   const multiUploadDocuments = [
     "IDs of Directors & Shareholders",
-    "Client references & Support Letters",
+    "Client References & Support Letters",
     "Guarantee/Contract",
     "Industry Accreditations",
     "Loan Agreements"
@@ -1365,7 +1403,6 @@ const badgeStyles = (status) => {
     minHeight: "100vh",
     maxWidth: "100vw",
     overflowX: "hidden",
-    padding: `80px 20px 20px ${isSidebarCollapsed ? "100px" : "290px"}`,
     margin: "0",
     boxSizing: "border-box",
     position: "relative",
@@ -1383,7 +1420,7 @@ const badgeStyles = (status) => {
         return expandedIDs;
       case "CV":
         return expandedCVs;
-      case "Client references & Support Letters":
+      case "Client References & Support Letters":
         return expandedClientReferences;
       case "Guarantee/Contract":
         return expandedGuarantees;
@@ -1537,9 +1574,6 @@ const badgeStyles = (status) => {
   });
 };
 
-
-
-
   if (!getAuth().currentUser && !loading) {
     return (
       <div style={getContainerStyles()}>
@@ -1654,6 +1688,57 @@ const badgeStyles = (status) => {
             <span style={{ color: "#5d4037", fontWeight: "600" }}>My Documents</span>
           </div>
 
+        {/* Investor View Indicator */}
+        {isInvestorView && (
+          <div style={{
+            backgroundColor: '#8d6e63',
+            color: 'white',
+            padding: '12px 20px',
+            borderRadius: '8px',
+            marginBottom: '20px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <Eye size={20} />
+              <div>
+                <strong>Viewing documents for:</strong> {viewingSMEName}
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                sessionStorage.removeItem('investorViewMode');
+                sessionStorage.removeItem('viewingSMEId');
+                sessionStorage.removeItem('viewingSMEName');
+                window.location.href = 'catalyst/cohorts';
+              }}
+              style={{
+                padding: "8px 16px",
+                backgroundColor: "#a67c52",
+                color: "white",
+                border: "none",
+                borderRadius: "6px",
+                cursor: "pointer",
+                fontWeight: "600",
+                fontSize: "14px",
+                transition: "background-color 0.3s ease",
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.backgroundColor = "#45a049";
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.backgroundColor = "#4caf50";
+              }}>
+              <span>←</span>
+             Back to My Cohorts
+            </button>
+          </div>
+        )}
+
         <div style={{
           width: "100%",
           maxWidth: "1400px",
@@ -1673,13 +1758,17 @@ const badgeStyles = (status) => {
               color: "#5d4037",
               margin: "0 0 8px 0",
               letterSpacing: "-0.025em"
-            }}>My Documents</h1>
+            }}>{isInvestorView ? "SME Core Documents" : "My Documents"}</h1>
             <p style={{
               fontSize: "1.125rem",
               color: "#6d4c41",
               margin: "0",
               fontWeight: "400"
-            }}>Track all your submitted documents in one place</p>
+            }}>
+              {isInvestorView 
+                ? `Reviewing core documents for ${viewingSMEName}` 
+                : "Track all your submitted documents in one place"}
+            </p>
 
             <div style={{
               backgroundColor: "#f5f2f0",
@@ -2061,8 +2150,10 @@ const badgeStyles = (status) => {
                       textTransform: "uppercase",
                       letterSpacing: "0.5px",
                       borderBottom: "2px solid #6d4c41",
-                      width: "25%"
-                    }}>Actions</th>
+                      width: isInvestorView ? "15%" : "25%" // Adjust width for investor view
+                    }}>
+                      {isInvestorView ? "Access" : "Actions"}
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -2091,7 +2182,7 @@ const badgeStyles = (status) => {
       // For multi-upload documents, check the multiple updated timestamp
       const multiUploadDocuments = [
         "IDs of Directors & Shareholders",
-        "Client references & Support Letters",
+        "Client References & Support Letters",
         "Guarantee/Contract",
         "Industry Accreditations",
         "Loan Agreements"
@@ -2126,8 +2217,8 @@ const badgeStyles = (status) => {
       const verification = profileData.verification?.[documentId];
       
       return (
-        <>
-          <tr key={docLabel} style={{
+        <React.Fragment key={docLabel}>
+          <tr style={{
             backgroundColor: index % 2 === 0 ? "white" : "#faf8f6",
             borderBottom: "1px solid #e8d8cf",
             transition: "background-color 0.2s ease",
@@ -2154,8 +2245,8 @@ const badgeStyles = (status) => {
                   {docLabel.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}
                 </div>
                 
-                {/* Add Document Button - only for multi-upload documents */}
-                {isMultiUpload && (
+                {/* Add Document Button - only for multi-upload documents and non-investors */}
+                {isMultiUpload && !isInvestorView && (
                   <button
                     onClick={() => handleAddNewDocument(docLabel)}
                     style={{
@@ -2295,100 +2386,153 @@ const badgeStyles = (status) => {
             }}>
               {docLabel === "CV" ? (
                 <div style={{ display: "flex", gap: "8px", justifyContent: "center", alignItems: "center" }}>
-                  <label style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "6px",
-                    padding: "8px 16px",
-                    backgroundColor: "#d3d3d3", 
-                    color: "#666",
-                    borderRadius: "6px",
-                    fontSize: "11px",
-                    fontWeight: "600",
-                    cursor: "not-allowed", 
-                    opacity: 0.6, 
-                    textTransform: "uppercase",
-                    letterSpacing: "0.5px"
-                  }}>
-                    <Upload size={12} />
-                    Upload
-                  </label>
+                  {isInvestorView ? (
+                    <span style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "4px",
+                      padding: "4px 8px",
+                      backgroundColor: "#f5f2f0",
+                      color: "#8d6e63",
+                      borderRadius: "4px",
+                      fontSize: "10px",
+                      fontWeight: "500"
+                    }}>
+                      <Eye size={12} />
+                      Read only
+                    </span>
+                  ) : (
+                    <label style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      padding: "8px 16px",
+                      backgroundColor: "#d3d3d3", 
+                      color: "#666",
+                      borderRadius: "6px",
+                      fontSize: "11px",
+                      fontWeight: "600",
+                      cursor: "not-allowed", 
+                      opacity: 0.6, 
+                      textTransform: "uppercase",
+                      letterSpacing: "0.5px"
+                    }}>
+                      <Upload size={12} />
+                      Upload
+                    </label>
+                  )}
                 </div>
               ) : isMultiUpload ? (
                 <div style={{ display: "flex", gap: "8px", justifyContent: "center", alignItems: "center" }}>
-                  <label style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "6px",
-                    padding: "8px 16px",
-                    backgroundColor: "#a67c52",
-                    color: "white",
-                    borderRadius: "6px",
-                    fontSize: "11px",
-                    fontWeight: "600",
-                    cursor: "pointer",
-                    transition: "all 0.2s ease",
-                    textTransform: "uppercase",
-                    letterSpacing: "0.5px"
-                  }}
-                  onMouseEnter={(e) => {
-                    e.target.style.backgroundColor = "#8d6e63";
-                    e.target.style.transform = "translateY(-1px)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.target.style.backgroundColor = "#a67c52";
-                    e.target.style.transform = "translateY(0)";
-                  }}
-                  >
-                    <Upload size={12} />
-                    Upload
-                    <input
-                      type="file"
-                      style={{ display: "none" }}
-                      onChange={(e) => {
-                        const files = e.target.files;
-                        if (files && files.length > 0) {
-                          handleIndividualDocumentUpload(docLabel, files[0], 0);
-                        }
-                      }}
-                      accept=".pdf,.jpg,.jpeg,.png"
-                    />
-                  </label>
+                  {isInvestorView ? (
+                    <span style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "4px",
+                      padding: "4px 8px",
+                      backgroundColor: "#f5f2f0",
+                      color: "#8d6e63",
+                      borderRadius: "4px",
+                      fontSize: "10px",
+                      fontWeight: "500"
+                    }}>
+                      <Eye size={12} />
+                      Read only
+                    </span>
+                  ) : (
+                    <label style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      padding: "8px 16px",
+                      backgroundColor: "#a67c52",
+                      color: "white",
+                      borderRadius: "6px",
+                      fontSize: "11px",
+                      fontWeight: "600",
+                      cursor: "pointer",
+                      transition: "all 0.2s ease",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.5px"
+                    }}
+                    onMouseEnter={(e) => {
+                      e.target.style.backgroundColor = "#8d6e63";
+                      e.target.style.transform = "translateY(-1px)";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.target.style.backgroundColor = "#a67c52";
+                      e.target.style.transform = "translateY(0)";
+                    }}
+                    >
+                      <Upload size={12} />
+                      Upload
+                      <input
+                        type="file"
+                        style={{ display: "none" }}
+                        onChange={(e) => {
+                          const files = e.target.files;
+                          if (files && files.length > 0) {
+                            handleIndividualDocumentUpload(docLabel, files[0], 0);
+                          }
+                        }}
+                        accept=".pdf,.jpg,.jpeg,.png"
+                      />
+                    </label>
+                  )}
                 </div>
               ) : (
-                <label style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "6px",
-                  padding: "8px 16px",
-                  backgroundColor: "#a67c52",
-                  color: "white",
-                  borderRadius: "6px",
-                  fontSize: "11px",
-                  fontWeight: "600",
-                  cursor: "pointer",
-                  transition: "all 0.2s ease",
-                  textTransform: "uppercase",
-                  letterSpacing: "0.5px"
-                }}
-                onMouseEnter={(e) => {
-                  e.target.style.backgroundColor = "#8d6e63";
-                  e.target.style.transform = "translateY(-1px)";
-                }}
-                onMouseLeave={(e) => {
-                  e.target.style.backgroundColor = "#a67c52";
-                  e.target.style.transform = "translateY(0)";
-                }}
-                >
-                  <Upload size={12} />
-                  {getDocumentUrlFromAnyLocation(docLabel, profileData) ? "Update" : "Upload"}
-                  <input
-                    type="file"
-                    style={{ display: "none" }}
-                    onChange={(e) => handleFileUpload(docLabel, e.target.files[0])}
-                    accept=".pdf,.jpg,.jpeg,.png"
-                  />
-                </label>
+                <div style={{ display: "flex", gap: "8px", justifyContent: "center", alignItems: "center" }}>
+                  {isInvestorView ? (
+                    <span style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "4px",
+                      padding: "4px 8px",
+                      backgroundColor: "#f5f2f0",
+                      color: "#8d6e63",
+                      borderRadius: "4px",
+                      fontSize: "10px",
+                      fontWeight: "500"
+                    }}>
+                      <Eye size={12} />
+                      Read only
+                    </span>
+                  ) : (
+                    <label style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      padding: "8px 16px",
+                      backgroundColor: "#a67c52",
+                      color: "white",
+                      borderRadius: "6px",
+                      fontSize: "11px",
+                      fontWeight: "600",
+                      cursor: "pointer",
+                      transition: "all 0.2s ease",
+                      textTransform: "uppercase",
+                      letterSpacing: "0.5px"
+                    }}
+                    onMouseEnter={(e) => {
+                      e.target.style.backgroundColor = "#8d6e63";
+                      e.target.style.transform = "translateY(-1px)";
+                    }}
+                    onMouseLeave={(e) => {
+                      e.target.style.backgroundColor = "#a67c52";
+                      e.target.style.transform = "translateY(0)";
+                    }}
+                    >
+                      <Upload size={12} />
+                      {getDocumentUrlFromAnyLocation(docLabel, profileData) ? "Update" : "Upload"}
+                      <input
+                        type="file"
+                        style={{ display: "none" }}
+                        onChange={(e) => handleFileUpload(docLabel, e.target.files[0])}
+                        accept=".pdf,.jpg,.jpeg,.png"
+                      />
+                    </label>
+                  )}
+                </div>
               )}
             </td>
           </tr>
@@ -2398,7 +2542,7 @@ const badgeStyles = (status) => {
           
           {/* Expanded rows for CVs - ONLY show matching documents when filtering */}
           {docLabel === "CV" && renderExpandedRows(docLabel, getMultipleDocumentData(docLabel, profileData), expandedCVs)}
-        </>
+        </React.Fragment>
       );
     })}
   </tbody>
