@@ -8,6 +8,8 @@ import { auth, db } from "../../firebaseConfig"
 import { doc, setDoc, getDoc, serverTimestamp } from "firebase/firestore"
 import emailjs from '@emailjs/browser';
 import { API_KEYS } from "../../API"
+import CatalystDetailsModal  from "./accelatorDetailsModal"
+
 
 // Mock data for the table
 const mockAccelerators = []
@@ -364,7 +366,9 @@ export function AcceleratorTable({ filters, onApplicationSubmitted }) {
   const [mounted, setMounted] = useState(false)
   const [showMatchBreakdown, setShowMatchBreakdown] = useState(false)
   const [selectedAccelerator, setSelectedAccelerator] = useState(null)
-  
+  const [showCatalystDetails, setShowCatalystDetails] = useState(false)
+  const [selectedCatalystDetails, setSelectedCatalystDetails] = useState(null)
+
   // Filter states - UPDATED
   const [selectedGeographic, setSelectedGeographic] = useState([])
   const [selectedSectors, setSelectedSectors] = useState([])
@@ -375,10 +379,10 @@ export function AcceleratorTable({ filters, onApplicationSubmitted }) {
   const [minMatchFilter, setMinMatchFilter] = useState(0)
 
   // Company member states
-const [companyOwnerId, setCompanyOwnerId] = useState(null)
-const [isCompanyMember, setIsCompanyMember] = useState(false)
-const [effectiveUserId, setEffectiveUserId] = useState(null)
-const [userRole, setUserRole] = useState(null)
+  const [companyOwnerId, setCompanyOwnerId] = useState(null)
+  const [isCompanyMember, setIsCompanyMember] = useState(false)
+  const [effectiveUserId, setEffectiveUserId] = useState(null)
+  const [userRole, setUserRole] = useState(null)
 
 
   const hasApplication = (acceleratorId) => {
@@ -391,55 +395,55 @@ const [userRole, setUserRole] = useState(null)
     setMounted(true)
     return () => setMounted(false)
   }, [])
-// Check company membership on mount
-useEffect(() => {
-  const checkCompanyMembership = async () => {
-    const user = auth.currentUser
-    if (!user) return
+  // Check company membership on mount
+  useEffect(() => {
+    const checkCompanyMembership = async () => {
+      const user = auth.currentUser
+      if (!user) return
 
-    try {
-      const userDocRef = doc(db, "users", user.uid)
-      const userDocSnap = await getDoc(userDocRef)
-      
-      if (userDocSnap.exists()) {
-        const userData = userDocSnap.data()
-        const userCompanyId = userData.companyId
-        const userCompanyRole = userData.userRole
-        
-        if (userCompanyId) {
-          const companyDocRef = doc(db, "companies", userCompanyId)
-          const companyDocSnap = await getDoc(companyDocRef)
-          
-          if (companyDocSnap.exists()) {
-            const companyData = companyDocSnap.data()
-            const ownerId = companyData.createdBy
-            
-            setUserRole(userCompanyRole || 'viewer')
-            
-            if (ownerId === user.uid) {
-              setIsCompanyMember(false)
-              setEffectiveUserId(user.uid)
-            } else {
-              setIsCompanyMember(true)
-              setCompanyOwnerId(ownerId)
-              setEffectiveUserId(ownerId)
+      try {
+        const userDocRef = doc(db, "users", user.uid)
+        const userDocSnap = await getDoc(userDocRef)
+
+        if (userDocSnap.exists()) {
+          const userData = userDocSnap.data()
+          const userCompanyId = userData.companyId
+          const userCompanyRole = userData.userRole
+
+          if (userCompanyId) {
+            const companyDocRef = doc(db, "companies", userCompanyId)
+            const companyDocSnap = await getDoc(companyDocRef)
+
+            if (companyDocSnap.exists()) {
+              const companyData = companyDocSnap.data()
+              const ownerId = companyData.createdBy
+
+              setUserRole(userCompanyRole || 'viewer')
+
+              if (ownerId === user.uid) {
+                setIsCompanyMember(false)
+                setEffectiveUserId(user.uid)
+              } else {
+                setIsCompanyMember(true)
+                setCompanyOwnerId(ownerId)
+                setEffectiveUserId(ownerId)
+              }
             }
+          } else {
+            setIsCompanyMember(false)
+            setEffectiveUserId(user.uid)
+            setUserRole('owner')
           }
-        } else {
-          setIsCompanyMember(false)
-          setEffectiveUserId(user.uid)
-          setUserRole('owner')
         }
+      } catch (error) {
+        console.error("Error checking company membership:", error)
+        setEffectiveUserId(user.uid)
+        setUserRole('owner')
       }
-    } catch (error) {
-      console.error("Error checking company membership:", error)
-      setEffectiveUserId(user.uid)
-      setUserRole('owner')
     }
-  }
 
-  checkCompanyMembership()
-}, [])
+    checkCompanyMembership()
+  }, [])
 
 
 
@@ -456,12 +460,12 @@ useEffect(() => {
       accelerator.speed
     ];
 
-    const missingCount = fieldsToCheck.filter(field => 
-      !field || 
-      field === '-' || 
-      field === 'Not specified' || 
-      field === 'Various' || 
-      field === 'unspecified' || 
+    const missingCount = fieldsToCheck.filter(field =>
+      !field ||
+      field === '-' ||
+      field === 'Not specified' ||
+      field === 'Various' ||
+      field === 'unspecified' ||
       field === 'Unknown' ||
       field === 'N/A'
     ).length;
@@ -494,20 +498,20 @@ useEffect(() => {
       try {
         const catalystProfileRef = doc(db, "catalystProfiles", catalystId);
         const catalystProfileSnap = await getDoc(catalystProfileRef);
-        
+
         if (catalystProfileSnap.exists()) {
           const profileData = catalystProfileSnap.data();
           console.log("📄 catalystProfiles data:", profileData);
-          
+
           catalystEmail = profileData.formData?.contactDetails?.businessEmail;
-          
+
           if (catalystEmail) {
             console.log("✅ Found catalyst email:", catalystEmail);
           } else {
             console.log("❌ No business email found in catalyst profile");
             catalystEmail = profileData.formData?.contactDetails?.email ||
-                           profileData.email ||
-                           profileData.contactEmail;
+              profileData.email ||
+              profileData.contactEmail;
           }
         } else {
           console.log("❌ No document in catalystProfiles for:", catalystId);
@@ -533,7 +537,7 @@ useEffect(() => {
       const catalystName = accelerator.name || "Catalyst";
 
       const emailSubject = `New Application Received from ${smeName}`;
-      
+
       let emailMessage = `Dear ${catalystName} Team,\n\n`;
       emailMessage += `You have received a new application from ${smeName}.\n\n`;
       emailMessage += `Application Details:\n`;
@@ -543,7 +547,7 @@ useEffect(() => {
       emailMessage += `- Funding Stage: ${smeData.entityOverview?.operationStage || "Not specified"}\n`;
       emailMessage += `- Funding Required: ${smeData.useOfFunds?.amountRequested || "Not specified"}\n`;
       emailMessage += `- Match Score: ${accelerator.matchPercentage || 0}%\n\n`;
-      
+
       emailMessage += `You can review this application in your catalyst dashboard.\n\n`;
       emailMessage += `Best regards,\nBIG Marketplace Africa Team`;
 
@@ -566,18 +570,18 @@ useEffect(() => {
         templateParams,
         emailjsConfig.publicKey
       );
-      
+
       console.log("✅ Catalyst email sent successfully!", response);
       return true;
-      
+
     } catch (emailError) {
       console.error("❌ Catalyst email failed:", emailError);
       return false;
     }
   }
 
- const fetchAccelerators = async () => {
-  if (!isMountedRef.current || !effectiveUserId) return
+  const fetchAccelerators = async () => {
+    if (!isMountedRef.current || !effectiveUserId) return
 
     setLoading(true)
     try {
@@ -585,7 +589,7 @@ useEffect(() => {
       if (!user) return
 
       // Use effectiveUserId for SME profile
-const smeDoc = await getDoc(doc(db, "universalProfiles", effectiveUserId))
+      const smeDoc = await getDoc(doc(db, "universalProfiles", effectiveUserId))
       const smeData = smeDoc.exists() ? smeDoc.data() : {}
 
       // Get fresh data from Firebase
@@ -594,12 +598,12 @@ const smeDoc = await getDoc(doc(db, "universalProfiles", effectiveUserId))
       const profiles = await Promise.all(
         snapshot.docs.flatMap(async (docSnap) => {
           const catalystId = docSnap.id
-          
+
           // Skip current user's own profile
-if (catalystId === user.uid || catalystId === effectiveUserId) {
-  return []
-}
-          
+          if (catalystId === user.uid || catalystId === effectiveUserId) {
+            return []
+          }
+
           const data = docSnap.data()
           const formData = data.formData || {}
           const overview = formData.entityOverview || {}
@@ -631,6 +635,7 @@ if (catalystId === user.uid || catalystId === effectiveUserId) {
                 matchPercentage: calculateMatchScore(smeData, formData),
                 pipelineStage: appData?.pipelineStage || "Match",
                 nextStage: appData?.nextStage || "Application Review",
+                rawFormData: formData,
               },
             ]
           }
@@ -664,6 +669,7 @@ if (catalystId === user.uid || catalystId === effectiveUserId) {
                 matchBreakdown: matchResult.breakdown,
                 pipelineStage: appData?.pipelineStage || "Match",
                 nextStage: appData?.nextStage || "Application Review",
+                rawFormData: formData,
               }
             }),
           )
@@ -681,42 +687,42 @@ if (catalystId === user.uid || catalystId === effectiveUserId) {
     }
   }
 
-useEffect(() => {
-  isMountedRef.current = true
-  if (effectiveUserId) {
-    fetchAccelerators()
-  }
+  useEffect(() => {
+    isMountedRef.current = true
+    if (effectiveUserId) {
+      fetchAccelerators()
+    }
 
-  return () => {
-    isMountedRef.current = false
-  }
-}, [filters, effectiveUserId])
+    return () => {
+      isMountedRef.current = false
+    }
+  }, [filters, effectiveUserId])
 
 
-useEffect(() => {
-  if (!effectiveUserId) return
+  useEffect(() => {
+    if (!effectiveUserId) return
 
-  const loadStatusFromFirestore = async () => {
-    const snapshot = await getDocs(collection(db, "smeCatalystApplications"))
-    const statusMap = {}
-    const stageMap = {}
+    const loadStatusFromFirestore = async () => {
+      const snapshot = await getDocs(collection(db, "smeCatalystApplications"))
+      const statusMap = {}
+      const stageMap = {}
 
-    snapshot.docs.forEach((docSnap) => {
-      const data = docSnap.data()
-      if (data.smeId === effectiveUserId) {
-        // This must match accelerator.id = `${catalystId}_${programIndex}`
-        const key = `${data.catalystId}_${data.programIndex ?? 0}`
-        statusMap[key] = "Sent"
-        stageMap[key] = data.status || "Application Sent"
-      }
-    })
+      snapshot.docs.forEach((docSnap) => {
+        const data = docSnap.data()
+        if (data.smeId === effectiveUserId) {
+          // This must match accelerator.id = `${catalystId}_${programIndex}`
+          const key = `${data.catalystId}_${data.programIndex ?? 0}`
+          statusMap[key] = "Sent"
+          stageMap[key] = data.status || "Application Sent"
+        }
+      })
 
-    setStatuses(statusMap)
-    setPipelineStages(stageMap)
-  }
+      setStatuses(statusMap)
+      setPipelineStages(stageMap)
+    }
 
-  loadStatusFromFirestore()
-}, [effectiveUserId, accelerators])
+    loadStatusFromFirestore()
+  }, [effectiveUserId, accelerators])
 
 
   const calculateMatchScore = (smeData, acceleratorData, program = null) => {
@@ -872,8 +878,8 @@ useEffect(() => {
       smeAmountRequested,
       accelMinTicket,
       accelMaxTicket,
-      smeValue:smeAmountRequested,
-      accelValue: `${accelMinTicket}-${accelMaxTicket}` ,
+      smeValue: smeAmountRequested,
+      accelValue: `${accelMinTicket}-${accelMaxTicket}`,
     }
     breakdown.ticketSize.matched = ticketMatch
 
@@ -958,12 +964,12 @@ useEffect(() => {
     // 6. Support Match
     const smeSupportCategory = smeData.useOfFunds?.additionalSupportFocus;
     const smeSupportSubtype = smeData.useOfFunds?.additionalSupportFocusSubtype;
-    
-    const accelSupportCategory = 
-      programData.supportFocusType || 
+
+    const accelSupportCategory =
+      programData.supportFocusType ||
       acceleratorData?.generalMatchingPreference?.supportFocus;
-    const accelSupportSubtype = 
-      programData.supportFocusSubtype || 
+    const accelSupportSubtype =
+      programData.supportFocusSubtype ||
       acceleratorData?.generalMatchingPreference?.supportFocusSubtype;
 
     let supportMatchScore = 0;
@@ -1040,19 +1046,19 @@ useEffect(() => {
   }
 
   const handleApplyClick = async (accelerator) => {
-  const user = auth.currentUser
-  if (!user) return
+    const user = auth.currentUser
+    if (!user) return
 
-  // Check permissions for company members
-  if (isCompanyMember && !['owner', 'admin'].includes(userRole)) {
-    setNotification({
-      type: "warning",
-      message: "Only company owners and admins can submit applications.",
-    })
-    return
-  }
+    // Check permissions for company members
+    if (isCompanyMember && !['owner', 'admin'].includes(userRole)) {
+      setNotification({
+        type: "warning",
+        message: "Only company owners and admins can submit applications.",
+      })
+      return
+    }
 
-  const smeUserId = effectiveUserId
+    const smeUserId = effectiveUserId
     const catalystId = accelerator.originalCatalystId || accelerator.id
     const programIndex = accelerator.programIndex || 0
 
@@ -1124,8 +1130,8 @@ useEffect(() => {
         catalystId: catalystId,
         programIndex: programIndex,
         smeId: smeUserId,
-          submittedBy: user.uid,              // ADD THIS
-  submittedByRole: userRole,      
+        submittedBy: user.uid,              // ADD THIS
+        submittedByRole: userRole,
         acceleratorName: accelerator.name,
         location: entity.location || "-",
         sector: (entity.economicSectors || []).join(", ") || "-",
@@ -1161,9 +1167,9 @@ useEffect(() => {
 
       setStatuses((prev) => ({ ...prev, [accelerator.id]: "Sent" }))
       setPipelineStages((prev) => ({ ...prev, [accelerator.id]: pipelineStage }))
-      setNotification({ 
-        type: "success", 
-        message: `Application sent to ${accelerator.name} and notification email sent!` 
+      setNotification({
+        type: "success",
+        message: `Application sent to ${accelerator.name} and notification email sent!`
       })
 
       if (onApplicationSubmitted) onApplicationSubmitted()
@@ -1176,7 +1182,8 @@ useEffect(() => {
   }
 
   const handleViewClick = (accelerator) => {
-    setModalAccelerator(accelerator)
+    setSelectedCatalystDetails(accelerator)
+    setShowCatalystDetails(true)
   }
 
   const handleViewMatchBreakdown = (accelerator) => {
@@ -1257,7 +1264,7 @@ useEffect(() => {
     // Filter by status
     if (
       selectedStatus.length > 0 &&
-      !selectedStatus.some((status) => 
+      !selectedStatus.some((status) =>
         (pipelineStages[accelerator.id] || "Match").toLowerCase().includes(status.toLowerCase()))
     ) {
       return false
@@ -1295,45 +1302,45 @@ useEffect(() => {
       >
 
         {/* Company Member Banner */}
-{isCompanyMember && (
-  <div style={{
-    backgroundColor: userRole === 'viewer' ? '#fef3c7' : '#e0f2fe',
-    border: `2px solid ${userRole === 'viewer' ? '#f59e0b' : '#0369a1'}`,
-    borderRadius: '12px',
-    padding: '16px 24px',
-    marginBottom: '24px',
-    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)'
-  }}>
-    <div style={{ 
-      display: 'flex', 
-      alignItems: 'center', 
-      gap: '12px', 
-      marginBottom: '8px' 
-    }}>
-      <span style={{ fontSize: '24px' }}>🤝</span>
-      <h3 style={{ 
-        margin: 0, 
-        color: userRole === 'viewer' ? '#f59e0b' : '#0369a1', 
-        fontWeight: '700',
-        fontSize: '1.1rem'
-      }}>
-        Company Catalyst Applications - Role: {userRole?.toUpperCase()}
-      </h3>
-    </div>
-    <p style={{ 
-      margin: 0, 
-      color: '#4a5568', 
-      fontSize: '0.95rem',
-      lineHeight: '1.5'
-    }}>
-      {userRole === 'owner' && 'You can view and manage all company catalyst applications.'}
-      {userRole === 'admin' && 'You can view and submit catalyst applications for the company.'}
-      {userRole === 'manager' && 'You can view catalyst applications and track their progress.'}
-      {userRole === 'employee' && 'You can view company catalyst applications.'}
-      {userRole === 'viewer' && 'You have read-only access to company catalyst applications.'}
-    </p>
-  </div>
-)}
+        {isCompanyMember && (
+          <div style={{
+            backgroundColor: userRole === 'viewer' ? '#fef3c7' : '#e0f2fe',
+            border: `2px solid ${userRole === 'viewer' ? '#f59e0b' : '#0369a1'}`,
+            borderRadius: '12px',
+            padding: '16px 24px',
+            marginBottom: '24px',
+            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)'
+          }}>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              marginBottom: '8px'
+            }}>
+              <span style={{ fontSize: '24px' }}>🤝</span>
+              <h3 style={{
+                margin: 0,
+                color: userRole === 'viewer' ? '#f59e0b' : '#0369a1',
+                fontWeight: '700',
+                fontSize: '1.1rem'
+              }}>
+                Company Catalyst Applications - Role: {userRole?.toUpperCase()}
+              </h3>
+            </div>
+            <p style={{
+              margin: 0,
+              color: '#4a5568',
+              fontSize: '0.95rem',
+              lineHeight: '1.5'
+            }}>
+              {userRole === 'owner' && 'You can view and manage all company catalyst applications.'}
+              {userRole === 'admin' && 'You can view and submit catalyst applications for the company.'}
+              {userRole === 'manager' && 'You can view catalyst applications and track their progress.'}
+              {userRole === 'employee' && 'You can view company catalyst applications.'}
+              {userRole === 'viewer' && 'You have read-only access to company catalyst applications.'}
+            </p>
+          </div>
+        )}
         {/* Notification area */}
         {notification && (
           <div
@@ -1390,32 +1397,32 @@ useEffect(() => {
                 selectedStatus.length > 0 ||
                 nextStageFilter ||
                 minMatchFilter > 0) && (
-                <span
-                  style={{
-                    background: "#5D2A0A",
-                    color: "white",
-                    borderRadius: "50%",
-                    width: "20px",
-                    height: "20px",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: "0.7rem",
-                  }}
-                >
-                  {
-                    [
-                      selectedGeographic.length,
-                      selectedSectors.length,
-                      selectedStages.length,
-                      selectedSupport.length,
-                      selectedStatus.length,
-                      nextStageFilter,
-                      minMatchFilter > 0,
-                    ].filter(Boolean).length
-                  }
-                </span>
-              )}
+                  <span
+                    style={{
+                      background: "#5D2A0A",
+                      color: "white",
+                      borderRadius: "50%",
+                      width: "20px",
+                      height: "20px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: "0.7rem",
+                    }}
+                  >
+                    {
+                      [
+                        selectedGeographic.length,
+                        selectedSectors.length,
+                        selectedStages.length,
+                        selectedSupport.length,
+                        selectedStatus.length,
+                        nextStageFilter,
+                        minMatchFilter > 0,
+                      ].filter(Boolean).length
+                    }
+                  </span>
+                )}
             </button>
           </div>
         </div>
@@ -2116,6 +2123,14 @@ useEffect(() => {
           </div>,
           document.body,
         )}
+
+      {mounted && showCatalystDetails && selectedCatalystDetails && (
+        <CatalystDetailsModal
+          catalyst={selectedCatalystDetails}
+          isOpen={showCatalystDetails}
+          onClose={() => { setShowCatalystDetails(false); setSelectedCatalystDetails(null) }}
+        />
+      )}
     </>
   )
 }
