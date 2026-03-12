@@ -1,29 +1,12 @@
 import { useState, useEffect } from "react";
 
 function OverallCompanyHealth() {
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [aiInsights, setAiInsights] = useState({});
   const [loading, setLoading] = useState({});
   const [isInvestorView, setIsInvestorView] = useState(false);
   const [viewingSMEId, setViewingSMEId] = useState(null);
   const [viewingSMEName, setViewingSMEName] = useState("");
   const [viewOrigin, setViewOrigin] = useState("investor");
-
-  useEffect(() => {
-    const checkSidebarState = () => {
-      setIsSidebarCollapsed(document.body.classList.contains("sidebar-collapsed"));
-    };
-
-    checkSidebarState();
-
-    const observer = new MutationObserver(checkSidebarState);
-    observer.observe(document.body, {
-      attributes: true,
-      attributeFilter: ["class"],
-    });
-
-    return () => observer.disconnect();
-  }, []);
 
   useEffect(() => {
     // Check for investor/catalyst view mode
@@ -306,7 +289,6 @@ function OverallCompanyHealth() {
     <div style={{
       minHeight: '100vh',
       backgroundColor: '#f7f3f0',
-      padding: `70px 20px 20px ${isSidebarCollapsed ? "100px" : "270px"}`,
       margin: "0",
       width: '100%',
       boxSizing: 'border-box',

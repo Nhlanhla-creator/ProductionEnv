@@ -5,8 +5,6 @@ import { Bar, Line, Pie } from "react-chartjs-2"
 import { doc, getDoc, setDoc, collection, query, where, getDocs } from "firebase/firestore"
 import { db, auth } from "../../firebaseConfig"
 import { onAuthStateChanged } from "firebase/auth"
-import Sidebar from "smses/Sidebar/Sidebar"
-import Header from "../DashboardHeader/DashboardHeader"
 import { DateRangePicker } from "./financial/components/SharedComponents"
 import {
   Chart as ChartJS,
@@ -1996,7 +1994,6 @@ const KPIDashboard = ({ activeSection, isInvestorView, financialYearStartMonth }
 // Main Operational Performance Component (Single Tab Version)
 const OperationalPerformance = () => {
   const [activeSection, setActiveSection] = useState("kpi-dashboard")
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const [user, setUser] = useState(null)
   const [showFullDescription, setShowFullDescription] = useState(false)
 
@@ -2032,22 +2029,6 @@ const OperationalPerformance = () => {
     return () => unsubscribe()
   }, [isInvestorView, viewingSMEId])
 
-  useEffect(() => {
-    const checkSidebarState = () => {
-      setIsSidebarCollapsed(document.body.classList.contains("sidebar-collapsed"))
-    }
-
-    checkSidebarState()
-
-    const observer = new MutationObserver(checkSidebarState)
-    observer.observe(document.body, {
-      attributes: true,
-      attributeFilter: ["class"],
-    })
-
-    return () => observer.disconnect()
-  }, [])
-
  const handleExitInvestorView = () => {
   // Clear all session storage items
   sessionStorage.removeItem("viewingSMEId")
@@ -2066,9 +2047,7 @@ const OperationalPerformance = () => {
   const getContentStyles = () => ({
     width: "100%",
     marginLeft: "0",
-    backgroundColor: "#f7f3f0",
     minHeight: "100vh",
-    padding: `70px 20px 20px ${isSidebarCollapsed ? "100px" : "270px"}`,
     transition: "padding 0.3s ease",
     boxSizing: "border-box",
   })
@@ -2137,7 +2116,7 @@ const OperationalPerformance = () => {
   </div>
 )}
 
-        <div style={{ padding: "20px", paddingTop: "40px", marginLeft: "20px" }}>
+        <div>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
             <h1 style={{ color: "#5d4037", fontSize: "32px", fontWeight: "700", margin: 0 }}>
               Operational Performance
@@ -2244,7 +2223,6 @@ const OperationalPerformance = () => {
             display: "flex",
             gap: "15px",
             marginBottom: "30px",
-            padding: "15px",
             backgroundColor: "#fdfcfb",
             borderRadius: "8px",
             boxShadow: "0 2px 4px rgba(0,0,0,0.05)",

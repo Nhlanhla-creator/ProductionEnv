@@ -110,7 +110,7 @@ const colors = {
   trialBrown: "#8D6E63", // Changed from trialGreen to trialBrown
 }
 
-const CatalystSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, onSidebarToggle }) => {
+const CatalystSubscriptions = () => {
   const auth = getAuth()
   const db = getFirestore()
   const user = auth.currentUser
@@ -127,14 +127,6 @@ const CatalystSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, onSideb
   const [paymentProcessing, setPaymentProcessing] = useState(false)
   const [checkoutId, setCheckoutId] = useState(null)
   const [showCheckout, setShowCheckout] = useState(false)
-
-  // Internal sidebar state
-  const [internalSidebarOpen, setInternalSidebarOpen] = useState(true)
-  const [internalSidebarWidth, setInternalSidebarWidth] = useState(280)
-
-  // Use props if provided, otherwise use internal state
-  const currentSidebarOpen = sidebarOpen !== undefined ? sidebarOpen : internalSidebarOpen
-  const currentSidebarWidth = sidebarWidth !== undefined ? sidebarWidth : internalSidebarWidth
 
   const plans = {
     discover: {
@@ -909,8 +901,7 @@ const CatalystSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, onSideb
       background: colors.offWhite,
       fontFamily: "'Inter', 'Segoe UI', 'Roboto', sans-serif",
       boxSizing: "border-box",
-      marginLeft: currentSidebarOpen ? `${currentSidebarWidth}px` : "0px",
-      width: currentSidebarOpen ? `calc(100% - ${currentSidebarWidth}px)` : "100%",
+      width: "100%",
       transition: "all 0.3s ease",
     },
     mainCard: {
@@ -2321,22 +2312,19 @@ const CatalystSubscriptions = ({ sidebarOpen = true, sidebarWidth = 280, onSideb
         /* Sidebar responsive adjustments */
         @media (max-width: 1400px) {
           .subscription-container {
-            margin-left: ${currentSidebarOpen ? "250px" : "0px"} !important;
-            width: ${currentSidebarOpen ? "calc(100% - 250px)" : "100%"} !important;
+            width: "100%" !important;
           }
         }
 
         @media (max-width: 1200px) {
           .subscription-container {
-            margin-left: ${currentSidebarOpen ? "220px" : "0px"} !important;
-            width: ${currentSidebarOpen ? "calc(100% - 220px)" : "100%"} !important;
+            width: "100%" !important;
           }
         }
 
         @media (max-width: 1024px) {
           .subscription-container {
-            margin-left: ${currentSidebarOpen ? "200px" : "0px"} !important;
-            width: ${currentSidebarOpen ? "calc(100% - 200px)" : "100%"} !important;
+            width: "100%" !important;
           }
         }
 

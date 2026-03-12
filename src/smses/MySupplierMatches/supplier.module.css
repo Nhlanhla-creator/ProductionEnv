@@ -1,5 +1,4 @@
 :root {
-
   --brown-50: #efebe9;
   --brown-100: #d7ccc8;
   --brown-200: #bcaaa4;
@@ -11,8 +10,6 @@
   --brown-800: #4e342e;
   --brown-900: #3e2723;
   --brown-accent: #d7ccc8;
-
-
   --white: #ffffff;
   --black: #212121;
   --pink-bubble: #f8bbd0;
@@ -31,12 +28,9 @@
   flex: 1;
   padding: 12px;
   box-sizing: border-box;
-  width: calc(100% - 250px);
+  width: 100%;
   max-width: 100%;
-  margin-left: 250px;
   margin-right: 0;
-  
-  margin-top: 55px;
 }
 
 .pageContainer {
@@ -1426,12 +1420,14 @@
   word-break: break-word;
   hyphens: auto;
   -webkit-line-clamp: var(--max-lines, 3);
+  line-clamp: var(--max-lines, 3);
   white-space: normal;
 }
 
 .truncatedText.expanded {
   display: block;
   -webkit-line-clamp: none;
+  line-clamp: none;
   max-height: none;
 }
 

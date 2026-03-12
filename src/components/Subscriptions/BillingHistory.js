@@ -31,7 +31,6 @@ const ReusableBillingHistory = ({
   setEmail: setParentEmail = () => {},
   setFullName: setParentFullName = () => {},
   setCompanyName: setParentCompanyName = () => {},
-  showSidebarSpacing = true,
 }) => {
   const [activeTab, setActiveTab] = useState("billing-history");
   const [firebaseData, setFirebaseData] = useState({});
@@ -42,36 +41,14 @@ const ReusableBillingHistory = ({
   const [loadingHistory, setLoadingHistory] = useState(true);
   const [growthTools, setGrowthTools] = useState([]);
   const [loadingGrowthTools, setLoadingGrowthTools] = useState(true);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-
+  
   const successFeeData =
     mockSuccessFeeData[userType] || mockSuccessFeeData.investor;
   const growthToolsData = userType === "sme" ? mockGrowthToolsData : [];
 
   // Get styles based on user type and sidebar state
-  const styles = getBillingHistoryStyles(isSidebarCollapsed, userType);
+  const styles = getBillingHistoryStyles(userType);
   const { userConfig } = styles;
-
-  // Detect sidebar collapse state
-  useEffect(() => {
-    if (!showSidebarSpacing) return;
-
-    const checkSidebarState = () => {
-      setIsSidebarCollapsed(
-        document.body.classList.contains("sidebar-collapsed")
-      );
-    };
-
-    checkSidebarState();
-
-    const observer = new MutationObserver(checkSidebarState);
-    observer.observe(document.body, {
-      attributes: true,
-      attributeFilter: ["class"],
-    });
-
-    return () => observer.disconnect();
-  }, [showSidebarSpacing]);
 
   // Sync local state with parent setters
   useEffect(() => {
@@ -538,13 +515,8 @@ const ReusableBillingHistory = ({
     fetchGrowthTools();
   }, [userType]);
 
-  // Choose container style based on sidebar spacing preference
-  const containerStyle = showSidebarSpacing
-    ? styles.billingContainerDynamic
-    : styles.billingContainer;
-
   return (
-    <div style={{ minHeight: "100vh", backgroundColor: colors.offWhite }}>
+    <div>
       <style>{`
         @keyframes spin {
           0% {
@@ -555,12 +527,6 @@ const ReusableBillingHistory = ({
           }
         }
 
-        @media (max-width: 1024px) {
-          .billing-container {
-            margin-left: ${showSidebarSpacing ? "250px" : "2rem"} !important;
-          }
-        }
-
         @media (max-width: 768px) {
           .billing-container {
             margin: 1rem !important;
@@ -568,7 +534,7 @@ const ReusableBillingHistory = ({
         }
       `}</style>
 
-      <div style={containerStyle} className="billing-container">
+      <div style={styles.billingContainer}>
         {/* Tab Navigation */}
         <div style={styles.tabNavigation}>
           {userConfig.tabKeys.map((tabKey, index) => (

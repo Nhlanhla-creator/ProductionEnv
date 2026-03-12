@@ -12,8 +12,6 @@
   --shadow-color: rgba(62, 39, 35, 0.1);
   --card-border-radius: clamp(0.5rem, 1.5vw, 0.75rem);
   --card-shadow: 0 4px 12px rgba(77, 52, 46, 0.08);
-  --sidebar-width: 280px;
-  --sidebar-collapsed-width: 80px;
 }
 
 .dashboard-container {
@@ -34,12 +32,9 @@
 
 .content {
   flex: 1;
-  margin-left: var(--sidebar-width);
-  
   padding: clamp(1rem, 1.5vw, 2rem);
   transition: margin-left 0.3s ease, width 0.3s ease;
   overflow-x: auto;
-  min-height: calc(100vh - var(--sidebar-width)); /* Adjust if header exists */
   display: flex;
   flex-direction: column;
 }
@@ -49,20 +44,6 @@
   margin: 0 auto;
   width: 100%;
   flex: 1;
-}
-
-/* Collapsed state */
-.sidebar-collapsed .content {
-  margin-left: var(--sidebar-collapsed-width);
-  width: calc(100% - var(--sidebar-collapsed-width));
-}
-
-/* Responsive breakpoints */
-@media screen and (max-width: 1200px) {
-  :root {
-    --sidebar-width: clamp(180px, 18vw, 250px);
-    --sidebar-collapsed-width: clamp(50px, 6vw, 80px);
-  }
 }
 
 @media screen and (max-width: 992px) {
@@ -915,11 +896,6 @@ body.modal-open {
 }
 
 @media (max-width: 1024px) {
-  :root {
-    --sidebar-width: 200px;
-    --sidebar-collapsed-width: 60px;
-  }
-
   .content {
     padding: 1rem;
   }
@@ -938,11 +914,6 @@ body.modal-open {
 }
 
 @media (max-width: 768px) {
-  :root {
-    --sidebar-width: 0px;
-    --sidebar-collapsed-width: 0px;
-  }
-
   .content {
     margin-left: 0;
     width: 100%;
