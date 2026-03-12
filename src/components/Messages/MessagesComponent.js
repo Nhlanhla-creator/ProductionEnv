@@ -182,6 +182,7 @@ const MessagesComponent = ({ config = {} }) => {
     return () => unsubscribe();
   }, []);
 
+  
   // Fetch sent messages
   useEffect(() => {
     const auth = getAuth();
@@ -257,6 +258,8 @@ const MessagesComponent = ({ config = {} }) => {
     return urls;
   };
 
+  
+
   const handleReply = async () => {
     if (!selectedMessage) return;
 
@@ -295,11 +298,9 @@ const MessagesComponent = ({ config = {} }) => {
       to: "",
       toName: "",
       subject: `Fwd: ${selectedMessage.subject}`,
-      content: `\n\n----- Forwarded Message -----\nFrom: ${
-        senderName || selectedMessage.fromName
-      }\nDate: ${formatDate(selectedMessage.date)}\n\n${
-        selectedMessage.content
-      }`,
+      content: `\n\n----- Forwarded Message -----\nFrom: ${senderName || selectedMessage.fromName
+        }\nDate: ${formatDate(selectedMessage.date)}\n\n${selectedMessage.content
+        }`,
       attachments: [],
     });
     setAttachmentFiles([]);
@@ -400,33 +401,125 @@ const MessagesComponent = ({ config = {} }) => {
 
   // In your MessagesComponent, add this function to handle termsheet acceptance
 
-const handleTermsheetResponse = async (messageId, accepted, termsheetUrl) => {
+// Add this function to handle accept with document upload
+const handleAcceptWithUpload = async (message) => {
   const auth = getAuth();
   const user = auth.currentUser;
   if (!user) return;
 
   try {
-    // Update the message to show it's been responded to
+    // Step 1: Check if document exists
+    if (!message.attachments || message.attachments.length === 0) {
+      alert("No document found to sign.");
+      return;
+    }
+
+    const documentUrl = message.attachments[0];
+    const fileName = documentUrl.split('/').pop().split('?')[0] || 'document.pdf';
+    
+    // Step 2: Download the original document
+    const response = await fetch(documentUrl);
+    const blob = await response.blob();
+    
+    // Create download link
+    const blobUrl = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = blobUrl;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(blobUrl);
+    
+    // Step 3: Prompt to upload signed version
+    alert("Please sign the downloaded document and then upload the signed version.");
+    
+    // Step 4: Create file input for signed document upload
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.pdf,.doc,.docx,.jpg,.jpeg,.png';
+    
+    input.onchange = async (e) => {
+      const signedFile = e.target.files[0];
+      if (!signedFile) return;
+      
+      // Upload signed document
+      const storage = getStorage();
+      const signedFileRef = ref(
+        storage,
+        `signed_documents/${user.uid}/${Date.now()}_${signedFile.name}`
+      );
+      
+      await uploadBytes(signedFileRef, signedFile);
+      const signedDocumentUrl = await getDownloadURL(signedFileRef);
+      
+      // Submit acceptance with signed document
+      await handleTermsheetResponse(
+        message.id,
+        "accepted",
+        documentUrl,
+        null,
+        signedDocumentUrl
+      );
+    };
+    
+    input.click();
+    
+  } catch (error) {
+    console.error("Error in accept with upload flow:", error);
+    alert("Failed to process document upload. Please try again.");
+  }
+};
+
+// Update handleTermsheetResponse to handle signed documents
+const handleTermsheetResponse = async (messageId, status, termsheetUrl, feedback = null, signedDocumentUrl = null) => {
+  const auth = getAuth();
+  const user = auth.currentUser;
+  if (!user) return;
+
+  try {
+    // Update the message with response
     await updateDoc(doc(db, "messages", messageId), {
       termsheetResponse: {
-        accepted: accepted,
+        status: status,
+        feedback: feedback,
+        signedDocumentUrl: signedDocumentUrl,
         respondedAt: new Date().toISOString(),
         respondedBy: user.uid
       }
     });
 
-    // Also update the application with the termsheet status
+    // Get message data
     const messageDoc = await getDoc(doc(db, "messages", messageId));
     const messageData = messageDoc.data();
-    
+
+    // Update applications
     if (messageData.applicationId) {
-      // Update investor application
-      const investorAppRef = doc(db, "investorApplications", messageData.applicationId);
-      await updateDoc(investorAppRef, {
-        termsheetStatus: accepted ? "accepted" : "declined",
-        termsheetRespondedAt: new Date().toISOString(),
-        termsheetUrl: termsheetUrl
-      });
+      // Try investor application
+      try {
+        const investorAppRef = doc(db, "investorApplications", messageData.applicationId);
+        await updateDoc(investorAppRef, {
+          termsheetStatus: status,
+          termsheetFeedback: feedback,
+          termsheetSignedDocument: signedDocumentUrl,
+          termsheetRespondedAt: new Date().toISOString(),
+        });
+      } catch (e) {
+        // Not an investor application
+      }
+
+      // Try catalyst application
+      try {
+        const catalystAppRef = doc(db, "catalystApplications", messageData.applicationId);
+        await updateDoc(catalystAppRef, {
+          supportAgreementStatus: status,
+          supportAgreementFeedback: feedback,
+          supportAgreementSignedDocument: signedDocumentUrl,
+          supportAgreementRespondedAt: new Date().toISOString(),
+        });
+      } catch (e) {
+        // Not a catalyst application
+      }
 
       // Update SME application
       const smeQuery = query(
@@ -435,36 +528,69 @@ const handleTermsheetResponse = async (messageId, accepted, termsheetUrl) => {
         where("funderId", "==", messageData.from)
       );
       const smeSnapshot = await getDocs(smeQuery);
-      
       if (!smeSnapshot.empty) {
-        const smeDocRef = smeSnapshot.docs[0].ref;
-        await updateDoc(smeDocRef, {
-          termsheetStatus: accepted ? "accepted" : "declined",
+        await updateDoc(smeSnapshot.docs[0].ref, {
+          termsheetStatus: status,
+          termsheetFeedback: feedback,
+          termsheetSignedDocument: signedDocumentUrl,
           termsheetRespondedAt: new Date().toISOString(),
-          termsheetUrl: termsheetUrl
         });
+      }
+
+      // Try smeCatalystApplications
+      try {
+        const smeCatalystQuery = query(
+          collection(db, "smeCatalystApplications"),
+          where("smeId", "==", user.uid)
+        );
+        const smeCatalystSnap = await getDocs(smeCatalystQuery);
+        if (!smeCatalystSnap.empty) {
+          await updateDoc(smeCatalystSnap.docs[0].ref, {
+            supportAgreementStatus: status,
+            supportAgreementFeedback: feedback,
+            supportAgreementSignedDocument: signedDocumentUrl,
+            supportAgreementRespondedAt: new Date().toISOString(),
+          });
+        }
+      } catch (e) {
+        console.warn("Could not update smeCatalystApplications:", e.message);
       }
     }
 
     // Send confirmation message to investor
+    let statusText = "";
+    switch(status) {
+      case "accepted":
+        statusText = "Accepted with Signed Document";
+        break;
+      case "accepted_with_conditions":
+        statusText = "Accepted with Conditions";
+        break;
+      case "declined":
+        statusText = "Declined";
+        break;
+    }
+
     await addDoc(collection(db, "messages"), {
       from: user.uid,
       fromName: "SME",
       to: messageData.from,
-      subject: `Termsheet ${accepted ? 'Accepted' : 'Declined'}: ${messageData.subject}`,
-      content: `The termsheet has been ${accepted ? 'accepted' : 'declined'}.${!accepted ? ' Please find our feedback below.' : ''}`,
+      subject: `Termsheet ${statusText}: ${messageData.subject}`,
+      content: `The termsheet has been ${status}.${feedback ? `\n\nFeedback: ${feedback}` : ''}${signedDocumentUrl ? '\n\nSigned document has been uploaded.' : ''}`,
       date: new Date().toISOString(),
       type: "inbox",
       read: false,
       applicationId: messageData.applicationId,
       termsheetResponse: {
-        accepted: accepted,
+        status: status,
+        feedback: feedback,
+        signedDocumentUrl: signedDocumentUrl,
         respondedAt: new Date().toISOString()
       }
     });
 
-    alert(`Termsheet ${accepted ? 'accepted' : 'declined'} successfully!`);
-    
+    alert(`Termsheet ${status === "accepted" ? 'accepted' : status === "accepted_with_conditions" ? 'accepted with conditions' : 'declined'} successfully!`);
+
     // Refresh messages
     window.location.reload();
   } catch (error) {
@@ -472,6 +598,7 @@ const handleTermsheetResponse = async (messageId, accepted, termsheetUrl) => {
     alert("Failed to process termsheet response. Please try again.");
   }
 };
+
 
   const handleSaveDraft = () => {
     const draft = {
@@ -667,11 +794,9 @@ const handleTermsheetResponse = async (messageId, accepted, termsheetUrl) => {
                   return (
                     <div
                       key={message.id}
-                      className={`message-item ${
-                        !message.read ? "unread" : ""
-                      } ${
-                        selectedMessage?.id === message.id ? "selected" : ""
-                      }`}
+                      className={`message-item ${!message.read ? "unread" : ""
+                        } ${selectedMessage?.id === message.id ? "selected" : ""
+                        }`}
                       onClick={() => handleMessageSelect(message)}
                     >
                       <div className="message-sender">{displayName}</div>
@@ -931,61 +1056,135 @@ const handleTermsheetResponse = async (messageId, accepted, termsheetUrl) => {
                       );
                     })()}
 
-                    {selectedMessage.subject?.includes("Termsheet Shared") && 
- !selectedMessage.termsheetResponse && (
+             {/* Handles both Termsheet and Support Agreement documents */}
+{/* Handles both Termsheet and Support Agreement documents */}
+{(selectedMessage.subject?.includes("Termsheet Shared") || 
+  selectedMessage.subject?.includes("Support Approved") ||
+  selectedMessage.subject?.includes("Support Agreement")) && 
+  !selectedMessage.termsheetResponse && (
   <div className="termsheet-actions">
-    <h4>Termsheet Response Required</h4>
-    <p>Please review the attached termsheet and indicate your decision:</p>
-    
+    <h4>
+      {selectedMessage.subject?.includes("Support") 
+        ? "Support Agreement Response Required"
+        : "Termsheet Response Required"}
+    </h4>
+    <p>
+      {selectedMessage.subject?.includes("Support")
+        ? "Please review the attached support agreement and indicate your decision:"
+        : "Please review the attached termsheet and indicate your decision:"}
+    </p>
+
+    {/* Document link — checks attachments array */}
     {selectedMessage.attachments && selectedMessage.attachments.length > 0 && (
       <div className="termsheet-document">
-        <a 
-          href={selectedMessage.attachments[0]} 
-          target="_blank" 
+        <a
+          href={selectedMessage.attachments[0]}
+          target="_blank"
           rel="noopener noreferrer"
           className="document-link"
         >
           <FileText size={20} />
-          View Termsheet Document
+          {selectedMessage.subject?.includes("Support")
+            ? "View Support Agreement Document"
+            : "View Termsheet Document"}
         </a>
       </div>
     )}
-    
-    <div className="termsheet-response-buttons">
+
+    <div className="termsheet-response-buttons three-options">
+      {/* Accept Button - Green */}
       <button
         className="accept-btn"
-        onClick={() => handleTermsheetResponse(
-          selectedMessage.id, 
-          true, 
-          selectedMessage.attachments?.[0]
-        )}
+        onClick={() => handleAcceptWithUpload(selectedMessage)}
       >
-        ✓ Accept Termsheet
+        <span className="btn-icon">✓</span>
+        Accept
       </button>
+
+      {/* Accept with Conditions - Orange */}
       <button
-        className="decline-btn"
+        className="conditions-btn"
         onClick={() => {
-          const feedback = prompt("Please provide feedback on why you're declining the termsheet:");
-          if (feedback !== null) {
-            handleTermsheetResponse(selectedMessage.id, false, selectedMessage.attachments?.[0]);
+          const conditions = prompt(
+            selectedMessage.subject?.includes("Support")
+              ? "Please outline your conditions for accepting the support agreement:"
+              : "Please outline your conditions for accepting the termsheet:"
+          );
+          if (conditions && conditions.trim() !== "") {
+            handleTermsheetResponse(
+              selectedMessage.id,
+              "accepted_with_conditions",
+              selectedMessage.attachments?.[0],
+              conditions
+            );
+          } else if (conditions !== null) {
+            alert("Please provide your conditions for acceptance.");
           }
         }}
       >
-        ✗ Decline Termsheet
+        <span className="btn-icon">⚡</span>
+        Accept with Conditions
+      </button>
+
+      {/* Decline Button - Red */}
+      <button
+        className="decline-btn"
+        onClick={() => {
+          const feedback = prompt(
+            selectedMessage.subject?.includes("Support")
+              ? "Please provide feedback on why you're declining the support agreement:"
+              : "Please provide feedback on why you're declining the termsheet:"
+          );
+          if (feedback && feedback.trim() !== "") {
+            handleTermsheetResponse(
+              selectedMessage.id,
+              "declined",
+              selectedMessage.attachments?.[0],
+              feedback
+            );
+          } else if (feedback !== null) {
+            alert("Please provide feedback for declining.");
+          }
+        }}
+      >
+        <span className="btn-icon">✗</span>
+        Decline
       </button>
     </div>
   </div>
 )}
 
 {selectedMessage.termsheetResponse && (
-  <div className={`termsheet-status ${selectedMessage.termsheetResponse.accepted ? 'accepted' : 'declined'}`}>
+  <div className={`termsheet-status ${selectedMessage.termsheetResponse.status === "accepted" ? "accepted" : 
+    selectedMessage.termsheetResponse.status === "accepted_with_conditions" ? "conditions" : "declined"}`}>
     <h4>
-      {selectedMessage.termsheetResponse.accepted ? '✓ Termsheet Accepted' : '✗ Termsheet Declined'}
+      {selectedMessage.termsheetResponse.status === "accepted" && 
+        "✓ " + (selectedMessage.subject?.includes("Support") ? "Agreement Accepted" : "Termsheet Accepted")}
+      {selectedMessage.termsheetResponse.status === "accepted_with_conditions" && 
+        "⚡ " + (selectedMessage.subject?.includes("Support") ? "Agreement Accepted with Conditions" : "Termsheet Accepted with Conditions")}
+      {selectedMessage.termsheetResponse.status === "declined" && 
+        "✗ " + (selectedMessage.subject?.includes("Support") ? "Agreement Declined" : "Termsheet Declined")}
     </h4>
+    {selectedMessage.termsheetResponse.feedback && (
+      <p className="feedback-text">
+        <strong>Feedback:</strong> {selectedMessage.termsheetResponse.feedback}
+      </p>
+    )}
     <p>Responded: {new Date(selectedMessage.termsheetResponse.respondedAt).toLocaleString()}</p>
+    {selectedMessage.termsheetResponse.signedDocumentUrl && (
+      <p className="signed-document-info">
+        <FileText size={16} />
+        <a 
+          href={selectedMessage.termsheetResponse.signedDocumentUrl} 
+          target="_blank" 
+          rel="noopener noreferrer"
+        >
+          View Signed Document
+        </a>
+      </p>
+    )}
   </div>
 )}
-
                   {supportAttachments &&
                     selectedMessage.attachments &&
                     selectedMessage.attachments.length > 0 && (
