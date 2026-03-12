@@ -22,6 +22,7 @@ import { createPortal } from "react-dom"
 import "react-circular-progressbar/dist/styles.css"
 import emailjs from "@emailjs/browser"
 import { API_KEYS } from "../../API"
+import InternDetailsModal from "./InternDetailsModal"
 
 // Replaced cities with South African provinces for location filter
 const southAfricanProvinces = [
@@ -1243,6 +1244,8 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
   const [interviewTime, setInterviewTime] = useState("")
   const [interviewLocation, setInterviewLocation] = useState("")
   const [formErrors, setFormErrors] = useState({})
+  const [showInternDetails, setShowInternDetails] = useState(false)
+  const [selectedInternDetails, setSelectedInternDetails] = useState(null)
 
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [notification, setNotification] = useState(null)
@@ -1287,9 +1290,9 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
 
 
   const [companyOwnerId, setCompanyOwnerId] = useState(null)
-const [isCompanyMember, setIsCompanyMember] = useState(false)
-const [effectiveUserId, setEffectiveUserId] = useState(null)
-const [userRole, setUserRole] = useState(null)
+  const [isCompanyMember, setIsCompanyMember] = useState(false)
+  const [effectiveUserId, setEffectiveUserId] = useState(null)
+  const [userRole, setUserRole] = useState(null)
 
 
   const getStageFields = (stage) => {
@@ -1418,71 +1421,71 @@ const [userRole, setUserRole] = useState(null)
 
 
   // Check company membership on mount
-useEffect(() => {
-  const checkCompanyMembership = async () => {
-    const user = auth.currentUser
-    if (!user) return
-
-    try {
-      const userDocRef = doc(db, "users", user.uid)
-      const userDocSnap = await getDoc(userDocRef)
-      
-      if (userDocSnap.exists()) {
-        const userData = userDocSnap.data()
-        const userCompanyId = userData.companyId
-        const userCompanyRole = userData.userRole
-        
-        if (userCompanyId) {
-          const companyDocRef = doc(db, "companies", userCompanyId)
-          const companyDocSnap = await getDoc(companyDocRef)
-          
-          if (companyDocSnap.exists()) {
-            const companyData = companyDocSnap.data()
-            const ownerId = companyData.createdBy
-            
-            setUserRole(userCompanyRole || 'viewer')
-            
-            if (ownerId === user.uid) {
-              setIsCompanyMember(false)
-              setEffectiveUserId(user.uid)
-            } else {
-              setIsCompanyMember(true)
-              setCompanyOwnerId(ownerId)
-              setEffectiveUserId(ownerId)
-            }
-          }
-        } else {
-          setIsCompanyMember(false)
-          setEffectiveUserId(user.uid)
-          setUserRole('owner')
-        }
-      }
-    } catch (error) {
-      console.error("Error checking company membership:", error)
-      setEffectiveUserId(user.uid)
-      setUserRole('owner')
-    }
-  }
-
-  checkCompanyMembership()
-}, [])
-
-
- useEffect(() => {
-  const fetchInternApplications = async () => {
-    if (!effectiveUserId) return
-    
-    setLoading(true)
-    try {
+  useEffect(() => {
+    const checkCompanyMembership = async () => {
       const user = auth.currentUser
-      if (!user) {
-        console.log("No authenticated user")
-        setLoading(false)
-        return
-      }
+      if (!user) return
 
-      const smeUserId = effectiveUserId
-      const smeUserDoc = await getDoc(doc(db, "universalProfiles", smeUserId))
+      try {
+        const userDocRef = doc(db, "users", user.uid)
+        const userDocSnap = await getDoc(userDocRef)
+
+        if (userDocSnap.exists()) {
+          const userData = userDocSnap.data()
+          const userCompanyId = userData.companyId
+          const userCompanyRole = userData.userRole
+
+          if (userCompanyId) {
+            const companyDocRef = doc(db, "companies", userCompanyId)
+            const companyDocSnap = await getDoc(companyDocRef)
+
+            if (companyDocSnap.exists()) {
+              const companyData = companyDocSnap.data()
+              const ownerId = companyData.createdBy
+
+              setUserRole(userCompanyRole || 'viewer')
+
+              if (ownerId === user.uid) {
+                setIsCompanyMember(false)
+                setEffectiveUserId(user.uid)
+              } else {
+                setIsCompanyMember(true)
+                setCompanyOwnerId(ownerId)
+                setEffectiveUserId(ownerId)
+              }
+            }
+          } else {
+            setIsCompanyMember(false)
+            setEffectiveUserId(user.uid)
+            setUserRole('owner')
+          }
+        }
+      } catch (error) {
+        console.error("Error checking company membership:", error)
+        setEffectiveUserId(user.uid)
+        setUserRole('owner')
+      }
+    }
+
+    checkCompanyMembership()
+  }, [])
+
+
+  useEffect(() => {
+    const fetchInternApplications = async () => {
+      if (!effectiveUserId) return
+
+      setLoading(true)
+      try {
+        const user = auth.currentUser
+        if (!user) {
+          console.log("No authenticated user")
+          setLoading(false)
+          return
+        }
+
+        const smeUserId = effectiveUserId
+        const smeUserDoc = await getDoc(doc(db, "universalProfiles", smeUserId))
         const smeUserData = smeUserDoc.exists() ? smeUserDoc.data() : {}
 
         const applicationsQuery = query(collection(db, "internshipApplications"), where("sponsorId", "==", smeUserId))
@@ -1560,9 +1563,9 @@ useEffect(() => {
 
               const availabilityData = applicationData.availableDates
                 ? applicationData.availableDates.map((avail) => ({
-                    ...avail,
-                    date: new Date(avail.date),
-                  }))
+                  ...avail,
+                  date: new Date(avail.date),
+                }))
                 : []
 
               const extractDocUrl = (docArray) => {
@@ -1611,8 +1614,8 @@ useEffect(() => {
                 availableDates: availabilityData,
                 locationFlexibility:
                   applicationData.locationFlexibility &&
-                  applicationData.locationFlexibility[0] &&
-                  applicationData.locationFlexibility[0] !== "N"
+                    applicationData.locationFlexibility[0] &&
+                    applicationData.locationFlexibility[0] !== "N"
                     ? applicationData.locationFlexibility[0]
                     : skillsInterests.locationPreference && skillsInterests.locationPreference !== "N"
                       ? skillsInterests.locationPreference
@@ -1718,8 +1721,8 @@ useEffect(() => {
                 availableDates: [],
                 locationFlexibility:
                   Array.isArray(academicOverview.locationFlexibility) &&
-                  academicOverview.locationFlexibility.length > 0 &&
-                  academicOverview.locationFlexibility[0] !== "N"
+                    academicOverview.locationFlexibility.length > 0 &&
+                    academicOverview.locationFlexibility[0] !== "N"
                     ? academicOverview.locationFlexibility.join(", ")
                     : "Not specified",
                 matchAnalysis: matchResult,
@@ -1767,7 +1770,7 @@ useEffect(() => {
     }
 
     fetchInternApplications()
-}, [effectiveUserId])
+  }, [effectiveUserId])
 
   const handleFilterChange = (filterName, value) => {
     setLocalFilters((prev) => ({
@@ -1829,18 +1832,18 @@ useEffect(() => {
     setMeetingPurpose("") // Reset meeting purpose
   }
 
-const handleStageUpdate = async () => {
-  // Check permissions for company members
-  if (isCompanyMember && !['owner', 'admin', 'manager'].includes(userRole)) {
-    setNotification({
-      type: "warning",
-      message: "You don't have permission to update application stages.",
-    })
-    return
-  }
+  const handleStageUpdate = async () => {
+    // Check permissions for company members
+    if (isCompanyMember && !['owner', 'admin', 'manager'].includes(userRole)) {
+      setNotification({
+        type: "warning",
+        message: "You don't have permission to update application stages.",
+      })
+      return
+    }
 
-  // Determine the fields relevant to the selected stage
-  const stageFields = getStageFields(selectedStage)
+    // Determine the fields relevant to the selected stage
+    const stageFields = getStageFields(selectedStage)
     const errors = {}
 
     if (!selectedStage) {
@@ -1879,10 +1882,10 @@ const handleStageUpdate = async () => {
 
     setIsSubmitting(true)
     try {
-     const user = auth.currentUser
-if (!user) throw new Error("User not authenticated")
+      const user = auth.currentUser
+      if (!user) throw new Error("User not authenticated")
 
-const sponsorId = effectiveUserId
+      const sponsorId = effectiveUserId
       const internId = selectedInternForStage.id // This is the application ID
 
       let attachmentUrl = null
@@ -1896,8 +1899,8 @@ const sponsorId = effectiveUserId
         status: selectedStage,
         pipelineStage: selectedStage,
         updatedAt: serverTimestamp(),
-          lastUpdatedBy: user.uid,           // ADD THIS
-  lastUpdatedByRole: userRole, 
+        lastUpdatedBy: user.uid,           // ADD THIS
+        lastUpdatedByRole: userRole,
         ...(stageNotes && { lastMessage: stageNotes }), // Use stageNotes as lastMessage
         ...(stageFields.showInterview && {
           interviewDetails: {
@@ -1949,19 +1952,19 @@ const sponsorId = effectiveUserId
         prevInterns.map((intern) =>
           intern.id === internId
             ? {
-                ...intern,
-                status: selectedStage,
-                pipelineStage: selectedStage,
-                ...(stageNotes && { lastMessage: stageNotes }),
-                ...(stageFields.showInterview && {
-                  interviewDetails: {
-                    date: interviewDate,
-                    time: interviewTime,
-                    location: interviewLocation,
-                  },
-                }),
-                ...(updateData.availableDates && { availableDates: updateData.availableDates }),
-              }
+              ...intern,
+              status: selectedStage,
+              pipelineStage: selectedStage,
+              ...(stageNotes && { lastMessage: stageNotes }),
+              ...(stageFields.showInterview && {
+                interviewDetails: {
+                  date: interviewDate,
+                  time: interviewTime,
+                  location: interviewLocation,
+                },
+              }),
+              ...(updateData.availableDates && { availableDates: updateData.availableDates }),
+            }
             : intern,
         ),
       )
@@ -2195,27 +2198,27 @@ const sponsorId = effectiveUserId
   }
 
   const handleRequestIntern = async (intern) => {
-  try {
-    const user = auth.currentUser
-    if (!user) {
-      setNotification({ type: "error", message: "User not authenticated. Please log in." })
-      return
-    }
+    try {
+      const user = auth.currentUser
+      if (!user) {
+        setNotification({ type: "error", message: "User not authenticated. Please log in." })
+        return
+      }
 
-    // Check permissions for company members
-    if (isCompanyMember && !['owner', 'admin'].includes(userRole)) {
-      setNotification({
-        type: "warning",
-        message: "Only company owners and admins can request interns.",
-      })
-      return
-    }
+      // Check permissions for company members
+      if (isCompanyMember && !['owner', 'admin'].includes(userRole)) {
+        setNotification({
+          type: "warning",
+          message: "Only company owners and admins can request interns.",
+        })
+        return
+      }
 
-    console.log("Starting intern request for:", intern.internName)
+      console.log("Starting intern request for:", intern.internName)
       console.log("SME User ID:", user.uid)
       console.log("Intern object:", intern)
       const internId = intern.internId
-const sponsorId = effectiveUserId
+      const sponsorId = effectiveUserId
 
       let smeData = {}
       try {
@@ -2275,7 +2278,7 @@ const sponsorId = effectiveUserId
         console.warn("Could not retrieve evaluation scores:", evaluationError)
       }
 
-     
+
       const requestDocId = `${sponsorId}_${internId}`
 
       console.log("Request document ID:", requestDocId)
@@ -2311,8 +2314,8 @@ const sponsorId = effectiveUserId
         provinces: internFormData.personalOverview?.provinces || [],
         cities: internFormData.personalOverview?.cities || [],
         sponsorId: sponsorId,
-          submittedBy: user.uid,              // ADD THIS
-  submittedByRole: userRole,          // ADD THIS
+        submittedBy: user.uid,              // ADD THIS
+        submittedByRole: userRole,          // ADD THIS
         sponsorName:
           smeData.entityOverview?.tradingName || smeData.entityOverview?.registeredName || "Our Organization",
         sponsorEmail: user.email || smeData.contactEmail || "Not provided",
@@ -2587,8 +2590,8 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
   }
 
   const handleViewDetails = (intern) => {
-    setSelectedIntern(intern)
-    setModalType("view")
+    setSelectedInternDetails(intern)
+    setShowInternDetails(true)
   }
 
   const handleBigScoreClick = (intern) => {
@@ -2736,14 +2739,14 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
     return missingCount > 4
   }
 
-const applyLocalFilters = () => {
-  let updatedInterns = [...interns]
+  const applyLocalFilters = () => {
+    let updatedInterns = [...interns]
 
-  updatedInterns = updatedInterns.filter((intern) => {
-    const user = auth.currentUser
-    if ((user && intern.internId === user.uid) || (effectiveUserId && intern.internId === effectiveUserId)) {
-      return false
-    }
+    updatedInterns = updatedInterns.filter((intern) => {
+      const user = auth.currentUser
+      if ((user && intern.internId === user.uid) || (effectiveUserId && intern.internId === effectiveUserId)) {
+        return false
+      }
 
       if (hasTooManyMissingFields(intern)) {
         return false
@@ -2803,51 +2806,51 @@ const applyLocalFilters = () => {
 
   return (
     <div style={{ padding: "20px", width: "100%", maxWidth: "100vw", overflowX: "hidden" }}>
-   
-    {/* Company Member Banner */}
-    {isCompanyMember && (
-      <div style={{
-        backgroundColor: userRole === 'viewer' ? '#fef3c7' : '#e0f2fe',
-        border: `2px solid ${userRole === 'viewer' ? '#f59e0b' : '#0369a1'}`,
-        borderRadius: '12px',
-        padding: '16px 24px',
-        marginBottom: '24px',
-        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)'
-      }}>
-        <div style={{ 
-          display: 'flex', 
-          alignItems: 'center', 
-          gap: '12px', 
-          marginBottom: '8px' 
-        }}>
-          <span style={{ fontSize: '24px' }}>🤝</span>
-          <h3 style={{ 
-            margin: 0, 
-            color: userRole === 'viewer' ? '#f59e0b' : '#0369a1', 
-            fontWeight: '700',
-            fontSize: '1.1rem'
-          }}>
-            Company Internship Applications - Role: {userRole?.toUpperCase()}
-          </h3>
-        </div>
-        <p style={{ 
-          margin: 0, 
-          color: '#4a5568', 
-          fontSize: '0.95rem',
-          lineHeight: '1.5'
-        }}>
-          {userRole === 'owner' && 'You can view and manage all company internship applications.'}
-          {userRole === 'admin' && 'You can view and request interns for the company.'}
-          {userRole === 'manager' && 'You can view and update internship application stages.'}
-          {userRole === 'employee' && 'You can view company internship applications.'}
-          {userRole === 'viewer' && 'You have read-only access to company internship applications.'}
-        </p>
-      </div>
-    )}
 
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}></div>
+      {/* Company Member Banner */}
+      {isCompanyMember && (
+        <div style={{
+          backgroundColor: userRole === 'viewer' ? '#fef3c7' : '#e0f2fe',
+          border: `2px solid ${userRole === 'viewer' ? '#f59e0b' : '#0369a1'}`,
+          borderRadius: '12px',
+          padding: '16px 24px',
+          marginBottom: '24px',
+          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)'
+        }}>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            marginBottom: '8px'
+          }}>
+            <span style={{ fontSize: '24px' }}>🤝</span>
+            <h3 style={{
+              margin: 0,
+              color: userRole === 'viewer' ? '#f59e0b' : '#0369a1',
+              fontWeight: '700',
+              fontSize: '1.1rem'
+            }}>
+              Company Internship Applications - Role: {userRole?.toUpperCase()}
+            </h3>
+          </div>
+          <p style={{
+            margin: 0,
+            color: '#4a5568',
+            fontSize: '0.95rem',
+            lineHeight: '1.5'
+          }}>
+            {userRole === 'owner' && 'You can view and manage all company internship applications.'}
+            {userRole === 'admin' && 'You can view and request interns for the company.'}
+            {userRole === 'manager' && 'You can view and update internship application stages.'}
+            {userRole === 'employee' && 'You can view company internship applications.'}
+            {userRole === 'viewer' && 'You have read-only access to company internship applications.'}
+          </p>
+        </div>
+      )}
+
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}></div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-        
+
         <h2 style={{ fontSize: "20px", fontWeight: "bold" }}>Intern Applications</h2>
         <button
           onClick={() => setShowFilters(true)}
@@ -3417,132 +3420,13 @@ const applyLocalFilters = () => {
         )}
 
       {/* View Details Modal */}
-      {selectedIntern &&
-        modalType === "view" &&
-        createPortal(
-          <div style={modalOverlayStyle} onClick={resetModal}>
-            <div style={modalContentStyle} onClick={(e) => e.stopPropagation()}>
-              <div
-                style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "32px" }}
-              >
-                <h3 style={{ fontSize: "28px", fontWeight: "800", color: "#3e2723", margin: 0 }}>
-                  {selectedIntern.internName} - Application Details
-                </h3>
-                <button
-                  onClick={resetModal}
-                  style={{
-                    background: "none",
-                    border: "none",
-                    fontSize: "24px",
-                    cursor: "pointer",
-                    color: "#666",
-                  }}
-                >
-                  <X size={24} />
-                </button>
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px", marginBottom: "32px" }}>
-                <div>
-                  <h4 style={{ fontSize: "18px", fontWeight: "600", color: "#4a352f", marginBottom: "16px" }}>
-                    Basic Information
-                  </h4>
-                  <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                    <div>
-                      <strong>Name:</strong> {selectedIntern.internName}
-                    </div>
-                    <div>
-                      <strong>Location:</strong> {selectedIntern.location}
-                    </div>
-                    <div>
-                      <strong>Institution:</strong> {selectedIntern.institution}
-                    </div>
-                    <div>
-                      <strong>Status:</strong> {selectedIntern.status}
-                    </div>
-                  </div>
-                </div>
-                <div>
-                  <h4 style={{ fontSize: "18px", fontWeight: "600", color: "#4a352f", marginBottom: "16px" }}>
-                    Education Details
-                  </h4>
-                  <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                    <div>
-                      <strong>Degree:</strong> {selectedIntern.degree}
-                    </div>
-                    <div>
-                      <strong>Field:</strong> {selectedIntern.field}
-                    </div>
-                    <div>
-                      <strong>Intern Type:</strong> {selectedIntern.internType}
-                    </div>
-                  </div>
-                </div>
-                <div>
-                  <h4 style={{ fontSize: "18px", fontWeight: "600", color: "#4a352f", marginBottom: "16px" }}>
-                    Internship Details
-                  </h4>
-                  <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                    <div>
-                      <strong>Role:</strong> {selectedIntern.role}
-                    </div>
-                    <div>
-                      <strong>Funding Program:</strong> {selectedIntern.fundingProgram}
-                    </div>
-                    <div>
-                      <strong>Funding Type:</strong> {selectedIntern.fundingProgramType}
-                    </div>
-                    <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                      <h4>Documents</h4>
-                      <div>{renderDocumentLink(selectedIntern.cvUrl, "CV Document")}</div>
-                      <div>{renderDocumentLink(selectedIntern.transcriptUrl, "Transcript Document")}</div>
-                      <div>{renderDocumentLink(selectedIntern.idDocumentUrl, "ID Document")}</div>
-                      <div>{renderDocumentLink(selectedIntern.motivationLetterUrl, "Motivation Letter")}</div>
-                      <div>{renderDocumentLink(selectedIntern.portfolioFileUrl, "Portfolio")}</div>
-                      <div>{renderDocumentLink(selectedIntern.proofOfStudyUrl, "Proof of Study")}</div>
-                      <div>{renderDocumentLink(selectedIntern.referencesUrl, "References")}</div>
-                    </div>
-                  </div>
-                </div>
-                <div>
-                  <h4 style={{ fontSize: "18px", fontWeight: "600", color: "#4a352f", marginBottom: "16px" }}>
-                    Match Information
-                  </h4>
-                  <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                    <div>
-                      <strong>Match Score:</strong> {selectedIntern.matchPercentage}%
-                    </div>
-                    <div>
-                      <strong>BIG Score:</strong> {selectedIntern.bigScore}%
-                    </div>
-                    <div>
-                      <strong>Location Flexibility:</strong> {selectedIntern.locationFlexibility}
-                    </div>
-                    <div>
-                      <strong>Availability Start:</strong> {selectedIntern.availabilityStart || "N/A"}
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px" }}>
-                <button
-                  onClick={resetModal}
-                  style={{
-                    padding: "12px 24px",
-                    backgroundColor: "#c8b6a6",
-                    color: "#4a352f",
-                    border: "none",
-                    borderRadius: "8px",
-                    cursor: "pointer",
-                    fontWeight: "600",
-                  }}
-                >
-                  Close
-                </button>
-              </div>
-            </div>
-          </div>,
-          document.body,
-        )}
+      {showInternDetails && selectedInternDetails && (
+        <InternDetailsModal
+          intern={selectedInternDetails}
+          isOpen={showInternDetails}
+          onClose={() => { setShowInternDetails(false); setSelectedInternDetails(null) }}
+        />
+      )}
 
       {/* Match Score Breakdown Modal */}
       {selectedIntern &&

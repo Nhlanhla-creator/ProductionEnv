@@ -9,6 +9,7 @@ import { auth } from "../../firebaseConfig"
 import { doc, setDoc, serverTimestamp, getDoc, query, where, onSnapshot } from "firebase/firestore"
 import emailjs from '@emailjs/browser';
 import { API_KEYS } from "../../API"
+import AdvisorDetailsModal from "./AdvisorDetailModal"
 
 // Mock data for the advisor table
 const mockAdvisors = []
@@ -426,6 +427,8 @@ export function AdvisorTable({ filters, onConnectionRequested, onCountChange }) 
   const [modalAdvisor, setModalAdvisor] = useState(null)
   const [notification, setNotification] = useState(null)
   const [mounted, setMounted] = useState(false)
+  const [showAdvisorDetails, setShowAdvisorDetails] = useState(false)
+  const [selectedAdvisorDetails, setSelectedAdvisorDetails] = useState(null)
 
   // Filter states
   const [selectedLocations, setSelectedLocations] = useState([])
@@ -438,12 +441,12 @@ export function AdvisorTable({ filters, onConnectionRequested, onCountChange }) 
   const [matchBreakdownModal, setMatchBreakdownModal] = useState(null)
 
   // Company member states
-const [companyOwnerId, setCompanyOwnerId] = useState(null)
-const [isCompanyMember, setIsCompanyMember] = useState(false)
-const [effectiveUserId, setEffectiveUserId] = useState(null)
-const [userRole, setUserRole] = useState(null)
+  const [companyOwnerId, setCompanyOwnerId] = useState(null)
+  const [isCompanyMember, setIsCompanyMember] = useState(false)
+  const [effectiveUserId, setEffectiveUserId] = useState(null)
+  const [userRole, setUserRole] = useState(null)
 
- 
+
 
   const mapFirestoreAdvisorToTable = (data, id) => {
     const formData = data.formData || {}
@@ -484,61 +487,61 @@ const [userRole, setUserRole] = useState(null)
   }, [])
 
   // Check company membership on mount
-useEffect(() => {
-  const checkCompanyMembership = async () => {
-    const user = auth.currentUser
-    if (!user) return
+  useEffect(() => {
+    const checkCompanyMembership = async () => {
+      const user = auth.currentUser
+      if (!user) return
 
-    try {
-      const userDocRef = doc(db, "users", user.uid)
-      const userDocSnap = await getDoc(userDocRef)
-      
-      if (userDocSnap.exists()) {
-        const userData = userDocSnap.data()
-        const userCompanyId = userData.companyId
-        const userCompanyRole = userData.userRole
-        
-        if (userCompanyId) {
-          const companyDocRef = doc(db, "companies", userCompanyId)
-          const companyDocSnap = await getDoc(companyDocRef)
-          
-          if (companyDocSnap.exists()) {
-            const companyData = companyDocSnap.data()
-            const ownerId = companyData.createdBy
-            
-            setUserRole(userCompanyRole || 'viewer')
-            
-            if (ownerId === user.uid) {
-              setIsCompanyMember(false)
-              setEffectiveUserId(user.uid)
-            } else {
-              setIsCompanyMember(true)
-              setCompanyOwnerId(ownerId)
-              setEffectiveUserId(ownerId)
+      try {
+        const userDocRef = doc(db, "users", user.uid)
+        const userDocSnap = await getDoc(userDocRef)
+
+        if (userDocSnap.exists()) {
+          const userData = userDocSnap.data()
+          const userCompanyId = userData.companyId
+          const userCompanyRole = userData.userRole
+
+          if (userCompanyId) {
+            const companyDocRef = doc(db, "companies", userCompanyId)
+            const companyDocSnap = await getDoc(companyDocRef)
+
+            if (companyDocSnap.exists()) {
+              const companyData = companyDocSnap.data()
+              const ownerId = companyData.createdBy
+
+              setUserRole(userCompanyRole || 'viewer')
+
+              if (ownerId === user.uid) {
+                setIsCompanyMember(false)
+                setEffectiveUserId(user.uid)
+              } else {
+                setIsCompanyMember(true)
+                setCompanyOwnerId(ownerId)
+                setEffectiveUserId(ownerId)
+              }
             }
+          } else {
+            setIsCompanyMember(false)
+            setEffectiveUserId(user.uid)
+            setUserRole('owner')
           }
-        } else {
-          setIsCompanyMember(false)
-          setEffectiveUserId(user.uid)
-          setUserRole('owner')
         }
+      } catch (error) {
+        console.error("Error checking company membership:", error)
+        setEffectiveUserId(user.uid)
+        setUserRole('owner')
       }
-    } catch (error) {
-      console.error("Error checking company membership:", error)
-      setEffectiveUserId(user.uid)
-      setUserRole('owner')
     }
-  }
 
-  checkCompanyMembership()
-}, [])
+    checkCompanyMembership()
+  }, [])
 
- // Add this useEffect to listen for status updates
-useEffect(() => {
-  if (!effectiveUserId) return
+  // Add this useEffect to listen for status updates
+  useEffect(() => {
+    if (!effectiveUserId) return
 
-  const unsubscribe = onSnapshot(
-    query(collection(db, "SmeAdvisorApplications"), where("smeId", "==", effectiveUserId)),
+    const unsubscribe = onSnapshot(
+      query(collection(db, "SmeAdvisorApplications"), where("smeId", "==", effectiveUserId)),
       (snapshot) => {
         const statusUpdates = {}
         snapshot.forEach((doc) => {
@@ -550,37 +553,37 @@ useEffect(() => {
     )
 
     return () => unsubscribe()
-}, [effectiveUserId])
+  }, [effectiveUserId])
 
   // ---- Functional-Expertise helpers ----
-const toArr = (v) => (Array.isArray(v) ? v : v ? [v] : []);
-const canon = (s) => s.toString().toLowerCase().replace(/[^a-z]/g, "");
+  const toArr = (v) => (Array.isArray(v) ? v : v ? [v] : []);
+  const canon = (s) => s.toString().toLowerCase().replace(/[^a-z]/g, "");
 
-// Common aliases (extend as needed)
-const FE_ALIASES = {
-  hr: "hr", humanresources: "hr",
-  tech: "tech", technology: "tech", it: "tech", ict: "tech",
-  legal: "legal", law: "legal",
-  strategy: "strategy",
-  finance: "finance",
-  esg: "esg",
-  governance: "governance",
-};
+  // Common aliases (extend as needed)
+  const FE_ALIASES = {
+    hr: "hr", humanresources: "hr",
+    tech: "tech", technology: "tech", it: "tech", ict: "tech",
+    legal: "legal", law: "legal",
+    strategy: "strategy",
+    finance: "finance",
+    esg: "esg",
+    governance: "governance",
+  };
 
-const normFE = (list) => {
-  const out = new Set();
-  for (const item of toArr(list)) {
-    const key = FE_ALIASES[canon(item)] || canon(item);
-    if (key) out.add(key);
-  }
-  return [...out];
-};
+  const normFE = (list) => {
+    const out = new Set();
+    for (const item of toArr(list)) {
+      const key = FE_ALIASES[canon(item)] || canon(item);
+      if (key) out.add(key);
+    }
+    return [...out];
+  };
 
-const overlapFE = (a, b) => {
-  const A = new Set(normFE(a));
-  for (const t of normFE(b)) if (A.has(t)) return true;
-  return false;
-};
+  const overlapFE = (a, b) => {
+    const A = new Set(normFE(a));
+    for (const t of normFE(b)) if (A.has(t)) return true;
+    return false;
+  };
 
   function calculateAdvisorMatch(smeProfile, advisorProfile) {
     const supportFocus = smeProfile.advisoryNeedsAssessment?.supportFocus || []
@@ -590,18 +593,18 @@ const overlapFE = (a, b) => {
     const smeLegal = (smeProfile.entityOverview?.legalStructure || "").toLowerCase()
     const rawRevenue = smeProfile.financialOverview?.annualRevenue || "0"
     const smeRevenue = Number.parseFloat(rawRevenue.replace(/[Rr\s,]/g, "").trim())
-const smeFunctionalExpertise = (smeProfile.entityOverview || [])
+    const smeFunctionalExpertise = (smeProfile.entityOverview || [])
     const advForm = advisorProfile.formData || {}
     const contact = advForm.contactDetails || {}
     const overview = advForm.personalProfessionalOverview || {}
     const selection = advForm.selectionCriteria || {}
-const smeFE = toArr(smeProfile?.advisoryNeedsAssessment?.functionalExpertise);
-const advisorFE = [
-  ...new Set([
-    ...toArr(overview?.functionalExpertise),
-    ...toArr(selection?.functionalExpertise),
-  ]),
-];
+    const smeFE = toArr(smeProfile?.advisoryNeedsAssessment?.functionalExpertise);
+    const advisorFE = [
+      ...new Set([
+        ...toArr(overview?.functionalExpertise),
+        ...toArr(selection?.functionalExpertise),
+      ]),
+    ];
 
     // Initialize breakdown with safe defaults
     const breakdown = {
@@ -631,7 +634,7 @@ const advisorFE = [
       },
       functionalExpertise: {
         matched: false,
-         smeValue: smeFE ||[],
+        smeValue: smeFE || [],
         advisorValue: overview.functionalExpertise || [],
       },
       legalEntityFit: {
@@ -662,9 +665,9 @@ const advisorFE = [
     )
 
     breakdown.functionalExpertise.matched = overlapFE(
-  breakdown.functionalExpertise.smeValue,
-  breakdown.functionalExpertise.advisorValue,
-);
+      breakdown.functionalExpertise.smeValue,
+      breakdown.functionalExpertise.advisorValue,
+    );
 
     breakdown.legalEntityFit.matched = (selection.legalEntityFit || "").toLowerCase() === smeLegal
 
@@ -698,75 +701,75 @@ const advisorFE = [
     }
   }
 
- useEffect(() => {
-  const fetchAdvisors = async () => {
-    if (!effectiveUserId) return
-    
-    setLoading(true)
-    try {
-      const snapshot = await getDocs(collection(db, "advisorProfiles"))
-      const user = auth.currentUser
-      if (!user) return
+  useEffect(() => {
+    const fetchAdvisors = async () => {
+      if (!effectiveUserId) return
 
-      const smeDoc = await getDoc(doc(db, "universalProfiles", effectiveUserId))
-      const advisoryApp = await getDoc(doc(db, "advisoryApplications", effectiveUserId))
+      setLoading(true)
+      try {
+        const snapshot = await getDocs(collection(db, "advisorProfiles"))
+        const user = auth.currentUser
+        if (!user) return
 
-      const profileData = {
-        ...(smeDoc.exists() ? smeDoc.data() : {}),
-        advisoryNeedsAssessment: advisoryApp.exists() ? advisoryApp.data().advisoryNeedsAssessment : {},
-      }
+        const smeDoc = await getDoc(doc(db, "universalProfiles", effectiveUserId))
+        const advisoryApp = await getDoc(doc(db, "advisoryApplications", effectiveUserId))
 
-      const mapped = snapshot.docs.map((docSnap) => {
-        const data = docSnap.data()
-        const id = docSnap.id
-        const matchResult = calculateAdvisorMatch(profileData, data)
-
-        return {
-          ...mapFirestoreAdvisorToTable(data, id),
-          matchPercentage: matchResult.score,
-          matchBreakdown: matchResult.breakdown,
+        const profileData = {
+          ...(smeDoc.exists() ? smeDoc.data() : {}),
+          advisoryNeedsAssessment: advisoryApp.exists() ? advisoryApp.data().advisoryNeedsAssessment : {},
         }
-      })
 
-      // Sort by match percentage (highest to lowest)
-      mapped.sort((a, b) => b.matchPercentage - a.matchPercentage)
-      setAdvisors(mapped)
+        const mapped = snapshot.docs.map((docSnap) => {
+          const data = docSnap.data()
+          const id = docSnap.id
+          const matchResult = calculateAdvisorMatch(profileData, data)
 
-      if (onCountChange) {
-        onCountChange(mapped.length) // Use mapped.length instead of advisors.length
+          return {
+            ...mapFirestoreAdvisorToTable(data, id),
+            matchPercentage: matchResult.score,
+            matchBreakdown: matchResult.breakdown,
+          }
+        })
+
+        // Sort by match percentage (highest to lowest)
+        mapped.sort((a, b) => b.matchPercentage - a.matchPercentage)
+        setAdvisors(mapped)
+
+        if (onCountChange) {
+          onCountChange(mapped.length) // Use mapped.length instead of advisors.length
+        }
+      } catch (error) {
+        console.error("Error fetching advisors:", error)
+      } finally {
+        setLoading(false)
       }
-    } catch (error) {
-      console.error("Error fetching advisors:", error)
-    } finally {
-      setLoading(false)
     }
-  }
 
-  fetchAdvisors()
-}, [onCountChange, effectiveUserId])
+    fetchAdvisors()
+  }, [onCountChange, effectiveUserId])
 
-const handleConnectClick = async (advisor) => {
-  const user = auth.currentUser
-  if (!user) return
+  const handleConnectClick = async (advisor) => {
+    const user = auth.currentUser
+    if (!user) return
 
-  // Check permissions for company members
-  if (isCompanyMember && !['owner', 'admin'].includes(userRole)) {
-    setNotification({
-      type: "warning",
-      message: "Only company owners and admins can connect with advisors.",
-    })
-    return
-  }
+    // Check permissions for company members
+    if (isCompanyMember && !['owner', 'admin'].includes(userRole)) {
+      setNotification({
+        type: "warning",
+        message: "Only company owners and admins can connect with advisors.",
+      })
+      return
+    }
 
-  const smeUserId = effectiveUserId
-  const advisorUserId = advisor.id
+    const smeUserId = effectiveUserId
+    const advisorUserId = advisor.id
 
     // Initialize matchData first
     const matchData = {
       advisorId: advisorUserId,
       smeId: smeUserId,
       submittedBy: user.uid,              // ADD THIS
-  submittedByRole: userRole,  
+      submittedByRole: userRole,
       createdAt: serverTimestamp(),
       status: "Contacted",
       matchPercentage: advisor.matchPercentage || 0,
@@ -831,14 +834,14 @@ const handleConnectClick = async (advisor) => {
       try {
         const advisorProfileRef = doc(db, "advisorProfiles", advisorUserId)
         const advisorProfileSnap = await getDoc(advisorProfileRef)
-        
+
         if (advisorProfileSnap.exists()) {
           const advisorProfileData = advisorProfileSnap.data()
-          advisorEmail = advisorProfileData.formData?.contactDetails?.email || 
-                        advisorProfileData.userEmail ||
-                        advisorProfileData.contactEmail ||
-                        advisorProfileData.email
-          
+          advisorEmail = advisorProfileData.formData?.contactDetails?.email ||
+            advisorProfileData.userEmail ||
+            advisorProfileData.contactEmail ||
+            advisorProfileData.email
+
           console.log("Found advisor email:", advisorEmail)
         } else {
           console.log("No advisor profile found for:", advisorUserId)
@@ -907,7 +910,7 @@ Best regards,\nBIG Marketplace Africa Team`;
             templateParams,
             emailjsConfig.publicKey
           );
-          
+
           console.log("✅ Connection request email sent successfully to advisor!", response);
         } catch (emailError) {
           console.error("❌ Email to advisor failed:", emailError);
@@ -965,12 +968,12 @@ Best regards,\nBIG Marketplace Africa Team`;
     }
   }
 
-useEffect(() => {
-  const fetchAdvisorApplications = async () => {
-    if (!effectiveUserId) return
+  useEffect(() => {
+    const fetchAdvisorApplications = async () => {
+      if (!effectiveUserId) return
 
-    const snapshot = await getDocs(collection(db, "SmeAdvisorApplications"))
-    const matches = snapshot.docs.filter((doc) => doc.data().smeId === effectiveUserId).map((doc) => doc.data())
+      const snapshot = await getDocs(collection(db, "SmeAdvisorApplications"))
+      const matches = snapshot.docs.filter((doc) => doc.data().smeId === effectiveUserId).map((doc) => doc.data())
 
       const updatedStatuses = {}
       matches.forEach((match) => {
@@ -980,10 +983,11 @@ useEffect(() => {
     }
 
     fetchAdvisorApplications()
-}, [effectiveUserId])
+  }, [effectiveUserId])
 
   const handleViewClick = (advisor) => {
-    setModalAdvisor(advisor)
+    setSelectedAdvisorDetails(advisor)
+    setShowAdvisorDetails(true)
   }
 
   const handleShortlistClick = (advisor) => {
@@ -1007,56 +1011,56 @@ useEffect(() => {
   }
 
   // Add this filter function near your other filter functions
-const hasTooManyMissingFields = (advisor) => {
-  const fieldsToCheck = [
-    advisor.name,
-    advisor.headline,
-    advisor.location,
-    advisor.sectorFocus,
-    advisor.functionalExpertise,
-    advisor.fundingStage,
-    advisor.engagementType,
-    advisor.compensationModel,
-    advisor.startDate,
-    advisor.availability,
-    advisor.matchPercentage?.toString()
-  ];
+  const hasTooManyMissingFields = (advisor) => {
+    const fieldsToCheck = [
+      advisor.name,
+      advisor.headline,
+      advisor.location,
+      advisor.sectorFocus,
+      advisor.functionalExpertise,
+      advisor.fundingStage,
+      advisor.engagementType,
+      advisor.compensationModel,
+      advisor.startDate,
+      advisor.availability,
+      advisor.matchPercentage?.toString()
+    ];
 
-  const missingCount = fieldsToCheck.filter(field => {
-    if (field === null || field === undefined) return true;
-    
-    const stringField = field.toString().trim();
-    return (
-      stringField === '' ||
-      stringField === '-' ||
-      stringField === 'Not specified' ||
-      stringField === 'Various' ||
-      stringField === 'unspecified' ||
-      stringField === 'Unknown' ||
-      stringField === 'N/A' ||
-      stringField === '0' || // If match percentage is 0, consider it missing
-      stringField.toLowerCase() === 'null' ||
-      stringField.toLowerCase().includes('not specified') ||
-      stringField.toLowerCase().includes('unspecified')
-    );
-  }).length;
+    const missingCount = fieldsToCheck.filter(field => {
+      if (field === null || field === undefined) return true;
 
-  return missingCount > 4;
-};
+      const stringField = field.toString().trim();
+      return (
+        stringField === '' ||
+        stringField === '-' ||
+        stringField === 'Not specified' ||
+        stringField === 'Various' ||
+        stringField === 'unspecified' ||
+        stringField === 'Unknown' ||
+        stringField === 'N/A' ||
+        stringField === '0' || // If match percentage is 0, consider it missing
+        stringField.toLowerCase() === 'null' ||
+        stringField.toLowerCase().includes('not specified') ||
+        stringField.toLowerCase().includes('unspecified')
+      );
+    }).length;
+
+    return missingCount > 4;
+  };
 
   // Get unique values for filter dropdowns
   const uniqueStatuses = [...new Set(advisors.map((adv) => statuses[adv.id] || adv.status).filter(Boolean))]
 
   const filteredAdvisors = advisors.filter((advisor) => {
-  const user = auth.currentUser;
-  if ((user && advisor.id === user.uid) || (effectiveUserId && advisor.id === effectiveUserId)) {
-    return false;
-  }
+    const user = auth.currentUser;
+    if ((user && advisor.id === user.uid) || (effectiveUserId && advisor.id === effectiveUserId)) {
+      return false;
+    }
     const currentStatus = statuses[advisor.id] || advisor.status
-    
-  if (hasTooManyMissingFields(advisor)) {
-    return false;
-  }
+
+    if (hasTooManyMissingFields(advisor)) {
+      return false;
+    }
 
     // Filter by location
     if (
@@ -1119,45 +1123,45 @@ const hasTooManyMissingFields = (advisor) => {
       >
 
         {/* Company Member Banner */}
-{isCompanyMember && (
-  <div style={{
-    backgroundColor: userRole === 'viewer' ? '#fef3c7' : '#e0f2fe',
-    border: `2px solid ${userRole === 'viewer' ? '#f59e0b' : '#0369a1'}`,
-    borderRadius: '12px',
-    padding: '16px 24px',
-    marginBottom: '24px',
-    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)'
-  }}>
-    <div style={{ 
-      display: 'flex', 
-      alignItems: 'center', 
-      gap: '12px', 
-      marginBottom: '8px' 
-    }}>
-      <span style={{ fontSize: '24px' }}>🤝</span>
-      <h3 style={{ 
-        margin: 0, 
-        color: userRole === 'viewer' ? '#f59e0b' : '#0369a1', 
-        fontWeight: '700',
-        fontSize: '1.1rem'
-      }}>
-        Company Advisor Connections - Role: {userRole?.toUpperCase()}
-      </h3>
-    </div>
-    <p style={{ 
-      margin: 0, 
-      color: '#4a5568', 
-      fontSize: '0.95rem',
-      lineHeight: '1.5'
-    }}>
-      {userRole === 'owner' && 'You can view and manage all company advisor connections.'}
-      {userRole === 'admin' && 'You can view and connect with advisors for the company.'}
-      {userRole === 'manager' && 'You can view advisor connections and track their progress.'}
-      {userRole === 'employee' && 'You can view company advisor connections.'}
-      {userRole === 'viewer' && 'You have read-only access to company advisor connections.'}
-    </p>
-  </div>
-)}
+        {isCompanyMember && (
+          <div style={{
+            backgroundColor: userRole === 'viewer' ? '#fef3c7' : '#e0f2fe',
+            border: `2px solid ${userRole === 'viewer' ? '#f59e0b' : '#0369a1'}`,
+            borderRadius: '12px',
+            padding: '16px 24px',
+            marginBottom: '24px',
+            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)'
+          }}>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              marginBottom: '8px'
+            }}>
+              <span style={{ fontSize: '24px' }}>🤝</span>
+              <h3 style={{
+                margin: 0,
+                color: userRole === 'viewer' ? '#f59e0b' : '#0369a1',
+                fontWeight: '700',
+                fontSize: '1.1rem'
+              }}>
+                Company Advisor Connections - Role: {userRole?.toUpperCase()}
+              </h3>
+            </div>
+            <p style={{
+              margin: 0,
+              color: '#4a5568',
+              fontSize: '0.95rem',
+              lineHeight: '1.5'
+            }}>
+              {userRole === 'owner' && 'You can view and manage all company advisor connections.'}
+              {userRole === 'admin' && 'You can view and connect with advisors for the company.'}
+              {userRole === 'manager' && 'You can view advisor connections and track their progress.'}
+              {userRole === 'employee' && 'You can view company advisor connections.'}
+              {userRole === 'viewer' && 'You have read-only access to company advisor connections.'}
+            </p>
+          </div>
+        )}
         {/* Notification area */}
         {notification && (
           <div
@@ -1213,31 +1217,31 @@ const hasTooManyMissingFields = (advisor) => {
                 selectedCompensationModels.length > 0 ||
                 statusFilter ||
                 minMatchFilter > 0) && (
-                <span
-                  style={{
-                    background: "#5D2A0A",
-                    color: "white",
-                    borderRadius: "50%",
-                    width: "20px",
-                    height: "20px",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: "0.7rem",
-                  }}
-                >
-                  {
-                    [
-                      selectedLocations.length,
-                      selectedSectors.length,
-                      selectedFundingStages.length,
-                      selectedCompensationModels.length,
-                      statusFilter,
-                      minMatchFilter > 0,
-                    ].filter(Boolean).length
-                  }
-                </span>
-              )}
+                  <span
+                    style={{
+                      background: "#5D2A0A",
+                      color: "white",
+                      borderRadius: "50%",
+                      width: "20px",
+                      height: "20px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: "0.7rem",
+                    }}
+                  >
+                    {
+                      [
+                        selectedLocations.length,
+                        selectedSectors.length,
+                        selectedFundingStages.length,
+                        selectedCompensationModels.length,
+                        statusFilter,
+                        minMatchFilter > 0,
+                      ].filter(Boolean).length
+                    }
+                  </span>
+                )}
             </button>
           </div>
         </div>
@@ -1888,6 +1892,14 @@ const hasTooManyMissingFields = (advisor) => {
           </div>,
           document.body,
         )}
+
+      {mounted && showAdvisorDetails && selectedAdvisorDetails && (
+        <AdvisorDetailsModal
+          advisor={selectedAdvisorDetails}
+          isOpen={showAdvisorDetails}
+          onClose={() => { setShowAdvisorDetails(false); setSelectedAdvisorDetails(null) }}
+        />
+      )}
     </>
   )
 }
