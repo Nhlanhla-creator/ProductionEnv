@@ -539,7 +539,7 @@ function App() {
         <SMESidebar companyName={companyName} />
         <div className={`${styles.mainContent} ${collapsed ? styles.sidebarCollapsed : styles.sidebarExpanded}`}>
           <SMSEHeader companyName={companyName} profileImage={profileImage} setProfileImage={setProfileImage} />
-          <div className="page-content">{children}</div>
+          <div>{children}</div>
         </div>
         <RegistrationSummary data={formData} open={showSummary} onClose={() => setShowSummary(false)} />
       </div>
