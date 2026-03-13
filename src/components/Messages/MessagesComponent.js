@@ -401,73 +401,78 @@ const MessagesComponent = ({ config = {} }) => {
 
   // In your MessagesComponent, add this function to handle termsheet acceptance
 
-// Add this function to handle accept with document upload
-const handleAcceptWithUpload = async (message) => {
+// Add state for tracking upload progress (add to your component)
+const [uploadingDocument, setUploadingDocument] = useState(false);
+
+// Handle signed document upload
+const handleSignedDocumentUpload = async (event, messageId) => {
   const auth = getAuth();
   const user = auth.currentUser;
   if (!user) return;
 
-  try {
-    // Step 1: Check if document exists
-    if (!message.attachments || message.attachments.length === 0) {
-      alert("No document found to sign.");
-      return;
-    }
+  const file = event.target.files[0];
+  if (!file) return;
 
-    const documentUrl = message.attachments[0];
-    const fileName = documentUrl.split('/').pop().split('?')[0] || 'document.pdf';
+  setUploadingDocument(true);
+
+  try {
+    // Upload signed document to Firebase Storage
+    const storage = getStorage();
+    const signedFileRef = ref(
+      storage,
+      `signed_documents/${user.uid}/${messageId}/${Date.now()}_${file.name}`
+    );
     
-    // Step 2: Download the original document
-    const response = await fetch(documentUrl);
-    const blob = await response.blob();
+    await uploadBytes(signedFileRef, file);
+    const signedDocumentUrl = await getDownloadURL(signedFileRef);
     
-    // Create download link
-    const blobUrl = window.URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = blobUrl;
-    link.download = fileName;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    window.URL.revokeObjectURL(blobUrl);
-    
-    // Step 3: Prompt to upload signed version
-    alert("Please sign the downloaded document and then upload the signed version.");
-    
-    // Step 4: Create file input for signed document upload
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.accept = '.pdf,.doc,.docx,.jpg,.jpeg,.png';
-    
-    input.onchange = async (e) => {
-      const signedFile = e.target.files[0];
-      if (!signedFile) return;
-      
-      // Upload signed document
-      const storage = getStorage();
-      const signedFileRef = ref(
-        storage,
-        `signed_documents/${user.uid}/${Date.now()}_${signedFile.name}`
-      );
-      
-      await uploadBytes(signedFileRef, signedFile);
-      const signedDocumentUrl = await getDownloadURL(signedFileRef);
-      
-      // Submit acceptance with signed document
-      await handleTermsheetResponse(
-        message.id,
-        "accepted",
-        documentUrl,
-        null,
-        signedDocumentUrl
-      );
-    };
-    
-    input.click();
+    // Store the uploaded document info in the selected message
+    setSelectedMessage({
+      ...selectedMessage,
+      tempSignedDocument: {
+        name: file.name,
+        url: signedDocumentUrl,
+        uploadedAt: new Date().toISOString()
+      }
+    });
+
+    alert("Document uploaded successfully! You can now proceed with acceptance.");
     
   } catch (error) {
-    console.error("Error in accept with upload flow:", error);
-    alert("Failed to process document upload. Please try again.");
+    console.error("Error uploading signed document:", error);
+    alert("Failed to upload signed document. Please try again.");
+  } finally {
+    setUploadingDocument(false);
+    // Clear the input
+    event.target.value = '';
+  }
+};
+
+// Handle accept with already uploaded document
+const handleAcceptWithUploadedDocument = async (message) => {
+  if (!message.tempSignedDocument) {
+    alert("Please upload a signed document first.");
+    return;
+  }
+
+  // Confirm with user
+  const confirmAccept = window.confirm(
+    "Are you sure you want to accept this termsheet with the uploaded signed document?"
+  );
+  
+  if (!confirmAccept) return;
+
+  try {
+    await handleTermsheetResponse(
+      message.id,
+      "accepted",
+      message.attachments?.[0],
+      null,
+      message.tempSignedDocument.url
+    );
+  } catch (error) {
+    console.error("Error accepting termsheet:", error);
+    alert("Failed to accept termsheet. Please try again.");
   }
 };
 
@@ -1088,14 +1093,79 @@ const handleTermsheetResponse = async (messageId, status, termsheetUrl, feedback
             ? "View Support Agreement Document"
             : "View Termsheet Document"}
         </a>
+        
+        {/* Download button for easy access */}
+        <button
+          className="download-doc-btn"
+          onClick={() => {
+            const link = document.createElement('a');
+            link.href = selectedMessage.attachments[0];
+            link.download = selectedMessage.attachments[0].split('/').pop().split('?')[0] || 'document.pdf';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+          }}
+        >
+          <Download size={16} />
+          Download
+        </button>
       </div>
     )}
 
+    {/* Upload Section - Required before Accept */}
+    <div className="termsheet-upload-section">
+      {/* <h5>Upload Signed Document</h5> */}
+      <p className="upload-instruction">
+        Please download the document, sign it, and upload the signed version here before accepting.
+      </p>
+      
+      <div className="upload-controls">
+        <input
+          type="file"
+          id="signed-document-upload"
+          accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+          style={{ display: 'none' }}
+          onChange={(e) => handleSignedDocumentUpload(e, selectedMessage.id)}
+        />
+        <button
+          className="upload-btn"
+          onClick={() => document.getElementById('signed-document-upload')?.click()}
+        >
+          <Paperclip size={16} />
+          {selectedMessage.tempSignedDocument ? 'Replace Signed Document' : 'Upload Signed Document'}
+        </button>
+        
+        {selectedMessage.tempSignedDocument && (
+          <div className="uploaded-file-info">
+            <FileText size={16} />
+            <span>{selectedMessage.tempSignedDocument.name}</span>
+            <button
+              className="remove-file-btn"
+              onClick={() => {
+                // Clear the uploaded file
+                const updatedMessage = {...selectedMessage};
+                delete updatedMessage.tempSignedDocument;
+                setSelectedMessage(updatedMessage);
+              }}
+            >
+              <X size={14} />
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+
     <div className="termsheet-response-buttons three-options">
-      {/* Accept Button - Green */}
+      {/* Accept Button - Green (disabled until document is uploaded) */}
       <button
-        className="accept-btn"
-        onClick={() => handleAcceptWithUpload(selectedMessage)}
+        className={`accept-btn ${!selectedMessage.tempSignedDocument ? 'disabled' : ''}`}
+        onClick={() => {
+          if (selectedMessage.tempSignedDocument) {
+            handleAcceptWithUploadedDocument(selectedMessage);
+          }
+        }}
+        disabled={!selectedMessage.tempSignedDocument}
+        title={!selectedMessage.tempSignedDocument ? 'Please upload signed document first' : ''}
       >
         <span className="btn-icon">✓</span>
         Accept
@@ -1111,11 +1181,17 @@ const handleTermsheetResponse = async (messageId, status, termsheetUrl, feedback
               : "Please outline your conditions for accepting the termsheet:"
           );
           if (conditions && conditions.trim() !== "") {
+            // For conditions, we still need the signed document
+            if (!selectedMessage.tempSignedDocument) {
+              alert("Please upload the signed document first.");
+              return;
+            }
             handleTermsheetResponse(
               selectedMessage.id,
               "accepted_with_conditions",
               selectedMessage.attachments?.[0],
-              conditions
+              conditions,
+              selectedMessage.tempSignedDocument.url
             );
           } else if (conditions !== null) {
             alert("Please provide your conditions for acceptance.");

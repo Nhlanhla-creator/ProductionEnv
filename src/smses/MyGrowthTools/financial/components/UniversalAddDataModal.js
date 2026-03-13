@@ -137,6 +137,7 @@ const MODAL_TABS = [
   { id: "cost-agility",       label: "Cost Agility" },
   { id: "liquidity-survival", label: "Liquidity & Survival" },
   { id: "dividends",          label: "Dividend History" },
+  { id: "cap-table",          label: "Cap Table & IRR" },
   { id: "loans",              label: "Loan Management" },
   { id: "custom-kpi",         label: "Custom KPI" },
 ];
@@ -188,7 +189,8 @@ const UniversalAddDataModal = ({
   const [pnlData,    setPnlData]    = useState(EMPTY_PNL);
   const [costData,   setCostData]   = useState({ fixedCosts: Array(12).fill(""), variableCosts: Array(12).fill(""), discretionaryCosts: Array(12).fill(""), semiVariableCosts: Array(12).fill(""), lockInDuration: Array(12).fill(""), notes: "" });
   const [liquidData, setLiquidData] = useState({ currentRatio: Array(12).fill(""), quickRatio: Array(12).fill(""), cashRatio: Array(12).fill(""), burnRate: Array(12).fill(""), cashCover: Array(12).fill(""), cashflow: Array(12).fill(""), operatingCashflow: Array(12).fill(""), investingCashflow: Array(12).fill(""), financingCashflow: Array(12).fill(""), loanRepayments: Array(12).fill(""), cashBalance: Array(12).fill(""), workingCapital: Array(12).fill(""), notes: "" });
-  const [dividendData, setDividendData] = useState({ date: "", amount: "", type: "Interim", declaredBy: "" });
+  const [dividendData, setDividendData] = useState({ year: new Date().getFullYear(), amountPerShare: 0, totalIssued: 0, paymentDate: "" });
+  const [capTableData, setCapTableData] = useState({ investors: [], irrInvestments: [] });
   const [loanData,     setLoanData]     = useState({ name: "", amount: "", interestRate: "", startDate: "", term: "", monthlyPayment: "", status: "active" });
   const [customKPI,    setCustomKPI]    = useState({ name: "", type: "bar", dataType: "currency", actual: Array(12).fill(""), budget: Array(12).fill("") });
 
@@ -203,18 +205,50 @@ const UniversalAddDataModal = ({
     if (!isOpen || !user) return;
     const load = async () => {
       try {
+        if (activeTab === "cap-table") {
+          const docRef = doc(db, "cap-table", user.uid);
+          const docSnap = await getDoc(docRef);
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            const investorsData = data.investors || [];
+            const updatedInvestors = investorsData.map(investor => ({
+              ...investor,
+              investment: investor.investment !== undefined ? investor.investment : (investor.valuation || 0)
+            }));
+            setCapTableData({ 
+              investors: updatedInvestors, 
+              irrInvestments: data.irrInvestments || [] 
+            });
+          }
+          return;
+        }
+
+        if (activeTab === "dividends") {
+          const docRef = doc(db, "dividend-history", user.uid);
+          const docSnap = await getDoc(docRef);
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            // We don't pre-fill dividend form with existing data since it's a list
+          }
+          return;
+        }
+
         const snapId = {
           "capital-structure":  `${user.uid}_capitalStructure_${selectedYear}`,
           "performance-engine": `${user.uid}_pnlManual_${selectedYear}`,
           "cost-agility":       `${user.uid}_costAgility_${selectedYear}`,
           "liquidity-survival": `${user.uid}_liquiditySurvival_${selectedYear}`,
         }[activeTab];
+        
         if (!snapId) return;
+        
         let snap = await getDoc(doc(db, "financialData", snapId));
         const legacyId = snapId.replace(`_${selectedYear}`, "");
         if (!snap.exists()) snap = await getDoc(doc(db, "financialData", legacyId));
+        
         if (!snap.exists()) return;
         const d = snap.data();
+        
         if (activeTab === "capital-structure"  && d.balanceSheetData) setBalanceSheetData(d.balanceSheetData);
         if (activeTab === "performance-engine") setPnlData((prev) => ({ ...prev, ...Object.fromEntries(Object.keys(prev).filter((k) => k !== "notes").map((k) => [k, d[k]?.map((v) => v.toFixed(2)) ?? Array(12).fill("")])), notes: d.notes || "" }));
         if (activeTab === "cost-agility")       setCostData({ fixedCosts: d.fixedCosts?.map((v) => v.toFixed(2)) ?? Array(12).fill(""), variableCosts: d.variableCosts?.map((v) => v.toFixed(2)) ?? Array(12).fill(""), discretionaryCosts: d.discretionaryCosts?.map((v) => v.toFixed(2)) ?? Array(12).fill(""), semiVariableCosts: d.semiVariableCosts?.map((v) => v.toFixed(2)) ?? Array(12).fill(""), lockInDuration: d.lockInDuration?.map((v) => v.toFixed(0)) ?? Array(12).fill(""), notes: d.notes || "" });
@@ -243,8 +277,38 @@ const UniversalAddDataModal = ({
           await setDoc(doc(db, "financialData", `${user.uid}_liquiditySurvival_${selectedYear}`), { userId: user.uid, ...Object.fromEntries(Object.keys(liquidData).filter((k) => k !== "notes").map((k) => [k, liquidData[k].map(num)])), notes: liquidData.notes, year: selectedYear, lastUpdated: new Date().toISOString() });
           break;
         case "dividends":
-          if (!dividendData.date || !dividendData.amount) return alert("Fill required fields");
-          await addDoc(collection(db, "financialData", `${user.uid}_dividends`, "dividendHistory"), { ...dividendData, amount: num(dividendData.amount), userId: user.uid, createdAt: new Date().toISOString() });
+          if (!dividendData.paymentDate || !dividendData.amountPerShare) return alert("Fill required fields");
+          
+          // First get existing dividends
+          const docRef = doc(db, "dividend-history", user.uid);
+          const docSnap = await getDoc(docRef);
+          let existingDividends = [];
+          if (docSnap.exists()) {
+            existingDividends = docSnap.data().dividends || [];
+          }
+          
+          // Add new dividend to the array
+          const newDividend = {
+            year: dividendData.year,
+            amountPerShare: num(dividendData.amountPerShare),
+            totalIssued: num(dividendData.totalIssued),
+            paymentDate: dividendData.paymentDate
+          };
+          
+          const updatedDividends = [...existingDividends, newDividend];
+          
+          // Save back to Firestore
+          await setDoc(doc(db, "dividend-history", user.uid), {
+            dividends: updatedDividends,
+            lastUpdated: new Date().toISOString(),
+          });
+          break;
+        case "cap-table":
+          await setDoc(doc(db, "cap-table", user.uid), {
+            investors: capTableData.investors,
+            irrInvestments: capTableData.irrInvestments,
+            lastUpdated: new Date().toISOString(),
+          });
           break;
         case "loans": {
           if (!loanData.name || !loanData.amount) return alert("Fill required fields");
@@ -261,6 +325,7 @@ const UniversalAddDataModal = ({
       }
       onSave?.();
       alert("Data saved successfully!");
+      onClose(); // Close modal after successful save
     } catch (e) {
       console.error("Error saving:", e);
       alert("Error saving data. Please try again.");
@@ -503,12 +568,225 @@ const UniversalAddDataModal = ({
         {activeTab === "dividends" && (
           <div className="p-5">
             <h4 className="text-mediumBrown mb-5 font-semibold">Add Dividend Record</h4>
-            {inputField("Date *",        "date",   dividendData.date,        (e) => setDividendData((p) => ({ ...p, date: e.target.value })))}
-            {inputField("Amount (ZAR) *","number", dividendData.amount,      (e) => setDividendData((p) => ({ ...p, amount: e.target.value })), "0.00")}
-            {selectField("Type", dividendData.type, (e) => setDividendData((p) => ({ ...p, type: e.target.value })),
-              <><option value="Interim">Interim</option><option value="Final">Final</option><option value="Special">Special</option></>
-            )}
-            {inputField("Declared By",  "text",   dividendData.declaredBy,  (e) => setDividendData((p) => ({ ...p, declaredBy: e.target.value })), "e.g., Board Resolution #123")}
+            <div className="grid grid-cols-2 gap-4">
+              {inputField("Year *",        "number", dividendData.year,        (e) => setDividendData((p) => ({ ...p, year: parseInt(e.target.value) || new Date().getFullYear() })))}
+              {inputField("Amount per Share (R) *","number", dividendData.amountPerShare,      (e) => setDividendData((p) => ({ ...p, amountPerShare: e.target.value })), "0.00", { step: "0.01" })}
+              {inputField("Total Issued (R) *","number", dividendData.totalIssued,      (e) => setDividendData((p) => ({ ...p, totalIssued: e.target.value })), "0.00", { step: "0.01" })}
+              {inputField("Payment Date *",        "date",   dividendData.paymentDate,        (e) => setDividendData((p) => ({ ...p, paymentDate: e.target.value })))}
+            </div>
+          </div>
+        )}
+
+        {/* ===== CAP TABLE & IRR ===== */}
+        {activeTab === "cap-table" && (
+          <div className="p-5">
+            <h4 className="text-mediumBrown mb-5 font-semibold">Edit Cap Table Data</h4>
+            
+            {/* Investors Section */}
+            <div className="mb-7">
+              <h5 className="text-mediumBrown mb-4 font-semibold text-sm">Investors</h5>
+              {capTableData.investors.map((investor, index) => (
+                <div
+                  key={index}
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "2fr 1fr 1fr auto",
+                    gap: "10px",
+                    alignItems: "center",
+                    marginBottom: "10px",
+                    padding: "10px",
+                    backgroundColor: "#f5f0eb",
+                    borderRadius: "4px",
+                  }}
+                >
+                  <input
+                    type="text"
+                    value={investor.name}
+                    onChange={(e) => {
+                      const newInvestors = [...capTableData.investors];
+                      newInvestors[index].name = e.target.value;
+                      setCapTableData({ ...capTableData, investors: newInvestors });
+                    }}
+                    className="w-full p-2 rounded border border-[#d4c4b0] text-sm"
+                    placeholder="Investor Name"
+                  />
+                  <input
+                    type="number"
+                    value={investor.shares}
+                    onChange={(e) => {
+                      const newInvestors = [...capTableData.investors];
+                      newInvestors[index].shares = Number.parseFloat(e.target.value) || 0;
+                      setCapTableData({ ...capTableData, investors: newInvestors });
+                    }}
+                    className="w-full p-2 rounded border border-[#d4c4b0] text-sm"
+                    placeholder="Shares"
+                  />
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={investor.investment || 0}
+                    onChange={(e) => {
+                      const newInvestors = [...capTableData.investors];
+                      newInvestors[index].investment = Number.parseFloat(e.target.value) || 0;
+                      setCapTableData({ ...capTableData, investors: newInvestors });
+                    }}
+                    className="w-full p-2 rounded border border-[#d4c4b0] text-sm"
+                    placeholder="Investment (RM)"
+                  />
+                  <button
+                    onClick={() => {
+                      const newInvestors = capTableData.investors.filter((_, i) => i !== index);
+                      setCapTableData({ ...capTableData, investors: newInvestors });
+                    }}
+                    className="px-3 py-2 bg-red-500 text-white border-0 rounded cursor-pointer text-sm"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+              <button
+                onClick={() => {
+                  setCapTableData({
+                    ...capTableData,
+                    investors: [...capTableData.investors, { name: "New Investor", shares: 0, investment: 0 }]
+                  });
+                }}
+                className="px-4 py-2 bg-[#72542b] text-[#fdfcfb] border-0 rounded cursor-pointer font-semibold text-sm"
+              >
+                + Add Investor
+              </button>
+            </div>
+
+            {/* IRR Investments Section */}
+            <div>
+              <h5 className="text-mediumBrown mb-4 font-semibold text-sm">IRR Investments</h5>
+              {capTableData.irrInvestments.map((investment, index) => (
+                <div
+                  key={index}
+                  style={{
+                    marginBottom: "20px",
+                    padding: "15px",
+                    backgroundColor: "#f5f0eb",
+                    borderRadius: "4px",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "grid",
+                      gridTemplateColumns: "2fr 1fr 1fr auto",
+                      gap: "10px",
+                      alignItems: "center",
+                      marginBottom: "10px",
+                    }}
+                  >
+                    <input
+                      type="text"
+                      value={investment.name}
+                      onChange={(e) => {
+                        const newInvestments = [...capTableData.irrInvestments];
+                        newInvestments[index].name = e.target.value;
+                        setCapTableData({ ...capTableData, irrInvestments: newInvestments });
+                      }}
+                      className="w-full p-2 rounded border border-[#d4c4b0] text-sm"
+                      placeholder="Project Name"
+                    />
+                    <input
+                      type="number"
+                      value={investment.irr}
+                      onChange={(e) => {
+                        const newInvestments = [...capTableData.irrInvestments];
+                        newInvestments[index].irr = Number.parseFloat(e.target.value) || 0;
+                        setCapTableData({ ...capTableData, irrInvestments: newInvestments });
+                      }}
+                      className="w-full p-2 rounded border border-[#d4c4b0] text-sm"
+                      placeholder="IRR %"
+                    />
+                    <select
+                      value={investment.details?.riskRating || "Medium"}
+                      onChange={(e) => {
+                        const newInvestments = [...capTableData.irrInvestments];
+                        if (!newInvestments[index].details) newInvestments[index].details = {};
+                        newInvestments[index].details.riskRating = e.target.value;
+                        setCapTableData({ ...capTableData, irrInvestments: newInvestments });
+                      }}
+                      className="w-full p-2 rounded border border-[#d4c4b0] text-sm"
+                    >
+                      <option value="Low">Low</option>
+                      <option value="Medium">Medium</option>
+                      <option value="High">High</option>
+                    </select>
+                    <button
+                      onClick={() => {
+                        const newInvestments = capTableData.irrInvestments.filter((_, i) => i !== index);
+                        setCapTableData({ ...capTableData, irrInvestments: newInvestments });
+                      }}
+                      className="px-3 py-2 bg-red-500 text-white border-0 rounded cursor-pointer text-sm"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "10px" }}>
+                    <input
+                      type="text"
+                      value={investment.details?.initialInvestment || ""}
+                      onChange={(e) => {
+                        const newInvestments = [...capTableData.irrInvestments];
+                        if (!newInvestments[index].details) newInvestments[index].details = {};
+                        newInvestments[index].details.initialInvestment = e.target.value;
+                        setCapTableData({ ...capTableData, irrInvestments: newInvestments });
+                      }}
+                      className="w-full p-2 rounded border border-[#d4c4b0] text-sm"
+                      placeholder="Initial Investment"
+                    />
+                    <input
+                      type="text"
+                      value={investment.details?.duration || ""}
+                      onChange={(e) => {
+                        const newInvestments = [...capTableData.irrInvestments];
+                        if (!newInvestments[index].details) newInvestments[index].details = {};
+                        newInvestments[index].details.duration = e.target.value;
+                        setCapTableData({ ...capTableData, irrInvestments: newInvestments });
+                      }}
+                      className="w-full p-2 rounded border border-[#d4c4b0] text-sm"
+                      placeholder="Duration"
+                    />
+                    <input
+                      type="text"
+                      value={investment.details?.cashFlows?.join(", ") || ""}
+                      onChange={(e) => {
+                        const newInvestments = [...capTableData.irrInvestments];
+                        if (!newInvestments[index].details) newInvestments[index].details = {};
+                        newInvestments[index].details.cashFlows = e.target.value.split(",").map((flow) => flow.trim());
+                        setCapTableData({ ...capTableData, irrInvestments: newInvestments });
+                      }}
+                      className="w-full p-2 rounded border border-[#d4c4b0] text-sm"
+                      placeholder="Cash Flows (comma separated)"
+                    />
+                  </div>
+                </div>
+              ))}
+              <button
+                onClick={() => {
+                  const newInvestment = {
+                    name: "New Project",
+                    irr: 0,
+                    details: {
+                      initialInvestment: "R0M",
+                      duration: "0 years",
+                      cashFlows: ["Year 1: R0M"],
+                      riskRating: "Medium",
+                    },
+                  };
+                  setCapTableData({
+                    ...capTableData,
+                    irrInvestments: [...capTableData.irrInvestments, newInvestment]
+                  });
+                }}
+                className="px-4 py-2 bg-[#72542b] text-[#fdfcfb] border-0 rounded cursor-pointer font-semibold text-sm"
+              >
+                + Add Investment
+              </button>
+            </div>
           </div>
         )}
 
