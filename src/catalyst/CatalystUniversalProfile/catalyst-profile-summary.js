@@ -7,7 +7,6 @@ import {
   Building,
   Phone,
   Target,
-  ClipboardList,
   FileText,
   UploadCloud,
   ShieldCheck,
@@ -19,8 +18,7 @@ const CatalystProfileSummary = ({ formData, onEdit }) => {
     instructions: false,
     entityOverview: false,
     contactDetails: false,
-    generalMatchingPreference: false,
-    programmeDetails: false,
+    programBriefMatchingPreference: false,
     applicationBrief: false,
     documentUpload: false,
     declarationConsent: false,
@@ -43,7 +41,10 @@ const CatalystProfileSummary = ({ formData, onEdit }) => {
 
   const formatCurrency = (value) => {
     if (!value) return "N/A"
-    const numericValue = Number.parseFloat(value.replace(/R|,/g, ""))
+    // Handle both string and number formats
+    const numericValue = typeof value === 'string' 
+      ? Number.parseFloat(value.replace(/R|,/g, ""))
+      : value
     if (isNaN(numericValue)) return value
     return `R${numericValue.toLocaleString("en-ZA")}`
   }
@@ -53,7 +54,10 @@ const CatalystProfileSummary = ({ formData, onEdit }) => {
   }
 
   const getSummaryData = () => {
+    const programBriefData = formData?.programBriefMatchingPreference || {}
+    
     return {
+      // Entity Overview
       registeredName: formData?.entityOverview?.registeredName,
       tradingName: formData?.entityOverview?.tradingName,
       legalEntityType: formData?.entityOverview?.legalEntityType,
@@ -66,6 +70,7 @@ const CatalystProfileSummary = ({ formData, onEdit }) => {
       referralSource: formData?.entityOverview?.referralSource,
       referralSourceOther: formData?.entityOverview?.referralSourceOther,
 
+      // Contact Details
       businessTel: formData?.contactDetails?.businessTel,
       businessEmail: formData?.contactDetails?.businessEmail,
       physicalAddress: formData?.contactDetails?.physicalAddress,
@@ -85,21 +90,29 @@ const CatalystProfileSummary = ({ formData, onEdit }) => {
       secondaryContactMobile: formData?.contactDetails?.secondaryContactMobile,
       secondaryContactEmail: formData?.contactDetails?.secondaryContactEmail,
 
-      programStructure: formData?.generalMatchingPreference?.programStructure,
-      legalEntityFit: formData?.generalMatchingPreference?.legalEntityFit,
-      programStage: formData?.generalMatchingPreference?.programStage,
-      supportFocus: formData?.generalMatchingPreference?.supportFocus,
-      supportFocusSubtype: formData?.generalMatchingPreference?.supportFocusSubtype,
-      sectorFocus: formData?.generalMatchingPreference?.sectorFocus,
-      sectorExclusions: formData?.generalMatchingPreference?.sectorExclusions,
-      geographicFocus: formData?.generalMatchingPreference?.geographicFocus,
-      selectedProvinces: formData?.generalMatchingPreference?.selectedProvinces,
-      selectedCountries: formData?.generalMatchingPreference?.selectedCountries,
-      targetDemographics: formData?.generalMatchingPreference?.targetDemographics,
+      // Program Brief & Matching Preference (Merged Section)
+      programName: programBriefData?.programName,
+      programWebsite: programBriefData?.programWebsite,
+      programDuration: programBriefData?.programDuration,
+      aboutProgram: programBriefData?.aboutProgram,
+      programGoals: programBriefData?.programGoals,
+      supportFramework: programBriefData?.supportFramework,
+      supportFocus: programBriefData?.supportFocus,
+      supportFocusSubtype: programBriefData?.supportFocusSubtype,
+      targetBusinessStage: programBriefData?.targetBusinessStage,
+      minimumSupportTicket: programBriefData?.minimumSupportTicket,
+      maximumSupportTicket: programBriefData?.maximumSupportTicket,
+      demographics: programBriefData?.demographics,
+      bbbeeLevel: programBriefData?.bbbeeLevel,
+      legalEntity: programBriefData?.legalEntity,
+      businessLifecycleStage: programBriefData?.businessLifecycleStage,
+      sectorFocus: programBriefData?.sectorFocus,
+      sectorExclusions: programBriefData?.sectorExclusions,
+      geographicFocus: programBriefData?.geographicFocus,
+      selectedCountries: programBriefData?.selectedCountries,
+      selectedProvinces: programBriefData?.selectedProvinces,
 
-      programs: formData?.programmeDetails?.programs || [],
-
-      overviewObjectives: formData?.applicationBrief?.overviewObjectives,
+      // Application Brief
       instructionsForApplying: formData?.applicationBrief?.instructionsForApplying,
       estimatedReviewTime: formData?.applicationBrief?.estimatedReviewTime,
       programOnboardingTime: formData?.applicationBrief?.programOnboardingTime,
@@ -113,10 +126,12 @@ const CatalystProfileSummary = ({ formData, onEdit }) => {
       evaluationCriteria: formData?.applicationBrief?.evaluationCriteria,
       impactAlignment: formData?.applicationBrief?.impactAlignment,
 
+      // Document Upload
       ...Object.fromEntries(
         documentUploadList.map((docItem) => [docItem.id, formData?.documentUpload?.[docItem.id]])
       ),
 
+      // Declaration & Consent
       accuracy: formData?.declarationConsent?.accuracy,
       dataProcessing: formData?.declarationConsent?.dataProcessing,
       termsConditions: formData?.declarationConsent?.termsConditions,
@@ -678,7 +693,7 @@ const CatalystProfileSummary = ({ formData, onEdit }) => {
               )}
             </div>
 
-            {/* General Matching Preference */}
+            {/* Program Brief & Matching Preference */}
             <div
               style={{
                 background: "linear-gradient(135deg, rgba(250, 247, 242, 0.9), rgba(245, 240, 225, 0.9))",
@@ -691,13 +706,13 @@ const CatalystProfileSummary = ({ formData, onEdit }) => {
               }}
             >
               <div
-                onClick={() => toggleSection("generalMatchingPreference")}
+                onClick={() => toggleSection("programBriefMatchingPreference")}
                 style={{
                   display: "flex",
                   justifyContent: "space-between",
                   alignItems: "center",
                   padding: "20px 28px",
-                  background: expandedSections.generalMatchingPreference
+                  background: expandedSections.programBriefMatchingPreference
                     ? "linear-gradient(135deg, #a67c52, #7d5a50)"
                     : "linear-gradient(135deg, #e6d7c3, #c8b6a6)",
                   cursor: "pointer",
@@ -705,25 +720,25 @@ const CatalystProfileSummary = ({ formData, onEdit }) => {
                 }}
               >
                 <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                  <Target size={24} color={expandedSections.generalMatchingPreference ? "#faf7f2" : "#4a352f"} />
+                  <Target size={24} color={expandedSections.programBriefMatchingPreference ? "#faf7f2" : "#4a352f"} />
                   <h2
                     style={{
                       margin: 0,
                       fontSize: "clamp(18px, 2vw, 20px)",
                       fontWeight: "700",
-                      color: expandedSections.generalMatchingPreference ? "#faf7f2" : "#4a352f",
+                      color: expandedSections.programBriefMatchingPreference ? "#faf7f2" : "#4a352f",
                     }}
                   >
-                    General Matching Preference
+                    Program Brief & Matching Preference
                   </h2>
                 </div>
-                {expandedSections.generalMatchingPreference ? (
+                {expandedSections.programBriefMatchingPreference ? (
                   <ChevronUp size={24} color="#faf7f2" />
                 ) : (
                   <ChevronDown size={24} color="#4a352f" />
                 )}
               </div>
-              {expandedSections.generalMatchingPreference && (
+              {expandedSections.programBriefMatchingPreference && (
                 <div
                   style={{
                     padding: "28px",
@@ -731,201 +746,241 @@ const CatalystProfileSummary = ({ formData, onEdit }) => {
                     animation: "slideDown 0.3s ease-out",
                   }}
                 >
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
-                      gap: "20px",
-                    }}
-                  >
-                    {[
-                      { label: "Program Structure", value: summaryData?.programStructure },
-                      { label: "Legal Entity Fit", value: summaryData?.legalEntityFit },
-                      { label: "Program Stage", value: summaryData?.programStage },
-                      { label: "Support Focus", value: summaryData?.supportFocus },
-                      { label: "Support Focus Subtype", value: summaryData?.supportFocusSubtype },
-                      { label: "Sector Focus", value: formatArray(summaryData?.sectorFocus) },
-                      { label: "Sector Exclusions", value: formatArray(summaryData?.sectorExclusions) },
-                      { label: "Geographic Focus", value: formatArray(summaryData?.geographicFocus) },
-                      { label: "Selected Provinces", value: formatArray(summaryData?.selectedProvinces) },
-                      { label: "Selected Countries", value: formatArray(summaryData?.selectedCountries) },
-                      { label: "Target Demographics", value: formatArray(summaryData?.targetDemographics) },
-                    ].map((item, i) => (
-                      <div
-                        key={i}
-                        style={{
-                          background: "rgba(250, 247, 242, 0.8)",
-                          borderRadius: "12px",
-                          padding: "20px",
-                          border: "1px solid rgba(200, 182, 166, 0.2)",
-                          transition: "all 0.3s ease",
-                        }}
-                      >
-                        <span
-                          style={{
-                            display: "block",
-                            fontSize: "13px",
-                            color: "#7d5a50",
-                            marginBottom: "8px",
-                            fontWeight: "600",
-                            textTransform: "uppercase",
-                            letterSpacing: "0.5px",
-                          }}
-                        >
-                          {item.label}
-                        </span>
-                        <span
-                          style={{
-                            fontSize: "15px",
-                            color: "#4a352f",
-                            fontWeight: "500",
-                            lineHeight: "1.4",
-                          }}
-                        >
-                          {item.value || "Not specified"}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Programme Details */}
-            <div
-              style={{
-                background: "linear-gradient(135deg, rgba(250, 247, 242, 0.9), rgba(245, 240, 225, 0.9))",
-                backdropFilter: "blur(20px)",
-                borderRadius: "20px",
-                overflow: "hidden",
-                border: "1px solid rgba(200, 182, 166, 0.3)",
-                boxShadow: "0 16px 32px rgba(74, 53, 47, 0.08)",
-                transition: "all 0.3s ease",
-              }}
-            >
-              <div
-                onClick={() => toggleSection("programmeDetails")}
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  padding: "20px 28px",
-                  background: expandedSections.programmeDetails
-                    ? "linear-gradient(135deg, #7d5a50, #4a352f)"
-                    : "linear-gradient(135deg, #e6d7c3, #c8b6a6)",
-                  cursor: "pointer",
-                  transition: "all 0.3s ease",
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                  <ClipboardList size={24} color={expandedSections.programmeDetails ? "#faf7f2" : "#4a352f"} />
-                  <h2
-                    style={{
-                      margin: 0,
-                      fontSize: "clamp(18px, 2vw, 20px)",
-                      fontWeight: "700",
-                      color: expandedSections.programmeDetails ? "#faf7f2" : "#4a352f",
-                    }}
-                  >
-                    Programme Details
-                  </h2>
-                </div>
-                {expandedSections.programmeDetails ? (
-                  <ChevronUp size={24} color="#faf7f2" />
-                ) : (
-                  <ChevronDown size={24} color="#4a352f" />
-                )}
-              </div>
-              {expandedSections.programmeDetails && (
-                <div
-                  style={{
-                    padding: "28px",
-                    background: "linear-gradient(135deg, rgba(250, 247, 242, 0.8), rgba(240, 230, 217, 0.6))",
-                    animation: "slideDown 0.3s ease-out",
-                  }}
-                >
-                  {summaryData.programs.length > 0 ? (
-                    summaryData.programs.map((program, index) => (
-                      <div
-                        key={index}
-                        style={{ marginBottom: "30px", paddingBottom: "20px", borderBottom: "1px solid #e8d5b7" }}
-                      >
-                        <h3 style={{ fontSize: "18px", fontWeight: "600", color: "#5d4037", marginBottom: "15px" }}>
-                          Program {index + 1}
-                        </h3>
-                        <div
-                          style={{
-                            display: "grid",
-                            gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
-                            gap: "20px",
-                          }}
-                        >
-                          {[
-                            { label: "Program Name", value: program.name },
-                            { label: "Program Budget", value: formatCurrency(program.budget) },
-                            { label: "Target Beneficiaries", value: formatArray(program.targetBeneficiaries) },
-                            { label: "Government Backed", value: program.governmentBacked ? "Yes" : "No" },
-                            { label: "Funding Sources", value: program.fundingSources },
-                            { label: "Program Structure", value: program.programStructure },
-                            {
-                              label: "Program Legal Structure",
-                              value:
-                                program.programLegalStructure === "other"
-                                  ? program.programLegalStructureOther
-                                  : program.programLegalStructure,
-                            },
-                            { label: "Target Business Stage", value: program.businessStage },
-                            { label: "Program Budget Category", value: program.programBudgetCategory },
-                            { label: "Average Support Amount", value: formatCurrency(program.averageSupportAmount) },
-                            { label: "Minimum Support", value: formatCurrency(program.minimumSupport) },
-                            { label: "Maximum Support", value: formatCurrency(program.maximumSupport) },
-                            {
-                              label: "Provides Follow-Up Support",
-                              value: program.providesFollowUp ? `Yes (${program.followUpPercentage || "N/A"}%)` : "No",
-                            },
-                            { label: "Continued Support Rights", value: program.continuedSupport ? "Yes" : "No" },
-                          ].map((item, i) => (
-                            <div
-                              key={i}
+                  {/* Section 1: Program Details */}
+                  <div style={{ marginBottom: "32px" }}>
+                    <h3 style={{ fontSize: "18px", fontWeight: "600", color: "#7d5a50", marginBottom: "20px", borderBottom: "2px solid #c8b6a6", paddingBottom: "8px" }}>
+                      Program Details
+                    </h3>
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
+                        gap: "20px",
+                      }}
+                    >
+                      {[
+                        { label: "Program Name", value: summaryData?.programName },
+                        { label: "Program Website", value: summaryData?.programWebsite },
+                        { label: "Program Duration", value: summaryData?.programDuration ? `${summaryData.programDuration} years` : null },
+                        { label: "About the Program", value: summaryData?.aboutProgram },
+                        { label: "Program Goals", value: summaryData?.programGoals },
+                        { label: "Support Framework", value: summaryData?.supportFramework },
+                      ].map((item, i) => (
+                        item.value && (
+                          <div
+                            key={i}
+                            style={{
+                              background: "rgba(250, 247, 242, 0.8)",
+                              borderRadius: "12px",
+                              padding: "20px",
+                              border: "1px solid rgba(200, 182, 166, 0.2)",
+                              transition: "all 0.3s ease",
+                            }}
+                          >
+                            <span
                               style={{
-                                background: "rgba(250, 247, 242, 0.8)",
-                                borderRadius: "12px",
-                                padding: "20px",
-                                border: "1px solid rgba(200, 182, 166, 0.2)",
-                                transition: "all 0.3s ease",
+                                display: "block",
+                                fontSize: "13px",
+                                color: "#7d5a50",
+                                marginBottom: "8px",
+                                fontWeight: "600",
+                                textTransform: "uppercase",
+                                letterSpacing: "0.5px",
                               }}
                             >
-                              <span
-                                style={{
-                                  display: "block",
-                                  fontSize: "13px",
-                                  color: "#7d5a50",
-                                  marginBottom: "8px",
-                                  fontWeight: "600",
-                                  textTransform: "uppercase",
-                                  letterSpacing: "0.5px",
-                                }}
-                              >
-                                {item.label}
-                              </span>
-                              <span
-                                style={{
-                                  fontSize: "15px",
-                                  color: "#4a352f",
-                                  fontWeight: "500",
-                                  lineHeight: "1.4",
-                                }}
-                              >
-                                {item.value || "Not provided"}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <p style={{ color: "#7d5a50", fontSize: "15px" }}>No program details provided.</p>
-                  )}
+                              {item.label}
+                            </span>
+                            <span
+                              style={{
+                                fontSize: "15px",
+                                color: "#4a352f",
+                                fontWeight: "500",
+                                lineHeight: "1.4",
+                              }}
+                            >
+                              {item.value || "Not provided"}
+                            </span>
+                          </div>
+                        )
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Section 2: Support Focus */}
+                  <div style={{ marginBottom: "32px" }}>
+                    <h3 style={{ fontSize: "18px", fontWeight: "600", color: "#7d5a50", marginBottom: "20px", borderBottom: "2px solid #c8b6a6", paddingBottom: "8px" }}>
+                      Support Focus
+                    </h3>
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
+                        gap: "20px",
+                      }}
+                    >
+                      {[
+                        { label: "Support Focus", value: formatArray(summaryData?.supportFocus) },
+                        { label: "Support Focus Subtype", value: formatArray(summaryData?.supportFocusSubtype) },
+                        { label: "Target Business Stage", value: formatArray(summaryData?.targetBusinessStage) },
+                        { label: "Minimum Support Ticket", value: summaryData?.minimumSupportTicket },
+                        { label: "Maximum Support Ticket", value: summaryData?.maximumSupportTicket },
+                      ].map((item, i) => (
+                        item.value && item.value !== "None specified" && (
+                          <div
+                            key={i}
+                            style={{
+                              background: "rgba(250, 247, 242, 0.8)",
+                              borderRadius: "12px",
+                              padding: "20px",
+                              border: "1px solid rgba(200, 182, 166, 0.2)",
+                              transition: "all 0.3s ease",
+                            }}
+                          >
+                            <span
+                              style={{
+                                display: "block",
+                                fontSize: "13px",
+                                color: "#7d5a50",
+                                marginBottom: "8px",
+                                fontWeight: "600",
+                                textTransform: "uppercase",
+                                letterSpacing: "0.5px",
+                              }}
+                            >
+                              {item.label}
+                            </span>
+                            <span
+                              style={{
+                                fontSize: "15px",
+                                color: "#4a352f",
+                                fontWeight: "500",
+                                lineHeight: "1.4",
+                              }}
+                            >
+                              {item.value}
+                            </span>
+                          </div>
+                        )
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Section 3: Target Beneficiaries */}
+                  <div style={{ marginBottom: "32px" }}>
+                    <h3 style={{ fontSize: "18px", fontWeight: "600", color: "#7d5a50", marginBottom: "20px", borderBottom: "2px solid #c8b6a6", paddingBottom: "8px" }}>
+                      Target Beneficiaries
+                    </h3>
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
+                        gap: "20px",
+                      }}
+                    >
+                      {[
+                        { label: "Demographics", value: formatArray(summaryData?.demographics) },
+                        { label: "B-BBEE Level", value: formatArray(summaryData?.bbbeeLevel) },
+                      ].map((item, i) => (
+                        item.value && item.value !== "None specified" && (
+                          <div
+                            key={i}
+                            style={{
+                              background: "rgba(250, 247, 242, 0.8)",
+                              borderRadius: "12px",
+                              padding: "20px",
+                              border: "1px solid rgba(200, 182, 166, 0.2)",
+                              transition: "all 0.3s ease",
+                            }}
+                          >
+                            <span
+                              style={{
+                                display: "block",
+                                fontSize: "13px",
+                                color: "#7d5a50",
+                                marginBottom: "8px",
+                                fontWeight: "600",
+                                textTransform: "uppercase",
+                                letterSpacing: "0.5px",
+                              }}
+                            >
+                              {item.label}
+                            </span>
+                            <span
+                              style={{
+                                fontSize: "15px",
+                                color: "#4a352f",
+                                fontWeight: "500",
+                                lineHeight: "1.4",
+                              }}
+                            >
+                              {item.value}
+                            </span>
+                          </div>
+                        )
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Section 4: General Preferences */}
+                  <div>
+                    <h3 style={{ fontSize: "18px", fontWeight: "600", color: "#7d5a50", marginBottom: "20px", borderBottom: "2px solid #c8b6a6", paddingBottom: "8px" }}>
+                      General Preferences
+                    </h3>
+                    <div
+                      style={{
+                        display: "grid",
+                        gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
+                        gap: "20px",
+                      }}
+                    >
+                      {[
+                        { label: "Legal Entity", value: formatArray(summaryData?.legalEntity) },
+                        { label: "Business Lifecycle Stage", value: formatArray(summaryData?.businessLifecycleStage) },
+                        { label: "Sector Focus", value: formatArray(summaryData?.sectorFocus) },
+                        { label: "Sector Exclusions", value: formatArray(summaryData?.sectorExclusions) },
+                        { label: "Geographic Focus", value: formatArray(summaryData?.geographicFocus) },
+                        { label: "Selected Countries", value: formatArray(summaryData?.selectedCountries) },
+                        { label: "Selected Provinces", value: formatArray(summaryData?.selectedProvinces) },
+                      ].map((item, i) => (
+                        item.value && item.value !== "None specified" && (
+                          <div
+                            key={i}
+                            style={{
+                              background: "rgba(250, 247, 242, 0.8)",
+                              borderRadius: "12px",
+                              padding: "20px",
+                              border: "1px solid rgba(200, 182, 166, 0.2)",
+                              transition: "all 0.3s ease",
+                            }}
+                          >
+                            <span
+                              style={{
+                                display: "block",
+                                fontSize: "13px",
+                                color: "#7d5a50",
+                                marginBottom: "8px",
+                                fontWeight: "600",
+                                textTransform: "uppercase",
+                                letterSpacing: "0.5px",
+                              }}
+                            >
+                              {item.label}
+                            </span>
+                            <span
+                              style={{
+                                fontSize: "15px",
+                                color: "#4a352f",
+                                fontWeight: "500",
+                                lineHeight: "1.4",
+                              }}
+                            >
+                              {item.value}
+                            </span>
+                          </div>
+                        )
+                      ))}
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
@@ -991,7 +1046,6 @@ const CatalystProfileSummary = ({ formData, onEdit }) => {
                     }}
                   >
                     {[
-                      { label: "Program Overview and Objectives", value: summaryData?.overviewObjectives },
                       { label: "Instructions for Applicants", value: summaryData?.instructionsForApplying },
                       { label: "Estimated Review Time", value: summaryData?.estimatedReviewTime },
                       { label: "Program Onboarding Time", value: summaryData?.programOnboardingTime },
@@ -1005,40 +1059,42 @@ const CatalystProfileSummary = ({ formData, onEdit }) => {
                       { label: "Selection Criteria", value: summaryData?.evaluationCriteria },
                       { label: "Impact Alignment", value: summaryData?.impactAlignment },
                     ].map((item, i) => (
-                      <div
-                        key={i}
-                        style={{
-                          background: "rgba(250, 247, 242, 0.8)",
-                          borderRadius: "12px",
-                          padding: "20px",
-                          border: "1px solid rgba(200, 182, 166, 0.2)",
-                          transition: "all 0.3s ease",
-                        }}
-                      >
-                        <span
+                      item.value && (
+                        <div
+                          key={i}
                           style={{
-                            display: "block",
-                            fontSize: "13px",
-                            color: "#7d5a50",
-                            marginBottom: "8px",
-                            fontWeight: "600",
-                            textTransform: "uppercase",
-                            letterSpacing: "0.5px",
+                            background: "rgba(250, 247, 242, 0.8)",
+                            borderRadius: "12px",
+                            padding: "20px",
+                            border: "1px solid rgba(200, 182, 166, 0.2)",
+                            transition: "all 0.3s ease",
                           }}
                         >
-                          {item.label}
-                        </span>
-                        <span
-                          style={{
-                            fontSize: "15px",
-                            color: "#4a352f",
-                            fontWeight: "500",
-                            lineHeight: "1.4",
-                          }}
-                        >
-                          {item.value || "Not provided"}
-                        </span>
-                      </div>
+                          <span
+                            style={{
+                              display: "block",
+                              fontSize: "13px",
+                              color: "#7d5a50",
+                              marginBottom: "8px",
+                              fontWeight: "600",
+                              textTransform: "uppercase",
+                              letterSpacing: "0.5px",
+                            }}
+                          >
+                            {item.label}
+                          </span>
+                          <span
+                            style={{
+                              fontSize: "15px",
+                              color: "#4a352f",
+                              fontWeight: "500",
+                              lineHeight: "1.4",
+                            }}
+                          >
+                            {item.value || "Not provided"}
+                          </span>
+                        </div>
+                      )
                     ))}
                   </div>
                 </div>
