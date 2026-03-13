@@ -1399,15 +1399,14 @@ const badgeStyles = (status) => {
 
   const getContainerStyles = () => ({
     fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-    width: "100%",
     minHeight: "100vh",
-    maxWidth: "100vw",
     overflowX: "hidden",
-    margin: "0",
+    margin: "0 20px",
     boxSizing: "border-box",
     position: "relative",
     transition: "padding 0.3s ease",
-    backgroundColor: "#faf8f6"
+    backgroundColor: "#faf8f6",
+    paddingBottom: "40px"
   });
 
   // Modified renderExpandedRows to only show matching documents when filtering
@@ -1644,18 +1643,14 @@ const badgeStyles = (status) => {
       `}</style>
 
       <div
-        className="my-documents-container"
         style={getContainerStyles()}
       >
         <div style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "8px",
-            marginBottom: "20px",
-            padding: "16px",
-            backgroundColor: "#f5f2f0",
-            borderRadius: "8px",
-            border: "1px solid #d7ccc8"
+          display: "flex",
+          alignItems: "center",
+          gap: "8px",
+          marginBottom: "20px",
+          padding: "16px",
           }}>
             <button
               onClick={() => window.location.href = "/profile"} 
@@ -1740,8 +1735,7 @@ const badgeStyles = (status) => {
         )}
 
         <div style={{
-          width: "100%",
-          maxWidth: "1400px",
+          width: "98%",
           margin: "0 auto",
         }}>
           <div className="my-documents-header" style={{

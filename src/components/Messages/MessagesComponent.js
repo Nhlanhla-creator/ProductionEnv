@@ -48,16 +48,6 @@ const MessagesComponent = ({ config = {} }) => {
   const [senderName, setSenderName] = useState("");
   const [unreadCount, setUnreadCount] = useState(0);
   const [attachmentFiles, setAttachmentFiles] = useState([]);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
-    try {
-      if (typeof document !== "undefined" && document.body) {
-        return document.body.classList.contains("sidebar-collapsed");
-      }
-      return localStorage.getItem("sidebarOpen") === "false";
-    } catch (e) {
-      return false;
-    }
-  });
 
   // Advisor-specific state
   const [recipients, setRecipients] = useState([]);
@@ -67,49 +57,6 @@ const MessagesComponent = ({ config = {} }) => {
   const fileInputRef = useRef(null);
   const storage = getStorage();
 
-  // Sidebar detection (if enabled)
-  useEffect(() => {
-    const update = () => {
-      try {
-        if (document && document.body) {
-          setIsSidebarCollapsed(
-            document.body.classList.contains("sidebar-collapsed")
-          );
-        } else {
-          setIsSidebarCollapsed(
-            localStorage.getItem("sidebarOpen") === "false"
-          );
-        }
-      } catch (e) {
-        setIsSidebarCollapsed(false);
-      }
-    };
-
-    // MutationObserver watches body class changes like in MyInvestments
-    let observer = null;
-    try {
-      if (document && document.body && window.MutationObserver) {
-        observer = new MutationObserver(() => update());
-        observer.observe(document.body, {
-          attributes: true,
-          attributeFilter: ["class"],
-        });
-      }
-    } catch (e) {
-      // noop
-    }
-
-    // Also listen to events used elsewhere in the app
-    window.addEventListener("sidebarToggle", update);
-    window.addEventListener("storage", update);
-
-    return () => {
-      if (observer) observer.disconnect();
-      window.removeEventListener("sidebarToggle", update);
-      window.removeEventListener("storage", update);
-    };
-  }, []);
-
   // Load recipients (Advisors only)
   useEffect(() => {
     if (!hasRecipientDropdown || !recipientsLoader) return;
@@ -117,17 +64,10 @@ const MessagesComponent = ({ config = {} }) => {
   }, [hasRecipientDropdown, recipientsLoader]);
 
   const getContainerStyles = () => {
-    const expandedLeft = 280;
-    const collapsedLeft = 80;
-
     return {
       minHeight: "calc(100vh - 80px)",
       maxWidth: "100vw",
       overflowX: "hidden",
-      padding: "10px 0",
-      marginLeft: isSidebarCollapsed
-        ? `${collapsedLeft}px`
-        : `${expandedLeft}px`,
       boxSizing: "border-box",
       position: "relative",
       transition: "margin-left 0.3s ease",
