@@ -29,33 +29,51 @@ const EmptyState = ({ message }) => (
   </div>
 );
 
-const barOpts = (yCb) => ({
+// Horizontal bar options
+// valCb        – optional tick formatter for the value (x) axis
+// integralOnly – only show integer ticks on the value axis
+const hBarOpts = (valCb, integralOnly) => ({
   responsive: true, maintainAspectRatio: false, animation: false,
-  plugins: { legend: { position: "bottom", labels: { color: B.dark, font: { size: 11 }, boxWidth: 12 } }, datalabels: { display: false } },
+  indexAxis: "y",
+  plugins: {
+    legend: { position: "bottom", labels: { color: B.dark, font: { size: 11 }, boxWidth: 12 } },
+    datalabels: { display: false },
+  },
   scales: {
-    x: { grid: { display: false }, ticks: { color: B.dark, font: { size: 10 } } },
-    y: { beginAtZero: true, grid: { color: B.offwhite }, ticks: { color: B.dark, callback: yCb || (v => v) } },
+    x: {
+      beginAtZero: true,
+      grid: { display: true, color: B.offwhite },
+      ticks: {
+        color: B.dark, font: { size: 10 },
+        ...(valCb ? { callback: valCb } : {}),
+        ...(integralOnly && !valCb ? { callback: v => Number.isInteger(v) ? v : "", precision: 0, stepSize: 1 } : {}),
+      },
+    },
+    y: { grid: { display: false }, ticks: { color: B.dark, font: { size: 11 } } },
   },
 });
 
-// ── Revenue per SME ───────────────────────────────────────────────────────────
+// ── Revenue per SME — horizontal bar, sorted highest → lowest ─────────────────
 const RevenuePerSME = () => {
   const { metrics } = usePortfolio();
-  const perSME = (metrics?.revenue?.perSME || []).filter(s => s.revenue > 0);
+  const perSME = [...(metrics?.revenue?.perSME || [])]
+    .filter(s => s.revenue > 0)
+    .sort((a, b) => b.revenue - a.revenue);
+  const minH = Math.max(240, perSME.length * 40);
 
   return (
-    <Card title="Annual Revenue per SME" subLabel="Actual revenue from SME profiles (R)">
+    <Card title="Annual Revenue per SME" subLabel="Horizontal bar — actual revenue from SME profiles (R)">
       {perSME.length > 0 ? (
         <>
-          <div style={{ flex: 1, minHeight: "240px" }}>
-            <Bar options={barOpts(v => "R" + (v / 1000000).toFixed(1) + "M")} data={{
-              labels: perSME.map(s => s.name),
-              datasets: [{ label: "Annual Revenue (R)", data: perSME.map(s => s.revenue), backgroundColor: C.slice(0, perSME.length) }],
-            }} />
+          <div style={{ flex: 1, minHeight: `${minH}px` }}>
+            <Bar
+              options={hBarOpts(v => "R" + (v / 1_000_000).toFixed(1) + "M")}
+              data={{ labels: perSME.map(s => s.name), datasets: [{ label: "Annual Revenue (R)", data: perSME.map(s => s.revenue), backgroundColor: C.slice(0, perSME.length) }] }}
+            />
           </div>
           <div style={{ display: "flex", justifyContent: "space-between", marginTop: "10px", padding: "8px 12px", background: B.offwhite, borderRadius: "6px" }}>
-            <span style={{ fontSize: "12px", color: B.dark, fontWeight: 600 }}>Portfolio Total: <strong>R{(metrics.revenue.total / 1000000).toFixed(1)}M</strong></span>
-            <span style={{ fontSize: "12px", color: B.warm }}>Avg: R{(metrics.revenue.avg / 1000000).toFixed(1)}M / SME</span>
+            <span style={{ fontSize: "12px", color: B.dark, fontWeight: 600 }}>Portfolio Total: <strong>R{(metrics.revenue.total / 1_000_000).toFixed(1)}M</strong></span>
+            <span style={{ fontSize: "12px", color: B.warm }}>Avg: R{(metrics.revenue.avg / 1_000_000).toFixed(1)}M / SME</span>
           </div>
         </>
       ) : <EmptyState message="Revenue data not yet available in profiles" />}
@@ -63,7 +81,7 @@ const RevenuePerSME = () => {
   );
 };
 
-// ── Profitability Status ──────────────────────────────────────────────────────
+// ── Profitability Status — sorted highest count → lowest ──────────────────────
 const ProfitabilityStatus = () => {
   const { metrics } = usePortfolio();
   const perSME = metrics?.revenue?.perSME || [];
@@ -73,8 +91,9 @@ const ProfitabilityStatus = () => {
     acc[s.profitability] = (acc[s.profitability] || 0) + 1;
     return acc;
   }, {});
-  const labels = Object.keys(statusCounts);
-  const values = labels.map(k => statusCounts[k]);
+  const sorted = Object.entries(statusCounts).sort((a, b) => b[1] - a[1]);
+  const labels = sorted.map(([l]) => l);
+  const values = sorted.map(([, v]) => v);
   const statusColors = { Profitable: "#7d5a36", "Break-even": "#b8a082", "Pre-revenue": "#d4c4b0", Unprofitable: "#9b3a1a" };
 
   return (
@@ -98,26 +117,29 @@ const ProfitabilityStatus = () => {
   );
 };
 
-// ── Capital Required ──────────────────────────────────────────────────────────
+// ── Capital Required — horizontal bar, sorted highest → lowest ────────────────
 const CapitalRequired = () => {
   const { metrics } = usePortfolio();
-  const perSME = (metrics?.revenue?.perSME || []).filter(s => s.fundingRequired > 0);
+  const perSME = [...(metrics?.revenue?.perSME || [])]
+    .filter(s => s.fundingRequired > 0)
+    .sort((a, b) => b.fundingRequired - a.fundingRequired);
+  const minH = Math.max(240, perSME.length * 40);
 
   return (
-    <Card title="Capital Required per SME" subLabel="Funding requested per SME (R)">
+    <Card title="Capital Required per SME" subLabel="Horizontal bar — funding requested per SME (R)">
       {perSME.length > 0 ? (
-        <div style={{ flex: 1, minHeight: "240px" }}>
-          <Bar options={barOpts(v => "R" + (v / 1000000).toFixed(1) + "M")} data={{
-            labels: perSME.map(s => s.name),
-            datasets: [{ label: "Funding Required (R)", data: perSME.map(s => s.fundingRequired), backgroundColor: C.slice(0, perSME.length) }],
-          }} />
+        <div style={{ flex: 1, minHeight: `${minH}px` }}>
+          <Bar
+            options={hBarOpts(v => "R" + (v / 1_000_000).toFixed(1) + "M")}
+            data={{ labels: perSME.map(s => s.name), datasets: [{ label: "Funding Required (R)", data: perSME.map(s => s.fundingRequired), backgroundColor: C.slice(0, perSME.length) }] }}
+          />
         </div>
       ) : <EmptyState />}
     </Card>
   );
 };
 
-// ── BIG Score as proxy for portfolio quality ──────────────────────────────────
+// ── BIG Score gauge — unchanged ───────────────────────────────────────────────
 const PortfolioQualityGauge = () => {
   const { metrics } = usePortfolio();
   const avg = metrics?.bigScore?.avg || 0;
@@ -151,22 +173,23 @@ const PortfolioQualityGauge = () => {
   );
 };
 
-// ── Client Count (from profile keyClients) ────────────────────────────────────
+// ── Key Clients per SME — horizontal bar, integral x-axis, sorted ─────────────
 const ClientsPerSME = () => {
-  const { metrics, enriched } = usePortfolio();
-  const smeClients = enriched.map(a => ({
-    name: a.smeName || "Unknown",
-    count: (a.profile?.productsServices?.keyClients || []).length,
-  })).filter(s => s.count > 0);
+  const { enriched } = usePortfolio();
+  const smeClients = enriched
+    .map(a => ({ name: a.smeName || "Unknown", count: (a.profile?.productsServices?.keyClients || []).length }))
+    .filter(s => s.count > 0)
+    .sort((a, b) => b.count - a.count);
+  const minH = Math.max(240, smeClients.length * 40);
 
   return (
-    <Card title="# Key Clients per SME" subLabel="Key clients listed in SME profiles">
+    <Card title="# Key Clients per SME" subLabel="Horizontal bar — key clients listed in SME profiles">
       {smeClients.length > 0 ? (
-        <div style={{ flex: 1, minHeight: "240px" }}>
-          <Bar options={barOpts()} data={{
-            labels: smeClients.map(s => s.name),
-            datasets: [{ label: "# Key Clients", data: smeClients.map(s => s.count), backgroundColor: C.slice(0, smeClients.length) }],
-          }} />
+        <div style={{ flex: 1, minHeight: `${minH}px` }}>
+          <Bar
+            options={hBarOpts(null, true)}
+            data={{ labels: smeClients.map(s => s.name), datasets: [{ label: "# Key Clients", data: smeClients.map(s => s.count), backgroundColor: C.slice(0, smeClients.length) }] }}
+          />
         </div>
       ) : <EmptyState message="Key client data not yet available in profiles" />}
     </Card>
