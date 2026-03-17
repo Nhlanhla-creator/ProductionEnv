@@ -10,10 +10,10 @@ const SuccessfulSupportDealsTable = ({ successfulDeals }) => {
 
   const getStatusColor = (status) => {
     switch (status) {
-      case "Active Support":        return "#4caf50"
+      case "Active Support": return "#4caf50"
       case "Completed Successfully": return "#2196f3"
-      case "Under Review":          return "#ff9800"
-      default:                      return "#666"
+      case "Under Review": return "#ff9800"
+      default: return "#666"
     }
   }
 
@@ -101,16 +101,16 @@ const SuccessfulSupportDealsTable = ({ successfulDeals }) => {
           <thead>
             <tr>
               {[
-                { label: "SMSE Name",         w: "12%" },
-                { label: "Funding Required",  w: "10%" },
-                { label: "Equity Offered",    w: "9%"  },
-                { label: "Start Date",        w: "10%" },
-                { label: "Sector",            w: "9%"  },
-                { label: "Location",          w: "10%" },
-                { label: "Guarantees",        w: "8%"  },
-                { label: "Services Required", w: "7%"  },
-                { label: "Status",            w: "11%" },
-                { label: "Action",            w: "14%", align: "center", noBorderRight: true },
+                { label: "SMSE Name", w: "12%" },
+                { label: "Funding Required", w: "10%" },
+                { label: "Equity Offered", w: "9%" },
+                { label: "Start Date", w: "10%" },
+                { label: "Sector", w: "9%" },
+                { label: "Location", w: "10%" },
+                { label: "Guarantees", w: "8%" },
+                { label: "Services Required", w: "7%" },
+                { label: "Status", w: "11%" },
+                { label: "Action", w: "14%", align: "center", noBorderRight: true },
               ].map(({ label, w, align, noBorderRight }) => (
                 <th key={label} style={{ ...TH, width: w, textAlign: align || "left", borderRight: noBorderRight ? "none" : "1px solid #1a0c02" }}>
                   {label}
@@ -204,10 +204,10 @@ const SuccessfulSupportDealsTable = ({ successfulDeals }) => {
 }
 
 // ── Main Tabbed Component ─────────────────────────────────────────────────────
-const SupportTabbedTables = ({ filters, stageFilter, loading }) => {
-  const [activeTab, setActiveTab]       = useState("my-matches")
+const SupportTabbedTables = ({ filters, stageFilter, loading, onStageOverride }) => {
+  const [activeTab, setActiveTab] = useState("my-matches")
   const [successfulDeals, setSuccessfulDeals] = useState([])
-  const [smeMatches, setSmeMatches]     = useState([])
+  const [smeMatches, setSmeMatches] = useState([])
   // Track whether we've seen data at least once so we don't fire notifications on initial load
   const isFirstLoad = useRef(true)
 
@@ -218,16 +218,16 @@ const SupportTabbedTables = ({ filters, stageFilter, loading }) => {
         ["support approved", "active support"].includes((sme.pipelineStage || "").toLowerCase())
       )
       .map((sme) => ({
-        id:               sme.id,
-        smseName:         sme.name,
-        fundingRequired:  sme.fundingRequired,
-        equityOffered:    sme.equityOffered,
-        startDate:        sme.applicationDate,
-        sector:           sme.sector,
-        location:         sme.location,
-        guarantees:       sme.guarantees,
+        id: sme.id,
+        smseName: sme.name,
+        fundingRequired: sme.fundingRequired,
+        equityOffered: sme.equityOffered,
+        startDate: sme.applicationDate,
+        sector: sme.sector,
+        location: sme.location,
+        guarantees: sme.guarantees,
         servicesRequired: sme.servicesRequired,
-        currentStatus:    sme.currentStatus || sme.pipelineStage,
+        currentStatus: sme.currentStatus || sme.pipelineStage,
       }))
 
   useEffect(() => {
@@ -269,7 +269,7 @@ const SupportTabbedTables = ({ filters, stageFilter, loading }) => {
       {/* Tab Navigation */}
       <div style={{ display: "flex", marginBottom: "0", backgroundColor: "#f5f5f5", borderRadius: "12px 12px 0 0", padding: "4px", boxShadow: "0 2px 8px rgba(0,0,0,0.1)" }}>
         {[
-          { id: "my-matches",       icon: <Users size={18} />,  label: "My Matches",      count: smeMatches.length },
+          { id: "my-matches", icon: <Users size={18} />, label: "My Matches", count: smeMatches.length },
           { id: "successful-deals", icon: <Trophy size={18} />, label: "Successful Deals", count: successfulDeals.length },
         ].map(({ id, icon, label, count }) => (
           <button key={id}
@@ -288,7 +288,12 @@ const SupportTabbedTables = ({ filters, stageFilter, loading }) => {
       {/* Tab Content */}
       <div style={{ backgroundColor: "white", borderRadius: "0 0 16px 16px", padding: "24px", minHeight: "600px", boxShadow: "0 4px 20px rgba(0,0,0,0.08)", border: "1px solid #e8e8e8", borderTop: "none" }}>
         {activeTab === "my-matches" && (
-          <SupportSMETable filters={filters} stageFilter={stageFilter} onSMEsLoaded={handleSMEsLoaded} />
+          <SupportSMETable
+            filters={filters}
+            stageFilter={stageFilter}
+            onSMEsLoaded={handleSMEsLoaded}
+            onStageOverride={onStageOverride}
+          />
         )}
         {activeTab === "successful-deals" && (
           <SuccessfulSupportDealsTable successfulDeals={successfulDeals} />
