@@ -3,9 +3,19 @@
 import { useState, useEffect } from "react"
 import { v4 as uuidv4 } from "uuid"
 import { getAuth } from "firebase/auth"
-import { collection, getFirestore, query, where, getDocs, doc, getDoc, setDoc } from "firebase/firestore"
+import { collection, getFirestore, query, where, getDocs, doc, getDoc, setDoc,addDoc, updateDoc } from "firebase/firestore"
 import { useNavigate } from "react-router-dom"
-import EmbeddedCheckout from "../EmbeddedCheckout"
+import { 
+  Check, 
+  X, 
+  Ticket, 
+  Award, 
+  Users,
+  Calendar,
+  Clock,
+  CheckCircle,
+  AlertCircle 
+} from "lucide-react"
 import { colors } from "../../shared/theme"
 import { getSubStyles } from "./Styles"
 import { 
@@ -16,7 +26,6 @@ import {
   getDefaultUserData,
   getFreePlanKey,
   getPopularPlanKey,
-  isPopularPlan,
   getAddOns
 } from "../../config/subscriptionsConfig"
 
@@ -61,7 +70,10 @@ const saveSubscriptionToFirebase = async (subscriptionData) => {
         isTrialPeriod: subscriptionData.isTrialPeriod || false,
         originalAmount: subscriptionData.originalAmount,
         trialStartDate: subscriptionData.trialStartDate,
-        trialEndDate: subscriptionData.trialEndDate
+        trialEndDate: subscriptionData.trialEndDate,
+        source: subscriptionData.source || "direct_payment",
+        voucherId: subscriptionData.voucherId || null,
+        voucherCode: subscriptionData.voucherCode || null
       }
     }, { merge: true })
     
@@ -140,6 +152,15 @@ const ReusableSubscription = ({
   const [paymentProcessing, setPaymentProcessing] = useState(false)
   const [showCheckout, setShowCheckout] = useState(false)
 
+  // Voucher state
+// Add these state variables
+const [showVoucherInput, setShowVoucherInput] = useState(false)
+const [voucherCode, setVoucherCode] = useState("")
+const [voucherMessage, setVoucherMessage] = useState("")
+const [voucherMessageType, setVoucherMessageType] = useState("") // "success" or "error"
+const [validatingVoucher, setValidatingVoucher] = useState(false)
+const [appliedVoucher, setAppliedVoucher] = useState(null)
+
   // Get configuration based on user type
   const plans = getPlanData(userType)
   const featureOrder = getFeatureOrder(userType)
@@ -158,7 +179,166 @@ const ReusableSubscription = ({
   const [history, setHistory] = useState([])
   const [errors, setErrors] = useState({})
 
-  const styles = getSubStyles()
+  const baseStyles = getSubStyles()
+  
+  // Extend styles with voucher styles
+  const styles = {
+    ...baseStyles,
+  voucherToggle: {
+      background: `linear-gradient(135deg, ${colors.cream} 0%, ${colors.lightTan} 100%)`,
+      borderRadius: "12px",
+      padding: "1rem 1.5rem",
+      marginBottom: "2rem",
+      border: `2px solid ${colors.accentGold}`,
+      cursor: "pointer",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      transition: "all 0.3s ease",
+    },
+    voucherToggleLeft: {
+      display: "flex",
+      alignItems: "center",
+      gap: "1rem",
+    },
+    voucherIcon: {
+      width: "40px",
+      height: "40px",
+      borderRadius: "50%",
+      background: colors.accentGold,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      color: colors.lightText,
+    },
+    voucherToggleText: {
+      fontSize: "1rem",
+      fontWeight: "600",
+      color: colors.darkBrown,
+    },
+    voucherToggleArrow: {
+      color: colors.accentGold,
+      fontSize: "1.2rem",
+      fontWeight: "600",
+    },
+    voucherContent: {
+      marginTop: "1.5rem",
+      padding: "1.5rem",
+      background: colors.offWhite,
+      borderRadius: "12px",
+      border: `1px solid ${colors.lightTan}`,
+    },
+    voucherTitle: {
+      fontSize: "1.2rem",
+      fontWeight: "700",
+      color: colors.darkBrown,
+      marginBottom: "1rem",
+      display: "flex",
+      alignItems: "center",
+      gap: "0.5rem",
+    },
+    voucherInputContainer: {
+      display: "flex",
+      gap: "1rem",
+      marginBottom: "1rem",
+    },
+    voucherInput: {
+      flex: 1  ,
+      padding: "1rem",
+      borderRadius: "8px",
+      border: `2px solid ${colors.lightTan}`,
+      fontSize: "1rem",
+      fontFamily: "'Courier New', monospace",
+      fontWeight: "600",
+      letterSpacing: "1px",
+      background: colors.cream,
+      color: colors.darkBrown,
+    },
+    voucherButton: {
+      padding: "1rem 2rem",
+      background: `linear-gradient(135deg, ${colors.accentGold} 0%, ${colors.mediumBrown} 100%)`,
+      color: colors.lightText,
+      border: "none",
+      borderRadius: "8px",
+      fontWeight: "600",
+      fontSize: "1rem",
+      cursor: "pointer",
+      transition: "all 0.3s ease",
+      whiteSpace: "nowrap",
+    },
+    voucherButtonDisabled: {
+      opacity: 0.6,
+      cursor: "not-allowed",
+    },
+    voucherMessage: {
+      padding: "1rem",
+      borderRadius: "8px",
+      marginBottom: "1rem",
+      fontSize: "0.95rem",
+    },
+    voucherMessageSuccess: {
+      background: `${colors.successGreen}20`,
+      border: `1px solid ${colors.successGreen}`,
+      color: colors.successGreen,
+    },
+    voucherMessageError: {
+      background: `${colors.errorRed}20`,
+      border: `1px solid ${colors.errorRed}`,
+      color: colors.errorRed,
+    },
+    voucherAppliedCard: {
+      background: `${colors.successGreen}10`,
+      border: `2px solid ${colors.successGreen}`,
+      borderRadius: "12px",
+      padding: "1.5rem",
+      marginTop: "1rem",
+    },
+    voucherAppliedTitle: {
+      fontSize: "1.1rem",
+      fontWeight: "700",
+      color: colors.successGreen,
+      marginBottom: "1rem",
+      display: "flex",
+      alignItems: "center",
+      gap: "0.5rem",
+    },
+    voucherPlanBadge: {
+      display: "inline-block",
+      padding: "0.25rem 1rem",
+      background: colors.accentGold,
+      color: colors.lightText,
+      borderRadius: "20px",
+      fontSize: "0.8rem",
+      fontWeight: "600",
+      marginLeft: "0.5rem",
+    },
+    voucherRedeemButton: {
+      width: "100%",
+      padding: "1rem",
+      background: colors.successGreen,
+      color: "white",
+      border: "none",
+      borderRadius: "8px",
+      fontWeight: "700",
+      fontSize: "1rem",
+      cursor: "pointer",
+      marginTop: "1rem",
+      transition: "all 0.3s ease",
+    },
+    voucherInfoText: {
+      fontSize: "0.9rem",
+      color: colors.mediumBrown,
+      marginTop: "1rem",
+      padding: "1rem",
+      background: `${colors.accentGold}10`,
+      borderRadius: "8px",
+      border: `1px solid ${colors.accentGold}30`,
+    },
+    voucherInfoHighlight: {
+      fontWeight: "700",
+      color: colors.accentGold,
+    },
+  }
 
   // Helper function to check if user is new (for trial eligibility)
   const isNewUser = () => {
@@ -206,7 +386,7 @@ const ReusableSubscription = ({
     return plans[planKey]?.price?.[cycle] || 0
   }
 
-  // Enhanced load user subscription data (FRONTEND-ONLY)
+  // Enhanced load user subscription data
   const loadUserSubscription = async (userId) => {
     console.log(`🔍 Loading ${userType} subscription for user:`, userId)
     setIsLoading(true)
@@ -222,6 +402,11 @@ const ReusableSubscription = ({
 
         if (userData.currentSubscription && userData.currentSubscription.plan) {
           console.log("✅ Found current subscription in user doc:", userData.currentSubscription)
+
+          // Check if subscription came from a voucher
+          const source = userData.currentSubscription.source || "direct_payment"
+          const voucherId = userData.currentSubscription.voucherId || null
+          const voucherCode = userData.currentSubscription.voucherCode || null
 
           // Create subscription object from user data
           const subscriptionFromUser = {
@@ -239,6 +424,9 @@ const ReusableSubscription = ({
             originalAmount: userData.currentSubscription.originalAmount,
             trialStartDate: userData.currentSubscription.trialStartDate,
             trialEndDate: userData.currentSubscription.trialEndDate,
+            source: source,
+            voucherId: voucherId,
+            voucherCode: voucherCode
           }
 
           setCurrentSubscription(subscriptionFromUser)
@@ -308,7 +496,301 @@ const ReusableSubscription = ({
     }
   }
 
-  // NEW: Billing cycle toggle component
+  // ==================== VOUCHER REDEMPTION FUNCTIONS ====================
+
+  // Validate voucher code
+ // ==================== VOUCHER REDEMPTION FUNCTIONS ====================
+
+// Validate voucher code
+const validateVoucher = async () => {
+  if (!voucherCode.trim()) {
+    setVoucherMessage("Please enter a voucher code")
+    setVoucherMessageType("error")
+    return
+  }
+
+  const auth = getAuth()
+  const user = auth.currentUser
+
+  if (!user) {
+    setVoucherMessage("Please log in to redeem a voucher")
+    setVoucherMessageType("error")
+    return
+  }
+
+  setValidatingVoucher(true)
+  setVoucherMessage("")
+  setVoucherMessageType("")
+
+  try {
+    // Find voucher by code
+    const vouchersRef = collection(db, "vouchers")
+    const q = query(vouchersRef, where("voucherCodes", "array-contains", voucherCode.toUpperCase()))
+    const querySnapshot = await getDocs(q)
+
+    if (querySnapshot.empty) {
+      setVoucherMessage("Invalid voucher code")
+      setVoucherMessageType("error")
+      setValidatingVoucher(false)
+      return
+    }
+
+    const voucherDoc = querySnapshot.docs[0]
+    const voucherData = { id: voucherDoc.id, ...voucherDoc.data() }
+
+    // Check if voucher is expired
+    if (voucherData.expiresAt && new Date(voucherData.expiresAt) < new Date()) {
+      setVoucherMessage("This voucher has expired")
+      setVoucherMessageType("error")
+      setValidatingVoucher(false)
+      return
+    }
+
+    // Check if voucher is still active
+    if (voucherData.status !== "active") {
+      setVoucherMessage("This voucher is no longer active")
+      setVoucherMessageType("error")
+      setValidatingVoucher(false)
+      return
+    }
+
+    // Check if there are remaining seats
+    if (voucherData.remainingSeats <= 0) {
+      setVoucherMessage("All seats for this voucher have been redeemed")
+      setVoucherMessageType("error")
+      setValidatingVoucher(false)
+      return
+    }
+
+    // Check if this user has already redeemed a seat from this voucher
+    const alreadyRedeemed = voucherData.redeemedSeats?.some(
+      seat => seat.userId === user.uid
+    )
+
+    if (alreadyRedeemed) {
+      setVoucherMessage("You have already redeemed a seat from this voucher")
+      setVoucherMessageType("error")
+      setValidatingVoucher(false)
+      return
+    }
+
+    // Check if this specific code has been used
+    const codeRedeemed = voucherData.redeemedSeats?.some(
+      seat => seat.code === voucherCode.toUpperCase()
+    )
+
+    if (codeRedeemed) {
+      setVoucherMessage("This voucher code has already been used")
+      setVoucherMessageType("error")
+      setValidatingVoucher(false)
+      return
+    }
+
+    // Map the plan name from voucher to match your subscription plans
+    // The voucher planName should be one of: "Freemium", "Standard", "Premium", "Enterprise"
+    const planName = voucherData.planName || "Premium"
+    
+    // Verify that this plan exists in your plans configuration
+    const planExists = Object.values(plans).some(p => p.name === planName)
+    
+    if (!planExists) {
+      console.error("Plan not found:", planName)
+      setVoucherMessage(`Invalid plan: ${planName}`)
+      setVoucherMessageType("error")
+      setValidatingVoucher(false)
+      return
+    }
+
+    // Voucher is valid
+    setVoucherMessage(`✅ Voucher valid! ${voucherData.remainingSeats} seat(s) remaining.`)
+    setVoucherMessageType("success")
+    setAppliedVoucher({
+      id: voucherDoc.id,
+      code: voucherCode.toUpperCase(),
+      planName: planName, // This will be "Freemium", "Standard", "Premium", or "Enterprise"
+      remainingSeats: voucherData.remainingSeats
+    })
+
+  } catch (error) {
+    console.error('Voucher validation error:', error)
+    setVoucherMessage("Error validating voucher. Please try again.")
+    setVoucherMessageType("error")
+  } finally {
+    setValidatingVoucher(false)
+  }
+}
+
+// Redeem voucher
+const redeemVoucher = async () => {
+  if (!appliedVoucher) return
+
+  const auth = getAuth()
+  const user = auth.currentUser
+
+  if (!user) {
+    setVoucherMessage("Please log in to redeem voucher")
+    setVoucherMessageType("error")
+    return
+  }
+
+  setValidatingVoucher(true)
+
+  try {
+    const voucherRef = doc(db, "vouchers", appliedVoucher.id)
+    const voucherDoc = await getDoc(voucherRef)
+    
+    if (!voucherDoc.exists()) {
+      setVoucherMessage("Voucher not found")
+      setVoucherMessageType("error")
+      setAppliedVoucher(null)
+      setValidatingVoucher(false)
+      return
+    }
+
+    const voucherData = voucherDoc.data()
+
+    // Double-check remaining seats
+    if (voucherData.remainingSeats <= 0) {
+      setVoucherMessage("No seats remaining for this voucher")
+      setVoucherMessageType("error")
+      setAppliedVoucher(null)
+      setValidatingVoucher(false)
+      return
+    }
+
+    console.log("🎫 Redeeming voucher for plan:", appliedVoucher.planName)
+
+    // Record the redemption
+    const redemptionData = {
+      voucherId: appliedVoucher.id,
+      voucherCode: appliedVoucher.code,
+      userId: user.uid,
+      userEmail: user.email,
+      userName: user.displayName || 'Valued Customer',
+      planName: appliedVoucher.planName,
+      redeemedAt: new Date().toISOString()
+    }
+
+    await addDoc(collection(db, "voucherRedemptions"), redemptionData)
+
+    // Update voucher document
+    const updatedRedeemedSeats = [
+      ...(voucherData.redeemedSeats || []),
+      {
+        userId: user.uid,
+        userEmail: user.email,
+        code: appliedVoucher.code,
+        redeemedAt: new Date().toISOString()
+      }
+    ]
+
+    await updateDoc(voucherRef, {
+      remainingSeats: voucherData.remainingSeats - 1,
+      redeemedSeats: updatedRedeemedSeats,
+      updatedAt: new Date().toISOString()
+    })
+
+    // Update user's subscription status with the CORRECT plan name
+    const userRef = doc(db, "users", user.uid)
+    const userDoc = await getDoc(userRef)
+
+    const subscriptionData = {
+      currentSubscription: {
+        plan: appliedVoucher.planName, // This will be "Premium", "Standard", etc.
+        status: "Success",
+        amount: 0, // Voucher = free
+        cycle: "monthly",
+        source: "voucher",
+        voucherId: appliedVoucher.id,
+        voucherCode: appliedVoucher.code,
+        lastUpdated: new Date().toISOString(),
+        isTrialPeriod: false,
+        autoRenew: false
+      }
+    }
+
+    console.log("💾 Updating user subscription to:", subscriptionData)
+
+    if (userDoc.exists()) {
+      await updateDoc(userRef, subscriptionData)
+    } else {
+      await setDoc(userRef, subscriptionData)
+    }
+
+    // Create subscription record
+    const subscriptionRecord = {
+      id: uuidv4(),
+      userId: user.uid,
+      userEmail: user.email,
+      userName: user.displayName || 'Valued Customer',
+      plan: appliedVoucher.planName,
+      cycle: "monthly",
+      amount: 0,
+      status: "Success",
+      source: "voucher",
+      voucherId: appliedVoucher.id,
+      voucherCode: appliedVoucher.code,
+      createdAt: new Date().toISOString(),
+      autoRenew: false
+    }
+
+    await addDoc(collection(db, "subscriptions"), subscriptionRecord)
+
+    // Update local state
+    const newSubscription = {
+      id: `user_${user.uid}`,
+      plan: appliedVoucher.planName,
+      status: "Success",
+      amount: 0,
+      cycle: "monthly",
+      createdAt: new Date().toISOString(),
+      userId: user.uid,
+      autoRenew: false,
+      source: "voucher",
+      voucherId: appliedVoucher.id,
+      voucherCode: appliedVoucher.code
+    }
+
+    setCurrentSubscription(newSubscription)
+    setIsExistingUser(true)
+
+    // Show success message
+    setVoucherMessage(`✅ Success! You are now subscribed to ${appliedVoucher.planName} plan via voucher.`)
+    setVoucherMessageType("success")
+    
+    // Clear voucher input
+    setAppliedVoucher(null)
+    setVoucherCode("")
+    
+    // Close voucher section after 3 seconds
+    setTimeout(() => {
+      setShowVoucherInput(false)
+      setVoucherMessage("")
+    }, 3000)
+
+    // Reload subscription data
+    setTimeout(() => {
+      loadUserSubscription(user.uid)
+    }, 1000)
+
+  } catch (error) {
+    console.error('Voucher redemption error:', error)
+    setVoucherMessage("Error redeeming voucher. Please try again.")
+    setVoucherMessageType("error")
+  } finally {
+    setValidatingVoucher(false)
+  }
+}
+
+// Clear voucher
+const clearVoucher = () => {
+  setAppliedVoucher(null)
+  setVoucherCode("")
+  setVoucherMessage("")
+  setVoucherMessageType("")
+}
+
+  // Billing cycle toggle component
   const BillingCycleToggle = () => (
     <div style={styles.billingToggleContainer}>
       <span style={{ color: colors.mediumBrown, fontWeight: 600, marginRight: "1rem" }}>Billing:</span>
@@ -582,7 +1064,7 @@ const ReusableSubscription = ({
     }
   }
 
-  // FRONTEND-ONLY: Handle payment with mock processing
+  // Handle payment with mock processing
   const handlePay = async () => {
     console.log("Starting payment process for plan:", selectedPlan)
 
@@ -734,7 +1216,7 @@ const ReusableSubscription = ({
     }
   }
 
-  // FRONTEND-ONLY: Handle add-on purchase with mock payment
+  // Handle add-on purchase with mock payment
   const handleAddOnClick = (addOn) => {
     setSelectedAddOn(addOn)
     setShowAddOnModal(true)
@@ -790,24 +1272,6 @@ const ReusableSubscription = ({
     } finally {
       setPaymentProcessing(false)
     }
-  }
-
-  // Handle checkout completion (simplified for frontend)
-  const handleCheckoutCompleted = async (event) => {
-    console.log("🎉 Payment completed:", event)
-    // This is now handled in handlePay and handleAddOnPayment
-  }
-
-  const handleCheckoutCancelled = () => {
-    console.log("Payment cancelled")
-    setShowCheckout(false)
-    alert("Payment cancelled")
-  }
-
-  const handleCheckoutExpired = () => {
-    console.log("Payment expired")
-    setShowCheckout(false)
-    alert("Payment session expired. Please try again.")
   }
 
   // Enhanced user data loading
@@ -880,6 +1344,128 @@ const ReusableSubscription = ({
           </small>
         </div>
 
+        {/* VOUCHER REDEMPTION SECTION */}
+        <div 
+          style={styles.voucherToggle}
+          onClick={() => setShowVoucherInput(!showVoucherInput)}
+        >
+          <div style={styles.voucherToggleLeft}>
+            <div style={styles.voucherIcon}>
+              <Ticket size={20} />
+            </div>
+            <span style={styles.voucherToggleText}>
+              Have a voucher code? Click here to redeem
+            </span>
+          </div>
+          <span style={styles.voucherToggleArrow}>
+            {showVoucherInput ? "▼" : "▶"}
+          </span>
+        </div>
+
+        {showVoucherInput && (
+          <div style={styles.voucherContent}>
+            <h3 style={styles.voucherTitle}>
+              <Award size={20} color={colors.accentGold} />
+              Redeem Your Voucher Code
+            </h3>
+
+            {!appliedVoucher ? (
+              <>
+                <div style={styles.voucherInputContainer}>
+                  <input
+                    type="text"
+                    style={styles.voucherInput}
+                    placeholder="Enter voucher code (e.g., ST061ABCDE)"
+                    value={voucherCode}
+                    onChange={(e) => setVoucherCode(e.target.value.toUpperCase())}
+                    disabled={validatingVoucher}
+                  />
+                  <button
+                    style={{
+                      ...styles.voucherButton,
+                      ...(validatingVoucher || !voucherCode.trim() ? styles.voucherButtonDisabled : {})
+                    }}
+                    onClick={validateVoucher}
+                    disabled={validatingVoucher || !voucherCode.trim()}
+                  >
+                    {validatingVoucher ? "Validating..." : "Apply"}
+                  </button>
+                </div>
+
+                {voucherMessage && (
+                  <div style={{
+                    ...styles.voucherMessage,
+                    ...(voucherMessageType === "success" ? styles.voucherMessageSuccess : {}),
+                    ...(voucherMessageType === "error" ? styles.voucherMessageError : {})
+                  }}>
+                    {voucherMessageType === "success" ? <CheckCircle size={16} style={{ marginRight: "0.5rem" }} /> : null}
+                    {voucherMessageType === "error" ? <AlertCircle size={16} style={{ marginRight: "0.5rem" }} /> : null}
+                    {voucherMessage}
+                  </div>
+                )}
+              </>
+            ) : (
+              <div style={styles.voucherAppliedCard}>
+                <div style={styles.voucherAppliedTitle}>
+                  <CheckCircle size={20} />
+                  Valid Voucher Applied
+                  <span style={styles.voucherPlanBadge}>{appliedVoucher.planName}</span>
+                </div>
+                
+                <div style={{ marginBottom: "1.5rem" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.5rem" }}>
+                    <span style={{ color: colors.mediumBrown }}>Voucher Code:</span>
+                    <span style={{ fontFamily: "'Courier New', monospace", fontWeight: "600", color: colors.darkBrown }}>
+                      {appliedVoucher.code}
+                    </span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between" }}>
+                    <span style={{ color: colors.mediumBrown }}>Remaining Seats:</span>
+                    <span style={{ fontWeight: "600", color: colors.darkBrown }}>
+                      {appliedVoucher.remainingSeats}
+                    </span>
+                  </div>
+                </div>
+
+                <button
+                  style={styles.voucherRedeemButton}
+                  onClick={redeemVoucher}
+                  disabled={validatingVoucher}
+                  onMouseEnter={(e) => {
+                    e.target.style.transform = "translateY(-2px)"
+                    e.target.style.boxShadow = `0 8px 20px ${colors.successGreen}66`
+                  }}
+                  onMouseLeave={(e) => {
+                    e.target.style.transform = "translateY(0)"
+                    e.target.style.boxShadow = "none"
+                  }}
+                >
+                  {validatingVoucher ? "Redeeming..." : "Redeem Voucher Now"}
+                </button>
+
+                <button
+                  style={{
+                    ...styles.voucherButton,
+                    background: "transparent",
+                    color: colors.mediumBrown,
+                    border: `2px solid ${colors.lightTan}`,
+                    marginTop: "0.5rem",
+                  }}
+                  onClick={clearVoucher}
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
+
+            <div style={styles.voucherInfoText}>
+              <span style={styles.voucherInfoHighlight}>📍 How to redeem:</span> Enter your voucher code above. 
+              Each code provides premium access for one user. After redemption, your account will be upgraded to the 
+              corresponding plan immediately.
+            </div>
+          </div>
+        )}
+
         {isExistingUser && currentSubscription ? (
           <>
             <h1 style={styles.pageTitle}>
@@ -895,6 +1481,19 @@ const ReusableSubscription = ({
               <div style={styles.subscriptionDetail}>
                 <span>Plan:</span>
                 <span style={{ fontWeight: 600 }}>{getCurrentPlanDisplayName()}</span>
+                {currentSubscription.source === "voucher" && (
+                  <span style={{ 
+                    marginLeft: "0.5rem", 
+                    padding: "0.2rem 0.5rem", 
+                    background: colors.accentGold,
+                    color: colors.lightText,
+                    borderRadius: "4px",
+                    fontSize: "0.7rem",
+                    fontWeight: "600"
+                  }}>
+                    VOUCHER
+                  </span>
+                )}
               </div>
               <div style={styles.subscriptionDetail}>
                 <span>Billing Cycle:</span>
@@ -911,7 +1510,7 @@ const ReusableSubscription = ({
                   {currentSubscription.amount === 0 && currentSubscription.isTrialPeriod
                     ? "FREE (Trial)"
                     : currentSubscription.amount === 0
-                      ? "Free"
+                      ? currentSubscription.source === "voucher" ? "FREE (Voucher)" : "Free"
                       : `R${getCurrentPlanAmount().toLocaleString()}`}
                 </span>
               </div>
