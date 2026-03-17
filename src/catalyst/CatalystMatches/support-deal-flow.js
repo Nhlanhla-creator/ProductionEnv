@@ -1,14 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Info } from "lucide-react";
 import { usePortfolio } from "../../context/PortfolioContext";
 
 // ─── Skeleton ─────────────────────────────────────────────────────────────────
 const SHIMMER_DELAYS = [
-  "animate-shimmer",    "animate-shimmer-d1", "animate-shimmer-d2",
+  "animate-shimmer", "animate-shimmer-d1", "animate-shimmer-d2",
   "animate-shimmer-d3", "animate-shimmer-d4", "animate-shimmer-d5",
-  "animate-shimmer",    "animate-shimmer-d1", "animate-shimmer-d2",
+  "animate-shimmer", "animate-shimmer-d1", "animate-shimmer-d2",
 ];
 
 const PipelineSkeleton = () => (
@@ -30,26 +30,55 @@ const PipelineSkeleton = () => (
 
 // ─── Stage definitions ────────────────────────────────────────────────────────
 const STAGES = [
-  { id: "initial",     name: "Matching",             description: "Total SMEs matched to this programme" },
-  { id: "application", name: "Application",          description: "Formal applications received" },
-  { id: "review",      name: "Evaluation",           description: "Applications currently under review" },
-  { id: "approved",    name: "Due Diligence",        description: "SMEs progressed to due diligence" },
-  { id: "supported",   name: "Support Approved",     description: "Applications with support approved" },
-  { id: "active",      name: "Active Support",       description: "SMEs actively receiving support" },
-  { id: "funding",     name: "Decision",             description: "Awaiting final funding decision" },
-  { id: "termsheet",   name: "Term Sheet",           description: "Term sheet issued" },
-  { id: "closed",      name: "Deal Closed",          description: "Deals successfully closed" },
-  { id: "rejected",    name: "Withdrawn / Declined", description: "Applications withdrawn or declined" },
+  { id: "initial", name: "Matching", description: "Total SMEs matched to this programme" },
+  { id: "application", name: "Application", description: "Formal applications received" },
+  { id: "review", name: "Evaluation", description: "Applications currently under review" },
+  { id: "approved", name: "Due Diligence", description: "SMEs progressed to due diligence" },
+  { id: "supported", name: "Support Approved", description: "Applications with support approved" },
+  { id: "active", name: "Active Support", description: "SMEs actively receiving support" },
+  { id: "funding", name: "Decision", description: "Awaiting final funding decision" },
+  { id: "termsheet", name: "Term Sheet", description: "Term sheet issued" },
+  { id: "closed", name: "Deal Closed", description: "Deals successfully closed" },
+  { id: "rejected", name: "Withdrawn / Declined", description: "Applications withdrawn or declined" },
 ];
 
 // ─── Component ────────────────────────────────────────────────────────────────
-export function SupportDealFlowPipeline({ onStageClick }) {
-  const { metrics, enriched, loading } = usePortfolio();
-  const [hoveredStage, setHoveredStage] = useState(null);
-  const counts = metrics?.pipeline || {};
+export function SupportDealFlowPipeline({ onStageClick, smeOverrides = [] }) {
+  const { enriched, loading } = usePortfolio()
+  const [hoveredStage, setHoveredStage] = useState(null)
+
+  // Merge context data with any locally-updated records
+  const mergedEnriched = useMemo(() => {
+    if (!smeOverrides.length) return enriched
+    const overrideMap = new Map(smeOverrides.map(o => [`${o.smeId}_${o.programIndex}`, o]))
+    return enriched.map(e => overrideMap.get(`${e.smeId}_${e.programIndex}`) || e)
+  }, [enriched, smeOverrides])
+
+  const counts = useMemo(() => {
+    const stageMapping = {
+      initial: () => true,
+      application: (s) => ["new application", "application sent"].includes(s),
+      review: (s) => ["under review", "in review", "evaluation"].includes(s),
+      approved: (s) => ["due diligence", "shortlisted"].includes(s),
+      supported: (s) => ["support approved"].includes(s),
+      funding: (s) => ["decision"].includes(s),
+      active: (s) => ["active support"].includes(s),
+      termsheet: (s) => ["term sheet"].includes(s),
+      closed: (s) => ["deal closed"].includes(s),
+      rejected: (s) => ["rejected", "withdrawn", "declined", "support declined"].includes(s),
+    }
+    const result = {}
+    for (const [id, test] of Object.entries(stageMapping)) {
+      result[id] = mergedEnriched.filter(e => {  // <-- was `enriched`, now `mergedEnriched`
+        const stage = (e.pipelineStage || e.status || "").toLowerCase()
+        return test(stage)
+      }).length
+    }
+    return result
+  }, [mergedEnriched])
 
   const handleStageClick = (stage) => {
-    console.log("Matches rendered", enriched, metrics);
+    console.log("Matches rendered", enriched);
     if (!stage?.id) return;
     if (onStageClick) onStageClick(stage.id === "all" ? null : stage.id);
   };

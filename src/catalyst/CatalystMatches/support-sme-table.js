@@ -9,6 +9,7 @@ import { storage } from "../../firebaseConfig"
 import { DayPicker } from "react-day-picker"
 import "react-day-picker/dist/style.css"
 import { usePortfolio } from "../../context/PortfolioContext"
+import SMEDetailsModal from "./SMEDetailsModal"
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const formatLabel = (value) => {
@@ -27,23 +28,23 @@ const getScoreColor = (score) => {
 }
 
 const STATUS_TYPES = {
-  "New Application":  { bg: "bg-blue-100",  text: "text-blue-700" },
-  "Under Review":     { bg: "bg-orange-100", text: "text-orange-700" },
-  "In Review":        { bg: "bg-purple-100", text: "text-purple-700" },
-  Shortlisted:        { bg: "bg-green-100",  text: "text-green-700" },
-  "Funding Approved": { bg: "bg-green-100",  text: "text-[#2d5016]" },
-  Rejected:           { bg: "bg-red-100",    text: "text-red-700" },
+  "New Application": { bg: "bg-blue-100", text: "text-blue-700" },
+  "Under Review": { bg: "bg-orange-100", text: "text-orange-700" },
+  "In Review": { bg: "bg-purple-100", text: "text-purple-700" },
+  Shortlisted: { bg: "bg-green-100", text: "text-green-700" },
+  "Funding Approved": { bg: "bg-green-100", text: "text-[#2d5016]" },
+  Rejected: { bg: "bg-red-100", text: "text-red-700" },
 }
 const getStatusClasses = (status) => STATUS_TYPES[status] || { bg: "bg-gray-100", text: "text-gray-600" }
 
 const PIPELINE_STAGES = {
-  MATCH:              { label: "Match",            next: "Application Sent" },
+  "NEW APPLICATION": { label: "New Application", next: "Application Sent" },
   "APPLICATION SENT": { label: "Application Sent", next: "Evaluation" },
-  EVALUATION:         { label: "Evaluation",       next: "Due Diligence" },
-  "DUE DILIGENCE":    { label: "Due Diligence",    next: "Decision" },
-  DECISION:           { label: "Decision",          next: "Support Approved" },
+  EVALUATION: { label: "Evaluation", next: "Due Diligence" },
+  "DUE DILIGENCE": { label: "Due Diligence", next: "Decision" },
+  DECISION: { label: "Decision", next: "Support Approved" },
   "SUPPORT APPROVED": { label: "Support Approved", next: "Active Support" },
-  "ACTIVE SUPPORT":   { label: "Active Support",   next: "N/A" },
+  "ACTIVE SUPPORT": { label: "Active Support", next: "N/A" },
   "SUPPORT DECLINED": { label: "Support Declined", next: "N/A" },
 }
 const getNextStage = (stage) => {
@@ -90,7 +91,7 @@ const TableSkeleton = () => (
         <tr>
           {Array.from({ length: COLS }).map((_, i) => (
             <th key={i} className="py-1.5 px-0.5 bg-gradient-to-br from-[#4e2106] to-darkBrown border-b-2 border-r border-[#1a0c02]">
-              <div className={`h-2.5 rounded bg-white/20 ${["animate-shimmer-d1","animate-shimmer-d2","animate-shimmer-d3","animate-shimmer-d4","animate-shimmer-d5","animate-shimmer","animate-shimmer-d1","animate-shimmer-d2","animate-shimmer-d3","animate-shimmer-d4","animate-shimmer-d5","animate-shimmer","animate-shimmer-d1","animate-shimmer-d2"][i]} bg-shimmer-dark bg-shimmer`} />
+              <div className={`h-2.5 rounded bg-white/20 ${["animate-shimmer-d1", "animate-shimmer-d2", "animate-shimmer-d3", "animate-shimmer-d4", "animate-shimmer-d5", "animate-shimmer", "animate-shimmer-d1", "animate-shimmer-d2", "animate-shimmer-d3", "animate-shimmer-d4", "animate-shimmer-d5", "animate-shimmer", "animate-shimmer-d1", "animate-shimmer-d2"][i]} bg-shimmer-dark bg-shimmer`} />
             </th>
           ))}
         </tr>
@@ -100,9 +101,8 @@ const TableSkeleton = () => (
           <tr key={row} className="border-b border-lightTan">
             {Array.from({ length: COLS }).map((_, col) => (
               <td key={col} className="py-1.5 px-0.5 border-r border-lightTan align-top">
-                <div className={`h-3 rounded bg-shimmer-light bg-shimmer ${
-                  ["animate-shimmer","animate-shimmer-d1","animate-shimmer-d2","animate-shimmer-d3","animate-shimmer-d4","animate-shimmer-d5"][col % 6]
-                } ${col === 0 ? "w-3/4" : col % 3 === 0 ? "w-1/2" : "w-5/6"}`} />
+                <div className={`h-3 rounded bg-shimmer-light bg-shimmer ${["animate-shimmer", "animate-shimmer-d1", "animate-shimmer-d2", "animate-shimmer-d3", "animate-shimmer-d4", "animate-shimmer-d5"][col % 6]
+                  } ${col === 0 ? "w-3/4" : col % 3 === 0 ? "w-1/2" : "w-5/6"}`} />
               </td>
             ))}
           </tr>
@@ -124,7 +124,7 @@ const BTN_PRIMARY = "px-6 py-3 bg-mediumBrown text-white border-none rounded-lg 
 const BTN_GHOST = "px-6 py-3 bg-transparent text-gray-500 border-2 border-gray-300 rounded-lg cursor-pointer font-medium text-base hover:border-gray-400 transition-colors"
 
 // ─── Component ────────────────────────────────────────────────────────────────
-export function SupportSMETable({ filters, stageFilter, onSMEsLoaded }) {
+export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOverride }) {
   const [smes, setSmes] = useState([])
   const [selectedSME, setSelectedSME] = useState(null)
   const [modalType, setModalType] = useState(null)
@@ -147,11 +147,13 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded }) {
   const [timeZone, setTimeZone] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone)
   const [showMatchBreakdown, setShowMatchBreakdown] = useState(false)
   const [selectedAcceleratorForBreakdown, setSelectedAcceleratorForBreakdown] = useState(null)
+  const [showSMEDetails, setShowSMEDetails] = useState(false)
+  const [selectedSMEDetails, setSelectedSMEDetails] = useState(null)
   const [bigScoreData, setBigScoreData] = useState({
-    pis:        { score: 0, color: "#4E342E" },
+    pis: { score: 0, color: "#4E342E" },
     compliance: { score: 0, color: "#8D6E63" },
     legitimacy: { score: 0, color: "#5D4037" },
-    fundability:{ score: 0, color: "#3E2723" },
+    fundability: { score: 0, color: "#3E2723" },
     leadership: { score: 0, color: "#4E342E" },
   })
   const [showFilters, setShowFilters] = useState(false)
@@ -162,23 +164,25 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded }) {
   const [supportAgreementStatuses, setSupportAgreementStatuses] = useState({})
 
   const applicationStages = [
-    { id: "evaluation",      name: "Evaluation",      color: "#3b82f6" },
-    { id: "due_diligence",   name: "Due Diligence",   color: "#8b5cf6" },
-    { id: "decision",        name: "Decision",         color: "#f59e0b" },
-    { id: "support_approved",name: "Support Approved", color: "#06b6d4" },
-    { id: "active_support",  name: "Active Support",  color: "#10b981" },
-    { id: "support_declined",name: "Support Declined", color: "#ef4444" },
+    { id: "new_application", name: "New Application", color: "#6366f1" },
+    { id: "application_sent", name: "Application Sent", color: "#3b82f6" },
+    { id: "evaluation", name: "Evaluation", color: "#3b82f6" },
+    { id: "due_diligence", name: "Due Diligence", color: "#8b5cf6" },
+    { id: "decision", name: "Decision", color: "#f59e0b" },
+    { id: "support_approved", name: "Support Approved", color: "#06b6d4" },
+    { id: "active_support", name: "Active Support", color: "#10b981" },
+    { id: "support_declined", name: "Support Declined", color: "#ef4444" },
   ]
 
   const getStageFields = (stageName) => {
     const base = { showMessage: true, showMeeting: true, showTermSheet: false, showAvailability: false }
     switch (stageName) {
-      case "Evaluation":      return { ...base, showAvailability: true }
-      case "Due Diligence":   return { ...base, showAvailability: true }
-      case "Decision":        return { ...base, showAvailability: true }
-      case "Support Approved":return { ...base, showTermSheet: true, showAvailability: true }
-      case "Active Support":  return { ...base, showTermSheet: true, showAvailability: false }
-      case "Support Declined":return { ...base, showMeeting: false, showAvailability: false }
+      case "Evaluation": return { ...base, showAvailability: true }
+      case "Due Diligence": return { ...base, showAvailability: true }
+      case "Decision": return { ...base, showAvailability: true }
+      case "Support Approved": return { ...base, showTermSheet: true, showAvailability: true }
+      case "Active Support": return { ...base, showTermSheet: true, showAvailability: false }
+      case "Support Declined": return { ...base, showMeeting: false, showAvailability: false }
       default: return base
     }
   }
@@ -247,59 +251,59 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded }) {
 
   // ── Context data ───────────────────────────────────────────────────────────
   const { enriched, catalystFormData, loading } = usePortfolio()
-  
+
   useEffect(() => {
     const mapRow = (a) => {
-      const entity  = a.profile?.entityOverview || {}
-      const funding = a.profile?.useOfFunds    || {}
+      const entity = a.profile?.entityOverview || {}
+      const funding = a.profile?.useOfFunds || {}
       const multiProgram = enriched.filter((e) => e.smeId === a.smeId).length > 1
       return {
-        file_id:         a.docId,
-        id:              a.smeId,
-        programIndex:    a.programIndex,
-        name:            (entity.registeredName || a.smeName || "N/A") +
-                         (multiProgram ? ` (Program ${parseInt(a.programIndex) + 1})` : ""),
-        location:        entity.location || a.location || "N/A",
-        sector:          (entity.economicSectors || []).join(", ") || a.sector || "N/A",
-        fundingStage:    entity.operationStage   || a.fundingStage    || "-",
+        file_id: a.docId,
+        id: a.smeId,
+        programIndex: a.programIndex,
+        name: (entity.registeredName || a.smeName || "N/A") +
+          (multiProgram ? ` (Program ${parseInt(a.programIndex) + 1})` : ""),
+        location: entity.location || a.location || "N/A",
+        sector: (entity.economicSectors || []).join(", ") || a.sector || "N/A",
+        fundingStage: entity.operationStage || a.fundingStage || "-",
         fundingRequired: funding.amountRequested || a.fundingRequired || "-",
-        equityOffered:   funding.equityType      || a.equityOffered   || "-",
-        guarantees:      a.guarantees            || "-",
-        supportRequired: a.supportRequired       || "-",
-        servicesRequired:a.servicesRequired      || "-",
+        equityOffered: funding.equityType || a.equityOffered || "-",
+        guarantees: a.guarantees || "-",
+        supportRequired: a.supportRequired || "-",
+        servicesRequired: a.servicesRequired || "-",
         applicationDate: a.applicationDate
           ? new Date(a.applicationDate).toLocaleDateString()
           : a.createdAt?.seconds
             ? new Date(a.createdAt.seconds * 1000).toLocaleDateString()
             : "-",
         matchPercentage: a.matchPercentage || 0,
-        bigScore:        a.bigScore        || 0,
-        compliance:      a.compliance      || 0,
-        legitimacy:      a.legitimacy      || 0,
-        fundability:     a.fundability     || 0,
-        pis:             a.pis             || 0,
-        currentStatus:   a.status          || a.pipelineStage || "New Application",
-        pipelineStage:   a.pipelineStage   || a.status        || "New Application",
-        nextStage:       a.nextStage       || "Evaluation",
-        action:          "Application Received",
-        availableDates:  (a.availableDates || []).map((av) => ({ ...av, date: new Date(av.date) })),
+        bigScore: a.bigScore || 0,
+        compliance: a.compliance || 0,
+        legitimacy: a.legitimacy || 0,
+        fundability: a.fundability || 0,
+        pis: a.pis || 0,
+        currentStatus: a.status || a.pipelineStage || "New Application",
+        pipelineStage: a.pipelineStage || a.status || "New Application",
+        nextStage: a.nextStage || "Evaluation",
+        action: "Application Received",
+        availableDates: (a.availableDates || []).map((av) => ({ ...av, date: new Date(av.date) })),
         acceleratorName: a.acceleratorName || "N/A",
-        programName:     a.programName     || `Program ${parseInt(a.programIndex) + 1}`,
+        programName: a.programName || `Program ${parseInt(a.programIndex) + 1}`,
       }
     }
     const mapped = enriched.map(mapRow)
     if (!stageFilter) { setSmes(mapped); onSMEsLoaded?.(mapped); return }
     const stageMapping = {
-      initial:     ["new application", "application sent", "match", "matched", "matching"],
+      initial: ["new application", "application sent", "match", "matched", "matching"],
       application: ["new application", "application sent"],
-      review:      ["under review", "in review", "evaluation"],
-      approved:    ["due diligence", "shortlisted"],
-      supported:   ["support approved"],
-      funding:     ["funding approved", "decision"],
-      active:      ["active support"],
-      termsheet:   ["term sheet"],
-      closed:      ["deal closed"],
-      rejected:    ["rejected", "withdrawn", "declined", "support declined"],
+      review: ["under review", "in review", "evaluation"],
+      approved: ["due diligence", "shortlisted"],
+      supported: ["support approved"],
+      funding: ["decision"],
+      active: ["active support"],
+      termsheet: ["term sheet"],
+      closed: ["deal closed"],
+      rejected: ["rejected", "withdrawn", "declined", "support declined"],
     }
     const allOtherStages = [
       ...stageMapping.application,
@@ -331,65 +335,65 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded }) {
   }, [enriched, stageFilter])
 
   useEffect(() => {
-  const fetchSupportAgreementStatuses = async () => {
-    const statusMap = {}
-    for (const sme of smes) {
-      if (sme.file_id) {
-        try {
-          const docSnap = await getDoc(doc(db, "catalystApplications", sme.file_id))
-          if (docSnap.exists()) {
-            const data = docSnap.data()
-            if (data.supportAgreementStatus) {
-              statusMap[sme.file_id] = data.supportAgreementStatus
+    const fetchSupportAgreementStatuses = async () => {
+      const statusMap = {}
+      for (const sme of smes) {
+        if (sme.file_id) {
+          try {
+            const docSnap = await getDoc(doc(db, "catalystApplications", sme.file_id))
+            if (docSnap.exists()) {
+              const data = docSnap.data()
+              if (data.supportAgreementStatus) {
+                statusMap[sme.file_id] = data.supportAgreementStatus
+              }
             }
+          } catch (error) {
+            console.error("Error fetching support agreement status:", error)
           }
-        } catch (error) {
-          console.error("Error fetching support agreement status:", error)
         }
       }
+      setSupportAgreementStatuses(statusMap)
     }
-    setSupportAgreementStatuses(statusMap)
+
+    if (smes.length > 0) {
+      fetchSupportAgreementStatuses()
+    }
+  }, [smes])
+
+  const renderSupportAgreementStatus = (sme) => {
+    const currentStage = updatedStages[`${sme.id}_${sme.programIndex}`] || sme.pipelineStage
+    if (currentStage !== "Support Approved") return null
+
+    const status = supportAgreementStatuses[sme.file_id]
+    if (!status) return (
+      <span title="Awaiting SME response" style={{
+        display: "inline-flex", alignItems: "center", justifyContent: "center",
+        width: "16px", height: "16px", borderRadius: "50%",
+        backgroundColor: "#9e9e9e", color: "white", fontSize: "10px",
+        flexShrink: 0, marginLeft: "4px"
+      }}>?</span>
+    )
+
+    if (status === "accepted") return (
+      <span title="Support Agreement Accepted" style={{
+        display: "inline-flex", alignItems: "center", justifyContent: "center",
+        width: "16px", height: "16px", borderRadius: "50%",
+        backgroundColor: "#4caf50", color: "white", fontSize: "10px", fontWeight: "bold",
+        flexShrink: 0, marginLeft: "4px"
+      }}>✓</span>
+    )
+
+    if (status === "declined") return (
+      <span title="Support Agreement Declined" style={{
+        display: "inline-flex", alignItems: "center", justifyContent: "center",
+        width: "16px", height: "16px", borderRadius: "50%",
+        backgroundColor: "#f44336", color: "white", fontSize: "10px", fontWeight: "bold",
+        flexShrink: 0, marginLeft: "4px"
+      }}>✗</span>
+    )
+
+    return null
   }
-
-  if (smes.length > 0) {
-    fetchSupportAgreementStatuses()
-  }
-}, [smes])
-
-const renderSupportAgreementStatus = (sme) => {
-  const currentStage = updatedStages[`${sme.id}_${sme.programIndex}`] || sme.pipelineStage
-  if (currentStage !== "Support Approved") return null
-
-  const status = supportAgreementStatuses[sme.file_id]
-  if (!status) return (
-    <span title="Awaiting SME response" style={{
-      display: "inline-flex", alignItems: "center", justifyContent: "center",
-      width: "16px", height: "16px", borderRadius: "50%",
-      backgroundColor: "#9e9e9e", color: "white", fontSize: "10px",
-      flexShrink: 0, marginLeft: "4px"
-    }}>?</span>
-  )
-
-  if (status === "accepted") return (
-    <span title="Support Agreement Accepted" style={{
-      display: "inline-flex", alignItems: "center", justifyContent: "center",
-      width: "16px", height: "16px", borderRadius: "50%",
-      backgroundColor: "#4caf50", color: "white", fontSize: "10px", fontWeight: "bold",
-      flexShrink: 0, marginLeft: "4px"
-    }}>✓</span>
-  )
-
-  if (status === "declined") return (
-    <span title="Support Agreement Declined" style={{
-      display: "inline-flex", alignItems: "center", justifyContent: "center",
-      width: "16px", height: "16px", borderRadius: "50%",
-      backgroundColor: "#f44336", color: "white", fontSize: "10px", fontWeight: "bold",
-      flexShrink: 0, marginLeft: "4px"
-    }}>✗</span>
-  )
-
-  return null
-}
   // ── Filter helpers ─────────────────────────────────────────────────────────
   const handleFilterChange = (key, value) => setLocalFilters((prev) => ({ ...prev, [key]: value }))
   const clearFilters = () => setLocalFilters({ location: "", matchScore: 50, minFunding: "", maxFunding: "", instruments: [], stages: [], sectors: [], supportTypes: [], smeType: "", sortBy: "" })
@@ -403,7 +407,7 @@ const renderSupportAgreementStatus = (sme) => {
     if (stageFields.showMessage && !message.trim()) errors.message = "Please provide a message"
     if (stageFields.showMeeting) {
       if (!meetingLocation.trim()) errors.meetingLocation = "Please provide a meeting location"
-      if (!meetingPurpose.trim())  errors.meetingPurpose  = "Please provide a meeting purpose"
+      if (!meetingPurpose.trim()) errors.meetingPurpose = "Please provide a meeting purpose"
     }
     if (stageFields.showAvailability && !availabilities.length) errors.availabilities = "Please select at least one available date"
     if (Object.keys(errors).length > 0) { setFormErrors(errors); return }
@@ -411,16 +415,16 @@ const renderSupportAgreementStatus = (sme) => {
     try {
       const user = auth.currentUser
       if (!user) throw new Error("User not authenticated")
-      const catalystId  = user.uid
-      const smeId       = selectedSMEForStage.id
-      const programIndex= selectedSMEForStage.programIndex || "0"
-      const documentId  = `${catalystId}_${smeId}_${programIndex}`
+      const catalystId = user.uid
+      const smeId = selectedSMEForStage.id
+      const programIndex = selectedSMEForStage.programIndex || "0"
+      const documentId = `${catalystId}_${smeId}_${programIndex}`
       const documentsmeId = `${smeId}_${catalystId}_${programIndex}`
       let attachmentUrl = null
       if (termSheetFile) {
         const storageRef = ref(storage, `support_termsheets/${smeId}/${termSheetFile.name}`)
-        const snapshot   = await uploadBytes(storageRef, termSheetFile)
-        attachmentUrl    = await getDownloadURL(snapshot.ref)
+        const snapshot = await uploadBytes(storageRef, termSheetFile)
+        attachmentUrl = await getDownloadURL(snapshot.ref)
       }
       const computedNextStage = getNextStage(nextStage)
       const updateData = {
@@ -434,8 +438,8 @@ const renderSupportAgreementStatus = (sme) => {
           date: a.date.toISOString(), timeSlots: a.timeSlots, timeZone: a.timeZone, status: a.status,
         }))
       }
-      const docRef     = doc(db, "catalystApplications", documentId)
-      const docSnapshot= await getDoc(docRef)
+      const docRef = doc(db, "catalystApplications", documentId)
+      const docSnapshot = await getDoc(docRef)
       if (!docSnapshot.exists()) throw new Error(`Document ${documentId} does not exist`)
       await updateDoc(docRef, updateData)
       try {
@@ -456,64 +460,81 @@ const renderSupportAgreementStatus = (sme) => {
       setSmes((prev) => {
         const next = prev.map((s) =>
           s.id === smeId && s.programIndex === programIndex
-            ? { ...s, status: nextStage, nextStage: computedNextStage, pipelineStage: nextStage,
-                ...(message && { lastMessage: message }),
-                ...(stageFields.showMeeting && { meetingDetails: { time: meetingTime, location: meetingLocation, purpose: meetingPurpose } }),
-                ...(updateData.availableDates && { availableDates: updateData.availableDates }) }
+            ? {
+              ...s, status: nextStage, nextStage: computedNextStage, pipelineStage: nextStage,
+              ...(message && { lastMessage: message }),
+              ...(stageFields.showMeeting && { meetingDetails: { time: meetingTime, location: meetingLocation, purpose: meetingPurpose } }),
+              ...(updateData.availableDates && { availableDates: updateData.availableDates })
+            }
             : s
         )
         onSMEsLoaded?.(next)
         return next
       })
       setUpdatedStages((prev) => ({ ...prev, [`${smeId}_${programIndex}`]: nextStage }))
+      setSmes((current) => {
+        onStageOverride?.(
+          current.map(s => ({
+            smeId: s.id,
+            programIndex: s.programIndex,
+            pipelineStage: s.id === smeId && s.programIndex === programIndex
+              ? nextStage
+              : (s.pipelineStage || s.currentStatus),
+            status: s.id === smeId && s.programIndex === programIndex
+              ? nextStage
+              : (s.currentStatus || s.pipelineStage),
+          }))
+        )
+        return current
+      })
       setNotification({ type: "success", message: `Application status updated to ${nextStage} successfully` })
       setShowStageModal(false)
       resetStageModal()
       const subject = `Update: ${nextStage} Stage for Your Application`
       // Replace the content building section with this more detailed version:
-let content = `Dear ${selectedSMEForStage.name},\n\nWe are pleased to inform you that your application has progressed to the "${nextStage}" stage.\n\n${message}`
+      let content = `Dear ${selectedSMEForStage.name},\n\nWe are pleased to inform you that your application has progressed to the "${nextStage}" stage.\n\n${message}`
 
-if (currentStageFields.showMeeting && meetingLocation && meetingPurpose) {
-  content += `\n\nMeeting Details:\n- Location: ${meetingLocation}\n- Purpose: ${meetingPurpose}`
-}
+      if (currentStageFields.showMeeting && meetingLocation && meetingPurpose) {
+        content += `\n\nMeeting Details:\n- Location: ${meetingLocation}\n- Purpose: ${meetingPurpose}`
+      }
 
-if (attachmentUrl) {
-  content += `\n\nSupport Agreement Document:\nPlease review the attached support agreement document using the link below:\n${attachmentUrl}\n\nKindly review and respond with your acceptance or decline of the agreement terms.`
-}
+      if (attachmentUrl) {
+        content += `\n\nSupport Agreement Document:\nPlease review the attached support agreement document using the link below:\n${attachmentUrl}\n\nKindly review and respond with your acceptance or decline of the agreement terms.`
+      }
 
-if (currentStageFields.showAvailability && availabilities.length > 0) {
-  content += `\n\nAvailable Meeting Times:\n` + 
-    availabilities.map((a, i) => {
-      const d = a.date.toLocaleDateString("en-US", { 
-        weekday: "long", year: "numeric", month: "long", day: "numeric" 
-      })
-      const t = a.timeSlots?.[0] 
-        ? `${a.timeSlots[0].start} - ${a.timeSlots[0].end} ${a.timeZone}` 
-        : "Time not specified"
-      return `${i + 1}. ${d} (${t})`
-    }).join("\n")
-  content += `\n\nPlease reply with your preferred meeting time from the above options.`
-}
+      if (currentStageFields.showAvailability && availabilities.length > 0) {
+        content += `\n\nAvailable Meeting Times:\n` +
+          availabilities.map((a, i) => {
+            const d = a.date.toLocaleDateString("en-US", {
+              weekday: "long", year: "numeric", month: "long", day: "numeric"
+            })
+            const t = a.timeSlots?.[0]
+              ? `${a.timeSlots[0].start} - ${a.timeSlots[0].end} ${a.timeZone}`
+              : "Time not specified"
+            return `${i + 1}. ${d} (${t})`
+          }).join("\n")
+        content += `\n\nPlease reply with your preferred meeting time from the above options.`
+      }
 
-content += `\n\nBest regards,\nSupport Team`
-    const messagePayload = {
-  to: smeId,
-  from: catalystId,
-  subject: `Update: ${nextStage} Stage for Your Application`,
-  content,
-  date: new Date().toISOString(),
-  read: false,
-  type: "inbox",
-  applicationId: documentId,
-  attachments: attachmentUrl ? [attachmentUrl] : [],
-  ...(attachmentUrl && { documentUrl: attachmentUrl, documentType: "support_agreement" }),
-  ...(updateData.availableDates && { availableDates: updateData.availableDates }),
-}
+      content += `\n\nBest regards,\nSupport Team`
+      const messagePayload = {
+        to: smeId,
+        from: catalystId,
+        subject: `Update: ${nextStage} Stage for Your Application`,
+        content,
+        date: new Date().toISOString(),
+        read: false,
+        type: "inbox",
+        applicationId: documentId,
+        attachments: attachmentUrl ? [attachmentUrl] : [],
+        ...(attachmentUrl && { documentUrl: attachmentUrl, documentType: "support_agreement" }),
+        ...(updateData.availableDates && { availableDates: updateData.availableDates }),
+      }
 
-await Promise.all([
-  addDoc(collection(db, "messages"), messagePayload),
-  addDoc(collection(db, "messages"), { ...messagePayload, read: true, type: "sent" }),
-])
+      await Promise.all([
+        addDoc(collection(db, "messages"), messagePayload),
+        addDoc(collection(db, "messages"), { ...messagePayload, read: true, type: "sent" }),
+      ])
     } catch (error) {
       console.error("Stage update error:", error)
       setNotification({ type: "error", message: `Failed to update status: ${error.message}` })
@@ -523,13 +544,16 @@ await Promise.all([
   }
 
   // ── Modal helpers ──────────────────────────────────────────────────────────
-  const handleViewDetails = (sme) => { setSelectedSME(sme); setModalType("view") }
+  const handleViewDetails = (sme) => {
+    setSelectedSMEDetails(sme)
+    setShowSMEDetails(true)
+  }
   const handleBigScoreClick = (sme) => {
     setBigScoreData({
-      compliance:  { score: sme.compliance  || 0, color: "#8D6E63" },
-      legitimacy:  { score: sme.legitimacy  || 0, color: "#5D4037" },
+      compliance: { score: sme.compliance || 0, color: "#8D6E63" },
+      legitimacy: { score: sme.legitimacy || 0, color: "#5D4037" },
       fundability: { score: sme.fundability || 0, color: "#3E2723" },
-      pis:         { score: sme.pis         || 0, color: "#4E342E" },
+      pis: { score: sme.pis || 0, color: "#4E342E" },
     })
     setSelectedSME(sme)
     setModalType("bigScore")
@@ -542,13 +566,13 @@ await Promise.all([
     const totalFields = 8
     let matched = 0
     const breakdown = {
-      fundingStage:     { score: 0, maxScore: 12.5, matched: false, description: "", details: {} },
-      ticketSize:       { score: 0, maxScore: 12.5, matched: false, description: "", details: {} },
-      geographicFit:    { score: 0, maxScore: 12.5, matched: false, description: "", details: {} },
-      sectorMatch:      { score: 0, maxScore: 12.5, matched: false, description: "", details: {} },
-      instrumentFit:    { score: 0, maxScore: 12.5, matched: false, description: "", details: {} },
-      supportMatch:     { score: 0, maxScore: 12.5, matched: false, description: "", details: {} },
-      legalEntityFit:   { score: 0, maxScore: 12.5, matched: false, description: "", details: {} },
+      fundingStage: { score: 0, maxScore: 12.5, matched: false, description: "", details: {} },
+      ticketSize: { score: 0, maxScore: 12.5, matched: false, description: "", details: {} },
+      geographicFit: { score: 0, maxScore: 12.5, matched: false, description: "", details: {} },
+      sectorMatch: { score: 0, maxScore: 12.5, matched: false, description: "", details: {} },
+      instrumentFit: { score: 0, maxScore: 12.5, matched: false, description: "", details: {} },
+      supportMatch: { score: 0, maxScore: 12.5, matched: false, description: "", details: {} },
+      legalEntityFit: { score: 0, maxScore: 12.5, matched: false, description: "", details: {} },
       revenueThreshold: { score: 0, maxScore: 12.5, matched: false, description: "", details: {} },
     }
 
@@ -580,18 +604,18 @@ await Promise.all([
       return false
     }
     const normalizeToken = (s) => s.toString().toLowerCase().trim().replace(/[_\-\s]+/g, "")
-    const normalizeList  = (v) => toArray(v).flatMap(item => item.split(/\s*,\s*/)).map(normalizeToken).filter(Boolean)
-    const normalize      = (val) => Array.isArray(val) ? val.map(v => v.toLowerCase().trim()) : val?.toLowerCase().trim()
-    const cleanCurrency  = (value) => { if (!value) return 0; return parseFloat(value.toString().replace(/[^0-9.]/g, "")) || 0 }
-    const cleanString    = (input) => {
+    const normalizeList = (v) => toArray(v).flatMap(item => item.split(/\s*,\s*/)).map(normalizeToken).filter(Boolean)
+    const normalize = (val) => Array.isArray(val) ? val.map(v => v.toLowerCase().trim()) : val?.toLowerCase().trim()
+    const cleanCurrency = (value) => { if (!value) return 0; return parseFloat(value.toString().replace(/[^0-9.]/g, "")) || 0 }
+    const cleanString = (input) => {
       if (Array.isArray(input)) return input.map(str => typeof str === "string" ? str.replace(/[_-]/g, " ").toLowerCase() : str)
       if (typeof input === "string") return input.replace(/[_-]/g, " ").toLowerCase()
       return input
     }
     const checkGeographicMatch = (smeLocation, acceleratorGeoData) => {
-      const smeProvince         = normalize(smeProfileData.entityOverview?.province)
-      const smeCountry          = cleanString(smeProfileData.entityOverview?.location) || "not specified"
-      const accelGeoFocus       = acceleratorGeoData.geographicFocus || []
+      const smeProvince = normalize(smeProfileData.entityOverview?.province)
+      const smeCountry = cleanString(smeProfileData.entityOverview?.location) || "not specified"
+      const accelGeoFocus = acceleratorGeoData.geographicFocus || []
       const accelSelectedCountries = cleanString(acceleratorGeoData.selectedCountries) || []
       const accelSelectedProvinces = cleanString(acceleratorGeoData.selectedProvinces) || []
       if (accelGeoFocus.includes("global")) return true
@@ -602,7 +626,7 @@ await Promise.all([
     }
 
     const programData = program || catalystFormData?.programmeDetails?.programs?.[0] || {}
-    const matchPrefs  = catalystFormData?.generalMatchingPreference || {}
+    const matchPrefs = catalystFormData?.generalMatchingPreference || {}
 
     // 1. Funding Stage
     const smeStage = smeProfileData.entityOverview?.operationStage
@@ -614,41 +638,41 @@ await Promise.all([
 
     // 2. Ticket Size
     const smeAmountRequested = cleanCurrency(smeProfileData.useOfFunds?.amountRequested)
-    const accelMinTicket     = cleanCurrency(programData.minimumSupport || 0)
-    const accelMaxTicket     = cleanCurrency(programData.maximumSupport || 0)
-    const ticketMatch        = smeAmountRequested >= accelMinTicket && smeAmountRequested <= accelMaxTicket
+    const accelMinTicket = cleanCurrency(programData.minimumSupport || 0)
+    const accelMaxTicket = cleanCurrency(programData.maximumSupport || 0)
+    const ticketMatch = smeAmountRequested >= accelMinTicket && smeAmountRequested <= accelMaxTicket
     breakdown.ticketSize.details = { smeValue: smeAmountRequested, accelValue: `${accelMinTicket}–${accelMaxTicket}` }
     breakdown.ticketSize.matched = ticketMatch
     if (ticketMatch) { breakdown.ticketSize.score = 12.5; matched++ }
 
     // 3. Geographic Fit
     const smeLocation = cleanString(smeProfileData.entityOverview?.location)
-    const geoMatch    = checkGeographicMatch(smeLocation, matchPrefs)
+    const geoMatch = checkGeographicMatch(smeLocation, matchPrefs)
     breakdown.geographicFit.details = { smeValue: smeLocation, accelValue: matchPrefs.geographicFocus }
     breakdown.geographicFit.matched = geoMatch
     if (geoMatch) { breakdown.geographicFit.score = 12.5; matched++ }
 
     // 4. Sector Match
-    const smeSectors  = smeProfileData.entityOverview?.economicSectors
+    const smeSectors = smeProfileData.entityOverview?.economicSectors
     const accelSectors = matchPrefs.sectorFocus
-    const sectorMatch  = hasOverlap(smeSectors, accelSectors)
+    const sectorMatch = hasOverlap(smeSectors, accelSectors)
     breakdown.sectorMatch.details = { smeValue: normalizeSectors(smeSectors).join(", "), accelValue: normalizeSectors(accelSectors).join(", ") }
     breakdown.sectorMatch.matched = sectorMatch
     if (sectorMatch) { breakdown.sectorMatch.score = 12.5; matched++ }
 
     // 5. Instrument Fit
-    const smeInstrumentRaw   = smeProfileData.useOfFunds?.fundingInstruments
+    const smeInstrumentRaw = smeProfileData.useOfFunds?.fundingInstruments
     const accelInstrumentRaw = programData.supportType || matchPrefs.supportFocusSubtype || matchPrefs.supportFocusType
-    const instrumentMatch    = hasOverlap(smeInstrumentRaw, accelInstrumentRaw)
+    const instrumentMatch = hasOverlap(smeInstrumentRaw, accelInstrumentRaw)
     breakdown.instrumentFit.details = { smeValue: normalizeList(smeInstrumentRaw).join(", "), accelValue: normalizeList(accelInstrumentRaw).join(", ") }
     breakdown.instrumentFit.matched = instrumentMatch
     if (instrumentMatch) { breakdown.instrumentFit.score = 12.5; matched++ }
 
     // 6. Support Match
-    const smeSupportCategory  = smeProfileData.useOfFunds?.additionalSupportFocus
-    const smeSupportSubtype   = smeProfileData.useOfFunds?.additionalSupportFocusSubtype
+    const smeSupportCategory = smeProfileData.useOfFunds?.additionalSupportFocus
+    const smeSupportSubtype = smeProfileData.useOfFunds?.additionalSupportFocusSubtype
     const accelSupportCategory = programData.supportFocusType || matchPrefs.supportFocus
-    const accelSupportSubtype  = programData.supportFocusSubtype || matchPrefs.supportFocusSubtype
+    const accelSupportSubtype = programData.supportFocusSubtype || matchPrefs.supportFocusSubtype
     let supportMatchScore = 0, supportMatched = false
     if (smeSupportSubtype && accelSupportSubtype && smeSupportSubtype === accelSupportSubtype) {
       supportMatchScore = 12.5; supportMatched = true; matched++
@@ -656,14 +680,14 @@ await Promise.all([
       supportMatchScore = 6.25; supportMatched = true
     }
     breakdown.supportMatch.details = {
-      smeValue:  smeSupportSubtype  ? `${smeSupportCategory} – ${smeSupportSubtype}`  : smeSupportCategory,
+      smeValue: smeSupportSubtype ? `${smeSupportCategory} – ${smeSupportSubtype}` : smeSupportCategory,
       accelValue: accelSupportSubtype ? `${accelSupportCategory} – ${accelSupportSubtype}` : accelSupportCategory,
     }
-    breakdown.supportMatch.score   = supportMatchScore
+    breakdown.supportMatch.score = supportMatchScore
     breakdown.supportMatch.matched = supportMatched
 
     // 7. Legal Entity Fit
-    const smeLegal   = smeProfileData.entityOverview?.legalStructure
+    const smeLegal = smeProfileData.entityOverview?.legalStructure
     const accelLegal = matchPrefs.legalEntityFit
     const legalMatch = normalize(smeLegal) === normalize(accelLegal)
     breakdown.legalEntityFit.details = { smeValue: smeLegal, accelValue: accelLegal }
@@ -671,9 +695,9 @@ await Promise.all([
     if (legalMatch) { breakdown.legalEntityFit.score = 12.5; matched++ }
 
     // 8. Revenue Threshold
-    const smeRevenue      = cleanCurrency(smeProfileData.financialOverview?.annualRevenue)
-    const accelThreshold  = cleanCurrency(programData.minimumSupport || "0")
-    const revenueMatch    = smeRevenue >= accelThreshold
+    const smeRevenue = cleanCurrency(smeProfileData.financialOverview?.annualRevenue)
+    const accelThreshold = cleanCurrency(programData.minimumSupport || "0")
+    const revenueMatch = smeRevenue >= accelThreshold
     breakdown.revenueThreshold.details = { smeValue: smeRevenue, accelValue: accelThreshold }
     breakdown.revenueThreshold.matched = revenueMatch
     if (revenueMatch) { breakdown.revenueThreshold.score = 12.5; matched++ }
@@ -684,11 +708,11 @@ await Promise.all([
   // ── Match breakdown ────────────────────────────────────────────────────────
   const handleViewMatchBreakdown = (sme) => {
     try {
-      const contextEntry   = enriched.find((a) => a.smeId === sme.id && a.programIndex === sme.programIndex)
+      const contextEntry = enriched.find((a) => a.smeId === sme.id && a.programIndex === sme.programIndex)
       const smeProfileData = contextEntry?.profile || {}
-      const programs       = catalystFormData?.programmeDetails?.programs || []
-      const program        = programs[parseInt(sme.programIndex)] || programs[0] || null
-      const matchResult    = calculateMatchScore(smeProfileData, catalystFormData, program)
+      const programs = catalystFormData?.programmeDetails?.programs || []
+      const program = programs[parseInt(sme.programIndex)] || programs[0] || null
+      const matchResult = calculateMatchScore(smeProfileData, catalystFormData, program)
       setSelectedAcceleratorForBreakdown({ ...sme, matchPercentage: matchResult.score, matchBreakdown: matchResult.breakdown })
       setShowMatchBreakdown(true)
     } catch (err) {
@@ -715,11 +739,10 @@ await Promise.all([
 
       {/* Notification */}
       {notification && (
-        <div className={`px-3 py-3 rounded-md mb-5 text-[0.8rem] border ${
-          notification.type === "success"
-            ? "bg-green-50 text-green-800 border-green-200"
-            : "bg-red-50 text-red-800 border-red-200"
-        }`}>
+        <div className={`px-3 py-3 rounded-md mb-5 text-[0.8rem] border ${notification.type === "success"
+          ? "bg-green-50 text-green-800 border-green-200"
+          : "bg-red-50 text-red-800 border-red-200"
+          }`}>
           {notification.message}
         </div>
       )}
@@ -773,8 +796,8 @@ await Promise.all([
                 </tr>
               ) : (
                 smes.map((sme) => {
-                  const currentStatus  = updatedStages[sme.id] || sme.pipelineStage || sme.currentStatus
-                  const statusClasses  = getStatusClasses(currentStatus)
+                  const currentStatus = updatedStages[sme.id] || sme.pipelineStage || sme.currentStatus
+                  const statusClasses = getStatusClasses(currentStatus)
                   return (
                     <tr key={`${sme.id}_${sme.programIndex}`} className="border-b border-lightTan hover:bg-cream/50">
                       {/* Name */}
@@ -846,14 +869,14 @@ await Promise.all([
                       </td>
                       {/* Status */}
                       {/* Status */}
-<td className={TD}>
-  <div className="flex items-center flex-wrap gap-0.5">
-    <span className={`${statusClasses.bg} ${statusClasses.text} py-0.5 px-1 rounded text-[0.65rem] font-medium inline-block whitespace-nowrap`}>
-      {currentStatus}
-    </span>
-    {renderSupportAgreementStatus(sme)}
-  </div>
-</td>
+                      <td className={TD}>
+                        <div className="flex items-center flex-wrap gap-0.5">
+                          <span className={`${statusClasses.bg} ${statusClasses.text} py-0.5 px-1 rounded text-[0.65rem] font-medium inline-block whitespace-nowrap`}>
+                            {currentStatus}
+                          </span>
+                          {renderSupportAgreementStatus(sme)}
+                        </div>
+                      </td>
                       {/* Action */}
                       <td className={`${TD} border-r-0`}>
                         <button
@@ -882,9 +905,9 @@ await Promise.all([
             </div>
             <div className="grid grid-cols-2 gap-6 mb-8">
               {[
-                { label: "Location", key: "location", options: [["", "All Locations"], ["cape-town","Cape Town"], ["johannesburg","Johannesburg"], ["durban","Durban"], ["pretoria","Pretoria"]] },
-                { label: "Sector",   key: "sector",   options: [["", "All Sectors"], ["tech","Technology"], ["agri","Agriculture"], ["cleantech","CleanTech"], ["healthtech","HealthTech"], ["edtech","EdTech"]] },
-                { label: "Funding Stage", key: "stages", options: [["","All Stages"], ["pre-seed","Pre-Seed"], ["seed","Seed"], ["series-a","Series A"], ["series-b","Series B"]] },
+                { label: "Location", key: "location", options: [["", "All Locations"], ["cape-town", "Cape Town"], ["johannesburg", "Johannesburg"], ["durban", "Durban"], ["pretoria", "Pretoria"]] },
+                { label: "Sector", key: "sector", options: [["", "All Sectors"], ["tech", "Technology"], ["agri", "Agriculture"], ["cleantech", "CleanTech"], ["healthtech", "HealthTech"], ["edtech", "EdTech"]] },
+                { label: "Funding Stage", key: "stages", options: [["", "All Stages"], ["pre-seed", "Pre-Seed"], ["seed", "Seed"], ["series-a", "Series A"], ["series-b", "Series B"]] },
               ].map(({ label, key, options }) => (
                 <div key={key}>
                   <label className={LABEL}>{label}</label>
@@ -972,7 +995,7 @@ await Promise.all([
             <div className="mb-6">
               <label className={LABEL}>Time Slot</label>
               <div className="flex gap-4">
-                {["start","end"].map((f) => (
+                {["start", "end"].map((f) => (
                   <div key={f} className="flex-1">
                     <label className="block mb-1 text-sm capitalize">{f === "start" ? "Start" : "End"} Time</label>
                     <input type="time" value={timeSlot[f]} onChange={(e) => handleTimeChange(f, e.target.value)} className="w-full px-2 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:border-accentGold" />
@@ -1130,6 +1153,14 @@ await Promise.all([
             </div>
           </div>
         </div>
+      )}
+
+      {showSMEDetails && selectedSMEDetails && (
+        <SMEDetailsModal
+          sme={selectedSMEDetails}
+          isOpen={showSMEDetails}
+          onClose={() => { setShowSMEDetails(false); setSelectedSMEDetails(null) }}
+        />
       )}
 
       {/* ── Match Breakdown Modal ───────────────────────────────────────────── */}
