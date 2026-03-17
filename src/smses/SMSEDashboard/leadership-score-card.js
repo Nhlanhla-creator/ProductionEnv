@@ -322,8 +322,7 @@ SCORING RULES PER CATEGORY:
 
 Leadership Credentials (40%) — score based on:
   - Directors count, CVs uploaded, LinkedIn profiles, executive designations, nationalities
-  - Certifications and qualifications uploaded
-  - Score 0 if no directors and no certifications. Score 5 if all directors have CVs + LinkedIn + certifications present.
+  - Score 0 if no directors. Score 5 if all directors have CVs + LinkedIn profiles present.
 
 Leadership Structure (30%) — score based on:
   - Executives count, positions filled, CVs uploaded, LinkedIn profiles, department coverage
@@ -348,7 +347,6 @@ OUTPUT FORMAT - YOU MUST FOLLOW THIS EXACTLY:
 - → Documents section: upload certifications, qualifications and awards
 - → Ownership & Management section: complete demographic data for all directors
 - 💡 Directors with uploaded CVs and LinkedIn profiles significantly strengthen credentials scoring
-- 💡 Professional certifications and industry recognition correlate with higher leadership bands
 
 ### 2. Leadership Structure
 **Score:** [0-5]
@@ -436,8 +434,7 @@ OUTPUT FORMAT - YOU MUST FOLLOW THIS EXACTLY:
     })
     evaluationData += `\nDirectors with LinkedIn: ${directors.filter(d => d?.linkedin).length}\n`
     evaluationData += `Directors with CVs: ${directors.filter(d => d?.cv).length}\n`
-    evaluationData += `Certifications Count: ${data?.documents?.otherCerts?.length || 0}\n`
-    evaluationData += `Certifications Available: ${data?.documents?.otherCerts?.length > 0 ? "Yes" : "No"}\n`
+    
 
     // ── LEADERSHIP STRUCTURE (Executives) ───────────────────────────────
     evaluationData += `\n=== LEADERSHIP STRUCTURE (EXECUTIVES) ===\n`
@@ -1196,7 +1193,7 @@ OUTPUT FORMAT - YOU MUST FOLLOW THIS EXACTLY:
                       </p>
                       <ul style={{ margin: "0", paddingLeft: "20px", color: "#5d4037" }}>
                         <li style={{ marginBottom: "6px" }}>
-                          <strong>Leadership Credentials – 40%:</strong> Directors' experience, professional track record, education, certifications and recognition
+                          <strong>Leadership Credentials – 40%:</strong> Directors' experience, professional track record, education and LinkedIn presence
                         </li>
                         <li style={{ marginBottom: "6px" }}>
                           <strong>Leadership Structure – 30%:</strong> Executive management capability, team composition and leadership roles

@@ -16,6 +16,7 @@ import { addInvestorNotification } from "../NotificationInvestor"
 import Modal from "components/Modal/Modal"
 import Upsell from "../../components/Upsell/Upsell"
 import useSubscriptionPlan from "../../hooks/useSubscriptionPlan"
+import InvestorSMEDetailsModal from "./InvestorSMEDetailsModal"
 
 const formatLabel = (value) => {
   if (!value) return ""
@@ -77,6 +78,8 @@ export function InvestorSMETable(filters, stageFilter, onDealComplete) {
   const [currentMatchBreakdown, setCurrentMatchBreakdown] = useState(null)
   const [investorProfile, setInvestorProfile] = useState(null)
   const [termsheetStatuses, setTermsheetStatuses] = useState({});
+  const [showSMEDetailsModal, setShowSMEDetailsModal] = useState(false)
+  const [selectedSMEForDetails, setSelectedSMEForDetails] = useState(null)
   const [defaultMessages, setDefaultMessages] = useState({
     "Under Review":
       "Dear Valued Partner,\n\nWe are pleased to inform you that your funding application has progressed to our comprehensive review stage. Our investment committee will conduct a thorough evaluation of your business proposal, financial projections, and growth potential.\n\nWe appreciate your patience during this critical assessment period and will keep you informed of our progress.\n\nBest regards,\nInvestment Review Team",
@@ -371,71 +374,71 @@ export function InvestorSMETable(filters, stageFilter, onDealComplete) {
       setAvailabilities([])
     }
   }
-useEffect(() => {
-  const fetchTermsheetStatuses = async () => {
-    const statusMap = {};
-    
-    for (const sme of smes) {
-      if (sme.id) {
-        try {
-          const docSnap = await getDoc(doc(db, "investorApplications", sme.id));
-          if (docSnap.exists()) {
-            const data = docSnap.data();
-            if (data.termsheetStatus) {
-              statusMap[sme.id] = data.termsheetStatus;
+  useEffect(() => {
+    const fetchTermsheetStatuses = async () => {
+      const statusMap = {};
+
+      for (const sme of smes) {
+        if (sme.id) {
+          try {
+            const docSnap = await getDoc(doc(db, "investorApplications", sme.id));
+            if (docSnap.exists()) {
+              const data = docSnap.data();
+              if (data.termsheetStatus) {
+                statusMap[sme.id] = data.termsheetStatus;
+              }
             }
+          } catch (error) {
+            console.error("Error fetching termsheet status:", error);
           }
-        } catch (error) {
-          console.error("Error fetching termsheet status:", error);
         }
       }
-    }
-    
-    setTermsheetStatuses(statusMap);
-  };
-  
-  if (smes.length > 0) {
-    fetchTermsheetStatuses();
-  }
-}, [smes]);
 
-// Add this function to render the termsheet status
-const renderTermsheetStatus = (sme) => {
-  const status = termsheetStatuses[sme.id];
-  
-  if (!status) {
-    return (
-      <div className={styles.termsheetStatus}>
-        <span className={styles.statusWaiting}>⏳ Awaiting Response</span>
-      </div>
-    );
-  }
-  
-  switch(status) {
-    case 'accepted':
+      setTermsheetStatuses(statusMap);
+    };
+
+    if (smes.length > 0) {
+      fetchTermsheetStatuses();
+    }
+  }, [smes]);
+
+  // Add this function to render the termsheet status
+  const renderTermsheetStatus = (sme) => {
+    const status = termsheetStatuses[sme.id];
+
+    if (!status) {
       return (
         <div className={styles.termsheetStatus}>
-          <span className={styles.statusAccepted}>
-            ✓ Accepted
-          </span>
+          <span className={styles.statusWaiting}>⏳ Awaiting Response</span>
         </div>
       );
-    case 'declined':
-      return (
-        <div className={styles.termsheetStatus}>
-          <span className={styles.statusDeclined}>
-            ✗ Declined
-          </span>
-        </div>
-      );
-    default:
-      return (
-        <div className={styles.termsheetStatus}>
-          <span className={styles.statusPending}>⏳ Pending</span>
-        </div>
-      );
-  }
-};
+    }
+
+    switch (status) {
+      case 'accepted':
+        return (
+          <div className={styles.termsheetStatus}>
+            <span className={styles.statusAccepted}>
+              ✓ Accepted
+            </span>
+          </div>
+        );
+      case 'declined':
+        return (
+          <div className={styles.termsheetStatus}>
+            <span className={styles.statusDeclined}>
+              ✗ Declined
+            </span>
+          </div>
+        );
+      default:
+        return (
+          <div className={styles.termsheetStatus}>
+            <span className={styles.statusPending}>⏳ Pending</span>
+          </div>
+        );
+    }
+  };
 
   useEffect(() => {
     setLoading(true)
@@ -851,28 +854,28 @@ const renderTermsheetStatus = (sme) => {
 
           Available Meeting Dates for this application:
           ${availabilities
-            .map((avail) => {
-              try {
-                const dateStr =
-                  avail.date instanceof Date
-                    ? avail.date.toLocaleDateString("en-US", {
-                      weekday: "long",
-                      year: "numeric",
-                      month: "long",
-                      day: "numeric",
-                    })
-                    : "Invalid Date"
+              .map((avail) => {
+                try {
+                  const dateStr =
+                    avail.date instanceof Date
+                      ? avail.date.toLocaleDateString("en-US", {
+                        weekday: "long",
+                        year: "numeric",
+                        month: "long",
+                        day: "numeric",
+                      })
+                      : "Invalid Date"
 
-                const timeStr = avail.timeSlots?.[0]
-                  ? `${avail.timeSlots[0].start} - ${avail.timeSlots[0].end} ${avail.timeZone}`
-                  : "Time not specified"
+                  const timeStr = avail.timeSlots?.[0]
+                    ? `${avail.timeSlots[0].start} - ${avail.timeSlots[0].end} ${avail.timeZone}`
+                    : "Time not specified"
 
-                return `${dateStr} (${timeStr})`
-              } catch (e) {
-                return "Invalid availability entry"
-              }
-            })
-            .join("\n")}
+                  return `${dateStr} (${timeStr})`
+                } catch (e) {
+                  return "Invalid availability entry"
+                }
+              })
+              .join("\n")}
 
         Please reply with your preferred meeting time from the above options.`
         } else {
@@ -993,36 +996,22 @@ const renderTermsheetStatus = (sme) => {
   const handleSMENameClick = async (sme) => {
     try {
       setLoading(true)
-      console.log(sme)
-
       const profileRef = doc(db, "universalProfiles", sme.smeId)
       const profileSnap = await getDoc(profileRef)
-
-      const investorProfileRef = doc(db, "MyuniversalProfile", sme.funderId)
-      const investorProfileSnap = await getDoc(investorProfileRef)
-
       if (profileSnap.exists()) {
         const profileData = profileSnap.data()
-        const investorData = investorProfileSnap.exists() ? investorProfileSnap.data() : {}
-
-        setSelectedSME({
+        setSelectedSMEForDetails({
           ...sme,
           ...profileData,
-          investorRequiredDocuments: sme.documentURLs || [],
-
+          investorRequiredDocuments: sme.documentURLs || {},
         })
-
-        setModalType("view")
       } else {
-        setSelectedSME(sme)
-        setModalType("view")
+        setSelectedSMEForDetails({ ...sme, investorRequiredDocuments: sme.documentURLs || {} })
       }
+      setShowSMEDetailsModal(true)
     } catch (error) {
-      console.error("Error fetching profiles:", error)
-      setNotification({
-        type: "error",
-        message: "Failed to load profile data",
-      })
+      console.error("Error fetching SME profile:", error)
+      setNotification({ type: "error", message: "Failed to load profile data" })
     } finally {
       setLoading(false)
     }
@@ -1407,27 +1396,27 @@ const renderTermsheetStatus = (sme) => {
     )
   }
 
-const handleNextStageChange = (sme) => {
-  setSelectedSMEForStage(sme)
-  setShowNextStageModal(true)
-  setNextStage("")
-  setMessage("")
-  setMeetingTime("")
-  setMeetingLocation("")
-  setMeetingPurpose("")
-  setFormErrors({})
-  setDocumentFile(null)
-  
-  // Auto-populate the amountAsked with SME's requested amount
-  const smeAmount = sme.fundingNeeded || sme.useOfFunds?.amountRequested || ""
-  setAmountAsked(smeAmount)
-  
-  setAmountApproved("")
-  setPaymentDeployment("")
-  setInvestmentType("")
+  const handleNextStageChange = (sme) => {
+    setSelectedSMEForStage(sme)
+    setShowNextStageModal(true)
+    setNextStage("")
+    setMessage("")
+    setMeetingTime("")
+    setMeetingLocation("")
+    setMeetingPurpose("")
+    setFormErrors({})
+    setDocumentFile(null)
 
-  loadApplicationAvailability(sme)
-}
+    // Auto-populate the amountAsked with SME's requested amount
+    const smeAmount = sme.fundingNeeded || sme.useOfFunds?.amountRequested || ""
+    setAmountAsked(smeAmount)
+
+    setAmountApproved("")
+    setPaymentDeployment("")
+    setInvestmentType("")
+
+    loadApplicationAvailability(sme)
+  }
 
   const deriveNextStage = (stage) => {
     switch (stage) {
@@ -1469,7 +1458,7 @@ const handleNextStageChange = (sme) => {
       "Funding Approved": ["Termsheet", "Deal Declined"],
       "Termsheet": ["Deal Complete", "Deal Declined"],
       "Deal Complete": ["Closed"],
-      "Deal Declined": ["Closed","Termsheet"]
+      "Deal Declined": ["Closed", "Termsheet"]
     }
 
     const allowedNextStages = validProgressions[currentStage] || []
@@ -2011,7 +2000,7 @@ const handleNextStageChange = (sme) => {
               <th>Application Date</th>
               <th>% Match</th>
               <th>Big Score</th>
-            
+
               <th>Status/Actions</th>
             </tr>
           </thead>
@@ -2105,215 +2094,215 @@ const handleNextStageChange = (sme) => {
                       onViewClick={() => handleBigScoreClick(sme)}
                     />
                   </td>
-    
-               <td style={{ whiteSpace: "nowrap" }}>
-  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
- 
-                    {/* Subscription-based gating for stage updates */}
-                    {subscriptionLoading ? (
-                      // While we check subscription, show disabled buttons
-                      updatedStages[sme.id] || sme.pipelineStage ? (
-                        <button
-                          className={styles.stageBadgeButton}
-                          title="Update Stage"
-                          style={{
-                            background: "none",
-                            border: "none",
-                            padding: 0,
-                            cursor: "not-allowed",
-                            opacity: 0.6,
-                          }}
-                          disabled
-                        >
-                          <div
+
+                  <td style={{ whiteSpace: "nowrap" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+
+                      {/* Subscription-based gating for stage updates */}
+                      {subscriptionLoading ? (
+                        // While we check subscription, show disabled buttons
+                        updatedStages[sme.id] || sme.pipelineStage ? (
+                          <button
+                            className={styles.stageBadgeButton}
+                            title="Update Stage"
                             style={{
-                              display: "inline-block",
-                              padding: "6px 12px",
-                              borderRadius: "16px",
-                              fontSize: "12px",
-                              fontWeight: "bold",
+                              background: "none",
+                              border: "none",
+                              padding: 0,
                               cursor: "not-allowed",
-                              boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
-                              ...getStageColor(updatedStages[sme.id] || sme.pipelineStage),
+                              opacity: 0.6,
                             }}
+                            disabled
                           >
-                            {updatedStages[sme.id] || sme.pipelineStage}
-                          </div>
-                        </button>
-                      ) : (
+                            <div
+                              style={{
+                                display: "inline-block",
+                                padding: "6px 12px",
+                                borderRadius: "16px",
+                                fontSize: "12px",
+                                fontWeight: "bold",
+                                cursor: "not-allowed",
+                                boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
+                                ...getStageColor(updatedStages[sme.id] || sme.pipelineStage),
+                              }}
+                            >
+                              {updatedStages[sme.id] || sme.pipelineStage}
+                            </div>
+                          </button>
+                        ) : (
+                          <>
+                            <button
+                              className={styles.actionBtn}
+                              title="Set Stage (checking subscription)"
+                              style={{
+                                backgroundColor: "#5d4037",
+                                color: "white",
+                                border: "none",
+                                borderRadius: "50%",
+                                width: "28px",
+                                height: "28px",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                marginRight: "8px",
+                                cursor: "not-allowed",
+                                opacity: 0.6,
+                              }}
+                              disabled
+                            >
+                              <Check size={16} />
+                            </button>
+                            <button
+                              className={styles.actionBtn}
+                              title="Decline application"
+                              style={{
+                                backgroundColor: "#d32f2f",
+                                color: "white",
+                                border: "none",
+                                borderRadius: "50%",
+                                width: "28px",
+                                height: "28px",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                cursor: "not-allowed",
+                                opacity: 0.6,
+                              }}
+                              disabled
+                            >
+                              <X size={16} />
+                            </button>
+                          </>
+                        )
+                      ) : currentPlan === "basic" ? (
+                        // For Discover users show Stage Update that opens Upsell popup
                         <>
                           <button
-                            className={styles.actionBtn}
-                            title="Set Stage (checking subscription)"
-                            style={{
-                              backgroundColor: "#5d4037",
-                              color: "white",
-                              border: "none",
-                              borderRadius: "50%",
-                              width: "28px",
-                              height: "28px",
-                              display: "inline-flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              marginRight: "8px",
-                              cursor: "not-allowed",
-                              opacity: 0.6,
+                            className={styles.stageBadgeButton}
+                            onClick={() => {
+                              setStageUpsellSME(sme)
+                              setShowStageUpsell(true)
                             }}
-                            disabled
-                          >
-                            <Check size={16} />
-                          </button>
-                          <button
-                            className={styles.actionBtn}
-                            title="Decline application"
+                            title="Stage Update"
                             style={{
-                              backgroundColor: "#d32f2f",
-                              color: "white",
+                              background: "none",
                               border: "none",
-                              borderRadius: "50%",
-                              width: "28px",
-                              height: "28px",
-                              display: "inline-flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              cursor: "not-allowed",
-                              opacity: 0.6,
+                              padding: 0,
+                              cursor: "pointer",
                             }}
-                            disabled
                           >
-                            <X size={16} />
+                            <div
+                              style={{
+                                display: "inline-block",
+                                padding: "6px 12px",
+                                borderRadius: "16px",
+                                fontSize: "12px",
+                                fontWeight: "bold",
+                                cursor: "pointer",
+                                boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
+                                backgroundColor: "#bdbdbd",
+                              }}
+                            >
+                              {"Stage Update"}
+                            </div>
                           </button>
                         </>
-                      )
-                    ) : currentPlan === "basic" ? (
-                      // For Discover users show Stage Update that opens Upsell popup
-                      <>
-                        <button
-                          className={styles.stageBadgeButton}
-                          onClick={() => {
-                            setStageUpsellSME(sme)
-                            setShowStageUpsell(true)
-                          }}
-                          title="Stage Update"
-                          style={{
-                            background: "none",
-                            border: "none",
-                            padding: 0,
-                            cursor: "pointer",
-                          }}
-                        >
-                          <div
-                            style={{
-                              display: "inline-block",
-                              padding: "6px 12px",
-                              borderRadius: "16px",
-                              fontSize: "12px",
-                              fontWeight: "bold",
-                              cursor: "pointer",
-                              boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
-                              backgroundColor: "#bdbdbd",
-                            }}
-                          >
-                            {"Stage Update"}
-                          </div>
-                        </button>
-                      </>
-                    ) : (
-                      // Normal behavior for Engage/Partner users
-                      updatedStages[sme.id] || sme.pipelineStage ? (
-                        <button
-                          className={styles.stageBadgeButton}
-                          onClick={() => handleNextStageChange(sme)}
-                          title="Update Stage"
-                          style={{
-                            background: "none",
-                            border: "none",
-                            padding: 0,
-                            cursor: "pointer",
-                          }}
-                        >
-                          <div
-                            style={{
-                              display: "inline-block",
-                              padding: "6px 12px",
-                              borderRadius: "16px",
-                              fontSize: "12px",
-                              fontWeight: "bold",
-                              cursor: "pointer",
-                              boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
-                              ...getStageColor(updatedStages[sme.id] || sme.pipelineStage),
-                            }}
-                          >
-                            {(updatedStages[sme.id] || sme.pipelineStage) === "Application Received"
-                              ? "Update Stage"
-                              : updatedStages[sme.id] || sme.pipelineStage}
-                          </div>
-                        </button>
                       ) : (
-                        <>
+                        // Normal behavior for Engage/Partner users
+                        updatedStages[sme.id] || sme.pipelineStage ? (
                           <button
-                            className={styles.actionBtn}
-                            title="Set Stage"
+                            className={styles.stageBadgeButton}
                             onClick={() => handleNextStageChange(sme)}
+                            title="Update Stage"
                             style={{
-                              backgroundColor: "#5d4037",
-                              color: "white",
+                              background: "none",
                               border: "none",
-                              borderRadius: "50%",
-                              width: "28px",
-                              height: "28px",
-                              display: "inline-flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              marginRight: "8px",
+                              padding: 0,
                               cursor: "pointer",
                             }}
                           >
-                            <Check size={16} />
+                            <div
+                              style={{
+                                display: "inline-block",
+                                padding: "6px 12px",
+                                borderRadius: "16px",
+                                fontSize: "12px",
+                                fontWeight: "bold",
+                                cursor: "pointer",
+                                boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
+                                ...getStageColor(updatedStages[sme.id] || sme.pipelineStage),
+                              }}
+                            >
+                              {(updatedStages[sme.id] || sme.pipelineStage) === "Application Received"
+                                ? "Update Stage"
+                                : updatedStages[sme.id] || sme.pipelineStage}
+                            </div>
                           </button>
-                          <button
-                            className={styles.actionBtn}
-                            title="Decline application"
-                            onClick={() => openModal(sme, "decline")}
-                            disabled={sme.status === "Declined"}
-                            style={{
-                              backgroundColor: "#d32f2f",
-                              color: "white",
-                              border: "none",
-                              borderRadius: "50%",
-                              width: "28px",
-                              height: "28px",
-                              display: "inline-flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              cursor: sme.status === "Declined" ? "not-allowed" : "pointer",
-                              opacity: sme.status === "Declined" ? 0.5 : 1,
-                            }}
-                          >
-                            <X size={16} />
-                          </button>
-                        </>
-                      )
-                    )}
-                       {/* Termsheet accepted/declined icon — only shows at Termsheet stage */}
-    {(updatedStages[sme.id] || sme.pipelineStage) === "Termsheet" && termsheetStatuses[sme.id] && (
-      termsheetStatuses[sme.id] === "accepted" ? (
-        <span title="Termsheet Accepted" style={{
-          display: "inline-flex", alignItems: "center", justifyContent: "center",
-          width: "20px", height: "20px", borderRadius: "50%",
-          backgroundColor: "#4caf50", color: "white", fontSize: "12px", fontWeight: "bold",
-          flexShrink: 0
-        }}>✓</span>
-      ) : termsheetStatuses[sme.id] === "declined" ? (
-        <span title="Termsheet Declined" style={{
-          display: "inline-flex", alignItems: "center", justifyContent: "center",
-          width: "20px", height: "20px", borderRadius: "50%",
-          backgroundColor: "#f44336", color: "white", fontSize: "12px", fontWeight: "bold",
-          flexShrink: 0
-        }}>✗</span>
-      ) : null
-    )}
-                     </div>
+                        ) : (
+                          <>
+                            <button
+                              className={styles.actionBtn}
+                              title="Set Stage"
+                              onClick={() => handleNextStageChange(sme)}
+                              style={{
+                                backgroundColor: "#5d4037",
+                                color: "white",
+                                border: "none",
+                                borderRadius: "50%",
+                                width: "28px",
+                                height: "28px",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                marginRight: "8px",
+                                cursor: "pointer",
+                              }}
+                            >
+                              <Check size={16} />
+                            </button>
+                            <button
+                              className={styles.actionBtn}
+                              title="Decline application"
+                              onClick={() => openModal(sme, "decline")}
+                              disabled={sme.status === "Declined"}
+                              style={{
+                                backgroundColor: "#d32f2f",
+                                color: "white",
+                                border: "none",
+                                borderRadius: "50%",
+                                width: "28px",
+                                height: "28px",
+                                display: "inline-flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                cursor: sme.status === "Declined" ? "not-allowed" : "pointer",
+                                opacity: sme.status === "Declined" ? 0.5 : 1,
+                              }}
+                            >
+                              <X size={16} />
+                            </button>
+                          </>
+                        )
+                      )}
+                      {/* Termsheet accepted/declined icon — only shows at Termsheet stage */}
+                      {(updatedStages[sme.id] || sme.pipelineStage) === "Termsheet" && termsheetStatuses[sme.id] && (
+                        termsheetStatuses[sme.id] === "accepted" ? (
+                          <span title="Termsheet Accepted" style={{
+                            display: "inline-flex", alignItems: "center", justifyContent: "center",
+                            width: "20px", height: "20px", borderRadius: "50%",
+                            backgroundColor: "#4caf50", color: "white", fontSize: "12px", fontWeight: "bold",
+                            flexShrink: 0
+                          }}>✓</span>
+                        ) : termsheetStatuses[sme.id] === "declined" ? (
+                          <span title="Termsheet Declined" style={{
+                            display: "inline-flex", alignItems: "center", justifyContent: "center",
+                            width: "20px", height: "20px", borderRadius: "50%",
+                            backgroundColor: "#f44336", color: "white", fontSize: "12px", fontWeight: "bold",
+                            flexShrink: 0
+                          }}>✗</span>
+                        ) : null
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))
@@ -3954,38 +3943,38 @@ const handleNextStageChange = (sme) => {
 )}
                     </div> */}
 
-                    {selectedSME.investorRequiredDocuments && 
- typeof selectedSME.investorRequiredDocuments === 'object' && 
- Object.keys(selectedSME.investorRequiredDocuments).length > 0 && (
-  <div style={{ marginBottom: "40px", backgroundColor: "#fff", borderRadius: "16px", padding: "32px", boxShadow: "0 8px 24px rgba(0,0,0,0.08)", border: "1px solid #e8e8e8" }}>
-    <h2 style={{ margin: "0 0 24px 0", fontSize: "24px", fontWeight: "700", color: "#3e2723", paddingBottom: "16px", borderBottom: "3px solid #8d6e63" }}>
-      Required Documents
-    </h2>
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "24px" }}>
-      {Object.entries(selectedSME.investorRequiredDocuments).map(([key, url]) => (
-        <div key={key}>
-          <span style={{ display: "block", fontSize: "16px", fontWeight: "600", color: "#5d4037", marginBottom: "8px" }}>
-            {formatLabel(key)}
-          </span>
-          {typeof url === 'string' && url.startsWith('http') ? (
-            <>
-              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                <Check size={16} color="#388e3c" />
-                <span style={{ fontSize: "16px", color: "#333" }}>Submitted</span>
-              </div>
-              <a href={url} target="_blank" rel="noopener noreferrer"
-                style={{ display: "inline-block", marginTop: "8px", color: "#5d4037", textDecoration: "underline", fontSize: "14px" }}>
-                View Document
-              </a>
-            </>
-          ) : (
-            <span style={{ fontSize: "16px", color: "#999" }}>Not submitted</span>
-          )}
-        </div>
-      ))}
-    </div>
-  </div>
-)}
+                    {selectedSME.investorRequiredDocuments &&
+                      typeof selectedSME.investorRequiredDocuments === 'object' &&
+                      Object.keys(selectedSME.investorRequiredDocuments).length > 0 && (
+                        <div style={{ marginBottom: "40px", backgroundColor: "#fff", borderRadius: "16px", padding: "32px", boxShadow: "0 8px 24px rgba(0,0,0,0.08)", border: "1px solid #e8e8e8" }}>
+                          <h2 style={{ margin: "0 0 24px 0", fontSize: "24px", fontWeight: "700", color: "#3e2723", paddingBottom: "16px", borderBottom: "3px solid #8d6e63" }}>
+                            Required Documents
+                          </h2>
+                          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "24px" }}>
+                            {Object.entries(selectedSME.investorRequiredDocuments).map(([key, url]) => (
+                              <div key={key}>
+                                <span style={{ display: "block", fontSize: "16px", fontWeight: "600", color: "#5d4037", marginBottom: "8px" }}>
+                                  {formatLabel(key)}
+                                </span>
+                                {typeof url === 'string' && url.startsWith('http') ? (
+                                  <>
+                                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                                      <Check size={16} color="#388e3c" />
+                                      <span style={{ fontSize: "16px", color: "#333" }}>Submitted</span>
+                                    </div>
+                                    <a href={url} target="_blank" rel="noopener noreferrer"
+                                      style={{ display: "inline-block", marginTop: "8px", color: "#5d4037", textDecoration: "underline", fontSize: "14px" }}>
+                                      View Document
+                                    </a>
+                                  </>
+                                ) : (
+                                  <span style={{ fontSize: "16px", color: "#999" }}>Not submitted</span>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                   </div>
 
                   <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "40px" }}>
@@ -4336,6 +4325,14 @@ const handleNextStageChange = (sme) => {
             </div>
           </div>
         </div>
+      )}
+
+      {showSMEDetailsModal && selectedSMEForDetails && (
+        <InvestorSMEDetailsModal
+          sme={selectedSMEForDetails}
+          isOpen={showSMEDetailsModal}
+          onClose={() => { setShowSMEDetailsModal(false); setSelectedSMEForDetails(null) }}
+        />
       )}
 
       {showNextStageModal && selectedSMEForStage && (
@@ -4818,55 +4815,55 @@ const handleNextStageChange = (sme) => {
                       marginBottom: "24px",
                     }}
                   >
-                     <div>
-          <label
-            style={{
-              display: "block",
-              marginBottom: "12px",
-              fontWeight: "700",
-              color: "#3e2723",
-              fontSize: "16px",
-            }}
-          >
-            Amount Asked:
-          </label>
-          <div
-            style={{
-              padding: "16px",
-              borderRadius: "12px",
-              border: "2px solid #388e3c",
-              width: "100%",
-              fontSize: "16px",
-              fontWeight: "600",
-              backgroundColor: "#f1f8e9",
-              color: "#1b5e20",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-            }}
-          >
-            <span>
-              {selectedSMEForStage?.fundingNeeded 
-                ? `R${Number(selectedSMEForStage.fundingNeeded).toLocaleString()}`
-                : selectedSMEForStage?.useOfFunds?.amountRequested || "Not specified"}
-            </span>
-            <Info 
-              size={16} 
-              color="#388e3c"
-              title="Auto-populated from SME's funding request"
-            />
-          </div>
-          <p
-            style={{
-              color: "#5d4037",
-              fontSize: "14px",
-              marginTop: "8px",
-              fontStyle: "italic",
-            }}
-          >
-            Auto-populated from SME's original request
-          </p>
-        </div>
+                    <div>
+                      <label
+                        style={{
+                          display: "block",
+                          marginBottom: "12px",
+                          fontWeight: "700",
+                          color: "#3e2723",
+                          fontSize: "16px",
+                        }}
+                      >
+                        Amount Asked:
+                      </label>
+                      <div
+                        style={{
+                          padding: "16px",
+                          borderRadius: "12px",
+                          border: "2px solid #388e3c",
+                          width: "100%",
+                          fontSize: "16px",
+                          fontWeight: "600",
+                          backgroundColor: "#f1f8e9",
+                          color: "#1b5e20",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between",
+                        }}
+                      >
+                        <span>
+                          {selectedSMEForStage?.fundingNeeded
+                            ? `R${Number(selectedSMEForStage.fundingNeeded).toLocaleString()}`
+                            : selectedSMEForStage?.useOfFunds?.amountRequested || "Not specified"}
+                        </span>
+                        <Info
+                          size={16}
+                          color="#388e3c"
+                          title="Auto-populated from SME's funding request"
+                        />
+                      </div>
+                      <p
+                        style={{
+                          color: "#5d4037",
+                          fontSize: "14px",
+                          marginTop: "8px",
+                          fontStyle: "italic",
+                        }}
+                      >
+                        Auto-populated from SME's original request
+                      </p>
+                    </div>
 
                     <div>
                       <label
@@ -5212,10 +5209,10 @@ const handleNextStageChange = (sme) => {
                     fontWeight: "bold",
                     color:
                       currentMatchBreakdown.sector.score * currentMatchBreakdown.sector.weight +
-                      currentMatchBreakdown.stage.score * currentMatchBreakdown.stage.weight +
-                      currentMatchBreakdown.ticket.score * currentMatchBreakdown.ticket.weight +
-                      currentMatchBreakdown.type.score * currentMatchBreakdown.type.weight >=
-                      80
+                        currentMatchBreakdown.stage.score * currentMatchBreakdown.stage.weight +
+                        currentMatchBreakdown.ticket.score * currentMatchBreakdown.ticket.weight +
+                        currentMatchBreakdown.type.score * currentMatchBreakdown.type.weight >=
+                        80
                         ? "#388E3C"
                         : currentMatchBreakdown.sector.score * currentMatchBreakdown.sector.weight +
                           currentMatchBreakdown.stage.score * currentMatchBreakdown.stage.weight +
