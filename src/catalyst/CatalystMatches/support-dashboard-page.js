@@ -44,7 +44,7 @@ function SupportDashboardContent() {
   const [showWelcomePopup, setShowWelcomePopup] = useState(false)
   const [currentOnboardingStep, setCurrentOnboardingStep] = useState(0)
   const [loading, setLoading] = useState(false)
-  
+
   // Initialize filters and stage filter state
   const [filters, setFilters] = useState({
     location: "",
@@ -59,6 +59,7 @@ function SupportDashboardContent() {
     sortBy: "",
   })
   const [stageFilter, setStageFilter] = useState('')
+  const [stageOverrides, setStageOverrides] = useState([])
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
@@ -105,9 +106,9 @@ function SupportDashboardContent() {
 
   if (!authChecked) {
     return (
-      <div 
+      <div
         className="w-full min-h-screen max-w-screen overflow-hidden m-0 relative bg-cover bg-center bg-no-repeat bg-fixed"
-        style={{ 
+        style={{
           backgroundImage: "url('../../assets/BiGBackround.png')",
           boxSizing: 'border-box'
         }}
@@ -120,9 +121,9 @@ function SupportDashboardContent() {
   }
 
   return (
-    <div 
+    <div
       className="w-full min-h-screen max-w-screen overflow-hidden relative bg-cover bg-center bg-no-repeat bg-fixed"
-      style={{ 
+      style={{
         backgroundImage: "url('../../assets/BiGBackround.png')",
         boxSizing: 'border-box'
       }}
@@ -154,7 +155,7 @@ function SupportDashboardContent() {
       {showWelcomePopup && (
         <div className="fixed inset-0 bg-black/70 flex justify-center items-center z-[1000] animate-[fadeIn_0.3s_ease-out] p-5 box-border">
           <div className="bg-white rounded-xl shadow-2xl w-[90%] max-w-[500px] relative overflow-hidden animate-[slideUp_0.4s_ease-out]">
-            <button 
+            <button
               className="absolute top-[15px] right-[15px] bg-none border-none cursor-pointer text-gray-600 z-10 transition-colors duration-200 p-1 hover:text-gray-800"
               onClick={closePopup}
             >
@@ -174,26 +175,25 @@ function SupportDashboardContent() {
                 {onboardingSteps.map((_, index) => (
                   <div
                     key={index}
-                    className={`w-2.5 h-2.5 rounded-full transition-all duration-300 ${
-                      index === currentOnboardingStep 
-                        ? 'bg-lightBrown scale-130' 
-                        : 'bg-gray-300'
-                    }`}
+                    className={`w-2.5 h-2.5 rounded-full transition-all duration-300 ${index === currentOnboardingStep
+                      ? 'bg-lightBrown scale-130'
+                      : 'bg-gray-300'
+                      }`}
                   />
                 ))}
               </div>
               <div className="flex justify-between mt-5 gap-2 flex-wrap">
-                <button 
+                <button
                   className="flex-1 min-w-[120px] py-3 px-6 rounded-lg cursor-pointer text-[clamp(0.8rem,2vw,0.9rem)] font-medium transition-all duration-200 border-2 border-lightBrown bg-transparent text-lightBrown hover:bg-lightBrown hover:text-white"
                   onClick={closePopup}
                 >
                   Skip
                 </button>
-                <button 
+                <button
                   className="flex-1 min-w-[120px] py-3 px-6 rounded-lg cursor-pointer text-[clamp(0.8rem,2vw,0.9rem)] font-medium transition-all duration-200 border-none bg-lightBrown text-white hover:bg-mediumBrown hover:-translate-y-0.5 flex items-center justify-center gap-2"
                   onClick={handleNextStep}
                 >
-                  {currentOnboardingStep < onboardingSteps.length - 1 ? "Next" : "Get Started"} 
+                  {currentOnboardingStep < onboardingSteps.length - 1 ? "Next" : "Get Started"}
                   <ArrowRight size={16} />
                 </button>
               </div>
@@ -204,20 +204,21 @@ function SupportDashboardContent() {
 
       <div className="w-full max-w-full p-0 px-8 m-0 box-border">
         {/* Pipeline Section */}
-        <div 
+        <div
           className="w-full max-w-full mb-1 bg-white/95 rounded-lg shadow-md box-border backdrop-blur-md"
         >
-            <SupportDealFlowPipeline onStageClick={setStageFilter} />
+          <SupportDealFlowPipeline onStageClick={setStageFilter} smeOverrides={stageOverrides} />
         </div>
 
         {/* Tables Section */}
-        <div 
+        <div
           className="w-full max-w-full p-5 mb-5 bg-white/95 rounded-lg shadow-md box-border backdrop-blur-md"
         >
-          <SupportTabbedTables 
-            filters={filters} 
+          <SupportTabbedTables
+            filters={filters}
             stageFilter={stageFilter}
             loading={loading}
+            onStageOverride={setStageOverrides}
           />
         </div>
       </div>
