@@ -9,7 +9,7 @@ const C = ["#3b2409", "#5e3f26", "#7d5a36", "#9c7c54", "#b8a082", "#c2a882", "#d
 
 const barOpts = (yCb) => ({
   responsive: true, maintainAspectRatio: false, animation: false,
-  plugins: { legend: { position: "bottom", labels: { color: B.dark, font: { size: 11 }, boxWidth: 12 } } },
+  plugins: { legend: { position: "bottom", labels: { color: B.dark, font: { size: 11 }, boxWidth: 12 } }, datalabels: { color: B.offwhite } },
   scales: {
     x: { grid: { display: false }, ticks: { color: B.dark, font: { size: 10 } } },
     y: { beginAtZero: true, grid: { color: B.offwhite }, ticks: { color: B.dark, callback: yCb || (v => v) } },
@@ -17,7 +17,7 @@ const barOpts = (yCb) => ({
 });
 const pieOpts = {
   responsive: true, maintainAspectRatio: false, animation: false,
-  plugins: { legend: { position: "bottom", labels: { color: B.dark, font: { size: 11 }, boxWidth: 12 } } },
+  plugins: { legend: { position: "bottom", labels: { color: B.dark, font: { size: 11 }, boxWidth: 12 } }, datalabels: { display: false } },
 };
 
 // ── Skeleton Loaders ──────────────────────────────────────────────────────────

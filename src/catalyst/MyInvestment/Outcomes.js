@@ -17,18 +17,24 @@ const Card = ({ title, subLabel, children }) => (
   </div>
 );
 
-const barOpts = () => ({
+// Horizontal bar, integral-only x-axis ticks (no decimals)
+const hBarIntegralOpts = {
   responsive: true, maintainAspectRatio: false, animation: false,
-  plugins: { legend: { position: "bottom", labels: { color: B.dark, font: { size: 11 }, boxWidth: 12 } } },
+  indexAxis: "y",
+  plugins: { legend: { position: "bottom", labels: { color: B.dark, font: { size: 11 }, boxWidth: 12 } }, datalabels: { color: B.offwhite, font: { weight: "bold" }, formatter: v => v > 0 ? v : "" } },
   scales: {
-    x: { grid: { display: false }, ticks: { color: B.dark, font: { size: 10 } } },
-    y: { beginAtZero: true, grid: { color: B.offwhite }, ticks: { color: B.dark } },
+    x: {
+      beginAtZero: true,
+      grid: { display: true, color: B.offwhite },
+      ticks: { color: B.dark, callback: v => Number.isInteger(v) ? v : "", precision: 0, stepSize: 1 },
+    },
+    y: { grid: { display: false }, ticks: { color: B.dark, font: { size: 11 } } },
   },
-});
+};
 
 const TotalJobsCreated = () => {
   const { metrics } = usePortfolio();
-  const j = metrics?.jobs || {};
+  const j        = metrics?.jobs || {};
   const total    = j.total    || 0;
   const direct   = j.direct   || 0;
   const indirect = j.indirect || 0;
@@ -59,21 +65,27 @@ const TotalJobsCreated = () => {
   );
 };
 
+// Jobs per SME — horizontal bar, sorted highest → lowest, integral x-axis
 const JobsPerSME = () => {
   const { metrics } = usePortfolio();
-  const perSME = (metrics?.jobs?.perSME || []).filter(s => s.jobs > 0);
-  const total  = metrics?.totalSMEs || 1;
-  const avgJobs = perSME.length > 0 ? (perSME.reduce((a, b) => a + b.jobs, 0) / total).toFixed(1) : 0;
+  const perSME = [...(metrics?.jobs?.perSME || [])]
+    .filter(s => s.jobs > 0)
+    .sort((a, b) => b.jobs - a.jobs);
+  const total   = metrics?.totalSMEs || 1;
+  const avgJobs = perSME.length > 0
+    ? (perSME.reduce((a, b) => a + b.jobs, 0) / total).toFixed(1)
+    : 0;
+  const minH = Math.max(240, perSME.length * 40);
 
   return (
-    <Card title="Jobs Created per SME" subLabel="Bar chart — projected jobs per SME">
+    <Card title="Jobs Created per SME" subLabel="Horizontal bar — projected jobs per SME (direct + indirect)">
       {perSME.length > 0 ? (
         <>
-          <div style={{ flex: 1, minHeight: "240px" }}>
-            <Bar options={barOpts()} data={{
-              labels: perSME.map(s => s.name),
-              datasets: [{ label: "Jobs (direct + indirect)", data: perSME.map(s => s.jobs), backgroundColor: C.slice(0, perSME.length) }],
-            }} />
+          <div style={{ flex: 1, minHeight: `${minH}px` }}>
+            <Bar
+              options={hBarIntegralOpts}
+              data={{ labels: perSME.map(s => s.name), datasets: [{ label: "Jobs (direct + indirect)", data: perSME.map(s => s.jobs), backgroundColor: C.slice(0, perSME.length) }] }}
+            />
           </div>
           <div style={{ display: "flex", justifyContent: "space-between", marginTop: "10px", padding: "8px 12px", background: B.offwhite, borderRadius: "6px" }}>
             <span style={{ fontSize: "12px", color: B.dark, fontWeight: 600 }}>Portfolio Avg: <strong>{avgJobs} jobs/SME</strong></span>
