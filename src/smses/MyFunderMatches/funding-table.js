@@ -22,6 +22,7 @@ import { ref, uploadBytes, getDownloadURL } from "firebase/storage"
 import get from "lodash.get"
 import styles from "./funding.module.css"
 import { useNavigate } from "react-router-dom"
+import FunderDetailsModal from "./FunderDetailsModal"
 const ADJACENT_INDUSTRIES = {
   ict: ["technology", "software", "digital services"],
   education: ["e-learning", "training", "edtech"],
@@ -560,21 +561,24 @@ export const FundingTable = ({ filters = {}, onInsightsData, onPrimaryMatchCount
   const [showFilterModal, setShowFilterModal] = useState(false)
   const [scoreBreakdowns, setScoreBreakdowns] = useState({})
   const [showBreakdownModal, setShowBreakdownModal] = useState(false)
- const [existingApplications, setExistingApplications] = useState({})
- const navigate = useNavigate()
-const [showBigScoreWarning, setShowBigScoreWarning] = useState(false);
+  const [existingApplications, setExistingApplications] = useState({})
+  const navigate = useNavigate()
+  const [showBigScoreWarning, setShowBigScoreWarning] = useState(false);
   const [currentBreakdown, setCurrentBreakdown] = useState(null)
 
+  const [showFunderDetails, setShowFunderDetails] = useState(false)
+  const [selectedFunderDetails, setSelectedFunderDetails] = useState(null)
+
   // Add these state variables after existing state declarations
-const [companyOwnerId, setCompanyOwnerId] = useState(null);
-const [isCompanyMember, setIsCompanyMember] = useState(false);
-const [effectiveUserId, setEffectiveUserId] = useState(null);
-const [userRole, setUserRole] = useState(null);
+  const [companyOwnerId, setCompanyOwnerId] = useState(null);
+  const [isCompanyMember, setIsCompanyMember] = useState(false);
+  const [effectiveUserId, setEffectiveUserId] = useState(null);
+  const [userRole, setUserRole] = useState(null);
   // Filter states
-// Add this state to track the big score
-const [bigScore, setBigScore] = useState(null);
-const [removedFunders, setRemovedFunders] = useState([]);
-const [showRestorePanel, setShowRestorePanel] = useState(false);
+  // Add this state to track the big score
+  const [bigScore, setBigScore] = useState(null);
+  const [removedFunders, setRemovedFunders] = useState([]);
+  const [showRestorePanel, setShowRestorePanel] = useState(false);
   // Filter states
   const [tableFilters, setTableFilters] = useState({
     funderName: "",
@@ -589,230 +593,230 @@ const [showRestorePanel, setShowRestorePanel] = useState(false);
     currentStage: "",
 
   })
-const [funderToRemove, setFunderToRemove] = useState(null);
+  const [funderToRemove, setFunderToRemove] = useState(null);
   // Add this function inside the FundingTable component (after other handlers)
-// Update the handleRemoveFunder function (around line 580)
-const handleRemoveFunder = async (funderId, fundKey) => {
-  try {
-    const auth = getAuth();
-    const user = auth.currentUser;
-    if (!user) throw new Error("User not authenticated");
-
-    // Check permissions
-    if (isCompanyMember && !['owner', 'admin'].includes(userRole)) {
-      setNotification({
-        type: "warning",
-        message: "Only company owners and admins can remove funders.",
-      });
-      return;
-    }
-
-    // Show loading notification
-    setNotification({
-      type: "info",
-      message: "Removing funder...",
-    });
-
-    // Create a document in removedFunders collection
-    await addDoc(collection(db, "removedFunders"), {
-      userId: effectiveUserId,
-      funderId: funderId,
-      fundKey: fundKey,
-      removedAt: new Date().toISOString(),
-      removedBy: user.uid,
-      removedByRole: userRole,
-    });
-
-    // Show success notification
-    setNotification({
-      type: "success",
-      message: "Funder removed successfully. Refreshing...",
-    });
-
-    // Wait a brief moment for the user to see the success message
-    setTimeout(() => {
-      // Reload the page to refresh the data
-      window.location.reload();
-    }, 800);
-
-  } catch (error) {
-    console.error("Error removing funder:", error);
-    setNotification({
-      type: "error",
-      message: "Failed to remove funder. Please try again.",
-    });
-  }
-};
-
-
-// Add the restore panel component
-const RestorePanel = () => {
-  const [removedFunderDetails, setRemovedFunderDetails] = useState([]);
-  
-  useEffect(() => {
-    const fetchRemovedDetails = async () => {
-      const details = [];
-      for (const funderId of removedFunders) {
-        try {
-          const docSnap = await getDoc(doc(db, "MyuniversalProfiles", funderId));
-          if (docSnap.exists()) {
-            details.push({
-              id: funderId,
-              name: docSnap.data().formData?.fundManageOverview?.registeredName || "Unknown Funder",
-              removedAt: new Date().toISOString() // You would need to store this in the database
-            });
-          }
-        } catch (error) {
-          console.error("Error fetching funder details:", error);
-        }
-      }
-      setRemovedFunderDetails(details);
-    };
-    
-    if (showRestorePanel && removedFunders.length > 0) {
-      fetchRemovedDetails();
-    }
-  }, [showRestorePanel, removedFunders]);
-
-    const handleRestoreFunder = async (funderId) => {
-  try {
-    // Show loading notification
-    setNotification({
-      type: "info",
-      message: "Restoring funder...",
-    });
-
-    // Delete from removedFunders collection
-    const removedQuery = query(
-      collection(db, "removedFunders"),
-      where("userId", "==", effectiveUserId),
-      where("funderId", "==", funderId)
-    );
-    const snapshot = await getDocs(removedQuery);
-    const batch = writeBatch(db);
-    snapshot.docs.forEach(doc => batch.delete(doc.ref));
-    await batch.commit();
-
-    // Show success notification
-    setNotification({
-      type: "success",
-      message: "Funder restored successfully. Refreshing...",
-    });
-
-    // Wait a brief moment for the user to see the success message
-    setTimeout(() => {
-      // Reload the page to refresh the data
-      window.location.reload();
-    }, 800);
-
-  } catch (error) {
-    console.error("Error restoring funder:", error);
-    setNotification({
-      type: "error",
-      message: "Failed to restore funder. Please try again.",
-    });
-  }
-};
-  
-  if (!showRestorePanel) return null;
-  
-  return (
-    <div style={{
-      background: "#F8F9FA",
-      border: "1px solid #DEE2E6",
-      borderRadius: "8px",
-      padding: "1rem",
-      marginBottom: "1rem"
-    }}>
-      <div style={{
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-        marginBottom: "0.5rem"
-      }}>
-        <h4 style={{ margin: 0, color: "#5D2A0A" }}>
-          Removed Funders ({removedFunders.length})
-        </h4>
-        <button
-          onClick={() => setShowRestorePanel(false)}
-          style={{
-            background: "none",
-            border: "none",
-            color: "#666",
-            cursor: "pointer",
-            fontSize: "1rem"
-          }}
-        >
-          ✕
-        </button>
-      </div>
-      
-      {removedFunderDetails.length === 0 ? (
-        <p style={{ color: "#666", fontSize: "0.875rem", margin: 0 }}>
-          No funders have been removed
-        </p>
-      ) : (
-        <div style={{ maxHeight: "200px", overflowY: "auto" }}>
-          {removedFunderDetails.map(funder => (
-            <div key={funder.id} style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              padding: "0.5rem",
-              borderBottom: "1px solid #DEE2E6"
-            }}>
-              <span style={{ fontSize: "0.875rem" }}>
-                {funder.name}
-              </span>
-              <button
-                onClick={() => handleRestoreFunder(funder.id)}
-                style={{
-                  padding: "0.25rem 0.5rem",
-                  background: "#E8F5E9",
-                  color: "#2E7D32",
-                  border: "1px solid #C8E6C9",
-                  borderRadius: "4px",
-                  fontSize: "0.75rem",
-                  cursor: "pointer"
-                }}
-              >
-                Restore
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-};
-// Add useEffect to fetch already removed funders (add after other useEffect hooks)
-// Update the fetchRemovedFunders useEffect
-useEffect(() => {
-  const fetchRemovedFunders = async () => {
-    if (!effectiveUserId) return;
-    
+  // Update the handleRemoveFunder function (around line 580)
+  const handleRemoveFunder = async (funderId, fundKey) => {
     try {
-      const removedQuery = query(
-        collection(db, "removedFunders"),
-        where("userId", "==", effectiveUserId)
-      );
-      
-      const snapshot = await getDocs(removedQuery);
-      const removedIds = snapshot.docs.map(doc => doc.data().funderId);
-      setRemovedFunders(removedIds);
-      
-      // Filter out removed funders from the lists
-      setAllFunders(prev => prev.filter(f => !removedIds.includes(f.funderId)));
-      setFilteredFunders(prev => prev.filter(f => !removedIds.includes(f.funderId)));
+      const auth = getAuth();
+      const user = auth.currentUser;
+      if (!user) throw new Error("User not authenticated");
+
+      // Check permissions
+      if (isCompanyMember && !['owner', 'admin'].includes(userRole)) {
+        setNotification({
+          type: "warning",
+          message: "Only company owners and admins can remove funders.",
+        });
+        return;
+      }
+
+      // Show loading notification
+      setNotification({
+        type: "info",
+        message: "Removing funder...",
+      });
+
+      // Create a document in removedFunders collection
+      await addDoc(collection(db, "removedFunders"), {
+        userId: effectiveUserId,
+        funderId: funderId,
+        fundKey: fundKey,
+        removedAt: new Date().toISOString(),
+        removedBy: user.uid,
+        removedByRole: userRole,
+      });
+
+      // Show success notification
+      setNotification({
+        type: "success",
+        message: "Funder removed successfully. Refreshing...",
+      });
+
+      // Wait a brief moment for the user to see the success message
+      setTimeout(() => {
+        // Reload the page to refresh the data
+        window.location.reload();
+      }, 800);
+
     } catch (error) {
-      console.error("Error fetching removed funders:", error);
+      console.error("Error removing funder:", error);
+      setNotification({
+        type: "error",
+        message: "Failed to remove funder. Please try again.",
+      });
     }
   };
-  
-  if (effectiveUserId) {
-    fetchRemovedFunders();
-  }
-}, [effectiveUserId]);
+
+
+  // Add the restore panel component
+  const RestorePanel = () => {
+    const [removedFunderDetails, setRemovedFunderDetails] = useState([]);
+
+    useEffect(() => {
+      const fetchRemovedDetails = async () => {
+        const details = [];
+        for (const funderId of removedFunders) {
+          try {
+            const docSnap = await getDoc(doc(db, "MyuniversalProfiles", funderId));
+            if (docSnap.exists()) {
+              details.push({
+                id: funderId,
+                name: docSnap.data().formData?.fundManageOverview?.registeredName || "Unknown Funder",
+                removedAt: new Date().toISOString() // You would need to store this in the database
+              });
+            }
+          } catch (error) {
+            console.error("Error fetching funder details:", error);
+          }
+        }
+        setRemovedFunderDetails(details);
+      };
+
+      if (showRestorePanel && removedFunders.length > 0) {
+        fetchRemovedDetails();
+      }
+    }, [showRestorePanel, removedFunders]);
+
+    const handleRestoreFunder = async (funderId) => {
+      try {
+        // Show loading notification
+        setNotification({
+          type: "info",
+          message: "Restoring funder...",
+        });
+
+        // Delete from removedFunders collection
+        const removedQuery = query(
+          collection(db, "removedFunders"),
+          where("userId", "==", effectiveUserId),
+          where("funderId", "==", funderId)
+        );
+        const snapshot = await getDocs(removedQuery);
+        const batch = writeBatch(db);
+        snapshot.docs.forEach(doc => batch.delete(doc.ref));
+        await batch.commit();
+
+        // Show success notification
+        setNotification({
+          type: "success",
+          message: "Funder restored successfully. Refreshing...",
+        });
+
+        // Wait a brief moment for the user to see the success message
+        setTimeout(() => {
+          // Reload the page to refresh the data
+          window.location.reload();
+        }, 800);
+
+      } catch (error) {
+        console.error("Error restoring funder:", error);
+        setNotification({
+          type: "error",
+          message: "Failed to restore funder. Please try again.",
+        });
+      }
+    };
+
+    if (!showRestorePanel) return null;
+
+    return (
+      <div style={{
+        background: "#F8F9FA",
+        border: "1px solid #DEE2E6",
+        borderRadius: "8px",
+        padding: "1rem",
+        marginBottom: "1rem"
+      }}>
+        <div style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: "0.5rem"
+        }}>
+          <h4 style={{ margin: 0, color: "#5D2A0A" }}>
+            Removed Funders ({removedFunders.length})
+          </h4>
+          <button
+            onClick={() => setShowRestorePanel(false)}
+            style={{
+              background: "none",
+              border: "none",
+              color: "#666",
+              cursor: "pointer",
+              fontSize: "1rem"
+            }}
+          >
+            ✕
+          </button>
+        </div>
+
+        {removedFunderDetails.length === 0 ? (
+          <p style={{ color: "#666", fontSize: "0.875rem", margin: 0 }}>
+            No funders have been removed
+          </p>
+        ) : (
+          <div style={{ maxHeight: "200px", overflowY: "auto" }}>
+            {removedFunderDetails.map(funder => (
+              <div key={funder.id} style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                padding: "0.5rem",
+                borderBottom: "1px solid #DEE2E6"
+              }}>
+                <span style={{ fontSize: "0.875rem" }}>
+                  {funder.name}
+                </span>
+                <button
+                  onClick={() => handleRestoreFunder(funder.id)}
+                  style={{
+                    padding: "0.25rem 0.5rem",
+                    background: "#E8F5E9",
+                    color: "#2E7D32",
+                    border: "1px solid #C8E6C9",
+                    borderRadius: "4px",
+                    fontSize: "0.75rem",
+                    cursor: "pointer"
+                  }}
+                >
+                  Restore
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+  // Add useEffect to fetch already removed funders (add after other useEffect hooks)
+  // Update the fetchRemovedFunders useEffect
+  useEffect(() => {
+    const fetchRemovedFunders = async () => {
+      if (!effectiveUserId) return;
+
+      try {
+        const removedQuery = query(
+          collection(db, "removedFunders"),
+          where("userId", "==", effectiveUserId)
+        );
+
+        const snapshot = await getDocs(removedQuery);
+        const removedIds = snapshot.docs.map(doc => doc.data().funderId);
+        setRemovedFunders(removedIds);
+
+        // Filter out removed funders from the lists
+        setAllFunders(prev => prev.filter(f => !removedIds.includes(f.funderId)));
+        setFilteredFunders(prev => prev.filter(f => !removedIds.includes(f.funderId)));
+      } catch (error) {
+        console.error("Error fetching removed funders:", error);
+      }
+    };
+
+    if (effectiveUserId) {
+      fetchRemovedFunders();
+    }
+  }, [effectiveUserId]);
 
   // Get unique values for filter dropdowns
   const getUniqueValues = (key) => {
@@ -835,144 +839,144 @@ useEffect(() => {
   const uniqueStages = getUniqueValues("targetStage")
   const uniqueTypes = getUniqueValues("investmentType")
   const uniquePipelineStages = getUniqueValues("pipelineStage")
- useEffect(() => {
-  const checkCompanyMembership = async () => {
-    const auth = getAuth();
-    const user = auth.currentUser;
-    if (!user) return;
+  useEffect(() => {
+    const checkCompanyMembership = async () => {
+      const auth = getAuth();
+      const user = auth.currentUser;
+      if (!user) return;
 
-    try {
-      const userDocRef = doc(db, "users", user.uid);
-      const userDocSnap = await getDoc(userDocRef);
-      
-      if (userDocSnap.exists()) {
-        const userData = userDocSnap.data();
-        const userCompanyId = userData.companyId;
-        const userCompanyRole = userData.userRole;
-        
-        if (userCompanyId) {
-          const companyDocRef = doc(db, "companies", userCompanyId);
-          const companyDocSnap = await getDoc(companyDocRef);
-          
-          if (companyDocSnap.exists()) {
-            const companyData = companyDocSnap.data();
-            const ownerId = companyData.createdBy;
-            
-            setUserRole(userCompanyRole || 'viewer');
-            
-            if (ownerId === user.uid) {
-              setIsCompanyMember(false);
-              setEffectiveUserId(user.uid);
-            } else {
-              setIsCompanyMember(true);
-              setCompanyOwnerId(ownerId);
-              setEffectiveUserId(ownerId);
+      try {
+        const userDocRef = doc(db, "users", user.uid);
+        const userDocSnap = await getDoc(userDocRef);
+
+        if (userDocSnap.exists()) {
+          const userData = userDocSnap.data();
+          const userCompanyId = userData.companyId;
+          const userCompanyRole = userData.userRole;
+
+          if (userCompanyId) {
+            const companyDocRef = doc(db, "companies", userCompanyId);
+            const companyDocSnap = await getDoc(companyDocRef);
+
+            if (companyDocSnap.exists()) {
+              const companyData = companyDocSnap.data();
+              const ownerId = companyData.createdBy;
+
+              setUserRole(userCompanyRole || 'viewer');
+
+              if (ownerId === user.uid) {
+                setIsCompanyMember(false);
+                setEffectiveUserId(user.uid);
+              } else {
+                setIsCompanyMember(true);
+                setCompanyOwnerId(ownerId);
+                setEffectiveUserId(ownerId);
+              }
             }
+          } else {
+            setIsCompanyMember(false);
+            setEffectiveUserId(user.uid);
+            setUserRole('owner');
           }
-        } else {
-          setIsCompanyMember(false);
-          setEffectiveUserId(user.uid);
-          setUserRole('owner');
         }
+      } catch (error) {
+        console.error("Error checking company membership:", error);
+        setEffectiveUserId(user.uid);
+        setUserRole('owner');
       }
-    } catch (error) {
-      console.error("Error checking company membership:", error);
-      setEffectiveUserId(user.uid);
-      setUserRole('owner');
-    }
-  };
+    };
 
-  checkCompanyMembership();
-}, []);
+    checkCompanyMembership();
+  }, []);
 
- useEffect(() => {
-  const fetchBigScore = async () => {
-    if (!effectiveUserId) return; // Wait for effectiveUserId
-    
-    try {
-      const bigEvalDocRef = doc(db, "bigEvaluations", effectiveUserId);
-      const bigEvalDoc = await getDoc(bigEvalDocRef);
-      
-      if (bigEvalDoc.exists()) {
-        const bigEvalData = bigEvalDoc.data();
-        const bigScoreData = bigEvalData.scores?.bigScore;
-        setBigScore(bigScoreData);
-        
-        console.log(`BigScore loaded: ${bigScoreData}%`);
-      } else {
-        console.log("No BigScore evaluation found");
+  useEffect(() => {
+    const fetchBigScore = async () => {
+      if (!effectiveUserId) return; // Wait for effectiveUserId
+
+      try {
+        const bigEvalDocRef = doc(db, "bigEvaluations", effectiveUserId);
+        const bigEvalDoc = await getDoc(bigEvalDocRef);
+
+        if (bigEvalDoc.exists()) {
+          const bigEvalData = bigEvalDoc.data();
+          const bigScoreData = bigEvalData.scores?.bigScore;
+          setBigScore(bigScoreData);
+
+          console.log(`BigScore loaded: ${bigScoreData}%`);
+        } else {
+          console.log("No BigScore evaluation found");
+          setBigScore(0);
+        }
+      } catch (error) {
+        console.error("Error fetching big score:", error);
         setBigScore(0);
       }
-    } catch (error) {
-      console.error("Error fetching big score:", error);
-      setBigScore(0);
-    }
-  };
+    };
 
-  if (effectiveUserId) {
-    fetchBigScore();
-  }
-}, [effectiveUserId]);
+    if (effectiveUserId) {
+      fetchBigScore();
+    }
+  }, [effectiveUserId]);
 
   const BigScoreIndicator = () => {
-  if (bigScore === null) {
+    if (bigScore === null) {
+      return (
+        <div style={{
+          padding: "0.5rem",
+          background: "#FFF3CD",
+          border: "1px solid #FFEAA7",
+          borderRadius: "4px",
+          fontSize: "0.75rem",
+          color: "#856404",
+          marginBottom: "1rem"
+        }}>
+          ⏳ Loading your BigScore...
+        </div>
+      );
+    }
+
+    const isEligible = bigScore >= 75;
+
     return (
       <div style={{
-        padding: "0.5rem",
-        background: "#FFF3CD",
-        border: "1px solid #FFEAA7",
-        borderRadius: "4px",
-        fontSize: "0.75rem",
-        color: "#856404",
-        marginBottom: "1rem"
+        padding: "0.75rem",
+        background: isEligible ? "#D4EDDA" : "#F8D7DA",
+        border: `1px solid ${isEligible ? "#C3E6CB" : "#F5C6CB"}`,
+        borderRadius: "6px",
+        fontSize: "0.8rem",
+        color: isEligible ? "#155724" : "#721C24",
+        marginBottom: "1rem",
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center"
       }}>
-        ⏳ Loading your BigScore...
-      </div>
-    );
-  }
-
-  const isEligible = bigScore >= 75;
-  
-  return (
-    <div style={{
-      padding: "0.75rem",
-      background: isEligible ? "#D4EDDA" : "#F8D7DA",
-      border: `1px solid ${isEligible ? "#C3E6CB" : "#F5C6CB"}`,
-      borderRadius: "6px",
-      fontSize: "0.8rem",
-      color: isEligible ? "#155724" : "#721C24",
-      marginBottom: "1rem",
-      display: "flex",
-      justifyContent: "space-between",
-      alignItems: "center"
-    }}>
-      <div>
-        <strong>BigScore: {bigScore}%</strong>
-        {isEligible ? (
-          <span> ✓ Eligible to apply</span>
-        ) : (
-          <span> ✗ Minimum 85% required</span>
+        <div>
+          <strong>BigScore: {bigScore}%</strong>
+          {isEligible ? (
+            <span> ✓ Eligible to apply</span>
+          ) : (
+            <span> ✗ Minimum 85% required</span>
+          )}
+        </div>
+        {!isEligible && (
+          <button
+            onClick={() => setShowBigScoreWarning(true)}
+            style={{
+              padding: "0.25rem 0.5rem",
+              background: "#007BFF",
+              color: "white",
+              border: "none",
+              borderRadius: "3px",
+              fontSize: "0.7rem",
+              cursor: "pointer"
+            }}
+          >
+            Get Help
+          </button>
         )}
       </div>
-      {!isEligible && (
-        <button
-          onClick={() => setShowBigScoreWarning(true)}
-          style={{
-            padding: "0.25rem 0.5rem",
-            background: "#007BFF",
-            color: "white",
-            border: "none",
-            borderRadius: "3px",
-            fontSize: "0.7rem",
-            cursor: "pointer"
-          }}
-        >
-          Get Help
-        </button>
-      )}
-    </div>
-  );
-};
+    );
+  };
   const BigScoreWarningModal = () => {
     if (!showBigScoreWarning) return null;
 
@@ -1059,7 +1063,7 @@ useEffect(() => {
             }}>
               Your score indicates you may benefit from incubation or acceleration support to strengthen your business foundation.
             </p>
-            
+
             <p style={{
               color: "#4a352f",
               fontSize: "16px",
@@ -1068,8 +1072,8 @@ useEffect(() => {
             }}>
               Your current <strong>BigScore is {bigScore}%</strong>, which is below the minimum requirement of <strong>85%</strong> needed to apply for funding.
             </p>
-            
-           
+
+
           </div>
 
           {/* Score Visualization */}
@@ -1096,7 +1100,7 @@ useEffect(() => {
                 fontWeight: "800"
               }}>{bigScore}%</div>
             </div>
-            
+
             <div style={{
               flex: 1,
               margin: "0 20px",
@@ -1132,7 +1136,7 @@ useEffect(() => {
                 <span>100%</span>
               </div>
             </div>
-            
+
             <div style={{ textAlign: "center" }}>
               <div style={{
                 color: "#4CAF50",
@@ -1181,7 +1185,7 @@ useEffect(() => {
             >
               Close
             </button>
-            
+
             <button
               onClick={handleGetHelpClick}
               style={{
@@ -1528,15 +1532,15 @@ useEffect(() => {
     return count
   }
 
-useEffect(() => {
-  const checkExistingApplications = async () => {
-    if (!effectiveUserId) return; // Wait for effectiveUserId
-    
-    try {
-      const [smeAppsSnapshot, investorAppsSnapshot] = await Promise.all([
-        getDocs(query(collection(db, "smeApplications"), where("smeId", "==", effectiveUserId))),
-        getDocs(query(collection(db, "investorApplications"), where("smeId", "==", effectiveUserId))),
-      ]);
+  useEffect(() => {
+    const checkExistingApplications = async () => {
+      if (!effectiveUserId) return; // Wait for effectiveUserId
+
+      try {
+        const [smeAppsSnapshot, investorAppsSnapshot] = await Promise.all([
+          getDocs(query(collection(db, "smeApplications"), where("smeId", "==", effectiveUserId))),
+          getDocs(query(collection(db, "investorApplications"), where("smeId", "==", effectiveUserId))),
+        ]);
 
         const existingApps = {}
         const appStatusMap = {}
@@ -1587,118 +1591,118 @@ useEffect(() => {
             }
           }),
         )
-        } catch (error) {
-      console.error("Error checking existing applications:", error);
+      } catch (error) {
+        console.error("Error checking existing applications:", error);
+      }
+    };
+
+    if (effectiveUserId) {
+      checkExistingApplications();
     }
-  };
-
-  if (effectiveUserId) {
-    checkExistingApplications();
-  }
-}, [effectiveUserId]);
+  }, [effectiveUserId]);
 
 
-useEffect(() => {
-  if (!effectiveUserId) return;
-  
-  const unsubscribe = onSnapshot(
-    query(collection(db, "smeApplications"), where("smeId", "==", effectiveUserId)),
-    (snapshot) => {
-      const updatedPipelineStages = {};
-      const updatedStatuses = {};
-      const updatedDates = {};
-      const updatedWaitingTimes = {};
+  useEffect(() => {
+    if (!effectiveUserId) return;
 
-      snapshot.forEach((doc) => {
-        const data = doc.data();
-        const key = `${data.funderId}_${data.fundName}`;
-        updatedPipelineStages[key] = data.pipelineStage || "Application Sent";
-        updatedStatuses[key] = data.status || "Pending";
-        updatedDates[key] = data.applicationDate || new Date().toISOString().split("T")[0];
-        updatedWaitingTimes[key] = data.waitingTime || "3-5 days";
-      });
+    const unsubscribe = onSnapshot(
+      query(collection(db, "smeApplications"), where("smeId", "==", effectiveUserId)),
+      (snapshot) => {
+        const updatedPipelineStages = {};
+        const updatedStatuses = {};
+        const updatedDates = {};
+        const updatedWaitingTimes = {};
 
-      setPipelineStages((prev) => ({ ...prev, ...updatedPipelineStages }));
-      setStatuses((prev) => ({ ...prev, ...updatedStatuses }));
-      setApplicationDates((prev) => ({ ...prev, ...updatedDates }));
-      setWaitingTimes((prev) => ({ ...prev, ...updatedWaitingTimes }));
+        snapshot.forEach((doc) => {
+          const data = doc.data();
+          const key = `${data.funderId}_${data.fundName}`;
+          updatedPipelineStages[key] = data.pipelineStage || "Application Sent";
+          updatedStatuses[key] = data.status || "Pending";
+          updatedDates[key] = data.applicationDate || new Date().toISOString().split("T")[0];
+          updatedWaitingTimes[key] = data.waitingTime || "3-5 days";
+        });
 
-      // Update funders with new pipeline stages
-      setAllFunders((prevFunders) =>
-        prevFunders.map((funder) => {
-          const key = `${funder.funderId}_${funder.name}`;
-          return {
-            ...funder,
-            pipelineStage: updatedPipelineStages[key] || funder.pipelineStage || "Match",
-          };
-        }),
-      );
+        setPipelineStages((prev) => ({ ...prev, ...updatedPipelineStages }));
+        setStatuses((prev) => ({ ...prev, ...updatedStatuses }));
+        setApplicationDates((prev) => ({ ...prev, ...updatedDates }));
+        setWaitingTimes((prev) => ({ ...prev, ...updatedWaitingTimes }));
 
-      setFilteredFunders((prevFunders) =>
-        prevFunders.map((funder) => {
-          const key = `${funder.funderId}_${funder.name}`;
-          return {
-            ...funder,
-            pipelineStage: updatedPipelineStages[key] || funder.pipelineStage || "Match",
-          };
-        }),
-      );
-    },
-    (error) => {
-      console.error("Error listening to application updates:", error);
-    },
-  );
+        // Update funders with new pipeline stages
+        setAllFunders((prevFunders) =>
+          prevFunders.map((funder) => {
+            const key = `${funder.funderId}_${funder.name}`;
+            return {
+              ...funder,
+              pipelineStage: updatedPipelineStages[key] || funder.pipelineStage || "Match",
+            };
+          }),
+        );
 
-  return () => unsubscribe();
-}, [effectiveUserId]);
+        setFilteredFunders((prevFunders) =>
+          prevFunders.map((funder) => {
+            const key = `${funder.funderId}_${funder.name}`;
+            return {
+              ...funder,
+              pipelineStage: updatedPipelineStages[key] || funder.pipelineStage || "Match",
+            };
+          }),
+        );
+      },
+      (error) => {
+        console.error("Error listening to application updates:", error);
+      },
+    );
 
- // Update handleApplyClick to use effectiveUserId
-const handleApplyClick = async (funder) => {
-  try {
-    const auth = getAuth();
-    const user = auth.currentUser;
-    if (!user) throw new Error("User not authenticated");
-    
-    if (bigScore === null) {
-      setNotification({ 
-        type: "info", 
-        message: "Please wait while we verify your eligibility..." 
-      });
-      return;
-    }
+    return () => unsubscribe();
+  }, [effectiveUserId]);
 
-    if (bigScore < 85) {
-      setShowBigScoreWarning(true);
-      return;
-    }
-    
-    // Check permissions for company members
-    if (isCompanyMember && !['owner', 'admin'].includes(userRole)) {
-      setNotification({
-        type: "warning",
-        message: "Only company owners and admins can submit applications.",
-      });
-      return;
-    }
-     
-    const applicationKey = `${funder.funderId}_${funder.name}`;
-    if (existingApplications[applicationKey]) {
-      setNotification({
-        type: "warning",
-        message: "You've already submitted an application to this funder.",
-      });
-      return;
-    }
+  // Update handleApplyClick to use effectiveUserId
+  const handleApplyClick = async (funder) => {
+    try {
+      const auth = getAuth();
+      const user = auth.currentUser;
+      if (!user) throw new Error("User not authenticated");
 
-    // Use effectiveUserId for profile data
-    const [funderSnap, profileSnap] = await Promise.all([
-      getDoc(doc(db, "MyuniversalProfiles", funder.funderId)),
-      getDoc(doc(db, "universalProfiles", effectiveUserId)),
-    ]);
+      if (bigScore === null) {
+        setNotification({
+          type: "info",
+          message: "Please wait while we verify your eligibility..."
+        });
+        return;
+      }
 
-    if (!funderSnap.exists() || !profileSnap.exists()) {
-      throw new Error("Missing funder or profile data");
-    }
+      if (bigScore < 85) {
+        setShowBigScoreWarning(true);
+        return;
+      }
+
+      // Check permissions for company members
+      if (isCompanyMember && !['owner', 'admin'].includes(userRole)) {
+        setNotification({
+          type: "warning",
+          message: "Only company owners and admins can submit applications.",
+        });
+        return;
+      }
+
+      const applicationKey = `${funder.funderId}_${funder.name}`;
+      if (existingApplications[applicationKey]) {
+        setNotification({
+          type: "warning",
+          message: "You've already submitted an application to this funder.",
+        });
+        return;
+      }
+
+      // Use effectiveUserId for profile data
+      const [funderSnap, profileSnap] = await Promise.all([
+        getDoc(doc(db, "MyuniversalProfiles", funder.funderId)),
+        getDoc(doc(db, "universalProfiles", effectiveUserId)),
+      ]);
+
+      if (!funderSnap.exists() || !profileSnap.exists()) {
+        throw new Error("Missing funder or profile data");
+      }
 
       const funderData = funderSnap.data()
       const profile = profileSnap.data()
@@ -1774,45 +1778,45 @@ const handleApplyClick = async (funder) => {
   }
 
   const submitApplication = async (funder) => {
-  try {
-    const auth = getAuth();
-    const user = auth.currentUser;
-    if (!user || !currentBusiness) throw new Error("Missing user or business");
+    try {
+      const auth = getAuth();
+      const user = auth.currentUser;
+      if (!user || !currentBusiness) throw new Error("Missing user or business");
 
-    // Check permissions
-    if (isCompanyMember && !['owner', 'admin'].includes(userRole)) {
-      setNotification({
-        type: "warning",
-        message: "Only company owners and admins can submit applications.",
-      });
-      return;
-    }
+      // Check permissions
+      if (isCompanyMember && !['owner', 'admin'].includes(userRole)) {
+        setNotification({
+          type: "warning",
+          message: "Only company owners and admins can submit applications.",
+        });
+        return;
+      }
 
-    const existingAppQuery = query(
-      collection(db, "smeApplications"),
-      where("smeId", "==", effectiveUserId), // Use effectiveUserId
-      where("funderId", "==", funder.funderId),
-      where("fundName", "==", funder.name),
-    );
+      const existingAppQuery = query(
+        collection(db, "smeApplications"),
+        where("smeId", "==", effectiveUserId), // Use effectiveUserId
+        where("funderId", "==", funder.funderId),
+        where("fundName", "==", funder.name),
+      );
 
-    const existingAppSnapshot = await getDocs(existingAppQuery);
-    if (!existingAppSnapshot.empty) {
-      setNotification({
-        type: "warning",
-        message: "Application already submitted to this funder.",
-      });
-      return;
-    }
+      const existingAppSnapshot = await getDocs(existingAppQuery);
+      if (!existingAppSnapshot.empty) {
+        setNotification({
+          type: "warning",
+          message: "Application already submitted to this funder.",
+        });
+        return;
+      }
 
-    const applicationDate = new Date().toISOString().split("T")[0];
+      const applicationDate = new Date().toISOString().split("T")[0];
 
-    const baseApplicationData = {
-      smeId: effectiveUserId, // Use effectiveUserId
-      submittedBy: user.uid, // Track who submitted
-      submittedByRole: userRole, // Track their role
-      funderId: funder.funderId,
-      fundName: funder.name,
-      smeName: currentBusiness.registeredName || "Unnamed Business",
+      const baseApplicationData = {
+        smeId: effectiveUserId, // Use effectiveUserId
+        submittedBy: user.uid, // Track who submitted
+        submittedByRole: userRole, // Track their role
+        funderId: funder.funderId,
+        fundName: funder.name,
+        smeName: currentBusiness.registeredName || "Unnamed Business",
         investmentType: funder.investmentType,
         entityType: currentBusiness.useOfFunds?.entityType || "Not specified",
         supportFormat: currentBusiness.applicationOverview?.supportFormat || "Not specified",
@@ -1909,176 +1913,176 @@ const handleApplyClick = async (funder) => {
     }
   }
 
- useEffect(() => {
-  if (!filters || !effectiveUserId) return;
+  useEffect(() => {
+    if (!filters || !effectiveUserId) return;
 
-  const fetchData = async () => {
-    try {
-      const auth = getAuth();
-      const user = auth.currentUser;
-      if (!user) throw new Error("User not authenticated");
+    const fetchData = async () => {
+      try {
+        const auth = getAuth();
+        const user = auth.currentUser;
+        if (!user) throw new Error("User not authenticated");
 
-      const businessSnap = await getDoc(doc(db, "universalProfiles", effectiveUserId));
-      if (!businessSnap.exists()) throw new Error("Business profile not found");
+        const businessSnap = await getDoc(doc(db, "universalProfiles", effectiveUserId));
+        if (!businessSnap.exists()) throw new Error("Business profile not found");
 
-      const rawBusinessData = businessSnap.data();
-      const businessData = normalizeSMEProfile(rawBusinessData);
-      setCurrentBusiness(businessData);
+        const rawBusinessData = businessSnap.data();
+        const businessData = normalizeSMEProfile(rawBusinessData);
+        setCurrentBusiness(businessData);
 
-      // Fetch removed funders first
-      const removedQuery = query(
-        collection(db, "removedFunders"),
-        where("userId", "==", effectiveUserId)
-      );
-      const removedSnapshot = await getDocs(removedQuery);
-      const removedFunderIds = new Set(removedSnapshot.docs.map(doc => doc.data().funderId));
+        // Fetch removed funders first
+        const removedQuery = query(
+          collection(db, "removedFunders"),
+          where("userId", "==", effectiveUserId)
+        );
+        const removedSnapshot = await getDocs(removedQuery);
+        const removedFunderIds = new Set(removedSnapshot.docs.map(doc => doc.data().funderId));
 
-      const [investorsSnapshot, appSnapshot] = await Promise.all([
-        getDocs(collection(db, "MyuniversalProfiles")),
-        getDocs(query(collection(db, "smeApplications"), where("smeId", "==", effectiveUserId))),
-      ]);
+        const [investorsSnapshot, appSnapshot] = await Promise.all([
+          getDocs(collection(db, "MyuniversalProfiles")),
+          getDocs(query(collection(db, "smeApplications"), where("smeId", "==", effectiveUserId))),
+        ]);
 
-      const totalInvestorCount = investorsSnapshot.size;
-      const matchedFunds = [];
-      const applicationsMap = {};
-      const appStatusMap = {};
-      const pipelineStageMap = {};
-      const applicationDateMap = {};
+        const totalInvestorCount = investorsSnapshot.size;
+        const matchedFunds = [];
+        const applicationsMap = {};
+        const appStatusMap = {};
+        const pipelineStageMap = {};
+        const applicationDateMap = {};
 
-      appSnapshot.forEach((doc) => {
-        const data = doc.data();
-        const key = `${data.funderId}_${data.fundName}`;
-        applicationsMap[key] = true;
-        pipelineStageMap[key] = data.pipelineStage || "Application Sent";
-        appStatusMap[key] = data.status || "Pending";
-        applicationDateMap[key] = data.applicationDate || new Date().toISOString().split("T")[0];
-      });
-
-      investorsSnapshot.forEach((docSnap) => {
-        const investor = docSnap.data();
-        
-        // Skip if this funder is in the removed list
-        if (removedFunderIds.has(docSnap.id)) {
-          return;
-        }
-
-        const generalPrefs = investor.formData?.generalInvestmentPreference || {};
-        const funds = investor.formData?.fundDetails?.funds || [];
-        const entityOverview = investor.formData?.entityOverview || {};
-        const contact = investor.formData?.contactDetails || {};
-        const isAnonymous = investor.anonymous || false;
-
-        funds.forEach((fund, index) => {
-          // ... rest of the fund processing code remains the same ...
-          const fundProfile = investor.formData?.fundDetails?.funds?.[index];
-          const estimatedReviewTime = investor.formData?.applicationBrief?.equityDocuments?.estimatedReviewTime || "-";
-          const displayName = isAnonymous ? "Anonymous" : investor.formData?.fundManageOverview?.registeredName || "Unnamed Fund";
-
-          let minTicket = fundProfile?.minimumTicket ?? fundProfile?.minTicket ?? fund.minimumTicket ?? fund.minTicket ?? investor.formData?.fundDetails?.minimumTicket;
-          let maxTicket = fundProfile?.maximumTicket ?? fundProfile?.maxTicket ?? fund.maximumTicket ?? fund.maxTicket ?? investor.formData?.fundDetails?.maximumTicket;
-
-          if (!minTicket) {
-            const ticketInfo = fundProfile?.ticketSize || fund.ticketSize || {};
-            minTicket = ticketInfo.min || ticketInfo.minimum || 0;
-          }
-          if (!maxTicket) {
-            const ticketInfo = fundProfile?.ticketSize || fund.ticketSize || {};
-            maxTicket = ticketInfo.max || ticketInfo.maximum || fund.size || 0;
-          }
-
-          const instruments = generalPrefs.investmentFocus
-            ? Array.isArray(generalPrefs.investmentFocus)
-              ? generalPrefs.investmentFocus
-              : [generalPrefs.investmentFocus]
-            : [];
-
-          const enrichedFund = {
-            ...fund,
-            stages: Array.isArray(generalPrefs.investmentStage)
-              ? generalPrefs.investmentStage
-              : [generalPrefs.investmentStage].filter(Boolean),
-            sectorFocus: Array.isArray(generalPrefs.sectorFocus)
-              ? generalPrefs.sectorFocus
-              : [generalPrefs.sectorFocus].filter(Boolean),
-            geographicFocus: Array.isArray(generalPrefs.geographicFocus)
-              ? generalPrefs.geographicFocus
-              : [generalPrefs.geographicFocus].filter(Boolean),
-            saProvinces: Array.isArray(generalPrefs.selectedProvinces)
-              ? generalPrefs.selectedProvinces
-              : [generalPrefs.selectedProvinces].filter(Boolean),
-            type: [generalPrefs.investmentFocus || "Various"],
-            instruments,
-            supportOffered: fund.supportOffered || [],
-            dueDiligenceTimeline: fund.dueDiligenceTimeline || generalPrefs.typicalDealClosingTime,
-            minimumTicket: minTicket,
-            maximumTicket: maxTicket,
-          };
-
-          const scoreResult = calculateHybridScore(businessData, enrichedFund);
-
-          if (scoreResult.score >= 0) {
-            const fundKey = `${docSnap.id}_${fund.name}`;
-            setScoreBreakdowns((prev) => ({
-              ...prev,
-              [fundKey]: scoreResult.breakdown,
-            }));
-
-            matchedFunds.push({
-              id: fundKey,
-              funderId: docSnap.id,
-              name: displayName,
-              fullProfile: investor.formData,
-              matchPercentage: scoreResult.score,
-              investmentType: enrichedFund.type.join(", ") || "Various",
-              targetStage: enrichedFund.stages.join(", ") || "Various",
-              ticketSize: formatTicketSize(minTicket, maxTicket),
-              minInvestment: minTicket,
-              maxInvestment: maxTicket,
-              sectorFocus: enrichedFund.sectorFocus.join(", ") || "Various",
-              geographicFocus: [...enrichedFund.geographicFocus, ...enrichedFund.saProvinces].join(", ") || "Various",
-              supportOffered: enrichedFund.supportOffered.join(", ") || "Not specified",
-              website: contact.website || "#",
-              deadline: entityOverview.deadline || "-",
-              waitingTime: investor.formData?.applicationBrief?.estimatedReviewTime || "-",
-              hasApplication: !!applicationsMap[fundKey],
-              pipelineStage: pipelineStageMap[fundKey] || "Match",
-            });
-          }
+        appSnapshot.forEach((doc) => {
+          const data = doc.data();
+          const key = `${data.funderId}_${data.fundName}`;
+          applicationsMap[key] = true;
+          pipelineStageMap[key] = data.pipelineStage || "Application Sent";
+          appStatusMap[key] = data.status || "Pending";
+          applicationDateMap[key] = data.applicationDate || new Date().toISOString().split("T")[0];
         });
-      });
 
-      const waitingTimeMap = {};
-      matchedFunds.forEach((f) => {
-        waitingTimeMap[f.id] = f.estimatedReviewTime || "-";
-      });
+        investorsSnapshot.forEach((docSnap) => {
+          const investor = docSnap.data();
 
-      setWaitingTimes(waitingTimeMap);
-      setStatuses(appStatusMap);
-      setPipelineStages(pipelineStageMap);
-      setApplicationDates(applicationDateMap);
+          // Skip if this funder is in the removed list
+          if (removedFunderIds.has(docSnap.id)) {
+            return;
+          }
 
-      matchedFunds.sort((a, b) => b.matchPercentage - a.matchPercentage);
+          const generalPrefs = investor.formData?.generalInvestmentPreference || {};
+          const funds = investor.formData?.fundDetails?.funds || [];
+          const entityOverview = investor.formData?.entityOverview || {};
+          const contact = investor.formData?.contactDetails || {};
+          const isAnonymous = investor.anonymous || false;
 
-      setAllFunders(matchedFunds);
-      setFilteredFunders(matchedFunds);
+          funds.forEach((fund, index) => {
+            // ... rest of the fund processing code remains the same ...
+            const fundProfile = investor.formData?.fundDetails?.funds?.[index];
+            const estimatedReviewTime = investor.formData?.applicationBrief?.equityDocuments?.estimatedReviewTime || "-";
+            const displayName = isAnonymous ? "Anonymous" : investor.formData?.fundManageOverview?.registeredName || "Unnamed Fund";
 
-      let filteredFunders = [...matchedFunds];
+            let minTicket = fundProfile?.minimumTicket ?? fundProfile?.minTicket ?? fund.minimumTicket ?? fund.minTicket ?? investor.formData?.fundDetails?.minimumTicket;
+            let maxTicket = fundProfile?.maximumTicket ?? fundProfile?.maxTicket ?? fund.maximumTicket ?? fund.maxTicket ?? investor.formData?.fundDetails?.maximumTicket;
 
-      if (filters.showOnly === "matches") {
-        filteredFunders = filteredFunders.filter((funder) => !funder.hasApplication);
-      } else if (filters.showOnly === "applications") {
-        filteredFunders = filteredFunders.filter((funder) => funder.hasApplication);
-      } else if (filters.pipelineStage) {
-        if (Array.isArray(filters.pipelineStage)) {
-          filteredFunders = filteredFunders.filter((funder) =>
-            filters.pipelineStage.includes(funder.pipelineStage)
-          );
-        } else {
-          filteredFunders = filteredFunders.filter((funder) => funder.pipelineStage === filters.pipelineStage);
+            if (!minTicket) {
+              const ticketInfo = fundProfile?.ticketSize || fund.ticketSize || {};
+              minTicket = ticketInfo.min || ticketInfo.minimum || 0;
+            }
+            if (!maxTicket) {
+              const ticketInfo = fundProfile?.ticketSize || fund.ticketSize || {};
+              maxTicket = ticketInfo.max || ticketInfo.maximum || fund.size || 0;
+            }
+
+            const instruments = generalPrefs.investmentFocus
+              ? Array.isArray(generalPrefs.investmentFocus)
+                ? generalPrefs.investmentFocus
+                : [generalPrefs.investmentFocus]
+              : [];
+
+            const enrichedFund = {
+              ...fund,
+              stages: Array.isArray(generalPrefs.investmentStage)
+                ? generalPrefs.investmentStage
+                : [generalPrefs.investmentStage].filter(Boolean),
+              sectorFocus: Array.isArray(generalPrefs.sectorFocus)
+                ? generalPrefs.sectorFocus
+                : [generalPrefs.sectorFocus].filter(Boolean),
+              geographicFocus: Array.isArray(generalPrefs.geographicFocus)
+                ? generalPrefs.geographicFocus
+                : [generalPrefs.geographicFocus].filter(Boolean),
+              saProvinces: Array.isArray(generalPrefs.selectedProvinces)
+                ? generalPrefs.selectedProvinces
+                : [generalPrefs.selectedProvinces].filter(Boolean),
+              type: [generalPrefs.investmentFocus || "Various"],
+              instruments,
+              supportOffered: fund.supportOffered || [],
+              dueDiligenceTimeline: fund.dueDiligenceTimeline || generalPrefs.typicalDealClosingTime,
+              minimumTicket: minTicket,
+              maximumTicket: maxTicket,
+            };
+
+            const scoreResult = calculateHybridScore(businessData, enrichedFund);
+
+            if (scoreResult.score >= 0) {
+              const fundKey = `${docSnap.id}_${fund.name}`;
+              setScoreBreakdowns((prev) => ({
+                ...prev,
+                [fundKey]: scoreResult.breakdown,
+              }));
+
+              matchedFunds.push({
+                id: fundKey,
+                funderId: docSnap.id,
+                name: displayName,
+                fullProfile: investor.formData,
+                matchPercentage: scoreResult.score,
+                investmentType: enrichedFund.type.join(", ") || "Various",
+                targetStage: enrichedFund.stages.join(", ") || "Various",
+                ticketSize: formatTicketSize(minTicket, maxTicket),
+                minInvestment: minTicket,
+                maxInvestment: maxTicket,
+                sectorFocus: enrichedFund.sectorFocus.join(", ") || "Various",
+                geographicFocus: [...enrichedFund.geographicFocus, ...enrichedFund.saProvinces].join(", ") || "Various",
+                supportOffered: enrichedFund.supportOffered.join(", ") || "Not specified",
+                website: contact.website || "#",
+                deadline: entityOverview.deadline || "-",
+                waitingTime: investor.formData?.applicationBrief?.estimatedReviewTime || "-",
+                hasApplication: !!applicationsMap[fundKey],
+                pipelineStage: pipelineStageMap[fundKey] || "Match",
+              });
+            }
+          });
+        });
+
+        const waitingTimeMap = {};
+        matchedFunds.forEach((f) => {
+          waitingTimeMap[f.id] = f.estimatedReviewTime || "-";
+        });
+
+        setWaitingTimes(waitingTimeMap);
+        setStatuses(appStatusMap);
+        setPipelineStages(pipelineStageMap);
+        setApplicationDates(applicationDateMap);
+
+        matchedFunds.sort((a, b) => b.matchPercentage - a.matchPercentage);
+
+        setAllFunders(matchedFunds);
+        setFilteredFunders(matchedFunds);
+
+        let filteredFunders = [...matchedFunds];
+
+        if (filters.showOnly === "matches") {
+          filteredFunders = filteredFunders.filter((funder) => !funder.hasApplication);
+        } else if (filters.showOnly === "applications") {
+          filteredFunders = filteredFunders.filter((funder) => funder.hasApplication);
+        } else if (filters.pipelineStage) {
+          if (Array.isArray(filters.pipelineStage)) {
+            filteredFunders = filteredFunders.filter((funder) =>
+              filters.pipelineStage.includes(funder.pipelineStage)
+            );
+          } else {
+            filteredFunders = filteredFunders.filter((funder) => funder.pipelineStage === filters.pipelineStage);
+          }
         }
-      }
 
-      setFunders(filteredFunders);
+        setFunders(filteredFunders);
 
         const useBreakdown = {}
         const typeBreakdown = {}
@@ -2112,17 +2116,17 @@ const handleApplyClick = async (funder) => {
         })
 
         matchedFunds.forEach((funder) => {
-          ;(funder.investmentType?.split(",") || []).forEach((type) => {
+          ; (funder.investmentType?.split(",") || []).forEach((type) => {
             const cleanType = type.trim()
             if (cleanType) typeBreakdown[cleanType] = (typeBreakdown[cleanType] || 0) + 1
           })
-          ;(funder.sectorFocus?.split(",") || []).forEach((sector) => {
-            const cleanSector = sector.trim()
-            if (cleanSector) {
-              sectorMatchCount[cleanSector] = (sectorMatchCount[cleanSector] || 0) + 1
-              sectorDistribution[cleanSector] = (sectorDistribution[cleanSector] || 0) + 1
-            }
-          })
+            ; (funder.sectorFocus?.split(",") || []).forEach((sector) => {
+              const cleanSector = sector.trim()
+              if (cleanSector) {
+                sectorMatchCount[cleanSector] = (sectorMatchCount[cleanSector] || 0) + 1
+                sectorDistribution[cleanSector] = (sectorDistribution[cleanSector] || 0) + 1
+              }
+            })
 
           if (funder.targetStage) {
             const stage = funder.targetStage.trim()
@@ -2158,15 +2162,15 @@ const handleApplyClick = async (funder) => {
         setInsightsData(newInsightsData)
         if (onInsightsData) onInsightsData(newInsightsData)
         if (onPrimaryMatchCount) onPrimaryMatchCount(matchedFunds.length)
-       } catch (error) {
-      setNotification({ type: "error", message: error.message });
-    } finally {
-      setLoading(false);
-    }
-  };
+      } catch (error) {
+        setNotification({ type: "error", message: error.message });
+      } finally {
+        setLoading(false);
+      }
+    };
 
-  fetchData();
-}, [JSON.stringify(filters), effectiveUserId]); 
+    fetchData();
+  }, [JSON.stringify(filters), effectiveUserId]);
 
   useEffect(() => {
     const fetchUserProfile = async () => {
@@ -2408,75 +2412,58 @@ const handleApplyClick = async (funder) => {
     position: "relative",
   }
 
-  const handleViewInvestorDetails = async (funder) => {
+  const handleNameClick = async (funder) => {
     try {
-      setLoading(true)
-      const docRef = doc(db, "MyuniversalProfiles", funder.funderId)
-      const docSnap = await getDoc(docRef)
-
-      if (docSnap.exists()) {
-        const data = docSnap.data()
-        setModalFunder({
-          ...funder,
-          fullProfile: data.formData || {},
-          matchPercentage: funder.matchPercentage,
-        })
-      } else {
-        setModalFunder({
-          ...funder,
-          fullProfile: null,
-        })
-      }
+      const docSnap = await getDoc(doc(db, "MyuniversalProfiles", funder.funderId))
+      const fullProfile = docSnap.exists() ? docSnap.data().formData : null
+      setSelectedFunderDetails({ ...funder, fullProfile, anonymous: docSnap.data()?.anonymous || false })
+      setShowFunderDetails(true)
     } catch (err) {
       console.error("Error loading funder profile", err)
-      setModalFunder(null)
-      setNotification({ type: "error", message: "Failed to load investor details" })
-    } finally {
-      setLoading(false)
     }
   }
 
- // Update handleUpdateNextStage to use effectiveUserId
-const handleUpdateNextStage = async (funder) => {
-  try {
-    const auth = getAuth();
-    const user = auth.currentUser;
-    if (!user) throw new Error("User not authenticated");
+  // Update handleUpdateNextStage to use effectiveUserId
+  const handleUpdateNextStage = async (funder) => {
+    try {
+      const auth = getAuth();
+      const user = auth.currentUser;
+      if (!user) throw new Error("User not authenticated");
 
-    // Check permissions
-    if (isCompanyMember && !['owner', 'admin', 'manager'].includes(userRole)) {
-      setNotification({
-        type: "warning",
-        message: "You don't have permission to update pipeline stages.",
+      // Check permissions
+      if (isCompanyMember && !['owner', 'admin', 'manager'].includes(userRole)) {
+        setNotification({
+          type: "warning",
+          message: "You don't have permission to update pipeline stages.",
+        });
+        return;
+      }
+
+      const applicationKey = `${funder.funderId}_${funder.name}`;
+      const currentStage = pipelineStages[applicationKey] || "Match";
+      const nextStage = getNextStage(currentStage);
+
+      const applicationQuery = query(
+        collection(db, "smeApplications"),
+        where("smeId", "==", effectiveUserId), // Use effectiveUserId
+        where("funderId", "==", funder.funderId),
+        where("fundName", "==", funder.name),
+      );
+
+      const applicationSnapshot = await getDocs(applicationQuery);
+      if (applicationSnapshot.empty) {
+        console.error("No application found for this funder");
+        return;
+      }
+
+      const applicationDoc = applicationSnapshot.docs[0];
+
+      await updateDoc(applicationDoc.ref, {
+        pipelineStage: nextStage,
+        lastUpdated: new Date().toISOString(),
+        lastUpdatedBy: user.uid,
+        lastUpdatedByRole: userRole,
       });
-      return;
-    }
-
-    const applicationKey = `${funder.funderId}_${funder.name}`;
-    const currentStage = pipelineStages[applicationKey] || "Match";
-    const nextStage = getNextStage(currentStage);
-
-    const applicationQuery = query(
-      collection(db, "smeApplications"),
-      where("smeId", "==", effectiveUserId), // Use effectiveUserId
-      where("funderId", "==", funder.funderId),
-      where("fundName", "==", funder.name),
-    );
-
-    const applicationSnapshot = await getDocs(applicationQuery);
-    if (applicationSnapshot.empty) {
-      console.error("No application found for this funder");
-      return;
-    }
-
-    const applicationDoc = applicationSnapshot.docs[0];
-
-    await updateDoc(applicationDoc.ref, {
-      pipelineStage: nextStage,
-      lastUpdated: new Date().toISOString(),
-      lastUpdatedBy: user.uid,
-      lastUpdatedByRole: userRole,
-    });
 
       setPipelineStages((prev) => ({
         ...prev,
@@ -2495,84 +2482,84 @@ const handleUpdateNextStage = async (funder) => {
   }
 
   // Add the confirmation modal component
-const ConfirmationModal = () => {
-  if (!funderToRemove) return null;
-  
-  return createPortal(
-    <div style={{
-      position: "fixed",
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      backgroundColor: "rgba(0,0,0,0.7)",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      zIndex: 2000,
-      backdropFilter: "blur(4px)"
-    }}>
+  const ConfirmationModal = () => {
+    if (!funderToRemove) return null;
+
+    return createPortal(
       <div style={{
-        background: "white",
-        borderRadius: "12px",
-        padding: "2rem",
-        maxWidth: "400px",
-        width: "90%",
-        boxShadow: "0 20px 40px rgba(0,0,0,0.3)"
+        position: "fixed",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        backgroundColor: "rgba(0,0,0,0.7)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        zIndex: 2000,
+        backdropFilter: "blur(4px)"
       }}>
-        <h3 style={{ margin: "0 0 1rem", color: "#5D2A0A" }}>
-          Remove Funder
-        </h3>
-        
-        <p style={{ margin: "0 0 1.5rem", color: "#666" }}>
-          Are you sure you want to remove <strong>{funderToRemove.name}</strong> from your view? 
-          This action cannot be undone and they won't appear in future searches.
-        </p>
-        
         <div style={{
-          display: "flex",
-          gap: "1rem",
-          justifyContent: "flex-end"
+          background: "white",
+          borderRadius: "12px",
+          padding: "2rem",
+          maxWidth: "400px",
+          width: "90%",
+          boxShadow: "0 20px 40px rgba(0,0,0,0.3)"
         }}>
-          <button
-            onClick={() => setFunderToRemove(null)}
-            style={{
-              padding: "0.5rem 1rem",
-              background: "#F5EBE0",
-              color: "#5D2A0A",
-              border: "1px solid #E8D5C4",
-              borderRadius: "6px",
-              cursor: "pointer",
-              fontSize: "0.875rem"
-            }}
-          >
-            Cancel
-          </button>
-          
-          <button
-  onClick={() => {
-    // Pass both funderId and the fundKey
-    handleRemoveFunder(funderToRemove.funderId, funderToRemove.id);
-    setFunderToRemove(null);
-  }}
-  style={{
-    padding: "0.5rem 1rem",
-    background: "#D32F2F",
-    color: "white",
-    border: "none",
-    borderRadius: "6px",
-    cursor: "pointer",
-    fontSize: "0.875rem"
-  }}
->
-  Remove Permanently
-</button>
+          <h3 style={{ margin: "0 0 1rem", color: "#5D2A0A" }}>
+            Remove Funder
+          </h3>
+
+          <p style={{ margin: "0 0 1.5rem", color: "#666" }}>
+            Are you sure you want to remove <strong>{funderToRemove.name}</strong> from your view?
+            This action cannot be undone and they won't appear in future searches.
+          </p>
+
+          <div style={{
+            display: "flex",
+            gap: "1rem",
+            justifyContent: "flex-end"
+          }}>
+            <button
+              onClick={() => setFunderToRemove(null)}
+              style={{
+                padding: "0.5rem 1rem",
+                background: "#F5EBE0",
+                color: "#5D2A0A",
+                border: "1px solid #E8D5C4",
+                borderRadius: "6px",
+                cursor: "pointer",
+                fontSize: "0.875rem"
+              }}
+            >
+              Cancel
+            </button>
+
+            <button
+              onClick={() => {
+                // Pass both funderId and the fundKey
+                handleRemoveFunder(funderToRemove.funderId, funderToRemove.id);
+                setFunderToRemove(null);
+              }}
+              style={{
+                padding: "0.5rem 1rem",
+                background: "#D32F2F",
+                color: "white",
+                border: "none",
+                borderRadius: "6px",
+                cursor: "pointer",
+                fontSize: "0.875rem"
+              }}
+            >
+              Remove Permanently
+            </button>
+          </div>
         </div>
-      </div>
-    </div>,
-    document.body
-  );
-};
+      </div>,
+      document.body
+    );
+  };
 
 
   const [mounted, setMounted] = useState(false)
@@ -2594,50 +2581,50 @@ const ConfirmationModal = () => {
           transition: "filter 0.2s ease",
         }}
       >
-      
-         <BigScoreIndicator />
-               <BigScoreWarningModal />
 
-                 {isCompanyMember && (
-        <div style={{
-          backgroundColor: userRole === 'viewer' ? '#fef3c7' : '#e0f2fe',
-          border: `2px solid ${userRole === 'viewer' ? '#f59e0b' : '#0369a1'}`,
-          borderRadius: '12px',
-          padding: '16px 24px',
-          marginBottom: '24px',
-          boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)'
-        }}>
-          <div style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: '12px', 
-            marginBottom: '8px' 
+        <BigScoreIndicator />
+        <BigScoreWarningModal />
+
+        {isCompanyMember && (
+          <div style={{
+            backgroundColor: userRole === 'viewer' ? '#fef3c7' : '#e0f2fe',
+            border: `2px solid ${userRole === 'viewer' ? '#f59e0b' : '#0369a1'}`,
+            borderRadius: '12px',
+            padding: '16px 24px',
+            marginBottom: '24px',
+            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)'
           }}>
-            <span style={{ fontSize: '24px' }}>🤝</span>
-            <h3 style={{ 
-              margin: 0, 
-              color: userRole === 'viewer' ? '#f59e0b' : '#0369a1', 
-              fontWeight: '700',
-              fontSize: '1.1rem'
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              marginBottom: '8px'
             }}>
-              Company Funding Applications - Role: {userRole?.toUpperCase()}
-            </h3>
+              <span style={{ fontSize: '24px' }}>🤝</span>
+              <h3 style={{
+                margin: 0,
+                color: userRole === 'viewer' ? '#f59e0b' : '#0369a1',
+                fontWeight: '700',
+                fontSize: '1.1rem'
+              }}>
+                Company Funding Applications - Role: {userRole?.toUpperCase()}
+              </h3>
+            </div>
+            <p style={{
+              margin: 0,
+              color: '#4a5568',
+              fontSize: '0.95rem',
+              lineHeight: '1.5'
+            }}>
+              {userRole === 'owner' && 'You can view and manage all company funding applications.'}
+              {userRole === 'admin' && 'You can view and submit funding applications for the company.'}
+              {userRole === 'manager' && 'You can view funding applications and track their progress.'}
+              {userRole === 'employee' && 'You can view company funding applications.'}
+              {userRole === 'viewer' && 'You have read-only access to company funding applications.'}
+            </p>
           </div>
-          <p style={{ 
-            margin: 0, 
-            color: '#4a5568', 
-            fontSize: '0.95rem',
-            lineHeight: '1.5'
-          }}>
-            {userRole === 'owner' && 'You can view and manage all company funding applications.'}
-            {userRole === 'admin' && 'You can view and submit funding applications for the company.'}
-            {userRole === 'manager' && 'You can view funding applications and track their progress.'}
-            {userRole === 'employee' && 'You can view company funding applications.'}
-            {userRole === 'viewer' && 'You have read-only access to company funding applications.'}
-          </p>
-        </div>
-      )}
-      
+        )}
+
         {notification && (
           <div
             style={{
@@ -2670,15 +2657,15 @@ const ConfirmationModal = () => {
               </button>
 
             )}
-              <button 
-    onClick={() => setShowRestorePanel(!showRestorePanel)}
-    style={{
-      ...filterButtonStyle,
-      background: showRestorePanel ? "#E3F2FD" : "#F5EBE0"
-    }}
-  >
-    📋 View Removed ({removedFunders.length})
-  </button>
+            <button
+              onClick={() => setShowRestorePanel(!showRestorePanel)}
+              style={{
+                ...filterButtonStyle,
+                background: showRestorePanel ? "#E3F2FD" : "#F5EBE0"
+              }}
+            >
+              📋 View Removed ({removedFunders.length})
+            </button>
           </div>
         </div>
 
@@ -2725,7 +2712,7 @@ const ConfirmationModal = () => {
                   <th style={tableHeaderStyle}>Next Stage</th>
                   <th style={tableHeaderStyle}>Waiting Time</th>
                   <th style={{ ...tableHeaderStyle, borderRight: "none" }}>Action</th>
-                   <th style={{ ...tableHeaderStyle, borderRight: "none" }}>Remove</th> {/* Add this */}
+                  <th style={{ ...tableHeaderStyle, borderRight: "none" }}>Remove</th> {/* Add this */}
                 </tr>
               </thead>
               <tbody>
@@ -2745,7 +2732,7 @@ const ConfirmationModal = () => {
                       <td style={tableCellStyle}>
                         <div style={{ display: "flex", alignItems: "center", gap: "0.3rem" }}>
                           <div>
-                            <span onClick={() => handleViewInvestorDetails(funder)} style={funderNameStyle}>
+                            <span onClick={() => handleNameClick(funder)} style={funderNameStyle}>
                               <TruncatedText text={funder.name} maxLength={15} />
                             </span>
                           </div>
@@ -2794,7 +2781,7 @@ const ConfirmationModal = () => {
                                       : "#F56565",
                               }}
                             />
-                         
+
                           </div>
                           <div style={{ display: "flex", alignItems: "center", gap: "4px", marginTop: "4px" }}>
                             <span
@@ -2930,30 +2917,30 @@ const ConfirmationModal = () => {
                         )}
                       </td>
 
-                         <td style={{ ...tableCellStyle, borderRight: "none", textAlign: "center" }}>
-<button
-  onClick={() => setFunderToRemove({
-    ...funder,
-    funderId: funder.funderId,
-    id: funder.id  // This is the fundKey
-  })}
-  style={{
-    background: "none",
-    border: "none",
-    color: "#D32F2F",
-    cursor: "pointer",
-    fontSize: "0.7rem",
-    padding: "0.25rem",
-    borderRadius: "3px",
-    transition: "all 0.2s"
-  }}
-  title="Remove funder from view"
-  onMouseOver={(e) => e.target.style.background = "#FFEBEE"}
-  onMouseOut={(e) => e.target.style.background = "none"}
->
-  <X size={14} />
-</button>
-</td>
+                      <td style={{ ...tableCellStyle, borderRight: "none", textAlign: "center" }}>
+                        <button
+                          onClick={() => setFunderToRemove({
+                            ...funder,
+                            funderId: funder.funderId,
+                            id: funder.id  // This is the fundKey
+                          })}
+                          style={{
+                            background: "none",
+                            border: "none",
+                            color: "#D32F2F",
+                            cursor: "pointer",
+                            fontSize: "0.7rem",
+                            padding: "0.25rem",
+                            borderRadius: "3px",
+                            transition: "all 0.2s"
+                          }}
+                          title="Remove funder from view"
+                          onMouseOver={(e) => e.target.style.background = "#FFEBEE"}
+                          onMouseOut={(e) => e.target.style.background = "none"}
+                        >
+                          <X size={14} />
+                        </button>
+                      </td>
 
                     </tr>
                   )
@@ -3009,6 +2996,14 @@ const ConfirmationModal = () => {
           </div>
         </div>
       </div>
+
+      {showFunderDetails && selectedFunderDetails && (
+        <FunderDetailsModal
+          funder={selectedFunderDetails}
+          isOpen={showFunderDetails}
+          onClose={() => { setShowFunderDetails(false); setSelectedFunderDetails(null) }}
+        />
+      )}
 
       {modalFunder && (
         <div style={modalOverlayStyle} onClick={() => setModalFunder(null)}>
@@ -3122,9 +3117,9 @@ const ConfirmationModal = () => {
                   >
                     Registered Name:
                   </span>
-                 <span style={{ fontSize: "16px", color: "#333" }}>
-                  {modalFunder.anonymous ? "Anonymous" : modalFunder.fullProfile?.fundManageOverview?.registeredName}
-                </span>
+                  <span style={{ fontSize: "16px", color: "#333" }}>
+                    {modalFunder.anonymous ? "Anonymous" : modalFunder.fullProfile?.fundManageOverview?.registeredName}
+                  </span>
                 </div>
                 <div>
                   <span
@@ -3376,7 +3371,7 @@ const ConfirmationModal = () => {
                 key={index}
                 style={{
                   marginBottom: "40px",
-                  backgroundColor:"#fff",
+                  backgroundColor: "#fff",
                   borderRadius: "16px",
                   padding: "32px",
                   boxShadow: "0 8px 24px rgba(0, 0, 0, 0.08), 0 2px 8px rgba(0, 0, 0, 0.04)",
@@ -3932,7 +3927,7 @@ const ConfirmationModal = () => {
         </div>
       )}
 
-       <RestorePanel />
+      <RestorePanel />
 
       {mounted &&
         showBreakdownModal &&
@@ -3987,13 +3982,13 @@ const ConfirmationModal = () => {
                           currentBreakdown.stage.score * currentBreakdown.stage.weight +
                           currentBreakdown.ticket.score * currentBreakdown.ticket.weight +
                           currentBreakdown.type.score * currentBreakdown.type.weight >=
-                        80
+                          80
                           ? "#388E3C"
                           : currentBreakdown.sector.score * currentBreakdown.sector.weight +
-                                currentBreakdown.stage.score * currentBreakdown.stage.weight +
-                                currentBreakdown.ticket.score * currentBreakdown.ticket.weight +
-                                currentBreakdown.type.score * currentBreakdown.type.weight >=
-                              60
+                            currentBreakdown.stage.score * currentBreakdown.stage.weight +
+                            currentBreakdown.ticket.score * currentBreakdown.ticket.weight +
+                            currentBreakdown.type.score * currentBreakdown.type.weight >=
+                            60
                             ? "#F57C00"
                             : "#D32F2F",
                       marginBottom: "0.5rem",
@@ -4017,7 +4012,7 @@ const ConfirmationModal = () => {
                     Overall Match Score
                   </p>
                 </div>
-                
+
 
                 <div
                   style={{
@@ -4639,7 +4634,7 @@ const ConfirmationModal = () => {
                   </div>
 
                   {/* Support Offered Filter */}
-                 
+
                 </div>
 
                 <div
@@ -4772,10 +4767,10 @@ const ConfirmationModal = () => {
           </div>
         </div>
       )}
-        {mounted && <ConfirmationModal />}
-  
+      {mounted && <ConfirmationModal />}
+
     </>
-    
+
   )
 }
 

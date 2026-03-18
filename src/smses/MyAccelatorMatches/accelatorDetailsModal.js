@@ -177,6 +177,42 @@ const CatalystDetailsModal = ({ catalyst, isOpen, onClose }) => {
                                         <InfoItem label="Services Offered" value={formatLabel(catalyst.servicesOffered)} />
                                     </div>
                                 </div>
+
+                                  <div style={infoCardStyle}>
+                                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                                            <h3 style={cardTitleStyle}><FileText size={18} />NDA Document</h3>
+                                            <button
+                                            onClick={() => {
+                                                if (catalyst?.ndaUrl) {
+                                                window.open(catalyst.ndaUrl, '_blank')
+                                                }
+                                            }}
+                                            style={{
+                                                padding: '6px 12px',
+                                                backgroundColor: catalyst?.ndaUrl ? '#5d4037' : '#cccccc',
+                                                color: 'white',
+                                                border: 'none',
+                                                borderRadius: '4px',
+                                                cursor: catalyst?.ndaUrl ? 'pointer' : 'not-allowed',
+                                                fontSize: '0.8rem',
+                                                fontWeight: '500',
+                                                display: 'flex',
+                                                alignItems: 'center',
+                                                gap: '4px',
+                                            }}
+                                            disabled={!catalyst?.ndaUrl}
+                                            >
+                                            <FileText size={14} />
+                                            {catalyst?.ndaUrl ? 'View Document' : 'No NDA'}
+                                            </button>
+                                        </div>
+                                        <div style={infoGridStyle}>
+                                            <InfoItem label="Status" value={catalyst?.ndaStatus || 'Not shared'} />
+                                            {catalyst?.ndaSharedDate && (
+                                            <InfoItem label="Shared Date" value={new Date(catalyst.ndaSharedDate).toLocaleDateString()} />
+                                            )}
+                                        </div>
+                                        </div>
                             </div>
                         </div>
                     )}
