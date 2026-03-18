@@ -2,10 +2,9 @@
 
 import { useState, useEffect } from "react"
 import { BarChart3, MapPin, Calendar, Filter, X, Eye } from "lucide-react"
-import { db, auth } from "../../firebaseConfig"
-import { serverTimestamp, doc, updateDoc, getDoc, addDoc, collection } from "firebase/firestore"
+import { db, auth, storage } from "../../firebaseConfig"
+import { serverTimestamp, doc, updateDoc, getDoc, addDoc, collection, query, where, getDocs } from "firebase/firestore"
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage"
-import { storage } from "../../firebaseConfig"
 import { DayPicker } from "react-day-picker"
 import "react-day-picker/dist/style.css"
 import { usePortfolio } from "../../context/PortfolioContext"
@@ -131,6 +130,7 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
   const [message, setMessage] = useState("")
   const [formErrors, setFormErrors] = useState({})
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isNDASharing, setIsNDASharing] = useState({}) 
   const [notification, setNotification] = useState(null)
   const [showStageModal, setShowStageModal] = useState(false)
   const [selectedSMEForStage, setSelectedSMEForStage] = useState(null)
@@ -140,6 +140,7 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
   const [meetingLocation, setMeetingLocation] = useState("")
   const [meetingPurpose, setMeetingPurpose] = useState("")
   const [termSheetFile, setTermSheetFile] = useState(null)
+  const [sentNDAs, setSentNDAs] = useState({})
   const [availabilities, setAvailabilities] = useState([])
   const [showCalendarModal, setShowCalendarModal] = useState(false)
   const [tempDates, setTempDates] = useState([])
@@ -543,6 +544,41 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
     }
   }
 
+  // Load existing shared NDAs for all SMEs
+useEffect(() => {
+  const loadSentNDAs = async () => {
+    try {
+      const user = auth.currentUser
+      if (!user) return
+
+      const sharedNDAQuery = query(
+        collection(db, "shared_nda"),
+        where("catalystId", "==", user.uid),
+        where("status", "==", "sent")
+      )
+      
+      const snapshot = await getDocs(sharedNDAQuery)
+      const sentMap = {}
+      
+      snapshot.docs.forEach(doc => {
+        const data = doc.data()
+        // Use compound key of smeId and programIndex to track per SME per program
+        const smeKey = `${data.smeId}_${data.programIndex}`
+        sentMap[smeKey] = true
+      })
+      
+      setSentNDAs(sentMap)
+      console.log("Loaded sent NDAs:", sentMap) // Debug log
+    } catch (error) {
+      console.error("Error loading sent NDAs:", error)
+    }
+  }
+
+  if (auth.currentUser) {
+    loadSentNDAs()
+  }
+}, []) // Run once on mount
+
   // ── Modal helpers ──────────────────────────────────────────────────────────
   const handleViewDetails = (sme) => {
     setSelectedSMEDetails(sme)
@@ -722,7 +758,125 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
   }
 
   const currentStageFields = getStageFields(nextStage)
+// ── Share NDA function ────────────────────────────────────────────────────────
+const handleShareNDA = async (sme) => {
+  const smeKey = `${sme.id}_${sme.programIndex}`
+  
+  try {
+    setIsNDASharing(prev => ({ ...prev, [smeKey]: true }))
+    
+    const user = auth.currentUser
+    if (!user) throw new Error("User not authenticated")
 
+    console.log("Sharing NDA for SME:", sme.id, sme.name)
+    console.log("Current user UID:", user.uid)
+
+    const ndaDocRef = doc(db, "ndas", user.uid)
+    const ndaDoc = await getDoc(ndaDocRef)
+    
+    console.log("NDA document exists:", ndaDoc.exists())
+    
+    if (!ndaDoc.exists()) {
+      setNotification({ 
+        type: "error", 
+        message: `No NDA found for your account. Please upload an NDA first.` 
+      })
+      return
+    }
+
+    const ndaData = ndaDoc.data()
+    console.log("NDA document data:", ndaData)
+    console.log("PDF URL:", ndaData.pdfUrl)
+
+    // Check for pdfUrl
+    if (!ndaData.pdfUrl) {
+      console.error("No pdfUrl found in NDA document. Available fields:", Object.keys(ndaData))
+      setNotification({ 
+        type: "error", 
+        message: "NDA document has no PDF URL. Please check the NDA document structure." 
+      })
+      return
+    }
+
+    // Create NDA share record
+    const shareData = {
+      catalystId: user.uid,
+      catalystName: user.displayName || "Catalyst",
+      catalystEmail: user.email,
+      ndaId: ndaDoc.id,
+      ndaUrl: ndaData.pdfUrl,
+      ndaName: ndaData.ndaContent || ndaData.name || ndaData.fileName || "NDA Document",
+      ndaUploadedAt: ndaData.dateSigned || ndaData.lastUpdated || ndaData.uploadedAt || ndaData.timestamp || ndaData.createdAt,
+      
+      smeId: sme.id,
+      smeName: sme.name,
+      
+      sharedAt: serverTimestamp(),
+      status: "sent",
+      programIndex: sme.programIndex,
+      applicationId: `${user.uid}_${sme.id}_${sme.programIndex}`
+    }
+
+    // Check if NDA already shared with this specific SME
+    const existingShareQuery = query(
+      collection(db, "shared_nda"),
+      where("catalystId", "==", user.uid),
+      where("smeId", "==", sme.id),
+      where("programIndex", "==", sme.programIndex)
+    )
+    
+    const existingShare = await getDocs(existingShareQuery)
+    
+    if (existingShare.empty) {
+      await addDoc(collection(db, "shared_nda"), shareData)
+      console.log("Created new share record for SME:", sme.id)
+    } else {
+      const shareDoc = existingShare.docs[0]
+      await updateDoc(doc(db, "shared_nda", shareDoc.id), {
+        ...shareData,
+        updatedAt: serverTimestamp(),
+        sharedAt: serverTimestamp()
+      })
+      console.log("Updated existing share record for SME:", sme.id)
+    }
+
+    // Send notification to SME
+    await addDoc(collection(db, "messages"), {
+      to: sme.id,
+      from: user.uid,
+      subject: "NDA Ready for Review",
+      content: `A Non-Disclosure Agreement (NDA) has been shared with you for your application. Please review and sign it at your earliest convenience.`,
+      date: new Date().toISOString(),
+      read: false,
+      type: "nda_share",
+      ndaId: ndaDoc.id,
+      ndaUrl: ndaData.pdfUrl,
+      ndaName: ndaData.ndaContent || ndaData.name || ndaData.fileName || "NDA Document",
+      applicationId: `${user.uid}_${sme.id}_${sme.programIndex}`,
+      smeName: sme.name,
+      smeId: sme.id
+    })
+
+    setSentNDAs(prev => ({
+      ...prev,
+      [smeKey]: true
+    }))
+
+    setNotification({ 
+      type: "success", 
+      message: `NDA shared successfully with ${sme.name}` 
+    })
+
+  } catch (error) {
+    console.error("Error sharing NDA:", error)
+    setNotification({ 
+      type: "error", 
+      message: `Failed to share NDA: ${error.message}` 
+    })
+  } finally {
+    setIsNDASharing(prev => ({ ...prev, [smeKey]: false }))
+  }
+}
   // ────────────────────────────────────────────────────────────────────────────
   return (
     <div className="p-5 w-full max-w-full overflow-x-hidden">
@@ -867,8 +1021,7 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
                           </button>
                         </div>
                       </td>
-                      {/* Status */}
-                      {/* Status */}
+                {/* Status */}
                       <td className={TD}>
                         <div className="flex items-center flex-wrap gap-0.5">
                           <span className={`${statusClasses.bg} ${statusClasses.text} py-0.5 px-1 rounded text-[0.65rem] font-medium inline-block whitespace-nowrap`}>
@@ -877,15 +1030,44 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
                           {renderSupportAgreementStatus(sme)}
                         </div>
                       </td>
-                      {/* Action */}
-                      <td className={`${TD} border-r-0`}>
-                        <button
-                          onClick={() => handleStageAction(sme)}
-                          className="px-1.5 py-0.5 bg-mediumBrown text-white border-none rounded cursor-pointer text-[0.7rem] font-medium w-full whitespace-nowrap hover:bg-darkBrown transition-colors"
-                        >
-                          Set Stage
-                        </button>
-                      </td>
+                    
+                   {/* Action */}
+<td className={`${TD} border-r-0`}>
+  <div className="flex flex-col gap-1"> {/* Added flex column with gap */}
+    <button
+      onClick={() => handleStageAction(sme)}
+      className="px-1.5 py-0.5 bg-mediumBrown text-white border-none rounded cursor-pointer text-[0.7rem] font-medium w-full whitespace-nowrap hover:bg-darkBrown transition-colors"
+    >
+      Set Stage
+    </button>
+
+    {/* Only show NDA button when stage is Evaluation */}
+    {(currentStatus === "Evaluation") && (
+      (() => {
+        const smeKey = `${sme.id}_${sme.programIndex}`
+        const isSharing = isNDASharing[smeKey]
+        const isSent = sentNDAs[smeKey]
+        
+        return isSent ? (
+          <button
+            disabled
+            className="px-1.5 py-0.5 bg-gray-400 text-white border-none rounded cursor-not-allowed text-[0.7rem] font-medium w-full whitespace-nowrap opacity-60"
+          >
+            NDA Sent
+          </button>
+        ) : (
+          <button
+            onClick={() => handleShareNDA(sme)}
+            disabled={isSharing}
+            className="px-1.5 py-0.5 bg-mediumBrown text-white border-none rounded cursor-pointer text-[0.7rem] font-medium w-full whitespace-nowrap hover:bg-darkBrown transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {isSharing ? "Sharing..." : "Share NDA"}
+          </button>
+        )
+      })()
+    )}
+  </div>
+</td>
                     </tr>
                   )
                 })

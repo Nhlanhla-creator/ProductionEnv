@@ -5,11 +5,10 @@ import { createPortal } from "react-dom"
 import { Check, ChevronDown, Filter, X, Eye } from "lucide-react"
 import { collection, getDocs } from "firebase/firestore"
 import { auth, db } from "../../firebaseConfig"
-import { doc, setDoc, getDoc, serverTimestamp } from "firebase/firestore"
+import { doc, setDoc, getDoc, serverTimestamp, query, where, orderBy, limit } from "firebase/firestore"
 import emailjs from '@emailjs/browser';
 import { API_KEYS } from "../../API"
 import CatalystDetailsModal  from "./accelatorDetailsModal"
-
 
 // Mock data for the table
 const mockAccelerators = []
@@ -1181,10 +1180,6 @@ export function AcceleratorTable({ filters, onApplicationSubmitted }) {
     }
   }
 
-  const handleViewClick = (accelerator) => {
-    setSelectedCatalystDetails(accelerator)
-    setShowCatalystDetails(true)
-  }
 
   const handleViewMatchBreakdown = (accelerator) => {
     setSelectedAccelerator(accelerator)
@@ -1202,6 +1197,57 @@ export function AcceleratorTable({ filters, onApplicationSubmitted }) {
     setNotification({ type: "info", message: `Added ${accelerator.name} to comparison` })
     setTimeout(() => setNotification(null), 3000)
   }
+
+ const handleViewClick = async (accelerator) => {
+  try {
+    const user = auth.currentUser
+    console.log("Current user UID:", user.uid)
+    console.log("Catalyst ID:", accelerator.originalCatalystId || accelerator.id)
+    
+    // Query shared_nda for this specific relationship
+    const sharedNDAQuery = query(
+      collection(db, "shared_nda"),
+      where("catalystId", "==", accelerator.originalCatalystId || accelerator.id),
+      where("smeId", "==", user.uid),
+      where("programIndex", "==", accelerator.programIndex || 0),
+      limit(1)
+    )
+    
+    const snapshot = await getDocs(sharedNDAQuery)
+    
+    
+    let ndaUrl = null
+    let ndaStatus = null
+    let ndaSharedDate = null
+    
+    if (!snapshot.empty) {
+      const ndaDoc = snapshot.docs[0]
+      const ndaData = ndaDoc.data()
+      console.log("Found NDA data:", ndaData)
+      
+      ndaUrl = ndaData.ndaUrl
+      ndaStatus = ndaData.status
+      ndaSharedDate = ndaData.sharedAt?.toDate?.() || ndaData.sharedAt
+    } else {
+      console.log("No NDA found for this relationship")
+    }
+    
+    // Set catalyst details with NDA info
+    setSelectedCatalystDetails({
+      ...accelerator,
+      ndaUrl,
+      ndaStatus,
+      ndaSharedDate
+    })
+    setShowCatalystDetails(true)
+    
+  } catch (error) {
+    console.error("Error fetching NDA info:", error)
+    // Still show the modal even if NDA fetch fails
+    setSelectedCatalystDetails(accelerator)
+    setShowCatalystDetails(true)
+  }
+}
 
   const applyFilters = () => {
     setShowFilterModal(false)
