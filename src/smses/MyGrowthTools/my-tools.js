@@ -19,6 +19,10 @@ import {
   CheckCircle,
   MessageSquare,
   Paperclip,
+  Copy,
+  Ticket,
+  Share2,
+  Mail,
 } from "lucide-react"
 import { collection, query, where, getDocs, getFirestore } from "firebase/firestore"
 import { getAuth } from "firebase/auth"
@@ -27,7 +31,9 @@ const MyToolsPage = () => {
   const [activeFilter, setActiveFilter] = useState("all")
   const [searchQuery, setSearchQuery] = useState("")
   const [purchasedTools, setPurchasedTools] = useState([])
+  const [voucherPurchases, setVoucherPurchases] = useState([])
   const [isLoading, setIsLoading] = useState(true)
+  const [copiedCode, setCopiedCode] = useState(null)
   const auth = getAuth()
   const db = getFirestore()
   const user = auth.currentUser
@@ -44,6 +50,8 @@ const MyToolsPage = () => {
     lightText: "#F5F2F0",
     gradientStart: "#4A352F",
     gradientEnd: "#7D5A50",
+    successGreen: "#2E7D32",
+    infoBlue: "#1976D2",
   }
 
   const styles = {
@@ -213,6 +221,174 @@ const MyToolsPage = () => {
       fontSize: "0.7rem",
       fontWeight: "700",
     },
+    // Voucher Section Styles
+    voucherSection: {
+      marginBottom: "2.5rem",
+    },
+    voucherHeader: {
+      display: "flex",
+      alignItems: "center",
+      gap: "1rem",
+      marginBottom: "1.5rem",
+    },
+    voucherIcon: {
+      width: "3rem",
+      height: "3rem",
+      background: `linear-gradient(135deg, ${colors.accentGold} 0%, ${colors.mediumBrown} 100%)`,
+      borderRadius: "12px",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      color: colors.lightText,
+    },
+    voucherTitle: {
+      fontSize: "1.5rem",
+      fontWeight: "700",
+      color: colors.darkBrown,
+      margin: "0 0 0.25rem 0",
+    },
+    voucherSubtitle: {
+      fontSize: "0.95rem",
+      color: colors.mediumBrown,
+      margin: "0",
+    },
+    voucherGrid: {
+      display: "grid",
+      gridTemplateColumns: "repeat(auto-fill, minmax(350px, 1fr))",
+      gap: "1.5rem",
+    },
+    voucherCard: {
+      background: `linear-gradient(135deg, ${colors.offWhite} 0%, ${colors.cream} 100%)`,
+      borderRadius: "18px",
+      padding: "1.75rem",
+      boxShadow: `0 8px 24px ${colors.darkBrown}10`,
+      border: `2px solid ${colors.accentGold}`,
+      transition: "all 0.3s ease",
+      position: "relative",
+      overflow: "hidden",
+    },
+    voucherCardHeader: {
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginBottom: "1.25rem",
+    },
+    voucherPlan: {
+      fontSize: "1.25rem",
+      fontWeight: "700",
+      color: colors.darkBrown,
+    },
+    voucherSeats: {
+      padding: "0.375rem 1rem",
+      background: colors.accentGold,
+      color: colors.lightText,
+      borderRadius: "20px",
+      fontSize: "0.8rem",
+      fontWeight: "600",
+    },
+    voucherCodesContainer: {
+      background: colors.offWhite,
+      borderRadius: "12px",
+      padding: "1rem",
+      marginBottom: "1.25rem",
+      border: `1px solid ${colors.lightTan}`,
+    },
+    voucherCodesTitle: {
+      fontSize: "0.9rem",
+      fontWeight: "600",
+      color: colors.darkBrown,
+      marginBottom: "0.75rem",
+      display: "flex",
+      alignItems: "center",
+      gap: "0.5rem",
+    },
+    voucherCodesList: {
+      display: "flex",
+      flexDirection: "column",
+      gap: "0.5rem",
+    },
+    voucherCodeItem: {
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      padding: "0.5rem 0.75rem",
+      background: colors.cream,
+      borderRadius: "8px",
+      border: `1px solid ${colors.lightTan}`,
+    },
+    voucherCode: {
+      fontFamily: "'Courier New', monospace",
+      fontWeight: "600",
+      fontSize: "0.9rem",
+      color: colors.darkBrown,
+      letterSpacing: "1px",
+    },
+    voucherCodeUsed: {
+      textDecoration: "line-through",
+      opacity: 0.6,
+      color: colors.mediumBrown,
+    },
+    voucherCodeStatus: {
+      fontSize: "0.7rem",
+      padding: "0.25rem 0.5rem",
+      borderRadius: "4px",
+      background: `${colors.successGreen}20`,
+      color: colors.successGreen,
+      fontWeight: "600",
+    },
+    copyButton: {
+      background: "none",
+      border: "none",
+      cursor: "pointer",
+      padding: "0.25rem",
+      color: colors.accentGold,
+      display: "flex",
+      alignItems: "center",
+      gap: "0.25rem",
+      fontSize: "0.7rem",
+      transition: "all 0.2s ease",
+    },
+    shareButtons: {
+      display: "flex",
+      gap: "0.5rem",
+      marginTop: "1rem",
+    },
+    shareButton: {
+      flex: 1,
+      padding: "0.5rem",
+      background: colors.offWhite,
+      border: `1px solid ${colors.lightTan}`,
+      borderRadius: "6px",
+      color: colors.mediumBrown,
+      fontSize: "0.75rem",
+      fontWeight: "600",
+      cursor: "pointer",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      gap: "0.25rem",
+      transition: "all 0.2s ease",
+    },
+    voucherFooter: {
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center",
+      marginTop: "1rem",
+      paddingTop: "1rem",
+      borderTop: `1px solid ${colors.lightTan}`,
+    },
+    voucherAmount: {
+      fontSize: "1.1rem",
+      fontWeight: "700",
+      color: colors.accentGold,
+    },
+    voucherDate: {
+      fontSize: "0.8rem",
+      color: colors.mediumBrown,
+      display: "flex",
+      alignItems: "center",
+      gap: "0.25rem",
+    },
     toolsSection: {
       marginBottom: "2.5rem",
       width: "100%",
@@ -339,7 +515,6 @@ const MyToolsPage = () => {
       color: colors.accentGold,
       fontWeight: "600",
     },
-    // NEW: Specifications section
     toolSpecifications: {
       marginBottom: "1.25rem",
       padding: "1rem",
@@ -599,6 +774,18 @@ const MyToolsPage = () => {
       textAlign: "center",
       marginTop: "0.875rem",
     },
+    copyNotification: {
+      position: "fixed",
+      bottom: "2rem",
+      right: "2rem",
+      background: colors.successGreen,
+      color: "white",
+      padding: "1rem 2rem",
+      borderRadius: "8px",
+      boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
+      animation: "slideIn 0.3s ease",
+      zIndex: 1000,
+    },
   }
 
   useEffect(() => {
@@ -608,6 +795,7 @@ const MyToolsPage = () => {
         return
       }
       try {
+        // Load regular growth tools purchases
         const purchasesRef = collection(db, "growthToolsPurchases")
         const q = query(purchasesRef, where("userId", "==", user.uid), where("status", "==", "Success"))
         const querySnapshot = await getDocs(q)
@@ -637,10 +825,47 @@ const MyToolsPage = () => {
           }
           tools.push(tool)
         })
+
+        // Load voucher purchases
+        const voucherPurchasesRef = collection(db, "voucherPurchases")
+        const voucherQ = query(voucherPurchasesRef, where("userId", "==", user.uid))
+        const voucherSnapshot = await getDocs(voucherQ)
+        const vouchers = []
+        
+        // For each voucher purchase, load the full voucher details to check redeemed status
+        for (const doc of voucherSnapshot.docs) {
+          const data = doc.data()
+          
+          // Get full voucher details
+          const voucherRef = collection(db, "vouchers")
+          const voucherQuery = query(voucherRef, where("transactionRef", "==", data.transactionRef))
+          const voucherDoc = await getDocs(voucherQuery)
+          
+          let voucherData = data
+          if (!voucherDoc.empty) {
+            const fullVoucher = voucherDoc.docs[0].data()
+            voucherData = {
+              ...data,
+              remainingSeats: fullVoucher.remainingSeats,
+              redeemedSeats: fullVoucher.redeemedSeats || []
+            }
+          }
+          
+          vouchers.push({
+            id: doc.id,
+            ...voucherData,
+            purchaseDate: data.createdAt?.toDate?.() || new Date(data.createdAt)
+          })
+        }
+
+        // Sort both arrays by date (newest first)
         tools.sort((a, b) => new Date(b.purchaseDate) - new Date(a.purchaseDate))
+        vouchers.sort((a, b) => new Date(b.purchaseDate) - new Date(a.purchaseDate))
+
         setPurchasedTools(tools)
+        setVoucherPurchases(vouchers)
       } catch (error) {
-        console.error("Error loading purchased tools:", error)
+        console.error("Error loading purchases:", error)
       } finally {
         setIsLoading(false)
       }
@@ -652,7 +877,7 @@ const MyToolsPage = () => {
     const iconMap = {
       legitimacy: <Award className="w-8 h-8" />,
       capital_appeal: <Target className="w-8 h-8" />,
-      fundability: <Target className="w-8 h-8" />, // Keep for backwards compatibility
+      fundability: <Target className="w-8 h-8" />,
       governance: <Users className="w-8 h-8" />,
       templates: <FileText className="w-8 h-8" />,
       growth_tool: <Zap className="w-8 h-8" />,
@@ -723,7 +948,7 @@ const MyToolsPage = () => {
   }
 
   const filterOptions = [
-    { id: "all", label: "All Tools", count: purchasedTools.length },
+    { id: "all", label: "All", count: purchasedTools.length + voucherPurchases.length },
     { id: "legitimacy", label: "Legitimacy", count: purchasedTools.filter((t) => t.category === "legitimacy").length },
     {
       id: "capital_appeal",
@@ -731,10 +956,16 @@ const MyToolsPage = () => {
       count: purchasedTools.filter((t) => t.category === "capital_appeal" || t.category === "fundability").length,
     },
     { id: "governance", label: "Governance", count: purchasedTools.filter((t) => t.category === "governance").length },
+    { id: "vouchers", label: "Vouchers", count: voucherPurchases.length },
     { id: "templates", label: "Templates", count: purchasedTools.filter((t) => t.category === "templates").length },
   ]
 
   const filteredTools = useMemo(() => {
+    // Handle voucher filter separately
+    if (activeFilter === "vouchers") {
+      return [] // Vouchers are shown separately, not in tools grid
+    }
+
     let filtered = purchasedTools
     if (activeFilter !== "all") {
       if (activeFilter === "capital_appeal") {
@@ -753,12 +984,40 @@ const MyToolsPage = () => {
     return filtered
   }, [purchasedTools, activeFilter, searchQuery])
 
+  const filteredVouchers = useMemo(() => {
+    if (activeFilter !== "vouchers" && activeFilter !== "all") return []
+    
+    let filtered = voucherPurchases
+    if (searchQuery) {
+      filtered = filtered.filter(
+        (voucher) =>
+          voucher.planName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          voucher.voucherCodes?.some(code => code.toLowerCase().includes(searchQuery.toLowerCase()))
+      )
+    }
+    return filtered
+  }, [voucherPurchases, activeFilter, searchQuery])
+
   const handleDownload = (url, filename) => {
     window.open(url, "_blank")
   }
 
   const handleShopMore = () => {
     window.location.href = "/growth/shop-tools"
+  }
+
+  const handleCopyCode = (code) => {
+    navigator.clipboard.writeText(code)
+    setCopiedCode(code)
+    setTimeout(() => setCopiedCode(null), 2000)
+  }
+
+  const handleShareViaEmail = (code, planName) => {
+    const subject = encodeURIComponent(`Your ${planName} Voucher Code`)
+    const body = encodeURIComponent(
+      `Here's your voucher code for ${planName}:\n\nCode: ${code}\n\nYou can redeem this at: ${window.location.origin}/subscription\n\nThis code provides premium access for one user.`
+    )
+    window.location.href = `mailto:?subject=${subject}&body=${body}`
   }
 
   const getStatusBadge = (deliveryStatus) => {
@@ -785,8 +1044,8 @@ const MyToolsPage = () => {
       <div style={styles.betaNotice}>
         <CheckCircle className="w-6 h-6" style={{ color: "#065F46" }} />
         <span>
-          <strong>✅ Files Delivered:</strong> Download your growth tools directly from this page once they've been
-          processed and delivered by our team.
+          <strong>✅ Voucher Management:</strong> Purchase vouchers for your team in the Growth Suite. Each voucher code
+          can be redeemed once for premium access. Share codes with team members via email.
         </span>
       </div>
 
@@ -794,8 +1053,8 @@ const MyToolsPage = () => {
       <div style={styles.pageHeader}>
         <div style={styles.headerContent}>
           <div style={styles.headerText}>
-            <h1 style={styles.pageTitle}>My Growth Tools</h1>
-            <p style={styles.pageSubtitle}>Access and manage all your purchased business growth tools and templates</p>
+            <h1 style={styles.pageTitle}>My Purchases</h1>
+            <p style={styles.pageSubtitle}>Access your growth tools and manage team vouchers</p>
           </div>
           <div style={styles.headerActions}>
             <button
@@ -811,7 +1070,7 @@ const MyToolsPage = () => {
               }}
             >
               <ShoppingCart className="w-5 h-5" />
-              Shop More Tools
+              Shop More
             </button>
           </div>
         </div>
@@ -823,7 +1082,7 @@ const MyToolsPage = () => {
           <Search style={styles.searchIcon} />
           <input
             type="text"
-            placeholder="Search your tools..."
+            placeholder="Search tools or voucher codes..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             style={styles.searchInput}
@@ -878,17 +1137,142 @@ const MyToolsPage = () => {
         </div>
       </div>
 
+      {/* Voucher Section */}
+      {(activeFilter === "all" || activeFilter === "vouchers") && filteredVouchers.length > 0 && (
+        <div style={styles.voucherSection}>
+          <div style={styles.voucherHeader}>
+            <div style={styles.voucherIcon}>
+              <Ticket size={24} />
+            </div>
+            <div>
+              <h2 style={styles.voucherTitle}>Team Vouchers</h2>
+              <p style={styles.voucherSubtitle}>
+                Share these codes with team members. Each code provides premium access for one person.
+              </p>
+            </div>
+          </div>
+
+          <div style={styles.voucherGrid}>
+            {filteredVouchers.map((voucher) => (
+              <div
+                key={voucher.id}
+                style={styles.voucherCard}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = "translateY(-4px)"
+                  e.currentTarget.style.boxShadow = `0 12px 32px ${colors.accentGold}30`
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = "translateY(0)"
+                  e.currentTarget.style.boxShadow = `0 8px 24px ${colors.darkBrown}10`
+                }}
+              >
+                <div style={styles.voucherCardHeader}>
+                  <h3 style={styles.voucherPlan}>{voucher.planName}</h3>
+                  <div style={styles.voucherSeats}>
+                    {voucher.remainingSeats || voucher.totalSeats} seats remaining
+                  </div>
+                </div>
+
+                <div style={styles.voucherCodesContainer}>
+                  <div style={styles.voucherCodesTitle}>
+                    <Ticket size={16} />
+                    Voucher Codes ({voucher.voucherCodes?.length || 0})
+                  </div>
+                  <div style={styles.voucherCodesList}>
+                    {voucher.voucherCodes?.map((code, index) => {
+                      const isRedeemed = voucher.redeemedSeats?.some(seat => seat.code === code)
+                      return (
+                        <div key={index} style={styles.voucherCodeItem}>
+                          <span style={{
+                            ...styles.voucherCode,
+                            ...(isRedeemed ? styles.voucherCodeUsed : {})
+                          }}>
+                            {code}
+                          </span>
+                          <div style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+                            {isRedeemed ? (
+                              <span style={styles.voucherCodeStatus}>Redeemed</span>
+                            ) : (
+                              <>
+                                <button
+                                  style={styles.copyButton}
+                                  onClick={() => handleCopyCode(code)}
+                                  title="Copy code"
+                                >
+                                  <Copy size={14} />
+                                  {copiedCode === code ? "Copied!" : "Copy"}
+                                </button>
+                                <button
+                                  style={styles.copyButton}
+                                  onClick={() => handleShareViaEmail(code, voucher.planName)}
+                                  title="Share via email"
+                                >
+                                  <Mail size={14} />
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                <div style={styles.shareButtons}>
+                  <button
+                    style={styles.shareButton}
+                    onClick={() => {
+                      const allCodes = voucher.voucherCodes?.join('\n')
+                      handleCopyCode(allCodes)
+                    }}
+                  >
+                    <Copy size={12} />
+                    Copy All
+                  </button>
+                  <button
+                    style={styles.shareButton}
+                    onClick={() => {
+                      const message = encodeURIComponent(
+                        `I've purchased ${voucher.totalSeats} seats for ${voucher.planName}. Here are the voucher codes:\n\n${voucher.voucherCodes?.join('\n')}\n\nEach code provides premium access for one user.`
+                      )
+                      window.location.href = `mailto:?subject=${encodeURIComponent(`Voucher Codes: ${voucher.planName}`)}&body=${message}`
+                    }}
+                  >
+                    <Mail size={12} />
+                    Share All
+                  </button>
+                </div>
+
+                <div style={styles.voucherFooter}>
+                  <div style={styles.voucherAmount}>R{voucher.totalAmount?.toLocaleString()}</div>
+                  <div style={styles.voucherDate}>
+                    <Calendar size={12} />
+                    {new Date(voucher.purchaseDate).toLocaleDateString()}
+                  </div>
+                </div>
+
+                <div style={{ fontSize: "0.8rem", color: colors.mediumBrown, marginTop: "1rem", textAlign: "center" }}>
+                  <strong>Redeem at:</strong> Subscription Page → Enter Voucher Code
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Tools Grid */}
       <div style={styles.toolsSection}>
-        {filteredTools.length === 0 ? (
+        {filteredTools.length === 0 && (activeFilter !== "vouchers" || filteredVouchers.length === 0) ? (
           <div style={styles.emptyState}>
             <Package style={styles.emptyIcon} />
             <h3 style={styles.emptyTitle}>
-              {purchasedTools.length === 0 ? "No Tools Purchased Yet" : "No Tools Found"}
+              {purchasedTools.length === 0 && voucherPurchases.length === 0 
+                ? "No Purchases Yet" 
+                : "No Items Found"}
             </h3>
             <p style={styles.emptyDescription}>
-              {purchasedTools.length === 0
-                ? "Start building your business with our comprehensive growth tools and templates. Browse our collection of professional resources designed to boost your BIG Score."
+              {purchasedTools.length === 0 && voucherPurchases.length === 0
+                ? "Start building your business with our comprehensive growth tools and team vouchers."
                 : "Try adjusting your search or filter criteria to find what you're looking for."}
             </p>
             <button
@@ -908,194 +1292,218 @@ const MyToolsPage = () => {
             </button>
           </div>
         ) : (
-          <div style={styles.toolsGrid}>
-            {filteredTools.map((tool) => (
-              <div
-                key={tool.id}
-                style={styles.toolCard}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.transform = "translateY(-6px)"
-                  e.currentTarget.style.boxShadow = `0 16px 40px ${colors.darkBrown}26`
-                  e.currentTarget.style.borderColor = colors.lightBrown
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = "translateY(0)"
-                  e.currentTarget.style.boxShadow = `0 8px 24px ${colors.darkBrown}10`
-                  e.currentTarget.style.borderColor = colors.lightTan
-                }}
-              >
-                <div style={styles.toolCardHeader}>
-                  <div style={styles.toolIconContainer}>{tool.icon}</div>
-                  <div style={styles.toolStatus}>{getStatusBadge(tool.deliveryStatus)}</div>
-                </div>
-                <div style={styles.toolCardBody}>
-                  <h3 style={styles.toolTitle}>{tool.title}</h3>
-                  <p style={styles.toolPackage}>
-                    {tool.package} • {tool.tier}
-                    {tool.subcategory && ` • ${tool.subcategory}`}
-                  </p>
-                  <p style={styles.toolDescription}>{tool.description}</p>
-                  <div style={styles.toolFeatures}>
-                    <h4 style={styles.featuresTitle}>What's Included:</h4>
-                    <ul style={styles.featuresList}>
-                      {tool.features.slice(0, 3).map((feature, index) => (
-                        <li key={index} style={styles.featureItem}>
-                          <Check style={styles.featureCheck} />
-                          <span>{feature}</span>
-                        </li>
-                      ))}
-                      {tool.features.length > 3 && (
-                        <li style={{ ...styles.featureItem, ...styles.featureItemMore }}>
-                          <Star style={styles.featureCheck} />+{tool.features.length - 3} more features
-                        </li>
-                      )}
-                    </ul>
+          filteredTools.length > 0 && (
+            <div style={styles.toolsGrid}>
+              {filteredTools.map((tool) => (
+                <div
+                  key={tool.id}
+                  style={styles.toolCard}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.transform = "translateY(-6px)"
+                    e.currentTarget.style.boxShadow = `0 16px 40px ${colors.darkBrown}26`
+                    e.currentTarget.style.borderColor = colors.lightBrown
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = "translateY(0)"
+                    e.currentTarget.style.boxShadow = `0 8px 24px ${colors.darkBrown}10`
+                    e.currentTarget.style.borderColor = colors.lightTan
+                  }}
+                >
+                  <div style={styles.toolCardHeader}>
+                    <div style={styles.toolIconContainer}>{tool.icon}</div>
+                    <div style={styles.toolStatus}>{getStatusBadge(tool.deliveryStatus)}</div>
                   </div>
+                  <div style={styles.toolCardBody}>
+                    <h3 style={styles.toolTitle}>{tool.title}</h3>
+                    <p style={styles.toolPackage}>
+                      {tool.package} • {tool.tier}
+                      {tool.subcategory && ` • ${tool.subcategory}`}
+                    </p>
+                    <p style={styles.toolDescription}>{tool.description}</p>
+                    <div style={styles.toolFeatures}>
+                      <h4 style={styles.featuresTitle}>What's Included:</h4>
+                      <ul style={styles.featuresList}>
+                        {tool.features.slice(0, 3).map((feature, index) => (
+                          <li key={index} style={styles.featureItem}>
+                            <Check style={styles.featureCheck} />
+                            <span>{feature}</span>
+                          </li>
+                        ))}
+                        {tool.features.length > 3 && (
+                          <li style={{ ...styles.featureItem, ...styles.featureItemMore }}>
+                            <Star style={styles.featureCheck} />+{tool.features.length - 3} more features
+                          </li>
+                        )}
+                      </ul>
+                    </div>
 
-                  {/* Show Customer Specifications */}
-                  {(tool.specifications || (tool.specificationFiles && tool.specificationFiles.length > 0)) && (
-                    <div style={styles.toolSpecifications}>
-                      <h4 style={styles.specsTitle}>
-                        <MessageSquare size={16} />
-                        Your Specifications
-                      </h4>
-                      {tool.specifications && <div style={styles.specsText}>{tool.specifications}</div>}
-                      {tool.specificationFiles && tool.specificationFiles.length > 0 && (
-                        <div style={styles.specsFiles}>
-                          <div
-                            style={{
-                              fontSize: "0.8rem",
-                              fontWeight: "600",
-                              color: colors.darkBrown,
-                              marginBottom: "0.5rem",
-                              display: "flex",
-                              alignItems: "center",
-                              gap: "0.3rem",
-                            }}
-                          >
-                            <Paperclip size={14} />
-                            Reference Files ({tool.specificationFiles.length})
-                          </div>
-                          {tool.specificationFiles.map((file, idx) => (
+                    {/* Show Customer Specifications */}
+                    {(tool.specifications || (tool.specificationFiles && tool.specificationFiles.length > 0)) && (
+                      <div style={styles.toolSpecifications}>
+                        <h4 style={styles.specsTitle}>
+                          <MessageSquare size={16} />
+                          Your Specifications
+                        </h4>
+                        {tool.specifications && <div style={styles.specsText}>{tool.specifications}</div>}
+                        {tool.specificationFiles && tool.specificationFiles.length > 0 && (
+                          <div style={styles.specsFiles}>
                             <div
-                              key={idx}
-                              style={styles.specFileItem}
-                              onClick={() => handleDownload(file.url, file.name)}
+                              style={{
+                                fontSize: "0.8rem",
+                                fontWeight: "600",
+                                color: colors.darkBrown,
+                                marginBottom: "0.5rem",
+                                display: "flex",
+                                alignItems: "center",
+                                gap: "0.3rem",
+                              }}
+                            >
+                              <Paperclip size={14} />
+                              Reference Files ({tool.specificationFiles.length})
+                            </div>
+                            {tool.specificationFiles.map((file, idx) => (
+                              <div
+                                key={idx}
+                                style={styles.specFileItem}
+                                onClick={() => handleDownload(file.url, file.name)}
+                                onMouseEnter={(e) => {
+                                  e.currentTarget.style.background = colors.lightTan
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.currentTarget.style.background = colors.cream
+                                }}
+                              >
+                                <FileText size={14} color={colors.accentGold} />
+                                <span style={{ flex: 1 }}>{file.name}</span>
+                                <Download size={12} color={colors.accentGold} />
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Show Deliverables if Delivered */}
+                    {tool.deliveryStatus === "delivered" && tool.deliverables && tool.deliverables.length > 0 ? (
+                      <div style={styles.toolDeliverables}>
+                        <h4 style={styles.deliverablesTitle}>📥 Your Files (Ready to Download):</h4>
+                        <div style={styles.deliverablesList}>
+                          {tool.deliverables.map((deliverable, index) => (
+                            <div
+                              key={index}
+                              style={styles.deliverableItem}
+                              onClick={() => handleDownload(deliverable.url, deliverable.name)}
                               onMouseEnter={(e) => {
                                 e.currentTarget.style.background = colors.lightTan
+                                e.currentTarget.style.transform = "translateX(5px)"
                               }}
                               onMouseLeave={(e) => {
                                 e.currentTarget.style.background = colors.cream
+                                e.currentTarget.style.transform = "translateX(0)"
                               }}
                             >
-                              <FileText size={14} color={colors.accentGold} />
-                              <span style={{ flex: 1 }}>{file.name}</span>
-                              <Download size={12} color={colors.accentGold} />
+                              <Download style={styles.deliverableIcon} />
+                              <div style={styles.deliverableInfo}>
+                                <span style={styles.deliverableName}>{deliverable.name}</span>
+                                <span style={styles.deliverableMeta}>{deliverable.size} • Click to download</span>
+                              </div>
+                              <ExternalLink size={16} color={colors.accentGold} />
                             </div>
                           ))}
                         </div>
+                      </div>
+                    ) : tool.deliveryStatus === "processing" ? (
+                      <div style={styles.noFilesMessage}>
+                        <Clock size={16} style={{ display: "inline", marginRight: "0.5rem" }} />
+                        <strong>Files are being prepared...</strong> You'll receive an email when they're ready to
+                        download.
+                      </div>
+                    ) : null}
+                  </div>
+                  <div style={styles.toolCardFooter}>
+                    <div style={styles.toolMeta}>
+                      <div style={styles.purchaseInfo}>
+                        <Calendar style={styles.metaIcon} />
+                        <span>Purchased {new Date(tool.purchaseDate).toLocaleDateString()}</span>
+                      </div>
+                      {tool.amount > 0 && (
+                        <div style={styles.amountInfo}>
+                          <span>R{tool.amount.toLocaleString()}</span>
+                        </div>
                       )}
                     </div>
-                  )}
-
-                  {/* Show Deliverables if Delivered */}
-                  {tool.deliveryStatus === "delivered" && tool.deliverables && tool.deliverables.length > 0 ? (
-                    <div style={styles.toolDeliverables}>
-                      <h4 style={styles.deliverablesTitle}>📥 Your Files (Ready to Download):</h4>
-                      <div style={styles.deliverablesList}>
-                        {tool.deliverables.map((deliverable, index) => (
-                          <div
-                            key={index}
-                            style={styles.deliverableItem}
-                            onClick={() => handleDownload(deliverable.url, deliverable.name)}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.background = colors.lightTan
-                              e.currentTarget.style.transform = "translateX(5px)"
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.background = colors.cream
-                              e.currentTarget.style.transform = "translateX(0)"
-                            }}
-                          >
-                            <Download style={styles.deliverableIcon} />
-                            <div style={styles.deliverableInfo}>
-                              <span style={styles.deliverableName}>{deliverable.name}</span>
-                              <span style={styles.deliverableMeta}>{deliverable.size} • Click to download</span>
-                            </div>
-                            <ExternalLink size={16} color={colors.accentGold} />
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ) : tool.deliveryStatus === "processing" ? (
-                    <div style={styles.noFilesMessage}>
-                      <Clock size={16} style={{ display: "inline", marginRight: "0.5rem" }} />
-                      <strong>Files are being prepared...</strong> You'll receive an email when they're ready to
-                      download.
-                    </div>
-                  ) : null}
-                </div>
-                <div style={styles.toolCardFooter}>
-                  <div style={styles.toolMeta}>
-                    <div style={styles.purchaseInfo}>
-                      <Calendar style={styles.metaIcon} />
-                      <span>Purchased {new Date(tool.purchaseDate).toLocaleDateString()}</span>
-                    </div>
-                    {tool.amount > 0 && (
-                      <div style={styles.amountInfo}>
-                        <span>R{tool.amount.toLocaleString()}</span>
+                    {tool.deliveryStatus === "delivered" && tool.deliveredAt && (
+                      <div
+                        style={{
+                          fontSize: "0.8rem",
+                          color: colors.mediumBrown,
+                          marginTop: "0.5rem",
+                          textAlign: "center",
+                        }}
+                      >
+                        ✅ Delivered on {new Date(tool.deliveredAt).toLocaleDateString()}
                       </div>
                     )}
                   </div>
-                  {tool.deliveryStatus === "delivered" && tool.deliveredAt && (
-                    <div
-                      style={{
-                        fontSize: "0.8rem",
-                        color: colors.mediumBrown,
-                        marginTop: "0.5rem",
-                        textAlign: "center",
-                      }}
-                    >
-                      ✅ Delivered on {new Date(tool.deliveredAt).toLocaleDateString()}
-                    </div>
-                  )}
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )
         )}
       </div>
 
       {/* Summary Stats */}
-      {purchasedTools.length > 0 && (
+      {(purchasedTools.length > 0 || voucherPurchases.length > 0) && (
         <div style={styles.summarySection}>
           <div style={styles.summaryCard}>
-            <h3 style={styles.summaryTitle}>Your Growth Journey</h3>
+            <h3 style={styles.summaryTitle}>Your Investment Summary</h3>
             <div style={styles.summaryStats}>
               <div style={styles.statItem}>
                 <div style={styles.statNumber}>{purchasedTools.length}</div>
                 <div style={styles.statLabel}>Tools Purchased</div>
               </div>
               <div style={styles.statItem}>
-                <div style={styles.statNumber}>
-                  {purchasedTools.filter((t) => t.deliveryStatus === "delivered").length}
-                </div>
-                <div style={styles.statLabel}>Tools Delivered</div>
+                <div style={styles.statNumber}>{voucherPurchases.length}</div>
+                <div style={styles.statLabel}>Voucher Batches</div>
               </div>
               <div style={styles.statItem}>
                 <div style={styles.statNumber}>
-                  R{purchasedTools.reduce((sum, tool) => sum + (tool.amount || 0), 0).toLocaleString()}
+                  {voucherPurchases.reduce((sum, v) => sum + (v.totalSeats || 0), 0)}
+                </div>
+                <div style={styles.statLabel}>Total Seats</div>
+              </div>
+              <div style={styles.statItem}>
+                <div style={styles.statNumber}>
+                  R{(purchasedTools.reduce((sum, tool) => sum + (tool.amount || 0), 0) + 
+                     voucherPurchases.reduce((sum, v) => sum + (v.totalAmount || 0), 0)).toLocaleString()}
                 </div>
                 <div style={styles.statLabel}>Total Investment</div>
-              </div>
-              <div style={styles.statItem}>
-                <div style={styles.statNumber}>{new Set(purchasedTools.map((tool) => tool.category)).size}</div>
-                <div style={styles.statLabel}>Categories Covered</div>
               </div>
             </div>
           </div>
         </div>
       )}
+
+      {/* Copy Notification */}
+      {copiedCode && (
+        <div style={styles.copyNotification}>
+          <Check size={16} style={{ marginRight: "0.5rem" }} />
+          Code copied to clipboard!
+        </div>
+      )}
+
+      <style>{`
+        @keyframes slideIn {
+          from {
+            transform: translateX(100%);
+            opacity: 0;
+          }
+          to {
+            transform: translateX(0);
+            opacity: 1;
+          }
+        }
+      `}</style>
     </div>
   )
 }
