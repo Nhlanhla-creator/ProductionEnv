@@ -25,13 +25,19 @@ const normalizeStage = (stage) => {
   return "application";
 };
 
+// ── Portfolio status filter ────────────────────────────────────────────────────
+// Only SMEs with these pipeline stages are included in portfolio charts
+// (PortfolioHealth, Performance, Outcomes).
+// CohortSelection continues to use the full enriched array.
+const PORTFOLIO_STAGES = new Set(["active", "supported"]); // "active support" + "support approved"
+
 const headcountBucket = (n) => {
   const v = parseInt(n) || 0;
-  if (v <= 5)   return "1–5";
-  if (v <= 20)  return "6–20";
-  if (v <= 50)  return "21–50";
-  if (v <= 100) return "51–100";
-  return "100+";
+  if (v <= 5)   return "1–5 employees";
+  if (v <= 20)  return "6–20 employees";
+  if (v <= 50)  return "21–50 employees";
+  if (v <= 100) return "51–100 employees";
+  return "100+ employees";
 };
 
 const revenueBucket = (n) => {
@@ -69,6 +75,14 @@ function computeMetrics(enriched) {
   });
 
   const matchPcts  = enriched.map(a => a.matchPercentage || 0).filter(m => m > 0);
+  const matchDist  = { "0–49": 0, "50–60": 0, "60–70": 0, "70–80": 0, "80–100": 0 };
+  matchPcts.forEach(s => {
+    if (s < 50)       matchDist["0–49"]++;
+    else if (s < 60)  matchDist["50–60"]++;
+    else if (s < 70)  matchDist["60–70"]++;
+    else if (s < 80)  matchDist["70–80"]++;
+    else              matchDist["80–100"]++;
+  });
   const vettingDays = enriched.filter(a => a.applicationDate).map(a => daysBetween(a.applicationDate, a.updatedAt));
   const avgVetting  = avg(vettingDays.filter(d => d > 0 && d < 3650));
 
@@ -171,13 +185,15 @@ function computeMetrics(enriched) {
 
   const closed   = enriched.filter(a => normalizeStage(a.pipelineStage) === "closed");
   const active   = enriched.filter(a => normalizeStage(a.pipelineStage) === "active");
-  const progDays = enriched.filter(a => ["closed", "active"].includes(normalizeStage(a.pipelineStage))).map(a => daysBetween(a.applicationDate, a.updatedAt)).filter(d => d > 0 && d < 3650);
-  const avgMonths = progDays.length ? Math.round(avg(progDays) / 30) : 0;
+  const avgMonths = avg(
+    active.filter(a => a.applicationDate)
+          .map(a => Math.round(daysBetween(a.applicationDate, null) / 30))
+          .filter(m => m > 0 && m < 120)
+  );
 
-  const toRow = (a) => ({
+  const toRow = a => ({
     name: a.smeName || "Unknown",
-    sector: (a.sector || "").split(",")[0].trim() || "General",
-    stage: a.profile?.entityOverview?.operationStage || "Startup",
+    sector: (a.sector || "Other").split(",")[0].trim(),
     bigScore: a.bigScore || 0,
     matchPct: a.matchPercentage || 0,
     compliance: a.compliance || 0,
@@ -202,7 +218,7 @@ function computeMetrics(enriched) {
     totalSMEs: n,
     pipeline,
     bigScore: { avg: avg(bigScores), min: bigScores.length ? Math.min(...bigScores) : 0, max: bigScores.length ? Math.max(...bigScores) : 0, dist: bigDist },
-    match:    { avg: avg(matchPcts), min: matchPcts.length ? Math.min(...matchPcts) : 0, max: matchPcts.length ? Math.max(...matchPcts) : 0 },
+    match:    { avg: avg(matchPcts), min: matchPcts.length ? Math.min(...matchPcts) : 0, max: matchPcts.length ? Math.max(...matchPcts) : 0, dist: matchDist },
     fundingReadinessRate,
     vetting:  { avg: avgVetting, target: 10 },
     stageDist,
@@ -228,11 +244,15 @@ function computeMetrics(enriched) {
 
 // ── hook ──────────────────────────────────────────────────────────────────────
 export const usePortfolioData = () => {
-  const [enriched,         setEnriched]         = useState([]);
-  const [metrics,          setMetrics]          = useState(null);
-  const [catalystFormData, setCatalystFormData] = useState({});
-  const [loading,          setLoading]          = useState(true);
-  const [error,            setError]            = useState(null);
+  const [enriched,          setEnriched]          = useState([]);
+  const [metrics,           setMetrics]           = useState(null);
+  // Filtered to "Active Support" + "Support Approved" — used by PortfolioHealth,
+  // Performance and Outcomes dashboards only.
+  const [portfolioEnriched, setPortfolioEnriched] = useState([]);
+  const [portfolioMetrics,  setPortfolioMetrics]  = useState(null);
+  const [catalystFormData,  setCatalystFormData]  = useState({});
+  const [loading,           setLoading]           = useState(true);
+  const [error,             setError]             = useState(null);
 
   const fetchAll = useCallback(async (uid) => {
     try {
@@ -253,7 +273,6 @@ export const usePortfolioData = () => {
       console.log(`[usePortfolioData] bigEvaluations: ${bigSnap.size} docs`);
 
       // ── 3. Build scores lookup: smeId → scores object ─────────────────────
-      // bigEvaluations doc id == SME auth uid == smeId extracted from app doc id.
       const scoresById = {};
       bigSnap.forEach(d => {
         const { scores } = d.data();
@@ -277,15 +296,11 @@ export const usePortfolioData = () => {
       }));
 
       // ── 6. Enrich: profile + scores from bigEvaluations ──────────────────
-      // Scores are spread at the top level so computeMetrics can read
-      // a.bigScore, a.compliance, a.fundability, a.legitimacy etc. directly.
       const enrichedApps = rawApps.map(a => {
         const evalScores = scoresById[a.smeId] || {};
         return {
           ...a,
           profile: profiles[a.smeId] || {},
-          // Scores from bigEvaluations take precedence over any stale values
-          // already stored on the catalystApplication document itself.
           bigScore:    evalScores.bigScore    ?? a.bigScore    ?? 0,
           compliance:  evalScores.compliance  ?? a.compliance  ?? 0,
           fundability: evalScores.fundability ?? a.fundability ?? 0,
@@ -298,8 +313,6 @@ export const usePortfolioData = () => {
       console.log("[usePortfolioData] enriched applications:", enrichedApps);
 
       // ── 7. Write scores back to catalystApplications (fire-and-forget) ────
-      // This keeps the application docs in sync so other parts of the app
-      // that read catalystApplications directly also see fresh scores.
       const writebacks = enrichedApps
         .filter(a => a.docId && scoresById[a.smeId])
         .map(a =>
@@ -314,17 +327,27 @@ export const usePortfolioData = () => {
               pis:         a.pis,
               scoresLastSyncedAt: new Date().toISOString(),
             },
-            { merge: true }   // never overwrite other fields
+            { merge: true }
           ).catch(err => console.warn(`[usePortfolioData] writeback failed for ${a.docId}:`, err))
         );
 
-      // Kick off writes in background — don't await, don't block the UI
       Promise.all(writebacks);
 
+      // ── 8. Compute metrics for ALL apps (used by CohortSelection) ─────────
       const computed = computeMetrics(enrichedApps);
-      console.log("[usePortfolioData] computed metrics:", computed);
+      // console.log("[usePortfolioData] computed metrics:", computed);
       setEnriched(enrichedApps);
       setMetrics(computed);
+
+      // ── 9. Filter to Active Support + Support Approved for portfolio pages ─
+      const portfolioApps = enrichedApps.filter(a =>
+        PORTFOLIO_STAGES.has(normalizeStage(a.pipelineStage))
+      );
+      // console.log(`[usePortfolioData] portfolio SMEs (active/approved): ${portfolioApps.length}`);
+      const portfolioComputed = computeMetrics(portfolioApps);
+      setPortfolioEnriched(portfolioApps);
+      setPortfolioMetrics(portfolioComputed);
+
     } catch (err) {
       console.error("usePortfolioData:", err);
       setError(err.message);
@@ -343,8 +366,10 @@ export const usePortfolioData = () => {
   }, [fetchAll]);
 
   return {
-    enriched,
-    metrics,
+    enriched,           // all apps — for CohortSelection
+    metrics,            // metrics for all apps — for CohortSelection
+    portfolioEnriched,  // Active Support + Support Approved only — for portfolio pages
+    portfolioMetrics,   // metrics for portfolio SMEs only — for portfolio pages
     catalystFormData,
     loading,
     error,
