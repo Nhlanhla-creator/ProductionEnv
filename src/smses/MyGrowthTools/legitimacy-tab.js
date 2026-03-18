@@ -3,7 +3,7 @@ import { useState } from "react"
 import { getFirestore, collection, addDoc, serverTimestamp } from "firebase/firestore"
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage"
 import { getAuth } from "firebase/auth"
-import { Check, ShoppingCart, Globe, Palette, Monitor, TrendingUp, Star, CreditCard, Upload, X, FileText, Image as ImageIcon, File, AlertCircle } from "lucide-react"
+import { Check, ShoppingCart, Globe, Palette, Monitor, TrendingUp, Star, CreditCard, Upload, X, FileText, Image as ImageIcon, File, AlertCircle, Ticket, Users, Award } from "lucide-react"
 import emailjs from '@emailjs/browser'
 
 const LegitimacyTab = () => {
@@ -19,12 +19,24 @@ const LegitimacyTab = () => {
   const [specFiles, setSpecFiles] = useState([])
   const [uploadingSpecs, setUploadingSpecs] = useState(false)
 
+  // Voucher related state
+  const [showVoucherSection, setShowVoucherSection] = useState(false)
+  const [showVoucherPurchaseModal, setShowVoucherPurchaseModal] = useState(false)
+  const [voucherPurchaseData, setVoucherPurchaseData] = useState({
+    seats: 1,
+    plan: "premium",
+    planName: "Premium",
+    price: 599
+  })
+  const [voucherSeats, setVoucherSeats] = useState(1)
+
   const EMAILJS_SERVICE_ID = "service_hm5lzgq"
   const EMAILJS_TEMPLATE_ID = "template_z3fw55r"
   const EMAILJS_ADMIN_TEMPLATE_ID = "template_xrrdplp"
   const EMAILJS_PUBLIC_KEY = "qzt6GK09NLvKGg8C1"
 
   const storage = getStorage()
+  const db = getFirestore()
 
   const colors = {
     darkBrown: "#372C27",
@@ -38,7 +50,46 @@ const LegitimacyTab = () => {
     lightText: "#F5F2F0",
     gradientStart: "#4A352F",
     gradientEnd: "#7D5A50",
+    successGreen: "#2E7D32",
+    errorRed: "#C62828"
   }
+
+  // Voucher plans for purchase - Using exact plan names that match subscription config
+  const voucherPlans = [
+    {
+      id: "freemium",
+      name: "Freemium",
+      displayName: "Freemium Plan",
+      description: "Access to Freemium features",
+      pricePerSeat: 299,
+      features: ["Basic features", "1 seat included", "Standard support"]
+    },
+    {
+      id: "standard",
+      name: "Standard",
+      displayName: "Standard Plan",
+      description: "Access to Standard plan features",
+      pricePerSeat: 399,
+      features: ["All Standard features", "Team collaboration", "Priority support"]
+    },
+    {
+      id: "premium",
+      name: "Premium",
+      displayName: "Premium Plan",
+      description: "Access to Premium plan features",
+      pricePerSeat: 599,
+      features: ["All Premium features", "Advanced analytics", "24/7 support"]
+    },
+    {
+      id: "enterprise",
+      name: "Enterprise",
+      displayName: "Enterprise Plan",
+      description: "Access to Enterprise features",
+      pricePerSeat: 799,
+      features: ["All Enterprise features", "Custom integrations", "Dedicated account manager"],
+      minSeats: 11
+    }
+  ]
 
   const legitimacyCategories = {
     digital: {
@@ -564,6 +615,203 @@ const LegitimacyTab = () => {
       gap: "1rem",
     },
     alertText: { flex: 1, fontSize: "0.9rem", color: colors.mediumBrown, lineHeight: "1.5" },
+    
+    // Voucher section styles
+    voucherToggleSection: {
+      marginBottom: "2rem",
+      padding: "1.5rem",
+      background: `linear-gradient(135deg, ${colors.cream} 0%, ${colors.lightTan} 100%)`,
+      borderRadius: "1rem",
+      border: `1px solid ${colors.accentGold}`,
+    },
+    voucherToggle: {
+      display: "flex",
+      gap: "1rem",
+      alignItems: "center",
+      cursor: "pointer",
+      padding: "0.5rem",
+    },
+    voucherToggleIcon: {
+      width: "40px",
+      height: "40px",
+      borderRadius: "50%",
+      background: colors.accentGold,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      color: colors.lightText,
+    },
+    voucherToggleText: {
+      fontSize: "1.1rem",
+      fontWeight: "600",
+      color: colors.darkBrown,
+    },
+    voucherContent: {
+      marginTop: "1.5rem",
+      borderTop: `1px solid ${colors.lightTan}`,
+      paddingTop: "1.5rem",
+    },
+    voucherPurchaseSection: {
+      marginBottom: "2rem",
+    },
+    voucherPurchaseTitle: {
+      fontSize: "1.2rem",
+      fontWeight: "700",
+      color: colors.darkBrown,
+      marginBottom: "1rem",
+      display: "flex",
+      alignItems: "center",
+      gap: "0.5rem",
+    },
+    voucherPlansGrid: {
+      display: "grid",
+      gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+      gap: "1rem",
+      marginBottom: "1.5rem",
+    },
+    voucherPlanCard: {
+      background: colors.offWhite,
+      border: `2px solid ${colors.lightTan}`,
+      borderRadius: "12px",
+      padding: "1.5rem",
+      cursor: "pointer",
+      transition: "all 0.3s ease",
+    },
+    voucherPlanCardSelected: {
+      borderColor: colors.accentGold,
+      background: `linear-gradient(135deg, ${colors.offWhite} 0%, ${colors.lightTan} 100%)`,
+      boxShadow: `0 4px 12px ${colors.accentGold}40`,
+    },
+    voucherPlanName: {
+      fontSize: "1.1rem",
+      fontWeight: "700",
+      color: colors.darkBrown,
+      marginBottom: "0.5rem",
+    },
+    voucherPlanPrice: {
+      fontSize: "1.5rem",
+      fontWeight: "800",
+      color: colors.accentGold,
+      marginBottom: "0.5rem",
+    },
+    voucherPlanPricePeriod: {
+      fontSize: "0.85rem",
+      color: colors.mediumBrown,
+      fontWeight: "normal",
+    },
+    voucherPlanFeatures: {
+      listStyle: "none",
+      padding: 0,
+      margin: "1rem 0 0 0",
+      fontSize: "0.85rem",
+      color: colors.mediumBrown,
+    },
+    voucherFeatureItem: {
+      display: "flex",
+      alignItems: "center",
+      gap: "0.5rem",
+      marginBottom: "0.5rem",
+    },
+    voucherSeatSelector: {
+      display: "flex",
+      alignItems: "center",
+      gap: "1rem",
+      padding: "1rem",
+      background: colors.cream,
+      borderRadius: "8px",
+      marginBottom: "1.5rem",
+    },
+    voucherSeatButton: {
+      width: "40px",
+      height: "40px",
+      borderRadius: "50%",
+      border: `2px solid ${colors.accentGold}`,
+      background: colors.offWhite,
+      color: colors.darkBrown,
+      fontSize: "1.2rem",
+      fontWeight: "bold",
+      cursor: "pointer",
+      transition: "all 0.2s ease",
+    },
+    voucherSeatCount: {
+      fontSize: "1.3rem",
+      fontWeight: "700",
+      color: colors.darkBrown,
+      minWidth: "40px",
+      textAlign: "center",
+    },
+    voucherTotal: {
+      fontSize: "1.2rem",
+      fontWeight: "600",
+      color: colors.darkBrown,
+      padding: "1rem",
+      background: `${colors.accentGold}20`,
+      borderRadius: "8px",
+      marginBottom: "1.5rem",
+      textAlign: "center",
+    },
+    voucherPurchaseBtn: {
+      background: `linear-gradient(135deg, ${colors.accentGold} 0%, ${colors.mediumBrown} 100%)`,
+      color: colors.lightText,
+      border: "none",
+      padding: "1rem 2rem",
+      borderRadius: "8px",
+      fontWeight: "700",
+      fontSize: "1rem",
+      cursor: "pointer",
+      width: "100%",
+      transition: "all 0.3s ease",
+    },
+    voucherModal: {
+      position: "fixed",
+      top: 0,
+      left: 0,
+      width: "100vw",
+      height: "100vh",
+      backgroundColor: `${colors.darkBrown}80`,
+      backdropFilter: "blur(8px)",
+      display: "flex",
+      justifyContent: "center",
+      alignItems: "center",
+      zIndex: 3000,
+      padding: "1rem",
+    },
+    voucherModalContent: {
+      background: colors.offWhite,
+      padding: "2rem",
+      borderRadius: "24px",
+      maxWidth: "500px",
+      width: "100%",
+      maxHeight: "90vh",
+      overflow: "auto",
+      boxShadow: `${colors.darkBrown}33 0px 24px 60px`,
+      border: `1px solid ${colors.lightTan}`,
+    },
+    voucherNote: {
+      fontSize: "0.9rem",
+      color: colors.mediumBrown,
+      marginTop: "1rem",
+      padding: "1rem",
+      background: `${colors.accentGold}10`,
+      borderRadius: "8px",
+      border: `1px solid ${colors.accentGold}30`,
+    },
+    voucherNoteHighlight: {
+      fontWeight: "700",
+      color: colors.accentGold,
+    },
+    buttonSecondary: {
+      background: `linear-gradient(135deg, ${colors.lightTan} 0%, ${colors.cream} 100%)`,
+      color: colors.darkBrown,
+      border: `2px solid ${colors.lightTan}`,
+      fontWeight: 700,
+      borderRadius: "12px",
+      padding: "1rem 2rem",
+      fontSize: "clamp(0.9rem, 1.5vw, 1rem)",
+      cursor: "pointer",
+      margin: "0.5rem",
+      transition: "all 0.3s ease",
+    },
   }
 
   const calculateEBusinessCardPrice = (item, users) => {
@@ -654,7 +902,6 @@ const LegitimacyTab = () => {
     return <File size={24} color={colors.mediumBrown} />
   }
 
-  // FIXED: Send customer confirmation email
   const sendConfirmationEmail = async (purchaseDetails) => {
     try {
       const itemsList = purchaseDetails.items
@@ -666,17 +913,15 @@ const LegitimacyTab = () => {
         toolName = `${purchaseDetails.packageName} (${purchaseDetails.userCount} user${purchaseDetails.userCount !== 1 ? 's' : ''})`
       }
 
-      // Clean specifications text - replace any problematic characters
       const cleanSpecifications = (purchaseDetails.specifications || "")
-        .replace(/[^\x20-\x7E\n\r\t]/g, '') // Remove non-ASCII characters
-        .replace(/{{/g, '[') // Replace {{ with [
-        .replace(/}}/g, ']') // Replace }} with ]
+        .replace(/[^\x20-\x7E\n\r\t]/g, '')
+        .replace(/{{/g, '[')
+        .replace(/}}/g, ']')
         .trim()
 
       const hasSpecifications = !!cleanSpecifications || (purchaseDetails.specFiles && purchaseDetails.specFiles.length > 0)
       const specFilesCount = purchaseDetails.specFiles ? purchaseDetails.specFiles.length : 0
 
-      // Create clean template params with NO undefined values
       const templateParams = {
         to_name: purchaseDetails.userName || 'Valued Customer',
         to_email: purchaseDetails.userEmail || '',
@@ -693,8 +938,6 @@ const LegitimacyTab = () => {
         spec_files_count: specFilesCount.toString()
       }
 
-      console.log('📧 Sending customer email with cleaned params:', templateParams)
-
       const response = await emailjs.send(
         EMAILJS_SERVICE_ID,
         EMAILJS_TEMPLATE_ID,
@@ -702,7 +945,6 @@ const LegitimacyTab = () => {
         EMAILJS_PUBLIC_KEY
       )
 
-      console.log('✅ Customer email sent successfully:', response)
       return { success: true, response }
     } catch (error) {
       console.error('❌ Customer email send failed:', error)
@@ -710,7 +952,6 @@ const LegitimacyTab = () => {
     }
   }
 
-  // FIXED: Send admin notification email
   const sendAdminNotification = async (purchaseDetails) => {
     try {
       const itemsList = purchaseDetails.items
@@ -722,7 +963,6 @@ const LegitimacyTab = () => {
         toolName = `${purchaseDetails.packageName} (${purchaseDetails.userCount} user${purchaseDetails.userCount !== 1 ? 's' : ''})`
       }
 
-      // Clean specifications text
       const cleanSpecifications = (purchaseDetails.specifications || "")
         .replace(/[^\x20-\x7E\n\r\t]/g, '')
         .replace(/{{/g, '[')
@@ -732,7 +972,6 @@ const LegitimacyTab = () => {
       const hasSpecifications = !!cleanSpecifications || (purchaseDetails.specFiles && purchaseDetails.specFiles.length > 0)
       const specFilesCount = purchaseDetails.specFiles ? purchaseDetails.specFiles.length : 0
 
-      // Create clean template params
       const templateParams = {
         customer_name: purchaseDetails.customerName || 'Valued Customer',
         customer_email: purchaseDetails.customerEmail || '',
@@ -751,8 +990,6 @@ const LegitimacyTab = () => {
         spec_files_count: specFilesCount.toString()
       }
 
-      console.log('📧 Sending admin notification with cleaned params:', templateParams)
-
       const response = await emailjs.send(
         EMAILJS_SERVICE_ID,
         EMAILJS_ADMIN_TEMPLATE_ID,
@@ -760,11 +997,141 @@ const LegitimacyTab = () => {
         EMAILJS_PUBLIC_KEY
       )
 
-      console.log('✅ Admin notification sent successfully:', response)
       return { success: true, response }
     } catch (error) {
       console.error('❌ Admin notification failed:', error)
       return { success: false, error }
+    }
+  }
+
+  // ==================== VOUCHER FUNCTIONS ====================
+
+  // Generate a unique voucher code
+  const generateVoucherCode = (planId, seats) => {
+    const prefix = planId.substring(0, 2).toUpperCase()
+    const randomPart = Math.random().toString(36).substring(2, 8).toUpperCase()
+    const seatsPart = seats.toString().padStart(2, '0')
+    return `${prefix}${seatsPart}${randomPart}`
+  }
+
+  // Handle voucher purchase
+  const handleVoucherPurchase = async () => {
+    const auth = getAuth()
+    const user = auth.currentUser
+
+    if (!user) {
+      alert("Please log in to purchase vouchers.")
+      return
+    }
+
+    const selectedPlan = voucherPlans.find(p => p.id === voucherPurchaseData.plan)
+    if (!selectedPlan) return
+
+    // Check minimum seats for enterprise plan
+    if (selectedPlan.id === "enterprise" && voucherSeats < 11) {
+      alert("Enterprise vouchers require a minimum of 11 seats.")
+      return
+    }
+
+    setShowVoucherPurchaseModal(true)
+  }
+
+  // Process voucher purchase payment
+  const processVoucherPurchase = async () => {
+    const auth = getAuth()
+    const user = auth.currentUser
+
+    if (!user) {
+      alert("Please log in to purchase vouchers.")
+      return
+    }
+
+    setPaymentProcessing(true)
+
+    try {
+      const selectedPlan = voucherPlans.find(p => p.id === voucherPurchaseData.plan)
+      if (!selectedPlan) {
+        throw new Error("Invalid plan selected")
+      }
+
+      const totalAmount = selectedPlan.pricePerSeat * voucherSeats
+      const transactionRef = `voucher_${Date.now()}_${user.uid.slice(0, 8)}`
+
+      // Generate unique voucher codes for each seat
+      const voucherCodes = []
+      const usedCodes = new Set()
+
+      for (let i = 0; i < voucherSeats; i++) {
+        let code
+        do {
+          code = generateVoucherCode(selectedPlan.id, voucherSeats)
+        } while (usedCodes.has(code))
+        
+        usedCodes.add(code)
+        voucherCodes.push(code)
+      }
+
+      // Create voucher document in Firestore with the CORRECT plan name
+      const voucherData = {
+        purchasedBy: user.uid,
+        purchaserEmail: user.email,
+        purchaserName: user.displayName || 'Valued Customer',
+        planId: selectedPlan.id,
+        planName: selectedPlan.name, // This will be "Premium", "Standard", etc.
+        displayName: selectedPlan.displayName,
+        totalSeats: voucherSeats,
+        remainingSeats: voucherSeats,
+        voucherCodes: voucherCodes,
+        redeemedSeats: [],
+        createdAt: serverTimestamp(),
+        transactionRef: transactionRef,
+        totalAmount: totalAmount,
+        status: "active",
+        expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000) // 1 year expiry
+      }
+
+      const voucherRef = await addDoc(collection(db, "vouchers"), voucherData)
+
+      // Save purchase record
+      const purchaseData = {
+        userId: user.uid,
+        userEmail: user.email,
+        userName: user.displayName || 'Valued Customer',
+        type: "voucher_purchase",
+        planName: selectedPlan.name,
+        seats: voucherSeats,
+        totalAmount: totalAmount,
+        voucherCodes: voucherCodes,
+        voucherId: voucherRef.id,
+        transactionRef: transactionRef,
+        createdAt: serverTimestamp(),
+        status: "Success"
+      }
+
+      await addDoc(collection(db, "voucherPurchases"), purchaseData)
+
+      // Show success message with codes
+      const codesList = voucherCodes.map((code, i) => `${i + 1}. ${code}`).join('\n')
+      alert(
+        `✅ Voucher Purchase Successful!\n\n` +
+        `Plan: ${selectedPlan.name} Plan\n` +
+        `Seats: ${voucherSeats}\n` +
+        `Total: R${totalAmount.toLocaleString()}\n\n` +
+        `Your voucher codes:\n${codesList}\n\n` +
+        `Share these codes with your team members. Each code can be used once for premium access.\n\n` +
+        `📍 REDEEM AT: Go to Subscription Page → Enter Voucher Code\n\n` +
+        `After redemption, your account will show as "${selectedPlan.name} Plan".`
+      )
+
+      setShowVoucherPurchaseModal(false)
+      setVoucherSeats(1)
+      setVoucherPurchaseData({ seats: 1, plan: "premium", planName: "Premium", price: 599 })
+
+    } catch (error) {
+      console.error('Voucher purchase error:', error)
+      alert(`Failed to purchase vouchers: ${error.message}`)
+    } finally {
+      setPaymentProcessing(false)
     }
   }
 
@@ -893,7 +1260,6 @@ const LegitimacyTab = () => {
         minute: '2-digit'
       })
 
-      // FIXED: Call email functions with ALL required parameters
       const customerEmailResult = await sendConfirmationEmail({
         userName: user.displayName || 'Valued Customer',
         userEmail: user.email,
@@ -933,7 +1299,7 @@ const LegitimacyTab = () => {
           `Total: R${total.toLocaleString()}\n\n` +
           `A confirmation email has been sent to ${user.email}.\n\n` +
           `Your tools will be processed and delivered within 3-14 working days.\n\n` +
-          `You can view your purchase in: Growth Tools → My Purchases`
+          `You can view your purchase in: My Purchases`
         )
       } else {
         alert(
@@ -942,7 +1308,7 @@ const LegitimacyTab = () => {
           `${selectedCount} item${selectedCount !== 1 ? "s" : ""} selected\n` +
           `Total: R${total.toLocaleString()}\n\n` +
           `Your tools will be delivered within 3-14 working days.\n\n` +
-          `You can view your purchase in: Growth Tools → My Purchases`
+          `You can view your purchase in: My Purchases`
         )
       }
 
@@ -979,6 +1345,113 @@ const LegitimacyTab = () => {
         <p style={styles.description}>
           A strong online presence and brand builds trust. If your business looks real, funders and clients will believe it is.
         </p>
+      </div>
+
+      {/* VOUCHER SECTION - Purchase vouchers for team */}
+      <div style={styles.voucherToggleSection}>
+        <div style={styles.voucherToggle} onClick={() => setShowVoucherSection(!showVoucherSection)}>
+          <div style={styles.voucherToggleIcon}>
+            <Ticket size={20} />
+          </div>
+          <span style={styles.voucherToggleText}>
+            {showVoucherSection ? "▼ Hide Voucher Purchase" : "▶ Purchase Team Vouchers (for multiple users)"}
+          </span>
+        </div>
+
+        {showVoucherSection && (
+          <div style={styles.voucherContent}>
+            {/* Voucher Purchase Section */}
+            <div style={styles.voucherPurchaseSection}>
+              <h3 style={styles.voucherPurchaseTitle}>
+                <Users size={20} /> Purchase Vouchers for Your Team
+              </h3>
+              
+              <div style={styles.voucherPlansGrid}>
+                {voucherPlans.map((plan) => (
+                  <div
+                    key={plan.id}
+                    style={{
+                      ...styles.voucherPlanCard,
+                      ...(voucherPurchaseData.plan === plan.id ? styles.voucherPlanCardSelected : {})
+                    }}
+                    onClick={() => setVoucherPurchaseData({
+                      ...voucherPurchaseData,
+                      plan: plan.id,
+                      planName: plan.name,
+                      price: plan.pricePerSeat
+                    })}
+                  >
+                    <div style={styles.voucherPlanName}>{plan.name}</div>
+                    <div style={styles.voucherPlanPrice}>
+                      R{plan.pricePerSeat}
+                      <span style={styles.voucherPlanPricePeriod}>/seat</span>
+                    </div>
+                    <ul style={styles.voucherPlanFeatures}>
+                      {plan.features.map((feature, i) => (
+                        <li key={i} style={styles.voucherFeatureItem}>
+                          <Check size={14} color={colors.accentGold} /> {feature}
+                        </li>
+                      ))}
+                    </ul>
+                    {plan.minSeats && (
+                      <div style={{ fontSize: "0.75rem", color: colors.accentGold, marginTop: "0.5rem" }}>
+                        Min. {plan.minSeats} seats
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              <div style={styles.voucherSeatSelector}>
+                <button
+                  style={styles.voucherSeatButton}
+                  onClick={() => setVoucherSeats(Math.max(1, voucherSeats - 1))}
+                  disabled={voucherSeats <= 1}
+                >
+                  -
+                </button>
+                <div>
+                  <div style={styles.voucherSeatCount}>{voucherSeats}</div>
+                  <div style={{ fontSize: "0.8rem", color: colors.mediumBrown }}>seats</div>
+                </div>
+                <button
+                  style={styles.voucherSeatButton}
+                  onClick={() => {
+                    const maxSeats = voucherPurchaseData.plan === "enterprise" ? 25 : 50
+                    setVoucherSeats(Math.min(maxSeats, voucherSeats + 1))
+                  }}
+                >
+                  +
+                </button>
+              </div>
+
+              <div style={styles.voucherTotal}>
+                Total: R{(voucherPurchaseData.price * voucherSeats).toLocaleString()}
+              </div>
+
+              <button
+                style={styles.voucherPurchaseBtn}
+                onClick={handleVoucherPurchase}
+                onMouseEnter={(e) => {
+                  e.target.style.transform = "translateY(-2px)"
+                  e.target.style.boxShadow = `0 8px 20px ${colors.accentGold}66`
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.transform = "translateY(0)"
+                  e.target.style.boxShadow = "none"
+                }}
+              >
+                <ShoppingCart size={20} style={{ marginRight: "0.5rem" }} />
+                Purchase Voucher
+              </button>
+
+              <div style={styles.voucherNote}>
+                <span style={styles.voucherNoteHighlight}>📍 REDEMPTION:</span> After purchase, you'll receive unique voucher codes. 
+                Share these with team members. Each code can be redeemed once on the <strong>Subscription Page</strong> for premium access.
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       <div style={styles.subTabsContainer}>
@@ -1247,6 +1720,71 @@ const LegitimacyTab = () => {
                 </p>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Voucher Purchase Modal */}
+      {showVoucherPurchaseModal && (
+        <div style={styles.voucherModal} onClick={() => setShowVoucherPurchaseModal(false)}>
+          <div style={styles.voucherModalContent} onClick={(e) => e.stopPropagation()}>
+            <div style={styles.specsHeader}>
+              <h2 style={styles.specsTitle}>Confirm Voucher Purchase</h2>
+              <button style={styles.closeBtn} onClick={() => setShowVoucherPurchaseModal(false)}>
+                <X size={24} />
+              </button>
+            </div>
+
+            <div style={{ padding: "1rem 0" }}>
+              <div style={{ marginBottom: "1.5rem" }}>
+                <div style={{ fontWeight: 600, color: colors.darkBrown, marginBottom: "0.5rem" }}>Plan:</div>
+                <div style={{ color: colors.mediumBrown }}>{voucherPurchaseData.planName} Plan</div>
+              </div>
+
+              <div style={{ marginBottom: "1.5rem" }}>
+                <div style={{ fontWeight: 600, color: colors.darkBrown, marginBottom: "0.5rem" }}>Number of Seats:</div>
+                <div style={{ color: colors.mediumBrown }}>{voucherSeats}</div>
+              </div>
+
+              <div style={{ marginBottom: "1.5rem" }}>
+                <div style={{ fontWeight: 600, color: colors.darkBrown, marginBottom: "0.5rem" }}>Price per Seat:</div>
+                <div style={{ color: colors.mediumBrown }}>R{voucherPurchaseData.price.toLocaleString()}</div>
+              </div>
+
+              <div style={{ background: colors.cream, padding: "1.5rem", borderRadius: "12px", marginBottom: "1.5rem" }}>
+                <div style={{ fontWeight: 700, color: colors.darkBrown, marginBottom: "0.5rem" }}>Total Amount:</div>
+                <div style={{ fontSize: "2rem", fontWeight: 800, color: colors.accentGold }}>
+                  R{(voucherPurchaseData.price * voucherSeats).toLocaleString()}
+                </div>
+              </div>
+
+              <div style={styles.alertBanner}>
+                <AlertCircle size={24} color={colors.accentGold} />
+                <div style={styles.alertText}>
+                  <strong>You will receive:</strong> {voucherSeats} unique voucher code{voucherSeats !== 1 ? 's' : ''} that can be distributed to your team members. Each code provides premium access for one user.
+                </div>
+              </div>
+
+              <div style={styles.voucherNote}>
+                <span style={styles.voucherNoteHighlight}>📍 AFTER PURCHASE:</span> Go to <strong>"My Purchases"</strong> to copy your voucher codes. Share them with team members who can redeem them on the <strong>Subscription Page</strong>.
+              </div>
+
+              <div style={{ display: "flex", gap: "1rem", marginTop: "2rem" }}>
+                <button
+                  style={{...styles.buttonSecondary, flex: 1}}
+                  onClick={() => setShowVoucherPurchaseModal(false)}
+                >
+                  Cancel
+                </button>
+                <button
+                  style={{...styles.saveBtn, flex: 2}}
+                  onClick={processVoucherPurchase}
+                  disabled={paymentProcessing}
+                >
+                  {paymentProcessing ? "Processing..." : "Confirm Purchase"}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

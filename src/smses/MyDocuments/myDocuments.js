@@ -3,7 +3,7 @@ import { getAuth } from "firebase/auth";
 import { getDoc, doc, updateDoc, serverTimestamp, onSnapshot } from "firebase/firestore";
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db, auth } from "../../firebaseConfig";
-import { FileText, ExternalLink, Upload, Filter, ChevronDown, ChevronUp, Trash2, Plus, Minus, Eye } from "lucide-react";
+import { FileText, ExternalLink, Upload, Filter, ChevronDown, ChevronUp, Trash2, Plus, Minus } from "lucide-react";
 import { onAuthStateChanged } from "firebase/auth";
 import { GoogleGenAI } from "@google/genai";
 import { 
@@ -34,7 +34,8 @@ const DOCUMENTS = [
   "COIDA Letter of Good Standing",
   "CV",
   "Financial Statements",
-  "Guarantee/Contract",
+  "Funder/Catalyst Contract", // NEW: Added Funder/Catalyst Contract
+  "Guarantees/Collateral",
   "Industry Accreditations",
   "Loan Agreements",
   "Pitch Deck",
@@ -43,24 +44,13 @@ const DOCUMENTS = [
   "Tax Clearance Certificate"
 ].sort((a, b) => a.localeCompare(b));
 
-// Core documents that catalysts can view
-const CORE_DOCUMENTS = [
-  "Company Profile / Brochure",
-  "Company Registration Certificate",
-  "Business Plan",
-  "Proof of Address",
-  "Tax Clearance Certificate",
-  "B-BBEE Certificate",
-  "COIDA Letter of Good Standing",
-  "Client References & Support Letters"
-].sort((a, b) => a.localeCompare(b));
-
 const MyDocuments = () => {
   const [profileData, setProfileData] = useState({});
   const [filter, setFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(true);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [isOverlayVisible, setIsOverlayVisible] = useState(false);
   const [validationResults, setValidationResults] = useState({});
@@ -73,12 +63,12 @@ const MyDocuments = () => {
   const [expandedGuarantees, setExpandedGuarantees] = useState(false);
   const [expandedAccreditations, setExpandedAccreditations] = useState(false);
   const [expandedLoanAgreements, setExpandedLoanAgreements] = useState(false);
-  const [isInvestorView, setIsInvestorView] = useState(false);
-  const [viewingSMEId, setViewingSMEId] = useState(null);
-  const [viewingSMEName, setViewingSMEName] = useState("");
-
+  const [expandedFinancialStatements, setExpandedFinancialStatements] = useState(false);
+  const [expandedFunderContracts, setExpandedFunderContracts] = useState(false); // NEW: State for Funder/Catalyst Contract expansion
   const [activeSection, setActiveSection] = useState('documents');
-const functions = getFunctions();
+  
+  const functions = getFunctions();
+  
   // Use the synchronization hook
   useDocumentSync(setSubmittedDocuments, setProfileData, null);
 
@@ -89,62 +79,54 @@ const functions = getFunctions();
     });
   };
 
-// Check for investor view mode on mount
-useEffect(() => {
-  const investorViewMode = sessionStorage.getItem("investorViewMode") === "true";
-  const smeId = sessionStorage.getItem("viewingSMEId");
-  const smeName = sessionStorage.getItem("viewingSMEName");
+  useEffect(() => {
+    const auth = getAuth();
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
+      if (user) {
+        try {
+          const profileRef = doc(db, "universalProfiles", user.uid);
+          
+          const unsubscribeSnapshot = onSnapshot(profileRef, (docSnap) => {
+            if (docSnap.exists()) {
+              const data = docSnap.data();
+              setProfileData(data);
+              const submitted = checkSubmittedDocs(DOCUMENTS, data);
+              setSubmittedDocuments(submitted);
+            }
+            setLoading(false);
+          });
 
-  if (investorViewMode && smeId) {
-    setIsInvestorView(true);
-    setViewingSMEId(smeId);
-    setViewingSMEName(smeName || "SME");
-    console.log("Investor view mode active, viewing SME:", smeId);
-  }
-}, []);
-
-useEffect(() => {
-  const auth = getAuth();
-  const unsubscribe = onAuthStateChanged(auth, async (user) => {
-    if (user) {
-      try {
-        // Determine which profile to load
-        let profileId = user.uid;
-        
-        // If in investor view mode, use the viewing SME ID instead
-        if (isInvestorView && viewingSMEId) {
-          profileId = viewingSMEId;
-          console.log("Loading documents for SME:", viewingSMEId);
-        } else {
-          console.log("Loading documents for logged-in user:", user.uid);
-        }
-        
-        const profileRef = doc(db, "universalProfiles", profileId);
-        
-        const unsubscribeSnapshot = onSnapshot(profileRef, (docSnap) => {
-          if (docSnap.exists()) {
-            const data = docSnap.data();
-            setProfileData(data);
-            const submitted = checkSubmittedDocs(DOCUMENTS, data);
-            setSubmittedDocuments(submitted);
-          } else {
-            console.log("No profile found for ID:", profileId);
-          }
+          return () => unsubscribeSnapshot(); 
+        } catch (err) {
+          console.error("Failed to load user documents:", err);
           setLoading(false);
-        });
-
-        return () => unsubscribeSnapshot(); 
-      } catch (err) {
-        console.error("Failed to load user documents:", err);
+        }
+      } else {
         setLoading(false);
       }
-    } else {
-      setLoading(false);
-    }
-  });
+    });
 
-  return () => unsubscribe();
-}, [isInvestorView, viewingSMEId]);
+    return () => unsubscribe();
+  }, []);
+
+  // Add sidebar detection
+  useEffect(() => {
+    const checkSidebarState = () => {
+      setIsSidebarCollapsed(document.body.classList.contains("sidebar-collapsed"))
+    }
+
+    // Check initial state
+    checkSidebarState()
+
+    // Watch for changes
+    const observer = new MutationObserver(checkSidebarState)
+    observer.observe(document.body, {
+      attributes: true,
+      attributeFilter: ["class"],
+    })
+
+    return () => observer.disconnect()
+  }, [])
 
   // Add this useEffect to MyDocuments component
   useEffect(() => {
@@ -182,6 +164,7 @@ useEffect(() => {
       return null;
     }
   };
+
 const validateDocumentWithAI = async (docLabel, file, registeredName) => {
   try {
     const base64Data = await new Promise((resolve) => {
@@ -189,34 +172,35 @@ const validateDocumentWithAI = async (docLabel, file, registeredName) => {
       reader.readAsDataURL(file);
       reader.onload = () => resolve(reader.result.split(',')[1]);
     });
-
-    
+ 
     const validateMyDocument = httpsCallable(functions, 'validateMyDocument');
-
+ 
     const result = await validateMyDocument({
       documentLabel: docLabel,
       base64File: base64Data,
       mimeType: file.type,
       registeredName: registeredName,
     });
-
+ 
     return result.data.validationResult;
-
+ 
   } catch (error) {
     console.error("AI validation failed:", error);
     throw new Error("Network error - please check your connection and try again");
   }
 };
-
+ 
   const getMultipleDocumentData = (docLabel, profileData) => {
     const documentId = getDocumentId(docLabel);
     
     const multiUploadDocuments = [
       "IDs of Directors & Shareholders",
       "Client References & Support Letters",
-      "Guarantee/Contract",
+      "Guarantees/Collateral",
       "Industry Accreditations",
-      "Loan Agreements"
+      "Loan Agreements",
+      "Financial Statements",
+      "Funder/Catalyst Contract" // NEW: Added Funder/Catalyst Contract to multi-upload
     ];
     
     if (multiUploadDocuments.includes(docLabel)) {
@@ -228,7 +212,7 @@ const validateDocumentWithAI = async (docLabel, file, registeredName) => {
           return [{
             url: singleUrl,
             status: "verified",
-            message: `${docLabel} verified`,
+            message: "Document verified",
             uploadedAt: profileData.documents?.[`${documentId}UpdatedAt`]?.seconds ? 
               new Date(profileData.documents[`${documentId}UpdatedAt`].seconds * 1000).toISOString() : 
               new Date().toISOString()
@@ -256,7 +240,7 @@ const validateDocumentWithAI = async (docLabel, file, registeredName) => {
       return [{
         url: url,
         status: "verified",
-        message: `${docLabel} verified`,
+        message: "Document verified",
         uploadedAt: profileData.documents?.[`${documentId}UpdatedAt`]?.seconds ? 
           new Date(profileData.documents[`${documentId}UpdatedAt`].seconds * 1000).toISOString() : 
           new Date().toISOString()
@@ -266,7 +250,7 @@ const validateDocumentWithAI = async (docLabel, file, registeredName) => {
     return [];
   };
 
-   const handleIndividualDocumentUpload = async (docLabel, file, docIndex) => {
+  const handleIndividualDocumentUpload = async (docLabel, file, docIndex) => {
     const auth = getAuth();
     const user = auth.currentUser;
     if (!user || !file) return;
@@ -282,14 +266,14 @@ const validateDocumentWithAI = async (docLabel, file, registeredName) => {
 
       const validationResult = await validateDocumentWithAI(docLabel, file, registeredName);
       
-      // Store validation result for display in notes (only if validation succeeded)
+      // Store validation result for display in notes
       setValidationResults(prev => ({
         ...prev,
         [docLabel]: validationResult
       }));
 
       if (!validationResult.isValid) {
-        // Upload the document but mark it as rejected
+        // Upload the document but mark it as rejected/expired
         const fileExtension = file.name.toLowerCase().split('.').pop();
         const fileName = `${documentId}_${Date.now()}_${docIndex}.${fileExtension}`;
         const storageRef = ref(storage, `universalProfiles/documents/${user.uid}/${fileName}`);
@@ -383,7 +367,6 @@ const validateDocumentWithAI = async (docLabel, file, registeredName) => {
       setIsUploading(false);
       setTimeout(() => {
         setIsOverlayVisible(false);
-        // Show alert only - no document should be uploaded or status shown
         alert(error.message || "Network error - please try again");
       }, 300);
     }
@@ -457,7 +440,6 @@ const validateDocumentWithAI = async (docLabel, file, registeredName) => {
     }
   };
 
- 
   const handleAddNewDocument = async (docLabel) => {
     const auth = getAuth();
     const user = auth.currentUser;
@@ -470,7 +452,7 @@ const validateDocumentWithAI = async (docLabel, file, registeredName) => {
       const currentDocs = getMultipleDocumentData(docLabel, profileData);
       const newDocData = {
         url: "",
-        status: "pending", // Changed from "pending" to be consistent
+        status: "pending",
         message: "No document uploaded",
         uploadedAt: new Date().toISOString()
       };
@@ -495,7 +477,6 @@ const validateDocumentWithAI = async (docLabel, file, registeredName) => {
       alert('Failed to add new document slot. Please try again.');
     }
   };
-
 
   const renderDocumentLinkForIndividual = (doc) => {
     if (!doc.url || doc.url === "") {
@@ -543,33 +524,101 @@ const validateDocumentWithAI = async (docLabel, file, registeredName) => {
     );
   };
 
-const renderIndividualDocumentActions = (docLabel, docIndex, doc) => {
-  // For investor view - show read-only indicator
-  if (isInvestorView) {
+  const renderIndividualDocumentActions = (docLabel, docIndex, doc) => {
+    // For CVs from ownership management, show delete button only
+    if (docLabel === "CV" && doc.source === "ownership_management") {
+      return (
+        <div style={{ display: "flex", gap: "8px", justifyContent: "center" }}>
+          <button
+            onClick={() => handleDeleteIndividualDocument(docLabel, docIndex)}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "4px",
+              padding: "6px 12px",
+              backgroundColor: "#d32f2f",
+              color: "white",
+              border: "none",
+              borderRadius: "6px",
+              fontSize: "11px",
+              cursor: "pointer",
+              fontWeight: "600",
+              transition: "all 0.2s ease"
+            }}
+            onMouseEnter={(e) => {
+              e.target.style.backgroundColor = "#b71c1c";
+            }}
+            onMouseLeave={(e) => {
+              e.target.style.backgroundColor = "#d32f2f";
+            }}
+          >
+            <Trash2 size={12} />
+            Delete
+          </button>
+        </div>
+      );
+    }
+    
+    if (docLabel === "CV") {
+      return (
+        <div style={{ display: "flex", gap: "8px", justifyContent: "center" }}>
+          <label style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "6px",
+            padding: "6px 12px",
+            backgroundColor: "#d3d3d3",
+            color: "#666", 
+            borderRadius: "6px",
+            fontSize: "11px",
+            fontWeight: "600",
+            cursor: "not-allowed", 
+            opacity: 0.6 
+          }}>
+            <Upload size={12} />
+            Upload
+          </label>
+        </div>
+      );
+    }
+    
+    // Regular actions for other documents
     return (
       <div style={{ display: "flex", gap: "8px", justifyContent: "center" }}>
-        <span style={{
+        <label style={{
           display: "inline-flex",
           alignItems: "center",
-          gap: "4px",
-          padding: "4px 8px",
-          backgroundColor: "#f5f2f0",
-          color: "#8d6e63",
-          borderRadius: "4px",
-          fontSize: "10px",
-          fontWeight: "500"
-        }}>
-          <Eye size={12} />
-          Read only
-        </span>
-      </div>
-    );
-  }
-
-  // For CVs from ownership management, show delete button only
-  if (docLabel === "CV" && doc.source === "ownership_management") {
-    return (
-      <div style={{ display: "flex", gap: "8px", justifyContent: "center" }}>
+          gap: "6px",
+          padding: "6px 12px",
+          backgroundColor: "#a67c52",
+          color: "white",
+          borderRadius: "6px",
+          fontSize: "11px",
+          fontWeight: "600",
+          cursor: "pointer",
+          transition: "all 0.2s ease"
+        }}
+        onMouseEnter={(e) => {
+          e.target.style.backgroundColor = "#8d6e63";
+        }}
+        onMouseLeave={(e) => {
+          e.target.style.backgroundColor = "#a67c52";
+        }}
+        >
+          <Upload size={12} />
+          {doc.url ? "Update" : "Upload"}
+          <input
+            type="file"
+            style={{ display: 'none' }}
+            onChange={(e) => {
+              const file = e.target.files[0];
+              if (file) {
+                handleIndividualDocumentUpload(docLabel, file, docIndex);
+              }
+            }}
+            accept=".pdf,.jpg,.jpeg,.png"
+          />
+        </label>
         <button
           onClick={() => handleDeleteIndividualDocument(docLabel, docIndex)}
           style={{
@@ -598,105 +647,17 @@ const renderIndividualDocumentActions = (docLabel, docIndex, doc) => {
         </button>
       </div>
     );
-  }
-  
-  if (docLabel === "CV") {
-    return (
-      <div style={{ display: "flex", gap: "8px", justifyContent: "center" }}>
-        <label style={{
-          display: "inline-flex",
-          alignItems: "center",
-          gap: "6px",
-          padding: "6px 12px",
-          backgroundColor: "#d3d3d3",
-          color: "#666", 
-          borderRadius: "6px",
-          fontSize: "11px",
-          fontWeight: "600",
-          cursor: "not-allowed", 
-          opacity: 0.6 
-        }}>
-          <Upload size={12} />
-          Upload
-        </label>
-      </div>
-    );
-  }
-  
-  // Regular actions for other documents
-  return (
-    <div style={{ display: "flex", gap: "8px", justifyContent: "center" }}>
-      <label style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: "6px",
-        padding: "6px 12px",
-        backgroundColor: "#a67c52",
-        color: "white",
-        borderRadius: "6px",
-        fontSize: "11px",
-        fontWeight: "600",
-        cursor: "pointer",
-        transition: "all 0.2s ease"
-      }}
-      onMouseEnter={(e) => {
-        e.target.style.backgroundColor = "#8d6e63";
-      }}
-      onMouseLeave={(e) => {
-        e.target.style.backgroundColor = "#a67c52";
-      }}
-      >
-        <Upload size={12} />
-        {doc.url ? "Update" : "Upload"}
-        <input
-          type="file"
-          style={{ display: 'none' }}
-          onChange={(e) => {
-            const file = e.target.files[0];
-            if (file) {
-              handleIndividualDocumentUpload(docLabel, file, docIndex);
-            }
-          }}
-          accept=".pdf,.jpg,.jpeg,.png"
-        />
-      </label>
-      <button
-        onClick={() => handleDeleteIndividualDocument(docLabel, docIndex)}
-        style={{
-          display: "inline-flex",
-          alignItems: "center",
-          gap: "4px",
-          padding: "6px 12px",
-          backgroundColor: "#d32f2f",
-          color: "white",
-          border: "none",
-          borderRadius: "6px",
-          fontSize: "11px",
-          cursor: "pointer",
-          fontWeight: "600",
-          transition: "all 0.2s ease"
-        }}
-        onMouseEnter={(e) => {
-          e.target.style.backgroundColor = "#b71c1c";
-        }}
-        onMouseLeave={(e) => {
-          e.target.style.backgroundColor = "#d32f2f";
-        }}
-      >
-        <Trash2 size={12} />
-        Delete
-      </button>
-    </div>
-  );
-};
+  };
 
   const renderDocumentLink = (label) => {
     const multiUploadDocuments = [
       "IDs of Directors & Shareholders", 
       "Client References & Support Letters",
-      "Guarantee/Contract",
+      "Guarantees/Collateral",
       "Industry Accreditations",
-      "Loan Agreements"
+      "Loan Agreements",
+      "Financial Statements",
+      "Funder/Catalyst Contract" // NEW: Added Funder/Catalyst Contract to multi-upload
     ];
     
     if (multiUploadDocuments.includes(label)) {
@@ -721,12 +682,16 @@ const renderIndividualDocumentActions = (docLabel, docIndex, doc) => {
             return { isExpanded: expandedIDs, setExpanded: setExpandedIDs };
           case "Client References & Support Letters":
             return { isExpanded: expandedClientReferences, setExpanded: setExpandedClientReferences };
-          case "Guarantee/Contract":
+          case "Guarantees/Collateral":
             return { isExpanded: expandedGuarantees, setExpanded: setExpandedGuarantees };
           case "Industry Accreditations":
             return { isExpanded: expandedAccreditations, setExpanded: setExpandedAccreditations };
           case "Loan Agreements":
             return { isExpanded: expandedLoanAgreements, setExpanded: setExpandedLoanAgreements };
+          case "Financial Statements":
+            return { isExpanded: expandedFinancialStatements, setExpanded: setExpandedFinancialStatements };
+          case "Funder/Catalyst Contract": // NEW: Case for Funder/Catalyst Contract
+            return { isExpanded: expandedFunderContracts, setExpanded: setExpandedFunderContracts };
           default:
             return { isExpanded: false, setExpanded: () => {} };
         }
@@ -882,7 +847,7 @@ const renderIndividualDocumentActions = (docLabel, docIndex, doc) => {
     );
   };
 
-    const handleFileUpload = async (docLabel, file) => {
+  const handleFileUpload = async (docLabel, file) => {
     const auth = getAuth();
     const user = auth.currentUser;
     if (!user || !file) return;
@@ -891,7 +856,6 @@ const renderIndividualDocumentActions = (docLabel, docIndex, doc) => {
     const fileExtension = file.name.toLowerCase().split('.').pop();
     
     if (!allowedTypes.includes(`.${fileExtension}`)) {
-      // Store error in validation results for display in notes
       setValidationResults(prev => ({
         ...prev,
         [docLabel]: {
@@ -906,7 +870,6 @@ const renderIndividualDocumentActions = (docLabel, docIndex, doc) => {
 
     const maxSize = 10 * 1024 * 1024;
     if (file.size > maxSize) {
-      // Store error in validation results for display in notes
       setValidationResults(prev => ({
         ...prev,
         [docLabel]: {
@@ -926,15 +889,12 @@ const renderIndividualDocumentActions = (docLabel, docIndex, doc) => {
       const registeredName = await getRegisteredName();
       const validationResult = await validateDocumentWithAI(docLabel, file, registeredName);
 
-      // Always store validation result for display in notes
       setValidationResults(prev => ({
         ...prev,
         [docLabel]: validationResult
       }));
 
-      // Remove the alert - validation result will show in Notes column
       if (validationResult.warnings && validationResult.warnings.length > 0) {
-        // Store warnings but don't show alert
         console.log("Document has warnings:", validationResult.warnings);
       }
 
@@ -947,7 +907,6 @@ const renderIndividualDocumentActions = (docLabel, docIndex, doc) => {
       await uploadBytes(storageRef, file);
       const downloadURL = await getDownloadURL(storageRef);
 
-      // ✅ Use sync service for upload
       await uploadDocumentWithSync(docLabel, downloadURL, validationResult);
       
       setSubmittedDocuments((prev) => Array.from(new Set([...prev, docLabel])));
@@ -968,112 +927,114 @@ const renderIndividualDocumentActions = (docLabel, docIndex, doc) => {
       setIsUploading(false);
       setTimeout(() => {
         setIsOverlayVisible(false);
-        // Show alert only - no document should be uploaded
         alert(error.message || "Network error - please try again");
       }, 300);
     }
   };
 
- 
   const getDocumentStatus = (docLabel) => {
-  const multiUploadDocuments = [
-    "IDs of Directors & Shareholders",
-    "Client References & Support Letters",
-    "Guarantee/Contract",
-    "Industry Accreditations",
-    "Loan Agreements"
-  ];
-  
-  // Handle multi-upload documents
-  if (multiUploadDocuments.includes(docLabel)) {
-    const allDocs = getMultipleDocumentData(docLabel, profileData);
-    const uploadedDocs = allDocs.filter(doc => doc.url && doc.url !== "");
+    const multiUploadDocuments = [
+      "IDs of Directors & Shareholders",
+      "Client References & Support Letters",
+      "Guarantees/Collateral",
+      "Industry Accreditations",
+      "Loan Agreements",
+      "Financial Statements",
+      "Funder/Catalyst Contract" // NEW: Added Funder/Catalyst Contract to multi-upload
+    ];
     
-    if (uploadedDocs.length === 0) {
+    // Handle multi-upload documents
+    if (multiUploadDocuments.includes(docLabel)) {
+      const allDocs = getMultipleDocumentData(docLabel, profileData);
+      const uploadedDocs = allDocs.filter(doc => doc.url && doc.url !== "");
+      
+      if (uploadedDocs.length === 0) {
+        return "pending";
+      }
+      
+      // Check for any rejected/expired documents
+      const hasRejected = uploadedDocs.some(doc => 
+        doc.status === "wrong_type" || 
+        doc.status === "name_mismatch" || 
+        doc.status === "incomplete" || 
+        doc.status === "rejected" ||
+        doc.status === "expired"
+      );
+      
+      if (hasRejected) {
+        return "rejected";
+      }
+      
+      // Check if all are verified
+      if (uploadedDocs.every(doc => 
+        doc.status === "verified" || doc.status === "verified:not_audited"
+      )) {
+        return "verified";
+      }
+      
       return "pending";
     }
     
-    // Check for any rejected/expired documents
-    const hasRejected = uploadedDocs.some(doc => 
-      doc.status === "wrong_type" || 
-      doc.status === "name_mismatch" || 
-      doc.status === "incomplete" || 
-      doc.status === "rejected" ||
-      doc.status === "expired"
-    );
-    
-    if (hasRejected) {
-      return "rejected";
-    }
-    
-    // Check if all are verified
-    if (uploadedDocs.every(doc => 
-      doc.status === "verified" || doc.status === "verified:not_audited"
-    )) {
-      return "verified";
-    }
-    
-    return "pending";
-  }
-  
-  // Handle CV separately
-  if (docLabel === "CV") {
-    const allDocs = getMultipleDocumentData(docLabel, profileData);
-    const uploadedDocs = allDocs.filter(doc => doc.url && doc.url !== "");
-    
-    if (uploadedDocs.length === 0) {
+    // Handle CV separately
+    if (docLabel === "CV") {
+      const allDocs = getMultipleDocumentData(docLabel, profileData);
+      const uploadedDocs = allDocs.filter(doc => doc.url && doc.url !== "");
+      
+      if (uploadedDocs.length === 0) {
+        return "pending";
+      }
+      
+      const hasRejected = uploadedDocs.some(doc => 
+        doc.status === "wrong_type" || 
+        doc.status === "name_mismatch" || 
+        doc.status === "incomplete" || 
+        doc.status === "rejected" ||
+        doc.status === "expired"
+      );
+      
+      if (hasRejected) {
+        return "rejected";
+      }
+      
+      if (uploadedDocs.every(doc => 
+        doc.status === "verified" || doc.status === "verified:not_audited"
+      )) {
+        return "verified";
+      }
+      
       return "pending";
     }
     
-    const hasRejected = uploadedDocs.some(doc => 
-      doc.status === "wrong_type" || 
-      doc.status === "name_mismatch" || 
-      doc.status === "incomplete" || 
-      doc.status === "rejected" ||
-      doc.status === "expired"
-    );
+    // Handle single upload documents
+    const documentId = getDocumentId(docLabel);
+    const url = getDocumentUrlFromAnyLocation(docLabel, profileData);
+    const verification = profileData.verification?.[documentId];
     
-    if (hasRejected) {
+    if (!url) {
+      return "pending";
+    }
+    
+    if (!verification) {
+      return "pending";
+    }
+    
+    if (verification.status === "verified" || verification.status === "verified:not_audited") {
+      return "verified";
+    } else {
       return "rejected";
     }
-    
-    if (uploadedDocs.every(doc => 
-      doc.status === "verified" || doc.status === "verified:not_audited"
-    )) {
-      return "verified";
-    }
-    
-    return "pending";
-  }
-  
-  // Handle single upload documents
-  const documentId = getDocumentId(docLabel);
-  const url = getDocumentUrlFromAnyLocation(docLabel, profileData);
-  const verification = profileData.verification?.[documentId];
-  
-  if (!url) {
-    return "pending";
-  }
-  
-  if (!verification) {
-    return "pending";
-  }
-  
-  if (verification.status === "verified" || verification.status === "verified:not_audited") {
-    return "verified";
-  } else {
-    return "rejected"; // Any non-verified status (expired, wrong_type, etc.) is rejected
-  }
-};
+  };
 
   // This function checks if a multi-upload document has ANY individual document matching the status filter
   const hasDocumentMatchingStatusFilter = (docLabel, statusFilter) => {
     const multiUploadDocuments = [
       "IDs of Directors & Shareholders",
       "Client References & Support Letters",
-      "Guarantee/Contract",
+      "Guarantees/Collateral",
       "Industry Accreditations",
-      "Loan Agreements"
+      "Loan Agreements",
+      "Financial Statements",
+      "Funder/Catalyst Contract" // NEW: Added Funder/Catalyst Contract to multi-upload
     ];
     
     if (!multiUploadDocuments.includes(docLabel) && docLabel !== "CV") {
@@ -1133,9 +1094,11 @@ const renderIndividualDocumentActions = (docLabel, docIndex, doc) => {
     const multiUploadDocuments = [
       "IDs of Directors & Shareholders",
       "Client References & Support Letters",
-      "Guarantee/Contract",
+      "Guarantees/Collateral",
       "Industry Accreditations",
-      "Loan Agreements"
+      "Loan Agreements",
+      "Financial Statements",
+      "Funder/Catalyst Contract" // NEW: Added Funder/Catalyst Contract to multi-upload
     ];
     
     if (!multiUploadDocuments.includes(docLabel) && docLabel !== "CV") {
@@ -1184,10 +1147,7 @@ const renderIndividualDocumentActions = (docLabel, docIndex, doc) => {
     });
   };
 
-  // Determine which documents to display based on view mode
-  const documentsToDisplay = isInvestorView ? CORE_DOCUMENTS : DOCUMENTS;
-
-  const filteredDocuments = documentsToDisplay.filter((docLabel) => {
+  const filteredDocuments = DOCUMENTS.filter((docLabel) => {
     const documentId = getDocumentId(docLabel);
     
     const fundingDocuments = [
@@ -1220,6 +1180,7 @@ const renderIndividualDocumentActions = (docLabel, docIndex, doc) => {
     const governanceDocuments = [
       "IDs of Directors & Shareholders",
       "Share Register",
+      "Funder/Catalyst Contract" // NEW: Added Funder/Catalyst Contract to Governance filter
     ];
 
     const capitalAppealDocuments = [
@@ -1229,7 +1190,7 @@ const renderIndividualDocumentActions = (docLabel, docIndex, doc) => {
       "Pitch Deck",
       "Industry Accreditations",
       "Loan Agreements",
-      "Guarantee/Contract"
+      "Guarantees/Collateral"
     ];
 
     const matchFilter =
@@ -1259,7 +1220,6 @@ const renderIndividualDocumentActions = (docLabel, docIndex, doc) => {
     if (!confirmDelete) return;
 
     try {
-      // ✅ Use sync service for deletion
       await deleteDocumentWithSync(docLabel);
       
       setSubmittedDocuments(prev => prev.filter(d => d !== docLabel));
@@ -1276,302 +1236,309 @@ const renderIndividualDocumentActions = (docLabel, docIndex, doc) => {
     }
   };
 
-  
- const getStatusBadge = (docLabel, individualDoc = null, docIndex = null) => {
-  const multiUploadDocuments = [
-    "IDs of Directors & Shareholders",
-    "Client References & Support Letters",
-    "Guarantee/Contract",
-    "Industry Accreditations",
-    "Loan Agreements"
-  ];
-  
-  // If we have an individual document, show its specific status
-  if (individualDoc && docIndex !== null) {
-    let status = "pending";
-    let displayStatus = "Pending";
+  const getStatusBadge = (docLabel, individualDoc = null, docIndex = null) => {
+    const multiUploadDocuments = [
+      "IDs of Directors & Shareholders",
+      "Client References & Support Letters",
+      "Guarantees/Collateral",
+      "Industry Accreditations",
+      "Loan Agreements",
+      "Financial Statements",
+      "Funder/Catalyst Contract" // NEW: Added Funder/Catalyst Contract to multi-upload
+    ];
     
-    if (!individualDoc.url || individualDoc.url === "") {
-      status = "pending";
-      displayStatus = "Pending";
-    } else if (
-      individualDoc.status === "wrong_type" || 
-      individualDoc.status === "name_mismatch" || 
-      individualDoc.status === "incomplete" || 
-      individualDoc.status === "rejected" ||
-      individualDoc.status === "expired"
-    ) {
-      status = "rejected";
-      displayStatus = "Rejected";
-    } else if (individualDoc.status === "verified" || individualDoc.status === "verified:not_audited") {
-      status = "verified";
-      displayStatus = "Verified";
+    // If we have an individual document, show its specific status
+    if (individualDoc && docIndex !== null) {
+      let status = "pending";
+      let displayStatus = "Pending";
+      
+      if (!individualDoc.url || individualDoc.url === "") {
+        status = "pending";
+        displayStatus = "Pending";
+      } else if (
+        individualDoc.status === "wrong_type" || 
+        individualDoc.status === "name_mismatch" || 
+        individualDoc.status === "incomplete" || 
+        individualDoc.status === "rejected" ||
+        individualDoc.status === "expired"
+      ) {
+        status = "rejected";
+        displayStatus = "Rejected";
+      } else if (individualDoc.status === "verified" || individualDoc.status === "verified:not_audited") {
+        status = "verified";
+        displayStatus = "Verified";
+      }
+      
+      return <span style={badgeStyles(status)}>{displayStatus}</span>;
     }
     
-    return <span style={badgeStyles(status)}>{displayStatus}</span>;
-  }
-  
-  // For multi-upload parent documents, show count of rejected/total
-  if (multiUploadDocuments.includes(docLabel) || docLabel === "CV") {
-    const allDocs = getMultipleDocumentData(docLabel, profileData);
-    const uploadedDocs = allDocs.filter(doc => doc.url && doc.url !== "");
-    
-    if (uploadedDocs.length === 0) {
+    // For multi-upload parent documents, show count of rejected/total
+    if (multiUploadDocuments.includes(docLabel) || docLabel === "CV") {
+      const allDocs = getMultipleDocumentData(docLabel, profileData);
+      const uploadedDocs = allDocs.filter(doc => doc.url && doc.url !== "");
+      
+      if (uploadedDocs.length === 0) {
+        return <span style={badgeStyles("pending")}>Pending</span>;
+      }
+
+      // Count rejected documents
+      const rejectedCount = uploadedDocs.filter(doc => 
+        doc.status === "wrong_type" || 
+        doc.status === "name_mismatch" || 
+        doc.status === "incomplete" || 
+        doc.status === "rejected" ||
+        doc.status === "expired"
+      ).length;
+      
+      if (rejectedCount > 0) {
+        return <span style={badgeStyles("rejected")}>{rejectedCount}/{uploadedDocs.length} Rejected</span>;
+      }
+
+      // Check if all are verified
+      const allVerified = uploadedDocs.every(doc => 
+        doc.status === "verified" || doc.status === "verified:not_audited"
+      );
+      
+      if (allVerified) {
+        return <span style={badgeStyles("verified")}>{uploadedDocs.length} Verified</span>;
+      }
+
       return <span style={badgeStyles("pending")}>Pending</span>;
     }
 
-    // Count rejected documents
-    const rejectedCount = uploadedDocs.filter(doc => 
-      doc.status === "wrong_type" || 
-      doc.status === "name_mismatch" || 
-      doc.status === "incomplete" || 
-      doc.status === "rejected" ||
-      doc.status === "expired"
-    ).length;
+    // Handle single upload documents
+    const documentId = getDocumentId(docLabel);
+    const url = getDocumentUrlFromAnyLocation(docLabel, profileData);
+    const verification = profileData.verification?.[documentId];
     
-    if (rejectedCount > 0) {
-      return <span style={badgeStyles("rejected")}>{rejectedCount}/{uploadedDocs.length} Rejected</span>;
+    if (!url) {
+      return <span style={badgeStyles("pending")}>Pending</span>;
     }
 
-    // Check if all are verified
-    const allVerified = uploadedDocs.every(doc => 
-      doc.status === "verified" || doc.status === "verified:not_audited"
-    );
+    let status = "pending";
+    let displayStatus = "Pending";
     
-    if (allVerified) {
-      return <span style={badgeStyles("verified")}>{uploadedDocs.length} Verified</span>;
+    if (verification) {
+      if (verification.status === "verified" || verification.status === "verified:not_audited") {
+        status = "verified";
+        displayStatus = "Verified";
+      } else {
+        status = "rejected";
+        displayStatus = "Rejected";
+      }
     }
 
-    return <span style={badgeStyles("pending")}>Pending</span>;
-  }
-
-  // Handle single upload documents
-  const documentId = getDocumentId(docLabel);
-  const url = getDocumentUrlFromAnyLocation(docLabel, profileData);
-  const verification = profileData.verification?.[documentId];
-  
-  if (!url) {
-    return <span style={badgeStyles("pending")}>Pending</span>;
-  }
-
-  let status = "pending";
-  let displayStatus = "Pending";
-  
-  if (verification) {
-    if (verification.status === "verified" || verification.status === "verified:not_audited") {
-      status = "verified";
-      displayStatus = "Verified";
-    } else {
-      status = "rejected";
-      displayStatus = "Rejected";
-    }
-  }
-
-  return <span style={badgeStyles(status)}>{displayStatus}</span>;
-};
-
-const badgeStyles = (status) => {
-  const styles = {
-    pending: {
-      backgroundColor: "#fff3e0",
-      color: "#ef6c00"
-    },
-    verified: {
-      backgroundColor: "#e8f5e8",
-      color: "#2e7d32"
-    },
-    rejected: {
-      backgroundColor: "#ffebee",
-      color: "#c62828"
-    }
+    return <span style={badgeStyles(status)}>{displayStatus}</span>;
   };
-  
-  return {
-    display: "inline-flex",
-    alignItems: "center",
-    padding: "4px 8px",
-    borderRadius: "12px",
-    fontSize: "11px",
-    fontWeight: "600",
-    ...styles[status]
+
+  const badgeStyles = (status) => {
+    const styles = {
+      pending: {
+        backgroundColor: "#fff3e0",
+        color: "#ef6c00"
+      },
+      verified: {
+        backgroundColor: "#e8f5e8",
+        color: "#2e7d32"
+      },
+      rejected: {
+        backgroundColor: "#ffebee",
+        color: "#c62828"
+      }
+    };
+    
+    return {
+      display: "inline-flex",
+      alignItems: "center",
+      padding: "4px 8px",
+      borderRadius: "12px",
+      fontSize: "11px",
+      fontWeight: "600",
+      ...styles[status]
+    };
   };
-};
 
   const getContainerStyles = () => ({
     fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+    width: "100%",
     minHeight: "100vh",
+    maxWidth: "100vw",
     overflowX: "hidden",
-    margin: "0 20px",
+    padding: `80px 20px 20px ${isSidebarCollapsed ? "100px" : "290px"}`,
+    margin: "0",
     boxSizing: "border-box",
     position: "relative",
     transition: "padding 0.3s ease",
-    backgroundColor: "#faf8f6",
-    paddingBottom: "40px"
+    backgroundColor: "#faf8f6"
   });
 
   // Modified renderExpandedRows to only show matching documents when filtering
   const renderExpandedRows = (docLabel, docs, isExpanded) => {
-  if (!isExpanded) return null;
+    if (!isExpanded) return null;
 
-  const getExpandedState = () => {
-    switch(docLabel) {
-      case "IDs of Directors & Shareholders":
-        return expandedIDs;
-      case "CV":
-        return expandedCVs;
-      case "Client References & Support Letters":
-        return expandedClientReferences;
-      case "Guarantee/Contract":
-        return expandedGuarantees;
-      case "Industry Accreditations":
-        return expandedAccreditations;
-      case "Loan Agreements":
-        return expandedLoanAgreements;
-      default:
-        return false;
+    const getExpandedState = () => {
+      switch(docLabel) {
+        case "IDs of Directors & Shareholders":
+          return expandedIDs;
+        case "CV":
+          return expandedCVs;
+        case "Client References & Support Letters":
+          return expandedClientReferences;
+        case "Guarantees/Collateral":
+          return expandedGuarantees;
+        case "Industry Accreditations":
+          return expandedAccreditations;
+        case "Loan Agreements":
+          return expandedLoanAgreements;
+        case "Financial Statements":
+          return expandedFinancialStatements;
+        case "Funder/Catalyst Contract": // NEW: Case for Funder/Catalyst Contract
+          return expandedFunderContracts;
+        default:
+          return false;
+      }
+    };
+
+    if (!getExpandedState()) return null;
+
+    // When filtering by status, only show documents that match the filter
+    let filteredDocs = docs;
+    if (statusFilter !== "all") {
+      filteredDocs = getIndividualDocumentsMatchingFilter(docLabel, statusFilter);
     }
-  };
 
-  if (!getExpandedState()) return null;
+    if (filteredDocs.length === 0) return null;
 
-  // When filtering by status, only show documents that match the filter
-  let filteredDocs = docs;
-  if (statusFilter !== "all") {
-    filteredDocs = getIndividualDocumentsMatchingFilter(docLabel, statusFilter);
-  }
-
-  if (filteredDocs.length === 0) return null;
-
-  return filteredDocs.map((doc, docIndex) => {
-    let displayName = "";
-    if (docLabel === "IDs of Directors & Shareholders") {
-      displayName = doc.role && doc.personName ? 
-        `${doc.personName} (${doc.role} ${doc.directorIndex !== undefined ? doc.directorIndex + 1 : doc.executiveIndex + 1})` : 
-        `ID ${docIndex + 1}`;
-    } else if (docLabel === "CV") {
-      displayName = doc.role && doc.personName ? 
-        `${doc.personName} (${doc.role} ${doc.directorIndex !== undefined ? doc.directorIndex + 1 : doc.executiveIndex + 1})` : 
-        `CV ${docIndex + 1}`;
-    } else {
-      const baseName = docLabel.split('/')[0].trim();
-      displayName = `${baseName} ${docIndex + 1}`;
-    }
-    
-    // Clean up status display - simplified
-    let statusDisplay = "Pending";
-    let statusStyle = "pending";
-    
-    if (!doc.url || doc.url === "") {
-      statusDisplay = "Pending";
-      statusStyle = "pending";
-    } else if (doc.status === "verified" || doc.status === "verified:not_audited") {
-      statusDisplay = "Verified";
-      statusStyle = "verified";
-    } else if (doc.status === "expired") {
-      statusDisplay = "Expired";
-      statusStyle = "expired";
-    } else if (
-      doc.status === "wrong_type" || 
-      doc.status === "name_mismatch" || 
-      doc.status === "incomplete" || 
-      doc.status === "rejected"
-    ) {
-      statusDisplay = "Rejected";
-      statusStyle = "rejected";
-    }
-    
-    return (
-      <tr 
-        key={`${docLabel}-${docIndex}`}
-        style={{
-          backgroundColor: docIndex % 2 === 0 ? "#f9f5f3" : "#f5f2f0",
-          borderBottom: "1px solid #e8d8cf",
-          transition: "background-color 0.2s ease"
-        }}
-      >
-        <td style={{
-          padding: "12px 20px 12px 40px",
-          fontSize: "13px",
-          color: "#6d4c41",
-          fontWeight: "500",
-          verticalAlign: "middle",
-          borderLeft: "3px solid #8d6e63"
-        }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <span style={{ 
-              display: "inline-flex", 
-              alignItems: "center", 
-              justifyContent: "center",
-              width: "20px",
-              height: "20px",
-              backgroundColor: "#8d6e63",
-              color: "white",
-              borderRadius: "50%",
-              fontSize: "10px",
-              fontWeight: "600"
-            }}>
-              {docIndex + 1}
-            </span>
-            {displayName}
-          </div>
-        </td>
-        
-        <td style={{
-          padding: "12px 20px",
-          textAlign: "center",
-          verticalAlign: "middle"
-        }}>
-          {renderDocumentLinkForIndividual(doc)}
-        </td>
-        <td style={{
-          padding: "12px 20px",
-          fontSize: "12px",
-          color: "#6d4c41",
-          textAlign: "center",
-          verticalAlign: "middle"
-        }}>
-          {doc.uploadedAt ? new Date(doc.uploadedAt).toLocaleDateString() : "-"}
-        </td>
-        <td style={{
-          padding: "12px 20px",
-          fontSize: "12px",
-          color: "#6d4c41",
-          textAlign: "center",
-          verticalAlign: "middle"
-        }}>
-          {doc.message || (doc.url ? "Document uploaded" : "No document uploaded")}
-        </td>
-        <td style={{
-          padding: "12px 20px",
-          textAlign: "center",
-          verticalAlign: "middle"
-        }}>
-          <span style={{
-            display: "inline-flex",
-            alignItems: "center",
-            padding: "4px 8px",
-            borderRadius: "12px",
-            fontSize: "10px",
-            fontWeight: "600",
-            backgroundColor: statusStyle === "verified" ? "#e8f5e8" : 
-                          statusStyle === "pending" ? "#fff3e0" : "#ffebee",
-            color: statusStyle === "verified" ? "#2e7d32" : 
-                  statusStyle === "pending" ? "#ef6c00" : "#c62828"
+    return filteredDocs.map((doc, docIndex) => {
+      let displayName = "";
+      if (docLabel === "IDs of Directors & Shareholders") {
+        displayName = doc.role && doc.personName ? 
+          `${doc.personName} (${doc.role} ${doc.directorIndex !== undefined ? doc.directorIndex + 1 : doc.executiveIndex + 1})` : 
+          `ID ${docIndex + 1}`;
+      } else if (docLabel === "CV") {
+        displayName = doc.role && doc.personName ? 
+          `${doc.personName} (${doc.role} ${doc.directorIndex !== undefined ? doc.directorIndex + 1 : doc.executiveIndex + 1})` : 
+          `CV ${docIndex + 1}`;
+      } else {
+        const baseName = docLabel.split('/')[0].trim();
+        displayName = `${baseName} ${docIndex + 1}`;
+      }
+      
+      // Clean up status display - simplified
+      let statusDisplay = "Pending";
+      let statusStyle = "pending";
+      
+      if (!doc.url || doc.url === "") {
+        statusDisplay = "Pending";
+        statusStyle = "pending";
+      } else if (doc.status === "verified" || doc.status === "verified:not_audited") {
+        statusDisplay = "Verified";
+        statusStyle = "verified";
+      } else if (doc.status === "expired") {
+        statusDisplay = "Expired";
+        statusStyle = "expired";
+      } else if (
+        doc.status === "wrong_type" || 
+        doc.status === "name_mismatch" || 
+        doc.status === "incomplete" || 
+        doc.status === "rejected"
+      ) {
+        statusDisplay = "Rejected";
+        statusStyle = "rejected";
+      }
+      
+      return (
+        <tr 
+          key={`${docLabel}-${docIndex}`}
+          style={{
+            backgroundColor: docIndex % 2 === 0 ? "#f9f5f3" : "#f5f2f0",
+            borderBottom: "1px solid #e8d8cf",
+            transition: "background-color 0.2s ease"
+          }}
+        >
+          <td style={{
+            padding: "12px 20px 12px 40px",
+            fontSize: "13px",
+            color: "#6d4c41",
+            fontWeight: "500",
+            verticalAlign: "middle",
+            borderLeft: "3px solid #8d6e63"
           }}>
-            {statusDisplay}
-          </span>
-        </td>
-        <td style={{
-          padding: "12px 20px",
-          textAlign: "center",
-          verticalAlign: "middle"
-        }}>
-          {renderIndividualDocumentActions(docLabel, docIndex, doc)}
-        </td>
-      </tr>
-    );
-  });
-};
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <span style={{ 
+                display: "inline-flex", 
+                alignItems: "center", 
+                justifyContent: "center",
+                width: "20px",
+                height: "20px",
+                backgroundColor: "#8d6e63",
+                color: "white",
+                borderRadius: "50%",
+                fontSize: "10px",
+                fontWeight: "600"
+              }}>
+                {docIndex + 1}
+              </span>
+              {displayName}
+            </div>
+          </td>
+          
+          <td style={{
+            padding: "12px 20px",
+            textAlign: "center",
+            verticalAlign: "middle"
+          }}>
+            {renderDocumentLinkForIndividual(doc)}
+          </td>
+          <td style={{
+            padding: "12px 20px",
+            fontSize: "12px",
+            color: "#6d4c41",
+            textAlign: "center",
+            verticalAlign: "middle"
+          }}>
+            {doc.uploadedAt ? new Date(doc.uploadedAt).toLocaleDateString() : "-"}
+          </td>
+          <td style={{
+            padding: "12px 20px",
+            fontSize: "12px",
+            color: "#6d4c41",
+            textAlign: "center",
+            verticalAlign: "middle"
+          }}>
+            {doc.message || (doc.url ? "Document uploaded" : "No document uploaded")}
+          </td>
+          <td style={{
+            padding: "12px 20px",
+            textAlign: "center",
+            verticalAlign: "middle"
+          }}>
+            <span style={{
+              display: "inline-flex",
+              alignItems: "center",
+              padding: "4px 8px",
+              borderRadius: "12px",
+              fontSize: "10px",
+              fontWeight: "600",
+              backgroundColor: statusStyle === "verified" ? "#e8f5e8" : 
+                            statusStyle === "pending" ? "#fff3e0" : "#ffebee",
+              color: statusStyle === "verified" ? "#2e7d32" : 
+                    statusStyle === "pending" ? "#ef6c00" : "#c62828"
+            }}>
+              {statusDisplay}
+            </span>
+          </td>
+          <td style={{
+            padding: "12px 20px",
+            textAlign: "center",
+            verticalAlign: "middle"
+          }}>
+            {renderIndividualDocumentActions(docLabel, docIndex, doc)}
+          </td>
+        </tr>
+      );
+    });
+  };
 
   if (!getAuth().currentUser && !loading) {
     return (
@@ -1643,14 +1610,18 @@ const badgeStyles = (status) => {
       `}</style>
 
       <div
+        className="my-documents-container"
         style={getContainerStyles()}
       >
         <div style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "8px",
-          marginBottom: "20px",
-          padding: "16px",
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            marginBottom: "20px",
+            padding: "16px",
+            backgroundColor: "#f5f2f0",
+            borderRadius: "8px",
+            border: "1px solid #d7ccc8"
           }}>
             <button
               onClick={() => window.location.href = "/profile"} 
@@ -1683,59 +1654,9 @@ const badgeStyles = (status) => {
             <span style={{ color: "#5d4037", fontWeight: "600" }}>My Documents</span>
           </div>
 
-        {/* Investor View Indicator */}
-        {isInvestorView && (
-          <div style={{
-            backgroundColor: '#8d6e63',
-            color: 'white',
-            padding: '12px 20px',
-            borderRadius: '8px',
-            marginBottom: '20px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between'
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <Eye size={20} />
-              <div>
-                <strong>Viewing documents for:</strong> {viewingSMEName}
-              </div>
-            </div>
-            <button
-              onClick={() => {
-                sessionStorage.removeItem('investorViewMode');
-                sessionStorage.removeItem('viewingSMEId');
-                sessionStorage.removeItem('viewingSMEName');
-                window.location.href = 'catalyst/cohorts';
-              }}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#a67c52",
-                color: "white",
-                border: "none",
-                borderRadius: "6px",
-                cursor: "pointer",
-                fontWeight: "600",
-                fontSize: "14px",
-                transition: "background-color 0.3s ease",
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
-              }}
-              onMouseEnter={(e) => {
-                e.target.style.backgroundColor = "#45a049";
-              }}
-              onMouseLeave={(e) => {
-                e.target.style.backgroundColor = "#4caf50";
-              }}>
-              <span>←</span>
-             Back to My Cohorts
-            </button>
-          </div>
-        )}
-
         <div style={{
-          width: "98%",
+          width: "100%",
+          maxWidth: "1400px",
           margin: "0 auto",
         }}>
           <div className="my-documents-header" style={{
@@ -1752,17 +1673,13 @@ const badgeStyles = (status) => {
               color: "#5d4037",
               margin: "0 0 8px 0",
               letterSpacing: "-0.025em"
-            }}>{isInvestorView ? "SME Core Documents" : "My Documents"}</h1>
+            }}>My Documents</h1>
             <p style={{
               fontSize: "1.125rem",
               color: "#6d4c41",
               margin: "0",
               fontWeight: "400"
-            }}>
-              {isInvestorView 
-                ? `Reviewing core documents for ${viewingSMEName}` 
-                : "Track all your submitted documents in one place"}
-            </p>
+            }}>Track all your submitted documents in one place</p>
 
             <div style={{
               backgroundColor: "#f5f2f0",
@@ -2144,403 +2061,327 @@ const badgeStyles = (status) => {
                       textTransform: "uppercase",
                       letterSpacing: "0.5px",
                       borderBottom: "2px solid #6d4c41",
-                      width: isInvestorView ? "15%" : "25%" // Adjust width for investor view
-                    }}>
-                      {isInvestorView ? "Access" : "Actions"}
-                    </th>
+                      width: "25%"
+                    }}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
-    {filteredDocuments.map((docLabel, index) => {
-      const documentId = getDocumentId(docLabel);
-      const unifiedPath = UNIFIED_DOCUMENT_PATHS[documentId];
-      
-          // Get the most recent updatedAt - check both root and documents nested
-  let updatedAt = 
-    // Check in documents nested first (your current structure)
-    profileData?.documents?.[`${documentId}UpdatedAt`] || 
-    profileData?.documents?.[`${documentId}_multiple_updated`] ||
-    // Then check at root level (where your data actually is)
-    profileData?.[`${documentId}UpdatedAt`] ||
-    profileData?.[`${documentId}_multiple_updated`];
+                  {filteredDocuments.map((docLabel, index) => {
+                    const documentId = getDocumentId(docLabel);
+                    const unifiedPath = UNIFIED_DOCUMENT_PATHS[documentId];
+                    
+                    // Get the most recent updatedAt - check both root and documents nested
+                    let updatedAt = 
+                      profileData?.documents?.[`${documentId}UpdatedAt`] || 
+                      profileData?.documents?.[`${documentId}_multiple_updated`] ||
+                      profileData?.[`${documentId}UpdatedAt`] ||
+                      profileData?.[`${documentId}_multiple_updated`];
 
-  // If unified path exists, try that too in both locations
-  if (!updatedAt && unifiedPath) {
-    updatedAt = profileData?.documents?.[`${unifiedPath}UpdatedAt`] ||
-                profileData?.[`${unifiedPath}UpdatedAt`];
-  }
+                    if (!updatedAt && unifiedPath) {
+                      updatedAt = profileData?.documents?.[`${unifiedPath}UpdatedAt`] ||
+                                  profileData?.[`${unifiedPath}UpdatedAt`];
+                    }
+                    
+                    const multiUploadDocuments = [
+                      "IDs of Directors & Shareholders",
+                      "Client References & Support Letters",
+                      "Guarantees/Collateral",
+                      "Industry Accreditations",
+                      "Loan Agreements",
+                      "Financial Statements",
+                      "Funder/Catalyst Contract" 
+                    ];
+                    
+                    const isMultiUpload = multiUploadDocuments.includes(docLabel);
+                    if (isMultiUpload) {
+                      const multipleUpdatedAt = profileData[`documents.${documentId}_multiple_updated`];
+                      if (multipleUpdatedAt) {
+                        updatedAt = multipleUpdatedAt;
+                      }
+                    }
+                    
+                    if (docLabel === "CV") {
+                      const cvUpdatedAt = profileData[`documents.cv_multiple_updated`];
+                      if (cvUpdatedAt) {
+                        updatedAt = cvUpdatedAt;
+                      }
+                    }
 
-  // console.log(`UpdatedAt for ${docLabel}:`, updatedAt);
-  // console.log(`Full documents object:`, profileData?.documents)
-      
-      // For multi-upload documents, check the multiple updated timestamp
-      const multiUploadDocuments = [
-        "IDs of Directors & Shareholders",
-        "Client References & Support Letters",
-        "Guarantee/Contract",
-        "Industry Accreditations",
-        "Loan Agreements"
-      ];
-      
-      const isMultiUpload = multiUploadDocuments.includes(docLabel);
-      if (isMultiUpload) {
-        const multipleUpdatedAt = profileData[`documents.${documentId}_multiple_updated`];
-        if (multipleUpdatedAt) {
-          updatedAt = multipleUpdatedAt;
-        }
-      }
-      
-      // For CVs, check CV specific timestamps
-      if (docLabel === "CV") {
-        const cvUpdatedAt = profileData[`documents.cv_multiple_updated`];
-        if (cvUpdatedAt) {
-          updatedAt = cvUpdatedAt;
-        }
-      }
+                    const allDocs = isMultiUpload ? getMultipleDocumentData(docLabel, profileData) : [];
 
-            // Format the date for display
- const formattedDate = updatedAt ? 
-    new Date(updatedAt.seconds * 1000).toLocaleDateString() : 
-    "Never";
-
-      const allDocs = isMultiUpload ? getMultipleDocumentData(docLabel, profileData) : [];
-
-      // Get the validation result for this document
-      const validationResult = validationResults[docLabel];
-      const url = getDocumentUrlFromAnyLocation(docLabel, profileData);
-      const verification = profileData.verification?.[documentId];
-      
-      return (
-        <React.Fragment key={docLabel}>
-          <tr style={{
-            backgroundColor: index % 2 === 0 ? "white" : "#faf8f6",
-            borderBottom: "1px solid #e8d8cf",
-            transition: "background-color 0.2s ease",
-            height: "60px"
-          }}
-          onMouseEnter={(e) => e.target.closest('tr').style.backgroundColor = "#efebe9"}
-          onMouseLeave={(e) => e.target.closest('tr').style.backgroundColor = index % 2 === 0 ? "white" : "#faf8f6"}
-          >
-            <td style={{
-              padding: "16px 20px",
-              fontSize: "14px",
-              color: "#5d4037",
-              fontWeight: "600",
-              verticalAlign: "middle"
-            }}>
-              <div style={{ 
-                display: "flex", 
-                flexDirection: "column", // Stack items vertically
-                alignItems: "flex-start", // Align to the left
-                gap: "4px" // Smaller gap between name and button
-              }}>
-                {/* Document Name/Label */}
-                <div>
-                  {docLabel.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}
-                </div>
-                
-                {/* Add Document Button - only for multi-upload documents and non-investors */}
-                {isMultiUpload && !isInvestorView && (
-                  <button
-                    onClick={() => handleAddNewDocument(docLabel)}
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      gap: "4px",
-                      padding: "3px 8px", // Slightly smaller padding
-                      color: "#5d4037", // Match the text color
-                      backgroundColor: "transparent", // Transparent background
-                      border: "1px solid #5d4037", // Outline border
-                      borderRadius: "4px",
-                      fontSize: "10px",
-                      cursor: "pointer",
-                      fontWeight: "500", // Slightly lighter weight
-                      transition: "all 0.2s ease",
-                      marginTop: "2px", // Small space above the button
-                      outline: "none" // Remove default focus outline
-                    }}
-                    onMouseEnter={(e) => {
-                      e.target.style.backgroundColor = "#5d4037"; // Fill with color on hover
-                      e.target.style.color = "white"; // White text on hover
-                      e.target.style.transform = "translateY(-1px)";
-                    }}
-                    onMouseLeave={(e) => {
-                      e.target.style.backgroundColor = "transparent"; // Back to transparent
-                      e.target.style.color = "#5d4037"; // Back to original color
-                      e.target.style.transform = "translateY(0)";
-                    }}
-                    onFocus={(e) => {
-                      e.target.style.backgroundColor = "#5d4037";
-                      e.target.style.color = "white";
-                    }}
-                    onBlur={(e) => {
-                      e.target.style.backgroundColor = "transparent";
-                      e.target.style.color = "#5d4037";
-                    }}
-                  >
-                    <Plus size={10} />
-                    Add {docLabel.split('/')[0].trim()}
-                  </button>
-                )}
-              </div>
-            </td>
-            <td style={{
-              padding: "16px 20px",
-              textAlign: "center",
-              verticalAlign: "middle",
-              backgroundColor: "transparent"
-            }}>
-              {renderDocumentLink(docLabel)}
-            </td>
-           <td style={{
-              padding: "16px 20px",
-              fontSize: "13px",
-              color: "#6d4c41",
-              textAlign: "center",
-              verticalAlign: "middle",
-              backgroundColor: "transparent"
-            }}>
-              {updatedAt?.seconds
-                ? new Date(updatedAt.seconds * 1000).toLocaleDateString()
-                : "-"}
-            </td>
-
-            <td style={{
-              padding: "16px 20px",
-              fontSize: "12px",
-              color: "#6d4c41",
-              textAlign: "center",
-              verticalAlign: "middle",
-              backgroundColor: "transparent"
-            }}>
-              {/* Notes display logic */}
-              {isMultiUpload ? (
-                (() => {
-                  const uploadedCount = allDocs.filter(d => d.url && d.url !== "").length;
-                  const verifiedCount = allDocs.filter(d => 
-                    d.url && d.url !== "" && (d.status === "verified" || d.status === "verified:not_audited")
-                  ).length;
-                  
-                  if (uploadedCount === 0) {
-                    return "No documents uploaded";
-                  }
-                  
-                  const baseName = docLabel.split('/')[0].trim();
-                  return `${verifiedCount}/${uploadedCount} ${baseName}${uploadedCount !== 1 ? 's' : ''} verified`;
-                })()
-              ) : docLabel === "CV" ? (
-                (() => {
-                  const allCVs = getMultipleDocumentData(docLabel, profileData);
-                  const uploadedCount = allCVs.filter(d => d.url && d.url !== "").length;
-                  const verifiedCount = allCVs.filter(d => 
-                    d.url && d.url !== "" && (d.status === "verified" || d.status === "verified:not_audited")
-                  ).length;
-                  
-                  if (uploadedCount === 0) {
-                    return "No CVs uploaded";
-                  }
-                  
-                  return `${verifiedCount}/${uploadedCount} CV${uploadedCount !== 1 ? 's' : ''} verified`;
-                })()
-              ) : (
-                // For regular documents, show AI validation message if available, otherwise show stored message
-                (() => {
-                  if (!url) {
-                    return "No document uploaded";
-                  }
-                  
-                  // Show AI validation result if available (from validationResults state)
-                  if (validationResult) {
-                    return validationResult.message || "Document uploaded";
-                  }
-                  
-                  // Otherwise show stored verification message
-                  if (!verification) {
-                    return "Uploaded - Pending Verification";
-                  }
-                  
-                  return verification.message || "Document uploaded";
-                })()
-              )}
-            </td>
-            <td style={{
-              padding: "16px 20px",
-              textAlign: "center",
-              verticalAlign: "middle",
-              backgroundColor: "transparent"
-            }}>
-              {getStatusBadge(docLabel)}
-            </td>
-            <td style={{
-              padding: "16px 20px",
-              textAlign: "center",
-              verticalAlign: "middle",
-              backgroundColor: "transparent"
-            }}>
-              {docLabel === "CV" ? (
-                <div style={{ display: "flex", gap: "8px", justifyContent: "center", alignItems: "center" }}>
-                  {isInvestorView ? (
-                    <span style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "4px",
-                      padding: "4px 8px",
-                      backgroundColor: "#f5f2f0",
-                      color: "#8d6e63",
-                      borderRadius: "4px",
-                      fontSize: "10px",
-                      fontWeight: "500"
-                    }}>
-                      <Eye size={12} />
-                      Read only
-                    </span>
-                  ) : (
-                    <label style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "6px",
-                      padding: "8px 16px",
-                      backgroundColor: "#d3d3d3", 
-                      color: "#666",
-                      borderRadius: "6px",
-                      fontSize: "11px",
-                      fontWeight: "600",
-                      cursor: "not-allowed", 
-                      opacity: 0.6, 
-                      textTransform: "uppercase",
-                      letterSpacing: "0.5px"
-                    }}>
-                      <Upload size={12} />
-                      Upload
-                    </label>
-                  )}
-                </div>
-              ) : isMultiUpload ? (
-                <div style={{ display: "flex", gap: "8px", justifyContent: "center", alignItems: "center" }}>
-                  {isInvestorView ? (
-                    <span style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "4px",
-                      padding: "4px 8px",
-                      backgroundColor: "#f5f2f0",
-                      color: "#8d6e63",
-                      borderRadius: "4px",
-                      fontSize: "10px",
-                      fontWeight: "500"
-                    }}>
-                      <Eye size={12} />
-                      Read only
-                    </span>
-                  ) : (
-                    <label style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "6px",
-                      padding: "8px 16px",
-                      backgroundColor: "#a67c52",
-                      color: "white",
-                      borderRadius: "6px",
-                      fontSize: "11px",
-                      fontWeight: "600",
-                      cursor: "pointer",
-                      transition: "all 0.2s ease",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.5px"
-                    }}
-                    onMouseEnter={(e) => {
-                      e.target.style.backgroundColor = "#8d6e63";
-                      e.target.style.transform = "translateY(-1px)";
-                    }}
-                    onMouseLeave={(e) => {
-                      e.target.style.backgroundColor = "#a67c52";
-                      e.target.style.transform = "translateY(0)";
-                    }}
-                    >
-                      <Upload size={12} />
-                      Upload
-                      <input
-                        type="file"
-                        style={{ display: "none" }}
-                        onChange={(e) => {
-                          const files = e.target.files;
-                          if (files && files.length > 0) {
-                            handleIndividualDocumentUpload(docLabel, files[0], 0);
-                          }
+                    const validationResult = validationResults[docLabel];
+                    const url = getDocumentUrlFromAnyLocation(docLabel, profileData);
+                    const verification = profileData.verification?.[documentId];
+                    
+                    return (
+                      <React.Fragment key={docLabel}>
+                        <tr style={{
+                          backgroundColor: index % 2 === 0 ? "white" : "#faf8f6",
+                          borderBottom: "1px solid #e8d8cf",
+                          transition: "background-color 0.2s ease",
+                          height: "60px"
                         }}
-                        accept=".pdf,.jpg,.jpeg,.png"
-                      />
-                    </label>
-                  )}
-                </div>
-              ) : (
-                <div style={{ display: "flex", gap: "8px", justifyContent: "center", alignItems: "center" }}>
-                  {isInvestorView ? (
-                    <span style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "4px",
-                      padding: "4px 8px",
-                      backgroundColor: "#f5f2f0",
-                      color: "#8d6e63",
-                      borderRadius: "4px",
-                      fontSize: "10px",
-                      fontWeight: "500"
-                    }}>
-                      <Eye size={12} />
-                      Read only
-                    </span>
-                  ) : (
-                    <label style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "6px",
-                      padding: "8px 16px",
-                      backgroundColor: "#a67c52",
-                      color: "white",
-                      borderRadius: "6px",
-                      fontSize: "11px",
-                      fontWeight: "600",
-                      cursor: "pointer",
-                      transition: "all 0.2s ease",
-                      textTransform: "uppercase",
-                      letterSpacing: "0.5px"
-                    }}
-                    onMouseEnter={(e) => {
-                      e.target.style.backgroundColor = "#8d6e63";
-                      e.target.style.transform = "translateY(-1px)";
-                    }}
-                    onMouseLeave={(e) => {
-                      e.target.style.backgroundColor = "#a67c52";
-                      e.target.style.transform = "translateY(0)";
-                    }}
-                    >
-                      <Upload size={12} />
-                      {getDocumentUrlFromAnyLocation(docLabel, profileData) ? "Update" : "Upload"}
-                      <input
-                        type="file"
-                        style={{ display: "none" }}
-                        onChange={(e) => handleFileUpload(docLabel, e.target.files[0])}
-                        accept=".pdf,.jpg,.jpeg,.png"
-                      />
-                    </label>
-                  )}
-                </div>
-              )}
-            </td>
-          </tr>
-          
-          {/* Expanded rows for multi-upload documents - ONLY show matching documents when filtering */}
-          {isMultiUpload && renderExpandedRows(docLabel, allDocs, true)}
-          
-          {/* Expanded rows for CVs - ONLY show matching documents when filtering */}
-          {docLabel === "CV" && renderExpandedRows(docLabel, getMultipleDocumentData(docLabel, profileData), expandedCVs)}
-        </React.Fragment>
-      );
-    })}
-  </tbody>
+                        onMouseEnter={(e) => e.target.closest('tr').style.backgroundColor = "#efebe9"}
+                        onMouseLeave={(e) => e.target.closest('tr').style.backgroundColor = index % 2 === 0 ? "white" : "#faf8f6"}
+                        >
+                          <td style={{
+                            padding: "16px 20px",
+                            fontSize: "14px",
+                            color: "#5d4037",
+                            fontWeight: "600",
+                            verticalAlign: "middle"
+                          }}>
+                            <div style={{ 
+                              display: "flex", 
+                              flexDirection: "column",
+                              alignItems: "flex-start",
+                              gap: "4px"
+                            }}>
+                              <div>
+                                {docLabel.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}
+                              </div>
+                              
+                              {isMultiUpload && (
+                                <button
+                                  onClick={() => handleAddNewDocument(docLabel)}
+                                  style={{
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    justifyContent: "center",
+                                    gap: "4px",
+                                    padding: "3px 8px",
+                                    color: "#5d4037",
+                                    backgroundColor: "transparent",
+                                    border: "1px solid #5d4037",
+                                    borderRadius: "4px",
+                                    fontSize: "10px",
+                                    cursor: "pointer",
+                                    fontWeight: "500",
+                                    transition: "all 0.2s ease",
+                                    marginTop: "2px",
+                                    outline: "none"
+                                  }}
+                                  onMouseEnter={(e) => {
+                                    e.target.style.backgroundColor = "#5d4037";
+                                    e.target.style.color = "white";
+                                    e.target.style.transform = "translateY(-1px)";
+                                  }}
+                                  onMouseLeave={(e) => {
+                                    e.target.style.backgroundColor = "transparent";
+                                    e.target.style.color = "#5d4037";
+                                    e.target.style.transform = "translateY(0)";
+                                  }}
+                                  onFocus={(e) => {
+                                    e.target.style.backgroundColor = "#5d4037";
+                                    e.target.style.color = "white";
+                                  }}
+                                  onBlur={(e) => {
+                                    e.target.style.backgroundColor = "transparent";
+                                    e.target.style.color = "#5d4037";
+                                  }}
+                                >
+                                  <Plus size={10} />
+                                  Add {docLabel.split('/')[0].trim()}
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                          <td style={{
+                            padding: "16px 20px",
+                            textAlign: "center",
+                            verticalAlign: "middle",
+                            backgroundColor: "transparent"
+                          }}>
+                            {renderDocumentLink(docLabel)}
+                          </td>
+                          <td style={{
+                            padding: "16px 20px",
+                            fontSize: "13px",
+                            color: "#6d4c41",
+                            textAlign: "center",
+                            verticalAlign: "middle",
+                            backgroundColor: "transparent"
+                          }}>
+                            {updatedAt?.seconds
+                              ? new Date(updatedAt.seconds * 1000).toLocaleDateString()
+                              : "-"}
+                          </td>
 
+                          <td style={{
+                            padding: "16px 20px",
+                            fontSize: "12px",
+                            color: "#6d4c41",
+                            textAlign: "center",
+                            verticalAlign: "middle",
+                            backgroundColor: "transparent"
+                          }}>
+                            {isMultiUpload ? (
+                              (() => {
+                                const uploadedCount = allDocs.filter(d => d.url && d.url !== "").length;
+                                const verifiedCount = allDocs.filter(d => 
+                                  d.url && d.url !== "" && (d.status === "verified" || d.status === "verified:not_audited")
+                                ).length;
+                                
+                                if (uploadedCount === 0) {
+                                  return "No documents uploaded";
+                                }
+                                
+                                const baseName = docLabel.split('/')[0].trim();
+                                return `${verifiedCount}/${uploadedCount} ${baseName}${uploadedCount !== 1 ? 's' : ''} verified`;
+                              })()
+                            ) : docLabel === "CV" ? (
+                              (() => {
+                                const allCVs = getMultipleDocumentData(docLabel, profileData);
+                                const uploadedCount = allCVs.filter(d => d.url && d.url !== "").length;
+                                const verifiedCount = allCVs.filter(d => 
+                                  d.url && d.url !== "" && (d.status === "verified" || d.status === "verified:not_audited")
+                                ).length;
+                                
+                                if (uploadedCount === 0) {
+                                  return "No CVs uploaded";
+                                }
+                                
+                                return `${verifiedCount}/${uploadedCount} CV${uploadedCount !== 1 ? 's' : ''} verified`;
+                              })()
+                            ) : (
+                              (() => {
+                                if (!url) {
+                                  return "No document uploaded";
+                                }
+                                
+                                if (validationResult) {
+                                  return validationResult.message || "Document uploaded";
+                                }
+                                
+                                if (!verification) {
+                                  return "Uploaded - Pending Verification";
+                                }
+                                
+                                return verification.message || "Document uploaded";
+                              })()
+                            )}
+                          </td>
+                          <td style={{
+                            padding: "16px 20px",
+                            textAlign: "center",
+                            verticalAlign: "middle",
+                            backgroundColor: "transparent"
+                          }}>
+                            {getStatusBadge(docLabel)}
+                          </td>
+                          <td style={{
+                            padding: "16px 20px",
+                            textAlign: "center",
+                            verticalAlign: "middle",
+                            backgroundColor: "transparent"
+                          }}>
+                            {docLabel === "CV" ? (
+                              <div style={{ display: "flex", gap: "8px", justifyContent: "center", alignItems: "center" }}>
+                                <label style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "6px",
+                                  padding: "8px 16px",
+                                  backgroundColor: "#d3d3d3", 
+                                  color: "#666",
+                                  borderRadius: "6px",
+                                  fontSize: "11px",
+                                  fontWeight: "600",
+                                  cursor: "not-allowed", 
+                                  opacity: 0.6, 
+                                  textTransform: "uppercase",
+                                  letterSpacing: "0.5px"
+                                }}>
+                                  <Upload size={12} />
+                                  Upload
+                                </label>
+                              </div>
+                            ) : isMultiUpload ? (
+                              <div style={{ display: "flex", gap: "8px", justifyContent: "center", alignItems: "center" }}>
+                                <label style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "6px",
+                                  padding: "8px 16px",
+                                  backgroundColor: "#a67c52",
+                                  color: "white",
+                                  borderRadius: "6px",
+                                  fontSize: "11px",
+                                  fontWeight: "600",
+                                  cursor: "pointer",
+                                  transition: "all 0.2s ease",
+                                  textTransform: "uppercase",
+                                  letterSpacing: "0.5px"
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.target.style.backgroundColor = "#8d6e63";
+                                  e.target.style.transform = "translateY(-1px)";
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.target.style.backgroundColor = "#a67c52";
+                                  e.target.style.transform = "translateY(0)";
+                                }}
+                                >
+                                  <Upload size={12} />
+                                  Upload
+                                  <input
+                                    type="file"
+                                    style={{ display: "none" }}
+                                    onChange={(e) => {
+                                      const files = e.target.files;
+                                      if (files && files.length > 0) {
+                                        handleIndividualDocumentUpload(docLabel, files[0], 0);
+                                      }
+                                    }}
+                                    accept=".pdf,.jpg,.jpeg,.png"
+                                  />
+                                </label>
+                              </div>
+                            ) : (
+                              <label style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "6px",
+                                padding: "8px 16px",
+                                backgroundColor: "#a67c52",
+                                color: "white",
+                                borderRadius: "6px",
+                                fontSize: "11px",
+                                fontWeight: "600",
+                                cursor: "pointer",
+                                transition: "all 0.2s ease",
+                                textTransform: "uppercase",
+                                letterSpacing: "0.5px"
+                              }}
+                              onMouseEnter={(e) => {
+                                e.target.style.backgroundColor = "#8d6e63";
+                                e.target.style.transform = "translateY(-1px)";
+                              }}
+                              onMouseLeave={(e) => {
+                                e.target.style.backgroundColor = "#a67c52";
+                                e.target.style.transform = "translateY(0)";
+                              }}
+                              >
+                                <Upload size={12} />
+                                {getDocumentUrlFromAnyLocation(docLabel, profileData) ? "Update" : "Upload"}
+                                <input
+                                  type="file"
+                                  style={{ display: "none" }}
+                                  onChange={(e) => handleFileUpload(docLabel, e.target.files[0])}
+                                  accept=".pdf,.jpg,.jpeg,.png"
+                                />
+                              </label>
+                            )}
+                          </td>
+                        </tr>
+                        
+                        {isMultiUpload && renderExpandedRows(docLabel, allDocs, true)}
+                        
+                        {docLabel === "CV" && renderExpandedRows(docLabel, getMultipleDocumentData(docLabel, profileData), expandedCVs)}
+                      </React.Fragment>
+                    );
+                  })}
+                </tbody>
               </table>
             </div>
           )}
