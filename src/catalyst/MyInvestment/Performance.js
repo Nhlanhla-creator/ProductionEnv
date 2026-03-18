@@ -7,13 +7,46 @@ ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend);
 const B = { darkest: "#3b2409", dark: "#5e3f26", medium: "#7d5a36", warm: "#9c7c54", light: "#b8a082", pale: "#d4c4b0", offwhite: "#f0e8de" };
 const C = ["#3b2409", "#5e3f26", "#7d5a36", "#9c7c54", "#b8a082", "#c2a882"];
 
-const Card = ({ title, subLabel, children }) => (
-  <div style={{ background: "#fff", borderRadius: "10px", padding: "20px", minHeight: "320px", boxShadow: "0 2px 10px rgba(59,36,9,0.07)", border: `1px solid ${B.pale}`, display: "flex", flexDirection: "column" }}>
-    <div style={{ paddingBottom: "10px", borderBottom: `1px solid ${B.offwhite}`, marginBottom: "10px" }}>
+// ── Layout constants ──────────────────────────────────────────────────────────
+const CARD_HEIGHT  = "400px";
+const CHART_HEIGHT = "260px";
+
+// ── Chart options ─────────────────────────────────────────────────────────────
+const hBarOpts = (valCb, integralOnly) => ({
+  responsive: true, maintainAspectRatio: false, animation: false,
+  indexAxis: "y",
+  plugins: { legend: { display: false }, datalabels: { display: false } },
+  scales: {
+    x: {
+      beginAtZero: true,
+      grid: { display: true, color: B.offwhite },
+      ticks: {
+        color: B.dark, font: { size: 10 },
+        ...(valCb ? { callback: valCb } : {}),
+        ...(integralOnly && !valCb ? { callback: v => Number.isInteger(v) ? v : "", precision: 0, stepSize: 1 } : {}),
+      },
+    },
+    y: { grid: { display: false }, ticks: { color: B.dark, font: { size: 11 } } },
+  },
+});
+
+// ── Shared primitives ─────────────────────────────────────────────────────────
+const Card = ({ title,  footer, children }) => (
+  <div style={{
+    background: "#fff", borderRadius: "10px", padding: "20px",
+    height: CARD_HEIGHT,
+    boxShadow: "0 2px 10px rgba(59,36,9,0.07)", border: `1px solid ${B.pale}`,
+    display: "flex", flexDirection: "column",
+  }}>
+    <div style={{ paddingBottom: "10px", borderBottom: `1px solid ${B.offwhite}`, marginBottom: "8px" }}>
       <h3 style={{ fontSize: "14px", fontWeight: "700", color: B.dark, margin: 0 }}>{title}</h3>
     </div>
-    {subLabel && <div style={{ fontSize: "11px", color: B.warm, background: B.offwhite, padding: "4px 9px", borderRadius: "4px", borderLeft: `3px solid ${B.medium}`, marginBottom: "12px", fontWeight: "500" }}>{subLabel}</div>}
-    <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>{children}</div>
+    <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>{children}</div>
+    {footer && (
+      <div style={{ marginTop: "8px", padding: "7px 10px", background: B.offwhite, borderRadius: "6px", flexShrink: 0 }}>
+        {footer}
+      </div>
+    )}
   </div>
 );
 
@@ -29,62 +62,45 @@ const EmptyState = ({ message }) => (
   </div>
 );
 
-// Horizontal bar options
-// valCb        – optional tick formatter for the value (x) axis
-// integralOnly – only show integer ticks on the value axis
-const hBarOpts = (valCb, integralOnly) => ({
-  responsive: true, maintainAspectRatio: false, animation: false,
-  indexAxis: "y",
-  plugins: {
-    legend: { position: "bottom", labels: { color: B.dark, font: { size: 11 }, boxWidth: 12 } },
-    datalabels: { display: false },
-  },
-  scales: {
-    x: {
-      beginAtZero: true,
-      grid: { display: true, color: B.offwhite },
-      ticks: {
-        color: B.dark, font: { size: 10 },
-        ...(valCb ? { callback: valCb } : {}),
-        ...(integralOnly && !valCb ? { callback: v => Number.isInteger(v) ? v : "", precision: 0, stepSize: 1 } : {}),
-      },
-    },
-    y: { grid: { display: false }, ticks: { color: B.dark, font: { size: 11 } } },
-  },
-});
-
-// ── Revenue per SME — horizontal bar, sorted highest → lowest ─────────────────
+// ── Revenue per SME ───────────────────────────────────────────────────────────
 const RevenuePerSME = () => {
-  const { metrics } = usePortfolio();
-  const perSME = [...(metrics?.revenue?.perSME || [])]
+  const { portfolioMetrics } = usePortfolio();
+  const perSME = [...(portfolioMetrics?.revenue?.perSME || [])]
     .filter(s => s.revenue > 0)
     .sort((a, b) => b.revenue - a.revenue);
-  const minH = Math.max(240, perSME.length * 40);
+  const innerH = Math.max(parseInt(CHART_HEIGHT), perSME.length * 36);
+
+  const footer = perSME.length > 0 && (
+    <div style={{ display: "flex", justifyContent: "space-between" }}>
+      <span style={{ fontSize: "12px", color: B.dark, fontWeight: 600 }}>
+        Total: <strong>R{(portfolioMetrics.revenue.total / 1_000_000).toFixed(1)}M</strong>
+      </span>
+      <span style={{ fontSize: "12px", color: B.warm }}>
+        Avg: R{(portfolioMetrics.revenue.avg / 1_000_000).toFixed(1)}M / SME
+      </span>
+    </div>
+  );
 
   return (
-    <Card title="Annual Revenue per SME" subLabel="Horizontal bar — actual revenue from SME profiles (R)">
+    <Card title="Annual Revenue per SME" subLabel="Horizontal bar — actual revenue from SME profiles (R)" footer={footer}>
       {perSME.length > 0 ? (
-        <>
-          <div style={{ flex: 1, minHeight: `${minH}px` }}>
+        <div style={{ flex: 1, overflowY: perSME.length > 7 ? "auto" : "visible" }}>
+          <div style={{ height: `${innerH}px` }}>
             <Bar
               options={hBarOpts(v => "R" + (v / 1_000_000).toFixed(1) + "M")}
               data={{ labels: perSME.map(s => s.name), datasets: [{ label: "Annual Revenue (R)", data: perSME.map(s => s.revenue), backgroundColor: C.slice(0, perSME.length) }] }}
             />
           </div>
-          <div style={{ display: "flex", justifyContent: "space-between", marginTop: "10px", padding: "8px 12px", background: B.offwhite, borderRadius: "6px" }}>
-            <span style={{ fontSize: "12px", color: B.dark, fontWeight: 600 }}>Portfolio Total: <strong>R{(metrics.revenue.total / 1_000_000).toFixed(1)}M</strong></span>
-            <span style={{ fontSize: "12px", color: B.warm }}>Avg: R{(metrics.revenue.avg / 1_000_000).toFixed(1)}M / SME</span>
-          </div>
-        </>
+        </div>
       ) : <EmptyState message="Revenue data not yet available in profiles" />}
     </Card>
   );
 };
 
-// ── Profitability Status — sorted highest count → lowest ──────────────────────
+// ── Profitability Status ──────────────────────────────────────────────────────
 const ProfitabilityStatus = () => {
-  const { metrics } = usePortfolio();
-  const perSME = metrics?.revenue?.perSME || [];
+  const { portfolioMetrics } = usePortfolio();
+  const perSME   = portfolioMetrics?.revenue?.perSME || [];
   const statuses = perSME.filter(s => s.profitability && s.profitability !== "Unknown");
 
   const statusCounts = statuses.reduce((acc, s) => {
@@ -117,37 +133,39 @@ const ProfitabilityStatus = () => {
   );
 };
 
-// ── Capital Required — horizontal bar, sorted highest → lowest ────────────────
+// ── Capital Required ──────────────────────────────────────────────────────────
 const CapitalRequired = () => {
-  const { metrics } = usePortfolio();
-  const perSME = [...(metrics?.revenue?.perSME || [])]
+  const { portfolioMetrics } = usePortfolio();
+  const perSME = [...(portfolioMetrics?.revenue?.perSME || [])]
     .filter(s => s.fundingRequired > 0)
     .sort((a, b) => b.fundingRequired - a.fundingRequired);
-  const minH = Math.max(240, perSME.length * 40);
+  const innerH = Math.max(parseInt(CHART_HEIGHT), perSME.length * 36);
 
   return (
     <Card title="Capital Required per SME" subLabel="Horizontal bar — funding requested per SME (R)">
       {perSME.length > 0 ? (
-        <div style={{ flex: 1, minHeight: `${minH}px` }}>
-          <Bar
-            options={hBarOpts(v => "R" + (v / 1_000_000).toFixed(1) + "M")}
-            data={{ labels: perSME.map(s => s.name), datasets: [{ label: "Funding Required (R)", data: perSME.map(s => s.fundingRequired), backgroundColor: C.slice(0, perSME.length) }] }}
-          />
+        <div style={{ flex: 1, overflowY: perSME.length > 7 ? "auto" : "visible" }}>
+          <div style={{ height: `${innerH}px` }}>
+            <Bar
+              options={hBarOpts(v => "R" + (v / 1_000_000).toFixed(1) + "M")}
+              data={{ labels: perSME.map(s => s.name), datasets: [{ label: "Funding Required (R)", data: perSME.map(s => s.fundingRequired), backgroundColor: C.slice(0, perSME.length) }] }}
+            />
+          </div>
         </div>
       ) : <EmptyState />}
     </Card>
   );
 };
 
-// ── BIG Score gauge — unchanged ───────────────────────────────────────────────
+// ── BIG Score gauge ───────────────────────────────────────────────────────────
 const PortfolioQualityGauge = () => {
-  const { metrics } = usePortfolio();
-  const avg = metrics?.bigScore?.avg || 0;
+  const { portfolioMetrics } = usePortfolio();
+  const avg = portfolioMetrics?.bigScore?.avg || 0;
   const R = 54, CIRC = 2 * Math.PI * R;
   const offset = CIRC - (CIRC * Math.min(avg, 100)) / 100;
 
   return (
-    <Card title="Portfolio Quality (BIG Score Avg)" subLabel="Blended average BIG score across all SMEs">
+    <Card title="Portfolio Quality (BIG Score Avg)" subLabel="Blended average BIG score across portfolio SMEs">
       <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "12px" }}>
         {avg > 0 ? (
           <>
@@ -159,7 +177,7 @@ const PortfolioQualityGauge = () => {
               <text x="80" y="92" textAnchor="middle" fill={B.warm} fontSize="12">/ 100</text>
             </svg>
             <div style={{ display: "flex", gap: "24px" }}>
-              {[["Avg", avg, B.dark], ["Min", metrics.bigScore.min, B.warm], ["Max", metrics.bigScore.max, B.medium]].map(([l, v, col]) => (
+              {[["Avg", avg, B.dark], ["Min", portfolioMetrics.bigScore.min, B.warm], ["Max", portfolioMetrics.bigScore.max, B.medium]].map(([l, v, col]) => (
                 <div key={l} style={{ textAlign: "center" }}>
                   <div style={{ fontSize: "10px", color: B.warm, marginBottom: "3px" }}>{l}</div>
                   <div style={{ fontSize: "16px", fontWeight: "700", color: col }}>{v}</div>
@@ -173,23 +191,29 @@ const PortfolioQualityGauge = () => {
   );
 };
 
-// ── Key Clients per SME — horizontal bar, integral x-axis, sorted ─────────────
+// ── Key Clients per SME ───────────────────────────────────────────────────────
 const ClientsPerSME = () => {
-  const { enriched } = usePortfolio();
-  const smeClients = enriched
-    .map(a => ({ name: a.smeName || "Unknown", count: (a.profile?.productsServices?.keyClients || []).length }))
+  // portfolioEnriched is already filtered to Active Support + Support Approved
+  const { portfolioEnriched } = usePortfolio();
+  const smeClients = (portfolioEnriched || [])
+    .map(a => ({
+      name: a.smeName || "Unknown",
+      count: (a.profile?.productsServices?.keyClients || []).length,
+    }))
     .filter(s => s.count > 0)
     .sort((a, b) => b.count - a.count);
-  const minH = Math.max(240, smeClients.length * 40);
+  const innerH = Math.max(parseInt(CHART_HEIGHT), smeClients.length * 36);
 
   return (
     <Card title="# Key Clients per SME" subLabel="Horizontal bar — key clients listed in SME profiles">
       {smeClients.length > 0 ? (
-        <div style={{ flex: 1, minHeight: `${minH}px` }}>
-          <Bar
-            options={hBarOpts(null, true)}
-            data={{ labels: smeClients.map(s => s.name), datasets: [{ label: "# Key Clients", data: smeClients.map(s => s.count), backgroundColor: C.slice(0, smeClients.length) }] }}
-          />
+        <div style={{ flex: 1, overflowY: smeClients.length > 7 ? "auto" : "visible" }}>
+          <div style={{ height: `${innerH}px` }}>
+            <Bar
+              options={hBarOpts(null, true)}
+              data={{ labels: smeClients.map(s => s.name), datasets: [{ label: "# Key Clients", data: smeClients.map(s => s.count), backgroundColor: C.slice(0, smeClients.length) }] }}
+            />
+          </div>
         </div>
       ) : <EmptyState message="Key client data not yet available in profiles" />}
     </Card>
@@ -203,9 +227,17 @@ const SUBS = [
 
 const Performance = () => {
   const [sub, setSub] = useState("financial");
-  const { loading } = usePortfolio();
+  const { loading, portfolioMetrics } = usePortfolio();
 
   if (loading) return <div style={{ padding: "2rem", textAlign: "center", color: B.warm }}>Loading performance data…</div>;
+
+  if (!portfolioMetrics || portfolioMetrics.totalSMEs === 0) {
+    return (
+      <div style={{ padding: "2rem", textAlign: "center", color: B.warm, fontStyle: "italic" }}>
+        No SMEs with "Active Support" or "Support Approved" status yet.
+      </div>
+    );
+  }
 
   return (
     <div style={{ width: "100%" }}>
@@ -218,7 +250,7 @@ const Performance = () => {
           <RevenuePerSME />
           <ProfitabilityStatus />
           <CapitalRequired />
-          <PortfolioQualityGauge />
+          {/* <PortfolioQualityGauge /> */}
         </div>
       )}
 
