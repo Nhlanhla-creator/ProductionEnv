@@ -1,12 +1,17 @@
 "use client"
 
 import { useState, useRef, useEffect, useCallback } from "react"
-import { Eye, X, Trophy, Calendar, DollarSign, Users, Package, Award, Building } from "lucide-react"
+import { Eye, X, Trophy, Calendar, DollarSign, Users, Package, Award, Building, Ticket, Copy, CheckCircle } from "lucide-react"
 import { SupportSMETable } from "./support-sme-table"
 
 // Successful Support Deals Table Component
 const SuccessfulSupportDealsTable = ({ successfulDeals }) => {
   const [selectedDeal, setSelectedDeal] = useState(null)
+  const [showVoucherModal, setShowVoucherModal] = useState(false)
+  const [voucherType, setVoucherType] = useState("")
+  const [voucherSeats, setVoucherSeats] = useState(1)
+  const [generatedVoucher, setGeneratedVoucher] = useState(null)
+  const [copied, setCopied] = useState(false)
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -23,6 +28,49 @@ const SuccessfulSupportDealsTable = ({ successfulDeals }) => {
     })
   }
 
+  // Generate voucher code
+  const generateVoucherCode = (type) => {
+    const prefix = type === "legitimacy" ? "LG" : type === "capital" ? "CA" : "GV"
+    const randomPart = Math.random().toString(36).substring(2, 8).toUpperCase()
+    const seatsPart = voucherSeats.toString().padStart(2, '0')
+    return `${prefix}${seatsPart}${randomPart}`
+  }
+
+  const handleGenerateVoucher = (type) => {
+    setVoucherType(type)
+    setShowVoucherModal(true)
+    setGeneratedVoucher(null)
+    setVoucherSeats(1)
+  }
+
+  const handleConfirmVoucher = () => {
+    const code = generateVoucherCode(voucherType)
+    setGeneratedVoucher({
+      code,
+      type: voucherType,
+      seats: voucherSeats,
+      createdAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString()
+    })
+  }
+
+  const handleCopyCode = () => {
+    if (generatedVoucher) {
+      navigator.clipboard.writeText(generatedVoucher.code)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    }
+  }
+
+  const getVoucherTypeName = (type) => {
+    switch(type) {
+      case "legitimacy": return "Boost Your Legitimacy Score"
+      case "capital": return "Boost Capital Appeal Score"
+      case "governance": return "Boost Governance Score"
+      default: return "Premium Subscription"
+    }
+  }
+
   const modalOverlayStyle = {
     position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
     backgroundColor: "rgba(62, 39, 35, 0.85)",
@@ -32,7 +80,7 @@ const SuccessfulSupportDealsTable = ({ successfulDeals }) => {
 
   const modalContentStyle = {
     backgroundColor: "#ffffff", borderRadius: "20px", padding: "40px",
-    maxWidth: "900px", width: "95%", maxHeight: "90vh", overflowY: "auto",
+    maxWidth: "500px", width: "95%", maxHeight: "90vh", overflowY: "auto",
     boxShadow: "0 20px 60px rgba(62, 39, 35, 0.5), 0 0 0 1px rgba(141, 110, 99, 0.1)",
     animation: "slideUp 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)",
   }
@@ -92,25 +140,68 @@ const SuccessfulSupportDealsTable = ({ successfulDeals }) => {
     color: "#FEFCFA", padding: "0.75rem 0.5rem", textAlign: "left",
     fontWeight: "600", fontSize: "0.75rem", letterSpacing: "0.5px",
     textTransform: "uppercase", borderRight: "1px solid #1a0c02",
+    fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
+  }
+
+  const TD = {
+    padding: "0.75rem 0.5rem",
+    borderRight: "1px solid #E8D5C4",
+    fontSize: "0.8rem",
+    verticalAlign: "top",
+    color: "#3e2723",
+    lineHeight: "1.4",
+    fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
   }
 
   return (
     <>
+      {/* Info Banner */}
+      <div style={{
+        backgroundColor: "#f0f7ff",
+        border: "1px solid #a67c52",
+        borderRadius: "8px",
+        padding: "16px 24px",
+        marginBottom: "24px",
+        display: "flex",
+        alignItems: "flex-start",
+        gap: "12px",
+      }}>
+        <Ticket size={24} style={{ color: "#a67c52", flexShrink: 0, marginTop: "2px" }} />
+        <div>
+          <p style={{ margin: "0 0 8px 0", color: "#3e2723", fontSize: "0.95rem", fontWeight: "600" }}>
+            🎟️ Support Your SME's Success with Vouchers!
+          </p>
+          <p style={{ margin: 0, color: "#5d4037", fontSize: "0.9rem", lineHeight: "1.5" }}>
+            You can generate vouchers to help your SMEs continue improving their scores. 
+            Click "Generate Voucher" below to create codes for:
+          </p>
+          <ul style={{ margin: "8px 0 0 0", paddingLeft: "20px", color: "#5d4037", fontSize: "0.9rem" }}>
+            <li><strong>Premium Subscription</strong> - Unlock all premium features</li>
+            <li><strong>Boost Your Legitimacy Score</strong> - Improve business credibility</li>
+            <li><strong>Boost Capital Appeal Score</strong> - Attract more investors</li>
+            <li><strong>Boost Governance Score</strong> - Strengthen business structure</li>
+          </ul>
+          <p style={{ margin: "12px 0 0 0", color: "#a67c52", fontSize: "0.85rem", fontStyle: "italic" }}>
+            💡 SMEs can check "My Purchases" to see if you've sent them vouchers!
+          </p>
+        </div>
+      </div>
+
       <div style={{ overflowX: "auto", borderRadius: "8px", border: "1px solid #E8D5C4", boxShadow: "0 4px 24px rgba(139, 69, 19, 0.08)" }}>
         <table style={{ width: "100%", borderCollapse: "collapse", background: "white", fontSize: "0.875rem", backgroundColor: "#FEFCFA", tableLayout: "fixed" }}>
           <thead>
             <tr>
               {[
                 { label: "SMSE Name", w: "12%" },
-                { label: "Funding Required", w: "10%" },
-                { label: "Equity Offered", w: "9%" },
-                { label: "Start Date", w: "10%" },
-                { label: "Sector", w: "9%" },
-                { label: "Location", w: "10%" },
+                { label: "Funding Required", w: "8%" },
+                { label: "Equity Offered", w: "7%" },
+                { label: "Start Date", w: "8%" },
+                { label: "Sector", w: "8%" },
+                { label: "Location", w: "8%" },
                 { label: "Guarantees", w: "8%" },
                 { label: "Services Required", w: "7%" },
-                { label: "Status", w: "11%" },
-                { label: "Action", w: "14%", align: "center", noBorderRight: true },
+                { label: "Status", w: "9%" },
+                { label: "Actions", w: "25%", align: "center", noBorderRight: true },
               ].map(({ label, w, align, noBorderRight }) => (
                 <th key={label} style={{ ...TH, width: w, textAlign: align || "left", borderRight: noBorderRight ? "none" : "1px solid #1a0c02" }}>
                   {label}
@@ -132,28 +223,34 @@ const SuccessfulSupportDealsTable = ({ successfulDeals }) => {
                   onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "#f5f5f5" }}
                   onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "white" }}
                 >
-                  <td style={{ padding: "0.75rem 0.5rem", borderRight: "1px solid #E8D5C4", verticalAlign: "top" }}>
+                  <td style={TD}>
                     <span style={{ color: "#a67c52", fontWeight: "500" }}><TruncatedText text={deal.smseName} maxLength={30} /></span>
                   </td>
-                  <td style={{ padding: "0.75rem 0.5rem", borderRight: "1px solid #E8D5C4", verticalAlign: "top" }}><TruncatedText text={deal.fundingRequired} maxLength={20} /></td>
-                  <td style={{ padding: "0.75rem 0.5rem", borderRight: "1px solid #E8D5C4", verticalAlign: "top" }}>
-                    <span style={{ backgroundColor: "#fff3e0", color: "#e65100", padding: "4px 8px", borderRadius: "12px", fontSize: "12px", fontWeight: "600" }}>{deal.equityOffered}</span>
+                  <td style={TD}><TruncatedText text={deal.fundingRequired} maxLength={15} /></td>
+                  <td style={TD}>
+                    <span style={{ backgroundColor: "#fff3e0", color: "#e65100", padding: "4px 8px", borderRadius: "12px", fontSize: "11px", fontWeight: "600" }}>{deal.equityOffered}</span>
                   </td>
-                  <td style={{ padding: "0.75rem 0.5rem", borderRight: "1px solid #E8D5C4", verticalAlign: "top", fontSize: "14px" }}>{new Date(deal.startDate).toLocaleDateString("en-ZA", { year: "numeric", month: "short", day: "numeric" })}</td>
-                  <td style={{ padding: "0.75rem 0.5rem", borderRight: "1px solid #E8D5C4", verticalAlign: "top" }}><TruncatedText text={deal.sector} maxLength={20} /></td>
-                  <td style={{ padding: "0.75rem 0.5rem", borderRight: "1px solid #E8D5C4", verticalAlign: "top" }}><TruncatedText text={deal.location} maxLength={15} /></td>
-                  <td style={{ padding: "0.75rem 0.5rem", borderRight: "1px solid #E8D5C4", verticalAlign: "top" }}><TruncatedGuarantees text={deal.guarantees} maxLines={2} /></td>
-                  <td style={{ padding: "0.75rem 0.5rem", borderRight: "1px solid #E8D5C4", verticalAlign: "top", textAlign: "center" }}><TruncatedText text={deal.servicesRequired} maxLength={20} /></td>
-                  <td style={{ padding: "0.75rem 0.5rem", borderRight: "1px solid #E8D5C4", verticalAlign: "top" }}>
-                    <span style={{ backgroundColor: getStatusColor(deal.currentStatus) + "20", color: getStatusColor(deal.currentStatus), padding: "6px 10px", borderRadius: "12px", fontSize: "12px", fontWeight: "600", display: "inline-block" }}>
+                  <td style={TD}><span style={{ fontSize: "13px" }}>{formatDate(deal.startDate)}</span></td>
+                  <td style={TD}><TruncatedText text={deal.sector} maxLength={15} /></td>
+                  <td style={TD}><TruncatedText text={deal.location} maxLength={15} /></td>
+                  <td style={TD}><TruncatedGuarantees text={deal.guarantees} maxLines={2} /></td>
+                  <td style={TD}><TruncatedText text={deal.servicesRequired} maxLength={15} /></td>
+                  <td style={TD}>
+                    <span style={{ backgroundColor: getStatusColor(deal.currentStatus) + "20", color: getStatusColor(deal.currentStatus), padding: "4px 8px", borderRadius: "12px", fontSize: "11px", fontWeight: "600", display: "inline-block" }}>
                       {deal.currentStatus}
                     </span>
                   </td>
-                  <td style={{ padding: "0.75rem 0.5rem", verticalAlign: "top", textAlign: "center" }}>
-                    <button onClick={() => setSelectedDeal(deal)}
-                      style={{ backgroundColor: "#5d4037", color: "white", border: "none", borderRadius: "8px", padding: "8px 16px", fontSize: "12px", fontWeight: "600", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px", margin: "0 auto" }}>
-                      <Eye size={14} /> View Details
-                    </button>
+                  <td style={{ ...TD, borderRight: "none", textAlign: "center" }}>
+                    <div style={{ display: "flex", gap: "6px", justifyContent: "center", flexWrap: "wrap" }}>
+                      <button onClick={() => setSelectedDeal(deal)}
+                        style={{ backgroundColor: "#5d4037", color: "white", border: "none", borderRadius: "6px", padding: "6px 10px", fontSize: "11px", fontWeight: "600", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px" }}>
+                        <Eye size={12} /> View
+                      </button>
+                      <button onClick={() => handleGenerateVoucher("premium")}
+                        style={{ backgroundColor: "#a67c52", color: "white", border: "none", borderRadius: "6px", padding: "6px 10px", fontSize: "11px", fontWeight: "600", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px" }}>
+                        <Ticket size={12} /> Voucher
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))
@@ -162,42 +259,250 @@ const SuccessfulSupportDealsTable = ({ successfulDeals }) => {
         </table>
       </div>
 
+      {/* View Details Modal */}
       {selectedDeal && (
         <div style={modalOverlayStyle} onClick={() => setSelectedDeal(null)}>
           <div style={modalContentStyle} onClick={(e) => e.stopPropagation()}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "32px", paddingBottom: "24px", borderBottom: "3px solid #8d6e63" }}>
-              <h2 style={{ fontSize: "28px", fontWeight: "700", color: "#3e2723", margin: 0, display: "flex", alignItems: "center", gap: "12px" }}>
-                <Building size={32} style={{ color: "#4caf50" }} />
-                Support Program Details: {selectedDeal.smseName}
+              <h2 style={{ fontSize: "24px", fontWeight: "700", color: "#3e2723", margin: 0, display: "flex", alignItems: "center", gap: "12px" }}>
+                <Building size={28} style={{ color: "#4caf50" }} />
+                Support Program Details
               </h2>
-              <button onClick={() => setSelectedDeal(null)} style={{ background: "none", border: "none", fontSize: "24px", cursor: "pointer", color: "#666", padding: "8px" }}>
-                <X size={24} />
+              <button onClick={() => setSelectedDeal(null)} style={{ background: "none", border: "none", fontSize: "20px", cursor: "pointer", color: "#666", padding: "8px" }}>
+                <X size={20} />
               </button>
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "24px", marginBottom: "32px" }}>
-              {[
-                { icon: <DollarSign size={20} />, title: "Program Financial Details", rows: [["Funding Required", selectedDeal.fundingRequired], ["Equity Offered", selectedDeal.equityOffered], ["Guarantees", selectedDeal.guarantees], ["Services Required", selectedDeal.servicesRequired]] },
-                { icon: <Calendar size={20} />, title: "Program Timeline", rows: [["Start Date", formatDate(selectedDeal.startDate)], ["Current Status", <span style={{ backgroundColor: getStatusColor(selectedDeal.currentStatus) + "20", color: getStatusColor(selectedDeal.currentStatus), padding: "4px 8px", borderRadius: "8px", fontSize: "12px", fontWeight: "600", marginLeft: "8px" }}>{selectedDeal.currentStatus}</span>]] },
-                { icon: <Award size={20} />, title: "SMSE Information", rows: [["Sector", selectedDeal.sector], ["Location", selectedDeal.location]] },
-              ].map(({ icon, title, rows }) => (
-                <div key={title} style={{ backgroundColor: "#f8f9fa", padding: "24px", borderRadius: "12px", border: "1px solid #e9ecef" }}>
-                  <h3 style={{ color: "#3e2723", marginBottom: "16px", display: "flex", alignItems: "center", gap: "8px" }}>{icon}{title}</h3>
-                  <div style={{ display: "grid", gap: "12px" }}>
-                    {rows.map(([k, v]) => <div key={k}><strong>{k}:</strong> {v}</div>)}
-                  </div>
-                </div>
-              ))}
+            <div style={{ marginBottom: "24px" }}>
+              <h3 style={{ fontSize: "20px", color: "#a67c52", marginBottom: "16px" }}>{selectedDeal.smseName}</h3>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "16px" }}>
+                <div><strong>Funding Required:</strong> {selectedDeal.fundingRequired}</div>
+                <div><strong>Equity Offered:</strong> {selectedDeal.equityOffered}</div>
+                <div><strong>Start Date:</strong> {formatDate(selectedDeal.startDate)}</div>
+                <div><strong>Sector:</strong> {selectedDeal.sector}</div>
+                <div><strong>Location:</strong> {selectedDeal.location}</div>
+                <div><strong>Status:</strong> {selectedDeal.currentStatus}</div>
+              </div>
             </div>
-            <div style={{ backgroundColor: "#f8f9fa", padding: "24px", borderRadius: "12px", border: "1px solid #e9ecef", marginBottom: "24px" }}>
-              <h3 style={{ color: "#3e2723", marginBottom: "16px", display: "flex", alignItems: "center", gap: "8px" }}><Package size={20} />Support Services Required</h3>
-              <p style={{ fontSize: "16px", color: "#333", lineHeight: "1.6", margin: 0 }}>{selectedDeal.servicesRequired}</p>
+            <div style={{ marginBottom: "24px" }}>
+              <h4 style={{ fontSize: "16px", color: "#3e2723", marginBottom: "8px" }}>Guarantees</h4>
+              <p style={{ color: "#666", lineHeight: "1.6" }}>{selectedDeal.guarantees}</p>
             </div>
-            <div style={{ display: "flex", justifyContent: "flex-end" }}>
-              <button onClick={() => setSelectedDeal(null)} style={{ backgroundColor: "#5d4037", color: "white", border: "none", borderRadius: "12px", padding: "16px 32px", fontSize: "16px", fontWeight: "600", cursor: "pointer" }}>Close</button>
+            <div style={{ marginBottom: "24px" }}>
+              <h4 style={{ fontSize: "16px", color: "#3e2723", marginBottom: "8px" }}>Services Required</h4>
+              <p style={{ color: "#666", lineHeight: "1.6" }}>{selectedDeal.servicesRequired}</p>
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px" }}>
+              <button onClick={() => { setSelectedDeal(null); handleGenerateVoucher("premium") }}
+                style={{ backgroundColor: "#a67c52", color: "white", border: "none", borderRadius: "8px", padding: "12px 24px", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}>
+                <Ticket size={16} style={{ marginRight: "8px", display: "inline" }} />
+                Generate Voucher
+              </button>
+              <button onClick={() => setSelectedDeal(null)} style={{ backgroundColor: "#5d4037", color: "white", border: "none", borderRadius: "8px", padding: "12px 24px", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}>
+                Close
+              </button>
             </div>
           </div>
         </div>
       )}
+
+      {/* Voucher Generation Modal */}
+      {showVoucherModal && (
+        <div style={modalOverlayStyle} onClick={() => setShowVoucherModal(false)}>
+          <div style={modalContentStyle} onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px" }}>
+              <h2 style={{ fontSize: "22px", fontWeight: "700", color: "#3e2723", margin: 0, display: "flex", alignItems: "center", gap: "8px" }}>
+                <Ticket size={24} style={{ color: "#a67c52" }} />
+                Generate Voucher
+              </h2>
+              <button onClick={() => setShowVoucherModal(false)} style={{ background: "none", border: "none", cursor: "pointer" }}>
+                <X size={20} />
+              </button>
+            </div>
+
+            {!generatedVoucher ? (
+              <>
+                <p style={{ color: "#5d4037", marginBottom: "24px" }}>
+                  Select the type of voucher you want to generate for this SME:
+                </p>
+
+                <div style={{ display: "grid", gap: "12px", marginBottom: "24px" }}>
+                  {[
+                    { id: "premium", label: "Premium Subscription", icon: "🌟" },
+                    { id: "legitimacy", label: "Boost Your Legitimacy Score", icon: "🏆" },
+                    { id: "capital", label: "Boost Capital Appeal Score", icon: "💰" },
+                    { id: "governance", label: "Boost Governance Score", icon: "⚖️" },
+                  ].map((option) => (
+                    <label key={option.id} style={{
+                      display: "flex",
+                      alignItems: "center",
+                      padding: "16px",
+                      border: `2px solid ${voucherType === option.id ? "#a67c52" : "#E8D5C4"}`,
+                      borderRadius: "10px",
+                      cursor: "pointer",
+                      backgroundColor: voucherType === option.id ? "#fef9f4" : "white",
+                      transition: "all 0.2s ease",
+                    }}>
+                      <input
+                        type="radio"
+                        name="voucherType"
+                        value={option.id}
+                        checked={voucherType === option.id}
+                        onChange={(e) => setVoucherType(e.target.value)}
+                        style={{ marginRight: "12px", accentColor: "#a67c52" }}
+                      />
+                      <span style={{ fontSize: "1.2rem", marginRight: "12px" }}>{option.icon}</span>
+                      <span style={{ color: "#3e2723", fontWeight: voucherType === option.id ? "600" : "400" }}>
+                        {option.label}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+
+                <div style={{ marginBottom: "24px" }}>
+                  <label style={{ display: "block", color: "#5d4037", fontWeight: "600", marginBottom: "8px" }}>
+                    Number of Seats:
+                  </label>
+                  <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+                    <button
+                      onClick={() => setVoucherSeats(Math.max(1, voucherSeats - 1))}
+                      style={{
+                        width: "40px",
+                        height: "40px",
+                        borderRadius: "50%",
+                        border: "2px solid #a67c52",
+                        background: "white",
+                        fontSize: "1.2rem",
+                        cursor: "pointer",
+                      }}
+                    >
+                      -
+                    </button>
+                    <span style={{ fontSize: "1.5rem", fontWeight: "700", color: "#3e2723", minWidth: "40px", textAlign: "center" }}>
+                      {voucherSeats}
+                    </span>
+                    <button
+                      onClick={() => setVoucherSeats(voucherSeats + 1)}
+                      style={{
+                        width: "40px",
+                        height: "40px",
+                        borderRadius: "50%",
+                        border: "2px solid #a67c52",
+                        background: "white",
+                        fontSize: "1.2rem",
+                        cursor: "pointer",
+                      }}
+                    >
+                      +
+                    </button>
+                  </div>
+                </div>
+
+                <button
+                  onClick={handleConfirmVoucher}
+                  disabled={!voucherType}
+                  style={{
+                    width: "100%",
+                    padding: "16px",
+                    backgroundColor: !voucherType ? "#ccc" : "#a67c52",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "10px",
+                    fontSize: "16px",
+                    fontWeight: "600",
+                    cursor: !voucherType ? "not-allowed" : "pointer",
+                    transition: "all 0.3s ease",
+                  }}
+                >
+                  Generate Voucher
+                </button>
+              </>
+            ) : (
+              <>
+                <div style={{
+                  backgroundColor: "#e8f5e9",
+                  border: "2px solid #4caf50",
+                  borderRadius: "12px",
+                  padding: "24px",
+                  marginBottom: "24px",
+                  textAlign: "center",
+                }}>
+                  <CheckCircle size={48} style={{ color: "#4caf50", marginBottom: "16px" }} />
+                  <h3 style={{ color: "#2e7d32", marginBottom: "8px" }}>Voucher Generated Successfully!</h3>
+                  <p style={{ color: "#3e2723", marginBottom: "16px" }}>
+                    {getVoucherTypeName(generatedVoucher.type)} • {generatedVoucher.seats} seat{generatedVoucher.seats > 1 ? 's' : ''}
+                  </p>
+                  
+                  <div style={{
+                    background: "#fff",
+                    border: "2px dashed #a67c52",
+                    borderRadius: "8px",
+                    padding: "16px",
+                    marginBottom: "16px",
+                  }}>
+                    <div style={{ fontFamily: "'Courier New', monospace", fontSize: "1.2rem", fontWeight: "bold", color: "#3e2723", marginBottom: "8px" }}>
+                      {generatedVoucher.code}
+                    </div>
+                    <button
+                      onClick={handleCopyCode}
+                      style={{
+                        background: "none",
+                        border: "none",
+                        color: "#a67c52",
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "4px",
+                        margin: "0 auto",
+                      }}
+                    >
+                      <Copy size={16} />
+                      {copied ? "Copied!" : "Copy Code"}
+                    </button>
+                  </div>
+
+                  <p style={{ fontSize: "0.85rem", color: "#666" }}>
+                    Expires: {new Date(generatedVoucher.expiresAt).toLocaleDateString()}
+                  </p>
+                </div>
+
+                <div style={{
+                  backgroundColor: "#f0f7ff",
+                  border: "1px solid #a67c52",
+                  borderRadius: "8px",
+                  padding: "16px",
+                  marginBottom: "24px",
+                }}>
+                  <p style={{ margin: 0, color: "#3e2723", fontSize: "0.9rem" }}>
+                    <strong>📍 Instructions:</strong> Share this code with the SME. They can redeem it in:
+                  </p>
+                  <ul style={{ margin: "8px 0 0 0", paddingLeft: "20px", color: "#5d4037" }}>
+                    <li><strong>Subscription Page</strong> - For premium access</li>
+                    <li><strong>Growth Tools → My Purchases</strong> - To view all received vouchers</li>
+                  </ul>
+                </div>
+
+                <button
+                  onClick={() => setShowVoucherModal(false)}
+                  style={{
+                    width: "100%",
+                    padding: "16px",
+                    backgroundColor: "#5d4037",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "10px",
+                    fontSize: "16px",
+                    fontWeight: "600",
+                    cursor: "pointer",
+                  }}
+                >
+                  Close
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
       <style>{`@keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } } @keyframes slideUp { from { opacity: 0; transform: translateY(30px) scale(0.95) } to { opacity: 1; transform: translateY(0) scale(1) } }`}</style>
     </>
   )
@@ -254,6 +559,7 @@ const SupportTabbedTables = ({ filters, stageFilter, loading, onStageOverride })
     fontSize: "16px", fontWeight: "600", cursor: "pointer",
     transition: "all 0.3s ease", borderRadius: "12px 12px 0 0",
     display: "flex", alignItems: "center", justifyContent: "center", gap: "8px",
+    fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif",
   })
 
   const badgeStyle = (isActive) => ({
