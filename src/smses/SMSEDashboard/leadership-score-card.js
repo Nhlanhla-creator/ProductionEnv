@@ -322,7 +322,10 @@ SCORING RULES PER CATEGORY:
 
 Leadership Credentials (40%) — score based on:
   - Directors count, CVs uploaded, LinkedIn profiles, executive designations, nationalities
-  - Score 0 if no directors. Score 5 if all directors have CVs + LinkedIn profiles present.
+  - B-BBEE Certificate, Company Registration Certificate, Tax Clearance Certificate, Industry Accreditations
+  - Score 0 if no directors and none of the 4 certifications present
+  - Score 5 if all directors have CVs + LinkedIn + all 4 certifications present
+  - Client References & Support Letters: DO NOT factor into the base score. If provided and verified, award +1 bonus point on top of the calculated score (max total still capped at 5)
 
 Leadership Structure (30%) — score based on:
   - Executives count, positions filled, CVs uploaded, LinkedIn profiles, department coverage
@@ -339,14 +342,15 @@ OUTPUT FORMAT - YOU MUST FOLLOW THIS EXACTLY:
 
 ### 1. Leadership Credentials
 **Score:** [0-5]
-**Evidence:** [Cite: Directors Count = X, CVs = Y, LinkedIn = Z, Certifications = W]
-**Confidence:** [High/Medium/Low]
-**Rationale:** [2-3 sentences based on director profiles, CVs, LinkedIn presence and certifications]
+**Evidence:** [Cite: Directors Count = X, CVs = Y, LinkedIn = Z, B-BBEE = X, Company Reg = X, Tax Clearance = X, Industry Accreditations = X, Client References = X (bonus)]
+**Rationale:** [2-3 sentences based on director profiles, CVs, LinkedIn presence and the 4 certifications. Note if Client References bonus point was applied.]
 **How to Improve:** 
 - → Ownership & Management section: add directors with positions, CVs and LinkedIn profiles
-- → Documents section: upload certifications, qualifications and awards
-- → Ownership & Management section: complete demographic data for all directors
-- 💡 Directors with uploaded CVs and LinkedIn profiles significantly strengthen credentials scoring
+- → Documents section: upload B-BBEE Certificate, Company Registration Certificate and Tax Clearance Certificate
+- → Documents section: upload Industry Accreditations to strengthen credentials
+- → Documents section: upload Client References & Support Letters for a bonus point (does not affect base score)
+- 💡 All 4 core certifications present alongside director CVs and LinkedIn profiles achieves the highest credentials score
+- 💡 Client References are a bonus — they cannot lower your score but can push it above the base calculation
 
 ### 2. Leadership Structure
 **Score:** [0-5]
@@ -434,7 +438,19 @@ OUTPUT FORMAT - YOU MUST FOLLOW THIS EXACTLY:
     })
     evaluationData += `\nDirectors with LinkedIn: ${directors.filter(d => d?.linkedin).length}\n`
     evaluationData += `Directors with CVs: ${directors.filter(d => d?.cv).length}\n`
-    
+    const bbbeeUrl = data?.documents?.bbbee || data?.verification?.bbbee?.url || null
+    const companyRegUrl = data?.documents?.companyRegistration || data?.verification?.companyRegistration?.url || null
+    const taxClearanceUrl = data?.documents?.taxClearance || data?.verification?.taxClearance?.url || null
+    const industryAccreditations = data?.documents?.industry_accreditations_multiple || []
+    const clientReferences = data?.documents?.client_references_support_letters_multiple || []
+
+    evaluationData += `\nB-BBEE Certificate: ${bbbeeUrl ? "Provided" : "Not provided"}\n`
+    evaluationData += `Company Registration Certificate: ${companyRegUrl ? "Provided" : "Not provided"}\n`
+    evaluationData += `Tax Clearance Certificate: ${taxClearanceUrl ? "Provided" : "Not provided"}\n`
+    evaluationData += `Industry Accreditations Count: ${industryAccreditations.filter(d => d.url && d.url !== "").length}\n`
+    evaluationData += `Industry Accreditations Provided: ${industryAccreditations.some(d => d.url && d.url !== "") ? "Yes" : "No"}\n`
+    evaluationData += `Client References & Support Letters Count: ${clientReferences.filter(d => d.url && d.url !== "").length}\n`
+    evaluationData += `Client References Provided (Bonus Only): ${clientReferences.some(d => d.url && d.url !== "") ? "Yes" : "No"}\n`
 
     // ── LEADERSHIP STRUCTURE (Executives) ───────────────────────────────
     evaluationData += `\n=== LEADERSHIP STRUCTURE (EXECUTIVES) ===\n`
@@ -1193,7 +1209,7 @@ OUTPUT FORMAT - YOU MUST FOLLOW THIS EXACTLY:
                       </p>
                       <ul style={{ margin: "0", paddingLeft: "20px", color: "#5d4037" }}>
                         <li style={{ marginBottom: "6px" }}>
-                          <strong>Leadership Credentials – 40%:</strong> Directors' experience, professional track record, education and LinkedIn presence
+                          <strong>Leadership Credentials – 40%:</strong> Directors' experience, professional track record, education, certifications and recognition
                         </li>
                         <li style={{ marginBottom: "6px" }}>
                           <strong>Leadership Structure – 30%:</strong> Executive management capability, team composition and leadership roles
