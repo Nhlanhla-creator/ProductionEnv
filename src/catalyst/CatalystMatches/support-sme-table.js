@@ -27,29 +27,46 @@ const getScoreColor = (score) => {
 }
 
 const STATUS_TYPES = {
-  "New Application": { bg: "bg-blue-100", text: "text-blue-700" },
-  "Under Review": { bg: "bg-orange-100", text: "text-orange-700" },
-  "In Review": { bg: "bg-purple-100", text: "text-purple-700" },
-  Shortlisted: { bg: "bg-green-100", text: "text-green-700" },
-  "Funding Approved": { bg: "bg-green-100", text: "text-[#2d5016]" },
-  Rejected: { bg: "bg-red-100", text: "text-red-700" },
+  // current labels
+  "New Application":  {  text: "text-blue-700"    },
+  "Application Sent": { text: "text-blue-700"    },
+  "Under Review":     {  text: "text-orange-700"  },
+  "In Review":        { text: "text-purple-700"  },
+  Evaluation:         {  text: "text-purple-700"  },
+  "Due Diligence":    { text: "text-indigo-700"  },
+  Shortlisted:        {  text: "text-green-700"   },
+  Decision:           { text: "text-yellow-700"  },
+  "Term Sheet":       {    text: "text-cyan-700"    },
+  Active:             {  text: "text-[#2d5016]"   },
+  Decline:            {    text: "text-red-700"     },
+  // legacy labels — map to same colours so old records render correctly
+  "Support Approved": {    text: "text-cyan-700"    },
+  "Active Support":   {  text: "text-[#2d5016]"   },
+  "Support Declined": { text: "text-red-700"     },
+  Rejected:           {     text: "text-red-700"     },
 }
 const getStatusClasses = (status) => STATUS_TYPES[status] || { bg: "bg-gray-100", text: "text-gray-600" }
 
 const PIPELINE_STAGES = {
-  "NEW APPLICATION": { label: "New Application", next: "Application Sent" },
-  "APPLICATION SENT": { label: "Application Sent", next: "Evaluation" },
-  EVALUATION: { label: "Evaluation", next: "Due Diligence" },
-  "DUE DILIGENCE": { label: "Due Diligence", next: "Decision" },
-  DECISION: { label: "Decision", next: "Support Approved" },
-  "SUPPORT APPROVED": { label: "Support Approved", next: "Active Support" },
-  "ACTIVE SUPPORT": { label: "Active Support", next: "N/A" },
-  "SUPPORT DECLINED": { label: "Support Declined", next: "N/A" },
+  // current
+  "NEW APPLICATION":  { label: "New Application",  next: "Application Sent" },
+  "APPLICATION SENT": { label: "Application Sent", next: "Evaluation"        },
+  EVALUATION:         { label: "Evaluation",        next: "Due Diligence"    },
+  "DUE DILIGENCE":    { label: "Due Diligence",     next: "Decision"         },
+  DECISION:           { label: "Decision",          next: "Term Sheet"       },
+  "TERM SHEET":       { label: "Term Sheet",        next: "Active"           },
+  ACTIVE:             { label: "Active",            next: "N/A"              },
+  DECLINE:            { label: "Decline",           next: "N/A"              },
+  // legacy — keep next-stage pointers so old records still advance correctly
+  "SUPPORT APPROVED": { label: "Support Approved",  next: "Active"           },
+  "ACTIVE SUPPORT":   { label: "Active Support",    next: "N/A"              },
+  "SUPPORT DECLINED": { label: "Support Declined",  next: "N/A"              },
 }
 const getNextStage = (stage) => {
-  if (stage?.toUpperCase() === "SUPPORT APPROVED") return "Approved/Declined"
+  if (stage?.toUpperCase() === "TERM SHEET") return "Active/Decline"
   return PIPELINE_STAGES[stage?.toUpperCase()]?.next || "N/A"
 }
+
 
 // ─── TruncatedText ─────────────────────────────────────────────────────────────
 const TruncatedText = ({ text, maxLines = 2, maxLength = 25 }) => {
@@ -164,27 +181,34 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
   })
   const [supportAgreementStatuses, setSupportAgreementStatuses] = useState({})
 
-  const applicationStages = [
+const applicationStages = [
     { id: "new_application", name: "New Application", color: "#6366f1" },
     { id: "application_sent", name: "Application Sent", color: "#3b82f6" },
     { id: "evaluation", name: "Evaluation", color: "#3b82f6" },
     { id: "due_diligence", name: "Due Diligence", color: "#8b5cf6" },
     { id: "decision", name: "Decision", color: "#f59e0b" },
-    { id: "support_approved", name: "Support Approved", color: "#06b6d4" },
-    { id: "active_support", name: "Active Support", color: "#10b981" },
-    { id: "support_declined", name: "Support Declined", color: "#ef4444" },
+    { id: "term_sheet", name: "Term Sheet", color: "#06b6d4" },
+    { id: "active", name: "Active", color: "#10b981" },
+    { id: "decline", name: "Decline", color: "#ef4444" },
   ]
 
-  const getStageFields = (stageName) => {
-    const base = { showMessage: true, showMeeting: true, showTermSheet: false, showAvailability: false }
+const getStageFields = (stageName) => {
     switch (stageName) {
-      case "Evaluation": return { ...base, showAvailability: true }
-      case "Due Diligence": return { ...base, showAvailability: true }
-      case "Decision": return { ...base, showAvailability: true }
-      case "Support Approved": return { ...base, showTermSheet: true, showAvailability: true }
-      case "Active Support": return { ...base, showTermSheet: true, showAvailability: false }
-      case "Support Declined": return { ...base, showMeeting: false, showAvailability: false }
-      default: return base
+      case "New Application":
+      case "Application Sent":
+        return { showMessage: true, showMeeting: true,  showTermSheet: false, showAvailability: false }
+      case "Evaluation":
+      case "Due Diligence":
+      case "Decision":
+        return { showMessage: true, showMeeting: true,  showTermSheet: false, showAvailability: true  }
+      case "Term Sheet":
+        return { showMessage: true, showMeeting: true,  showTermSheet: true,  showAvailability: true  }
+      case "Active":
+        return { showMessage: true, showMeeting: false, showTermSheet: false, showAvailability: false }
+      case "Decline":
+        return { showMessage: true, showMeeting: false, showTermSheet: false, showAvailability: false }
+      default:
+        return { showMessage: true, showMeeting: true,  showTermSheet: false, showAvailability: false }
     }
   }
 
@@ -292,19 +316,33 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
         programName: a.programName || `Program ${parseInt(a.programIndex) + 1}`,
       }
     }
-    const mapped = enriched.map(mapRow)
-    if (!stageFilter) { setSmes(mapped); onSMEsLoaded?.(mapped); return }
-    const stageMapping = {
-      initial: ["new application", "application sent", "match", "matched", "matching"],
+const mapped = enriched.map((a) => {
+  const row = mapRow(a)
+  // Recalculate live match score so table and breakdown are always in sync
+  const programs = catalystFormData?.programmeDetails?.programs || []
+  const program = programs[parseInt(a.programIndex)] || programs[0] || null
+  try {
+    const result = calculateMatchScore(a.profile || {}, catalystFormData, program)
+    row.matchPercentage = result.score
+  } catch (_) { /* keep stored value on error */ }
+  return row
+}).sort((a, b) => b.matchPercentage - a.matchPercentage)
+
+if (!stageFilter) { setSmes(mapped); onSMEsLoaded?.(mapped); return }
+   const stageMapping = {
+      initial:     ["new application", "application sent", "match", "matched", "matching"],
       application: ["new application", "application sent"],
-      review: ["under review", "in review", "evaluation"],
-      approved: ["due diligence", "shortlisted"],
-      supported: ["support approved"],
-      funding: ["decision"],
-      active: ["active support"],
-      termsheet: ["term sheet"],
-      closed: ["deal closed"],
-      rejected: ["rejected", "withdrawn", "declined", "support declined"],
+      review:      ["under review", "in review", "evaluation"],
+      approved:    ["due diligence", "shortlisted"],
+      // kept for any legacy pipeline cards that still emit "supported"
+      supported:   ["support approved"],
+      funding:     ["decision"],
+      // new: "term sheet"
+      termsheet:   ["term sheet"],
+      // new: "active" | old: "active support", "support approved"
+      active:      ["active", "active support", "support approved"],
+      // new: "decline" | old: "support declined", "rejected", "withdrawn", "declined"
+      rejected:    ["decline", "support declined", "rejected", "withdrawn", "declined"],
     }
     const allOtherStages = [
       ...stageMapping.application,
@@ -328,7 +366,7 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
         valid.includes((s.currentStatus || "").toLowerCase())
       )
     }
-    setSmes(filtered)
+   setSmes([...filtered].sort((a, b) => b.matchPercentage - a.matchPercentage))
     // Always pass the full mapped set to the parent for notification tracking.
     // Passing the filtered subset caused the notification system to treat
     // disappearing IDs (due to filtering) as stage-changes → spurious badges.
@@ -363,7 +401,7 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
 
   const renderSupportAgreementStatus = (sme) => {
     const currentStage = updatedStages[`${sme.id}_${sme.programIndex}`] || sme.pipelineStage
-    if (currentStage !== "Support Approved") return null
+    if (!["Term Sheet", "Support Approved"].includes(currentStage)) return null
 
     const status = supportAgreementStatuses[sme.file_id]
     if (!status) return (
@@ -401,7 +439,7 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
   const applyFilters = () => { console.log("Applying filters:", localFilters); setShowFilters(false) }
 
   // ── Stage update ───────────────────────────────────────────────────────────
-  const handleStageUpdate = async () => {
+ const handleStageUpdate = async () => {
     const stageFields = getStageFields(nextStage)
     const errors = {}
     if (!nextStage) errors.nextStage = "Please select a stage"
@@ -411,6 +449,14 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
       if (!meetingPurpose.trim()) errors.meetingPurpose = "Please provide a meeting purpose"
     }
     if (stageFields.showAvailability && !availabilities.length) errors.availabilities = "Please select at least one available date"
+    if (stageFields.showTermSheet && termSheetFile) {
+      const allowed = ["application/pdf", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"]
+      if (!allowed.includes(termSheetFile.type)) {
+        errors.termSheetFile = "Only PDF or Word documents are accepted"
+      } else if (termSheetFile.size > 10 * 1024 * 1024) {
+        errors.termSheetFile = "File must be under 10 MB"
+      }
+    }
     if (Object.keys(errors).length > 0) { setFormErrors(errors); return }
     setIsSubmitting(true)
     try {
@@ -495,15 +541,15 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
       // Replace the content building section with this more detailed version:
       let content = `Dear ${selectedSMEForStage.name},\n\nWe are pleased to inform you that your application has progressed to the "${nextStage}" stage.\n\n${message}`
 
-      if (currentStageFields.showMeeting && meetingLocation && meetingPurpose) {
+     if (stageFields.showMeeting && meetingLocation && meetingPurpose) {
         content += `\n\nMeeting Details:\n- Location: ${meetingLocation}\n- Purpose: ${meetingPurpose}`
       }
 
       if (attachmentUrl) {
-        content += `\n\nSupport Agreement Document:\nPlease review the attached support agreement document using the link below:\n${attachmentUrl}\n\nKindly review and respond with your acceptance or decline of the agreement terms.`
+        content += `\n\nTerm Sheet Document:\nPlease review the attached term sheet using the link below:\n${attachmentUrl}\n\nKindly review and respond with your acceptance or decline of the terms.`
       }
 
-      if (currentStageFields.showAvailability && availabilities.length > 0) {
+      if (stageFields.showAvailability && availabilities.length > 0) {
         content += `\n\nAvailable Meeting Times:\n` +
           availabilities.map((a, i) => {
             const d = a.date.toLocaleDateString("en-US", {
@@ -648,21 +694,60 @@ useEffect(() => {
       if (typeof input === "string") return input.replace(/[_-]/g, " ").toLowerCase()
       return input
     }
-    const checkGeographicMatch = (smeLocation, acceleratorGeoData) => {
-      const smeProvince = normalize(smeProfileData.entityOverview?.province)
-      const smeCountry = cleanString(smeProfileData.entityOverview?.location) || "not specified"
-      const accelGeoFocus = acceleratorGeoData.geographicFocus || []
-      const accelSelectedCountries = cleanString(acceleratorGeoData.selectedCountries) || []
-      const accelSelectedProvinces = cleanString(acceleratorGeoData.selectedProvinces) || []
+    const checkGeographicMatch = () => {
+      // programBriefMatchingPreference is the source of truth for geo;
+      // fall back to generalMatchingPreference for older records
+      const briefPrefs = catalystFormData?.programBriefMatchingPreference || {}
+      const generalPrefs = catalystFormData?.generalMatchingPreference || {}
+
+      const accelGeoFocus = toArray(briefPrefs.geographicFocus?.length ? briefPrefs.geographicFocus : generalPrefs.geographicFocus)
+        .map(s => s.toLowerCase().trim())
+
+      // Global / regional → always match
       if (accelGeoFocus.includes("global")) return true
-      if (accelGeoFocus.includes("regional_emea") || accelGeoFocus.includes("regional_na") || accelGeoFocus.includes("regional_apac")) return true
-      if (accelGeoFocus.includes("country_specific")) return accelSelectedCountries.includes(smeCountry) || accelSelectedCountries.includes(smeLocation)
-      if (accelGeoFocus.includes("province_specific")) return accelSelectedProvinces.includes(smeProvince)
+      if (
+        accelGeoFocus.includes("regional_emea") ||
+        accelGeoFocus.includes("regional_na") ||
+        accelGeoFocus.includes("regional_apac")
+      ) return true
+
+      // ── SME location fields ──
+      const smeCountries = toArray(smeProfileData.entityOverview?.operatingCountries)
+        .map(s => s.toLowerCase().trim())
+      const smeLocationFallback = (smeProfileData.entityOverview?.location || "").toLowerCase().trim()
+      const smeProvinces = toArray(smeProfileData.entityOverview?.operatingProvinces)
+        .map(s => s.toLowerCase().trim())
+      const smeProvinceFallback = (smeProfileData.entityOverview?.province || "").toLowerCase().trim()
+
+      if (accelGeoFocus.includes("country_specific")) {
+        // selectedCountries lives on programBriefMatchingPreference, fall back to generalMatchingPreference
+        const accelCountries = toArray(
+          briefPrefs.selectedCountries?.length ? briefPrefs.selectedCountries : generalPrefs.selectedCountries
+        ).map(s => s.toLowerCase().trim().replace(/[_\-\s]+/g, ""))
+
+        const smeCountryTokens = [...smeCountries, smeLocationFallback]
+          .map(s => s.replace(/[_\-\s]+/g, ""))
+
+        return smeCountryTokens.some(c => accelCountries.includes(c))
+      }
+
+      if (accelGeoFocus.includes("province_specific")) {
+        const accelProvinces = toArray(
+          briefPrefs.selectedProvinces?.length ? briefPrefs.selectedProvinces : generalPrefs.selectedProvinces
+        ).map(s => s.toLowerCase().trim().replace(/[_\-\s]+/g, ""))
+
+        const smeProvinceTokens = [...smeProvinces, smeProvinceFallback]
+          .map(s => s.replace(/[_\-\s]+/g, ""))
+
+        return smeProvinceTokens.some(p => accelProvinces.includes(p))
+      }
+
       return false
     }
+  
 
     const programData = program || catalystFormData?.programmeDetails?.programs?.[0] || {}
-    const matchPrefs = catalystFormData?.generalMatchingPreference || {}
+    const matchPrefs = catalystFormData?.programBriefMatchingPreference || catalystFormData?.generalMatchingPreference || {}
 
     // 1. Funding Stage
     const smeStage = smeProfileData.entityOverview?.operationStage
@@ -681,10 +766,20 @@ useEffect(() => {
     breakdown.ticketSize.matched = ticketMatch
     if (ticketMatch) { breakdown.ticketSize.score = 12.5; matched++ }
 
-    // 3. Geographic Fit
-    const smeLocation = cleanString(smeProfileData.entityOverview?.location)
-    const geoMatch = checkGeographicMatch(smeLocation, matchPrefs)
-    breakdown.geographicFit.details = { smeValue: smeLocation, accelValue: matchPrefs.geographicFocus }
+     // 3. Geographic Fit
+    const geoMatch = checkGeographicMatch()
+    const smeLocationDisplay = [
+      ...toArray(smeProfileData.entityOverview?.operatingCountries),
+      smeProfileData.entityOverview?.location,
+    ].filter(Boolean).join(", ") || "N/A"
+ const briefPrefsForDisplay = catalystFormData?.programBriefMatchingPreference || {}
+    const generalPrefsForDisplay = catalystFormData?.generalMatchingPreference || {}
+    const accelGeoDisplay = [
+      ...toArray(briefPrefsForDisplay.geographicFocus?.length ? briefPrefsForDisplay.geographicFocus : generalPrefsForDisplay.geographicFocus),
+      ...toArray(briefPrefsForDisplay.selectedCountries?.length ? briefPrefsForDisplay.selectedCountries : generalPrefsForDisplay.selectedCountries),
+      ...toArray(briefPrefsForDisplay.selectedProvinces?.length ? briefPrefsForDisplay.selectedProvinces : generalPrefsForDisplay.selectedProvinces),
+    ].filter(Boolean).join(", ") || "N/A"
+    breakdown.geographicFit.details = { smeValue: smeLocationDisplay, accelValue: accelGeoDisplay }
     breakdown.geographicFit.matched = geoMatch
     if (geoMatch) { breakdown.geographicFit.score = 12.5; matched++ }
 
@@ -914,13 +1009,13 @@ const handleShareNDA = async (sme) => {
               <col style={{ width: "60px" }} />  {/* Funding Stage */}
               <col style={{ width: "65px" }} />  {/* Funding Required */}
               <col style={{ width: "55px" }} />  {/* Equity Offered */}
-              <col style={{ width: "60px" }} />  {/* Guarantees */}
+              <col style={{ width: "70px" }} />  {/* Guarantees */}
               <col style={{ width: "75px" }} />  {/* Support Required */}
               <col style={{ width: "70px" }} />  {/* Services Required */}
               <col style={{ width: "65px" }} />  {/* Application Date */}
               <col style={{ width: "50px" }} />  {/* Match % */}
               <col style={{ width: "55px" }} />  {/* BIG Score */}
-              <col style={{ width: "70px" }} />  {/* Current Status */}
+              <col style={{ width: "80px" }} />  {/* Current Status */}
               <col style={{ width: "60px" }} />  {/* Action */}
             </colgroup>
             <thead>
@@ -1127,33 +1222,129 @@ const handleShareNDA = async (sme) => {
         </div>
       )}
 
-      {/* ── BIG Score Modal ─────────────────────────────────────────────────── */}
+    {/* ── BIG Score Modal ─────────────────────────────────────────────────── */}
       {selectedSME && modalType === "bigScore" && (
         <div className={MODAL_OVERLAY} onClick={resetModal}>
-          <div className={MODAL_BOX} onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-8">
-              <h3 className="text-[28px] font-extrabold text-darkBrown m-0">BIG Score Breakdown</h3>
-              <div className="bg-mediumBrown text-white rounded-full w-20 h-20 flex items-center justify-center text-[28px] font-extrabold shadow-[0_8px_24px_rgba(93,64,55,0.3)]">
-                {calculateTotalScore()}
+          <div
+            className="relative bg-white rounded-[24px] w-[95%] max-w-[520px] max-h-[90vh] overflow-y-auto shadow-[0_32px_80px_rgba(62,39,35,0.45)]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* ── Header band ── */}
+            <div
+              className="relative rounded-t-[24px] px-8 pt-8 pb-6 overflow-hidden"
+              style={{ background: "linear-gradient(135deg, #140905 0%, #6D4C41 60%, #8D6E63 100%)" }}
+            >
+              {/* decorative circles */}
+              <div className="absolute -top-6 -right-6 w-32 h-32 rounded-full bg-white/5 pointer-events-none" />
+              <div className="absolute top-4 -right-2 w-16 h-16 rounded-full bg-white/5 pointer-events-none" />
+
+              <div className="flex justify-between items-start relative z-10">
+                <div>
+                  <p className="text-[#D7B899] text-xs font-semibold uppercase tracking-widest mb-1">BIG Score</p>
+                  <h3 className="text-white text-[22px] font-extrabold m-0 leading-tight">
+                    {selectedSME.name}
+                  </h3>
+                  <p className="text-[#C4A882] text-sm mt-1 m-0">Support Readiness Breakdown</p>
+                </div>
+
+                {/* Total score ring */}
+                <div className="flex flex-col items-center flex-shrink-0 ml-4">
+                  <div
+                    className="w-[72px] h-[72px] rounded-full flex items-center justify-center shadow-[0_4px_20px_rgba(0,0,0,0.4)]"
+                    style={{
+                      background: `conic-gradient(
+                        ${getScoreColor(calculateTotalScore())} ${calculateTotalScore() * 3.6}deg,
+                        rgba(255,255,255,0.15) 0deg
+                      )`,
+                    }}
+                  >
+                    <div className="w-[56px] h-[56px] rounded-full bg-[#1a0c02] flex items-center justify-center">
+                      <span
+                        className="text-[18px] font-extrabold"
+                        style={{ color: getScoreColor(calculateTotalScore()) }}
+                      >
+                        {calculateTotalScore()}
+                      </span>
+                    </div>
+                  </div>
+                  <span className="text-[#C4A882] text-[10px] mt-1 font-semibold uppercase tracking-wider">Overall</span>
+                </div>
               </div>
+
+              {/* close button */}
+              <button
+                onClick={resetModal}
+                className="absolute top-4 right-4 w-7 h-7 rounded-full bg-white/10 border-none cursor-pointer flex items-center justify-center text-white/70 hover:bg-white/20 hover:text-white transition-all text-base z-20"
+              >
+                ✕
+              </button>
             </div>
-            <p className="text-lg text-mediumBrown mb-8 leading-relaxed">
-              The BIG Score is a comprehensive evaluation of {selectedSME.name}'s support readiness across four key dimensions:
-            </p>
-            {Object.entries(bigScoreData).map(([key, data]) => (
-              <div key={key} className="bg-gray-50 rounded-2xl p-7 mb-7 shadow-sm border border-gray-200">
-                <div className="flex justify-between items-center mb-4">
-                  <h4 className="m-0 text-xl font-bold capitalize">{key} Score</h4>
-                  <span className="text-[28px] font-extrabold" style={{ color: data.color }}>{data.score}%</span>
-                </div>
-                <div className="w-full h-4 bg-cream rounded-full overflow-hidden shadow-inner">
-                  <div className="h-full rounded-full transition-all duration-[1500ms] ease-out"
-                    style={{ width: `${data.score}%`, backgroundColor: data.color }} />
-                </div>
-              </div>
-            ))}
-            <div className="flex justify-end">
-              <button onClick={resetModal} className={BTN_PRIMARY}>Close</button>
+
+            {/* ── Score cards ── */}
+            <div className="px-8 py-6 flex flex-col gap-4">
+              {(() => {
+                const META = {
+                  compliance:  { label: "Compliance",  icon: "✅", desc: "Regulatory & legal compliance",      grad: "from-[#140905] to-[#4E342E]"  },
+                  legitimacy:  { label: "Legitimacy",  icon: "🏛️", desc: "Business legitimacy & verification", grad: "from-[#3E2723] to-[#6D4C41]"  },
+                  fundability: { label: "Capital Appeal", icon: "💰", desc: "Investment readiness & financials",   grad: "from-[#4E342E] to-[#8D6E63]"  },
+                  pis:         { label: "PIS",         icon: "📊", desc: "Public Intrest score",         grad: "from-[#5D4037] to-[#A1887F]"  },
+                }
+                return Object.entries(bigScoreData).map(([key, data]) => {
+                  const meta = META[key] || { label: key, icon: "📈", desc: "", grad: "from-[#4e2106] to-[#8D6E63]" }
+                  const score = data.score || 0
+                  const color = getScoreColor(score)
+                  return (
+                    <div
+                      key={key}
+                      className="rounded-2xl overflow-hidden border border-[#e8ddd5] shadow-sm hover:shadow-md transition-shadow"
+                    >
+                      {/* card top strip */}
+                      <div className={`bg-gradient-to-r ${meta.grad} px-5 py-3 flex justify-between items-center`}>
+                        <div className="flex items-center gap-2">
+                          <span className="text-base">{meta.icon}</span>
+                          <div>
+                            <p className="text-white text-[13px] font-bold m-0 leading-none">{meta.label} Score</p>
+                            <p className="text-white/70 text-[10px] m-0 mt-0.5">{meta.desc}</p>
+                          </div>
+                        </div>
+                        <span className="text-white text-[22px] font-extrabold leading-none">{score}%</span>
+                      </div>
+
+                      {/* progress bar */}
+                      <div className="bg-[#fdf8f4] px-5 py-3">
+                        <div className="flex justify-between text-[10px] text-[#9e7b65] mb-1.5 font-medium">
+                          <span>0%</span>
+                          <span className="font-semibold" style={{ color }}>
+                            {score >= 80 ? "Excellent" : score >= 60 ? "Good" : "Needs Attention"}
+                          </span>
+                          <span>100%</span>
+                        </div>
+                        <div className="w-full h-3 bg-[#ede3da] rounded-full overflow-hidden shadow-inner">
+                          <div
+                            className="h-full rounded-full transition-all duration-[1200ms] ease-out"
+                            style={{
+                              width: `${score}%`,
+                              background: `linear-gradient(90deg, ${color}cc, ${color})`,
+                              boxShadow: `0 0 8px ${color}66`,
+                            }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })
+              })()}
+            </div>
+
+            {/* ── Footer ── */}
+            <div className="px-8 pb-7 flex justify-end">
+              <button
+                onClick={resetModal}
+                className="px-6 py-2.5 rounded-xl text-sm font-semibold text-white border-none cursor-pointer transition-all hover:opacity-90 hover:shadow-md"
+                style={{ background: "linear-gradient(135deg, #140905, #6D4C41)" }}
+              >
+                Close
+              </button>
             </div>
           </div>
         </div>
@@ -1321,7 +1512,12 @@ const handleShareNDA = async (sme) => {
                     <label className={LABEL}>Support Agreement Upload:</label>
                     <input type="file" accept=".pdf,.doc,.docx" onChange={(e) => setTermSheetFile(e.target.files[0])}
                       className="w-full px-4 py-3 border-2 border-[#c8b6a6] rounded-lg text-sm bg-[#f5f0e1]" />
-                    {termSheetFile && <p className="text-sm text-gray-500 mt-2">Selected: {termSheetFile.name}</p>}
+                  {termSheetFile && !formErrors.termSheetFile && (
+                      <p className="text-sm text-gray-500 mt-2">Selected: {termSheetFile.name}</p>
+                    )}
+                    {formErrors.termSheetFile && (
+                      <p className="text-red-600 text-sm mt-2">{formErrors.termSheetFile}</p>
+                    )}
                   </div>
                 )}
               </>
