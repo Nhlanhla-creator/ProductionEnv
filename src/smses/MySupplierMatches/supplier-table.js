@@ -78,27 +78,24 @@ const STAGE_COLORS = {
 
 // Enhanced matching criteria with better weights
 const ENHANCED_MATCHING_CRITERIA = {
-  // Primary matching (60%)
   CATEGORY_MATCH: {
-    weight: 0.4,
+    weight: 0.40,
     description: "Product/Service Category Alignment",
   },
   BBBEE_LEVEL: {
-    weight: 0.1,
+    weight: 0.10,
     description: "BBBEE Level Compliance",
   },
   LOCATION: {
-    weight: 0.1,
+    weight: 0.10,
     description: "Geographic Location Match",
   },
-
-  // Secondary matching (40%)
   DELIVERY_MODE: {
-    weight: 0.1,
+    weight: 0.10,
     description: "Delivery Mode Compatibility",
   },
   BUDGET_RANGE: {
-    weight: 0.1,
+    weight: 0.10,
     description: "Budget Fit",
   },
   OWNERSHIP_PREFS: {
@@ -107,7 +104,7 @@ const ENHANCED_MATCHING_CRITERIA = {
   },
   URGENCY_LEAD_TIME: {
     weight: 0.05,
-    description: "Delivery Timeframe & Urgency Match",
+    description: "Urgency & Lead Time Match",
   },
   EXPERIENCE: {
     weight: 0.05,
@@ -238,95 +235,107 @@ function convertToDays(value, unit) {
 
 // Enhanced match calculation functions
 function calculateCategoryMatch(application, supplier) {
-  // FIX: Read from requestOverview where the form actually saves it
-  const appCategories =
-    application.productsServices?.categories ||      // old path (keep for legacy)
-    application.requestOverview?.categories ||        // new path from RequestOverview.js
-    application.productsServices?.productCategories || // legacy suppliers path
-    [];
+  const appCategories = (
+    application.productsServices?.categories ||
+    application.requestOverview?.categories ||
+    application.productsServices?.productCategories ||
+    []
+  ).map(c => (typeof c === 'string' ? c : c?.name || '').toLowerCase().trim())
+    .filter(Boolean);
 
-  const appKeywords =
-    application.requestOverview?.keywords?.toLowerCase() ||  // FIX: correct path
-    application.keywords?.toLowerCase() ||
-    "";
-
-  const appPurpose =
-    application.requestOverview?.purpose?.toLowerCase() ||   // FIX: correct path
-    application.purpose?.toLowerCase() ||
-    "";
+  const appKeywords = application.requestOverview?.keywords?.toLowerCase() || "";
+  const appPurpose = application.requestOverview?.purpose?.toLowerCase() || "";
 
   const supplierText = extractSupplierDescriptiveText(supplier);
 
-  if ((appCategories.length === 0 && !appKeywords && !appPurpose) || !supplierText) {
-    return { score: 0, matches: [] };
-  }
+  if (!supplierText) return { score: 0, matches: [] };
+  if (appCategories.length === 0 && !appKeywords && !appPurpose) return { score: 0, matches: [] };
 
-  let matches = 0;
-  const matchedTerms = [];
-  const totalTerms = [];
+  const matchedCategories = [];
+  const unmatchedCategories = [];
 
+  // Binary match per category — matched or not
   appCategories.forEach(appCat => {
-    totalTerms.push(appCat);
-    const expandedCategories = expandSearchTerms([appCat.toLowerCase()]);
-    const hasMatch = expandedCategories.some(catTerm => supplierText.includes(catTerm));
+    const expandedTerms = expandSearchTerms([appCat]);
+    const hasMatch = expandedTerms.some(term => supplierText.includes(term));
     if (hasMatch) {
-      matches++;
-      matchedTerms.push(appCat);
+      matchedCategories.push(appCat);
+    } else {
+      unmatchedCategories.push(appCat);
     }
   });
 
+  // Category score: proportion of requested categories matched (0 to 1)
+  const categoryScore = appCategories.length > 0
+    ? matchedCategories.length / appCategories.length
+    : 0;
+
+  // Keyword/purpose secondary signal
+  let keywordScore = 0;
+  const matchedKeywords = [];
   if (appKeywords || appPurpose) {
     const combinedText = `${appKeywords} ${appPurpose}`;
-    const words = combinedText.split(/\s+/).filter(word => word.length > 3);
+    const words = combinedText.split(/\s+/).filter(w => w.length > 3);
+    let keywordHits = 0;
     words.forEach(word => {
-      totalTerms.push(word);
-      const expandedWords = expandSearchTerms([word.toLowerCase()]);
-      const hasMatch = expandedWords.some(expandedWord => supplierText.includes(expandedWord));
+      const expanded = expandSearchTerms([word]);
+      const hasMatch = expanded.some(term => supplierText.includes(term));
       if (hasMatch) {
-        matches++;
-        matchedTerms.push(word);
+        keywordHits++;
+        matchedKeywords.push(word);
       }
     });
+    keywordScore = words.length > 0 ? keywordHits / words.length : 0;
   }
 
-  const score = totalTerms.length > 0 ? matches / totalTerms.length : 0;
+  const finalScore = appCategories.length > 0
+    ? (categoryScore * 0.7) + (keywordScore * 0.3)
+    : keywordScore;
+
   return {
-    score: Math.min(score * 1.3, 1),
-    matches: matchedTerms
+    score: Math.min(finalScore, 1),
+    matches: matchedCategories,
+    unmatched: unmatchedCategories,
+    keywordMatches: matchedKeywords,
   };
 }
 
 function calculateLocationMatch(application, supplier) {
-  // FIX: location is saved under matchingPreferences
   const appLocation =
     application.matchingPreferences?.location ||
-    application.requestOverview?.location ||
-    "";
+    application.requestOverview?.location || "";
   const supplierLocation = supplier.entityOverview?.location || "";
 
-  if (!appLocation || !supplierLocation) return 0.5;
+  if (!appLocation) return 0.5; // No preference = neutral
+  if (!supplierLocation) return 0;
 
   const normalizedApp = appLocation.toLowerCase().trim();
   const normalizedSupplier = supplierLocation.toLowerCase().trim();
-  return normalizedApp === normalizedSupplier ? 1 : 0;
+
+  if (normalizedApp === normalizedSupplier) return 1;
+  // Partial match (e.g. "Johannesburg" within "Johannesburg, Gauteng")
+  if (normalizedSupplier.includes(normalizedApp) || normalizedApp.includes(normalizedSupplier)) return 0.7;
+  return 0;
 }
 
 function calculateDeliveryMatch(application, supplier) {
-  // FIX: deliveryModes is saved under matchingPreferences in MatchingPreferences.js
   const appModes =
     application.matchingPreferences?.deliveryModes ||
-    application.requestOverview?.deliveryModes ||
-    [];
+    application.requestOverview?.deliveryModes || [];
   const supplierModes = supplier.productsServices?.deliveryModes || [];
 
-  if (appModes.length === 0 || supplierModes.length === 0) return 0.5;
+  if (appModes.length === 0) return 0.5; // No preference = neutral
+  if (supplierModes.length === 0) return 0;
 
   const appHasHybrid = appModes.includes("Hybrid");
   const supplyHasHybrid = supplierModes.includes("Hybrid");
   if (appHasHybrid || supplyHasHybrid) return 1;
 
-  const deliveryMatches = appModes.filter(appMode => supplierModes.includes(appMode));
-  return deliveryMatches.length / appModes.length;
+  // Count how many required modes the supplier supports
+  const matchedModes = appModes.filter(appMode => supplierModes.includes(appMode));
+
+  // All modes match = full score, partial = proportional, none = 0
+  return matchedModes.length / appModes.length;
 }
 
 function calculateBudgetMatch(application, supplier) {
@@ -351,18 +360,20 @@ function calculateBudgetMatch(application, supplier) {
 }
 
 function calculateBBBEEEMatch(application, supplier) {
-  // FIX: bbeeLevel is saved under matchingPreferences
   const bbeePreference =
-    application.matchingPreferences?.bbeeLevel ||
-    application.matchingPreferences?.bbeeLevel ||
-    "0";
+    application.matchingPreferences?.bbeeLevel || "0";
 
   const appBBBEEPref = parseInt(bbeePreference.replace(/\D/g, "") || "0") || 0;
   const bbbeeLevel = parseInt(supplier.legalCompliance?.bbbeeLevel || "0") || 0;
 
-  if (appBBBEEPref <= bbbeeLevel) return 1;
-  if (appBBBEEPref - bbbeeLevel <= 2) return 0.5;
-  return 0;
+  // If no preference specified, neutral score
+  if (appBBBEEPref === 0) return 0.5;
+
+  // Binary: meets requirement or doesn't
+  // Lower level number = better (Level 1 is best)
+  if (bbbeeLevel <= appBBBEEPref) return 1;      // Meets or exceeds requirement
+  if (bbbeeLevel === appBBBEEPref + 1) return 0.5; // One level off
+  return 0;                                         // Does not meet requirement
 }
 
 function calculateOwnershipMatch(application, supplier) {
@@ -435,10 +446,7 @@ function extractSupplierDescriptiveText(supplier) {
 
 function calculateEnhancedMatchScore(application, supplier, ratingsData = null) {
   if (!application || !supplier) {
-    return {
-      totalScore: 0,
-      breakdown: {},
-    }
+    return { totalScore: 0, breakdown: {} }
   }
 
   let totalScore = 0
@@ -446,74 +454,101 @@ function calculateEnhancedMatchScore(application, supplier, ratingsData = null) 
 
   // Category Match (40%)
   const categoryMatch = calculateCategoryMatch(application, supplier)
-  totalScore += categoryMatch.score * ENHANCED_MATCHING_CRITERIA.CATEGORY_MATCH.weight * 100
+  const categoryContribution = categoryMatch.score * ENHANCED_MATCHING_CRITERIA.CATEGORY_MATCH.weight * 100
+  totalScore += categoryContribution
   breakdown.categoryMatch = {
-    score: categoryMatch.score * 100,
+    score: Math.round(categoryMatch.score * 100),
+    weight: ENHANCED_MATCHING_CRITERIA.CATEGORY_MATCH.weight * 100,
+    contribution: Math.round(categoryContribution),
     description: ENHANCED_MATCHING_CRITERIA.CATEGORY_MATCH.description,
     matches: categoryMatch.matches
   }
 
   // BBBEE Match (10%)
   const bbbeeScore = calculateBBBEEEMatch(application, supplier)
-  totalScore += bbbeeScore * ENHANCED_MATCHING_CRITERIA.BBBEE_LEVEL.weight * 100
+  const bbbeeContribution = bbbeeScore * ENHANCED_MATCHING_CRITERIA.BBBEE_LEVEL.weight * 100
+  totalScore += bbbeeContribution
   breakdown.bbbeeMatch = {
-    score: bbbeeScore * 100,
+    score: Math.round(bbbeeScore * 100),
+    weight: ENHANCED_MATCHING_CRITERIA.BBBEE_LEVEL.weight * 100,
+    contribution: Math.round(bbbeeContribution),
     description: ENHANCED_MATCHING_CRITERIA.BBBEE_LEVEL.description,
   }
 
   // Location Match (10%)
   const locationScore = calculateLocationMatch(application, supplier)
-  totalScore += locationScore * ENHANCED_MATCHING_CRITERIA.LOCATION.weight * 100
+  const locationContribution = locationScore * ENHANCED_MATCHING_CRITERIA.LOCATION.weight * 100
+  totalScore += locationContribution
   breakdown.locationMatch = {
-    score: locationScore * 100,
+    score: Math.round(locationScore * 100),
+    weight: ENHANCED_MATCHING_CRITERIA.LOCATION.weight * 100,
+    contribution: Math.round(locationContribution),
     description: ENHANCED_MATCHING_CRITERIA.LOCATION.description,
   }
 
   // Delivery Match (10%)
   const deliveryScore = calculateDeliveryMatch(application, supplier)
-  totalScore += deliveryScore * ENHANCED_MATCHING_CRITERIA.DELIVERY_MODE.weight * 100
+  const deliveryContribution = deliveryScore * ENHANCED_MATCHING_CRITERIA.DELIVERY_MODE.weight * 100
+  totalScore += deliveryContribution
   breakdown.deliveryMatch = {
-    score: deliveryScore * 100,
+    score: Math.round(deliveryScore * 100),
+    weight: ENHANCED_MATCHING_CRITERIA.DELIVERY_MODE.weight * 100,
+    contribution: Math.round(deliveryContribution),
     description: ENHANCED_MATCHING_CRITERIA.DELIVERY_MODE.description,
   }
 
   // Budget Match (10%)
   const budgetScore = calculateBudgetMatch(application, supplier)
-  totalScore += budgetScore * ENHANCED_MATCHING_CRITERIA.BUDGET_RANGE.weight * 100
+  const budgetContribution = budgetScore * ENHANCED_MATCHING_CRITERIA.BUDGET_RANGE.weight * 100
+  totalScore += budgetContribution
   breakdown.budgetMatch = {
-    score: budgetScore * 100,
+    score: Math.round(budgetScore * 100),
+    weight: ENHANCED_MATCHING_CRITERIA.BUDGET_RANGE.weight * 100,
+    contribution: Math.round(budgetContribution),
     description: ENHANCED_MATCHING_CRITERIA.BUDGET_RANGE.description,
   }
 
   // Ownership Preferences (5%)
   const ownershipScore = calculateOwnershipMatch(application, supplier)
-  totalScore += ownershipScore * ENHANCED_MATCHING_CRITERIA.OWNERSHIP_PREFS.weight * 100
+  const ownershipContribution = ownershipScore * ENHANCED_MATCHING_CRITERIA.OWNERSHIP_PREFS.weight * 100
+  totalScore += ownershipContribution
   breakdown.ownershipMatch = {
-    score: ownershipScore * 100,
+    score: Math.round(ownershipScore * 100),
+    weight: ENHANCED_MATCHING_CRITERIA.OWNERSHIP_PREFS.weight * 100,
+    contribution: Math.round(ownershipContribution),
     description: ENHANCED_MATCHING_CRITERIA.OWNERSHIP_PREFS.description,
   }
 
   // Rating Match (5%)
   const ratingScore = calculateRatingMatch(supplier, ratingsData)
-  totalScore += ratingScore * ENHANCED_MATCHING_CRITERIA.RATING.weight * 100
+  const ratingContribution = ratingScore * ENHANCED_MATCHING_CRITERIA.RATING.weight * 100
+  totalScore += ratingContribution
   breakdown.ratingMatch = {
-    score: ratingScore * 100,
+    score: Math.round(ratingScore * 100),
+    weight: ENHANCED_MATCHING_CRITERIA.RATING.weight * 100,
+    contribution: Math.round(ratingContribution),
     description: ENHANCED_MATCHING_CRITERIA.RATING.description,
   }
 
-  // Experience Match (5%) - Simplified for now
+  // Experience Match (5%)
   const experienceScore = 0.5
-  totalScore += experienceScore * ENHANCED_MATCHING_CRITERIA.EXPERIENCE.weight * 100
+  const experienceContribution = experienceScore * ENHANCED_MATCHING_CRITERIA.EXPERIENCE.weight * 100
+  totalScore += experienceContribution
   breakdown.experienceMatch = {
-    score: experienceScore * 100,
+    score: Math.round(experienceScore * 100),
+    weight: ENHANCED_MATCHING_CRITERIA.EXPERIENCE.weight * 100,
+    contribution: Math.round(experienceContribution),
     description: ENHANCED_MATCHING_CRITERIA.EXPERIENCE.description,
   }
 
-  // Urgency/Lead Time Match (5%) - Simplified for now
+  // Urgency/Lead Time Match (5%)
   const urgencyScore = 0.5
-  totalScore += urgencyScore * ENHANCED_MATCHING_CRITERIA.URGENCY_LEAD_TIME.weight * 100
+  const urgencyContribution = urgencyScore * ENHANCED_MATCHING_CRITERIA.URGENCY_LEAD_TIME.weight * 100
+  totalScore += urgencyContribution
   breakdown.urgencyLeadTimeMatch = {
-    score: urgencyScore * 100,
+    score: Math.round(urgencyScore * 100),
+    weight: ENHANCED_MATCHING_CRITERIA.URGENCY_LEAD_TIME.weight * 100,
+    contribution: Math.round(urgencyContribution),
     description: ENHANCED_MATCHING_CRITERIA.URGENCY_LEAD_TIME.description,
   }
 
@@ -823,9 +858,17 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
 
 
   const applyFiltersWithUpdatedSuppliers = (suppliersArray) => {
+    const getEffectiveScore = (supplier) => {
+      if (supplier.secondaryMatchScore !== null && supplier.secondaryMatchScore !== undefined) {
+        return calculateCombinedMatchScore(supplier.matchPercentage || 0, supplier.secondaryMatchScore);
+      }
+      return supplier.matchPercentage || 0;
+    };
+
     const filtered = suppliersArray.filter((supplier) => {
       if (filters.location && !supplier.entityOverview?.location?.includes(filters.location)) return false
-      if (supplier.matchPercentage < filters.matchScore) return false
+      const effectiveScore = getEffectiveScore(supplier);
+      if (effectiveScore < filters.matchScore) return false
       if (filters.bbbeeLevel && supplier.legalCompliance?.bbbeeLevel !== filters.bbbeeLevel) return false
       if (
         filters.sectors.length > 0 &&
@@ -835,8 +878,12 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
       return true
     })
 
-    // Sort by match percentage (high to low)
-    const sorted = filtered.sort((a, b) => b.matchPercentage - a.matchPercentage);
+    // Sort by combined/AI score when available, fallback to primary match
+    const sorted = filtered.sort((a, b) => {
+      const scoreA = getEffectiveScore(a);
+      const scoreB = getEffectiveScore(b);
+      return scoreB - scoreA;
+    });
 
     setFilteredSuppliers(sorted);
     if (onSuppliersUpdate) {
@@ -845,76 +892,84 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
   }
 
   // // Helper function to create the analysis prompt
-  // function createSupplierAnalysisPrompt(suppliers, customerPurpose) {
-  //   // Truncate customer purpose if too long
-  //   const truncatedPurpose = customerPurpose.length > 600
-  //     ? customerPurpose.substring(0, 600) + "..."
-  //     : customerPurpose;
+  function createSupplierAnalysisPrompt(suppliers, customerPurpose) {
+    const truncatedPurpose = customerPurpose.length > 800
+      ? customerPurpose.substring(0, 800) + "..."
+      : customerPurpose;
 
-  //   const supplierData = suppliers.map(supplier => {
-  //     const name = supplier.entityOverview?.tradingName ||
-  //       supplier.entityOverview?.registeredName ||
-  //       'Unknown Supplier';
+    const supplierData = suppliers.map(supplier => {
+      const name = supplier.entityOverview?.tradingName ||
+        supplier.entityOverview?.registeredName ||
+        'Unknown Supplier';
 
-  //     // Extract product categories safely
-  //     const productCategories = supplier.productsServices?.productCategories || [];
-  //     const serviceCategories = supplier.productsServices?.serviceCategories || [];
-  //     const targetMarket = supplier.productsServices?.targetMarket || 'Not specified';
+      const productCategories = supplier.productsServices?.productCategories || [];
+      const serviceCategories = supplier.productsServices?.serviceCategories || [];
+      const targetMarket = supplier.productsServices?.targetMarket || 'Not specified';
+      const sector = supplier.entityOverview?.economicSectors?.[0] || 'Not specified';
+      const location = supplier.entityOverview?.location || 'Not specified';
 
-  //     // Create limited description
-  //     const productsDesc = productCategories.map(cat =>
-  //       typeof cat === 'string' ? cat : cat.name || cat.category || 'Unknown'
-  //     ).join(', ').substring(0, 150);
+      // Extract product names and descriptions
+      const productsDesc = productCategories.map(cat => {
+        if (typeof cat === 'string') return cat;
+        const name = cat.name || cat.category || '';
+        const products = cat.products?.map(p => `${p.name || ''} ${p.description || ''}`).join('; ') || '';
+        return `${name} ${products}`;
+      }).join(', ').substring(0, 200);
 
-  //     const servicesDesc = serviceCategories.map(cat =>
-  //       typeof cat === 'string' ? cat : cat.name || cat.category || 'Unknown'
-  //     ).join(', ').substring(0, 150);
+      // Extract service names and descriptions
+      const servicesDesc = serviceCategories.map(cat => {
+        if (typeof cat === 'string') return cat;
+        const name = cat.name || cat.category || '';
+        const services = cat.services?.map(s => `${s.name || ''} ${s.description || ''}`).join('; ') || '';
+        return `${name} ${services}`;
+      }).join(', ').substring(0, 200);
 
-  //     return `
-  // SUPPLIER: ${supplier.id}
-  // NAME: ${name}
-  // PRODUCTS: ${productsDesc || 'None specified'}
-  // SERVICES: ${servicesDesc || 'None specified'}
-  // TARGET: ${targetMarket.substring(0, 100)}
-  // ---`;
-  //   }).join('\n');
+      return `SUPPLIER_ID: ${supplier.id}
+NAME: ${name}
+SECTOR: ${sector}
+LOCATION: ${location}
+PRODUCTS: ${productsDesc || 'None listed'}
+SERVICES: ${servicesDesc || 'None listed'}
+TARGET_MARKET: ${targetMarket.substring(0, 150)}
+---END_SUPPLIER---`;
+    }).join('\n');
 
-  //   return `Analyze business matching between customer needs and supplier capabilities.
+    return `You are a business matching expert. Analyze how well each supplier matches the customer request below.
 
-  // CUSTOMER REQUEST:
-  // "${truncatedPurpose}"
+CUSTOMER REQUEST:
+"${truncatedPurpose}"
 
-  // SUPPLIER DATA:
-  // ${supplierData}
+SUPPLIERS TO ANALYZE (${suppliers.length} total):
+${supplierData}
 
-  // INSTRUCTIONS:
-  // - Analyze each supplier against the customer request
-  // - Score 0-5 based on semantic alignment and capability match
-  // - Consider: industry relevance, service overlap, target market fit
-  // - Return JSON with supplierId, score (0-5), reasoning, and matchedCapabilities
+CRITICAL RULES:
+1. You MUST return a match for EVERY supplier listed above — all ${suppliers.length} of them
+2. Use the exact SUPPLIER_ID values as the supplierId in your response
+3. Do NOT skip any supplier even if their profile is incomplete
+4. For suppliers with no product/service info, give score 0 with reasoning explaining why
 
-  // SCORING:
-  // 5 = Excellent match - direct capability alignment
-  // 4 = Strong match - minor gaps but high relevance  
-  // 3 = Good match - general alignment with some gaps
-  // 2 = Partial match - limited relevance
-  // 1 = Minimal match - very weak connection
-  // 0 = No meaningful alignment
+SCORING GUIDE (0-5):
+5 = Excellent — direct capability match, supplier clearly offers what customer needs
+4 = Strong — high relevance, minor gaps
+3 = Good — general alignment, some capability gaps
+2 = Partial — limited relevance, indirect connection
+1 = Minimal — very weak connection
+0 = None — no meaningful alignment or profile is too incomplete to assess
 
-  // RETURN VALID JSON:
-  // {
-  //   "matches": [
-  //     {
-  //       "supplierId": "supplier-id-1",
-  //       "score": 4.2,
-  //       "reasoning": "Brief explanation of match quality",
-  //       "matchedCapabilities": ["capability1", "capability2"]
-  //     }
-  //   ]
-  // }
+RETURN THIS EXACT JSON FORMAT (no markdown, no extra text):
+{
+  "matches": [
+    {
+      "supplierId": "exact-supplier-id-here",
+      "score": 3.5,
+      "reasoning": "2-3 sentences explaining WHY this score was given, what matched and what didn't",
+      "matchedCapabilities": ["specific capability 1", "specific capability 2"]
+    }
+  ]
+}
 
-  // Focus on practical business alignment, not just keywords.`;
-  // }
+Remember: The matches array must contain exactly ${suppliers.length} entries, one per supplier.`;
+  }
 
   // In your runSecondaryAiAnalysis function, add this check at the beginning:
 
@@ -933,11 +988,12 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
     });
 
     // Use ALL filtered suppliers, not just first 5
-    const suppliersToAnalyze = filteredSuppliers;
+    const suppliersToAnalyze = allSuppliers.filter(s => s.id !== currentUser?.uid);
 
     setIsAiAnalyzing(true);
     setAiAnalysisProgress({ current: 0, total: suppliersToAnalyze.length });
     setAiAnalysisError("");
+    console.log(`Starting AI analysis for ${suppliersToAnalyze.length} suppliers`);
 
     try {
       const functions = getFunctions();
@@ -956,10 +1012,14 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
 
       console.log("Sending", suppliersForAnalysis.length, "suppliers for AI analysis");
 
+      setAiAnalysisProgress({ current: 0, total: suppliersToAnalyze.length });
+
       const result = await analyzeSupplierMatches({
-        suppliers: suppliersForAnalysis,  // Send ALL suppliers
+        suppliers: suppliersForAnalysis,
         customerPurpose: customerPurpose,
-        applicationId: applicationId
+        applicationId: applicationId,
+        analyzeAll: true,        // tell the function to not limit results
+        maxSuppliers: suppliersForAnalysis.length  // explicit count
       });
 
       console.log("AI analysis completed successfully:", result.data);
@@ -1009,17 +1069,23 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
             secondaryMatchCapabilities: analysis.capabilities
           };
         }
-        // Keep existing analysis if no new analysis (shouldn't happen with all suppliers)
         return supplier;
       };
 
       setSuppliers(prev => prev.map(updateSupplierWithAnalysis));
+      setAllSuppliers(prev => prev.map(updateSupplierWithAnalysis));
       setFilteredSuppliers(prev => prev.map(updateSupplierWithAnalysis));
 
+      setAiAnalysisProgress({ current: analyzedIds.length, total: suppliersToAnalyze.length });
+
+      const missedCount = suppliersToAnalyze.length - analyzedIds.length;
       setNotification({
-        type: "success",
-        message: `AI analysis completed. Secondary match scores updated for ${analyzedIds.length} suppliers`
+        type: missedCount === 0 ? "success" : "info",
+        message: missedCount === 0
+          ? `✅ AI analysis complete — all ${analyzedIds.length} suppliers analyzed`
+          : `✅ AI analysis complete — ${analyzedIds.length} analyzed, ${missedCount} skipped (incomplete profiles)`
       });
+      setTimeout(() => setNotification(null), 4000);
 
     } catch (error) {
       console.error("AI Analysis error details:", error);
@@ -1079,21 +1145,12 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
 
   // NEW: Handle secondary match breakdown
   const handleShowSecondaryBreakdown = (supplier) => {
-    if (!supplier.secondaryMatchScore) {
-      setNotification({
-        type: "warning",
-        message: "No AI analysis available for this supplier yet"
-      });
-      setTimeout(() => setNotification(null), 3000);
-      return;
-    }
-
     setSecondaryBreakdownData({
       supplier,
-      primaryScore: supplier.matchPercentage,
-      secondaryScore: supplier.secondaryMatchScore,
-      reasoning: supplier.secondaryMatchReasoning,
-      capabilities: supplier.secondaryMatchCapabilities
+      primaryScore: supplier.matchPercentage || supplier.newMatchScore || 0,
+      secondaryScore: supplier.secondaryMatchScore ?? null,
+      reasoning: supplier.secondaryMatchReasoning || null,
+      capabilities: supplier.secondaryMatchCapabilities || []
     });
     setShowSecondaryBreakdown(true);
   };
@@ -1113,7 +1170,7 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
     }
 
     // Combine scores: 60% primary match, 40% AI semantic match
-    const combinedScore = (primaryScore * 0.6) + (aiScore * 0.4);
+    const combinedScore = (aiScore * 0.6) + (primaryScore * 0.4);
     return Math.round(combinedScore);
   }
 
@@ -1457,6 +1514,51 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
           </td>
 
           <td style={tableCellStyle}>
+            {supplier.secondaryMatchScore !== null && supplier.secondaryMatchScore !== undefined ? (
+              <div style={matchContainerStyle}>
+                <div style={progressBarStyle}>
+                  <div
+                    style={{
+                      ...progressFillStyle,
+                      width: `${calculateCombinedMatchScore(
+                        supplier.matchPercentage || supplier.newMatchScore || 0,
+                        supplier.secondaryMatchScore
+                      )}%`,
+                      backgroundColor: getSecondaryMatchColor(
+                        calculateCombinedMatchScore(
+                          supplier.matchPercentage || supplier.newMatchScore || 0,
+                          supplier.secondaryMatchScore
+                        )
+                      ),
+                    }}
+                  />
+                </div>
+                <div style={{ display: "flex", alignItems: "center", gap: "4px", marginTop: "4px" }}>
+                  <span style={{ ...matchScoreStyle, color: getSecondaryMatchColor(calculateCombinedMatchScore(supplier.matchPercentage || supplier.newMatchScore || 0, supplier.secondaryMatchScore)), fontWeight: "bold" }}>
+                    {calculateCombinedMatchScore(supplier.matchPercentage || supplier.newMatchScore || 0, supplier.secondaryMatchScore)}%
+                  </span>
+                  <Eye
+                    size={14}
+                    style={{ cursor: "pointer", color: "#a67c52" }}
+                    onClick={() => handleShowSecondaryBreakdown(supplier)}
+                    title="View AI match breakdown"
+                  />
+                </div>
+              </div>
+            ) : (
+              <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                <span style={{ color: "#999", fontSize: "0.75rem", fontStyle: "italic" }}>Pending</span>
+                <Eye
+                  size={14}
+                  style={{ cursor: "pointer", color: "#a67c52" }}
+                  onClick={() => handleShowSecondaryBreakdown(supplier)}
+                  title="Click to see details / run AI analysis"
+                />
+              </div>
+            )}
+          </td>
+
+          <td style={tableCellStyle}>
             <div style={matchContainerStyle}>
               <div style={progressBarStyle}>
                 <div
@@ -1499,65 +1601,6 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
             </div>
           </td>
 
-          <td style={tableCellStyle}>
-            {supplier.secondaryMatchScore !== null && supplier.secondaryMatchScore !== undefined ? (
-              <div style={matchContainerStyle}>
-                <div style={progressBarStyle}>
-                  <div
-                    style={{
-                      ...progressFillStyle,
-                      width: `${calculateCombinedMatchScore(
-                        supplier.matchPercentage || supplier.newMatchScore || 0,
-                        supplier.secondaryMatchScore
-                      )}%`,
-                      backgroundColor: getSecondaryMatchColor(
-                        calculateCombinedMatchScore(
-                          supplier.matchPercentage || supplier.newMatchScore || 0,
-                          supplier.secondaryMatchScore
-                        )
-                      ),
-                    }}
-                  />
-                </div>
-                <div style={{ display: "flex", alignItems: "center", gap: "4px", marginTop: "4px" }}>
-                  <span
-                    style={{
-                      ...matchScoreStyle,
-                      color: getSecondaryMatchColor(
-                        calculateCombinedMatchScore(
-                          supplier.matchPercentage || supplier.newMatchScore || 0,
-                          supplier.secondaryMatchScore
-                        )
-                      ),
-                      fontWeight: "bold",
-                    }}
-                  >
-                    {calculateCombinedMatchScore(
-                      supplier.matchPercentage || supplier.newMatchScore || 0,
-                      supplier.secondaryMatchScore
-                    )}%
-                  </span>
-                  <Eye
-                    size={14}
-                    style={{
-                      cursor: "pointer",
-                      color: "#a67c52",
-                    }}
-                    onClick={() => handleShowSecondaryBreakdown(supplier)}
-                    title="View secondary match breakdown"
-                  />
-                </div>
-              </div>
-            ) : (
-              <span style={{
-                color: "#999",
-                fontSize: "0.75rem",
-                fontStyle: "italic"
-              }}>
-                Pending analysis
-              </span>
-            )}
-          </td>
 
           {/* Action Column - Updated for previous contacts */}
           <td style={tableCellStyle}>
@@ -1979,6 +2022,13 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
   const applyFilters = () => {
     applyFiltersWithUpdatedSuppliers(allSuppliers);
   }
+
+  const getEffectiveScore = (supplier) => {
+    if (supplier.secondaryMatchScore !== null && supplier.secondaryMatchScore !== undefined) {
+      return calculateCombinedMatchScore(supplier.matchPercentage || 0, supplier.secondaryMatchScore);
+    }
+    return supplier.matchPercentage || 0;
+  };
 
 
   useEffect(() => {
@@ -2431,6 +2481,7 @@ BIG Marketplace Africa Team`;
           position: "relative",
           filter: showModal || showFilters ? "blur(2px)" : "none",
           transition: "filter 0.2s ease",
+          pointerEvents: isAiAnalyzing ? "none" : "auto",
         }}
       >
         {/* Notification area */}
@@ -2490,61 +2541,127 @@ BIG Marketplace Africa Team`;
           </div>
         )}
 
-        {/* AI Analysis Progress Overlay */}
-        {isAiAnalyzing && (
-          <div
-            style={{
-              position: "fixed",
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              backgroundColor: "rgba(0, 0, 0, 0.7)",
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              justifyContent: "center",
-              zIndex: 9999,
-              color: "white",
-            }}
-          >
-            <div
-              style={{
-                background: "white",
-                padding: "2rem",
-                borderRadius: "12px",
-                textAlign: "center",
-                color: "#5D2A0A",
-                minWidth: "300px",
-              }}
-            >
-              <Brain size={48} color="#5D2A0A" style={{ marginBottom: "1rem" }} />
-              <h3 style={{ marginBottom: "1rem" }}>AI Semantic Analysis</h3>
-              <p>Analyzing supplier capabilities...</p>
-              <div
-                style={{
-                  width: "100%",
-                  height: "8px",
-                  backgroundColor: "#E8D5C4",
-                  borderRadius: "4px",
-                  margin: "1rem 0",
-                  overflow: "hidden",
-                }}
-              >
-                <div
-                  style={{
-                    width: `${(aiAnalysisProgress.current / aiAnalysisProgress.total) * 100}%`,
-                    height: "100%",
-                    backgroundColor: "#5D2A0A",
-                    transition: "width 0.3s ease",
-                  }}
-                />
+        {/* AI Analysis Full Screen Loader - rendered via portal so it's always on top */}
+        {mounted && isAiAnalyzing && createPortal(
+          <div style={{
+            position: "fixed",
+            top: 0, left: 0, right: 0, bottom: 0,
+            backgroundColor: "rgba(0,0,0,0.75)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 99999,
+          }}>
+            <div style={{
+              background: "white",
+              padding: "2.5rem",
+              borderRadius: "16px",
+              textAlign: "center",
+              color: "#5D2A0A",
+              minWidth: "380px",
+              maxWidth: "480px",
+              boxShadow: "0 25px 50px rgba(0,0,0,0.3)",
+            }}>
+              {/* Animated brain icon */}
+              <div style={{
+                width: "80px", height: "80px",
+                borderRadius: "50%",
+                background: "linear-gradient(135deg, #5D2A0A, #a67c52)",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                margin: "0 auto 1.5rem auto",
+                animation: "pulse 1.5s ease-in-out infinite",
+              }}>
+                <Brain size={40} color="white" />
               </div>
-              <p style={{ fontSize: "0.875rem" }}>
-                {aiAnalysisProgress.current} of {aiAnalysisProgress.total} suppliers
+
+              <style>{`
+                @keyframes pulse {
+                  0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(93,42,10,0.4); }
+                  70% { transform: scale(1.05); box-shadow: 0 0 0 15px rgba(93,42,10,0); }
+                  100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(93,42,10,0); }
+                }
+                @keyframes shimmer {
+                  0% { background-position: -400px 0; }
+                  100% { background-position: 400px 0; }
+                }
+                @keyframes dotBounce {
+                  0%, 80%, 100% { transform: scale(0); opacity: 0.3; }
+                  40% { transform: scale(1); opacity: 1; }
+                }
+              `}</style>
+
+              <h3 style={{ margin: "0 0 0.5rem 0", fontSize: "1.25rem", fontWeight: "700" }}>
+                AI Semantic Analysis Running
+              </h3>
+              <p style={{ margin: "0 0 1.5rem 0", color: "#8D6E63", fontSize: "0.875rem" }}>
+                Analyzing supplier capabilities against your request...
+              </p>
+
+              {/* Progress bar */}
+              <div style={{
+                width: "100%", height: "10px",
+                backgroundColor: "#E8D5C4",
+                borderRadius: "5px",
+                margin: "0 0 0.75rem 0",
+                overflow: "hidden",
+              }}>
+                <div style={{
+                  height: "100%",
+                  background: "linear-gradient(90deg, #5D2A0A 0%, #a67c52 50%, #5D2A0A 100%)",
+                  backgroundSize: "400px 100%",
+                  borderRadius: "5px",
+                  animation: "shimmer 1.5s infinite linear",
+                  width: aiAnalysisProgress.total > 0
+                    ? `${Math.max(5, (aiAnalysisProgress.current / aiAnalysisProgress.total) * 100)}%`
+                    : "100%",
+                  transition: "width 0.5s ease",
+                }} />
+              </div>
+
+              {/* Supplier count */}
+              <p style={{ margin: "0 0 1.5rem 0", color: "#5D2A0A", fontSize: "0.875rem", fontWeight: "600" }}>
+                {aiAnalysisProgress.total > 0
+                  ? `Analyzing ${aiAnalysisProgress.total} supplier profiles...`
+                  : "Preparing analysis..."}
+              </p>
+
+              {/* Animated dots */}
+              <div style={{ display: "flex", justifyContent: "center", gap: "8px", marginBottom: "1.5rem" }}>
+                {[0, 1, 2].map(i => (
+                  <div key={i} style={{
+                    width: "10px", height: "10px",
+                    borderRadius: "50%",
+                    background: "#5D2A0A",
+                    animation: `dotBounce 1.4s ease-in-out ${i * 0.16}s infinite`,
+                  }} />
+                ))}
+              </div>
+
+              {/* What's happening */}
+              <div style={{
+                background: "#FFF8F5",
+                border: "1px solid #E8D5C4",
+                borderRadius: "8px",
+                padding: "1rem",
+                textAlign: "left",
+              }}>
+                <p style={{ margin: "0 0 0.5rem 0", fontSize: "0.75rem", fontWeight: "600", color: "#5D2A0A" }}>
+                  What's happening right now:
+                </p>
+                <ul style={{ margin: 0, paddingLeft: "1.25rem", color: "#7D5A50" }}>
+                  <li style={{ fontSize: "0.75rem", marginBottom: "0.25rem" }}>Reading each supplier's full product & service profile</li>
+                  <li style={{ fontSize: "0.75rem", marginBottom: "0.25rem" }}>Comparing against your specific request semantically</li>
+                  <li style={{ fontSize: "0.75rem", marginBottom: "0.25rem" }}>Scoring capability alignment & generating explanations</li>
+                  <li style={{ fontSize: "0.75rem" }}>Caching results so future loads are instant</li>
+                </ul>
+              </div>
+
+              <p style={{ margin: "1.25rem 0 0 0", fontSize: "0.7rem", color: "#A67C52" }}>
+                ⏱ This may take 30–60 seconds for large supplier lists
               </p>
             </div>
-          </div>
+          </div>,
+          document.body
         )}
 
         <div style={{ marginBottom: "2rem" }}>
@@ -2761,248 +2878,229 @@ BIG Marketplace Africa Team`;
                       ✖
                     </button>
                   </div>
+
                   <div style={modalBodyStyle}>
-                    {/* Score Comparison */}
-                    <div style={{
-                      display: "grid",
-                      gridTemplateColumns: "1fr 1fr 1fr", // Changed to 3 columns
-                      gap: "1rem",
-                      marginBottom: "2rem",
-                      paddingBottom: "1rem",
-                      borderBottom: "2px solid #E8D5C4",
-                    }}>
-                      <div style={{ textAlign: "center" }}>
-                        <div
-                          style={{
-                            fontSize: "2rem",
-                            fontWeight: "bold",
-                            color: getMatchScoreClass(secondaryBreakdownData?.primaryScore).color,
-                            marginBottom: "0.5rem",
-                          }}
-                        >
-                          {secondaryBreakdownData?.primaryScore}%
+                    {secondaryBreakdownData?.secondaryScore === null || secondaryBreakdownData?.secondaryScore === undefined ? (
+                      <div>
+                        <div style={{ textAlign: "center", padding: "2rem", background: "#FFF8E1", borderRadius: "8px", border: "1px solid #FFE0B2", marginBottom: "1.5rem" }}>
+                          <Brain size={48} color="#F57C00" style={{ marginBottom: "1rem" }} />
+                          <h3 style={{ color: "#5D2A0A", marginBottom: "0.5rem" }}>AI Analysis Pending</h3>
+                          <p style={{ color: "#7D5A50", fontSize: "0.875rem", marginBottom: "1.5rem" }}>
+                            Click <strong>"AI Analysis"</strong> to run semantic analysis on all {allSuppliers.length} suppliers.
+                          </p>
+                          <button onClick={() => { setShowSecondaryBreakdown(false); runSecondaryAiAnalysis(); }}
+                            style={{ padding: "0.75rem 1.5rem", background: "#5D2A0A", color: "white", border: "none", borderRadius: "6px", fontSize: "0.875rem", fontWeight: "600", cursor: "pointer" }}>
+                            Run AI Analysis Now
+                          </button>
                         </div>
-                        <p style={{ fontSize: "0.875rem", color: "#8D6E63", margin: 0 }}>
-                          Primary Match
-                        </p>
-                        <p style={{ fontSize: "0.75rem", color: "#A67C52", margin: "0.25rem 0 0 0" }}>
-                          Structured Data
-                        </p>
-                      </div>
-                      <div style={{ textAlign: "center" }}>
-                        <div
-                          style={{
-                            fontSize: "2rem",
-                            fontWeight: "bold",
-                            color: getSecondaryMatchColor(secondaryBreakdownData?.secondaryScore),
-                            marginBottom: "0.5rem",
-                          }}
-                        >
-                          {secondaryBreakdownData?.secondaryScore}%
-                        </div>
-                        <p style={{ fontSize: "0.875rem", color: "#8D6E63", margin: 0 }}>
-                          AI Semantic Match
-                        </p>
-                        <p style={{ fontSize: "0.75rem", color: "#A67C52", margin: "0.25rem 0 0 0" }}>
-                          Context & Meaning
-                        </p>
-                      </div>
-                      <div style={{ textAlign: "center" }}>
-                        <div
-                          style={{
-                            fontSize: "2.5rem", // Slightly larger for emphasis
-                            fontWeight: "bold",
-                            color: getSecondaryMatchColor(calculateCombinedMatchScore(
-                              secondaryBreakdownData?.primaryScore,
-                              secondaryBreakdownData?.secondaryScore
-                            )),
-                            marginBottom: "0.5rem",
-                          }}
-                        >
-                          {calculateCombinedMatchScore(
-                            secondaryBreakdownData?.primaryScore,
-                            secondaryBreakdownData?.secondaryScore
-                          )}%
-                        </div>
-                        <p style={{ fontSize: "0.875rem", color: "#8D6E63", margin: 0 }}>
-                          Combined Match
-                        </p>
-                        <p style={{ fontSize: "0.75rem", color: "#A67C52", margin: "0.25rem 0 0 0" }}>
-                          60% Primary + 40% AI
-                        </p>
-                      </div>
-                    </div>
-
-                    <div
-                      style={{
-                        background: "#F8F5F0",
-                        border: "1px solid #E8D5C4",
-                        borderRadius: "8px",
-                        padding: "1rem",
-                        marginBottom: "1.5rem",
-                      }}
-                    >
-                      <h4
-                        style={{
-                          fontSize: "0.875rem",
-                          fontWeight: "600",
-                          color: "#5D2A0A",
-                          margin: "0 0 0.5rem 0",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "0.5rem",
-                        }}
-                      >
-                        📊 Score Calculation
-                      </h4>
-                      <p style={{ fontSize: "0.75rem", color: "#5D2A0A", margin: 0, lineHeight: "1.4" }}>
-                        <strong>Secondary Match % = (Primary Match × 60%) + (AI Match × 40%)</strong><br />
-                        This combines structured data matching with AI semantic analysis for a more comprehensive assessment.
-                      </p>
-                    </div>
-
-                    {/* AI Reasoning */}
-                    <div
-                      style={{
-                        background: "#FEFCFA",
-                        border: "1px solid #E8D5C4",
-                        borderRadius: "8px",
-                        padding: "1.5rem",
-                        marginBottom: "1.5rem",
-                      }}
-                    >
-                      <h4
-                        style={{
-                          fontSize: "1rem",
-                          fontWeight: "600",
-                          color: "#5D2A0A",
-                          margin: "0 0 1rem 0",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "0.5rem",
-                        }}
-                      >
-                        <Brain size={18} />
-                        AI Analysis
-                      </h4>
-                      <p
-                        style={{
-                          fontSize: "0.875rem",
-                          lineHeight: "1.6",
-                          color: "#5D2A0A",
-                          margin: 0,
-                          whiteSpace: "pre-wrap",
-                        }}
-                      >
-                        {secondaryBreakdownData?.reasoning || "No reasoning provided."}
-                      </p>
-                    </div>
-
-                    {/* Matched Capabilities */}
-                    {secondaryBreakdownData?.capabilities &&
-                      secondaryBreakdownData.capabilities.length > 0 && (
-                        <div
-                          style={{
-                            background: "#F8F5F0",
-                            border: "1px solid #E8D5C4",
-                            borderRadius: "8px",
-                            padding: "1.5rem",
-                            marginBottom: "1.5rem",
-                          }}
-                        >
-                          <h4
-                            style={{
-                              fontSize: "1rem",
-                              fontWeight: "600",
-                              color: "#5D2A0A",
-                              margin: "0 0 1rem 0",
-                            }}
-                          >
-                            Matched Capabilities
+                        <div style={{ background: "#FEFCFA", border: "1px solid #E8D5C4", borderRadius: "8px", padding: "1.5rem" }}>
+                          <h4 style={{ color: "#5D2A0A", marginBottom: "1rem", fontSize: "0.875rem" }}>
+                            Current Primary Match Score: <span style={{ fontSize: "1.5rem", fontWeight: "bold", color: secondaryBreakdownData?.primaryScore >= 75 ? "#48BB78" : secondaryBreakdownData?.primaryScore >= 50 ? "#F6AD55" : "#F56565" }}>{secondaryBreakdownData?.primaryScore}%</span>
                           </h4>
-                          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
-                            {secondaryBreakdownData.capabilities.map((capability, index) => (
-                              <span
-                                key={index}
-                                style={{
-                                  background: "#E8F5E8",
-                                  color: "#388E3C",
-                                  padding: "0.5rem 0.75rem",
-                                  borderRadius: "16px",
-                                  fontSize: "0.75rem",
-                                  fontWeight: "500",
-                                  border: "1px solid #C8E6C9",
-                                }}
-                              >
-                                {capability}
-                              </span>
-                            ))}
+                          <p style={{ fontSize: "0.75rem", color: "#8D6E63", margin: 0 }}>Based on structured data matching (category, location, BBBEE, budget, delivery mode). AI analysis adds semantic understanding of actual service alignment.</p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div>
+                        {/* TOP SCORE SUMMARY */}
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "1rem", marginBottom: "2rem", paddingBottom: "1rem", borderBottom: "2px solid #E8D5C4" }}>
+                          <div style={{ textAlign: "center", background: "#F8F5F0", borderRadius: "8px", padding: "1rem" }}>
+                            <div style={{ fontSize: "2rem", fontWeight: "bold", color: getMatchScoreClass(secondaryBreakdownData?.primaryScore).color, marginBottom: "0.25rem" }}>
+                              {secondaryBreakdownData?.primaryScore}%
+                            </div>
+                            <p style={{ fontSize: "0.8rem", fontWeight: "600", color: "#5D2A0A", margin: "0 0 0.25rem 0" }}>Primary Match</p>
+                            <p style={{ fontSize: "0.7rem", color: "#8D6E63", margin: 0 }}>Structured Data Scoring</p>
+                          </div>
+                          <div style={{ textAlign: "center", background: "#F8F5F0", borderRadius: "8px", padding: "1rem" }}>
+                            <div style={{ fontSize: "2rem", fontWeight: "bold", color: getSecondaryMatchColor(secondaryBreakdownData?.secondaryScore), marginBottom: "0.25rem" }}>
+                              {secondaryBreakdownData?.secondaryScore}%
+                            </div>
+                            <p style={{ fontSize: "0.8rem", fontWeight: "600", color: "#5D2A0A", margin: "0 0 0.25rem 0" }}>AI Semantic Match</p>
+                            <p style={{ fontSize: "0.7rem", color: "#8D6E63", margin: 0 }}>Context & Meaning Analysis</p>
+                          </div>
+                          <div style={{ textAlign: "center", background: "#5D2A0A", borderRadius: "8px", padding: "1rem" }}>
+                            <div style={{ fontSize: "2.5rem", fontWeight: "bold", color: "white", marginBottom: "0.25rem" }}>
+                              {calculateCombinedMatchScore(secondaryBreakdownData?.primaryScore, secondaryBreakdownData?.secondaryScore)}%
+                            </div>
+                            <p style={{ fontSize: "0.8rem", fontWeight: "600", color: "#E8D5C4", margin: "0 0 0.25rem 0" }}>Combined Match</p>
+                            <p style={{ fontSize: "0.7rem", color: "#E8D5C4", margin: 0 }}>60% AI + 40% Primary</p>
                           </div>
                         </div>
-                      )}
 
-                    {/* Improvement Suggestions */}
-                    <div
-                      style={{
-                        background: "#FFF3E0",
-                        border: "1px solid #FFE0B2",
-                        borderRadius: "8px",
-                        padding: "1.5rem",
-                      }}
-                    >
-                      <h4
-                        style={{
-                          fontSize: "1rem",
-                          fontWeight: "600",
-                          color: "#5D2A0A",
-                          margin: "0 0 1rem 0",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "0.5rem",
-                        }}
-                      >
-                        <TrendingUp size={18} />
-                        To Improve Semantic Match
-                      </h4>
-                      <ul style={{ margin: 0, paddingLeft: "1.5rem", color: "#5D2A0A" }}>
-                        <li style={{ marginBottom: "0.5rem", fontSize: "0.875rem" }}>
-                          Add more detailed descriptions of products and services
-                        </li>
-                        <li style={{ marginBottom: "0.5rem", fontSize: "0.875rem" }}>
-                          Include specific use cases and client success stories
-                        </li>
-                        <li style={{ marginBottom: "0.5rem", fontSize: "0.875rem" }}>
-                          Highlight specialized expertise and unique capabilities
-                        </li>
-                        <li style={{ fontSize: "0.875rem" }}>
-                          Update target market descriptions to be more specific
-                        </li>
-                      </ul>
-                    </div>
+                        {/* PRIMARY MATCH DETAILED BREAKDOWN */}
+                        <div style={{ background: "#FEFCFA", border: "1px solid #E8D5C4", borderRadius: "8px", padding: "1.5rem", marginBottom: "1.5rem" }}>
+                          <h4 style={{ fontSize: "1rem", fontWeight: "600", color: "#5D2A0A", margin: "0 0 1.25rem 0", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                            📊 Primary Match Breakdown — What We Analyzed
+                          </h4>
+                          <p style={{ fontSize: "0.75rem", color: "#8D6E63", margin: "0 0 1rem 0" }}>
+                            These are the structured data criteria we compare between your application and this supplier's profile:
+                          </p>
+                          <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                            {secondaryBreakdownData?.supplier?.matchDetails && Object.entries(secondaryBreakdownData.supplier.matchDetails).map(([key, details]) => {
+                              const criteriaInfo = ENHANCED_MATCHING_CRITERIA[key];
+                              const weight = criteriaInfo ? criteriaInfo.weight * 100 : 0;
+                              const score = Math.round(details.score);
+                              const scoreColor = score >= 75 ? "#388E3C" : score >= 50 ? "#F57C00" : "#D32F2F";
+                              const getStatusIcon = (s) => s >= 75 ? "✅" : s >= 50 ? "⚠️" : "❌";
+                              const getStatusLabel = (s) => s >= 75 ? "Good match" : s >= 50 ? "Partial match" : "Poor match";
 
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "center",
-                        paddingTop: "1.5rem",
-                        borderTop: "1px solid #E8D5C4",
-                        marginTop: "1.5rem",
-                      }}
-                    >
-                      <button
-                        style={{
-                          padding: "0.75rem 2rem",
-                          background: "#5D2A0A",
-                          color: "white",
-                          border: "none",
-                          borderRadius: "6px",
-                          fontSize: "0.875rem",
-                          fontWeight: "500",
-                          cursor: "pointer",
-                          transition: "all 0.2s",
-                        }}
-                        onClick={() => setShowSecondaryBreakdown(false)}
-                      >
+                              const getCriteriaExplanation = (k, s, supplier, application) => {
+                                const sup = secondaryBreakdownData?.supplier;
+                                switch (k) {
+                                  case 'categoryMatch':
+                                    return s >= 75
+                                      ? `The supplier's product/service categories align well with your requested categories.${details.matches?.length > 0 ? ` Matched: ${details.matches.slice(0, 3).join(", ")}` : ""}`
+                                      : s >= 40
+                                        ? `Partial category overlap found.${details.matches?.length > 0 ? ` Some matches: ${details.matches.slice(0, 2).join(", ")}` : " Limited category alignment detected."}`
+                                        : `No strong category match. The supplier's listed categories don't align with what you requested.`;
+                                  case 'bbbeeMatch':
+                                    const bbbeeLevel = sup?.legalCompliance?.bbbeeLevel || "N/A";
+                                    return s >= 75
+                                      ? `Supplier BBBEE level (${bbbeeLevel}) meets or exceeds your requirement.`
+                                      : s >= 50
+                                        ? `Supplier BBBEE level (${bbbeeLevel}) is close to your preferred level but not exact.`
+                                        : `Supplier BBBEE level (${bbbeeLevel}) does not meet your transformation requirement.`;
+                                  case 'locationMatch':
+                                    const loc = sup?.entityOverview?.location || "Not specified";
+                                    return s >= 75
+                                      ? `Supplier is located in ${loc}, which matches your geographic preference.`
+                                      : s >= 40
+                                        ? `Supplier location (${loc}) is nearby or in the same region as your preference.`
+                                        : `Supplier is in ${loc}, which doesn't match your preferred location.`;
+                                  case 'deliveryMatch':
+                                    const modes = sup?.productsServices?.deliveryModes?.join(", ") || "Not specified";
+                                    return s >= 75
+                                      ? `Supplier delivery modes (${modes}) match your required delivery preferences.`
+                                      : s >= 40
+                                        ? `Supplier offers some compatible delivery modes (${modes}) but not all you require.`
+                                        : `Supplier delivery modes (${modes}) don't match your requirements.`;
+                                  case 'budgetMatch':
+                                    const revenue = sup?.financialOverview?.annualRevenue || "Not specified";
+                                    return s >= 75
+                                      ? `Supplier's revenue (${revenue}) indicates capacity within your budget range.`
+                                      : s >= 40
+                                        ? `Supplier's revenue (${revenue}) is somewhat aligned with your budget, but may be outside your ideal range.`
+                                        : `Supplier's revenue (${revenue}) suggests a capacity mismatch with your budget range.`;
+                                  case 'ownershipMatch':
+                                    return s >= 75
+                                      ? `Supplier's ownership profile meets your transformation/ownership preferences.`
+                                      : s >= 40
+                                        ? `Supplier partially meets your ownership preferences.`
+                                        : `Supplier ownership profile doesn't strongly match your preferences.`;
+                                  case 'ratingMatch':
+                                    const rating = sup?.rating || 0;
+                                    const ratingCount = sup?.ratingCount || 0;
+                                    return ratingCount === 0
+                                      ? `No ratings yet — this supplier has not been reviewed on the platform.`
+                                      : `Supplier has an average rating of ${rating.toFixed(1)}/5 based on ${ratingCount} review(s).`;
+                                  case 'experienceMatch':
+                                    return `Sector experience match is estimated at 50% (detailed experience data not yet fully captured in profile).`;
+                                  case 'urgencyLeadTimeMatch':
+                                    const urgency = sup?.applicationOverview?.urgency || sup?.urgency || "Not specified";
+                                    return `Supplier's typical lead time (${urgency}) compared to your urgency requirement.`;
+                                  default:
+                                    return details.description || "No additional detail available.";
+                                }
+                              };
+
+                              return (
+                                <div key={key} style={{ background: "#F8F5F0", borderRadius: "6px", padding: "0.75rem 1rem", borderLeft: `4px solid ${scoreColor}` }}>
+                                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.4rem" }}>
+                                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                                      <span style={{ fontSize: "0.85rem" }}>{getStatusIcon(score)}</span>
+                                      <span style={{ fontSize: "0.8rem", fontWeight: "600", color: "#5D2A0A" }}>{details.description}</span>
+                                    </div>
+                                    <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+                                      <span style={{ fontSize: "0.7rem", color: "#8D6E63" }}>Weight: {weight}%</span>
+                                      <span style={{ fontSize: "0.85rem", fontWeight: "bold", color: scoreColor }}>{score}%</span>
+                                    </div>
+                                  </div>
+                                  <div style={{ background: "#E8D5C4", borderRadius: "3px", height: "5px", marginBottom: "0.5rem" }}>
+                                    <div style={{ height: "100%", background: scoreColor, width: `${score}%`, borderRadius: "3px", transition: "width 0.3s ease" }} />
+                                  </div>
+                                  <p style={{ fontSize: "0.75rem", color: "#5D2A0A", margin: "0 0 0.25rem 0", lineHeight: "1.4" }}>
+                                    {getCriteriaExplanation(key, score)}
+                                  </p>
+                                  <span style={{ fontSize: "0.7rem", color: "#8D6E63" }}>
+                                    {getStatusLabel(score)} · Contributes {Math.round((score * weight) / 100)}% to total primary score
+                                  </span>
+                                  {/* Show matched categories chips */}
+                                  {key === 'categoryMatch' && details.matches && details.matches.length > 0 && (
+                                    <div style={{ display: "flex", flexWrap: "wrap", gap: "0.25rem", marginTop: "0.5rem" }}>
+                                      {details.matches.map((m, i) => (
+                                        <span key={i} style={{ background: "#E8F5E8", color: "#388E3C", padding: "0.2rem 0.5rem", borderRadius: "10px", fontSize: "0.65rem", border: "1px solid #C8E6C9" }}>{m}</span>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+
+                        {/* AI SEMANTIC ANALYSIS */}
+                        <div style={{ background: "#FEFCFA", border: "1px solid #E8D5C4", borderRadius: "8px", padding: "1.5rem", marginBottom: "1.5rem" }}>
+                          <h4 style={{ fontSize: "1rem", fontWeight: "600", color: "#5D2A0A", margin: "0 0 1rem 0", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                            <Brain size={18} />
+                            AI Semantic Analysis — Why this score?
+                          </h4>
+                          <div style={{ background: "#F8F5F0", borderRadius: "6px", padding: "1rem", marginBottom: "1rem", borderLeft: "4px solid #5D2A0A" }}>
+                            <p style={{ fontSize: "0.875rem", lineHeight: "1.7", color: "#5D2A0A", margin: 0, whiteSpace: "pre-wrap" }}>
+                              {secondaryBreakdownData?.reasoning || "No reasoning provided."}
+                            </p>
+                          </div>
+                          <p style={{ fontSize: "0.7rem", color: "#8D6E63", margin: 0 }}>
+                            The AI reads the supplier's actual product/service descriptions and compares them semantically to your request — going beyond category tags to understand real-world capability alignment.
+                          </p>
+                        </div>
+
+                        {/* MATCHED CAPABILITIES */}
+                        {secondaryBreakdownData?.capabilities && secondaryBreakdownData.capabilities.length > 0 && (
+                          <div style={{ background: "#F0FDF4", border: "1px solid #BBF7D0", borderRadius: "8px", padding: "1.5rem", marginBottom: "1.5rem" }}>
+                            <h4 style={{ fontSize: "1rem", fontWeight: "600", color: "#166534", margin: "0 0 0.75rem 0" }}>✅ Matched Capabilities</h4>
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
+                              {secondaryBreakdownData.capabilities.map((cap, i) => (
+                                <span key={i} style={{ background: "#DCFCE7", color: "#166534", padding: "0.4rem 0.75rem", borderRadius: "16px", fontSize: "0.75rem", fontWeight: "500", border: "1px solid #BBF7D0" }}>{cap}</span>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* GAPS / WHY NOT HIGHER */}
+                        {secondaryBreakdownData?.secondaryScore < 75 && (
+                          <div style={{ background: "#FFF7ED", border: "1px solid #FED7AA", borderRadius: "8px", padding: "1.5rem", marginBottom: "1.5rem" }}>
+                            <h4 style={{ fontSize: "1rem", fontWeight: "600", color: "#9A3412", margin: "0 0 0.75rem 0", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                              <TrendingUp size={18} />
+                              Why isn't the AI score higher?
+                            </h4>
+                            <ul style={{ margin: 0, paddingLeft: "1.25rem", color: "#7C2D12" }}>
+                              {secondaryBreakdownData?.secondaryScore < 40 && (
+                                <li style={{ marginBottom: "0.5rem", fontSize: "0.875rem" }}>The supplier's listed products/services have <strong>limited or no overlap</strong> with your requested service category.</li>
+                              )}
+                              {secondaryBreakdownData?.secondaryScore >= 40 && secondaryBreakdownData?.secondaryScore < 75 && (
+                                <li style={{ marginBottom: "0.5rem", fontSize: "0.875rem" }}>The supplier has <strong>some relevant capabilities</strong> but may serve a different target market or industry vertical.</li>
+                              )}
+                              <li style={{ marginBottom: "0.5rem", fontSize: "0.875rem" }}>The supplier's profile descriptions may be <strong>incomplete or use different terminology</strong> — view their full profile before deciding.</li>
+                              <li style={{ fontSize: "0.875rem" }}>AI scoring is based solely on <strong>publicly listed profile information</strong> — the supplier may have unlisted capabilities.</li>
+                            </ul>
+                          </div>
+                        )}
+
+                        {/* IMPROVEMENT TIPS */}
+                        <div style={{ background: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: "8px", padding: "1.5rem" }}>
+                          <h4 style={{ fontSize: "1rem", fontWeight: "600", color: "#1E40AF", margin: "0 0 0.75rem 0" }}>💡 How to improve this match</h4>
+                          <ul style={{ margin: 0, paddingLeft: "1.25rem", color: "#1E3A8A" }}>
+                            <li style={{ marginBottom: "0.5rem", fontSize: "0.875rem" }}>Add more detail to your service request description so AI can better match intent</li>
+                            <li style={{ marginBottom: "0.5rem", fontSize: "0.875rem" }}>View the supplier's full profile — their actual offerings may align more than the score suggests</li>
+                            <li style={{ fontSize: "0.875rem" }}>Re-run AI Analysis after updating your application criteria</li>
+                          </ul>
+                        </div>
+                      </div>
+                    )}
+
+                    <div style={{ display: "flex", justifyContent: "center", paddingTop: "1.5rem", borderTop: "1px solid #E8D5C4", marginTop: "1.5rem" }}>
+                      <button style={{ padding: "0.75rem 2rem", background: "#5D2A0A", color: "white", border: "none", borderRadius: "6px", fontSize: "0.875rem", fontWeight: "500", cursor: "pointer" }}
+                        onClick={() => setShowSecondaryBreakdown(false)}>
                         Close Analysis
                       </button>
                     </div>
@@ -3173,254 +3271,243 @@ BIG Marketplace Africa Team`;
                   </button>
                 </div>
                 <div style={modalBodyStyle}>
-                  <div
-                    style={{
-                      textAlign: "center",
-                      marginBottom: "2rem",
-                      paddingBottom: "1rem",
-                      borderBottom: "2px solid #E8D5C4",
-                    }}
-                  >
-                    <div
-                      style={{
-                        fontSize: "3rem",
-                        fontWeight: "bold",
-                        color:
-                          matchBreakdownData?.matchPercentage >= 80
-                            ? "#388E3C"
-                            : matchBreakdownData?.matchPercentage >= 60
-                              ? "#F57C00"
-                              : "#D32F2F",
-                        marginBottom: "0.5rem",
-                      }}
-                    >
+                  {/* Overall Score Header */}
+                  <div style={{ textAlign: "center", marginBottom: "2rem", paddingBottom: "1.5rem", borderBottom: "2px solid #E8D5C4" }}>
+                    <div style={{
+                      fontSize: "3.5rem", fontWeight: "bold", lineHeight: 1,
+                      color: matchBreakdownData?.matchPercentage >= 75 ? "#388E3C"
+                        : matchBreakdownData?.matchPercentage >= 50 ? "#F57C00" : "#D32F2F",
+                      marginBottom: "0.5rem"
+                    }}>
                       {matchBreakdownData?.matchPercentage}%
                     </div>
-                    <p
-                      style={{
-                        fontSize: "1rem",
-                        color: "#8D6E63",
-                        margin: "0",
-                      }}
-                    >
-                      Overall Match Score
+                    <p style={{ fontSize: "1rem", color: "#8D6E63", margin: "0 0 0.5rem 0" }}>Overall Primary Match Score</p>
+                    <p style={{ fontSize: "0.75rem", color: "#A67C52", margin: 0 }}>
+                      Based on structured data: categories, location, BBBEE, budget, delivery mode & more
                     </p>
                   </div>
 
-                  <div
-                    style={{
-                      display: "grid",
-                      gridTemplateColumns: "repeat(auto-fit, minmax(350px, 1fr))",
-                      gap: "1rem",
-                      marginBottom: "2rem",
-                    }}
-                  >
-                    {matchBreakdownData?.matchDetails &&
-                      Object.entries(matchBreakdownData.matchDetails).map(([key, details]) => {
-                        const criteriaInfo = ENHANCED_MATCHING_CRITERIA[key]
-                        const weight = criteriaInfo ? criteriaInfo.weight * 100 : 0
-                        const scoreColor = details.score >= 80 ? "#388E3C" : details.score >= 50 ? "#F57C00" : "#D32F2F"
+                  {/* Score Legend */}
+                  <div style={{ display: "flex", gap: "1rem", marginBottom: "1.5rem", justifyContent: "center", flexWrap: "wrap" }}>
+                    {[
+                      { color: "#388E3C", label: "Strong match (75–100%)" },
+                      { color: "#F57C00", label: "Partial match (50–74%)" },
+                      { color: "#D32F2F", label: "Weak match (0–49%)" },
+                    ].map((item, i) => (
+                      <div key={i} style={{ display: "flex", alignItems: "center", gap: "0.4rem", fontSize: "0.75rem", color: "#5D2A0A" }}>
+                        <div style={{ width: "12px", height: "12px", borderRadius: "50%", background: item.color }} />
+                        {item.label}
+                      </div>
+                    ))}
+                  </div>
 
-                        return (
-                          <div
-                            key={key}
-                            style={{
-                              background: "#FEFCFA",
-                              border: "1px solid #E8D5C4",
-                              borderRadius: "8px",
-                              padding: "1.25rem",
-                              borderLeft: `4px solid ${scoreColor}`,
-                            }}
-                          >
-                            <div
-                              style={{
-                                display: "flex",
-                                justifyContent: "space-between",
-                                alignItems: "flex-start",
-                                marginBottom: "0.75rem",
-                              }}
-                            >
-                              <h4
-                                style={{
-                                  fontSize: "0.875rem",
-                                  fontWeight: "600",
-                                  color: "#5D2A0A",
-                                  margin: "0",
-                                  lineHeight: "1.3",
-                                  flex: "1",
-                                }}
-                              >
+                  {/* Criteria Breakdown */}
+                  <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", marginBottom: "2rem" }}>
+                    {matchBreakdownData?.matchDetails && Object.entries(matchBreakdownData.matchDetails).map(([key, details]) => {
+                      const score = details.score ?? 0;
+                      const weight = details.weight ?? 0;
+                      const contribution = details.contribution ?? 0;
+                      const scoreColor = score >= 75 ? "#388E3C" : score >= 50 ? "#F57C00" : "#D32F2F";
+                      const statusIcon = score >= 75 ? "✅" : score >= 50 ? "⚠️" : "❌";
+
+                      // Human-readable explanation per criterion
+                      const getExplanation = (k, s, data) => {
+                        const sup = matchBreakdownData;
+                        switch (k) {
+                          case 'categoryMatch': {
+                            const matched = data.matches || [];
+                            const unmatched = data.unmatched || [];
+                            if (matched.length === 0 && unmatched.length === 0) {
+                              return "No categories were specified in your request to compare against.";
+                            }
+                            if (matched.length === 0) {
+                              return `None of your requested categories (${unmatched.join(", ")}) were found in this supplier's profile.`;
+                            }
+                            if (unmatched.length === 0) {
+                              return `All requested categories matched: ${matched.join(", ")}.`;
+                            }
+                            return `Matched ${matched.length} of ${matched.length + unmatched.length} categories. ✓ ${matched.join(", ")} | ✗ ${unmatched.join(", ")}`;
+                          }
+                          case 'bbbeeMatch': {
+                            const level = sup?.legalCompliance?.bbbeeLevel || "N/A";
+                            if (s === 50) return `No BBBEE preference was set in your request — neutral score applied. Supplier is Level ${level}.`;
+                            if (s >= 75) return `Supplier BBBEE Level ${level} meets your requirement.`;
+                            if (s >= 50) return `Supplier BBBEE Level ${level} is one level off your requirement.`;
+                            return `Supplier BBBEE Level ${level} does not meet your requirement.`;
+                          }
+                          case 'locationMatch': {
+                            const loc = sup?.entityOverview?.location || "Not specified";
+                            if (s === 50) return `No location preference was set — neutral score applied. Supplier is based in ${loc}.`;
+                            if (s >= 75) return `Supplier location (${loc}) matches your preference.`;
+                            if (s >= 40) return `Supplier (${loc}) is in the same general region as your preference.`;
+                            return `Supplier location (${loc}) does not match your preferred location.`;
+                          }
+                          case 'deliveryMatch': {
+                            const modes = sup?.productsServices?.deliveryModes?.join(", ") || "Not specified";
+                            if (s === 50) return `No delivery mode preference set — neutral score applied. Supplier offers: ${modes}.`;
+                            if (s >= 75) return `Supplier delivery modes (${modes}) fully match your requirements.`;
+                            if (s >= 40) return `Supplier (${modes}) partially matches your required delivery modes.`;
+                            return `Supplier delivery modes (${modes}) do not match your requirements.`;
+                          }
+                          case 'budgetMatch': {
+                            const revenue = sup?.financialOverview?.annualRevenue || "Not specified";
+                            if (s === 50) return `No budget range set — neutral score applied. Supplier revenue: ${revenue}.`;
+                            if (s >= 75) return `Supplier revenue (${revenue}) is within your specified budget range.`;
+                            if (s >= 40) return `Supplier revenue (${revenue}) is slightly outside your budget range.`;
+                            return `Supplier revenue (${revenue}) is significantly outside your budget range.`;
+                          }
+                          case 'ownershipMatch': {
+                            if (s === 50) return "No ownership preferences were set — neutral score applied.";
+                            if (s >= 75) return "Supplier's ownership profile meets your transformation preferences.";
+                            return "Supplier partially meets your ownership preferences.";
+                          }
+                          case 'ratingMatch': {
+                            const rating = sup?.rating || 0;
+                            const count = sup?.ratingCount || 0;
+                            if (count === 0) return "This supplier has not been rated yet on the platform.";
+                            return `Supplier has ${rating.toFixed(1)}/5 stars based on ${count} review(s).`;
+                          }
+                          case 'experienceMatch':
+                            return "Sector experience is estimated — detailed experience data not yet fully captured in this supplier's profile.";
+                          case 'urgencyLeadTimeMatch': {
+                            const urgency = sup?.urgency || sup?.applicationOverview?.urgency || "Not specified";
+                            return `Supplier's typical lead time is ${urgency}. This is compared to your urgency requirement.`;
+                          }
+                          default:
+                            return "No additional detail available.";
+                        }
+                      };
+
+                      return (
+                        <div key={key} style={{
+                          background: "#FEFCFA",
+                          border: `1px solid ${scoreColor}30`,
+                          borderLeft: `5px solid ${scoreColor}`,
+                          borderRadius: "8px",
+                          padding: "1rem",
+                        }}>
+                          {/* Row 1: Label + Score */}
+                          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
+                            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                              <span>{statusIcon}</span>
+                              <span style={{ fontWeight: "600", fontSize: "0.875rem", color: "#5D2A0A" }}>
                                 {details.description}
-                              </h4>
-                              <span
-                                style={{
-                                  fontSize: "1.25rem",
-                                  fontWeight: "bold",
-                                  color: scoreColor,
-                                  marginLeft: "1rem",
-                                }}
-                              >
-                                {Math.round(details.score)}%
                               </span>
                             </div>
-
-                            <div
-                              style={{
-                                background: "#E8D5C4",
-                                borderRadius: "4px",
-                                height: "8px",
-                                overflow: "hidden",
-                                marginBottom: "0.5rem",
-                              }}
-                            >
-                              <div
-                                style={{
-                                  height: "100%",
-                                  background: scoreColor,
-                                  width: `${details.score}%`,
-                                  transition: "width 0.3s ease",
-                                }}
-                              />
-                            </div>
-
-                            <div
-                              style={{
-                                display: "flex",
-                                justifyContent: "space-between",
-                                alignItems: "center",
-                              }}
-                            >
-                              <span
-                                style={{
-                                  fontSize: "0.75rem",
-                                  color: "#8D6E63",
-                                }}
-                              >
-                                Weight: {weight}%
+                            <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+                              <span style={{ fontSize: "0.7rem", color: "#8D6E63" }}>
+                                Weight: <strong>{weight}%</strong>
                               </span>
-                              <span
-                                style={{
-                                  fontSize: "0.75rem",
-                                  color: "#8D6E63",
-                                }}
-                              >
-                                Contribution: {Math.round((details.score * weight) / 100)}%
+                              <span style={{ fontSize: "0.7rem", color: "#8D6E63" }}>
+                                Contributes: <strong>+{contribution}%</strong>
+                              </span>
+                              <span style={{ fontSize: "1.1rem", fontWeight: "bold", color: scoreColor }}>
+                                {score}%
                               </span>
                             </div>
+                          </div>
 
-                            {/* Show matched categories for category match */}
-                            {key === 'categoryMatch' && details.matches && details.matches.length > 0 && (
-                              <div style={{ marginTop: '0.75rem', paddingTop: '0.75rem', borderTop: '1px solid #E8D5C4' }}>
-                                <span style={{ fontSize: "0.75rem", color: "#8D6E63", fontWeight: "600" }}>
-                                  Matched Categories:
+                          {/* Progress bar */}
+                          <div style={{ background: "#E8D5C4", borderRadius: "4px", height: "7px", marginBottom: "0.6rem" }}>
+                            <div style={{
+                              height: "100%", borderRadius: "4px",
+                              background: scoreColor,
+                              width: `${score}%`,
+                              transition: "width 0.4s ease"
+                            }} />
+                          </div>
+
+                          {/* Explanation */}
+                          <p style={{ fontSize: "0.8rem", color: "#5D2A0A", margin: "0 0 0.35rem 0", lineHeight: "1.5" }}>
+                            {getExplanation(key, score, details)}
+                          </p>
+
+                          {/* Category chips for category match */}
+                          {key === 'categoryMatch' && details.matches && details.matches.length > 0 && (
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: "0.3rem", marginTop: "0.4rem" }}>
+                              {details.matches.map((m, i) => (
+                                <span key={i} style={{
+                                  background: "#E8F5E8", color: "#388E3C",
+                                  padding: "0.2rem 0.5rem", borderRadius: "10px",
+                                  fontSize: "0.7rem", border: "1px solid #C8E6C9"
+                                }}>✓ {m}</span>
+                              ))}
+                              {(details.unmatched || []).map((m, i) => (
+                                <span key={`u-${i}`} style={{
+                                  background: "#FFEBEE", color: "#D32F2F",
+                                  padding: "0.2rem 0.5rem", borderRadius: "10px",
+                                  fontSize: "0.7rem", border: "1px solid #FFCDD2"
+                                }}>✗ {m}</span>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  {/* Score formula note */}
+                  <div style={{
+                    background: "#F8F5F0", border: "1px solid #E8D5C4",
+                    borderRadius: "8px", padding: "1rem", marginBottom: "1.5rem",
+                    fontSize: "0.75rem", color: "#5D2A0A", lineHeight: "1.6"
+                  }}>
+                    <strong>📊 How this score is calculated:</strong><br />
+                    Each criterion has a weight (shown above). The score for each criterion (0–100%) is multiplied by its weight and summed to produce the overall match %. For example, Category Alignment (weight 40%) scoring 75% contributes 30% to the total.
+                  </div>
+
+                  {/* Improvement section - only show criteria scoring below 75% */}
+                  {matchBreakdownData?.matchDetails && Object.entries(matchBreakdownData.matchDetails).some(([, d]) => (d.score ?? 0) < 75) && (
+                    <div style={{
+                      background: "#FFF3E0", border: "1px solid #FFE0B2",
+                      borderRadius: "8px", padding: "1.5rem", marginBottom: "1.5rem"
+                    }}>
+                      <h4 style={{ fontSize: "1rem", fontWeight: "600", color: "#5D2A0A", margin: "0 0 1rem 0" }}>
+                        🔧 How to Improve This Match Score
+                      </h4>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+                        {Object.entries(matchBreakdownData.matchDetails)
+                          .filter(([, d]) => (d.score ?? 0) < 75)
+                          .sort(([, a], [, b]) => (b.weight ?? 0) - (a.weight ?? 0)) // highest weight first
+                          .map(([key, details]) => {
+                            const suggestions = {
+                              categoryMatch: "Expand your service/product categories in your profile to include more relevant terms that align with customer needs.",
+                              bbbeeMatch: "Improve your BBBEE certification level — even moving one level has a significant impact on matching.",
+                              locationMatch: "Add remote or national delivery capability to your profile if you can serve clients outside your base location.",
+                              deliveryMatch: "Add more delivery modes (on-site, remote, hybrid) to broaden your compatibility with customer preferences.",
+                              budgetMatch: "Ensure your annual revenue and pricing tiers are accurately reflected in your financial profile.",
+                              ownershipMatch: "Ensure your ownership demographics (Black-owned, Women-owned, Youth-owned) are fully captured in your profile.",
+                              ratingMatch: "Encourage satisfied clients to leave reviews on the platform to improve your rating score.",
+                              experienceMatch: "Add detailed sector experience, case studies, and client names to your profile.",
+                              urgencyLeadTimeMatch: "Update your profile to reflect your actual delivery lead times and availability.",
+                            };
+                            return (
+                              <div key={key} style={{
+                                background: "white", border: "1px solid #E8D5C4",
+                                borderRadius: "6px", padding: "0.75rem",
+                                display: "flex", gap: "0.75rem", alignItems: "flex-start"
+                              }}>
+                                <span style={{ fontSize: "0.75rem", fontWeight: "700", color: "#F57C00", whiteSpace: "nowrap" }}>
+                                  {details.weight}% weight
                                 </span>
-                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem', marginTop: '0.25rem' }}>
-                                  {details.matches.map((category, idx) => (
-                                    <span
-                                      key={idx}
-                                      style={{
-                                        background: '#E8F5E8',
-                                        color: '#388E3C',
-                                        padding: '0.25rem 0.5rem',
-                                        borderRadius: '12px',
-                                        fontSize: '0.7rem',
-                                      }}
-                                    >
-                                      {category}
-                                    </span>
-                                  ))}
+                                <div>
+                                  <div style={{ fontSize: "0.8rem", fontWeight: "600", color: "#D32F2F", marginBottom: "0.2rem" }}>
+                                    {details.description} — currently {details.score}%
+                                  </div>
+                                  <div style={{ fontSize: "0.78rem", color: "#5D2A0A", lineHeight: "1.4" }}>
+                                    {suggestions[key] || "Review your profile to ensure all relevant information is complete and accurate."}
+                                  </div>
                                 </div>
                               </div>
-                            )}
-                          </div>
-                        )
-                      })}
-                  </div>
-
-                  <div
-                    style={{
-                      background: "#F5EBE0",
-                      border: "1px solid #E8D5C4",
-                      borderRadius: "8px",
-                      padding: "1.5rem",
-                      marginBottom: "2rem",
-                    }}
-                  >
-                    <h4
-                      style={{
-                        fontSize: "1rem",
-                        fontWeight: "600",
-                        color: "#5D2A0A",
-                        margin: "0 0 1rem 0",
-                      }}
-                    >
-                      How to Improve Your Match Score:
-                    </h4>
-                    <div
-                      style={{
-                        display: "grid",
-                        gridTemplateColumns: "repeat(auto-fit, minmax(250px, 1fr))",
-                        gap: "1rem",
-                      }}
-                    >
-                      {matchBreakdownData?.matchDetails &&
-                        Object.entries(matchBreakdownData.matchDetails)
-                          .filter(([key, details]) => details.score < 70)
-                          .map(([key, details]) => (
-                            <div
-                              key={key}
-                              style={{
-                                background: "white",
-                                border: "1px solid #E8D5C4",
-                                borderRadius: "6px",
-                                padding: "1rem",
-                              }}
-                            >
-                              <h5
-                                style={{
-                                  fontSize: "0.875rem",
-                                  fontWeight: "600",
-                                  color: "#D32F2F",
-                                  margin: "0 0 0.5rem 0",
-                                }}
-                              >
-                                {details.description}
-                              </h5>
-                              <p
-                                style={{
-                                  fontSize: "0.8rem",
-                                  color: "#5D2A0A",
-                                  margin: "0",
-                                  lineHeight: "1.4",
-                                }}
-                              >
-                                {getImprovementSuggestion(key, details.score)}
-                              </p>
-                            </div>
-                          ))}
+                            );
+                          })}
+                      </div>
                     </div>
-                  </div>
+                  )}
 
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "center",
-                      paddingTop: "1.5rem",
-                      borderTop: "1px solid #E8D5C4",
-                    }}
-                  >
+                  <div style={{ display: "flex", justifyContent: "center", paddingTop: "1.5rem", borderTop: "1px solid #E8D5C4" }}>
                     <button
-                      style={{
-                        padding: "0.75rem 2rem",
-                        background: "#5D2A0A",
-                        color: "white",
-                        border: "none",
-                        borderRadius: "6px",
-                        fontSize: "0.875rem",
-                        fontWeight: "500",
-                        cursor: "pointer",
-                        transition: "all 0.2s",
-                      }}
+                      style={{ padding: "0.75rem 2rem", background: "#5D2A0A", color: "white", border: "none", borderRadius: "6px", fontSize: "0.875rem", fontWeight: "500", cursor: "pointer" }}
                       onClick={() => setShowMatchBreakdown(false)}
                     >
                       Close Breakdown

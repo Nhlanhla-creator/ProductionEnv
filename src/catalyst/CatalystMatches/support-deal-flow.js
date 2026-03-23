@@ -30,16 +30,14 @@ const PipelineSkeleton = () => (
 
 // ─── Stage definitions ────────────────────────────────────────────────────────
 const STAGES = [
-  { id: "initial", name: "Matching", description: "Total SMEs matched to this programme" },
-  { id: "application", name: "Application", description: "Formal applications received" },
-  { id: "review", name: "Evaluation", description: "Applications currently under review" },
-  { id: "approved", name: "Due Diligence", description: "SMEs progressed to due diligence" },
-  { id: "supported", name: "Support Approved", description: "Applications with support approved" },
-  { id: "active", name: "Active Support", description: "SMEs actively receiving support" },
-  { id: "funding", name: "Decision", description: "Awaiting final funding decision" },
-  { id: "termsheet", name: "Term Sheet", description: "Term sheet issued" },
-  { id: "closed", name: "Deal Closed", description: "Deals successfully closed" },
-  { id: "rejected", name: "Withdrawn / Declined", description: "Applications withdrawn or declined" },
+  { id: "initial",     name: "Matching",     description: "Total SMEs matched to this programme" },
+  { id: "application", name: "Application",  description: "Formal applications received" },
+  { id: "review",      name: "Evaluation",   description: "Applications currently under review" },
+  { id: "approved",    name: "Due Diligence",description: "SMEs progressed to due diligence" },
+  { id: "funding",     name: "Decision",     description: "Awaiting final funding decision" },
+  { id: "termsheet",   name: "Term Sheet",   description: "Term sheet issued" },
+  { id: "active",      name: "Active",       description: "SMEs actively receiving support" },
+  { id: "rejected",    name: "Decline",      description: "Applications declined" },
 ];
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -56,16 +54,17 @@ export function SupportDealFlowPipeline({ onStageClick, smeOverrides = [] }) {
 
   const counts = useMemo(() => {
     const stageMapping = {
-      initial: () => true,
+      initial:     () => true,
       application: (s) => ["new application", "application sent"].includes(s),
-      review: (s) => ["under review", "in review", "evaluation"].includes(s),
-      approved: (s) => ["due diligence", "shortlisted"].includes(s),
-      supported: (s) => ["support approved"].includes(s),
-      funding: (s) => ["decision"].includes(s),
-      active: (s) => ["active support"].includes(s),
-      termsheet: (s) => ["term sheet"].includes(s),
-      closed: (s) => ["deal closed"].includes(s),
-      rejected: (s) => ["rejected", "withdrawn", "declined", "support declined"].includes(s),
+      review:      (s) => ["under review", "in review", "evaluation"].includes(s),
+      approved:    (s) => ["due diligence", "shortlisted"].includes(s),
+      funding:     (s) => ["decision"].includes(s),
+      // new: "term sheet" | old: no equivalent
+      termsheet:   (s) => ["term sheet","support approved"].includes(s),
+      // new: "active"     | old: "active support", "support approved"
+      active:      (s) => ["active", "active support", ].includes(s),
+      // new: "decline"    | old: "support declined", "rejected", "withdrawn", "declined"
+      rejected:    (s) => ["decline", "support declined", "rejected", "withdrawn", "declined"].includes(s),
     }
     const result = {}
     for (const [id, test] of Object.entries(stageMapping)) {

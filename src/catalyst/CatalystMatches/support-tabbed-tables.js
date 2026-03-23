@@ -3,6 +3,8 @@
 import { useState, useRef, useEffect, useCallback } from "react"
 import { Eye, X, Trophy, Calendar, DollarSign, Users, Package, Award, Building, Ticket, Copy, CheckCircle } from "lucide-react"
 import { SupportSMETable } from "./support-sme-table"
+import { auth, db } from "../../firebaseConfig"
+import { collection, addDoc, getDocs, query, where, doc, updateDoc, getDoc } from "firebase/firestore"
 
 // Successful Support Deals Table Component
 const SuccessfulSupportDealsTable = ({ successfulDeals }) => {
@@ -12,6 +14,7 @@ const SuccessfulSupportDealsTable = ({ successfulDeals }) => {
   const [voucherSeats, setVoucherSeats] = useState(1)
   const [generatedVoucher, setGeneratedVoucher] = useState(null)
   const [copied, setCopied] = useState(false)
+  const [savingVoucher, setSavingVoucher] = useState(false)
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -30,7 +33,7 @@ const SuccessfulSupportDealsTable = ({ successfulDeals }) => {
 
   // Generate voucher code
   const generateVoucherCode = (type) => {
-    const prefix = type === "legitimacy" ? "LG" : type === "capital" ? "CA" : "GV"
+    const prefix = type === "legitimacy" ? "LG" : type === "capital" ? "CA" : type === "governance" ? "GV" : "PR"
     const randomPart = Math.random().toString(36).substring(2, 8).toUpperCase()
     const seatsPart = voucherSeats.toString().padStart(2, '0')
     return `${prefix}${seatsPart}${randomPart}`
@@ -43,15 +46,53 @@ const SuccessfulSupportDealsTable = ({ successfulDeals }) => {
     setVoucherSeats(1)
   }
 
-  const handleConfirmVoucher = () => {
+  const handleConfirmVoucher = async () => {
+    const user = auth.currentUser
+    if (!user) {
+      alert("Please log in to generate vouchers")
+      return
+    }
+
     const code = generateVoucherCode(voucherType)
-    setGeneratedVoucher({
-      code,
-      type: voucherType,
-      seats: voucherSeats,
-      createdAt: new Date().toISOString(),
-      expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString()
-    })
+    setSavingVoucher(true)
+
+    try {
+      const voucherData = {
+        code: code,
+        type: voucherType,
+        seats: voucherSeats,
+        planName: voucherType === "premium" ? "Premium" : 
+                   voucherType === "legitimacy" ? "Standard" : 
+                   voucherType === "capital" ? "Premium" : "Standard",
+        createdAt: new Date().toISOString(),
+        expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+        status: "active",
+        remainingSeats: voucherSeats,
+        redeemedSeats: [],
+        voucherCodes: [code],
+        createdBy: user.uid,
+        createdForSME: selectedDeal?.id || null,
+        catalystId: user.uid,
+        smeId: selectedDeal?.id || null,
+        smeName: selectedDeal?.smseName || null
+      }
+
+      // Save to Firebase
+      const vouchersRef = collection(db, "vouchers")
+      const docRef = await addDoc(vouchersRef, voucherData)
+      
+      setGeneratedVoucher({
+        ...voucherData,
+        id: docRef.id
+      })
+      
+      console.log("✅ Voucher saved to Firebase:", docRef.id)
+    } catch (error) {
+      console.error("❌ Error saving voucher:", error)
+      alert("Failed to save voucher. Please try again.")
+    } finally {
+      setSavingVoucher(false)
+    }
   }
 
   const handleCopyCode = () => {
@@ -182,7 +223,7 @@ const SuccessfulSupportDealsTable = ({ successfulDeals }) => {
             <li><strong>Boost Governance Score</strong> - Strengthen business structure</li>
           </ul>
           <p style={{ margin: "12px 0 0 0", color: "#a67c52", fontSize: "0.85rem", fontStyle: "italic" }}>
-            💡 SMEs can check "My Purchases" to see if you've sent them vouchers!
+            💡 SMEs can check "Successful Deals" to see if you've sent them vouchers!
           </p>
         </div>
       </div>
@@ -399,21 +440,21 @@ const SuccessfulSupportDealsTable = ({ successfulDeals }) => {
 
                 <button
                   onClick={handleConfirmVoucher}
-                  disabled={!voucherType}
+                  disabled={!voucherType || savingVoucher}
                   style={{
                     width: "100%",
                     padding: "16px",
-                    backgroundColor: !voucherType ? "#ccc" : "#a67c52",
+                    backgroundColor: (!voucherType || savingVoucher) ? "#ccc" : "#a67c52",
                     color: "white",
                     border: "none",
                     borderRadius: "10px",
                     fontSize: "16px",
                     fontWeight: "600",
-                    cursor: !voucherType ? "not-allowed" : "pointer",
+                    cursor: (!voucherType || savingVoucher) ? "not-allowed" : "pointer",
                     transition: "all 0.3s ease",
                   }}
                 >
-                  Generate Voucher
+                  {savingVoucher ? "Saving Voucher..." : "Generate Voucher"}
                 </button>
               </>
             ) : (
