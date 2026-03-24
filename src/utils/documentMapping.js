@@ -23,7 +23,7 @@ export const DOCUMENT_MAPPING = {
   "Bank Details Confirmation Letter": { id: "bankDetailsConfirmation", category: DOCUMENT_CATEGORIES.ADDITIONAL },
   "Business Plan": { id: "businessPlan", category: DOCUMENT_CATEGORIES.ADDITIONAL },
   "Financial Statements": { id: "financialStatements", category: DOCUMENT_CATEGORIES.ADDITIONAL },
-  "Guarantee/Contract": { id: "guaranteeContract", category: DOCUMENT_CATEGORIES.ADDITIONAL },
+  "Guarantee/Collateral": { id: "guaranteeContract", category: DOCUMENT_CATEGORIES.ADDITIONAL },
   "Impact Statements": { id: "impactStatements", category: DOCUMENT_CATEGORIES.ADDITIONAL },
   "Loan Agreements": { id: "loanAgreements", category: DOCUMENT_CATEGORIES.ADDITIONAL },
   "Pitch Deck": { id: "pitchDeck", category: DOCUMENT_CATEGORIES.ADDITIONAL },
