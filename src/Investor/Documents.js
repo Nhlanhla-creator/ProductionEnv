@@ -5,9 +5,12 @@ import { getAuth } from "firebase/auth"
 import { getDoc, doc, updateDoc, serverTimestamp } from "firebase/firestore"
 import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage"
 import { db } from "../firebaseConfig"
-import { FileText, ExternalLink, Upload } from "lucide-react"
+import { FileText, ExternalLink, Upload, Filter, ChevronDown } from "lucide-react"
 import get from "lodash.get"
 import { onAuthStateChanged } from "firebase/auth"
+import { getFunctions, httpsCallable } from "firebase/functions"
+
+const functions = getFunctions()
 
 const DOCUMENT_PATHS = {
   "Company Logo": "formData.entityOverview.companyLogo",
@@ -29,13 +32,25 @@ const getDocumentURL = (label, data) => {
   return get(data, DOCUMENT_PATHS[label])
 }
 
+const getDocumentUpdatedAt = (label, data) => {
+  const path = DOCUMENT_PATHS[label]
+  const parts = path.split(".")
+  const timestampPath = parts.length === 1 ? `${parts[0]}UpdatedAt` : `${parts.slice(0, -1).join(".")}.UpdatedAt`
+  return get(data, timestampPath)
+}
+
 const Documents = () => {
   const [profileData, setProfileData] = useState({})
   const [submittedDocuments, setSubmittedDocuments] = useState([])
   const [filter, setFilter] = useState("all")
+  const [statusFilter, setStatusFilter] = useState("all")
   const [searchTerm, setSearchTerm] = useState("")
   const [loading, setLoading] = useState(true)
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
+  const [isUploading, setIsUploading] = useState(false)
+  const [isOverlayVisible, setIsOverlayVisible] = useState(false)
+  const [validationResults, setValidationResults] = useState({})
+  const [showStatusFilter, setShowStatusFilter] = useState(false)
 
   useEffect(() => {
     const observer = new MutationObserver((mutations) => {
@@ -57,6 +72,17 @@ const Documents = () => {
 
     return () => observer.disconnect()
   }, [])
+
+  // Handle click outside for status filter
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (showStatusFilter && !event.target.closest('th')) {
+        setShowStatusFilter(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [showStatusFilter])
 
   useEffect(() => {
     const auth = getAuth()
@@ -84,15 +110,101 @@ const Documents = () => {
     return () => unsubscribe()
   }, [])
 
+  const getRegisteredName = async () => {
+    const user = getAuth().currentUser
+    if (!user) return null
+
+    try {
+      const profileRef = doc(db, "MyuniversalProfiles", user.uid)
+      const profileSnap = await getDoc(profileRef)
+      if (profileSnap.exists()) {
+        const data = profileSnap.data()
+        return data.entityOverview?.registeredName || data.fundName || ""
+      }
+    } catch (error) {
+      console.error("Error fetching registered name:", error)
+    }
+    return null
+  }
+
+  const validateDocumentWithAI = async (docLabel, file, registeredName) => {
+    try {
+      const base64Data = await new Promise((resolve) => {
+        const reader = new FileReader()
+        reader.readAsDataURL(file)
+        reader.onload = () => resolve(reader.result.split(',')[1])
+      })
+
+      const validateMyDocument = httpsCallable(functions, 'validateMyDocument')
+
+      const result = await validateMyDocument({
+        documentLabel: docLabel,
+        base64File: base64Data,
+        mimeType: file.type,
+        registeredName: registeredName,
+      })
+
+      return result.data.validationResult
+    } catch (error) {
+      console.error("AI validation failed:", error)
+      throw new Error("Network error - please check your connection and try again")
+    }
+  }
+
   const handleFileUpload = async (docLabel, file) => {
     const auth = getAuth()
     const user = auth.currentUser
     if (!user || !file) return
 
-    const storage = getStorage()
-    const storageRef = ref(storage, `MyuniversalProfiles/documents/${user.uid}/${docLabel}.pdf`)
+    const allowedTypes = ['.pdf', '.jpg', '.jpeg', '.png', '.svg', '.doc', '.docx']
+    const fileExtension = file.name.toLowerCase().split('.').pop()
+    
+    if (!allowedTypes.includes(`.${fileExtension}`)) {
+      setValidationResults(prev => ({
+        ...prev,
+        [docLabel]: {
+          isValid: false,
+          status: "rejected",
+          message: `Invalid file type. Please upload PDF, Word, or Image files.`,
+          warnings: []
+        }
+      }))
+      alert(`Invalid file type. Please upload PDF, Word, or Image files.`)
+      return
+    }
+
+    const maxSize = 10 * 1024 * 1024
+    if (file.size > maxSize) {
+      setValidationResults(prev => ({
+        ...prev,
+        [docLabel]: {
+          isValid: false,
+          status: "rejected",
+          message: `File size exceeds 10MB limit. Please upload a smaller file.`,
+          warnings: []
+        }
+      }))
+      alert(`File size exceeds 10MB limit. Please upload a smaller file.`)
+      return
+    }
+
+    setIsUploading(true)
+    setIsOverlayVisible(true)
 
     try {
+      const registeredName = await getRegisteredName()
+      const validationResult = await validateDocumentWithAI(docLabel, file, registeredName)
+      
+      setValidationResults(prev => ({
+        ...prev,
+        [docLabel]: validationResult
+      }))
+
+      const storage = getStorage()
+      const timestamp = Date.now()
+      const filePath = `MyuniversalProfiles/documents/${user.uid}/${docLabel.replace(/\s+/g, '_')}_${timestamp}.${fileExtension}`
+      const storageRef = ref(storage, filePath)
+
       await uploadBytes(storageRef, file)
       const downloadURL = await getDownloadURL(storageRef)
 
@@ -118,19 +230,69 @@ const Documents = () => {
         setProfileData(updatedProfileSnap.data())
       }
 
-      alert(`${docLabel} uploaded successfully.`)
+      if (validationResult.message && validationResult.message !== "Document verified") {
+        alert(`${docLabel} uploaded: ${validationResult.message}`)
+      } else {
+        alert(`${docLabel} uploaded successfully.`)
+      }
     } catch (error) {
       console.error("Upload failed:", error)
+      alert(error.message || "Upload failed. Please try again.")
+    } finally {
+      setIsUploading(false)
+      setTimeout(() => {
+        setIsOverlayVisible(false)
+      }, 300)
     }
   }
 
-  const filteredDocuments = DOCUMENTS.filter((doc) => {
-    const isSubmitted = submittedDocuments.includes(doc)
-    const matchFilter =
-      filter === "all" || (filter === "submitted" && isSubmitted) || (filter === "pending" && !isSubmitted)
-    const matchSearch = doc.toLowerCase().includes(searchTerm.toLowerCase())
-    return matchFilter && matchSearch
-  })
+  const getDocumentStatus = (docLabel) => {
+    const url = getDocumentURL(docLabel, profileData)
+    const validation = validationResults[docLabel]
+    
+    if (!url) return "pending"
+    
+    if (validation) {
+      if (validation.status === "verified" || validation.status === "verified:not_audited") return "verified"
+      if (validation.status === "expired") return "expired"
+      if (validation.status === "rejected" || validation.status === "wrong_type" || validation.status === "name_mismatch" || validation.status === "incomplete") {
+        return "rejected"
+      }
+    }
+    
+    return "uploaded"
+  }
+
+  const getStatusBadge = (docLabel) => {
+    const status = getDocumentStatus(docLabel)
+    
+    const styles = {
+      pending: { backgroundColor: "#fff3e0", color: "#ef6c00", text: "Pending" },
+      uploaded: { backgroundColor: "#e3f2fd", color: "#0d47a1", text: "Uploaded" },
+      verified: { backgroundColor: "#e8f5e8", color: "#2e7d32", text: "Verified" },
+      expired: { backgroundColor: "#fff3e0", color: "#c62828", text: "Expired" },
+      rejected: { backgroundColor: "#ffebee", color: "#c62828", text: "Rejected" }
+    }
+    
+    const style = styles[status] || styles.pending
+    
+    return (
+      <span
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          padding: "4px 8px",
+          borderRadius: "12px",
+          fontSize: "11px",
+          fontWeight: "600",
+          backgroundColor: style.backgroundColor,
+          color: style.color,
+        }}
+      >
+        {style.text}
+      </span>
+    )
+  }
 
   const renderDocumentLink = (label) => {
     const url = getDocumentURL(label, profileData)
@@ -179,27 +341,20 @@ const Documents = () => {
     )
   }
 
-  const getStatusBadge = (docLabel) => {
-    const url = getDocumentURL(docLabel, profileData)
-    const isUploaded = !!url
-
-    return (
-      <span
-        style={{
-          display: "inline-flex",
-          alignItems: "center",
-          padding: "4px 8px",
-          borderRadius: "12px",
-          fontSize: "11px",
-          fontWeight: "600",
-          backgroundColor: isUploaded ? "#e8f5e8" : "#ffebee",
-          color: isUploaded ? "#2e7d32" : "#c62828",
-        }}
-      >
-        {isUploaded ? "Uploaded" : "Pending"}
-      </span>
-    )
-  }
+  const filteredDocuments = DOCUMENTS.filter((doc) => {
+    const status = getDocumentStatus(doc)
+    const matchFilter =
+      filter === "all" ||
+      (filter === "submitted" && status !== "pending") ||
+      (filter === "pending" && status === "pending")
+    
+    const matchStatusFilter =
+      statusFilter === "all" || status === statusFilter
+    
+    const matchSearch = doc.toLowerCase().includes(searchTerm.toLowerCase())
+    
+    return matchFilter && matchStatusFilter && matchSearch
+  })
 
   if (!getAuth().currentUser && !loading) {
     return <div className="empty-state">Please sign in to view documents.</div>
@@ -208,6 +363,9 @@ const Documents = () => {
   return (
     <>
       <style jsx global>{`
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
         html {
           -webkit-text-size-adjust: 100%;
           text-size-adjust: 100%;
@@ -398,6 +556,7 @@ const Documents = () => {
                 </button>
               ))}
             </div>
+            
             <input
               className="search-box"
               type="text"
@@ -443,22 +602,6 @@ const Documents = () => {
               }}
             >
               Loading documents...
-            </div>
-          ) : filteredDocuments.length === 0 ? (
-            <div
-              style={{
-                textAlign: "center",
-                padding: "80px 32px",
-                backgroundColor: "#f5f2f0",
-                borderRadius: "16px",
-                border: "2px dashed #d7ccc8",
-                color: "#6d4c41",
-                fontSize: "1.125rem",
-                fontWeight: "500",
-                width: "100%",
-              }}
-            >
-              No documents found
             </div>
           ) : (
             <div
@@ -543,7 +686,7 @@ const Documents = () => {
                         width: "15%",
                       }}
                     >
-                      Status
+                      Notes
                     </th>
                     <th
                       style={{
@@ -554,132 +697,343 @@ const Documents = () => {
                         textTransform: "uppercase",
                         letterSpacing: "0.5px",
                         borderBottom: "2px solid #6d4c41",
-                        width: "25%",
+                        width: "10%",
+                        position: "relative"
+                      }}
+                    >
+                      <div 
+                        style={{ 
+                          display: "flex", 
+                          alignItems: "center", 
+                          justifyContent: "center",
+                          gap: "8px",
+                          cursor: "pointer",
+                          position: "relative"
+                        }}
+                        onClick={() => setShowStatusFilter(!showStatusFilter)}
+                      >
+                        Status
+                        <Filter size={14} />
+                        
+                        {showStatusFilter && (
+                          <div
+                            style={{
+                              position: "absolute",
+                              top: "100%",
+                              left: "50%",
+                              transform: "translateX(-50%)",
+                              backgroundColor: "white",
+                              border: "1px solid #d7ccc8",
+                              borderRadius: "8px",
+                              boxShadow: "0 4px 12px rgba(0, 0, 0, 0.15)",
+                              zIndex: 9999,
+                              minWidth: "180px",
+                              marginTop: "8px",
+                              overflow: "hidden",
+                            }}
+                          >
+                            <div
+                              style={{
+                                padding: "8px 12px",
+                                backgroundColor: "#f5f2f0",
+                                borderBottom: "1px solid #d7ccc8",
+                                fontSize: "12px",
+                                fontWeight: "600",
+                                color: "#5d4037",
+                              }}
+                            >
+                              Filter by Status
+                            </div>
+                            <div style={{ maxHeight: "300px", overflowY: "auto" }}>
+                              {["all", "pending", "uploaded", "verified", "expired", "rejected"].map((status) => {
+                                const statusLabels = {
+                                  all: "All",
+                                  pending: "Pending",
+                                  uploaded: "Uploaded",
+                                  verified: "Verified",
+                                  expired: "Expired",
+                                  rejected: "Rejected",
+                                }
+                                return (
+                                  <button
+                                    key={status}
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      setStatusFilter(status)
+                                      setShowStatusFilter(false)
+                                    }}
+                                    style={{
+                                      display: "block",
+                                      width: "100%",
+                                      padding: "10px 16px",
+                                      textAlign: "left",
+                                      border: "none",
+                                      backgroundColor: statusFilter === status ? "#efebe9" : "white",
+                                      color: "#5d4037",
+                                      fontSize: "13px",
+                                      cursor: "pointer",
+                                      borderBottom: "1px solid #f5f2f0",
+                                    }}
+                                    onMouseEnter={(e) => (e.target.style.backgroundColor = statusFilter === status ? "#efebe9" : "#faf8f6")}
+                                    onMouseLeave={(e) => (e.target.style.backgroundColor = statusFilter === status ? "#efebe9" : "white")}
+                                  >
+                                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                                      <span>{statusLabels[status]}</span>
+                                      {statusFilter === status && (
+                                        <span style={{ color: "#8d6e63", fontSize: "12px" }}>✓</span>
+                                      )}
+                                    </div>
+                                  </button>
+                                )
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </th>
+                    <th
+                      style={{
+                        padding: "16px 20px",
+                        textAlign: "center",
+                        fontWeight: "600",
+                        fontSize: "12px",
+                        textTransform: "uppercase",
+                        letterSpacing: "0.5px",
+                        borderBottom: "2px solid #6d4c41",
+                        width: "15%",
                       }}
                     >
                       Actions
                     </th>
-                  </tr>
+                   </tr>
                 </thead>
                 <tbody>
-                  {filteredDocuments.map((doc, index) => {
-                    const base = DOCUMENT_PATHS[doc]
-                    let updatedAt
-                    if (typeof base === "string") {
-                      const parts = base.split(".")
-                      const timestampPath =
-                        parts.length === 1 ? `${parts[0]}UpdatedAt` : `${parts.slice(0, -1).join(".")}.UpdatedAt`
-                      updatedAt = get(profileData, timestampPath)
-                    }
+                  {filteredDocuments.length === 0 ? (
+                    <tr>
+                      <td colSpan="6" style={{ textAlign: "center", padding: "60px 20px", color: "#6d4c41", fontSize: "14px" }}>
+                        No documents found
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredDocuments.map((doc, index) => {
+                      const updatedAt = getDocumentUpdatedAt(doc, profileData)
+                      const validation = validationResults[doc]
+                      const url = getDocumentURL(doc, profileData)
 
-                    return (
-                      <tr
-                        key={doc}
-                        style={{
-                          backgroundColor: index % 2 === 0 ? "white" : "#faf8f6",
-                          borderBottom: "1px solid #e8d8cf",
-                          transition: "background-color 0.2s ease",
-                          height: "60px",
-                        }}
-                        onMouseEnter={(e) => (e.target.closest("tr").style.backgroundColor = "#efebe9")}
-                        onMouseLeave={(e) =>
-                          (e.target.closest("tr").style.backgroundColor = index % 2 === 0 ? "white" : "#faf8f6")
-                        }
-                      >
-                        <td
+                      return (
+                        <tr
+                          key={doc}
                           style={{
-                            padding: "16px 20px",
-                            fontSize: "14px",
-                            color: "#5d4037",
-                            fontWeight: "600",
-                            verticalAlign: "middle",
+                            backgroundColor: index % 2 === 0 ? "white" : "#faf8f6",
+                            borderBottom: "1px solid #e8d8cf",
+                            transition: "background-color 0.2s ease",
+                            height: "60px",
                           }}
+                          onMouseEnter={(e) => (e.target.closest("tr").style.backgroundColor = "#efebe9")}
+                          onMouseLeave={(e) =>
+                            (e.target.closest("tr").style.backgroundColor = index % 2 === 0 ? "white" : "#faf8f6")
+                          }
                         >
-                          {doc}
-                        </td>
-                        <td
-                          style={{
-                            padding: "16px 20px",
-                            textAlign: "center",
-                            verticalAlign: "middle",
-                            backgroundColor: "transparent",
-                          }}
-                        >
-                          {renderDocumentLink(doc)}
-                        </td>
-                        <td
-                          style={{
-                            padding: "16px 20px",
-                            fontSize: "13px",
-                            color: "#6d4c41",
-                            textAlign: "center",
-                            verticalAlign: "middle",
-                            backgroundColor: "transparent",
-                          }}
-                        >
-                          {updatedAt?.seconds ? new Date(updatedAt.seconds * 1000).toLocaleDateString() : "-"}
-                        </td>
-                        <td
-                          style={{
-                            padding: "16px 20px",
-                            textAlign: "center",
-                            verticalAlign: "middle",
-                            backgroundColor: "transparent",
-                          }}
-                        >
-                          {getStatusBadge(doc)}
-                        </td>
-                        <td
-                          style={{
-                            padding: "16px 20px",
-                            textAlign: "center",
-                            verticalAlign: "middle",
-                            backgroundColor: "transparent",
-                          }}
-                        >
-                          <label
+                          <td
                             style={{
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: "6px",
-                              padding: "8px 16px",
-                              backgroundColor: "#a67c52",
-                              color: "white",
-                              borderRadius: "6px",
-                              fontSize: "11px",
+                              padding: "16px 20px",
+                              fontSize: "14px",
+                              color: "#5d4037",
                               fontWeight: "600",
-                              cursor: "pointer",
-                              transition: "all 0.2s ease",
-                              textTransform: "uppercase",
-                              letterSpacing: "0.5px",
-                            }}
-                            onMouseEnter={(e) => {
-                              e.target.style.backgroundColor = "#8d6e63"
-                              e.target.style.transform = "translateY(-1px)"
-                            }}
-                            onMouseLeave={(e) => {
-                              e.target.style.backgroundColor = "#a67c52"
-                              e.target.style.transform = "translateY(0)"
+                              verticalAlign: "middle",
                             }}
                           >
-                            <Upload size={12} />
-                            {getDocumentURL(doc, profileData) ? "Update" : "Upload"}
-                            <input
-                              type="file"
-                              style={{ display: "none" }}
-                              onChange={(e) => handleFileUpload(doc, e.target.files[0])}
-                            />
-                          </label>
-                        </td>
-                      </tr>
-                    )
-                  })}
+                            {doc}
+                          </td>
+                          <td
+                            style={{
+                              padding: "16px 20px",
+                              textAlign: "center",
+                              verticalAlign: "middle",
+                              backgroundColor: "transparent",
+                            }}
+                          >
+                            {renderDocumentLink(doc)}
+                          </td>
+                          <td
+                            style={{
+                              padding: "16px 20px",
+                              fontSize: "13px",
+                              color: "#6d4c41",
+                              textAlign: "center",
+                              verticalAlign: "middle",
+                              backgroundColor: "transparent",
+                            }}
+                          >
+                            {updatedAt?.seconds ? new Date(updatedAt.seconds * 1000).toLocaleDateString() : "-"}
+                          </td>
+                          <td
+                            style={{
+                              padding: "16px 20px",
+                              fontSize: "12px",
+                              color: "#6d4c41",
+                              textAlign: "center",
+                              verticalAlign: "middle",
+                              backgroundColor: "transparent",
+                            }}
+                          >
+                            {validation?.message || (url ? "Document uploaded" : "No document uploaded")}
+                          </td>
+                          <td
+                            style={{
+                              padding: "16px 20px",
+                              textAlign: "center",
+                              verticalAlign: "middle",
+                              backgroundColor: "transparent",
+                            }}
+                          >
+                            {getStatusBadge(doc)}
+                          </td>
+                          <td
+                            style={{
+                              padding: "16px 20px",
+                              textAlign: "center",
+                              verticalAlign: "middle",
+                              backgroundColor: "transparent",
+                            }}
+                          >
+                            <label
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: "6px",
+                                padding: "8px 16px",
+                                backgroundColor: "#a67c52",
+                                color: "white",
+                                borderRadius: "6px",
+                                fontSize: "11px",
+                                fontWeight: "600",
+                                cursor: isUploading ? "not-allowed" : "pointer",
+                                transition: "all 0.2s ease",
+                                textTransform: "uppercase",
+                                letterSpacing: "0.5px",
+                                opacity: isUploading ? 0.7 : 1,
+                              }}
+                              onMouseEnter={(e) => {
+                                if (!isUploading) {
+                                  e.target.style.backgroundColor = "#8d6e63"
+                                  e.target.style.transform = "translateY(-1px)"
+                                }
+                              }}
+                              onMouseLeave={(e) => {
+                                if (!isUploading) {
+                                  e.target.style.backgroundColor = "#a67c52"
+                                  e.target.style.transform = "translateY(0)"
+                                }
+                              }}
+                            >
+                              {isUploading ? (
+                                <>
+                                  <div
+                                    style={{
+                                      width: "12px",
+                                      height: "12px",
+                                      border: "2px solid transparent",
+                                      borderTop: "2px solid white",
+                                      borderRadius: "50%",
+                                      animation: "spin 1s linear infinite",
+                                    }}
+                                  />
+                                  Uploading...
+                                </>
+                              ) : (
+                                <>
+                                  <Upload size={12} />
+                                  {getDocumentURL(doc, profileData) ? "Update" : "Upload"}
+                                </>
+                              )}
+                              <input
+                                type="file"
+                                style={{ display: "none" }}
+                                onChange={(e) => handleFileUpload(doc, e.target.files[0])}
+                                disabled={isUploading}
+                                accept=".pdf,.jpg,.jpeg,.png,.svg,.doc,.docx"
+                              />
+                            </label>
+                          </td>
+                        </tr>
+                      )
+                    })
+                  )}
                 </tbody>
               </table>
             </div>
           )}
         </div>
       </div>
+
+      {/* Upload Overlay */}
+      {isOverlayVisible && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100%",
+            height: "100%",
+            backgroundColor: "rgba(0, 0, 0, 0.7)",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 9999,
+            backdropFilter: "blur(4px)",
+            opacity: isUploading ? 1 : 0,
+            transition: "opacity 0.3s ease-in-out",
+            pointerEvents: isUploading ? "auto" : "none",
+          }}
+        >
+          <div
+            style={{
+              backgroundColor: "#f5f5f5",
+              padding: "40px 60px",
+              borderRadius: "12px",
+              textAlign: "center",
+              boxShadow: "0 8px 32px rgba(0, 0, 0, 0.3)",
+              border: "1px solid #ddd",
+              transform: isUploading ? "scale(1)" : "scale(0.9)",
+              transition: "all 0.3s ease-in-out",
+              opacity: isUploading ? 1 : 0,
+            }}
+          >
+            <div
+              style={{
+                width: "50px",
+                height: "50px",
+                border: "4px solid #e0e0e0",
+                borderTop: "4px solid #a67c52",
+                borderRadius: "50%",
+                animation: "spin 1s linear infinite",
+                margin: "0 auto 20px auto",
+              }}
+            />
+            <p
+              style={{
+                margin: 0,
+                color: "#5d4037",
+                fontSize: "16px",
+                fontWeight: "600",
+              }}
+            >
+              Uploading Document...
+            </p>
+            <p
+              style={{
+                margin: "10px 0 0 0",
+                color: "#8d6e63",
+                fontSize: "12px",
+                fontStyle: "italic",
+              }}
+            >
+              Please wait while we validate your file
+            </p>
+          </div>
+        </div>
+      )}
     </>
   )
 }

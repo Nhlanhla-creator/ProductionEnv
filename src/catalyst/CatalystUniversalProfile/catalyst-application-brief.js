@@ -6,7 +6,6 @@ import styles from "./catalyst-universal-profile.module.css"
 const coreDocumentsOptions = [
   { value: "business_profile", label: "Business Profile / Overview" },
   { value: "company_registration", label: "Company Registration (CIPC)" },
-  { value: "business_plan", label: "Business Plan" },
   { value: "proof_of_address", label: "Proof of Address (Utility Bill, Lease Agreement)" },
   { value: "tax_clearance", label: "Tax Clearance Certificate" },
   { value: "bbbee_certificate", label: "B-BBEE Certificate" },
@@ -33,21 +32,50 @@ const smeVaultDocumentOptions = [
   { value: "company_profile_vault", label: "Company Profile" },
   { value: "org_structure", label: "Organisational Structure" },
   { value: "client_references", label: "Client References" },
+    { value: "pitch_deck", label: "Pitch Deck" },
+
+  
 ]
 
 export default function CatalystApplicationBrief({ data = {}, updateData }) {
-  const handleChange = (e) => {
-    const { name, value } = e.target
-    updateData({ [name]: value })
-  }
+const handleChange = (e) => {
+  const { name, value } = e.target
+  updateData({ [name]: value })
+}
 
-  const handleCheckboxChange = (category, value) => {
-    const currentValues = data[category] || []
-    const newValues = currentValues.includes(value)
+const handleCheckboxChange = (category, value) => {
+  const currentValues = data[category] || []
+  let newValues
+  
+  if (value === "other") {
+    // When checking "other", add it to the array
+    if (currentValues.includes("other")) {
+      newValues = currentValues.filter((item) => item !== "other")
+      // Also clear the other text when unchecking
+      updateData({ coreDocumentsOther: "" })
+    } else {
+      newValues = [...currentValues, "other"]
+    }
+  } else {
+    newValues = currentValues.includes(value)
       ? currentValues.filter((item) => item !== value)
       : [...currentValues, value]
-    updateData({ [category]: newValues })
   }
+  
+  updateData({ [category]: newValues })
+}
+
+const handleOtherTextChange = (e) => {
+  const { value } = e.target
+  // Save the other text
+  updateData({ coreDocumentsOther: value })
+  
+  // If there's text and "other" is not checked, automatically check it
+  if (value.trim() !== "" && !(data.coreDocuments || []).includes("other")) {
+    const currentValues = data.coreDocuments || []
+    updateData({ coreDocuments: [...currentValues, "other"] })
+  }
+}
 
   const checkboxStyle = {
     width: "16px",
@@ -193,41 +221,44 @@ export default function CatalystApplicationBrief({ data = {}, updateData }) {
             </thead>
             <tbody>
               <tr>
-                <td style={{ ...cellStyle, width: "50%", verticalAlign: "top" }}>
-                  {coreDocumentsOptions.map((option) => (
-                    <label key={option.value} style={checkboxLabelStyle}>
-                      <input
-                        type="checkbox"
-                        checked={(data.coreDocuments || []).includes(option.value)}
-                        onChange={() => handleCheckboxChange("coreDocuments", option.value)}
-                        style={checkboxStyle}
-                      />
-                      <span>{option.label}</span>
-                    </label>
-                  ))}
-                  {(data.coreDocuments || []).includes("other") && (
-                    <div style={{ marginTop: "10px", marginLeft: "26px" }}>
-                      <input
-                        type="text"
-                        name="coreDocumentsOther"
-                        value={data.coreDocumentsOther || ""}
-                        onChange={handleChange}
-                        className={styles.input}
-                        placeholder="Please specify other core documents..."
-                        style={{ width: "100%", maxWidth: "280px" }}
-                      />
-                    </div>
-                  )}
-                </td>
+           <td style={{ ...cellStyle, width: "50%", verticalAlign: "top" }}>
+              {coreDocumentsOptions.map((option) => (
+                <label key={option.value} style={checkboxLabelStyle}>
+                  <input
+                    type="checkbox"
+                    checked={(data.coreDocuments || []).includes(option.value)}
+                    onChange={() => handleCheckboxChange("coreDocuments", option.value)}
+                    style={checkboxStyle}
+                  />
+                  <span>{option.label}</span>
+                </label>
+              ))}
+              {(data.coreDocuments || []).includes("other") && (
+                <div style={{ marginTop: "10px", marginLeft: "26px" }}>
+                  <input
+                    type="text"
+                    name="coreDocumentsOther"
+                    value={data.coreDocumentsOther || ""}
+                    onChange={handleOtherTextChange}
+                    className={styles.input}
+                    placeholder="Please specify other core documents..."
+                    style={{ width: "100%", maxWidth: "280px" }}
+                  />
+                </div>
+              )}
+            </td>
                 <td style={{ ...cellStyle, width: "50%", verticalAlign: "top" }}>
 
                   {/* Grant/Funding */}
                   <div style={{ marginBottom: "20px" }}>
                     <div style={{ ...subHeadingStyle, color: "#8b4513" }}>If Grant/Funding Program:</div>
                     {[
-                      { key: "financial_statements", label: "Financial Statements" },
-                      { key: "bank_statements", label: "Bank Statements (3-6 months)" },
                       { key: "bank_details", label: "Bank Details Confirmation" },
+                      { key: "bank_statements", label: "Bank Statements (3-6 months)" },
+                      { value: "business_plan", label: "Business Plan" },
+                      { key: "financial_statements", label: "Financial Statements" },
+                      { key: "pitch_deck", label: "Pitch Deck" },
+
                     ].map(({ key, label }) => (
                       <label key={key} style={checkboxLabelStyle}>
                         <input

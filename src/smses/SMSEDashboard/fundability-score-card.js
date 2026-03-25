@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   ChevronDown,
   RefreshCw,
@@ -39,9 +39,9 @@ export function FundabilityScoreCard({
   const [showAboutScore, setShowAboutScore] = useState(false);
   const [showScoreBreakdown, setShowScoreBreakdown] = useState(false);
   const [showDetailedAnalysis, setShowDetailedAnalysis] = useState(false);
-const [confidenceScores, setConfidenceScores] = useState({});
-const [evidenceMap, setEvidenceMap] = useState({});
-const [confRationaleMap, setConfRationaleMap] = useState({});
+  const [confidenceScores, setConfidenceScores] = useState({});
+  const [evidenceMap, setEvidenceMap] = useState({});
+  const [confRationaleMap, setConfRationaleMap] = useState({});
   // Additional states for funding application sections
   const [businessPlanAnalysis, setBusinessPlanAnalysis] = useState(null);
   const [pitchDeckAnalysis, setPitchDeckAnalysis] = useState(null);
@@ -56,6 +56,13 @@ const [confRationaleMap, setConfRationaleMap] = useState({});
   const [hasAppliedForFunding, setHasAppliedForFunding] = useState(false);
   const [fundingCheckComplete, setFundingCheckComplete] = useState(false);
   const [isReevaluating, setIsReevaluating] = useState(false);
+
+  const hasReevaluated = useRef(false);
+  const isReevaluatingRef = useRef(false);
+  const fundingCheckCompleteRef = useRef(false);
+  // Add alongside fundingCheckCompleteRef at the top of your component:
+  const isFundingDataLoadedRef = useRef(false);
+
 
   const handleTestFunction = async () => {
     try {
@@ -78,35 +85,33 @@ const [confRationaleMap, setConfRationaleMap] = useState({});
         const data = universalSnap.data();
         const completedSections = data.completedSections || {};
 
+        // ✅ Match EXACTLY the section IDs in sectionsWithGuarantees array
+        // from FundingApplication.js + declarationCommitment
         const requiredFundingSections = [
           "applicationOverview",
-          "contactDetails",
-          "declarationCommitment",
-          "declarationConsent",
-          "documentUpload",
-          "documents",
-          "enterpriseReadiness",
-          "entityOverview",
-          "financialOverview",
-          "growthPotential",
-          "guarantees",
-          "howDidYouHear",
-          "instructions",
-          "legalCompliance",
-          "ownershipManagement",
-          "productsServices",
-          "socialImpact",
           "useOfFunds",
+          "enterpriseReadiness",
+          "guarantees",
+          "growthPotential",
+          "socialImpact",
+          "documentUpload",
+          "declarationCommitment",  // ← was "declarationConsent" before (wrong!)
         ];
 
-        const fundingApplied = requiredFundingSections.every(
-          (section) => completedSections[section] === true
-        );
+        const fundingApplied =
+          requiredFundingSections.every(section => completedSections[section] === true)
+          || data.applicationSubmitted === true;
 
+        // 🔍 Debug: log which sections are missing
+        const missingSections = requiredFundingSections.filter(
+          (section) => completedSections[section] !== true
+        );
         console.log("✅ Funding application status:", fundingApplied);
+        console.log("📋 All completedSections keys:", Object.keys(completedSections));
+        console.log("❌ Missing funding sections:", missingSections);
+
         setHasAppliedForFunding(fundingApplied);
 
-        // If user has applied, load funding data immediately
         if (fundingApplied) {
           await fetchFundingApplicationData();
         } else {
@@ -114,10 +119,12 @@ const [confRationaleMap, setConfRationaleMap] = useState({});
         }
 
         setFundingCheckComplete(true);
+        fundingCheckCompleteRef.current = true;
       }
     } catch (err) {
       console.error("Error checking funding application status:", err);
       setFundingCheckComplete(true);
+      fundingCheckCompleteRef.current = true;
       setIsFundingDataLoaded(true);
     }
   }, [auth?.currentUser?.uid, fundingCheckComplete]);
@@ -155,15 +162,13 @@ const [confRationaleMap, setConfRationaleMap] = useState({});
     // Check score patterns for each section
     sections.forEach((section, index) => {
       const scorePattern = new RegExp(
-        `###\\s+${
-          index + 1
+        `###\\s+${index + 1
         }\\.\\s*${section}[\\s\\S]*?\\*\\*Score:\\*\\*\\s*(\\d)`,
         "i"
       );
       const scoreMatch = text.match(scorePattern);
       console.log(
-        `🎯 Section ${index + 1} (${section}): Score = ${
-          scoreMatch ? scoreMatch[1] : "NOT FOUND"
+        `🎯 Section ${index + 1} (${section}): Score = ${scoreMatch ? scoreMatch[1] : "NOT FOUND"
         }`
       );
     });
@@ -264,6 +269,9 @@ const [confRationaleMap, setConfRationaleMap] = useState({});
       // Consider it loaded if we found at least some data
       const isLoaded = loadedCount > 0;
       setIsFundingDataLoaded(isLoaded);
+      // setIsFundingDataLoaded(false) locations — also add:
+
+      isFundingDataLoadedRef.current = false;
 
       console.log("🎯 Funding data load complete:", {
         loaded: `${loadedCount}/${totalSections} sections`,
@@ -275,53 +283,61 @@ const [confRationaleMap, setConfRationaleMap] = useState({});
     } catch (error) {
       console.error("Error fetching funding application data:", error);
       setIsFundingDataLoaded(false);
+      isFundingDataLoadedRef.current = false;
     }
   }, [auth?.currentUser?.uid]);
+  
   useEffect(() => {
-    if (!auth?.currentUser?.uid || !apiKey || isEvaluating || isReevaluating)
-      return;
+    if (!auth?.currentUser?.uid || !apiKey) return;
+    if (isEvaluating || isReevaluatingRef.current) return;
+    if (hasReevaluated.current) return; // ← already ran once, stop forever
 
-    // Only run automatic re-evaluation when ALL these conditions are met:
+
     if (hasAppliedForFunding && isFundingDataLoaded && aiEvaluationResult) {
-      console.log("💰 Checking if automatic re-evaluation is needed...");
-
       const checkAndRunReevaluation = async () => {
         try {
-          const aiEvalRef = doc(
-            db,
-            "aiFundabilityEvaluations",
-            auth.currentUser.uid
-          );
+          const aiEvalRef = doc(db, "aiFundabilityEvaluations", auth.currentUser.uid);
           const aiSnap = await getDoc(aiEvalRef);
 
           if (aiSnap.exists()) {
             const saved = aiSnap.data();
 
-            // Check if saved evaluation exists but doesn't include funding data
             if (saved.result && saved.includedFundingData === false) {
-              console.log(
-                "🔄 AUTOMATIC: Funding data now available but previous evaluation doesn't include it"
-              );
-              console.log(
-                "🔄 AUTOMATIC: Running new evaluation with Business Plan, Pitch Deck, and Credit Report"
-              );
+              // Gate immediately so re-render can't trigger this again
+              hasReevaluated.current = true;
+              isReevaluatingRef.current = true;
 
               setIsReevaluating(true);
-              setEvaluationError(
-                "Updating analysis with funding application materials..."
-              );
+              setEvaluationError("Updating analysis with funding application materials...");
 
-              // Run the new evaluation automatically
-              await runAiEvaluation(auth.currentUser.uid);
+              const result = await runAiEvaluation(auth.currentUser.uid);
+
+              // Save updated result to Firestore with includedFundingData: true
+              if (result) {
+                const docRef = doc(db, "aiFundabilityEvaluations", auth.currentUser.uid);
+                await setDoc(docRef, {
+                  result,
+                  timestamp: new Date(),
+                  includedFundingData: true,  // ← marks it as done so it won't re-run
+                }, { merge: true });
+              }
 
               setIsReevaluating(false);
+              isReevaluatingRef.current = false;
               setEvaluationError("");
+            } else {
+              // Already includes funding data — mark as done, never re-run
+              hasReevaluated.current = true;
             }
+          } else {
+            hasReevaluated.current = true;
           }
         } catch (error) {
           console.error("Error during automatic re-evaluation:", error);
           setIsReevaluating(false);
-          setEvaluationError("Failed to update analysis with funding data");
+          isReevaluatingRef.current = false;
+          hasReevaluated.current = true; // ← even on error, don't retry infinitely
+          setEvaluationError("");
         }
       };
 
@@ -334,9 +350,7 @@ const [confRationaleMap, setConfRationaleMap] = useState({});
     auth?.currentUser?.uid,
     apiKey,
     isEvaluating,
-    isReevaluating,
   ]);
-
   // Update the score calculation to include funding application sections
   useEffect(() => {
     if (profileData && aiEvaluationResult) {
@@ -370,78 +384,78 @@ const [confRationaleMap, setConfRationaleMap] = useState({});
     isFundingDataLoaded,
   ]);
 
-const parseAiEvaluationScores = (text) => {
-  console.log("🔍 Parsing AI evaluation text for scores...");
+  const parseAiEvaluationScores = (text) => {
+    console.log("🔍 Parsing AI evaluation text for scores...");
 
-  const baseCategories = {
-    financialReadiness: ["Financial Readiness"],
-    financialStrength: ["Financial Strength"],
-    operations: ["Operational Strength"],
-    impact: ["Impact Proof"],
-  };
+    const baseCategories = {
+      financialReadiness: ["Financial Readiness"],
+      financialStrength: ["Financial Strength"],
+      operations: ["Operational Strength"],
+      impact: ["Impact Proof"],
+    };
 
-  const fundingCategories = hasAppliedForFunding
-    ? {
+    const fundingCategories = hasAppliedForFunding
+      ? {
         businessPlanAnalysis: ["Business Plan Quality"],
         pitchDeckScore: ["Pitch Deck Effectiveness"],
         creditReport: ["Creditworthiness"],
       }
-    : {};
+      : {};
 
-  const allCategories = { ...baseCategories, ...fundingCategories };
-  const scores = {};
-  const confidenceMap = {};
-  const evidenceMap = {};
-  const confRationaleMap = {};
+    const allCategories = { ...baseCategories, ...fundingCategories };
+    const scores = {};
+    const confidenceMap = {};
+    const evidenceMap = {};
+    const confRationaleMap = {};
 
-  Object.entries(allCategories).forEach(([key, labels]) => {
-    let foundScore = 0;
+    Object.entries(allCategories).forEach(([key, labels]) => {
+      let foundScore = 0;
 
-    for (const label of labels) {
-      // Find section body
-      const sectionRe = new RegExp(
-        `###\\s*\\d+\\.\\s*${label}[^\\n]*\\n([\\s\\S]*?)(?=###|$)`,
-        "i"
-      );
-      const sectionMatch = text.match(sectionRe);
-      const body = sectionMatch ? sectionMatch[1] : "";
+      for (const label of labels) {
+        // Find section body
+        const sectionRe = new RegExp(
+          `###\\s*\\d+\\.\\s*${label}[^\\n]*\\n([\\s\\S]*?)(?=###|$)`,
+          "i"
+        );
+        const sectionMatch = text.match(sectionRe);
+        const body = sectionMatch ? sectionMatch[1] : "";
 
-      // Extract confidence
-      const confMatch = body.match(/Confidence\s*:\s*(High|Medium|Low)/i);
-      if (confMatch) confidenceMap[key] = confMatch[1];
+        // Extract confidence
+        const confMatch = body.match(/Confidence\s*:\s*(High|Medium|Low)/i);
+        if (confMatch) confidenceMap[key] = confMatch[1];
 
-      // Extract confidence rationale
-      const confRatMatch = body.match(/Confidence Rationale\s*:\s*([^\n]+)/i);
-      if (confRatMatch) confRationaleMap[key] = confRatMatch[1].trim();
+        // Extract confidence rationale
+        const confRatMatch = body.match(/Confidence Rationale\s*:\s*([^\n]+)/i);
+        if (confRatMatch) confRationaleMap[key] = confRatMatch[1].trim();
 
-      // Extract evidence
-      const evidenceMatch = body.match(/Evidence\s*:\s*([^\n]+)/i);
-      if (evidenceMatch) evidenceMap[key] = evidenceMatch[1].trim();
+        // Extract evidence
+        const evidenceMatch = body.match(/Evidence\s*:\s*([^\n]+)/i);
+        if (evidenceMatch) evidenceMap[key] = evidenceMatch[1].trim();
 
-      const patterns = [
-        new RegExp(`###\\s+\\d+\\.\\s*${label}[\\s\\S]*?\\*\\*Score:\\*\\*\\s*(\\d)`, "i"),
-        new RegExp(`${label}[\\s\\S]*?\\*\\*Score:\\*\\*\\s*(\\d)`, "i"),
-        new RegExp(`${label}[\\s\\S]*?Score:\\s*(\\d)`, "i"),
-      ];
+        const patterns = [
+          new RegExp(`###\\s+\\d+\\.\\s*${label}[\\s\\S]*?\\*\\*Score:\\*\\*\\s*(\\d)`, "i"),
+          new RegExp(`${label}[\\s\\S]*?\\*\\*Score:\\*\\*\\s*(\\d)`, "i"),
+          new RegExp(`${label}[\\s\\S]*?Score:\\s*(\\d)`, "i"),
+        ];
 
-      for (const pattern of patterns) {
-        const match = text.match(pattern);
-        if (match) { foundScore = parseInt(match[1]); break; }
+        for (const pattern of patterns) {
+          const match = text.match(pattern);
+          if (match) { foundScore = parseInt(match[1]); break; }
+        }
+        if (foundScore > 0) break;
       }
-      if (foundScore > 0) break;
-    }
 
-    scores[key] = Math.min(Math.max(foundScore, 0), 5);
-  });
+      scores[key] = Math.min(Math.max(foundScore, 0), 5);
+    });
 
-  // Store on component refs for use in formatAiResult
-  scores._confidence = confidenceMap;
-  scores._evidence = evidenceMap;
-  scores._confRationale = confRationaleMap;
+    // Store on component refs for use in formatAiResult
+    scores._confidence = confidenceMap;
+    scores._evidence = evidenceMap;
+    scores._confRationale = confRationaleMap;
 
-  console.log("🎯 Final parsed AI scores:", scores);
-  return scores;
-};
+    console.log("🎯 Final parsed AI scores:", scores);
+    return scores;
+  };
 
 
   // Add this comprehensive debug function
@@ -470,8 +484,7 @@ const parseAiEvaluationScores = (text) => {
     sections.forEach((section, index) => {
       const scoreMatch = section.content.match(/\*\*Score:\*\*\s*(\d)/);
       console.log(
-        `🎯 Section ${index + 1}: "${section.title}" - Score: ${
-          scoreMatch ? scoreMatch[1] : "NOT FOUND"
+        `🎯 Section ${index + 1}: "${section.title}" - Score: ${scoreMatch ? scoreMatch[1] : "NOT FOUND"
         }`
       );
     });
@@ -614,10 +627,10 @@ const parseAiEvaluationScores = (text) => {
       ? parseAiEvaluationScores(aiEvaluationResult)
       : {};
     console.log("AI scores extracted:", aiScores);
-// Sync confidence/evidence to state for formatAiResult badges
-if (aiScores._confidence) setConfidenceScores(aiScores._confidence);
-if (aiScores._evidence) setEvidenceMap(aiScores._evidence);
-if (aiScores._confRationale) setConfRationaleMap(aiScores._confRationale);
+    // Sync confidence/evidence to state for formatAiResult badges
+    if (aiScores._confidence) setConfidenceScores(aiScores._confidence);
+    if (aiScores._evidence) setEvidenceMap(aiScores._evidence);
+    if (aiScores._confRationale) setConfRationaleMap(aiScores._confRationale);
     // 🔥 ADD THIS: If funding scores are missing but should be there, set defaults
     if (hasAppliedForFunding) {
       if (aiScores.businessPlanAnalysis === undefined) {
@@ -780,29 +793,23 @@ if (aiScores._confRationale) setConfRationaleMap(aiScores._confRationale);
 
     // Financial Readiness
     evaluationData += `\n=== FINANCIAL READINESS ===\n`;
-    evaluationData += `Accounting/ERP System: ${
-      data?.financialOverview?.hasAccountingSoftware || "Not specified"
-    }\n`;
-    evaluationData += `Books Up-to-Date: ${
-      data?.financialOverview?.booksUpToDate ? "Yes" : "Not confirmed"
-    }\n`;
-    evaluationData += `Tax Number: ${
-      data?.legalCompliance?.taxNumber ? "Compliant" : "Not confirmed"
-    }\n`;
-    evaluationData += `VAT Number: ${
-      data?.legalCompliance?.vatNumber ? "Compliant" : "Not confirmed"
-    }\n`;
-    evaluationData += `Financial Statements: ${
-      data?.fundingDocuments?.financialStatements?.length > 0
+    evaluationData += `Accounting/ERP System: ${data?.financialOverview?.hasAccountingSoftware || "Not specified"
+      }\n`;
+    evaluationData += `Books Up-to-Date: ${data?.financialOverview?.booksUpToDate ? "Yes" : "Not confirmed"
+      }\n`;
+    evaluationData += `Tax Number: ${data?.legalCompliance?.taxNumber ? "Compliant" : "Not confirmed"
+      }\n`;
+    evaluationData += `VAT Number: ${data?.legalCompliance?.vatNumber ? "Compliant" : "Not confirmed"
+      }\n`;
+    evaluationData += `Financial Statements: ${data?.fundingDocuments?.financialStatements?.length > 0
         ? "Available"
         : "Not provided"
-    }\n`;
+      }\n`;
 
     // Financial Strength
     evaluationData += `\n=== FINANCIAL STRENGTH ===\n`;
-    evaluationData += `Annual Revenue: ${
-      data?.financialOverview?.annualRevenue || "Not provided"
-    }\n`;
+    evaluationData += `Annual Revenue: ${data?.financialOverview?.annualRevenue || "Not provided"
+      }\n`;
     try {
       const userId = auth.currentUser?.uid;
       const finRef = doc(db, "aiFinancialEvaluations", userId);
@@ -811,88 +818,75 @@ if (aiScores._confRationale) setConfRationaleMap(aiScores._confRationale);
       if (revenueData?.evaluation?.score) {
         evaluationData += `\n--- REVENUE GROWTH ANALYSIS ---\n`;
         evaluationData += `Score: ${revenueData.evaluation.score} out of 5\n`;
-        evaluationData += `Summary: ${
-          revenueData.evaluation.summary || "No summary available"
-        }\n`;
+        evaluationData += `Summary: ${revenueData.evaluation.summary || "No summary available"
+          }\n`;
       }
     } catch (err) {
       console.error("Error loading revenue growth evaluation:", err);
     }
-    evaluationData += `Profitability: ${
-      data?.financialOverview?.profitabilityStatus || "No"
-    }\n`;
-    evaluationData += `Financials: ${
-      data?.enterpriseReadiness?.hasFinancials || "No"
-    }\n`;
-    evaluationData += `Audited financials: ${
-      data?.enterpriseReadiness?.hasAuditedFinancials || "No"
-    }\n`;
+    evaluationData += `Profitability: ${data?.financialOverview?.profitabilityStatus || "No"
+      }\n`;
+    evaluationData += `Financials: ${data?.enterpriseReadiness?.hasFinancials || "No"
+      }\n`;
+    evaluationData += `Audited financials: ${data?.enterpriseReadiness?.hasAuditedFinancials || "No"
+      }\n`;
 
     // Operations
-    evaluationData += `\n=== OPERATIONAL STRENGTH ===\n`;
-    evaluationData += `Processes documented: ${
-      data?.operations?.processesDocumented || "Not specified"
-    }\n`;
-    evaluationData += `Team size: ${data?.operations?.teamSize ?? "Unknown"}\n`;
-    evaluationData += `Infrastructure notes: ${
-      data?.operations?.infrastructure || "Not specified"
-    }\n`;
-    evaluationData += `Supply/Delivery capacity: ${
-      data?.operations?.capacity || "Not specified"
-    }\n`;
+    evaluationData += `Processes documented: ${data?.operationsOverview?.hasFormalProcedures || "Not specified"
+      }\n`;
+    evaluationData += `Team size: ${data?.entityOverview?.fullTimeEmployees ?? "Unknown"}\n`;
+    evaluationData += `Contingency planning: ${data?.operationsOverview?.contingencyPlan || "Not specified"
+      }\n`;
+    evaluationData += `Performance tracking: ${data?.operationsOverview?.trackPerformanceMetrics || "Not specified"
+      }\n`;
+    evaluationData += `Multiple suppliers: ${data?.operationsOverview?.multipleSuppliers || "Not specified"
+      }\n`;
+    evaluationData += `Capacity to increase: ${data?.operationsOverview?.hasCapacityToIncrease || "Not specified"
+      }\n`;
+    evaluationData += `Successful deliveries: ${data?.operationsOverview?.threeSuccessfulDeliveries || "Not specified"
+      }\n`;
+    evaluationData += `Major incidents: ${data?.operationsOverview?.hasMajorIncidents || "Not specified"
+      }\n`;
+    evaluationData += `Operational challenges: ${data?.operationsOverview?.operationalChallenges || "Not specified"
+      }\n`;
 
     // Impact Proof
     evaluationData += `\n=== IMPACT PROOF ===\n`;
     evaluationData += `\n-- Job Creation --\n`;
-    evaluationData += `Planned jobs to be created: ${
-      data?.socialImpact?.jobsToCreate || 0
-    }\n`;
-    evaluationData += `Local employees to be hired: ${
-      data?.socialImpact?.localEmployeesHired || 0
-    }\n`;
+    evaluationData += `Planned jobs to be created: ${data?.socialImpact?.jobsToCreate || 0
+      }\n`;
+    evaluationData += `Local employees to be hired: ${data?.socialImpact?.localEmployeesHired || 0
+      }\n`;
     evaluationData += `\n-- HDG Impact (Youth, Women, Disability) --\n`;
-    evaluationData += `% Black ownership: ${
-      data?.socialImpact?.blackOwnership || 0
-    }%\n`;
-    evaluationData += `% Women ownership: ${
-      data?.socialImpact?.womenOwnership || 0
-    }%\n`;
-    evaluationData += `% Youth ownership: ${
-      data?.socialImpact?.youthOwnership || 0
-    }%\n`;
-    evaluationData += `% Disabled ownership: ${
-      data?.socialImpact?.disabledOwnership || 0
-    }%\n`;
+    evaluationData += `% Black ownership: ${data?.socialImpact?.blackOwnership || 0
+      }%\n`;
+    evaluationData += `% Women ownership: ${data?.socialImpact?.womenOwnership || 0
+      }%\n`;
+    evaluationData += `% Youth ownership: ${data?.socialImpact?.youthOwnership || 0
+      }%\n`;
+    evaluationData += `% Disabled ownership: ${data?.socialImpact?.disabledOwnership || 0
+      }%\n`;
     evaluationData += `\n-- Environmental Responsibility --\n`;
-    evaluationData += `Environmental impact: ${
-      data?.socialImpact?.environmentalImpact || "Not specified"
-    }\n`;
-    evaluationData += `SDG/ESD alignment: ${
-      data?.socialImpact?.sdgAlignment || "Not specified"
-    }\n`;
+    evaluationData += `Environmental impact: ${data?.socialImpact?.environmentalImpact || "Not specified"
+      }\n`;
+    evaluationData += `SDG/ESD alignment: ${data?.socialImpact?.sdgAlignment || "Not specified"
+      }\n`;
     evaluationData += `\n-- CSR/CSI Investment --\n`;
-    evaluationData += `CSI/CSR Spend: ${
-      data?.socialImpact?.csiCsrSpend || "R 0"
-    }\n`;
-    evaluationData += `Community investment amount: ${
-      data?.socialImpact?.communityInvestmentAmount || "R 0"
-    }\n`;
-    evaluationData += `Number of beneficiaries: ${
-      data?.socialImpact?.numberOfBeneficiaries || 0
-    }\n`;
-    evaluationData += `Focus areas: ${
-      data?.socialImpact?.csrFocusAreas || "Not specified"
-    }\n`;
-    evaluationData += `Investment description: ${
-      data?.socialImpact?.socialInvestmentCommunities || "Not specified"
-    }\n`;
+    evaluationData += `CSI/CSR Spend: ${data?.socialImpact?.csiCsrSpend || "R 0"
+      }\n`;
+    evaluationData += `Community investment amount: ${data?.socialImpact?.communityInvestmentAmount || "R 0"
+      }\n`;
+    evaluationData += `Number of beneficiaries: ${data?.socialImpact?.numberOfBeneficiaries || 0
+      }\n`;
+    evaluationData += `Focus areas: ${data?.socialImpact?.csrFocusAreas || "Not specified"
+      }\n`;
+    evaluationData += `Investment description: ${data?.socialImpact?.socialInvestmentCommunities || "Not specified"
+      }\n`;
     evaluationData += `\n-- Local Value Creation --\n`;
-    evaluationData += `Local procurement spend: ${
-      data?.socialImpact?.localProcurementSpend || "R 0"
-    }\n`;
-    evaluationData += `Strategy for local value: ${
-      data?.socialImpact?.localValueStrategy || "Not specified"
-    }\n`;
+    evaluationData += `Local procurement spend: ${data?.socialImpact?.localProcurementSpend || "R 0"
+      }\n`;
+    evaluationData += `Strategy for local value: ${data?.socialImpact?.localValueStrategy || "Not specified"
+      }\n`;
 
     if (hasAppliedForFunding && isFundingDataLoaded) {
       console.log("✅ Adding funding application sections to evaluation");
@@ -931,9 +925,8 @@ if (aiScores._confRationale) setConfRationaleMap(aiScores._confRationale);
       // Pitch Deck Analysis
       if (pitchDeckAnalysis?.content) {
         evaluationData += `\n--- PITCH DECK ANALYSIS ---\n`;
-        evaluationData += `Previous AI Score: ${
-          pitchDeckAnalysis.score || pitchDeckAnalysis.operationalScore
-        }/100\n`;
+        evaluationData += `Previous AI Score: ${pitchDeckAnalysis.score || pitchDeckAnalysis.operationalScore
+          }/100\n`;
         evaluationData += `Analysis Summary:\n${pitchDeckAnalysis.content}\n`;
         evaluationData += `\nCONVERT TO 0-5 SCALE: Divide the score by 20 to get the rating out of 5.\n`;
       } else {
@@ -992,7 +985,14 @@ if (aiScores._confRationale) setConfRationaleMap(aiScores._confRationale);
       const maxWaitTime = 10000; // 10 seconds
       const startTime = Date.now();
 
-      while (!isFundingDataLoaded && Date.now() - startTime < maxWaitTime) {
+      while (!isFundingDataLoadedRef.current && Date.now() - startTime < maxWaitTime) {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+      if (!isFundingDataLoadedRef.current) {
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+
+      if (!isFundingDataLoadedRef.current) {
         await new Promise((resolve) => setTimeout(resolve, 500));
         console.log("⏳ Still waiting for funding data...");
       }
@@ -1040,7 +1040,7 @@ if (aiScores._confRationale) setConfRationaleMap(aiScores._confRationale);
 
       console.log(`📋 Evaluating ${totalCategories} categories`);
 
-     const combinedMessage = `Evaluate the fundability of the following business using the BIG Fundability Scorecard rubric.
+      const combinedMessage = `Evaluate the fundability of the following business using the BIG Fundability Scorecard rubric.
 
 CRITICAL INSTRUCTION: You MUST evaluate ALL ${totalCategories} categories listed below. Do not skip any categories.
 
@@ -1377,25 +1377,25 @@ ${hasAppliedForFunding ? `
       </div>
     );
   }; // 🔥 UPDATE your Firebase listener to handle initial evaluation properly
-  
+
 
   // Add this helper function before the problematic useEffect
-const waitForFundingCheck = () => {
-  return new Promise((resolve, reject) => {
-    const maxWaitTime = 15000;
-    const startTime = Date.now();
-    
-    const checkInterval = setInterval(() => {
-      if (fundingCheckComplete) {
-        clearInterval(checkInterval);
-        resolve();
-      } else if (Date.now() - startTime > maxWaitTime) {
-        clearInterval(checkInterval);
-        reject(new Error("Timeout"));
-      }
-    }, 100);
-  });
-};
+  const waitForFundingCheck = () => {
+    return new Promise((resolve, reject) => {
+      const maxWaitTime = 15000;
+      const startTime = Date.now();
+
+      const checkInterval = setInterval(() => {
+        if (fundingCheckCompleteRef.current) {        // ← uses ref, not stale state
+          clearInterval(checkInterval);
+          resolve();
+        } else if (Date.now() - startTime > maxWaitTime) {
+          clearInterval(checkInterval);
+          reject(new Error("Timeout"));
+        }
+      }, 100);
+    });
+  };
 
 
   useEffect(() => {
@@ -1426,29 +1426,21 @@ const waitForFundingCheck = () => {
           // 🔥 CRITICAL: Wait for ALL prerequisites
           // Replace this entire section in the Firebase listener useEffect:
 
-// 🔥 CRITICAL: Wait for ALL prerequisites
-if (!fundingCheckComplete) {
-  console.log("⏳ Waiting for funding check to complete...");
-  setEvaluationError("Determining funding application status...");
+          if (!fundingCheckCompleteRef.current) {
+            console.log("⏳ Waiting for funding check to complete...");
+            setEvaluationError("Determining funding application status...");
 
-  try {
-    // Wait for funding check to complete with a promise
-    await waitForFundingCheck();
-    
-    // Double-check if it completed
-    if (!fundingCheckComplete) {
-      throw new Error("Funding status check timed out");
-    }
-    
-    console.log("✅ Funding check completed successfully");
-    setEvaluationError("");
-  } catch (error) {
-    console.log("❌ Funding check timeout or error:", error);
-    await updateDoc(docRef, { triggerFundabilityEvaluation: false });
-    setEvaluationError("Funding status check timeout. Please try again.");
-    return;
-  }
-}
+            try {
+              await waitForFundingCheck();
+              console.log("✅ Funding check completed successfully");
+              setEvaluationError("");
+            } catch (error) {
+              console.log("❌ Funding check timeout or error:", error);
+              await updateDoc(docRef, { triggerFundabilityEvaluation: false });
+              setEvaluationError("Funding status check timeout. Please try again.");
+              return;
+            }
+          }
           // 🔥 Wait for funding data if user has applied
           if (hasAppliedForFunding && !isFundingDataLoaded) {
             console.log(
@@ -1460,10 +1452,13 @@ if (!fundingCheckComplete) {
             const startTime = Date.now();
 
             while (
-              hasAppliedForFunding &&
-              !isFundingDataLoaded &&
+              !isFundingDataLoadedRef.current &&
               Date.now() - startTime < maxWaitTime
             ) {
+              await new Promise((resolve) => setTimeout(resolve, 500));
+            }
+
+            if (!isFundingDataLoadedRef.current) {
               await new Promise((resolve) => setTimeout(resolve, 500));
             }
 
@@ -1511,28 +1506,19 @@ if (!fundingCheckComplete) {
       }
 
       // ✅ Load saved AI result - WITH IMPROVED LOGIC
+      // Inside your onSnapshot callback, replace the saved result loading block:
       try {
         const aiSnap = await getDoc(aiEvalRef);
         if (aiSnap.exists()) {
           const saved = aiSnap.data();
           if (saved.result) {
-            console.log("📄 Found saved AI evaluation result");
-            console.log("Saved funding status:", saved.includedFundingData);
-            console.log("Current funding status:", hasAppliedForFunding);
+            console.log("📄 Loading saved AI evaluation result");
+            setAiEvaluationResult(saved.result);
 
-            // 🔥 IMPROVED LOGIC: Load the saved result but track if we need to re-evaluate
-            const shouldLoadSavedResult = true; // Always load to show something
-
-            if (shouldLoadSavedResult) {
-              console.log("✅ Loading saved result");
-              setAiEvaluationResult(saved.result);
-
-              // 🔥 NEW: If funding status doesn't match, the automatic re-evaluation useEffect will handle it
-              if (hasAppliedForFunding && saved.includedFundingData === false) {
-                console.log(
-                  "⚠️ Saved result doesn't include funding data, but automatic re-evaluation will handle this"
-                );
-              }
+            // ✅ If it already includes funding data, mark reevaluation as done
+            // so the auto-reevaluation effect never fires
+            if (saved.includedFundingData === true || !hasAppliedForFunding) {
+              hasReevaluated.current = true;
             }
           }
         }
@@ -1587,130 +1573,130 @@ if (!fundingCheckComplete) {
   const ScoreIcon = scoreLevel.icon;
 
   const formatAiResult = (text) => {
-  if (!text) return null;
+    if (!text) return null;
 
-  const cleanedResult = text.replace(/\*\*(.*?)\*\*/g, "$1");
-  const sections = cleanedResult.split(/(?=###\s)/g);
+    const cleanedResult = text.replace(/\*\*(.*?)\*\*/g, "$1");
+    const sections = cleanedResult.split(/(?=###\s)/g);
 
-  return sections.map((section, index) => {
-    const trimmed = section.trim();
-    if (!trimmed) return null;
+    return sections.map((section, index) => {
+      const trimmed = section.trim();
+      if (!trimmed) return null;
 
-    const isCategorySection = /^###\s+\d+\./.test(trimmed);
+      const isCategorySection = /^###\s+\d+\./.test(trimmed);
 
-    if (isCategorySection) {
-      const lines = trimmed.split("\n").filter((line) => line.trim());
-      const header = lines[0];
-      const content = lines.slice(1).join("\n");
+      if (isCategorySection) {
+        const lines = trimmed.split("\n").filter((line) => line.trim());
+        const header = lines[0];
+        const content = lines.slice(1).join("\n");
 
-      // Extract badges
-      const evidenceMatch   = content.match(/Evidence\s*:\s*([^\n]+)/i);
-      const confidenceMatch = content.match(/Confidence\s*:\s*(High|Medium|Low)/i);
-      const confRatMatch    = content.match(/Confidence Rationale\s*:\s*([^\n]+)/i);
-      const confidenceLevel = confidenceMatch?.[1] || null;
+        // Extract badges
+        const evidenceMatch = content.match(/Evidence\s*:\s*([^\n]+)/i);
+        const confidenceMatch = content.match(/Confidence\s*:\s*(High|Medium|Low)/i);
+        const confRatMatch = content.match(/Confidence Rationale\s*:\s*([^\n]+)/i);
+        const confidenceLevel = confidenceMatch?.[1] || null;
 
-      const confidenceColor =
-        confidenceLevel === "High"   ? { bg: "#e8f5e9", text: "#1B5E20" } :
-        confidenceLevel === "Medium" ? { bg: "#fff3e0", text: "#E65100" } :
-        confidenceLevel === "Low"    ? { bg: "#ffebee", text: "#B71C1C" } : null;
+        const confidenceColor =
+          confidenceLevel === "High" ? { bg: "#e8f5e9", text: "#1B5E20" } :
+            confidenceLevel === "Medium" ? { bg: "#fff3e0", text: "#E65100" } :
+              confidenceLevel === "Low" ? { bg: "#ffebee", text: "#B71C1C" } : null;
 
-      // Split off improvement section
-      const improvementIndex = content.toLowerCase().indexOf("how to improve");
-      let mainContent = content;
-      let improvementContent = "";
-      if (improvementIndex !== -1) {
-        mainContent = content.substring(0, improvementIndex);
-        improvementContent = content.substring(improvementIndex);
-      }
+        // Split off improvement section
+        const improvementIndex = content.toLowerCase().indexOf("how to improve");
+        let mainContent = content;
+        let improvementContent = "";
+        if (improvementIndex !== -1) {
+          mainContent = content.substring(0, improvementIndex);
+          improvementContent = content.substring(improvementIndex);
+        }
 
-      // Strip badge lines from main content
-      const mainCleaned = mainContent
-        .replace(/Evidence\s*:\s*[^\n]+\n?/i, "")
-        .replace(/Confidence\s*:\s*[^\n]+\n?/i, "")
-        .replace(/Confidence Rationale\s*:\s*[^\n]+\n?/i, "")
-        .trim();
+        // Strip badge lines from main content
+        const mainCleaned = mainContent
+          .replace(/Evidence\s*:\s*[^\n]+\n?/i, "")
+          .replace(/Confidence\s*:\s*[^\n]+\n?/i, "")
+          .replace(/Confidence Rationale\s*:\s*[^\n]+\n?/i, "")
+          .trim();
 
-      return (
-        <div key={index} style={{ marginBottom: "20px", border: "1px solid #e8d8cf", borderRadius: "8px", overflow: "hidden" }}>
-          {/* Header */}
-          <div style={{ backgroundColor: "#8d6e63", color: "white", padding: "12px 16px", fontWeight: "bold" }}>
-            {header.replace("###", "").trim()}
-          </div>
-
-          {/* Evidence + Confidence badges */}
-          {(evidenceMatch || confidenceLevel) && (
-            <div style={{
-              display: "flex", gap: "10px", padding: "10px 16px",
-              backgroundColor: "#f9f5f0", borderBottom: "1px solid #e8d8cf",
-              flexWrap: "wrap", alignItems: "flex-start"
-            }}>
-              {evidenceMatch && (
-                <div style={{
-                  display: "flex", alignItems: "flex-start", gap: "6px",
-                  backgroundColor: "#f3e8dc", padding: "5px 12px",
-                  borderRadius: "16px", fontSize: "12px", color: "#5d4037", maxWidth: "100%"
-                }}>
-                  <span style={{ marginTop: "1px", flexShrink: 0 }}>📄</span>
-                  <span style={{ lineHeight: "1.4" }}>{evidenceMatch[1].trim()}</span>
-                </div>
-              )}
-              {confidenceLevel && confidenceColor && (
-                <div style={{
-                  display: "flex", alignItems: "center", gap: "6px",
-                  backgroundColor: confidenceColor.bg, padding: "5px 12px",
-                  borderRadius: "16px", fontSize: "12px",
-                  color: confidenceColor.text, fontWeight: "600", flexShrink: 0
-                }}>
-                  <span>🛡</span>
-                  <span>Confidence: {confidenceLevel}</span>
-                </div>
-              )}
-              {confRatMatch && (
-                <div style={{
-                  width: "100%", fontSize: "12px", color: "#8d6e63",
-                  fontStyle: "italic", paddingLeft: "4px", marginTop: "2px", lineHeight: "1.4"
-                }}>
-                  {confRatMatch[1].trim()}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Main Content */}
-          <div style={{ padding: "16px", backgroundColor: "white" }}>
-            <div style={{ whiteSpace: "pre-wrap", lineHeight: "1.6", color: "#5d4037", marginBottom: improvementContent ? "15px" : "0" }}>
-              {mainCleaned}
+        return (
+          <div key={index} style={{ marginBottom: "20px", border: "1px solid #e8d8cf", borderRadius: "8px", overflow: "hidden" }}>
+            {/* Header */}
+            <div style={{ backgroundColor: "#8d6e63", color: "white", padding: "12px 16px", fontWeight: "bold" }}>
+              {header.replace("###", "").trim()}
             </div>
 
-            {improvementContent && (
-              <div style={{ backgroundColor: "#f8f4f0", padding: "15px", borderRadius: "6px", borderLeft: "4px solid #ff9800" }}>
-                <div style={{ fontWeight: "bold", color: "#5d4037", marginBottom: "10px", display: "flex", alignItems: "center", gap: "8px" }}>
-                  <TrendingUp size={16} />
-                  Improvement Actions
-                </div>
-                <div style={{ whiteSpace: "pre-wrap", lineHeight: "1.6", color: "#6d4c41", fontSize: "14px" }}>
-                  {improvementContent.replace("How to Improve:", "").trim()}
-                </div>
+            {/* Evidence + Confidence badges */}
+            {(evidenceMatch || confidenceLevel) && (
+              <div style={{
+                display: "flex", gap: "10px", padding: "10px 16px",
+                backgroundColor: "#f9f5f0", borderBottom: "1px solid #e8d8cf",
+                flexWrap: "wrap", alignItems: "flex-start"
+              }}>
+                {evidenceMatch && (
+                  <div style={{
+                    display: "flex", alignItems: "flex-start", gap: "6px",
+                    backgroundColor: "#f3e8dc", padding: "5px 12px",
+                    borderRadius: "16px", fontSize: "12px", color: "#5d4037", maxWidth: "100%"
+                  }}>
+                    <span style={{ marginTop: "1px", flexShrink: 0 }}>📄</span>
+                    <span style={{ lineHeight: "1.4" }}>{evidenceMatch[1].trim()}</span>
+                  </div>
+                )}
+                {confidenceLevel && confidenceColor && (
+                  <div style={{
+                    display: "flex", alignItems: "center", gap: "6px",
+                    backgroundColor: confidenceColor.bg, padding: "5px 12px",
+                    borderRadius: "16px", fontSize: "12px",
+                    color: confidenceColor.text, fontWeight: "600", flexShrink: 0
+                  }}>
+                    <span>🛡</span>
+                    <span>Confidence: {confidenceLevel}</span>
+                  </div>
+                )}
+                {confRatMatch && (
+                  <div style={{
+                    width: "100%", fontSize: "12px", color: "#8d6e63",
+                    fontStyle: "italic", paddingLeft: "4px", marginTop: "2px", lineHeight: "1.4"
+                  }}>
+                    {confRatMatch[1].trim()}
+                  </div>
+                )}
               </div>
             )}
+
+            {/* Main Content */}
+            <div style={{ padding: "16px", backgroundColor: "white" }}>
+              <div style={{ whiteSpace: "pre-wrap", lineHeight: "1.6", color: "#5d4037", marginBottom: improvementContent ? "15px" : "0" }}>
+                {mainCleaned}
+              </div>
+
+              {improvementContent && (
+                <div style={{ backgroundColor: "#f8f4f0", padding: "15px", borderRadius: "6px", borderLeft: "4px solid #ff9800" }}>
+                  <div style={{ fontWeight: "bold", color: "#5d4037", marginBottom: "10px", display: "flex", alignItems: "center", gap: "8px" }}>
+                    <TrendingUp size={16} />
+                    Improvement Actions
+                  </div>
+                  <div style={{ whiteSpace: "pre-wrap", lineHeight: "1.6", color: "#6d4c41", fontSize: "14px" }}>
+                    {improvementContent.replace("How to Improve:", "").trim()}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      }
+
+      return (
+        <div key={index} style={{ marginBottom: "15px" }}>
+          <div style={{
+            fontSize: "14px", lineHeight: "1.6", color: "#6d4c41",
+            whiteSpace: "pre-wrap", backgroundColor: "white",
+            padding: "16px", borderRadius: "8px", border: "1px solid #e8d8cf"
+          }}>
+            {trimmed}
           </div>
         </div>
       );
-    }
-
-    return (
-      <div key={index} style={{ marginBottom: "15px" }}>
-        <div style={{
-          fontSize: "14px", lineHeight: "1.6", color: "#6d4c41",
-          whiteSpace: "pre-wrap", backgroundColor: "white",
-          padding: "16px", borderRadius: "8px", border: "1px solid #e8d8cf"
-        }}>
-          {trimmed}
-        </div>
-      </div>
-    );
-  }).filter(Boolean);
-};
+    }).filter(Boolean);
+  };
 
   return (
     <>
@@ -2253,7 +2239,7 @@ if (!fundingCheckComplete) {
                           color: "#6d4c41",
                         }}
                       >
-                        {hasAppliedForFunding
+                        {true
                           ? "Seven key assessment areas:"
                           : "Four key assessment areas:"}
                       </p>
@@ -2281,7 +2267,9 @@ if (!fundingCheckComplete) {
                           inclusion, environmental responsibility, and CSR
                           investment
                         </li>
-                        {hasAppliedForFunding && (
+                        <li></li>
+                       <h2><strong>Fundibility section:</strong></h2> 
+                      
                           <>
                             <li style={{ marginBottom: "6px" }}>
                               <strong>Business Plan:</strong> Comprehensive
@@ -2298,7 +2286,7 @@ if (!fundingCheckComplete) {
                               assessment and financial reliability
                             </li>
                           </>
-                        )}
+                       
                       </ul>
                     </div>
 
@@ -2374,8 +2362,8 @@ if (!fundingCheckComplete) {
                         operational strength and pitch quality, while mature
                         companies are assessed primarily on financial
                         performance.
-                        {hasAppliedForFunding &&
-                          " When you apply for funding, additional weight is given to your Business Plan, Pitch Deck, and Credit Report to provide a comprehensive assessment of your investment readiness."}
+                        
+                        When you apply for funding, additional weight is given to your Business Plan, Pitch Deck, and Credit Report to provide a comprehensive assessment of your investment readiness.
                         Financial readiness and strength typically carry the
                         highest weights across all stages.
                       </p>

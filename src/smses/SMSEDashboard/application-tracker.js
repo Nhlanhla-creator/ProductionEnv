@@ -30,47 +30,42 @@ export function ApplicationTracker({ styles, userId }) {
     setTrackerSteps(newSteps)
   }
 
-  useEffect(() => {
-    const fetchApplicationStatus = async () => {
-      if (!userId) return;
+useEffect(() => {
+  const fetchApplicationStatus = async () => {
+    if (!userId) return;
 
-      try {
-        /** -------------------
-         * FUNDING & SUPPORT
-         * ------------------- */
-        const universalRef = doc(db, "universalProfiles", userId);
-        const universalSnap = await getDoc(universalRef);
+    try {
+      const universalRef = doc(db, "universalProfiles", userId);
+      const universalSnap = await getDoc(universalRef);
 
-        let fundingApplied = false;
-        if (universalSnap.exists()) {
-          const data = universalSnap.data();
-          const completedSections = data.completedSections || {};
+      let fundingApplied = false;
+      if (universalSnap.exists()) {
+        const data = universalSnap.data();
+        const completedSections = data.completedSections || {};
 
-          const requiredFundingSections = [
-            "applicationOverview",
-            "contactDetails",
-            "declarationCommitment",
-            "declarationConsent",
-            "documentUpload",
-            "documents",
-            "enterpriseReadiness",
-            "entityOverview",
-            "financialOverview",
-            "growthPotential",
-            "guarantees",
-            "howDidYouHear",
-            "instructions",
-            "legalCompliance",
-            "ownershipManagement",
-            "productsServices",
-            "socialImpact",
-            "useOfFunds"
-          ];
+        // ✅ Match EXACTLY the section IDs from FundingApplication.js sectionsWithGuarantees
+        const requiredFundingSections = [
+          "applicationOverview",
+          "useOfFunds",
+          "enterpriseReadiness",
+          "guarantees",
+          "growthPotential",
+          "socialImpact",
+          "documentUpload",
+          "declarationCommitment",
+        ];
 
-          fundingApplied = requiredFundingSections.every(
-            (section) => completedSections[section] === true
-          );
-        }
+        const sectionsComplete = requiredFundingSections.every(
+          (section) => completedSections[section] === true
+        );
+
+        // ✅ Also check the direct submission flag as a fallback
+        fundingApplied = sectionsComplete || data.applicationSubmitted === true;
+
+        console.log("📋 completedSections:", completedSections);
+        console.log("❌ Missing sections:", requiredFundingSections.filter(s => !completedSections[s]));
+        console.log("✅ fundingApplied:", fundingApplied);
+      }
 
         /** -------------------
          * ADVISORY/BOARD MEMBER

@@ -599,7 +599,7 @@ const rejectedDocsText = (reportData.rejectedDocs || []).length
   : "No rejected documents.";
 
   const scoreSummaryText = `
-BIG Score: ${reportData.overallScore} — ${getScoreLevel(reportData.overallScore).level}
+
 Compliance: ${reportData.complianceScore ?? "N/A"}
 Legitimacy: ${reportData.legitimacyScore ?? "N/A"}
 Leadership: ${reportData.leadershipScore ?? "N/A"}
@@ -923,7 +923,7 @@ Keep it concise, professional, and actionable.
           </div>
           <div class="content">
             <div class="scores-grid">
-      <div class="score-card"><div class="score-value">${reportData.bigScore}</div><div class="score-label">BIG Score</div></div>
+
 <div class="score-card"><div class="score-value">${reportData.complianceScore ?? 0}%</div><div class="score-label">Compliance</div></div>
 <div class="score-card"><div class="score-value">${reportData.legitimacyScore ?? 0}</div><div class="score-label">Legitimacy</div></div>
 <div class="score-card"><div class="score-value">${reportData.leadershipScore ?? 0}</div><div class="score-label">Leadership</div></div>
