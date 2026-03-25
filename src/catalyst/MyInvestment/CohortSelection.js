@@ -2,29 +2,25 @@ import React, { useState } from "react";
 import { Bar, Doughnut } from "react-chartjs-2";
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend } from "chart.js";
 import { usePortfolio } from "../../context/PortfolioContext";
-import { color } from "framer-motion";
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend);
 
 const B = { darkest: "#3b2409", dark: "#5e3f26", medium: "#7d5a36", warm: "#9c7c54", light: "#b8a082", pale: "#d4c4b0", offwhite: "#f0e8de" };
 const C = ["#3b2409", "#5e3f26", "#7d5a36", "#9c7c54", "#b8a082", "#c2a882", "#d4c4b0", "#a08060"];
 
-// ── Layout constants — shared with all dashboard pages ────────────────────────
-const CARD_HEIGHT  = "460px";
+const CARD_HEIGHT = "460px";
 const CHART_HEIGHT = "260px";
 
 // ── Chart options ─────────────────────────────────────────────────────────────
 
-// Vertical bar (used for Min/Avg/Max style charts — always small datasets)
 const vBarOpts = (yCb, xTitle) => ({
   responsive: true, maintainAspectRatio: false, animation: false,
   plugins: { legend: { display: false, position: "bottom", labels: { color: B.dark, font: { size: 11 }, boxWidth: 12 } }, datalabels: { display: false } },
   scales: {
     x: { title: { display: true, text: xTitle, color: B.dark }, grid: { display: false }, ticks: { color: B.dark, font: { size: 10 } } },
-    y: { title: { display: true, text: "Number of SMEs", color: B.dark }, beginAtZero: true, grid: { color: B.offwhite }, ticks: { color: B.dark, callback: yCb || (v => v), stepSize: 1, } },
+    y: { title: { display: true, text: "Number of SMEs", color: B.dark }, beginAtZero: true, grid: { color: B.offwhite }, ticks: { color: B.dark, callback: yCb || (v => v), stepSize: 1 } },
   },
 });
 
-// Horizontal bar (used when a categorical distribution has >5 entries)
 const hBarOpts = (integralOnly) => ({
   responsive: true, maintainAspectRatio: false, animation: false,
   indexAxis: "y",
@@ -33,10 +29,7 @@ const hBarOpts = (integralOnly) => ({
     x: {
       beginAtZero: true,
       grid: { display: true, color: B.offwhite },
-      ticks: {
-        color: B.dark, font: { size: 10 },
-        ...(integralOnly ? { callback: v => Number.isInteger(v) ? v : "", precision: 0, stepSize: 1 } : {}),
-      },
+      ticks: { color: B.dark, font: { size: 10 }, ...(integralOnly ? { callback: v => Number.isInteger(v) ? v : "", precision: 0, stepSize: 1 } : {}) },
     },
     y: { grid: { display: false }, ticks: { color: B.dark, font: { size: 11 } } },
   },
@@ -47,100 +40,15 @@ const doughnutOpts = {
   plugins: { legend: { position: "bottom", labels: { color: B.dark, font: { size: 11 }, boxWidth: 12 } }, datalabels: { color: B.offwhite } },
 };
 
-// ── Skeleton Loaders ──────────────────────────────────────────────────────────
-const ChartSkeleton = () => (
-  <div className="flex-1 min-h-[200px] flex items-center justify-center">
-    <div className="w-full h-full relative">
-      <div className="absolute inset-0 flex items-end justify-around px-4">
-        {[1, 2, 3, 4, 5].map((i) => (
-          <div
-            key={i}
-            className="w-8 bg-shimmer-mid bg-shimmer rounded-t-md animate-shimmer"
-            style={{ height: `${[55, 80, 40, 70, 30][i - 1]}%`, animationDelay: `${i * 0.1}s` }}
-          />
-        ))}
-      </div>
-      <div className="absolute bottom-0 left-0 right-0 h-px bg-paleBrown" />
-    </div>
-  </div>
-);
-
-const DoughnutSkeleton = () => (
-  <div className="flex-1 min-h-[200px] flex items-center justify-center">
-    <div className="relative w-32 h-32">
-      <div className="absolute inset-0 rounded-full border-8 border-shimmer-mid bg-shimmer animate-shimmer" />
-      <div className="absolute inset-2 rounded-full border-4 border-shimmer-light bg-shimmer animate-shimmer-d1" style={{ clipPath: "polygon(0 0, 50% 0, 50% 100%, 0 100%)" }} />
-      <div className="absolute inset-2 rounded-full border-4 border-shimmer-dark bg-shimmer animate-shimmer-d2" style={{ clipPath: "polygon(50% 0, 100% 0, 100% 100%, 50% 100%)" }} />
-      <div className="absolute inset-[30%] rounded-full bg-white" />
-    </div>
-  </div>
-);
-
-const GaugeSkeleton = () => (
-  <div className="flex-1 flex flex-col items-center justify-center gap-4">
-    <div className="relative w-32 h-32">
-      <div className="absolute inset-0 rounded-full border-8 border-shimmer-mid bg-shimmer animate-shimmer" />
-      <div className="absolute inset-0 rounded-full border-8 border-shimmer-dark bg-shimmer animate-shimmer-d1"
-        style={{ clipPath: "polygon(50% 50%, 50% 0, 100% 0, 100% 100%, 50% 100%, 50% 50%)", transform: "rotate(-45deg)" }} />
-      <div className="absolute inset-0 flex items-center justify-center">
-        <div className="w-12 h-8 bg-shimmer-mid bg-shimmer animate-shimmer-d2 rounded" />
-      </div>
-    </div>
-    <div className="flex gap-6">
-      {[1, 2, 3].map((i) => (
-        <div key={i} className="text-center">
-          <div className="w-12 h-3 bg-shimmer-light bg-shimmer animate-shimmer rounded mx-auto mb-1" />
-          <div className="w-16 h-5 bg-shimmer-mid bg-shimmer animate-shimmer-d1 rounded" />
-        </div>
-      ))}
-    </div>
-  </div>
-);
-
-const ProgressBarSkeleton = () => (
-  <div className="flex-1 flex flex-col items-center justify-center gap-4">
-    <div className="w-32 h-32 bg-shimmer-light bg-shimmer animate-shimmer rounded-full" />
-    <div className="w-24 h-6 bg-shimmer-mid bg-shimmer animate-shimmer-d1 rounded" />
-    <div className="w-full h-3 bg-shimmer-light bg-shimmer animate-shimmer-d2 rounded-full" />
-    <div className="flex justify-between w-full">
-      <div className="w-16 h-3 bg-shimmer-mid bg-shimmer animate-shimmer-d3 rounded" />
-      <div className="w-16 h-3 bg-shimmer-dark bg-shimmer animate-shimmer-d4 rounded" />
-    </div>
-  </div>
-);
-
-const CardSkeleton = ({ type = "bar" }) => {
-  const body = { bar: <ChartSkeleton />, doughnut: <DoughnutSkeleton />, gauge: <GaugeSkeleton />, progress: <ProgressBarSkeleton /> }[type] || <ChartSkeleton />;
-  return (
-    <div
-      className="bg-white rounded-xl p-5 shadow-[0_2px_10px_rgba(59,36,9,0.07)] border border-paleBrown flex flex-col"
-      style={{ height: CARD_HEIGHT }}
-    >
-      <div className="pb-2.5 border-b border-offWhite mb-2.5">
-        <div className="w-3/4 h-4 bg-shimmer-dark bg-shimmer animate-shimmer rounded" />
-      </div>
-      <div className="w-2/3 h-3 bg-shimmer-mid bg-shimmer animate-shimmer-d1 rounded mb-3 ml-1" />
-      {body}
-    </div>
-  );
-};
-
 // ── Shared primitives ─────────────────────────────────────────────────────────
 const Card = ({ title, footer, children }) => (
-  <div style={{
-    background: "#fff", borderRadius: "10px", padding: "20px",
-    height: CARD_HEIGHT,
-    boxShadow: "0 2px 10px rgba(59,36,9,0.07)", border: `1px solid ${B.pale}`,
-    display: "flex", flexDirection: "column",
-  }}>
+  <div style={{ background: "#fff", borderRadius: "10px", padding: "20px", height: CARD_HEIGHT, boxShadow: "0 2px 10px rgba(59,36,9,0.07)", border: `1px solid ${B.pale}`, display: "flex", flexDirection: "column" }}>
     <div style={{ paddingBottom: "10px", borderBottom: `1px solid ${B.offwhite}`, marginBottom: "8px" }}>
       <h3 style={{ fontSize: "14px", fontWeight: "700", color: B.dark, margin: 0 }}>{title}</h3>
     </div>
     <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>{children}</div>
     {footer && (
-      <div style={{ marginTop: "8px", padding: "7px 10px", background: B.offwhite, borderRadius: "6px", flexShrink: 0 }}>
-        {footer}
-      </div>
+      <div style={{ marginTop: "8px", padding: "7px 10px", borderRadius: "6px", flexShrink: 0 }}>{footer}</div>
     )}
   </div>
 );
@@ -157,11 +65,123 @@ const EmptyState = () => (
   </div>
 );
 
+// ── Skeleton Loaders ──────────────────────────────────────────────────────────
+// Constants (labels, legends, pill text, known targets) render as-is.
+// Only fetched values are shimmed.
+
+// AverageMatchStrength + AverageBIGScore — default "range" view
+const ScoreRangeSkeleton = ({ target, suffix = "%" }) => (
+  <>
+    <div style={{ display: "flex", gap: "6px", marginBottom: "10px", flexShrink: 0 }}>
+      <Pill label="Range" active />
+      <Pill label="Histogram" />
+    </div>
+    <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "12px" }}>
+      {/* big avg figure */}
+      <div className="bg-shimmer-dark bg-shimmer animate-shimmer" style={{ width: "140px", height: "54px", borderRadius: "8px" }} />
+      {/* target is a known constant */}
+      <div style={{ fontSize: "14px", color: B.medium, fontWeight: 600 }}>Target: {target}{suffix}</div>
+      <div style={{ width: "100%", marginTop: "4px" }}>
+        {/* layered bar — widths are unknown, use placeholder widths */}
+        <div style={{ position: "relative", width: "100%", height: "12px", background: B.pale, borderRadius: "6px" }}>
+          <div className="bg-shimmer-light bg-shimmer animate-shimmer" style={{ position: "absolute", left: 0, top: 0, width: "75%", height: "100%", borderRadius: "6px" }} />
+          <div className="bg-shimmer-mid bg-shimmer animate-shimmer-d1" style={{ position: "absolute", left: 0, top: 0, width: "52%", height: "100%", borderRadius: "6px" }} />
+          <div className="bg-shimmer-dark bg-shimmer animate-shimmer-d2" style={{ position: "absolute", left: 0, top: 0, width: "30%", height: "100%", borderRadius: "6px" }} />
+        </div>
+        {/* value labels below bar */}
+        <div style={{ display: "flex", justifyContent: "space-between", marginTop: "10px" }}>
+          <div className="bg-shimmer-light bg-shimmer animate-shimmer-d1" style={{ width: "36px", height: "14px", borderRadius: "4px" }} />
+          <div className="bg-shimmer-mid bg-shimmer animate-shimmer-d2" style={{ width: "56px", height: "14px", borderRadius: "4px" }} />
+          <div className="bg-shimmer-light bg-shimmer animate-shimmer-d3" style={{ width: "36px", height: "14px", borderRadius: "4px" }} />
+        </div>
+        {/* legend — labels are constants */}
+        <div style={{ position: "relative", width: "95%", height: "20px", marginTop: "36px" }}>
+          {[["Min", B.darkest], ["Cohort Avg", B.medium], ["Max", B.light]].map(([label, color]) => (
+            <div key={label} style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+              <div style={{ width: "12px", height: "12px", borderRadius: "6px", background: color }} />
+              <span style={{ fontSize: "11px", color }}>{label}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  </>
+);
+
+// FundingReadinessRate — big % → "X of Y SMEs" → progress bar → Current / Target
+const FundingReadinessSkeleton = () => (
+  <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "12px", marginTop: "-8px" }}>
+    <div className="bg-shimmer-dark bg-shimmer animate-shimmer" style={{ width: "140px", height: "54px", borderRadius: "8px" }} />
+    <div className="bg-shimmer-light bg-shimmer animate-shimmer-d1" style={{ width: "190px", height: "16px", borderRadius: "4px" }} />
+    <div style={{ width: "100%", marginTop: "4px" }}>
+      <div style={{ width: "100%", background: B.pale, borderRadius: "6px", height: "12px", overflow: "hidden" }}>
+        <div className="bg-shimmer-mid bg-shimmer animate-shimmer" style={{ width: "55%", height: "100%", borderRadius: "6px" }} />
+      </div>
+      <div style={{ display: "flex", justifyContent: "space-between", padding: "4px" }}>
+        {/* current rate is dynamic */}
+        <div className="bg-shimmer-light bg-shimmer animate-shimmer-d2" style={{ width: "80px", height: "11px", borderRadius: "4px", marginTop: "2px" }} />
+        {/* target is a known constant */}
+        <span style={{ fontSize: "14px", color: B.warm }}>Target: 70%</span>
+      </div>
+    </div>
+  </div>
+);
+
+// AverageVettingTime — SVG gauge arc → center value → Actual / Target / Variance stats
+const VettingTimeSkeleton = () => {
+  const R = 54, CIRC = 2 * Math.PI * R;
+  return (
+    <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+      <svg width="260" height="260" viewBox="0 0 160 160">
+        <circle cx="80" cy="80" r={R} stroke={B.pale} strokeWidth="11" fill="none" />
+        {/* arc shimmed — actual value unknown, use a mid-point placeholder */}
+        <circle cx="80" cy="80" r={R} stroke={B.light} strokeWidth="11" fill="none" strokeLinecap="round"
+          strokeDasharray={CIRC} strokeDashoffset={CIRC * 0.45} transform="rotate(-90 80 80)" />
+        {/* center number shimmed */}
+        <rect x="54" y="60" width="52" height="26" rx="5" fill={B.pale} />
+        {/* "days" label is a constant */}
+        <text x="80" y="93" textAnchor="middle" fill={B.warm} fontSize="13">days</text>
+      </svg>
+      {/* stat labels are constants, values are shimmed */}
+      <div style={{ display: "flex", gap: "24px" }}>
+        {[["Actual", "44px"], ["Target", "44px"], ["Variance", "52px"]].map(([label, w], i) => (
+          <div key={label} style={{ textAlign: "center" }}>
+            <div style={{ fontSize: "10px", color: B.warm, marginBottom: "3px" }}>{label}</div>
+            <div className={`bg-shimmer-mid bg-shimmer animate-shimmer-d${i + 1}`} style={{ width: w, height: "20px", borderRadius: "4px", margin: "0 auto" }} />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+};
+
+// SMEPipelineProgress — default "stage" view: pills → hbar rows → stage badges
+const PipelineProgressSkeleton = () => (
+  <>
+    <div style={{ display: "flex", gap: "6px", marginBottom: "10px", flexShrink: 0 }}>
+      <Pill label="Stage Dist." active />
+      <Pill label="Funnel" />
+    </div>
+    <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column", gap: "8px" }}>
+      {[82, 64, 48, 36, 22].map((w, i) => (
+        <div key={i} style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          {/* stage label — unknown, shimmed */}
+          <div className={`bg-shimmer-light bg-shimmer animate-shimmer-d${(i % 4) + 1}`} style={{ width: "90px", height: "13px", borderRadius: "4px", flexShrink: 0 }} />
+          {/* bar — count unknown, widths are illustrative */}
+          <div className={`bg-shimmer-mid bg-shimmer animate-shimmer-d${(i % 4) + 1}`} style={{ width: `${w}%`, height: "24px", borderRadius: "4px" }} />
+        </div>
+      ))}
+    </div>
+    {/* stage count badges — dynamic, shimmed */}
+    <div style={{ display: "flex", justifyContent: "center", gap: "5px", flexWrap: "wrap", flexShrink: 0, marginTop: "8px" }}>
+      {[64, 80, 52, 68, 56].map((w, i) => (
+        <div key={i} className={`bg-shimmer-light bg-shimmer animate-shimmer-d${(i % 4) + 1}`} style={{ width: `${w}px`, height: "18px", borderRadius: "10px" }} />
+      ))}
+    </div>
+  </>
+);
+
 // ── Shared Range View ─────────────────────────────────────────────────────────
-// Joint bar shows the full-pipeline range: Min → pipelineAvg → Max.
-// The big "Cohort Avg" figure above is separately sourced from portfolio SMEs only.
-// A distinct cohort marker (filled circle) is also pinned on the bar so you can
-// see exactly where the cohort sits relative to the full-pipeline spread.
 const ScoreRangeView = ({ min, pipelineAvg, max, cohortAvg, target, suffix = "%" }) => {
   if (!min && !pipelineAvg && !max && !cohortAvg) return <EmptyState />;
 
@@ -170,54 +190,32 @@ const ScoreRangeView = ({ min, pipelineAvg, max, cohortAvg, target, suffix = "%"
 
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "12px" }}>
-
-      {/* "Cohort Avg" label
-      <div style={{ fontSize: "14px", color: B.darkest, fontWeight: 600, letterSpacing: "0.8px" }}>
-        Cohorts Avg
-      </div> */}
-
-      {/* Big cohort avg figure */}
-      <div style={{ fontSize: "64px", fontWeight: "800", color: B.darkest, lineHeight: 1, marginTop: "-4px" }}>
+      <div style={{ fontSize: "64px", fontWeight: "800", color: B.darkest, lineHeight: 1 }}>
         {cohortAvg}<span style={{ fontSize: "32px" }}>{suffix}</span>
       </div>
-
-      {/* Target */}
-      <div style={{ fontSize: "14px", color: B.medium, fontWeight: 600 }}>
-        Target: {target}{suffix}
-      </div>
-
-      {/* Joint progress bar */}
+      <div style={{ fontSize: "14px", color: B.medium, fontWeight: 600 }}>Target: {target}{suffix}</div>
       <div style={{ width: "100%", marginTop: "4px" }}>
-
-        {/* Track */}
         <div style={{ position: "relative", width: "100%", height: "12px", background: B.pale, borderRadius: "6px", overflow: "visible" }}>
-          {/* Max layer — lightest */}
           <div style={{ position: "absolute", left: 0, top: 0, width: `${mx}%`, height: "100%", background: B.light, borderRadius: "6px", overflow: "hidden" }} />
-          {/* Pipeline avg layer — medium */}
           <div style={{ position: "absolute", left: 0, top: 0, width: `${pa}%`, height: "100%", background: B.medium, borderRadius: "6px", overflow: "hidden" }} />
-          {/* Min layer — darkest */}
           <div style={{ position: "absolute", left: 0, top: 0, width: `${mn}%`, height: "100%", background: B.dark, borderRadius: "6px", overflow: "hidden" }} />
         </div>
-
-        {/* Value labels */}
         <div style={{ position: "relative", width: "95%", height: "38px", marginTop: "6px" }}>
           {[
-            { val: mn, label: "Min",     color: B.dark   },
+            { val: mn, label: "Min", color: B.dark },
             { val: pa, label: "Matches Avg", color: B.medium },
-            { val: mx, label: "Max",     color: B.light  },
+            { val: mx, label: "Max", color: B.light },
           ].map(({ val, label, color }) => (
             <div key={label} style={{ position: "absolute", left: `${val}%`, transform: "translateX(-50%)", textAlign: "center", whiteSpace: "nowrap" }}>
               <div style={{ fontSize: "14px", fontWeight: 700, color }}>{val}{suffix}</div>
             </div>
           ))}
         </div>
-
-        {/* Custom legend */}
         <div style={{ position: "relative", width: "95%", height: "20px", marginTop: "6px" }}>
           {[
-            { label: "Cohort Avg", color: B.darkest },
-            { label: "Pipeline Avg", color: B.medium },
-            { label: "Target", color: B.light },
+            { label: "Min", color: B.darkest },
+            { label: "Cohort Avg", color: B.medium },
+            { label: "Max", color: B.light },
           ].map(({ label, color }) => (
             <div key={label} style={{ display: "flex", alignItems: "center", gap: "4px", marginRight: "16px" }}>
               <div style={{ width: "12px", height: "12px", borderRadius: "6px", background: color }} />
@@ -235,64 +233,27 @@ const AverageMatchStrength = () => {
   const { portfolioMetrics } = usePortfolio();
   const [view, setView] = useState("range");
 
-  // Range bar + histogram: full pipeline (unfiltered)
-  const m    = portfolioMetrics?.match || {};
+  const m = portfolioMetrics?.match || {};
   const dist = portfolioMetrics?.match?.dist || {};
-  // Big "Cohort Avg" figure: portfolio SMEs only (Active Support + Support Approved)
   const cohortAvg = portfolioMetrics?.match?.avg || 0;
-
   const hasData = m.min > 0 || m.avg > 0 || cohortAvg > 0;
 
   return (
     <Card title="Average Match Strength (%)">
-      <div
-        style={{
-          display: "flex",
-          gap: "6px",
-          marginBottom: "10px",
-          flexShrink: 0,
-        }}
-      >
-        <Pill
-          label="Range"
-          active={view === "range"}
-          onClick={() => setView("range")}
-        />
-        <Pill
-          label="Histogram"
-          active={view === "histogram"}
-          onClick={() => setView("histogram")}
-        />
+      <div style={{ display: "flex", gap: "6px", marginBottom: "10px", flexShrink: 0 }}>
+        <Pill label="Range" active={view === "range"} onClick={() => setView("range")} />
+        <Pill label="Histogram" active={view === "histogram"} onClick={() => setView("histogram")} />
       </div>
       {hasData ? (
-        view === "range" ? (
-          <ScoreRangeView
-            min={m.min}
-            pipelineAvg={m.avg}
-            max={m.max}
-            cohortAvg={cohortAvg}
-            target={75}
-          />
-        ) : (
-          <div style={{ height: CHART_HEIGHT }}>
-            <Bar
-              options={vBarOpts((v) => v, "Average Match Strength (%)")}
-              data={{
-                labels: Object.keys(dist),
-                datasets: [
-                  {
-                    label: "SMEs",
-                    data: Object.values(dist),
-                    backgroundColor: B.darkest,
-                  },
-                ],
-              }}
-            />
-          </div>
-        )
-      ) : (
-        <EmptyState />
-      )}
+        view === "range"
+          ? <ScoreRangeView min={m.min} pipelineAvg={m.avg} max={m.max} cohortAvg={cohortAvg} target={75} />
+          : <div style={{ height: CHART_HEIGHT }}>
+              <Bar
+                options={vBarOpts(v => v, "Average Match Strength (%)")}
+                data={{ labels: Object.keys(dist), datasets: [{ label: "SMEs", data: Object.values(dist), backgroundColor: B.darkest }] }}
+              />
+            </div>
+      ) : <EmptyState />}
     </Card>
   );
 };
@@ -300,21 +261,17 @@ const AverageMatchStrength = () => {
 // ── Average BIG Score ─────────────────────────────────────────────────────────
 const AverageBIGScore = () => {
   const { portfolioMetrics } = usePortfolio();
-  
   const [view, setView] = useState("range");
 
-  // Range bar + histogram: full pipeline (unfiltered)
-  const b    = portfolioMetrics?.bigScore || {};
+  const b = portfolioMetrics?.bigScore || {};
   const dist = portfolioMetrics?.bigScore?.dist || {};
-  // Big "Cohort Avg" figure: portfolio SMEs only (Active Support + Support Approved)
   const cohortAvg = portfolioMetrics?.bigScore?.avg || 0;
-
   const hasData = b.min > 0 || b.avg > 0 || cohortAvg > 0;
 
   return (
     <Card title="Average BIG Score (%)">
       <div style={{ display: "flex", gap: "6px", marginBottom: "10px", flexShrink: 0 }}>
-        <Pill label="Range"     active={view === "range"}     onClick={() => setView("range")} />
+        <Pill label="Range" active={view === "range"} onClick={() => setView("range")} />
         <Pill label="Histogram" active={view === "histogram"} onClick={() => setView("histogram")} />
       </div>
       {hasData ? (
@@ -334,26 +291,25 @@ const AverageBIGScore = () => {
 // ── Funding Readiness Rate ────────────────────────────────────────────────────
 const FundingReadinessRate = () => {
   const { portfolioMetrics } = usePortfolio();
-  const rate  = portfolioMetrics?.fundingReadinessRate ?? 0;
+  const rate = portfolioMetrics?.fundingReadinessRate ?? 0;
   const total = portfolioMetrics?.totalSMEs ?? 0;
   const ready = Math.round((rate / 100) * total);
 
   return (
     <Card title="Funding Readiness Rate (%)">
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "6px" }}>
-        <div style={{ display: "flex", gap: "6px", marginBottom: "10px", flexShrink: 0 }}>
-          <div style={{ width: "12px", height: "12px", borderRadius: "6px", background: "transparent" }} />
-        </div>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "12px", marginTop: "-8px" }}>
         <div style={{ fontSize: "64px", fontWeight: "800", color: B.darkest, lineHeight: 1 }}>
           {rate}<span style={{ fontSize: "32px" }}>%</span>
         </div>
         <div style={{ fontSize: "14px", color: B.medium, fontWeight: 600 }}>{ready} of {total} SMEs funding-ready</div>
-        <div style={{ width: "100%", background: B.pale, borderRadius: "4px", height: "10px", overflow: "hidden" }}>
-          <div style={{ width: `${rate}%`, background: B.medium, height: "100%", borderRadius: "4px" }} />
-        </div>
-        <div style={{ display: "flex", justifyContent: "space-between", width: "100%", padding: "0 4px" }}>
-          <span style={{ fontSize: "11px", color: B.warm }}>Current: {rate}%</span>
-          <span style={{ fontSize: "11px", color: B.warm }}>Target: 70%</span>
+        <div style={{ width: "100%", marginTop: "4px" }}>
+          <div style={{ width: "100%", background: B.pale, borderRadius: "6px", height: "12px", overflow: "hidden" }}>
+            <div style={{ width: `${rate}%`, background: B.medium, height: "100%", borderRadius: "6px" }} />
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", width: "100%", padding: "4px" }}>
+            <span style={{ fontSize: "14px", color: B.warm }}>Current: {rate}%</span>
+            <span style={{ fontSize: "14px", color: B.warm }}>Target: 70%</span>
+          </div>
         </div>
       </div>
     </Card>
@@ -363,8 +319,8 @@ const FundingReadinessRate = () => {
 // ── Average Vetting Time ──────────────────────────────────────────────────────
 const AverageVettingTime = () => {
   const { portfolioMetrics } = usePortfolio();
-  const ACTUAL   = portfolioMetrics?.vetting?.avg    || 0;
-  const TARGET   = portfolioMetrics?.vetting?.target || 10;
+  const ACTUAL = portfolioMetrics?.vetting?.avg || 0;
+  const TARGET = portfolioMetrics?.vetting?.target || 10;
   const VARIANCE = ACTUAL - TARGET;
   const R = 54, CIRC = 2 * Math.PI * R;
   const offset = CIRC - (CIRC * Math.min(ACTUAL, 60)) / 60;
@@ -383,12 +339,12 @@ const AverageVettingTime = () => {
             </svg>
             <div style={{ display: "flex", gap: "24px" }}>
               {[
-                ["Actual",   Math.round(ACTUAL) + "d",                                    B.dark],
-                ["Target",   TARGET + "d",                                                  B.medium],
-                ["Variance", (VARIANCE > 0 ? "+" : "") + Math.round(VARIANCE) + "d",       VARIANCE > 0 ? "#8b3a1a" : B.medium],
+                ["Actual", Math.round(ACTUAL) + "d", B.dark],
+                ["Target", TARGET + "d", B.medium],
+                ["Variance", (VARIANCE > 0 ? "+" : "") + Math.round(VARIANCE) + "d", VARIANCE > 0 ? "#8b3a1a" : B.medium],
               ].map(([l, v, col]) => (
                 <div key={l} style={{ textAlign: "center" }}>
-                  <div style={{ fontSize: "10px", color: B.warm, marginBottom: "3px" }}>{l}</div>
+                  <div style={{ fontSize: "14px", color: B.warm, marginBottom: "3px" }}>{l}</div>
                   <div style={{ fontSize: "16px", fontWeight: "700", color: col }}>{v}</div>
                 </div>
               ))}
@@ -403,37 +359,31 @@ const AverageVettingTime = () => {
 };
 
 // ── SME Pipeline Progress ─────────────────────────────────────────────────────
-// Stage Dist has 8 pipeline stages (>5) → horizontal bar, sorted highest → lowest.
-// Funnel view stays as a Doughnut (intentional visual, not a distribution comparison).
 const SMEPipelineProgress = () => {
   const { metrics } = usePortfolio();
-  const [view, setView]   = useState("stage");
-  const dist              = metrics?.stageDist || {};
+  const [view, setView] = useState("stage");
+  const dist = metrics?.stageDist || {};
 
-  // Filter out zero-count stages so the chart isn't padded with empty bars
-  const nonZeroEntries    = Object.entries(dist).filter(([, v]) => v > 0);
-  // Horizontal bar: sorted highest → lowest
-  const sortedEntries     = [...nonZeroEntries].sort((a, b) => b[1] - a[1]);
-  const hbarLabels        = sortedEntries.map(([k]) => k);
-  const hbarValues        = sortedEntries.map(([, v]) => v);
-  // Doughnut: keep original stage order for readability
-  const doughnutLabels    = nonZeroEntries.map(([k]) => k);
-  const doughnutValues    = nonZeroEntries.map(([, v]) => v);
+  const nonZeroEntries = Object.entries(dist).filter(([, v]) => v > 0);
+  const sortedEntries = [...nonZeroEntries].sort((a, b) => b[1] - a[1]);
+  const hbarLabels = sortedEntries.map(([k]) => k);
+  const hbarValues = sortedEntries.map(([, v]) => v);
+  const doughnutLabels = nonZeroEntries.map(([k]) => k);
+  const doughnutValues = nonZeroEntries.map(([, v]) => v);
 
   const hasData = nonZeroEntries.length > 0;
-  const innerH  = Math.max(parseInt(CHART_HEIGHT), hbarLabels.length * 36);
+  const innerH = Math.max(parseInt(CHART_HEIGHT), hbarLabels.length * 36);
 
   return (
     <Card title="SME Pipeline Progress">
       <div style={{ display: "flex", gap: "6px", marginBottom: "10px", flexShrink: 0 }}>
-        <Pill label="Stage Dist." active={view === "stage"}  onClick={() => setView("stage")} />
-        <Pill label="Funnel"      active={view === "funnel"} onClick={() => setView("funnel")} />
+        <Pill label="Stage Dist." active={view === "stage"} onClick={() => setView("stage")} />
+        <Pill label="Funnel" active={view === "funnel"} onClick={() => setView("funnel")} />
       </div>
       {hasData ? (
         <>
           <div style={{ flex: 1, overflow: "hidden" }}>
             {view === "stage" ? (
-              // >5 stages → horizontal bar
               <div style={{ height: `${innerH}px`, overflowY: hbarLabels.length > 7 ? "auto" : "visible" }}>
                 <Bar
                   options={hBarOpts(true)}
@@ -441,7 +391,6 @@ const SMEPipelineProgress = () => {
                 />
               </div>
             ) : (
-              // Doughnut funnel — keeps natural stage order
               <div style={{ height: CHART_HEIGHT }}>
                 <Doughnut
                   options={doughnutOpts}
@@ -450,10 +399,9 @@ const SMEPipelineProgress = () => {
               </div>
             )}
           </div>
-          {/* Stage count badges — shown in both views */}
           <div style={{ display: "flex", justifyContent: "center", gap: "5px", marginTop: "0px", flexWrap: "wrap", flexShrink: 0 }}>
             {doughnutLabels.map((s, i) => (
-              <span key={s} style={{ fontSize: "10px", color: B.dark, background: B.offwhite, padding: "3px 7px", borderRadius: "10px" }}>
+              <span key={s} style={{ fontSize: "10px", color: B.dark, padding: "3px 7px", borderRadius: "10px" }}>
                 {s}: <strong>{doughnutValues[i]}</strong>
               </span>
             ))}
@@ -467,16 +415,17 @@ const SMEPipelineProgress = () => {
 // ── Main ──────────────────────────────────────────────────────────────────────
 const CohortSelection = () => {
   const { loading } = usePortfolio();
+  const grid = { display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(380px, 1fr))", gap: "20px" };
 
   if (loading) {
     return (
-      <div className="w-full">
-        <div className="grid grid-cols-[repeat(auto-fill,minmax(380px,1fr))] gap-5">
-          <CardSkeleton type="bar" />
-          <CardSkeleton type="bar" />
-          <CardSkeleton type="progress" />
-          <CardSkeleton type="gauge" />
-          <CardSkeleton type="doughnut" />
+      <div style={{ width: "100%" }}>
+        <div style={grid}>
+          <Card title="Average Match Strength (%)"><ScoreRangeSkeleton target={75} /></Card>
+          <Card title="Average BIG Score (%)"><ScoreRangeSkeleton target={70} /></Card>
+          <Card title="Funding Readiness Rate (%)"><FundingReadinessSkeleton /></Card>
+          <Card title="Average Vetting Time (Days)"><VettingTimeSkeleton /></Card>
+          <Card title="SME Pipeline Progress"><PipelineProgressSkeleton /></Card>
         </div>
       </div>
     );
@@ -484,7 +433,7 @@ const CohortSelection = () => {
 
   return (
     <div style={{ width: "100%" }}>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(380px, 1fr))", gap: "20px" }}>
+      <div style={grid}>
         <AverageMatchStrength />
         <AverageBIGScore />
         <FundingReadinessRate />
