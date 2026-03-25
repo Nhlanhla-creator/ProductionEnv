@@ -1,7 +1,7 @@
 "use client"
 import { useState, useRef, useEffect } from "react"
 import { Eye, ChevronDown, Search, X, Trophy, TrendingUp, Calendar, DollarSign, FileText, Users, MapPin, GraduationCap, Briefcase, RefreshCw, BarChart3, Package, Star, MessageSquare, Send } from "lucide-react"
-import AdvisoryApplication from "../../smses/AdvisorApplication/AdvisorApplication"
+// REMOVED: import AdvisoryApplication from "../../smses/AdvisorApplication/AdvisorApplication"
 import { AdvisorTable } from "./advisor-table"
 import { db, auth } from "../../firebaseConfig"
 import { collection, query, where, onSnapshot, doc, getDoc, updateDoc, arrayUnion, serverTimestamp } from "firebase/firestore"
@@ -1349,7 +1349,7 @@ const AdvisorTabbedTables = ({
   applications,
   successfulDeals,
 }) => {
-  const [activeTab, setActiveTab] = useState("application") // Changed default to "application"
+  const [activeTab, setActiveTab] = useState("my-matches") // Changed default to "my-matches"
   const [myMatchesCount, setMyMatchesCount] = useState(0)
   const [successfulDealsCount, setSuccessfulDealsCount] = useState(0)
 
@@ -1403,28 +1403,7 @@ const AdvisorTabbedTables = ({
           boxShadow: "0 2px 8px rgba(0, 0, 0, 0.1)",
         }}
       >
-        {/* Advisory Application Tab - FIRST */}
-        <button
-          onClick={() => setActiveTab("application")}
-          style={tabStyle(activeTab === "application")}
-          onMouseEnter={(e) => {
-            if (activeTab !== "application") {
-              e.target.style.backgroundColor = "#8d6e63"
-              e.target.style.color = "white"
-            }
-          }}
-          onMouseLeave={(e) => {
-            if (activeTab !== "application") {
-              e.target.style.backgroundColor = "transparent"
-              e.target.style.color = "#5d4037"
-            }
-          }}
-        >
-          <FileText size={18} />
-          Advisory Application
-        </button>
-
-        {/* My Matches Tab - SECOND */}
+        {/* My Matches Tab - FIRST */}
         <button
           onClick={() => setActiveTab("my-matches")}
           style={tabStyle(activeTab === "my-matches")}
@@ -1462,7 +1441,7 @@ const AdvisorTabbedTables = ({
           </span>
         </button>
 
-        {/* Successful Deals Tab - THIRD */}
+        {/* Successful Deals Tab - SECOND */}
         <button
           onClick={() => setActiveTab("successful-deals")}
           style={tabStyle(activeTab === "successful-deals")}
@@ -1513,14 +1492,7 @@ const AdvisorTabbedTables = ({
           borderTop: "none",
         }}
       >
-        {/* Advisory Application Content - FIRST */}
-        {activeTab === "application" && (
-          <div>
-            <AdvisoryApplication />
-          </div>
-        )}
-
-        {/* My Matches Content - SECOND */}
+        {/* My Matches Content - FIRST */}
         {activeTab === "my-matches" && (
           <div>
             <AdvisorTable
@@ -1532,7 +1504,7 @@ const AdvisorTabbedTables = ({
           </div>
         )}
 
-        {/* Successful Deals Content - THIRD */}
+        {/* Successful Deals Content - SECOND */}
         {activeTab === "successful-deals" && <SuccessfulAdvisorDealsTable successfulDeals={successfulDeals} />}
       </div>
 

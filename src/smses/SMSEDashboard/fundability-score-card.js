@@ -603,10 +603,10 @@ export function FundabilityScoreCard({
   verifyWeightings();
 
   const categoryNames = {
-    financialReadiness: "Financial readiness",
-    financialStrength: "Financial strength",
-    operations: "Operational strength",
-    impact: "Impact proof",
+    financialReadiness: "Financial Readiness",
+    financialStrength: "Financial Strength",
+    operations: "Operational Strength",
+    impact: "Impact Proof",
     ...(hasAppliedForFunding && {
       businessPlanAnalysis: "Business Plan",
       pitchDeckScore: "Pitch Deck",
@@ -648,10 +648,10 @@ export function FundabilityScoreCard({
     }
 
     const categoryMappings = {
-      financialReadiness: "Financial readiness",
-      financialStrength: "Financial strength",
-      operations: "Operational strength",
-      impact: "Impact proof",
+      financialReadiness: "Financial Readiness",
+      financialStrength: "Financial Strength",
+      operations: "Operational Strength",
+      impact: "Impact Proof",
     };
 
     // Add funding application categories if user has applied
@@ -1550,26 +1550,18 @@ ${hasAppliedForFunding ? `
 
   // Updated score levels with new color scheme
   const getScoreLevel = (score) => {
-    if (score > 90)
-      return { level: "Highly fundable", color: "#1B5E20", icon: CheckCircle };
-    if (score >= 81)
-      return {
-        level: "Strong investment case",
-        color: "#4CAF50",
-        icon: CheckCircle,
-      };
-    if (score >= 61)
-      return {
-        level: "Moderate potential",
-        color: "#FF9800",
-        icon: TrendingUp,
-      };
-    if (score >= 41)
-      return { level: "Basic potential", color: "#F44336", icon: AlertCircle };
-    return { level: "Needs development", color: "#B71C1C", icon: AlertCircle };
+    if (score >= 4.5)
+      return { level: "Investor Grade", color: "#1B5E20", icon: CheckCircle };
+    if (score >= 3.6)
+      return { level: "Capital Ready", color: "#4CAF50", icon: CheckCircle };
+    if (score >= 2.6)
+      return { level: "Emerging", color: "#FF9800", icon: TrendingUp };
+    if (score >= 1.6)
+      return { level: "Developing", color: "#F44336", icon: AlertCircle };
+    return { level: "Weak", color: "#B71C1C", icon: AlertCircle };
   };
 
-  const scoreLevel = getScoreLevel(fundabilityScore);
+  const scoreLevel = getScoreLevel(fundabilityScore / 20);
   const ScoreIcon = scoreLevel.icon;
 
   const formatAiResult = (text) => {
@@ -1824,7 +1816,7 @@ ${hasAppliedForFunding ? `
                   marginBottom: "2px",
                 }}
               >
-                {fundabilityScore}%
+                {(fundabilityScore / 20).toFixed(1)}
               </span>
               <span
                 style={{
@@ -1834,7 +1826,7 @@ ${hasAppliedForFunding ? `
                   textTransform: "uppercase",
                   letterSpacing: "1px",
                 }}
-              ></span>
+              >/5</span>
 
               {/* Animated ring */}
               <div
@@ -2038,7 +2030,7 @@ ${hasAppliedForFunding ? `
                       lineHeight: "1",
                     }}
                   >
-                    {fundabilityScore}%
+                    {(fundabilityScore / 20).toFixed(1)}
                   </span>
                   <span
                     style={{
@@ -2050,7 +2042,7 @@ ${hasAppliedForFunding ? `
                       letterSpacing: "0.5px",
                     }}
                   >
-                    {scoreLevel.level}
+                    /5
                   </span>
                 </div>
 
@@ -2216,11 +2208,7 @@ ${hasAppliedForFunding ? `
                     }}
                   >
                     <p style={{ marginBottom: "16px", lineHeight: "1.6" }}>
-                      The Capital Appeal Score assesses how attractive a
-                      business is to potential investors and lenders. It
-                      evaluates key factors that influence funding decisions
-                      across critical areas that determine investment readiness
-                      and risk profile.
+                      Capital Appeal Score measures a business's ability to absorb, deploy, and return capital by assessing its financial strength, financial discipline, credibility, and operational execution capability, and readiness to secure funding.
                     </p>
 
                     <div
@@ -2250,43 +2238,45 @@ ${hasAppliedForFunding ? `
                           color: "#5d4037",
                         }}
                       >
-                        <li style={{ marginBottom: "6px" }}>
-                          <strong>Financial readiness:</strong> Accounting
-                          systems, compliance, and up-to-date financial records
+                        <li style={{ marginBottom: "12px" }}>
+                          <strong>1. Financial Strength</strong><br />
+                          🔹 1. Financial Performance (Reality)<br />
+                          &nbsp;&nbsp;&nbsp;Revenue consistency<br />
+                          &nbsp;&nbsp;&nbsp;Profitability<br />
+                          &nbsp;&nbsp;&nbsp;Growth trajectory<br />
+                          &nbsp;&nbsp;&nbsp;Signal: Is the business economically viable?<br />
+                          <br />
+                          🔹 2. Financial Management & Systems<br />
+                          &nbsp;&nbsp;&nbsp;Accounting systems<br />
+                          &nbsp;&nbsp;&nbsp;Bookkeeping discipline<br />
+                          &nbsp;&nbsp;&nbsp;Management accounts<br />
+                          &nbsp;&nbsp;&nbsp;Signal: Can the business manage capital properly?<br />
+                          <br />
+                          🔹 3. Financial Credibility<br />
+                          &nbsp;&nbsp;&nbsp;Financial statements<br />
+                          &nbsp;&nbsp;&nbsp;Audit/review status<br />
+                          &nbsp;&nbsp;&nbsp;Debt position<br />
+                          &nbsp;&nbsp;&nbsp;Signal: Can investors trust the numbers?
                         </li>
-                        <li style={{ marginBottom: "6px" }}>
-                          <strong>Financial strength:</strong> Revenue growth,
-                          profitability, and audited financials
+                        <li style={{ marginBottom: "12px" }}>
+                          <strong>2. Operational Strength</strong><br />
+                          Process maturity<br />
+                          Systems & infrastructure<br />
+                          Delivery capability<br />
+                          Scalability of operations<br />
+                          Signal: Can the business execute and scale with capital?
                         </li>
-                        <li style={{ marginBottom: "6px" }}>
-                          <strong>Operational strength:</strong> Business
-                          processes, infrastructure, and operational maturity
+                        <li style={{ marginBottom: "12px" }}>
+                          <strong>3. Fundability</strong><br />
+                          (if "funding Intent" is year, this is triggered, but the components below must be tiered – as explained in accompanying word document)<br />
+                          <br />
+                          Investment Case (business plan, projections)<br />
+                          Pitch Readiness<br />
+                          Impact / mandate alignment<br />
+                          Creditworthiness<br />
+                          Guarantees/collateral<br />
+                          Financial Resilience & Efficiency
                         </li>
-                        <li style={{ marginBottom: "6px" }}>
-                          <strong>Impact proof:</strong> Job creation, HDG
-                          inclusion, environmental responsibility, and CSR
-                          investment
-                        </li>
-                        <li></li>
-                       <h2><strong>Fundibility section:</strong></h2> 
-                      
-                          <>
-                            <li style={{ marginBottom: "6px" }}>
-                              <strong>Business Plan:</strong> Comprehensive
-                              business strategy, market analysis, and financial
-                              projections
-                            </li>
-                            <li style={{ marginBottom: "6px" }}>
-                              <strong>Pitch Deck:</strong> Investor presentation
-                              quality, storytelling, and value proposition
-                              clarity
-                            </li>
-                            <li style={{ marginBottom: "6px" }}>
-                              <strong>Credit Report:</strong> Creditworthiness
-                              assessment and financial reliability
-                            </li>
-                          </>
-                       
                       </ul>
                     </div>
 
@@ -2306,7 +2296,7 @@ ${hasAppliedForFunding ? `
                           color: "#6d4c41",
                         }}
                       >
-                        Score interpretation:
+                        Score (/5) - Classification - Meaning:
                       </p>
                       <ul
                         style={{
@@ -2316,24 +2306,19 @@ ${hasAppliedForFunding ? `
                         }}
                       >
                         <li style={{ marginBottom: "4px" }}>
-                          <strong>91-100%:</strong> Highly fundable -
-                          exceptional investment opportunity
+                          <strong>0.0 – 1.5:</strong> Weak - Not investable
                         </li>
                         <li style={{ marginBottom: "4px" }}>
-                          <strong>81-90%:</strong> Strong investment case - very
-                          attractive to funders
+                          <strong>1.6 – 2.5:</strong> Developing - High risk
                         </li>
                         <li style={{ marginBottom: "4px" }}>
-                          <strong>61-80%:</strong> Moderate potential - some
-                          areas need strengthening
+                          <strong>2.6 – 3.5:</strong> Emerging - Some potential
                         </li>
                         <li style={{ marginBottom: "4px" }}>
-                          <strong>41-60%:</strong> Basic potential - significant
-                          improvements needed
+                          <strong>3.6 – 4.4:</strong> Capital Ready - Strong candidate
                         </li>
                         <li style={{ marginBottom: "4px" }}>
-                          <strong>0-40%:</strong> Needs development -
-                          fundamental changes required
+                          <strong>4.5 – 5.0:</strong> Investor Grade - High-quality, scalable
                         </li>
                       </ul>
                     </div>
@@ -2364,7 +2349,7 @@ ${hasAppliedForFunding ? `
                         performance.
                         
                         When you apply for funding, additional weight is given to your Business Plan, Pitch Deck, and Credit Report to provide a comprehensive assessment of your investment readiness.
-                        Financial readiness and strength typically carry the
+                        Financial strength and operational execution typically carry the
                         highest weights across all stages.
                       </p>
                     </div>

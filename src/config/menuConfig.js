@@ -408,6 +408,39 @@ export const smeMenuItems = [
     route: "/dashboard",
   },
   {
+    id: "my-applications",
+    label: "My Applications",
+    icon: <FileText size={18} />,
+    route: "/my-applications",
+    hasSubmenu: true,
+    subItems: [
+      {
+        id: "products-services-applications",
+        label: "Products/Services Applications",
+        icon: <Package size={16} />,
+        route: "/applications/product",
+      },
+      {
+        id: "funding-support-applications",
+        label: "Funding/Support Applications",
+        icon: <CircleDollarSign size={16} />,
+        route: "/applications/funding",
+      },
+      {
+        id: "advisor-board-applications",
+        label: "Advisor/Board Member Application",
+        icon: <UserCheck size={16} />,
+        route: "/applications/advisory",
+      },
+      {
+        id: "intern-applications",
+        label: "Intern Application",
+        icon: <GraduationCap size={16} />,
+        route: "/applications/intern",
+      },
+    ],
+  },
+  {
     id: "matches",
     label: "My Matches",
     icon: <HeartHandshake size={18} />,
