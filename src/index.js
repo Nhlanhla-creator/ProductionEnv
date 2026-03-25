@@ -4,13 +4,16 @@ import './index.css';
 import App from './App';
 import IdleTimeoutModal from './smses/components/IdleTimeoutModal';
 import reportWebVitals from './reportWebVitals';
+import { PortfolioProvider } from 'context/PortfolioContext';
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
   <React.StrictMode>
-    <App />
-    <IdleTimeoutModal />
-  </React.StrictMode>
+    <PortfolioProvider>
+      <App />
+      <IdleTimeoutModal />
+    </PortfolioProvider>
+  </React.StrictMode>,
 );
 
 // If you want to start measuring performance in your app, pass a function

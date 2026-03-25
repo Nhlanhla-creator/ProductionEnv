@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Bar, Doughnut } from "react-chartjs-2";
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend } from "chart.js";
 import { usePortfolio } from "../../context/PortfolioContext";
+import { color } from "framer-motion";
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend);
 
 const B = { darkest: "#3b2409", dark: "#5e3f26", medium: "#7d5a36", warm: "#9c7c54", light: "#b8a082", pale: "#d4c4b0", offwhite: "#f0e8de" };
@@ -14,12 +15,12 @@ const CHART_HEIGHT = "260px";
 // ── Chart options ─────────────────────────────────────────────────────────────
 
 // Vertical bar (used for Min/Avg/Max style charts — always small datasets)
-const vBarOpts = (yCb) => ({
+const vBarOpts = (yCb, xTitle) => ({
   responsive: true, maintainAspectRatio: false, animation: false,
-  plugins: { legend: { position: "bottom", labels: { color: B.dark, font: { size: 11 }, boxWidth: 12 } }, datalabels: { display: false } },
+  plugins: { legend: { display: false, position: "bottom", labels: { color: B.dark, font: { size: 11 }, boxWidth: 12 } }, datalabels: { display: false } },
   scales: {
-    x: { grid: { display: false }, ticks: { color: B.dark, font: { size: 10 } } },
-    y: { beginAtZero: true, grid: { color: B.offwhite }, ticks: { color: B.dark, callback: yCb || (v => v) } },
+    x: { title: { display: true, text: xTitle, color: B.dark }, grid: { display: false }, ticks: { color: B.dark, font: { size: 10 } } },
+    y: { title: { display: true, text: "Number of SMEs", color: B.dark }, beginAtZero: true, grid: { color: B.offwhite }, ticks: { color: B.dark, callback: yCb || (v => v), stepSize: 1, } },
   },
 });
 
@@ -170,10 +171,10 @@ const ScoreRangeView = ({ min, pipelineAvg, max, cohortAvg, target, suffix = "%"
   return (
     <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "12px" }}>
 
-      {/* "Cohort Avg" label */}
+      {/* "Cohort Avg" label
       <div style={{ fontSize: "14px", color: B.darkest, fontWeight: 600, letterSpacing: "0.8px" }}>
         Cohorts Avg
-      </div>
+      </div> */}
 
       {/* Big cohort avg figure */}
       <div style={{ fontSize: "64px", fontWeight: "800", color: B.darkest, lineHeight: 1, marginTop: "-4px" }}>
@@ -199,15 +200,28 @@ const ScoreRangeView = ({ min, pipelineAvg, max, cohortAvg, target, suffix = "%"
         </div>
 
         {/* Value labels */}
-        <div style={{ position: "relative", width: "100%", height: "38px", marginTop: "6px" }}>
+        <div style={{ position: "relative", width: "95%", height: "38px", marginTop: "6px" }}>
           {[
             { val: mn, label: "Min",     color: B.dark   },
             { val: pa, label: "Matches Avg", color: B.medium },
             { val: mx, label: "Max",     color: B.light  },
           ].map(({ val, label, color }) => (
             <div key={label} style={{ position: "absolute", left: `${val}%`, transform: "translateX(-50%)", textAlign: "center", whiteSpace: "nowrap" }}>
-              <div style={{ fontSize: "11px", fontWeight: 700, color }}>{val}{suffix}</div>
-              <div style={{ fontSize: "10px", color: B.warm }}>{label}</div>
+              <div style={{ fontSize: "14px", fontWeight: 700, color }}>{val}{suffix}</div>
+            </div>
+          ))}
+        </div>
+
+        {/* Custom legend */}
+        <div style={{ position: "relative", width: "95%", height: "20px", marginTop: "6px" }}>
+          {[
+            { label: "Cohort Avg", color: B.darkest },
+            { label: "Pipeline Avg", color: B.medium },
+            { label: "Target", color: B.light },
+          ].map(({ label, color }) => (
+            <div key={label} style={{ display: "flex", alignItems: "center", gap: "4px", marginRight: "16px" }}>
+              <div style={{ width: "12px", height: "12px", borderRadius: "6px", background: color }} />
+              <div style={{ fontSize: "11px", color }}>{label}</div>
             </div>
           ))}
         </div>
@@ -218,12 +232,12 @@ const ScoreRangeView = ({ min, pipelineAvg, max, cohortAvg, target, suffix = "%"
 
 // ── Average Match Strength ────────────────────────────────────────────────────
 const AverageMatchStrength = () => {
-  const { metrics, portfolioMetrics } = usePortfolio();
+  const { portfolioMetrics } = usePortfolio();
   const [view, setView] = useState("range");
 
   // Range bar + histogram: full pipeline (unfiltered)
-  const m    = metrics?.match || {};
-  const dist = metrics?.match?.dist || {};
+  const m    = portfolioMetrics?.match || {};
+  const dist = portfolioMetrics?.match?.dist || {};
   // Big "Cohort Avg" figure: portfolio SMEs only (Active Support + Support Approved)
   const cohortAvg = portfolioMetrics?.match?.avg || 0;
 
@@ -231,32 +245,67 @@ const AverageMatchStrength = () => {
 
   return (
     <Card title="Average Match Strength (%)">
-      <div style={{ display: "flex", gap: "6px", marginBottom: "10px", flexShrink: 0 }}>
-        <Pill label="Range"     active={view === "range"}     onClick={() => setView("range")} />
-        <Pill label="Histogram" active={view === "histogram"} onClick={() => setView("histogram")} />
+      <div
+        style={{
+          display: "flex",
+          gap: "6px",
+          marginBottom: "10px",
+          flexShrink: 0,
+        }}
+      >
+        <Pill
+          label="Range"
+          active={view === "range"}
+          onClick={() => setView("range")}
+        />
+        <Pill
+          label="Histogram"
+          active={view === "histogram"}
+          onClick={() => setView("histogram")}
+        />
       </div>
       {hasData ? (
-        view === "range"
-          ? <ScoreRangeView min={m.min} pipelineAvg={m.avg} max={m.max} cohortAvg={cohortAvg} target={75} />
-          : <div style={{ height: CHART_HEIGHT }}>
-              <Bar
-                options={vBarOpts(v => v + "%")}
-                data={{ labels: Object.keys(dist), datasets: [{ label: "# SMEs", data: Object.values(dist), backgroundColor: C.slice(0, 5) }] }}
-              />
-            </div>
-      ) : <EmptyState />}
+        view === "range" ? (
+          <ScoreRangeView
+            min={m.min}
+            pipelineAvg={m.avg}
+            max={m.max}
+            cohortAvg={cohortAvg}
+            target={75}
+          />
+        ) : (
+          <div style={{ height: CHART_HEIGHT }}>
+            <Bar
+              options={vBarOpts((v) => v, "Average Match Strength (%)")}
+              data={{
+                labels: Object.keys(dist),
+                datasets: [
+                  {
+                    label: "SMEs",
+                    data: Object.values(dist),
+                    backgroundColor: B.darkest,
+                  },
+                ],
+              }}
+            />
+          </div>
+        )
+      ) : (
+        <EmptyState />
+      )}
     </Card>
   );
 };
 
 // ── Average BIG Score ─────────────────────────────────────────────────────────
 const AverageBIGScore = () => {
-  const { metrics, portfolioMetrics } = usePortfolio();
+  const { portfolioMetrics } = usePortfolio();
+  
   const [view, setView] = useState("range");
 
   // Range bar + histogram: full pipeline (unfiltered)
-  const b    = metrics?.bigScore || {};
-  const dist = metrics?.bigScore?.dist || {};
+  const b    = portfolioMetrics?.bigScore || {};
+  const dist = portfolioMetrics?.bigScore?.dist || {};
   // Big "Cohort Avg" figure: portfolio SMEs only (Active Support + Support Approved)
   const cohortAvg = portfolioMetrics?.bigScore?.avg || 0;
 
@@ -273,8 +322,8 @@ const AverageBIGScore = () => {
           ? <ScoreRangeView min={b.min} pipelineAvg={b.avg} max={b.max} cohortAvg={cohortAvg} target={70} />
           : <div style={{ height: CHART_HEIGHT }}>
               <Bar
-                options={vBarOpts(v => v + "%")}
-                data={{ labels: Object.keys(dist), datasets: [{ label: "# SMEs", data: Object.values(dist), backgroundColor: C.slice(0, 5) }] }}
+                options={vBarOpts(v => v, "Average BIG Score (%)")}
+                data={{ labels: Object.keys(dist), datasets: [{ label: "SMEs", data: Object.values(dist), backgroundColor: B.darkest }] }}
               />
             </div>
       ) : <EmptyState />}
@@ -284,14 +333,17 @@ const AverageBIGScore = () => {
 
 // ── Funding Readiness Rate ────────────────────────────────────────────────────
 const FundingReadinessRate = () => {
-  const { metrics } = usePortfolio();
-  const rate  = metrics?.fundingReadinessRate ?? 0;
-  const total = metrics?.totalSMEs ?? 0;
+  const { portfolioMetrics } = usePortfolio();
+  const rate  = portfolioMetrics?.fundingReadinessRate ?? 0;
+  const total = portfolioMetrics?.totalSMEs ?? 0;
   const ready = Math.round((rate / 100) * total);
 
   return (
     <Card title="Funding Readiness Rate (%)">
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "16px" }}>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "6px" }}>
+        <div style={{ display: "flex", gap: "6px", marginBottom: "10px", flexShrink: 0 }}>
+          <div style={{ width: "12px", height: "12px", borderRadius: "6px", background: "transparent" }} />
+        </div>
         <div style={{ fontSize: "64px", fontWeight: "800", color: B.darkest, lineHeight: 1 }}>
           {rate}<span style={{ fontSize: "32px" }}>%</span>
         </div>
@@ -310,9 +362,9 @@ const FundingReadinessRate = () => {
 
 // ── Average Vetting Time ──────────────────────────────────────────────────────
 const AverageVettingTime = () => {
-  const { metrics } = usePortfolio();
-  const ACTUAL   = metrics?.vetting?.avg    || 0;
-  const TARGET   = metrics?.vetting?.target || 10;
+  const { portfolioMetrics } = usePortfolio();
+  const ACTUAL   = portfolioMetrics?.vetting?.avg    || 0;
+  const TARGET   = portfolioMetrics?.vetting?.target || 10;
   const VARIANCE = ACTUAL - TARGET;
   const R = 54, CIRC = 2 * Math.PI * R;
   const offset = CIRC - (CIRC * Math.min(ACTUAL, 60)) / 60;
@@ -326,7 +378,7 @@ const AverageVettingTime = () => {
               <circle cx="80" cy="80" r={R} stroke={B.pale} strokeWidth="11" fill="none" />
               <circle cx="80" cy="80" r={R} stroke={ACTUAL <= TARGET ? B.medium : B.dark} strokeWidth="11" fill="none" strokeLinecap="round"
                 strokeDasharray={CIRC} strokeDashoffset={offset} transform="rotate(-90 80 80)" />
-              <text x="80" y="74" textAnchor="middle" fill={B.darkest} fontSize="30" fontWeight="800">{Math.round(ACTUAL)}</text>
+              <text x="80" y="74" textAnchor="middle" fill={B.darkest} fontSize="30" fontWeight="800">{(ACTUAL).toFixed(0)}</text>
               <text x="80" y="93" textAnchor="middle" fill={B.warm} fontSize="13">days</text>
             </svg>
             <div style={{ display: "flex", gap: "24px" }}>
