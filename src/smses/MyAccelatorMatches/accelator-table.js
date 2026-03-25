@@ -41,6 +41,10 @@ const PIPELINE_STAGES = {
   },
   "ACTIVE SUPPORT": {
     label: "Active Support",
+    next: "Successful Deals",
+  },
+  "SUCCESSFUL DEALS": {
+    label: "Successful Deals",
     next: "N/A",
   },
   "SUPPORT DECLINED": {
@@ -48,7 +52,6 @@ const PIPELINE_STAGES = {
     next: "N/A",
   },
 }
-
 // Geographic focus options - UPDATED
 const geographicFocusOptions = [
   { value: "global", label: "Global" },
@@ -128,6 +131,7 @@ const statusOptions = [
   { value: "Decision", label: "Decision" },
   { value: "Support Approved", label: "Support Approved" },
   { value: "Active Support", label: "Active Support" },
+  { value: "Successful Deals", label: "Successful Deals" },
   { value: "Support Declined", label: "Support Declined" },
 ]
 

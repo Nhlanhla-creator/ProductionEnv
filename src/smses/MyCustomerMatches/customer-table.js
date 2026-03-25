@@ -113,45 +113,40 @@ const getStatusStyle = (status) => {
 }
 
 const MATCHING_CRITERIA = {
-  // High importance (total 50%)
   CATEGORY_MATCH: {
-    weight: 0.3, // 30%
-    description: "Service/Product Category Alignment",
+    weight: 0.40,
+    description: "Product/Service Category Alignment",
   },
   BBBEE_LEVEL: {
-    weight: 0.1, // 10%
+    weight: 0.10,
     description: "BBBEE Level Compliance",
   },
   LOCATION: {
-    weight: 0.1, // 10%
+    weight: 0.10,
     description: "Geographic Location Match",
   },
-
-  // Medium importance (total 30%)
   DELIVERY_MODE: {
-    weight: 0.1, // 10%
+    weight: 0.10,
     description: "Delivery Mode Compatibility",
   },
   BUDGET_RANGE: {
-    weight: 0.1, // 10%
+    weight: 0.10,
     description: "Budget Fit",
   },
   OWNERSHIP_PREFS: {
-    weight: 0.1, // 10%
+    weight: 0.05,
     description: "Ownership Preferences Match",
   },
-
-  // Lower importance (total 20%)
   URGENCY_LEAD_TIME: {
-    weight: 0.05, // 5%
-    description: "Project Urgency Alignment",
+    weight: 0.05,
+    description: "Urgency & Lead Time Match",
   },
   EXPERIENCE: {
-    weight: 0.1, // 10%
+    weight: 0.05,
     description: "Sector Experience Match",
   },
   RATING: {
-    weight: 0.05, // 5%
+    weight: 0.05,
     description: "Supplier Rating",
   },
 }
@@ -426,405 +421,234 @@ export function CustomerTable() {
 
   function calculateMatchScore(application, supplier, ratingsData = null) {
     if (!application || !supplier) {
-      console.error("Invalid parameters to calculateMatchScore:", { application, supplier });
-      return {
-        totalScore: 0,
-        breakdown: {}
-      };
+      return { totalScore: 0, breakdown: {} };
     }
 
-    let score = 0
-    let totalWeight = 0
-    const breakdown = {}
+    let totalScore = 0;
+    const breakdown = {};
 
-    // Safely extract all required data with fallbacks
-    const demand = application.productsServices || {}
-    const supply = supplier.productsServices || {}
-    const requestOverview = application.requestOverview || {}
-    const matchingPrefs = application.matchingPreferences || {}
-    const supplierLegal = supplier.legalCompliance || {}
-    const supplierFinancial = supplier.financialOverview || {}
-    const supplierEntity = supplier.entityOverview || {}
-    const supplierOwnership = supplier.ownershipManagement || {}
+    // ── helpers ──────────────────────────────────────────────────────
+    const expandSearchTerms = (terms) => terms.map(t => t.toLowerCase().trim());
 
-    // Normalize application categories
-    const appCategories = Array.isArray(demand.categories)
-      ? demand.categories
-        .map((c) => (typeof c === "string" ? c.toLowerCase().trim() : (c.name || "").toLowerCase().trim()))
-        .filter(Boolean)
-      : []
+    const extractSupplierText = (sup) => {
+      let text = "";
+      sup.productsServices?.productCategories?.forEach(cat => {
+        text += ` ${cat.name || ""} `;
+        cat.products?.forEach(p => { text += ` ${p.name || ""} ${p.description || ""} `; });
+      });
+      sup.productsServices?.serviceCategories?.forEach(cat => {
+        text += ` ${cat.name || ""} `;
+        cat.services?.forEach(s => { text += ` ${s.name || ""} ${s.description || ""} `; });
+      });
+      text += ` ${sup.productsServices?.targetMarket || ""} `;
+      return text.toLowerCase().trim();
+    };
 
-    console.log("Application Categories:", appCategories)
+    // ── 1. CATEGORY MATCH (40%) ───────────────────────────────────────
+    const appCategories = (
+      application.productsServices?.categories ||
+      application.requestOverview?.categories ||
+      application.productsServices?.productCategories ||
+      []
+    ).map(c => (typeof c === "string" ? c : c?.name || "").toLowerCase().trim()).filter(Boolean);
 
-    // Normalize supplier categories from both productCategories and serviceCategories
-    const supplierProductCategories = Array.isArray(supply.productCategories)
-      ? supply.productCategories
-        .map((c) => (typeof c === "string" ? c.toLowerCase().trim() : (c.name || "").toLowerCase().trim()))
-        .filter(Boolean)
-      : []
+    const appKeywords = application.requestOverview?.keywords?.toLowerCase() || "";
+    const appPurpose = application.requestOverview?.purpose?.toLowerCase() || "";
+    const supplierText = extractSupplierText(supplier);
 
-    const supplierServiceCategories = Array.isArray(supply.serviceCategories)
-      ? supply.serviceCategories
-        .map((c) => (typeof c === "string" ? c.toLowerCase().trim() : (c.name || "").toLowerCase().trim()))
-        .filter(Boolean)
-      : []
+    let categoryScore = 0;
+    const matchedCategories = [];
+    const unmatchedCategories = [];
 
-    // Combine all supplier categories and remove duplicates
-    const allSupplierCategories = [...new Set([...supplierProductCategories, ...supplierServiceCategories])]
-    console.log("Supplier Categories:", allSupplierCategories)
-
-    // Rest of your normalized data...
-    const appBudgetMin = Number.parseInt((requestOverview.minBudget || "0").replace(/\D/g, "")) || 0
-    const appBudgetMax = Number.parseInt((requestOverview.maxBudget || "0").replace(/\D/g, "")) || 1000000
-    const appLocation = (requestOverview.location || "").toLowerCase().trim()
-
-    console.log("Budget Range:", appBudgetMin, "-", appBudgetMax)
-
-    const appDeliveryModes = Array.isArray(requestOverview.deliveryModes)
-      ? requestOverview.deliveryModes.map((m) => m.toLowerCase().trim()).filter(Boolean)
-      : []
-
-    const number = matchingPrefs.bbeeLevel ? matchingPrefs.bbeeLevel.replace(/\D/g, '') : "0"
-    const appBBBEEPref = Number.parseInt(number || "0") || 0
-
-    const appOwnershipPrefs = Array.isArray(matchingPrefs.ownershipPrefs)
-      ? matchingPrefs.ownershipPrefs.map((p) => p.toLowerCase().trim()).filter(Boolean)
-      : []
-
-    const supplyDeliveryModes = Array.isArray(supply.deliveryModes)
-      ? supply.deliveryModes.map((m) => m.toLowerCase().trim()).filter(Boolean)
-      : []
-
-    const bbbeeLevel = Number.parseInt(supplierLegal.bbbeeLevel || "0") || 0
-    const revenue = Number.parseInt((supplierFinancial.annualRevenue || "0").replace(/\D/g, "")) || 0
-    const location = (supplierEntity.location || "").toLowerCase().trim()
-    const experienceText = (supplierEntity.businessDescription || "").toLowerCase().trim()
-    const sectorPref = (matchingPrefs.sectorExperience || "").toLowerCase().trim()
-    const supplierRating = (supplier.pisScore || 50) / 10
-
-    console.log("Supplier Revenue:", revenue)
-
-    // IMPROVED CATEGORY MATCHING (30%)
-    if (MATCHING_CRITERIA.CATEGORY_MATCH.weight > 0) {
-      let categoryScore = 0
-
-      if (appCategories.length > 0 && allSupplierCategories.length > 0) {
-        // Find matching categories (case-insensitive, partial matches)
-        const matchingCategories = appCategories.filter(appCat =>
-          allSupplierCategories.some(supplierCat =>
-            supplierCat.includes(appCat) || appCat.includes(supplierCat) ||
-            calculateSimilarity(appCat, supplierCat) > 0.7
-          )
-        )
-
-        categoryScore = matchingCategories.length / appCategories.length
-        console.log("Category Matches:", matchingCategories, "Score:", categoryScore)
-      } else if (appCategories.length === 0) {
-        categoryScore = 0.5 // Neutral score if no categories specified
-      }
-
-      score += categoryScore * MATCHING_CRITERIA.CATEGORY_MATCH.weight * 100
-      breakdown.categoryMatch = {
-        score: categoryScore * 100,
-        description: MATCHING_CRITERIA.CATEGORY_MATCH.description,
-        matches: appCategories.length > 0 ? getCategoryMatches(appCategories, allSupplierCategories) : []
-      }
-      totalWeight += MATCHING_CRITERIA.CATEGORY_MATCH.weight * 100
-    }
-
-    // Rest of your existing criteria calculations remain the same...
-    // 2. BBBEE_LEVEL (10%)
-    if (MATCHING_CRITERIA.BBBEE_LEVEL.weight > 0) {
-      let bbbeeScore = 0
-
-      if (appBBBEEPref <= bbbeeLevel) {
-        bbbeeScore = 1 // Perfect match
-      } else if (appBBBEEPref - bbbeeLevel <= 2) {
-        bbbeeScore = 0.5 // Partial match
-      }
-
-      score += bbbeeScore * MATCHING_CRITERIA.BBBEE_LEVEL.weight * 100
-      breakdown.bbbeeMatch = {
-        score: bbbeeScore * 100,
-        description: MATCHING_CRITERIA.BBBEE_LEVEL.description,
-      }
-      totalWeight += MATCHING_CRITERIA.BBBEE_LEVEL.weight * 100
-    }
-
-    // 3. LOCATION (10%)
-    if (MATCHING_CRITERIA.LOCATION.weight > 0) {
-      const locationScore = location && appLocation && (location.includes(appLocation) || appLocation.includes(location)) ? 1 : 0
-
-      score += locationScore * MATCHING_CRITERIA.LOCATION.weight * 100
-      breakdown.locationMatch = {
-        score: locationScore * 100,
-        description: MATCHING_CRITERIA.LOCATION.description,
-      }
-      totalWeight += MATCHING_CRITERIA.LOCATION.weight * 100
-    }
-
-
-    // 4. DELIVERY_MODE (10%) - SIMPLIFIED WITH HYBRID COMPATIBILITY
-    if (MATCHING_CRITERIA.DELIVERY_MODE.weight > 0) {
-      let deliveryScore = 0
-
-      if (appDeliveryModes.length > 0 && supplyDeliveryModes.length > 0) {
-        // Check if either party has Hybrid - if so, full compatibility
-        const appHasHybrid = appDeliveryModes.includes("Hybrid")
-        const supplyHasHybrid = supplyDeliveryModes.includes("Hybrid")
-
-        if (appHasHybrid || supplyHasHybrid) {
-          deliveryScore = 1 // Full score if either has Hybrid
-        } else {
-          // Standard matching for non-Hybrid cases
-          const deliveryMatches = appDeliveryModes.filter((appMode) =>
-            supplyDeliveryModes.includes(appMode)
-          )
-          deliveryScore = deliveryMatches.length / appDeliveryModes.length
-        }
-      } else if (appDeliveryModes.length === 0) {
-        deliveryScore = 0.5 // Neutral score if no delivery modes specified
-      }
-
-      score += deliveryScore * MATCHING_CRITERIA.DELIVERY_MODE.weight * 100
-      breakdown.deliveryMatch = {
-        score: deliveryScore * 100,
-        description: MATCHING_CRITERIA.DELIVERY_MODE.description,
-        matches: appDeliveryModes.length > 0 ? getDeliveryModeMatches(appDeliveryModes, supplyDeliveryModes) : [],
-        hasHybrid: appDeliveryModes.includes("Hybrid") || supplyDeliveryModes.includes("Hybrid")
-      }
-      totalWeight += MATCHING_CRITERIA.DELIVERY_MODE.weight * 100
-    }
-
-
-    // 5. BUDGET_RANGE (10%)
-    if (MATCHING_CRITERIA.BUDGET_RANGE.weight > 0) {
-      let budgetScore = 0
-
-      if (revenue > 0) {
-        if (revenue >= appBudgetMin && revenue <= appBudgetMax) {
-          budgetScore = 1
-        } else if (revenue >= appBudgetMin * 0.5 && revenue <= appBudgetMax * 1.5) {
-          budgetScore = 0.7
-        } else {
-          budgetScore = 0.3
-        }
-      }
-
-      score += budgetScore * MATCHING_CRITERIA.BUDGET_RANGE.weight * 100
-      breakdown.budgetMatch = {
-        score: budgetScore * 100,
-        description: MATCHING_CRITERIA.BUDGET_RANGE.description,
-      }
-      totalWeight += MATCHING_CRITERIA.BUDGET_RANGE.weight * 100
-    }
-
-    // 6. OWNERSHIP_PREFS (10%)
-    // IMPROVED OWNERSHIP_PREFS (10%)
-    if (MATCHING_CRITERIA.OWNERSHIP_PREFS.weight > 0) {
-      let ownershipScore = 0
-      const ownershipDetails = {
-        blackOwned: { percentage: 0, meetsThreshold: false },
-        womenOwned: { percentage: 0, meetsThreshold: false },
-        youthOwned: { percentage: 0, meetsThreshold: false },
-        disabilityInclusive: { percentage: 0, meetsThreshold: false }
-      }
-      console.log(appOwnershipPrefs)
-      if (appOwnershipPrefs.length > 0) {
-        // Calculate ownership percentages from shareholders array
-        const shareholderData = calculateOwnershipPercentages(supplierOwnership)
-
-        // Update ownership details with calculated percentages
-        ownershipDetails.blackOwned.percentage = shareholderData.blackOwnership
-        ownershipDetails.womenOwned.percentage = shareholderData.womenOwnership
-        ownershipDetails.youthOwned.percentage = shareholderData.youthOwnership
-        ownershipDetails.disabilityInclusive.percentage = shareholderData.disabilityOwnership
-
-        // Check thresholds for each preference
-        appOwnershipPrefs.forEach((pref) => {
-          const normalizedPref = pref.toLowerCase().trim()
-
-          if (normalizedPref.includes("black-owned") || normalizedPref.includes("black owned")) {
-            const meetsThreshold = shareholderData.blackOwnership >= 51
-            ownershipDetails.blackOwned.meetsThreshold = meetsThreshold
-            if (meetsThreshold) ownershipScore += 0.4
-          }
-          else if (normalizedPref.includes("women-owned") || normalizedPref.includes("women owned") || normalizedPref.includes("female-owned")) {
-            const meetsThreshold = shareholderData.womenOwnership >= 30
-            ownershipDetails.womenOwned.meetsThreshold = meetsThreshold
-            if (meetsThreshold) ownershipScore += 0.3
-          }
-          else if (normalizedPref.includes("youth-owned") || normalizedPref.includes("youth owned")) {
-            const meetsThreshold = shareholderData.youthOwnership >= 25
-            ownershipDetails.youthOwned.meetsThreshold = meetsThreshold
-            if (meetsThreshold) ownershipScore += 0.2
-          }
-          else if (normalizedPref.includes("disability") || normalizedPref.includes("disabled")) {
-            const meetsThreshold = shareholderData.disabilityOwnership >= 5
-            ownershipDetails.disabilityInclusive.meetsThreshold = meetsThreshold
-            if (meetsThreshold) ownershipScore += 0.1
-          }
-        })
-
-        ownershipScore = Math.min(ownershipScore, 1)
-      } else {
-        ownershipScore = 0.5 // Neutral score if no preferences
-      }
-
-      score += ownershipScore * MATCHING_CRITERIA.OWNERSHIP_PREFS.weight * 100
-      breakdown.ownershipMatch = {
-        score: ownershipScore * 100,
-        description: MATCHING_CRITERIA.OWNERSHIP_PREFS.description,
-        details: ownershipDetails
-      }
-      totalWeight += MATCHING_CRITERIA.OWNERSHIP_PREFS.weight * 100
-    }
-
-
-    // 7. URGENCY_LEAD_TIME MATCHING (10%) - CORRECTED LOGIC
-    if (MATCHING_CRITERIA.URGENCY_LEAD_TIME.weight > 0) {
-      let urgencyLeadTimeScore = 0
-
-      const appStartDate = requestOverview.startDate
-      const appEndDate = requestOverview.endDate
-
-      // Check if we have application dates and supplier lead time data
-      if (appStartDate && (supply.minLeadTime || supply.maxLeadTime)) {
-        const requestStart = new Date(appStartDate).getTime()
-        const requestEnd = new Date(appEndDate || appStartDate).getTime() // Use start date if no end date
-        const now = new Date().getTime()
-
-        const daysUntilRequestStart = (requestStart - now) / (1000 * 60 * 60 * 24)
-        const totalProjectDays = (requestEnd - now) / (1000 * 60 * 60 * 24)
-
-        // Calculate supplier's delivery times in days
-        const minDeliveryDays = supply.minLeadTime ?
-          convertToDays(supply.minLeadTime, supply.minLeadTimeUnit || 'days') : 0
-        const maxDeliveryDays = supply.maxLeadTime ?
-          convertToDays(supply.maxLeadTime, supply.maxLeadTimeUnit || 'days') : minDeliveryDays * 1.5
-
-        console.log("Lead Time Matching Debug:", {
-          appStartDate,
-          appEndDate,
-          daysUntilRequestStart: Math.round(daysUntilRequestStart),
-          totalProjectDays: Math.round(totalProjectDays),
-          minDeliveryDays: Math.round(minDeliveryDays),
-          maxDeliveryDays: Math.round(maxDeliveryDays),
-          supplierData: {
-            minLeadTime: supply.minLeadTime,
-            maxLeadTime: supply.maxLeadTime,
-            minLeadTimeUnit: supply.minLeadTimeUnit,
-            maxLeadTimeUnit: supply.maxLeadTimeUnit
-          }
-        })
-
-        // Apply your scoring logic:
-        // 1.0 if both min and max fit within project timeframe
-        // 0.8 if only minimum fits but maximum doesn't
-        // 0.0 if neither fits
-
-        const minFits = minDeliveryDays <= totalProjectDays
-        const maxFits = maxDeliveryDays <= totalProjectDays
-        console.log(minFits)
-        console.log(maxFits)
-        if (minFits && maxFits) {
-          urgencyLeadTimeScore = 1.0 // Full points - both fit perfectly
-        } else if (minFits && !maxFits) {
-          urgencyLeadTimeScore = 0.8 // Partial points - minimum fits but maximum doesn't
-        } else {
-          urgencyLeadTimeScore = 0.0 // No points - can't deliver in time
-        }
-
-        console.log("Lead Time Score Result:", {
-          minFits,
-          maxFits,
-          finalScore: urgencyLeadTimeScore
-        })
-
-      } else {
-        // Missing data - neutral score
-        urgencyLeadTimeScore = 0.5
-        console.log("Lead Time: Missing data, using neutral score")
-      }
-
-      score += urgencyLeadTimeScore * MATCHING_CRITERIA.URGENCY_LEAD_TIME.weight * 100
-      breakdown.urgencyLeadTimeMatch = {
-        score: urgencyLeadTimeScore * 100,
-        description: MATCHING_CRITERIA.URGENCY_LEAD_TIME.description,
-        canDeliverInTime: urgencyLeadTimeScore > 0,
-      }
-      totalWeight += MATCHING_CRITERIA.URGENCY_LEAD_TIME.weight * 100
-    }
-
-    // 8. EXPERIENCE (10%)
-    if (MATCHING_CRITERIA.EXPERIENCE.weight > 0) {
-      let experienceScore = 0
-
-      if (sectorPref && experienceText) {
-        // Simple keyword matching
-        const prefWords = sectorPref.split(/\s+/)
-        const matchedWords = prefWords.filter((word) => experienceText.includes(word))
-        experienceScore = matchedWords.length / Math.max(prefWords.length, 1)
-      } else if (!sectorPref) {
-        experienceScore = 0.5 // Neutral score if no preference
-      }
-
-      score += experienceScore * MATCHING_CRITERIA.EXPERIENCE.weight * 100
-      breakdown.experienceMatch = {
-        score: experienceScore * 100,
-        description: MATCHING_CRITERIA.EXPERIENCE.description,
-      }
-      totalWeight += MATCHING_CRITERIA.EXPERIENCE.weight * 100
-    }
-
-
-    // 9. RATING (5%)
-    if (MATCHING_CRITERIA.RATING.weight > 0) {
-      console.log("Available ratings data:", ratingsData)
-
-      // Use the ratings data passed as parameter, or fall back to state
-      const effectiveRatingsData = ratingsData || supplierRatings;
-
-      // Helper function to get rating from the data
-      const getRatingFromData = (supplierId) => {
-        return effectiveRatingsData[supplierId] || {
-          average: 0,
-          count: 0,
-          latestComment: "No ratings yet"
-        };
-      };
-
-      // Use the actual supplier rating
-      const supplierId = supplier?.id;
-      const supplierRatingData = getRatingFromData(supplierId);
-      const actualRating = supplierRatingData.average || 0;
-
-      console.log("Rating calculation:", {
-        supplierId,
-        actualRating,
-        ratingData: supplierRatingData,
-        allRatings: effectiveRatingsData
+    if (appCategories.length > 0 || appKeywords || appPurpose) {
+      appCategories.forEach(appCat => {
+        const hasMatch = supplierText.includes(appCat);
+        if (hasMatch) { matchedCategories.push(appCat); }
+        else { unmatchedCategories.push(appCat); }
       });
 
-      // Normalize rating to 0-1 scale (assuming 0-5 scale)
-      const ratingScore = actualRating / 5;
+      const catScore = appCategories.length > 0 ? matchedCategories.length / appCategories.length : 0;
 
-      score += ratingScore * MATCHING_CRITERIA.RATING.weight * 100;
-      breakdown.ratingMatch = {
-        score: ratingScore * 100,
-        description: MATCHING_CRITERIA.RATING.description,
-        actualRating: actualRating,
-        ratingCount: supplierRatingData.count
-      };
-      totalWeight += MATCHING_CRITERIA.RATING.weight * 100;
+      let kwScore = 0;
+      if (appKeywords || appPurpose) {
+        const words = `${appKeywords} ${appPurpose}`.split(/\s+/).filter(w => w.length > 3);
+        const hits = words.filter(w => supplierText.includes(w)).length;
+        kwScore = words.length > 0 ? hits / words.length : 0;
+      }
+
+      categoryScore = appCategories.length > 0 ? (catScore * 0.7) + (kwScore * 0.3) : kwScore;
     }
-    // Calculate final weighted score
-    const finalScore = totalWeight > 0 ? score / totalWeight : 0
+
+    const categoryContribution = Math.min(categoryScore, 1) * MATCHING_CRITERIA.CATEGORY_MATCH.weight * 100;
+    totalScore += categoryContribution;
+    breakdown.categoryMatch = {
+      score: Math.round(Math.min(categoryScore, 1) * 100),
+      weight: MATCHING_CRITERIA.CATEGORY_MATCH.weight * 100,
+      contribution: Math.round(categoryContribution),
+      description: MATCHING_CRITERIA.CATEGORY_MATCH.description,
+      matches: matchedCategories,
+      unmatched: unmatchedCategories,
+    };
+
+    // ── 2. BBBEE MATCH (10%) ─────────────────────────────────────────
+    const bbbeePref = application.matchingPreferences?.bbeeLevel || application.requestOverview?.bbeeLevel || "0";
+    const appBBBEE = parseInt((bbbeePref || "0").replace(/\D/g, "")) || 0;
+    const supplierBBBEE = parseInt(supplier.legalCompliance?.bbbeeLevel || "0") || 0;
+
+    let bbbeeScore = 0.5;
+    if (appBBBEE > 0) {
+      if (supplierBBBEE <= appBBBEE) bbbeeScore = 1;
+      else if (supplierBBBEE === appBBBEE + 1) bbbeeScore = 0.5;
+      else bbbeeScore = 0;
+    }
+
+    const bbbeeContribution = bbbeeScore * MATCHING_CRITERIA.BBBEE_LEVEL.weight * 100;
+    totalScore += bbbeeContribution;
+    breakdown.bbbeeMatch = {
+      score: Math.round(bbbeeScore * 100),
+      weight: MATCHING_CRITERIA.BBBEE_LEVEL.weight * 100,
+      contribution: Math.round(bbbeeContribution),
+      description: MATCHING_CRITERIA.BBBEE_LEVEL.description,
+    };
+
+    // ── 3. LOCATION MATCH (10%) ──────────────────────────────────────
+    const appLoc = (application.matchingPreferences?.location || application.requestOverview?.location || "").toLowerCase().trim();
+    const supLoc = (supplier.entityOverview?.location || "").toLowerCase().trim();
+
+    let locationScore = 0.5;
+    if (appLoc) {
+      if (!supLoc) locationScore = 0;
+      else if (appLoc === supLoc) locationScore = 1;
+      else if (supLoc.includes(appLoc) || appLoc.includes(supLoc)) locationScore = 0.7;
+      else locationScore = 0;
+    }
+
+    const locationContribution = locationScore * MATCHING_CRITERIA.LOCATION.weight * 100;
+    totalScore += locationContribution;
+    breakdown.locationMatch = {
+      score: Math.round(locationScore * 100),
+      weight: MATCHING_CRITERIA.LOCATION.weight * 100,
+      contribution: Math.round(locationContribution),
+      description: MATCHING_CRITERIA.LOCATION.description,
+    };
+
+    // ── 4. DELIVERY MODE MATCH (10%) ─────────────────────────────────
+    const appModes = (application.matchingPreferences?.deliveryModes || application.requestOverview?.deliveryModes || []);
+    const supModes = supplier.productsServices?.deliveryModes || [];
+
+    let deliveryScore = 0.5;
+    if (appModes.length > 0) {
+      if (supModes.length === 0) {
+        deliveryScore = 0;
+      } else if (appModes.includes("Hybrid") || supModes.includes("Hybrid")) {
+        deliveryScore = 1;
+      } else {
+        const matched = appModes.filter(m => supModes.includes(m));
+        deliveryScore = matched.length / appModes.length;
+      }
+    }
+
+    const deliveryContribution = deliveryScore * MATCHING_CRITERIA.DELIVERY_MODE.weight * 100;
+    totalScore += deliveryContribution;
+    breakdown.deliveryMatch = {
+      score: Math.round(deliveryScore * 100),
+      weight: MATCHING_CRITERIA.DELIVERY_MODE.weight * 100,
+      contribution: Math.round(deliveryContribution),
+      description: MATCHING_CRITERIA.DELIVERY_MODE.description,
+    };
+
+    // ── 5. BUDGET MATCH (10%) ────────────────────────────────────────
+    const minBudgetRaw = application.matchingPreferences?.minBudget || application.requestOverview?.minBudget || "0";
+    const maxBudgetRaw = application.matchingPreferences?.maxBudget || application.requestOverview?.maxBudget || "0";
+    const appBudgetMin = parseInt((minBudgetRaw || "0").replace(/\D/g, "")) || 0;
+    const appBudgetMax = parseInt((maxBudgetRaw || "0").replace(/\D/g, "")) || 1000000;
+    const revenue = parseInt((supplier.financialOverview?.annualRevenue || "0").replace(/\D/g, "")) || 0;
+
+    let budgetScore = 0.5;
+    if (revenue > 0) {
+      if (revenue >= appBudgetMin && revenue <= appBudgetMax) budgetScore = 1;
+      else if (revenue >= appBudgetMin * 0.5 && revenue <= appBudgetMax * 1.5) budgetScore = 0.7;
+      else budgetScore = 0.3;
+    }
+
+    const budgetContribution = budgetScore * MATCHING_CRITERIA.BUDGET_RANGE.weight * 100;
+    totalScore += budgetContribution;
+    breakdown.budgetMatch = {
+      score: Math.round(budgetScore * 100),
+      weight: MATCHING_CRITERIA.BUDGET_RANGE.weight * 100,
+      contribution: Math.round(budgetContribution),
+      description: MATCHING_CRITERIA.BUDGET_RANGE.description,
+    };
+
+    // ── 6. OWNERSHIP MATCH (5%) ──────────────────────────────────────
+    const appOwnershipPrefs = (application.matchingPreferences?.ownershipPrefs || []);
+    let ownershipScore = 0.5;
+
+    if (appOwnershipPrefs.length > 0) {
+      const shareholderData = calculateOwnershipPercentages(supplier.ownershipManagement || {});
+      ownershipScore = 0;
+
+      appOwnershipPrefs.forEach(pref => {
+        const p = pref.toLowerCase().trim();
+        if ((p.includes("black-owned") || p.includes("black owned")) && shareholderData.blackOwnership >= 51) ownershipScore += 0.4;
+        else if ((p.includes("women-owned") || p.includes("women owned")) && shareholderData.womenOwnership >= 30) ownershipScore += 0.3;
+        else if ((p.includes("youth-owned") || p.includes("youth owned")) && shareholderData.youthOwnership >= 25) ownershipScore += 0.2;
+        else if ((p.includes("disability") || p.includes("disabled")) && shareholderData.disabilityOwnership >= 5) ownershipScore += 0.1;
+      });
+      ownershipScore = Math.min(ownershipScore, 1);
+    }
+
+    const ownershipContribution = ownershipScore * MATCHING_CRITERIA.OWNERSHIP_PREFS.weight * 100;
+    totalScore += ownershipContribution;
+    breakdown.ownershipMatch = {
+      score: Math.round(ownershipScore * 100),
+      weight: MATCHING_CRITERIA.OWNERSHIP_PREFS.weight * 100,
+      contribution: Math.round(ownershipContribution),
+      description: MATCHING_CRITERIA.OWNERSHIP_PREFS.description,
+    };
+
+    // ── 7. URGENCY / LEAD TIME (5%) ──────────────────────────────────
+    const urgencyScore = 0.5; // estimated until lead time data is fully captured
+    const urgencyContribution = urgencyScore * MATCHING_CRITERIA.URGENCY_LEAD_TIME.weight * 100;
+    totalScore += urgencyContribution;
+    breakdown.urgencyLeadTimeMatch = {
+      score: Math.round(urgencyScore * 100),
+      weight: MATCHING_CRITERIA.URGENCY_LEAD_TIME.weight * 100,
+      contribution: Math.round(urgencyContribution),
+      description: MATCHING_CRITERIA.URGENCY_LEAD_TIME.description,
+    };
+
+    // ── 8. EXPERIENCE MATCH (5%) ─────────────────────────────────────
+    const experienceScore = 0.5; // estimated
+    const experienceContribution = experienceScore * MATCHING_CRITERIA.EXPERIENCE.weight * 100;
+    totalScore += experienceContribution;
+    breakdown.experienceMatch = {
+      score: Math.round(experienceScore * 100),
+      weight: MATCHING_CRITERIA.EXPERIENCE.weight * 100,
+      contribution: Math.round(experienceContribution),
+      description: MATCHING_CRITERIA.EXPERIENCE.description,
+    };
+
+    // ── 9. RATING MATCH (5%) ─────────────────────────────────────────
+    const supplierId = supplier?.id;
+    const effectiveRatings = ratingsData || {};
+    const ratingData = effectiveRatings[supplierId] || { average: 0, count: 0 };
+    const ratingScore = (ratingData.average || 0) / 5;
+    const ratingContribution = ratingScore * MATCHING_CRITERIA.RATING.weight * 100;
+    totalScore += ratingContribution;
+    breakdown.ratingMatch = {
+      score: Math.round(ratingScore * 100),
+      weight: MATCHING_CRITERIA.RATING.weight * 100,
+      contribution: Math.round(ratingContribution),
+      description: MATCHING_CRITERIA.RATING.description,
+      actualRating: ratingData.average || 0,
+      ratingCount: ratingData.count || 0,
+    };
 
     return {
-      totalScore: Math.round(finalScore * 100), // Convert to percentage
+      totalScore: Math.round(totalScore),
       breakdown,
-    }
+    };
   }
 
   const fetchSupplierRatings = async () => {
@@ -882,18 +706,19 @@ export function CustomerTable() {
   }
 
   const formatMatchBreakdown = (matchDetails) => {
-    if (!matchDetails) return null
-
+    if (!matchDetails) return null;
     return Object.entries(matchDetails).reduce((acc, [key, details]) => {
       acc[key] = {
-        score: details.score,
+        score: details.score ?? 0,
+        weight: details.weight ?? 0,
+        contribution: details.contribution ?? 0,
         description: details.description,
-        // Add the weight information from MATCHING_CRITERIA
-        weight: Object.values(MATCHING_CRITERIA).find((c) => c.description === details.description)?.weight * 100 || 0,
-      }
-      return acc
-    }, {})
-  }
+        matches: details.matches || [],
+        unmatched: details.unmatched || [],
+      };
+      return acc;
+    }, {});
+  };
 
   const handleShowMatchBreakdown = (application) => {
     // Add validation checks
