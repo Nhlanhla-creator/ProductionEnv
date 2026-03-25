@@ -13,18 +13,18 @@ const Card = ({ title, children }) => (
 );
 
 const GraduateCount = () => {
-  const { metrics } = usePortfolio();
-  const ex    = metrics?.exit || {};
-  const total = metrics?.totalSMEs || 0;
+  const { portfolioMetrics } = usePortfolio();
+  const ex    = portfolioMetrics?.exit || {};
+  const total = portfolioMetrics?.totalSMEs || 0;
   const grad  = ex.graduates   || 0;
   const active = ex.active     || 0;
   const rate  = ex.graduationRate || 0;
 
   return (
-    <Card title="# Graduates / Deal Closed" subLabel="KPI Card — SMEs that reached Deal Closed stage">
+    <Card title="Graduates / Deal Closed" subLabel="KPI Card — SMEs that reached Deal Closed stage">
       <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "10px" }}>
         <div style={{ fontSize: "72px", fontWeight: "800", color: B.darkest, lineHeight: 1 }}>{grad}</div>
-        <div style={{ fontSize: "15px", color: B.medium, fontWeight: 600 }}>deal closed to date</div>
+        <div style={{ fontSize: "15px", color: B.medium, fontWeight: 600 }}>{`Deal${grad === 1 ? "" : "s"} Closed To Date`}</div>
         <div style={{ display: "flex", gap: "20px", marginTop: "14px" }}>
           {[["Active", active, B.dark], ["Total Portfolio", total, B.medium], ["Target", Math.max(total, 10), B.warm]].map(([l, v, col]) => (
             <div key={l} style={{ textAlign: "center" }}>

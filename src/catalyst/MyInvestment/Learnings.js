@@ -60,11 +60,11 @@ const HBarFromObj = ({ title, subLabel, data, emptyMsg, summaryFn }) => {
 };
 
 const MostRequestedSupportArea = () => {
-  const { metrics } = usePortfolio();
+  const { portfolioMetrics } = usePortfolio();
   // Combine supportRequired and servicesRequired from applications
   const combined = {};
-  const support  = metrics?.learnings?.support   || {};
-  const services = metrics?.learnings?.services  || {};
+  const support  = portfolioMetrics?.learnings?.support   || {};
+  const services = portfolioMetrics?.learnings?.services  || {};
   Object.entries(support).forEach(([k, v]) => { combined[k] = (combined[k] || 0) + v; });
   Object.entries(services).forEach(([k, v]) => { combined[k] = (combined[k] || 0) + v; });
 
@@ -80,8 +80,8 @@ const MostRequestedSupportArea = () => {
 };
 
 const CapabilityGapDistribution = () => {
-  const { metrics } = usePortfolio();
-  const barriers = metrics?.learnings?.barriers || {};
+  const { portfolioMetrics } = usePortfolio();
+  const barriers = portfolioMetrics?.learnings?.barriers || {};
 
   return (
     <HBarFromObj
@@ -107,21 +107,16 @@ const Learnings = () => {
 
   return (
     <div style={{ width: "100%" }}>
-      <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "20px" }}>
-        {SUBS.map(s => <Pill key={s.id} label={s.label} active={sub === s.id} onClick={() => setSub(s.id)} />)}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fill, minmax(420px, 1fr))",
+          gap: "20px",
+        }}
+      >
+        <MostRequestedSupportArea />
+        <CapabilityGapDistribution />
       </div>
-
-      {sub === "support" && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(420px, 1fr))", gap: "20px" }}>
-          <MostRequestedSupportArea />
-        </div>
-      )}
-
-      {sub === "capabilities" && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(420px, 1fr))", gap: "20px" }}>
-          <CapabilityGapDistribution />
-        </div>
-      )}
     </div>
   );
 };

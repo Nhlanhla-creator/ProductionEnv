@@ -60,7 +60,6 @@ const TotalJobsCreated = () => {
         {total > 0 ? (
           <>
             <div style={{ fontSize: "64px", fontWeight: "800", color: B.darkest, lineHeight: 1 }}>{total}</div>
-            <div style={{ fontSize: "14px", color: B.medium, fontWeight: 600 }}>total jobs (direct + indirect)</div>
             <div style={{ display: "flex", gap: "20px", marginTop: "14px" }}>
               {[["Direct", direct, B.dark], ["Indirect", indirect, B.medium]].map(([l, v, col]) => (
                 <div key={l} style={{ textAlign: "center" }}>
@@ -80,41 +79,93 @@ const TotalJobsCreated = () => {
   );
 };
 
-// ── Jobs per SME ──────────────────────────────────────────────────────────────
-const JobsPerSME = () => {
+// ── Pill toggle ───────────────────────────────────────────────────────────────
+const Pill = ({ label, active, onClick }) => (
+  <button
+    onClick={onClick}
+    style={{
+      padding: "5px 14px", borderRadius: "20px", cursor: "pointer", fontSize: "11px",
+      border: `1.5px solid ${active ? B.medium : B.pale}`,
+      fontWeight: active ? 700 : 500,
+      background: active ? B.medium : "#fff",
+      color: active ? "#fff" : B.medium,
+    }}
+  >
+    {label}
+  </button>
+);
+
+// ── Jobs per SME / Sector (merged toggleable card) ─────────────────────────────
+const JobsBreakdown = () => {
   const { portfolioMetrics } = usePortfolio();
+  const [view, setView] = React.useState("sme");
+
+  // Per-SME: only SMEs that have any jobs
   const perSME = [...(portfolioMetrics?.jobs?.perSME || [])]
     .filter(s => s.jobs > 0)
     .sort((a, b) => b.jobs - a.jobs);
-  const total   = portfolioMetrics?.totalSMEs || 1;
-  const avgJobs = perSME.length > 0
-    ? (perSME.reduce((a, b) => a + b.jobs, 0) / total).toFixed(1)
-    : 0;
-  const innerH = Math.max(parseInt(CHART_HEIGHT), perSME.length * 36);
 
-  const footer = (
+  // Per-sector: only sectors present among the SMEs that have jobs
+  const activeSectors = new Set(perSME.map(s => s.sector));
+  const perSector = [...(portfolioMetrics?.jobs?.perSector || [])]
+    .filter(s => s.jobs > 0 && activeSectors.has(s.sector))
+    .sort((a, b) => b.jobs - a.jobs);
+
+  const totalSMEs = portfolioMetrics?.totalSMEs || 1;
+  const avgJobs   = perSME.length > 0
+    ? (perSME.reduce((a, b) => a + b.jobs, 0) / totalSMEs).toFixed(1)
+    : 0;
+
+  const smeInnerH    = Math.max(parseInt(CHART_HEIGHT), perSME.length * 36);
+  const sectorInnerH = Math.max(parseInt(CHART_HEIGHT), perSector.length * 36);
+
+  const footer = view === "sme" ? (
     <div style={{ display: "flex", justifyContent: "space-between" }}>
       <span style={{ fontSize: "12px", color: B.dark, fontWeight: 600 }}>
         Portfolio Avg: <strong>{avgJobs} jobs/SME</strong>
       </span>
       <span style={{ fontSize: "12px", color: B.warm }}>Target: 15</span>
     </div>
+  ) : (
+    <div style={{ display: "flex", justifyContent: "space-between" }}>
+      <span style={{ fontSize: "12px", color: B.dark, fontWeight: 600 }}>
+        Total: <strong>{perSector.reduce((a, b) => a + b.jobs, 0)} jobs</strong>
+      </span>
+      <span style={{ fontSize: "12px", color: B.warm }}>{perSector.length} active sectors</span>
+    </div>
   );
 
+  const isEmpty = view === "sme" ? perSME.length === 0 : perSector.length === 0;
+
   return (
-    <Card title="Jobs Created per SME" subLabel="Horizontal bar — projected jobs per SME (direct + indirect)" footer={footer}>
-      {perSME.length > 0 ? (
+    <Card title="Jobs Created" footer={!isEmpty ? footer : undefined}>
+      {/* Toggle pills */}
+      <div style={{ display: "flex", gap: "6px", marginBottom: "10px", flexShrink: 0 }}>
+        <Pill label="Per SME"    active={view === "sme"}    onClick={() => setView("sme")} />
+        <Pill label="Per Sector" active={view === "sector"} onClick={() => setView("sector")} />
+      </div>
+
+      {isEmpty ? (
+        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: B.light, fontSize: "12px", fontStyle: "italic" }}>
+          No job data available yet
+        </div>
+      ) : view === "sme" ? (
         <div style={{ flex: 1, overflowY: perSME.length > 7 ? "auto" : "visible" }}>
-          <div style={{ height: `${innerH}px` }}>
+          <div style={{ height: `${smeInnerH}px` }}>
             <Bar
               options={hBarIntegralOpts}
-              data={{ labels: perSME.map(s => s.name), datasets: [{ label: "Jobs (direct + indirect)", data: perSME.map(s => s.jobs), backgroundColor: C.slice(0, perSME.length) }] }}
+              data={{ labels: perSME.map(s => s.name), datasets: [{ label: "Jobs", data: perSME.map(s => s.jobs), backgroundColor: C.slice(0, perSME.length) }] }}
             />
           </div>
         </div>
       ) : (
-        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: B.light, fontSize: "12px", fontStyle: "italic" }}>
-          No job data available yet
+        <div style={{ flex: 1, overflowY: perSector.length > 7 ? "auto" : "visible" }}>
+          <div style={{ height: `${sectorInnerH}px` }}>
+            <Bar
+              options={hBarIntegralOpts}
+              data={{ labels: perSector.map(s => s.sector), datasets: [{ label: "Jobs (direct + indirect)", data: perSector.map(s => s.jobs), backgroundColor: C.slice(0, perSector.length) }] }}
+            />
+          </div>
         </div>
       )}
     </Card>
@@ -138,7 +189,7 @@ const Outcomes = () => {
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(380px, 1fr))", gap: "20px" }}>
       <TotalJobsCreated />
-      <JobsPerSME />
+      <JobsBreakdown />
     </div>
   );
 };

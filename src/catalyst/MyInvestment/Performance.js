@@ -82,7 +82,7 @@ const RevenuePerSME = () => {
   );
 
   return (
-    <Card title="Annual Revenue per SME" subLabel="Horizontal bar — actual revenue from SME profiles (R)" footer={footer}>
+    <Card title="Net Profit per SME" subLabel="Horizontal bar — actual revenue from SME profiles (R)" footer={footer}>
       {perSME.length > 0 ? (
         <div style={{ flex: 1, overflowY: perSME.length > 7 ? "auto" : "visible" }}>
           <div style={{ height: `${innerH}px` }}>
@@ -102,15 +102,19 @@ const ProfitabilityStatus = () => {
   const { portfolioMetrics } = usePortfolio();
   const perSME   = portfolioMetrics?.revenue?.perSME || [];
   const statuses = perSME.filter(s => s.profitability && s.profitability !== "Unknown");
+  // mock data to test distribution
+  // const statuses = [...perSME.filter(s => s.profitability && s.profitability !== "Unknown"), ...[...Array(20)].map((_, i) => ({ profitability: ["Profitable", "Breakeven", "Unprofitable"][i % 3] }))];
 
   const statusCounts = statuses.reduce((acc, s) => {
     acc[s.profitability] = (acc[s.profitability] || 0) + 1;
     return acc;
   }, {});
+
   const sorted = Object.entries(statusCounts).sort((a, b) => b[1] - a[1]);
   const labels = sorted.map(([l]) => l);
   const values = sorted.map(([, v]) => v);
-  const statusColors = { Profitable: "#7d5a36", "Break-even": "#b8a082", "Pre-revenue": "#d4c4b0", Unprofitable: "#9b3a1a" };
+
+  const statusColors = { "Profitable": "#2fe578", "Breakeven": "#fad05d", "Pre-revenue": "#d4c4b0", "Unprofitable": "#de2e2e" };
 
   return (
     <Card title="Profitability Status" subLabel="Distribution across portfolio SMEs">
@@ -205,7 +209,7 @@ const ClientsPerSME = () => {
   const innerH = Math.max(parseInt(CHART_HEIGHT), smeClients.length * 36);
 
   return (
-    <Card title="# Key Clients per SME" subLabel="Horizontal bar — key clients listed in SME profiles">
+    <Card title="Key Clients per SME" subLabel="Horizontal bar — key clients listed in SME profiles">
       {smeClients.length > 0 ? (
         <div style={{ flex: 1, overflowY: smeClients.length > 7 ? "auto" : "visible" }}>
           <div style={{ height: `${innerH}px` }}>
@@ -241,24 +245,12 @@ const Performance = () => {
 
   return (
     <div style={{ width: "100%" }}>
-      <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "20px" }}>
-        {SUBS.map(s => <Pill key={s.id} label={s.label} active={sub === s.id} onClick={() => setSub(s.id)} />)}
-      </div>
-
-      {sub === "financial" && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(380px, 1fr))", gap: "20px" }}>
           <RevenuePerSME />
           <ProfitabilityStatus />
-          <CapitalRequired />
           {/* <PortfolioQualityGauge /> */}
-        </div>
-      )}
-
-      {sub === "market-penetration" && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(380px, 1fr))", gap: "20px" }}>
           <ClientsPerSME />
         </div>
-      )}
     </div>
   );
 };

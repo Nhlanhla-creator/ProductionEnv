@@ -199,7 +199,7 @@ const SMEsByRevenue = () => {
   const hasData = values.length > 0;
 
   return (
-    <Card title="SMEs by Revenue (#)" subLabel={view === "pie" ? "Distribution by revenue band" : "Revenue per SME (R)"}>
+    <Card title="SMEs by Revenue" subLabel={view === "pie" ? "Distribution by revenue band" : "Revenue per SME (R)"}>
       <div style={{ display: "flex", gap: "6px", marginBottom: "10px", flexShrink: 0 }}>
         <Pill label="Distribution" active={view === "pie"} onClick={() => setView("pie")} />
         <Pill label="Per SME"      active={view === "bar"} onClick={() => setView("bar")} />
@@ -300,64 +300,68 @@ const PortfolioHealth = () => {
 
           {/* Headcount: descriptive labels already set in usePortfolioData (e.g. "6–20 employees") */}
           <SmartCard
-            title="SMEs by Headcount (#)"
+            title="SMEs by Headcount"
             subLabel="Employee count bands — smart chart (pie ≤5 slices, hbar if more)"
             data={portfolioMetrics?.headcount || {}}
           />
 
-          {/* Sector: likely >5 → auto hbar */}
           <SmartCard
-            title="SMEs by Sector (#)"
-            subLabel="Economic sector — smart chart (pie ≤5, hbar if more)"
-            data={portfolioMetrics?.sector || {}}
-          />
-
-          <SmartCard
-            title="SMEs by Business Lifecycle Stage (#)"
+            title="SMEs by Business Lifecycle Stage"
             subLabel="Operational stage — smart chart (pie ≤5, hbar if more)"
             data={portfolioMetrics?.lifecycle || {}}
           />
 
           {/* Geography: likely >5 provinces → auto hbar */}
           <SmartCard
-            title="SMEs by Geography (#)"
+            title="SMEs by Geography"
             subLabel="Province / location — smart chart (pie ≤5, hbar if more)"
             data={portfolioMetrics?.geography || {}}
+          />
+
+          {/* Sector: likely >5 → auto hbar */}
+          <SmartCard
+            title="SMEs by Sector"
+            subLabel="Economic sector — smart chart (pie ≤5, hbar if more)"
+            data={portfolioMetrics?.sector || {}}
           />
         </div>
       )}
 
       {sub === "demographics" && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(380px, 1fr))", gap: "20px" }}>
-          <SmartCard title="SMEs by Gender (#)"            subLabel="Shareholder gender breakdown"          data={portfolioMetrics?.gender     || {}} />
-          <SmartCard title="SMEs by Disability Status (#)" subLabel="Disability disclosed by shareholders"  data={portfolioMetrics?.disability || {}} />
-          <SmartCard title="SMEs by Youth Status (#)"      subLabel="Youth shareholders"                   data={portfolioMetrics?.youth      || {}} />
-          <SmartCard title="SMEs by HDI Ownership (#)"     subLabel="Black ownership > 50%"                data={portfolioMetrics?.hdi        || {}} />
+          <SmartCard title="SMEs by Gender"            subLabel="Shareholder gender breakdown"          data={portfolioMetrics?.gender     || {}} />
+          <SmartCard title="SMEs by Disability Status" subLabel="Disability disclosed by shareholders"  data={portfolioMetrics?.disability || {}} />
+          <SmartCard title="SMEs by Youth Status"      subLabel="Youth shareholders"                   data={portfolioMetrics?.youth      || {}} />
+          <SmartCard title="SMEs by HDI Ownership"     subLabel="Black ownership > 50%"                data={portfolioMetrics?.hdi        || {}} />
           <SMEsByRevenue />
         </div>
       )}
 
       {sub === "support" && (
+        <>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(380px, 1fr))", gap: "20px" }}>
-          <HBarCard
-            title="SMEs by Support Focus (#)"
-            subLabel="Support type requested"
-            data={portfolioMetrics?.supportFocus  || {}}
-          />
-          <HBarCard
-            title="SMEs by Services Requested (#)"
-            subLabel="Services type requested"
-            data={portfolioMetrics?.servicesFocus || {}}
-          />
           {/* Normalise funding instrument keys → 4 canonical values */}
           <HBarCard
-            title="SMEs by Funding Instrument (#)"
+            title="SMEs by Funding Instrument"
             subLabel="Instrument type from profile (equity / grant / debt / skills_training)"
             data={normalizeFundingData(portfolioMetrics?.fundingType || {})}
           />
           <FundingAllocationBySector />
           <AverageFundingPerSME />
         </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(380px, 1fr))", gap: "20px", marginTop: "20px" }}>
+          <HBarCard
+            title="SMEs by Support Focus"
+            subLabel="Support type requested"
+            data={portfolioMetrics?.supportFocus  || {}}
+          />
+          <HBarCard
+            title="SMEs by Services Requested"
+            subLabel="Services type requested"
+            data={portfolioMetrics?.servicesFocus || {}}
+          />
+        </div>
+        </>
       )}
     </div>
   );

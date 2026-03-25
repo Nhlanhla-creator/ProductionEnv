@@ -7,8 +7,10 @@ import {
   TrendingUp, DollarSign, Users, Clock,
   Rocket, Target, Award, Activity
 } from "lucide-react";
+import { Bar, Doughnut } from "react-chartjs-2";
 import { collection, getDocs, query } from "firebase/firestore";
 import { db } from '../../firebaseConfig';
+import { usePortfolio } from "../../context/PortfolioContext";
 
 Chart.register(...registerables);
 
@@ -119,6 +121,459 @@ const InsightsSkeleton = () => (
     </div>
   </div>
 );
+
+// ── Cohort Selection Tab — helpers ─────────────────────────────────────────────
+// Uses react-chartjs-2 (Bar / Doughnut).
+// Ecosystem data  → metrics / enriched   (ALL catalyst applications)
+// Portfolio data  → portfolioMetrics      (Active Support + Support Approved only)
+// ──────────────────────────────────────────────────────────────────────────────
+
+const BP = {
+  darkest: "#3b2409", dark: "#5e3f26", medium: "#7d5a36",
+  warm: "#9c7c54", light: "#b8a082", pale: "#d4c4b0", offwhite: "#f0e8de",
+};
+const BCOLORS = ["#3b2409","#5e3f26","#7d5a36","#9c7c54","#b8a082","#c2a882","#d4c4b0","#a08060"];
+// Distinct amber-brown for the portfolio (cohort) line overlay on histograms
+const PORTFOLIO_LINE_COLOR = "#c17d3c";
+const CS_CARD_H  = "460px";
+const CS_CHART_H = "260px";
+
+// Plain bar options (for range view — no second dataset, no legend needed)
+const csVBarOpts = (yCb) => ({
+  responsive: true, maintainAspectRatio: false, animation: false,
+  plugins: {
+    legend: { display: false },
+    datalabels: { display: false },
+  },
+  scales: {
+    x: { grid: { display: false }, ticks: { color: BP.dark, font: { size: 10 } } },
+    y: { beginAtZero: true, grid: { color: BP.offwhite }, ticks: { color: BP.dark, callback: yCb || (v => v) } },
+  },
+});
+
+// Mixed bar + line options (for histograms — ecosystem bars + portfolio line)
+const csHistogramOpts = (yCb, xTitle) => ({
+  responsive: true, maintainAspectRatio: false, animation: false,
+    plugins: { legend: { display: false, position: "bottom", labels: { color: BP.dark, font: { size: 11 }, boxWidth: 12 } }, datalabels: { display: false } },
+    scales: {
+      x: { title: { display: true, text: xTitle, color: BP.dark }, grid: { display: false }, ticks: { color: BP.dark, font: { size: 10 } } },
+      y: { title: { display: true, text: "Number of SMEs", color: BP.dark }, beginAtZero: true, grid: { color: BP.offwhite }, ticks: { color: BP.dark, callback: yCb || (v => v), stepSize: 1, } },
+    },
+});
+
+const csHBarOpts = (integralOnly) => ({
+  responsive: true, maintainAspectRatio: false, animation: false,
+  indexAxis: "y",
+  plugins: { legend: { display: false }, datalabels: { display: false } },
+  scales: {
+    x: {
+      beginAtZero: true,
+      grid: { display: true, color: BP.offwhite },
+      ticks: {
+        color: BP.dark, font: { size: 10 },
+        ...(integralOnly ? { callback: v => Number.isInteger(v) ? v : "", precision: 0, stepSize: 1 } : {}),
+      },
+    },
+    y: { grid: { display: false }, ticks: { color: BP.dark, font: { size: 11 } } },
+  },
+});
+
+const csDoughnutOpts = {
+  responsive: true, maintainAspectRatio: false, animation: false,
+  plugins: {
+    legend: { position: "bottom", labels: { color: BP.dark, font: { size: 11 }, boxWidth: 12 } },
+    datalabels: { color: BP.offwhite },
+  },
+};
+
+// ── Shared primitives ──────────────────────────────────────────────────────────
+
+const CsCard = ({ title, footer, children }) => (
+  <div style={{
+    background: "#fff", borderRadius: "10px", padding: "20px",
+    height: CS_CARD_H,
+    boxShadow: "0 2px 10px rgba(59,36,9,0.07)", border: `1px solid ${BP.pale}`,
+    display: "flex", flexDirection: "column",
+  }}>
+    <div style={{ paddingBottom: "10px", borderBottom: `1px solid ${BP.offwhite}`, marginBottom: "8px" }}>
+      <h3 style={{ fontSize: "14px", fontWeight: "700", color: BP.dark, margin: 0 }}>{title}</h3>
+    </div>
+    <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>{children}</div>
+    {footer && (
+      <div style={{ marginTop: "8px", padding: "7px 10px", background: BP.offwhite, borderRadius: "6px", flexShrink: 0 }}>
+        {footer}
+      </div>
+    )}
+  </div>
+);
+
+const CsPill = ({ label, active, onClick }) => (
+  <button
+    onClick={onClick}
+    style={{
+      padding: "5px 14px", borderRadius: "20px", cursor: "pointer", fontSize: "11px",
+      border: `1.5px solid ${active ? BP.medium : BP.pale}`,
+      fontWeight: active ? 700 : 500,
+      background: active ? BP.medium : "#fff",
+      color: active ? "#fff" : BP.medium,
+    }}
+  >
+    {label}
+  </button>
+);
+
+const CsEmpty = () => (
+  <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: BP.light, fontSize: "12px", fontStyle: "italic" }}>
+    No data yet
+  </div>
+);
+
+// ── Score Range View ───────────────────────────────────────────────────────────
+// Shows the ecosystem spread: Min → Ecosystem Avg → Max.
+// "Cohort Avg" label and big figure have been removed per spec.
+// The progress bar markers now read "Ecosystem Avg" (was "Matches Avg").
+const CsScoreRangeView = ({ min, pipelineAvg, max, target, ecoSystemAvg, suffix = "%" }) => {
+  if (!min && !pipelineAvg && !max) return <CsEmpty />;
+
+  const clamp = v => Math.min(Math.max(v || 0, 0), 100);
+  const mn = clamp(min), pa = clamp(pipelineAvg), mx = clamp(max);
+
+  return (
+    <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "12px" }}>
+      {/* "Ecosystem Avg" label
+      <div style={{ fontSize: "14px", color: BP.darkest, fontWeight: 600, letterSpacing: "0.8px" }}>
+        Ecosystem Avg
+      </div> */}
+
+      {/* Big ecosystem avg figure */}
+      <div style={{ fontSize: "64px", fontWeight: "800", color: BP.darkest, lineHeight: 1, marginTop: "-4px" }}>
+        {ecoSystemAvg}<span style={{ fontSize: "32px" }}>{suffix}</span>
+      </div>
+
+      {/* Target */}
+      <div style={{ fontSize: "14px", color: BP.medium, fontWeight: 600 }}>
+        Target: {target}{suffix}
+      </div>
+
+      {/* Joint progress bar */}
+      <div style={{ width: "100%", marginTop: "4px" }}>
+
+        {/* Track */}
+        <div style={{ position: "relative", width: "100%", height: "12px", background: BP.pale, borderRadius: "6px", overflow: "visible" }}>
+          {/* Max layer — lightest */}
+          <div style={{ position: "absolute", left: 0, top: 0, width: `${mx}%`, height: "100%", background: BP.light, borderRadius: "6px", overflow: "hidden" }} />
+          {/* Pipeline avg layer — medium */}
+          <div style={{ position: "absolute", left: 0, top: 0, width: `${pa}%`, height: "100%", background: BP.medium, borderRadius: "6px", overflow: "hidden" }} />
+          {/* Min layer — darkest */}
+          <div style={{ position: "absolute", left: 0, top: 0, width: `${mn}%`, height: "100%", background: BP.dark, borderRadius: "6px", overflow: "hidden" }} />
+        </div>
+
+        {/* Value labels */}
+        <div style={{ position: "relative", width: "95%", height: "38px", marginTop: "6px" }}>
+          {[
+            { val: mn, label: "Min",           color: BP.dark   },
+            { val: pa, label: "Ecosystem Avg", color: BP.medium },
+            { val: mx, label: "Max",           color: BP.light  },
+          ].map(({ val, label, color }) => (
+            <div
+              key={label}
+              style={{ position: "absolute", left: `${val}%`, transform: "translateX(-50%)", textAlign: "center", whiteSpace: "nowrap" }}
+            >
+              <div style={{ fontSize: "14px", fontWeight: 700, color }}>{val}{suffix}</div>
+            </div>
+          ))}
+        </div>
+        {/* Custom legend */}
+        <div style={{ position: "relative", width: "95%", height: "20px", marginTop: "6px" }}>
+          {[
+            { label: "Cohort Avg", color: BP.darkest },
+            { label: "Pipeline Avg", color: BP.medium },
+            { label: "Target", color: BP.light },
+          ].map(({ label, color }) => (
+            <div key={label} style={{ display: "flex", alignItems: "center", gap: "4px", marginRight: "16px" }}>
+              <div style={{ width: "12px", height: "12px", borderRadius: "6px", background: color }} />
+              <div style={{ fontSize: "11px", color }}>{label}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ── Histogram dataset builder ──────────────────────────────────────────────────
+// Returns two datasets:
+//   1. Bar  → ecosystem distribution (all matches via `metrics`)
+//   2. Line → portfolio distribution (Active Support + Support Approved via `portfolioMetrics`)
+const buildHistogramData = (ecosystemDist, portfolioDist) => ({
+  labels: Object.keys(ecosystemDist),
+  datasets: [
+    {
+      type: "bar",
+      label: "Ecosystem",
+      data: Object.values(ecosystemDist),
+      backgroundColor: BCOLORS.slice(0, Object.keys(ecosystemDist).length),
+      order: 2,
+    },
+    {
+      type: "line",
+      label: "Cohorts",
+      data: Object.keys(ecosystemDist).map(k => portfolioDist?.[k] || 0),
+      borderColor: PORTFOLIO_LINE_COLOR,
+      backgroundColor: "transparent",
+      tension: 0.4,
+      pointBackgroundColor: PORTFOLIO_LINE_COLOR,
+      pointBorderColor: "#fff",
+      pointBorderWidth: 2,
+      pointRadius: 5,
+      pointHoverRadius: 7,
+      order: 1,
+    },
+  ],
+});
+
+// ── Average Match Strength ─────────────────────────────────────────────────────
+const CsAverageMatchStrength = ({ metrics, portfolioMetrics }) => {
+  const [view, setView] = useState("range");
+
+  // Ecosystem (all matches)
+  const m             = metrics?.match || {};
+  const ecosystemDist = metrics?.match?.dist || {};
+  // Portfolio line overlay
+  const portfolioDist = portfolioMetrics?.match?.dist || {};
+
+  const hasData = m.min > 0 || m.avg > 0;
+
+  return (
+    <CsCard title="Average Match Strength (%)">
+      <div style={{ display: "flex", gap: "6px", marginBottom: "10px", flexShrink: 0 }}>
+        <CsPill label="Range"     active={view === "range"}     onClick={() => setView("range")} />
+        <CsPill label="Histogram" active={view === "histogram"} onClick={() => setView("histogram")} />
+      </div>
+      {hasData ? (
+        view === "range"
+          ? <CsScoreRangeView min={m.min} pipelineAvg={m.avg} max={m.max} target={75} ecoSystemAvg={m.avg} />
+          : (
+            <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+              <div style={{ height: CS_CHART_H }}>
+                <Bar
+                  options={csHistogramOpts(v => v, "Average Match Strength (%)")}
+                  data={buildHistogramData(ecosystemDist, portfolioDist)}
+                />
+              </div>
+            </div>
+          )
+      ) : <CsEmpty />}
+    </CsCard>
+  );
+};
+
+// ── Average BIG Score ──────────────────────────────────────────────────────────
+const CsAverageBIGScore = ({ metrics, portfolioMetrics }) => {
+  const [view, setView] = useState("range");
+
+  // Ecosystem (all matches)
+  const b             = metrics?.bigScore || {};
+  const ecosystemDist = metrics?.bigScore?.dist || {};
+  // Portfolio line overlay
+  const portfolioDist = portfolioMetrics?.bigScore?.dist || {};
+
+  const hasData = b.min > 0 || b.avg > 0;
+
+  return (
+    <CsCard title="Average BIG Score (%)">
+      <div style={{ display: "flex", gap: "6px", marginBottom: "10px", flexShrink: 0 }}>
+        <CsPill label="Range"     active={view === "range"}     onClick={() => setView("range")} />
+        <CsPill label="Histogram" active={view === "histogram"} onClick={() => setView("histogram")} />
+      </div>
+      {hasData ? (
+        view === "range"
+          ? <CsScoreRangeView min={b.min} pipelineAvg={b.avg} max={b.max} target={70} ecoSystemAvg={b.avg} />
+          : (
+            <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
+              <div style={{ height: CS_CHART_H }}>
+                <Bar
+                  options={csHistogramOpts(v => v, "Average BIG Score (%)")}
+                  data={buildHistogramData(ecosystemDist, portfolioDist)}
+                />
+              </div>
+            </div>
+          )
+      ) : <CsEmpty />}
+    </CsCard>
+  );
+};
+
+// ── Funding Readiness Rate ─────────────────────────────────────────────────────
+const CsFundingReadinessRate = ({ metrics }) => {
+  const rate  = metrics?.fundingReadinessRate ?? 0;
+  const total = metrics?.totalSMEs ?? 0;
+  const ready = Math.round((rate / 100) * total);
+
+  return (
+    <CsCard title="Funding Readiness Rate (%)">
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "6px" }}>
+        <div style={{ display: "flex", gap: "6px", marginBottom: "10px", flexShrink: 0 }}>
+          <div style={{ width: "12px", height: "12px", borderRadius: "6px", background: "transparent" }} />
+        </div>
+        <div style={{ fontSize: "64px", fontWeight: "800", color: BP.darkest, lineHeight: 1 }}>
+          {rate}<span style={{ fontSize: "32px" }}>%</span>
+        </div>
+        <div style={{ fontSize: "14px", color: BP.medium, fontWeight: 600 }}>{ready} of {total} SMEs funding-ready</div>
+        <div style={{ width: "100%", background: BP.pale, borderRadius: "4px", height: "10px", overflow: "hidden" }}>
+          <div style={{ width: `${rate}%`, background: BP.medium, height: "100%", borderRadius: "4px" }} />
+        </div>
+        <div style={{ display: "flex", justifyContent: "space-between", width: "100%", padding: "0 4px" }}>
+          <span style={{ fontSize: "11px", color: BP.warm }}>Current: {rate}%</span>
+          <span style={{ fontSize: "11px", color: BP.warm }}>Target: 70%</span>
+        </div>
+      </div>
+    </CsCard>
+  );
+};
+
+// ── Average Vetting Time ───────────────────────────────────────────────────────
+const CsAverageVettingTime = ({ metrics }) => {
+  const ACTUAL = metrics?.vetting?.avg || 0;
+  const TARGET = metrics?.vetting?.target || 10;
+  const VARIANCE = ACTUAL - TARGET;
+  const R = 54, CIRC = 2 * Math.PI * R;
+  const offset = CIRC - (CIRC * Math.min(ACTUAL, 60)) / 60;
+
+  return (
+    <CsCard title="Average Vetting Time (Days)">
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+        {ACTUAL > 0 ? (
+          <>
+            <svg width="260" height="260" viewBox="0 0 160 160">
+              <circle cx="80" cy="80" r={R} stroke={BP.pale} strokeWidth="11" fill="none" />
+              <circle
+                cx="80" cy="80" r={R}
+                stroke={ACTUAL <= TARGET ? BP.medium : BP.dark}
+                strokeWidth="11" fill="none" strokeLinecap="round"
+                strokeDasharray={CIRC} strokeDashoffset={offset}
+                transform="rotate(-90 80 80)"
+              />
+              <text x="80" y="74" textAnchor="middle" fill={BP.darkest} fontSize="30" fontWeight="800">{Math.round(ACTUAL)}</text>
+              <text x="80" y="93" textAnchor="middle" fill={BP.warm} fontSize="13">days</text>
+            </svg>
+            <div style={{ display: "flex", gap: "24px" }}>
+              {[
+                ["Actual",   Math.round(ACTUAL) + "d",                                      BP.dark],
+                ["Target",   TARGET + "d",                                                    BP.medium],
+                ["Variance", (VARIANCE > 0 ? "+" : "") + Math.round(VARIANCE) + "d",         VARIANCE > 0 ? "#8b3a1a" : BP.medium],
+              ].map(([l, v, col]) => (
+                <div key={l} style={{ textAlign: "center" }}>
+                  <div style={{ fontSize: "10px", color: BP.warm, marginBottom: "3px" }}>{l}</div>
+                  <div style={{ fontSize: "16px", fontWeight: "700", color: col }}>{v}</div>
+                </div>
+              ))}
+            </div>
+          </>
+        ) : (
+          <div style={{ color: BP.light, fontSize: "12px", fontStyle: "italic" }}>Not enough data to compute vetting time yet</div>
+        )}
+      </div>
+    </CsCard>
+  );
+};
+
+// ── SME Pipeline Progress ──────────────────────────────────────────────────────
+const CsSMEPipelineProgress = ({ metrics }) => {
+  const [view, setView] = useState("stage");
+  const dist = metrics?.stageDist || {};
+
+  const nonZeroEntries = Object.entries(dist).filter(([, v]) => v > 0);
+  const sortedEntries = [...nonZeroEntries].sort((a, b) => b[1] - a[1]);
+  const hbarLabels = sortedEntries.map(([k]) => k);
+  const hbarValues = sortedEntries.map(([, v]) => v);
+  const doughnutLabels = nonZeroEntries.map(([k]) => k);
+  const doughnutValues = nonZeroEntries.map(([, v]) => v);
+
+  const hasData = nonZeroEntries.length > 0;
+  const innerH  = Math.max(parseInt(CS_CHART_H), hbarLabels.length * 36);
+
+  return (
+    <CsCard title="SME Pipeline Progress">
+      <div style={{ display: "flex", gap: "6px", marginBottom: "10px", flexShrink: 0 }}>
+        <CsPill label="Stage Dist." active={view === "stage"}  onClick={() => setView("stage")} />
+        <CsPill label="Funnel"      active={view === "funnel"} onClick={() => setView("funnel")} />
+      </div>
+      {hasData ? (
+        <>
+          <div style={{ flex: 1, overflow: "hidden" }}>
+            {view === "stage" ? (
+              <div style={{ height: `${innerH}px`, overflowY: hbarLabels.length > 7 ? "auto" : "visible" }}>
+                <Bar
+                  options={csHBarOpts(true)}
+                  data={{ labels: hbarLabels, datasets: [{ label: "# SMEs", data: hbarValues, backgroundColor: BCOLORS.slice(0, hbarLabels.length) }] }}
+                />
+              </div>
+            ) : (
+              <div style={{ height: CS_CHART_H }}>
+                <Doughnut
+                  options={csDoughnutOpts}
+                  data={{ labels: doughnutLabels, datasets: [{ data: doughnutValues, backgroundColor: BCOLORS.slice(0, doughnutLabels.length), borderWidth: 2, borderColor: "#fff" }] }}
+                />
+              </div>
+            )}
+          </div>
+          <div style={{ display: "flex", justifyContent: "center", gap: "5px", marginTop: "0px", flexWrap: "wrap", flexShrink: 0 }}>
+            {doughnutLabels.map((s, i) => (
+              <span key={s} style={{ fontSize: "10px", color: BP.dark, background: BP.offwhite, padding: "3px 7px", borderRadius: "10px" }}>
+                {s}: <strong>{doughnutValues[i]}</strong>
+              </span>
+            ))}
+          </div>
+        </>
+      ) : <CsEmpty />}
+    </CsCard>
+  );
+};
+
+// ── Cohort Selection Tab skeleton ──────────────────────────────────────────────
+const CsCohortSkeleton = () => (
+  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(380px, 1fr))", gap: "20px" }}>
+    {["bar","bar","progress","gauge","doughnut"].map((_, i) => (
+      <div
+        key={i}
+        className="bg-white rounded-xl p-5 border border-paleBrown flex flex-col"
+        style={{ height: CS_CARD_H, boxShadow: "0 2px 10px rgba(59,36,9,0.07)" }}
+      >
+        <div className="pb-2.5 border-b border-offWhite mb-2.5">
+          <div className="w-3/4 h-4 bg-shimmer-dark bg-shimmer animate-shimmer rounded" />
+        </div>
+        <div className="flex-1 flex items-end justify-around px-4 gap-2">
+          {[55, 80, 40, 70, 30].map((h, j) => (
+            <div
+              key={j}
+              className="flex-1 bg-shimmer-mid bg-shimmer rounded-t-md animate-shimmer"
+              style={{ height: `${h}%`, animationDelay: `${j * 0.1}s` }}
+            />
+          ))}
+        </div>
+      </div>
+    ))}
+  </div>
+);
+
+// ── Cohort Selection Tab content ───────────────────────────────────────────────
+// Consumes the portfolio context; renders the 5 CohortSelection charts.
+const CohortSelectionTabContent = () => {
+  const { metrics, portfolioMetrics, loading } = usePortfolio();
+
+  if (loading) return <CsCohortSkeleton />;
+
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(380px, 1fr))", gap: "20px" }}>
+      <CsAverageMatchStrength  metrics={metrics} portfolioMetrics={portfolioMetrics} />
+      <CsAverageBIGScore       metrics={metrics} portfolioMetrics={portfolioMetrics} />
+      <CsFundingReadinessRate  metrics={metrics} />
+      <CsAverageVettingTime    metrics={metrics} />
+      <CsSMEPipelineProgress   metrics={metrics} />
+    </div>
+  );
+};
 
 // ── Main Component ─────────────────────────────────────────────────────────────
 
@@ -535,10 +990,11 @@ export function AcceleratorInsights() {
 
   // ── Tab config ─────────────────────────────────────────────────────────────
   const tabs = [
-    { id: "program-types",          label: "Catalyst Types & Reach",   icon: Rocket },
-    { id: "sector-focus",           label: "Sector Focus",             icon: Target },
-    { id: "outcomes-effectiveness", label: "Outcomes & Effectiveness", icon: Award },
-    { id: "engagement-patterns",    label: "Engagement Patterns",      icon: Activity },
+    { id: "cohort-selection",        label: "Cohort Selection",         icon: Users    }, // ← first tab
+    { id: "program-types",           label: "Catalyst Types & Reach",   icon: Rocket   },
+    { id: "sector-focus",            label: "Sector Focus",             icon: Target   },
+    { id: "outcomes-effectiveness",  label: "Outcomes & Effectiveness", icon: Award    },
+    { id: "engagement-patterns",     label: "Engagement Patterns",      icon: Activity },
   ];
 
   const statCards = [
@@ -594,7 +1050,10 @@ export function AcceleratorInsights() {
       </div>
 
       {/* Charts grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+      <div className={activeTab === "cohort-selection" ? "" : "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5"}>
+
+        {/* ── Cohort Selection tab ── */}
+        {activeTab === "cohort-selection" && <CohortSelectionTabContent />}
 
         {activeTab === "program-types" && (<>
           <div className="bg-white rounded-2xl border border-lightTan p-4 shadow-sm" style={{ height: 280 }}>

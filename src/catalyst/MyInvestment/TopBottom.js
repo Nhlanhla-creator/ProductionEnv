@@ -59,8 +59,8 @@ const InsightBox = ({ text }) => (
 
 // ── TOP 3 ─────────────────────────────────────────────────────────────────────
 const HighestBIGScore = () => {
-  const { metrics } = usePortfolio();
-  const rows = metrics?.performers?.topBig || [];
+  const { portfolioMetrics } = usePortfolio();
+  const rows = portfolioMetrics?.performers?.topBig || [];
   return (
     <Card title="Highest BIG Score" subLabel="Top 3 — ranked by BIG score">
       <RankedTable isTop rows={rows} metricLabel="BIG Score" unit="%" fmt={r => r.bigScore} />
@@ -70,8 +70,8 @@ const HighestBIGScore = () => {
 };
 
 const HighestMatchScore = () => {
-  const { metrics } = usePortfolio();
-  const rows = metrics?.performers?.topMatch || [];
+  const { portfolioMetrics } = usePortfolio();
+  const rows = portfolioMetrics?.performers?.topMatch || [];
   return (
     <Card title="Highest Match %" subLabel="Top 3 — ranked by programme match percentage">
       <RankedTable isTop rows={rows} metricLabel="Match %" unit="%" fmt={r => r.matchPct} />
@@ -81,8 +81,8 @@ const HighestMatchScore = () => {
 };
 
 const HighestFundability = () => {
-  const { metrics } = usePortfolio();
-  const rows = (metrics?.performers?.topBig || []).filter(r => r.fundability > 0);
+  const { portfolioMetrics } = usePortfolio();
+  const rows = (portfolioMetrics?.performers?.topBig || []).filter(r => r.fundability > 0);
   return (
     <Card title="Highest Fundability Score" subLabel="Top 3 — ranked by fundability sub-score">
       <RankedTable isTop rows={rows} metricLabel="Fundability" unit="%" fmt={r => r.fundability} />
@@ -92,8 +92,8 @@ const HighestFundability = () => {
 };
 
 const HighestRevenue = () => {
-  const { metrics } = usePortfolio();
-  const perSME = (metrics?.revenue?.perSME || []).filter(s => s.revenue > 0).sort((a, b) => b.revenue - a.revenue).slice(0, 3);
+  const { portfolioMetrics } = usePortfolio();
+  const perSME = (portfolioMetrics?.revenue?.perSME || []).filter(s => s.revenue > 0).sort((a, b) => b.revenue - a.revenue).slice(0, 3);
   const rows = perSME.map(s => ({ name: s.name, sector: s.sector, stage: s.profitability }));
   return (
     <Card title="Highest Revenue SMEs" subLabel="Top 3 — ranked by annual revenue">
@@ -105,8 +105,8 @@ const HighestRevenue = () => {
 
 // ── BOTTOM 3 ──────────────────────────────────────────────────────────────────
 const LowestBIGScore = () => {
-  const { metrics } = usePortfolio();
-  const rows = metrics?.performers?.bottomBig || [];
+  const { portfolioMetrics } = usePortfolio();
+  const rows = portfolioMetrics?.performers?.bottomBig || [];
   return (
     <Card title="Lowest BIG Score" subLabel="Bottom 3 — require immediate support">
       <RankedTable isTop={false} rows={rows} metricLabel="BIG Score" unit="%" fmt={r => r.bigScore} />
@@ -116,8 +116,8 @@ const LowestBIGScore = () => {
 };
 
 const LowestMatchScore = () => {
-  const { metrics } = usePortfolio();
-  const rows = metrics?.performers?.bottomMatch || [];
+  const { portfolioMetrics } = usePortfolio();
+  const rows = portfolioMetrics?.performers?.bottomMatch || [];
   return (
     <Card title="Lowest Match %" subLabel="Bottom 3 — weakest programme fit">
       <RankedTable isTop={false} rows={rows} metricLabel="Match %" unit="%" fmt={r => r.matchPct} />
@@ -127,8 +127,8 @@ const LowestMatchScore = () => {
 };
 
 const LowestComplianceScore = () => {
-  const { metrics } = usePortfolio();
-  const rows = (metrics?.performers?.lowCompliance || []).filter(r => r.compliance > 0);
+  const { portfolioMetrics } = usePortfolio();
+  const rows = (portfolioMetrics?.performers?.lowCompliance || []).filter(r => r.compliance > 0);
   return (
     <Card title="Lowest Compliance Score" subLabel="Bottom 3 — compliance risk flagged">
       <RankedTable isTop={false} rows={rows} metricLabel="Compliance" unit="%" fmt={r => r.compliance} />
@@ -138,8 +138,8 @@ const LowestComplianceScore = () => {
 };
 
 const LowestFundability = () => {
-  const { metrics } = usePortfolio();
-  const rows = (metrics?.performers?.lowFundability || []).filter(r => r.fundability > 0);
+  const { portfolioMetrics } = usePortfolio();
+  const rows = (portfolioMetrics?.performers?.lowFundability || []).filter(r => r.fundability > 0);
   return (
     <Card title="Lowest Fundability Score" subLabel="Bottom 3 — least investment-ready">
       <RankedTable isTop={false} rows={rows} metricLabel="Fundability" unit="%" fmt={r => r.fundability} />

@@ -164,14 +164,28 @@ function computeMetrics(enriched) {
   });
 
   let jobsDirect = 0, jobsIndirect = 0;
-  const jobsPerSME = enriched.map(a => {
+  const jobsPerSME = enriched.reduce((acc, a) => {
+    const gp = a.profile?.growthPotential || {};
+    const d  = parseInt(gp.employmentIncreaseDirect   || "0") || 0; 
+    const i  = parseInt(gp.employmentIncreaseIndirect || "0") || 0;
+    jobsDirect += d;
+    jobsIndirect += i;
+    acc.push({ name: a.smeName || "Unknown", sector: (a.sector || "Other").split(",")[0].trim(), jobs: d + i });
+    return acc;
+  }, []);
+
+  const jobsPerSectorMap = enriched.reduce((acc, a) => {
+    const sec = (a.sector || "Other").split(",")[0].trim();
     const gp = a.profile?.growthPotential || {};
     const d  = parseInt(gp.employmentIncreaseDirect   || "0") || 0;
     const i  = parseInt(gp.employmentIncreaseIndirect || "0") || 0;
-    jobsDirect   += d;
-    jobsIndirect += i;
-    return { name: a.smeName || "Unknown", sector: (a.sector || "").split(",")[0].trim(), jobs: d + i };
-  });
+    acc[sec] = (acc[sec] || 0) + d + i;
+    return acc;
+  }, {});
+  const jobsPerSector = Object.entries(jobsPerSectorMap).map(([sector, jobs]) => ({ sector, jobs }));
+
+  // console.log("Jobs per SME:", jobsPerSME);
+  console.log("Jobs per sector:", jobsPerSector);
 
   const revenuePerSME = enriched.map(a => ({
     name: a.smeName || "Unknown",
@@ -228,7 +242,7 @@ function computeMetrics(enriched) {
     supportFocus, servicesFocus,
     fundingType,
     funding:  { amounts: fundingAmounts, avg: avg(fundingAmounts), total: fundingAmounts.reduce((a, b) => a + b, 0), bySector: fundingBySector },
-    jobs:     { direct: jobsDirect, indirect: jobsIndirect, total: jobsDirect + jobsIndirect, perSME: jobsPerSME },
+    jobs:     { direct: jobsDirect, indirect: jobsIndirect, total: jobsDirect + jobsIndirect, perSME: jobsPerSME, perSector: jobsPerSector },
     exit:     { graduates: closed.length, active: active.length, avgMonths, graduationRate: n ? Math.round((closed.length / n) * 100) : 0 },
     performers: {
       topBig:         byBig.slice(0, 3).map(toRow),
@@ -269,8 +283,8 @@ export const usePortfolioData = () => {
         getDocs(collection(db, "bigEvaluations")),
       ]);
 
-      console.log(`[usePortfolioData] catalystApplications: ${appSnap.size} docs`);
-      console.log(`[usePortfolioData] bigEvaluations: ${bigSnap.size} docs`);
+      // console.log(`[usePortfolioData] catalystApplications: ${appSnap.size} docs`);
+      // console.log(`[usePortfolioData] bigEvaluations: ${bigSnap.size} docs`);
 
       // ── 3. Build scores lookup: smeId → scores object ─────────────────────
       const scoresById = {};
@@ -310,7 +324,7 @@ export const usePortfolioData = () => {
         };
       });
 
-      console.log("[usePortfolioData] enriched applications:", enrichedApps);
+      // console.log("[usePortfolioData] enriched applications:", enrichedApps);
 
       // ── 7. Write scores back to catalystApplications (fire-and-forget) ────
       const writebacks = enrichedApps
@@ -347,6 +361,9 @@ export const usePortfolioData = () => {
       const portfolioComputed = computeMetrics(portfolioApps);
       setPortfolioEnriched(portfolioApps);
       setPortfolioMetrics(portfolioComputed);
+
+      console.log("[usePortfolioData] portfolio metrics:", portfolioComputed);
+      console.log("[usePortfolioData] portfolio enriched:", portfolioApps);
 
     } catch (err) {
       console.error("usePortfolioData:", err);
