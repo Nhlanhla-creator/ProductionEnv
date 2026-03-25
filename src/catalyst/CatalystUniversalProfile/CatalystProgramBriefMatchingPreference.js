@@ -1,61 +1,87 @@
 "use client"
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { ChevronDown, ChevronUp } from "lucide-react"
-import styles from "./catalyst-universal-profile.module.css"
 
 // ─── Option Lists ─────────────────────────────────────────────────────────────
 
 const supportFocusOptions = [
-  { value: "funding", label: "Funding Support" },
-  { value: "capacity_building", label: "Capacity Building" },
-  { value: "market_access", label: "Market Access" },
-  { value: "technology", label: "Technology & Innovation" },
-  { value: "social_impact", label: "Social Impact" },
+  { value: "funding", label: "Funding Support", tooltip: "Direct financial assistance and capital access" },
+  { value: "capacity_building", label: "Capacity Building", tooltip: "Skills development, training, and operational improvement" },
+  { value: "market_access", label: "Market Access", tooltip: "Connections, distribution channels, and market entry support" },
+  { value: "technology", label: "Technology & Innovation", tooltip: "Tech infrastructure, digital tools, and innovation resources" },
+  { value: "social_impact", label: "Social Impact", tooltip: "Support for community development and social responsibility" },
 ]
 
 const supportFocusSubtypes = {
   funding: [
-    { value: "grants", label: "Grants (non-repayable funding)" },
-    { value: "low_interest_loans", label: "Low-Interest Loans" },
-    { value: "seed_funding", label: "Seed Funding" },
-    { value: "crowdfunding_support", label: "Crowdfunding Support" },
+    { value: "grants", label: "Grants (non-repayable funding)", tooltip: "Funding that does not require repayment or equity exchange" },
+    { value: "low_interest_loans", label: "Low-Interest Loans", tooltip: "Loans with below-market interest rates" },
+    { value: "seed_funding", label: "Seed Funding", tooltip: "Early-stage capital for product development and market testing" },
+    { value: "crowdfunding_support", label: "Crowdfunding Support", tooltip: "Assistance with raising funds from many small investors online" },
   ],
   capacity_building: [
-    { value: "skills_training", label: "Skills Training & Development" },
-    { value: "business_mentorship", label: "Business Mentorship" },
-    { value: "leadership_development", label: "Leadership Development" },
-    { value: "financial_literacy", label: "Financial Literacy" },
+    { value: "skills_training", label: "Skills Training & Development", tooltip: "Workshops and courses for employee skills enhancement" },
+    { value: "business_mentorship", label: "Business Mentorship", tooltip: "One-on-one guidance from experienced entrepreneurs" },
+    { value: "leadership_development", label: "Leadership Development", tooltip: "Training for management and executive team building" },
+    { value: "financial_literacy", label: "Financial Literacy", tooltip: "Education on financial management, accounting, and planning" },
   ],
   market_access: [
-    { value: "networking", label: "Networking & Partnerships" },
-    { value: "market_linkages", label: "Market Linkages" },
-    { value: "trade_facilitation", label: "Trade Facilitation" },
-    { value: "export_support", label: "Export Support" },
+    { value: "networking", label: "Networking & Partnerships", tooltip: "Connections to potential partners, clients, and collaborators" },
+    { value: "market_linkages", label: "Market Linkages", tooltip: "Direct connections to buyers, distributors, or suppliers" },
+    { value: "trade_facilitation", label: "Trade Facilitation", tooltip: "Support with export/import procedures and documentation" },
+    { value: "export_support", label: "Export Support", tooltip: "Assistance with entering and succeeding in international markets" },
   ],
   technology: [
-    { value: "digital_tools", label: "Digital Tools & Platforms" },
-    { value: "tech_training", label: "Technology Training" },
-    { value: "innovation_labs", label: "Innovation Labs" },
-    { value: "research_development", label: "Research & Development" },
+    { value: "digital_tools", label: "Digital Tools & Platforms", tooltip: "Software, apps, and digital infrastructure" },
+    { value: "tech_training", label: "Technology Training", tooltip: "Education on using specific technologies or software" },
+    { value: "innovation_labs", label: "Innovation Labs", tooltip: "Access to research facilities and experimental spaces" },
+    { value: "research_development", label: "Research & Development", tooltip: "Support for product research and technological innovation" },
   ],
   social_impact: [
-    { value: "community_development", label: "Community Development" },
-    { value: "environmental_programs", label: "Environmental Programs" },
-    { value: "youth_development", label: "Youth Development" },
-    { value: "women_empowerment", label: "Women Empowerment" },
+    { value: "community_development", label: "Community Development", tooltip: "Projects benefiting local communities and stakeholders" },
+    { value: "environmental_programs", label: "Environmental Programs", tooltip: "Initiatives focused on sustainability and environmental protection" },
+    { value: "youth_development", label: "Youth Development", tooltip: "Programs supporting young entrepreneurs and employees" },
+    { value: "women_empowerment", label: "Women Empowerment", tooltip: "Initiatives supporting women-led businesses and gender equality" },
   ],
 }
 
+// Matches SME FundingApplication exactly
+const fundingInstrumentOptions = [
+  { value: "Any", label: "Any" },
+  { value: "Equity", label: "Equity (Buying shares in the business)", tooltip: "Investor purchases ownership stake in your company in exchange for capital" },
+  { value: "Debt", label: "Debt (Loan-based funding)", tooltip: "Borrowed money that must be repaid with interest over time" },
+  { value: "Grants", label: "Grants (Non-repayable funding)", tooltip: "Funds provided by government or organizations that do not need to be repaid" },
+  { value: "Convertible Notes", label: "Convertible Notes (Loan that can turn into shares)", tooltip: "Short-term debt that converts to equity during future financing round" },
+  { value: "Revenue-based Financing", label: "Revenue-based Financing", tooltip: "Repayment tied to company's monthly revenue rather than fixed installments" },
+  { value: "Hybrid/Structured Instruments", label: "Hybrid/Structured Instruments", tooltip: "Combination of debt and equity features tailored to specific needs" },
+  { value: "Secondary Market Strategies", label: "Secondary Market Strategies", tooltip: "Investments in existing shares rather than new company equity" },
+  { value: "Special Strategies", label: "Special Strategies", tooltip: "Customized or non-traditional funding approaches" },
+  { value: "Other", label: "Other (please specify)" },
+]
+
+// Matches SME FundingApplication exactly
+const funderTypeOptions = [
+  { value: "Any", label: "Any" },
+  { value: "Venture Capital", label: "Venture Capital", tooltip: "Professional investors in high-growth startups, typically taking equity" },
+  { value: "Angel Investment", label: "Angel Investment", tooltip: "Individual investors using personal funds for early-stage companies" },
+  { value: "Private Equity", label: "Private Equity", tooltip: "Investment in established companies for expansion or restructuring" },
+  { value: "Government Fund", label: "Government Fund", tooltip: "Public sector funding through agencies or development programs" },
+  { value: "Grant / Non-Profit", label: "Grant / Non-Profit", tooltip: "Non-repayable funding from foundations or charitable organizations" },
+  { value: "Development Finance", label: "Development Finance", tooltip: "Funding from development banks focused on economic growth" },
+  { value: "Corporate Investment", label: "Corporate Investment", tooltip: "Investment from established companies for strategic partnerships" },
+  { value: "Other (specify)", label: "Other (specify)" },
+]
+
 const businessStageOptions = [
-  { value: "pre_seed", label: "Pre-Seed" },
-  { value: "seed", label: "Seed" },
-  { value: "series_a", label: "Series A" },
-  { value: "series_b", label: "Series B" },
-  { value: "series_c", label: "Series C+" },
-  { value: "growth_pe", label: "Growth / PE" },
-  { value: "mbo", label: "MBO" },
-  { value: "mbi", label: "MBI" },
-  { value: "lbo", label: "LBO" },
+  { value: "Pre-seed", label: "Pre-seed", tooltip: "Earliest stage: Idea development, prototypes, market validation" },
+  { value: "Seed", label: "Seed", tooltip: "First equity funding: Complete product, initial customers" },
+  { value: "Series A", label: "Series A", tooltip: "Scale proven products, optimize, grow customer base" },
+  { value: "Series B", label: "Series B", tooltip: "Expand market reach, scale operations, meet demand" },
+  { value: "Series C+", label: "Series C+", tooltip: "Dominate markets, acquire competitors, prepare for IPO" },
+  { value: "Growth/PE", label: "Growth/PE", tooltip: "Private equity for mature companies: Expansion, restructuring" },
+  { value: "MBO", label: "MBO", tooltip: "Management Buyout: Existing team buys the business" },
+  { value: "MBI", label: "MBI", tooltip: "Management Buy-in: External team takes over business" },
+  { value: "LBO", label: "LBO", tooltip: "Leveraged Buyout: Purchase financed mostly through debt" },
 ]
 
 const demographicsOptions = [
@@ -101,37 +127,43 @@ const legalEntityOptions = [
 ]
 
 const sectorFocusOptions = [
-  { value: "generalist", label: "Generalist" },
-  { value: "agriculture", label: "Agriculture / Forestry / Fishing" },
-  { value: "automotive", label: "Automotive / Motor Industry" },
-  { value: "banking", label: "Banking / Insurance / Investments" },
-  { value: "beauty", label: "Beauty / Cosmetics / Personal Care" },
-  { value: "construction", label: "Construction / Building / Civils" },
-  { value: "consulting", label: "Consulting / Business Services" },
-  { value: "creative", label: "Creative Arts / Design / Entertainment" },
-  { value: "customer_service", label: "Call Centre / Customer Service" },
-  { value: "education", label: "Education / Training / Teaching" },
-  { value: "engineering", label: "Engineering" },
-  { value: "environmental", label: "Environmental / Natural Sciences" },
-  { value: "government", label: "Government / Public Sector" },
-  { value: "healthcare", label: "Healthcare / Nursing / Medical" },
-  { value: "hospitality", label: "Hospitality / Hotel / Catering / Tourism" },
-  { value: "hr", label: "Human Resources / Recruitment" },
-  { value: "ict", label: "ICT / Information Technology" },
-  { value: "infrastructure", label: "Infrastructure" },
-  { value: "legal", label: "Legal / Law" },
-  { value: "logistics", label: "Logistics / Transport / Supply Chain" },
-  { value: "manufacturing", label: "Manufacturing / Production" },
-  { value: "marketing", label: "Marketing / Advertising / PR" },
-  { value: "media", label: "Media / Journalism / Publishing" },
-  { value: "mining", label: "Mining / Energy / Oil & Gas" },
-  { value: "ngo", label: "NGO / Non-Profit / Community Services" },
-  { value: "property", label: "Real Estate / Property" },
-  { value: "retail", label: "Retail / Wholesale / Sales" },
-  { value: "science", label: "Science / Research / Development" },
-  { value: "security", label: "Security / Emergency Services" },
-  { value: "telecoms", label: "Telecommunications" },
-  { value: "trades", label: "Trades / Artisans / Technical" },
+  { value: "Generalist", label: "Generalist" },
+  { value: "Agriculture", label: "Agriculture" },
+  { value: "Automotive", label: "Automotive" },
+  { value: "Banking, Finance & Insurance", label: "Banking, Finance & Insurance" },
+  { value: "Beauty / Cosmetics / Personal Care", label: "Beauty / Cosmetics / Personal Care" },
+  { value: "Construction", label: "Construction" },
+  { value: "Consulting", label: "Consulting" },
+  { value: "Creative Arts / Design", label: "Creative Arts / Design" },
+  { value: "Customer Service", label: "Customer Service" },
+  { value: "Education & Training", label: "Education & Training" },
+  { value: "Engineering", label: "Engineering" },
+  { value: "Environmental / Natural Sciences", label: "Environmental / Natural Sciences" },
+  { value: "Government / Public Sector", label: "Government / Public Sector" },
+  { value: "Healthcare / Medical", label: "Healthcare / Medical" },
+  { value: "Hospitality / Tourism", label: "Hospitality / Tourism" },
+  { value: "Human Resources", label: "Human Resources" },
+  { value: "Information Technology (IT)", label: "Information Technology (IT)" },
+  { value: "Infrastructure", label: "Infrastructure" },
+  { value: "Legal / Law", label: "Legal / Law" },
+  { value: "Logistics / Supply Chain", label: "Logistics / Supply Chain" },
+  { value: "Manufacturing", label: "Manufacturing" },
+  { value: "Marketing / Advertising / PR", label: "Marketing / Advertising / PR" },
+  { value: "Media / Journalism / Broadcasting", label: "Media / Journalism / Broadcasting" },
+  { value: "Mining", label: "Mining" },
+  { value: "Energy", label: "Energy" },
+  { value: "Oil & Gas", label: "Oil & Gas" },
+  { value: "Non-Profit / NGO", label: "Non-Profit / NGO" },
+  { value: "Property / Real Estate", label: "Property / Real Estate" },
+  { value: "Retail / Wholesale", label: "Retail / Wholesale" },
+  { value: "Safety & Security / Police / Defence", label: "Safety & Security / Police / Defence" },
+  { value: "Sales", label: "Sales" },
+  { value: "Science & Research", label: "Science & Research" },
+  { value: "Social Services / Social Work", label: "Social Services / Social Work" },
+  { value: "Sports / Recreation / Fitness", label: "Sports / Recreation / Fitness" },
+  { value: "Telecommunications", label: "Telecommunications" },
+  { value: "Transport", label: "Transport" },
+  { value: "Utilities (Water, Electricity, Waste)", label: "Utilities (Water, Electricity, Waste)" },
 ]
 
 const geographicFocusOptions = [
@@ -203,6 +235,20 @@ const inputStyle = {
   boxSizing: "border-box",
 }
 
+const selectStyle = {
+  width: "100%",
+  padding: "9px 12px",
+  border: "1px solid #d2b48c",
+  borderRadius: "6px",
+  fontSize: "14px",
+  outline: "none",
+  backgroundColor: "white",
+  fontFamily: "inherit",
+  boxSizing: "border-box",
+  cursor: "pointer",
+  appearance: "auto",
+}
+
 const labelStyle = {
   display: "block",
   fontWeight: "600",
@@ -211,16 +257,9 @@ const labelStyle = {
   fontSize: "14px",
 }
 
-// ─── MultiSelect ───────────────────────────────────────────────────────────────
+// ─── MultiSelect (kept for Sections 3 & 4) ────────────────────────────────────
 
-function MultiSelect({ options, selected: _selected, onChange, placeholder = "Select options...", includeSelectAll = true }) {
-  // Normalise: could arrive as a string (legacy), array, or undefined
-  const selected = Array.isArray(_selected)
-    ? _selected
-    : typeof _selected === "string" && _selected
-      ? [_selected]
-      : []
-
+function MultiSelect({ options, selected = [], onChange, placeholder = "Select options...", includeSelectAll = true }) {
   const [isOpen, setIsOpen] = useState(false)
   const allSelected = selected.length === options.length
 
@@ -311,6 +350,7 @@ function MultiSelect({ options, selected: _selected, onChange, placeholder = "Se
                 <div
                   key={option.value}
                   onClick={() => toggle(option.value)}
+                  title={option.tooltip || ""}
                   style={{
                     padding: "8px 12px", cursor: "pointer", display: "flex", alignItems: "center", gap: "8px",
                     backgroundColor: isSel ? "#fdf6ee" : "white", fontSize: "14px", color: "#5d4037",
@@ -342,7 +382,7 @@ function MultiSelect({ options, selected: _selected, onChange, placeholder = "Se
 
 const formatRand = (val) => {
   const numeric = String(val).replace(/[^\d]/g, "")
-  return numeric ? "R" + parseInt(numeric).toLocaleString("en-ZA") : ""
+  return numeric ? "R " + parseInt(numeric).toLocaleString("en-ZA") : ""
 }
 
 // ─── Main Component ────────────────────────────────────────────────────────────
@@ -350,17 +390,17 @@ const formatRand = (val) => {
 export default function CatalystProgramBriefMatchingPreference({ data = {}, updateData = () => {} }) {
   const h = (field, value) => updateData({ [field]: value })
 
-  // Normalise: old data may have stored a string, new data stores an array
-  const supportFocusArray = Array.isArray(data.supportFocus)
-    ? data.supportFocus
-    : data.supportFocus
-      ? [data.supportFocus]
-      : []
-
-  const isFundingSelected = supportFocusArray.includes("funding")
-  const availableSubtypes = supportFocusArray.flatMap((f) => supportFocusSubtypes[f] || [])
+  const isFundingSelected = data.supportFocus === "funding"
+  const availableSubtypes = data.supportFocus ? (supportFocusSubtypes[data.supportFocus] || []) : []
   const showProvinces = (data.geographicFocus || []).includes("province_specific")
   const showCountries = (data.geographicFocus || []).includes("country_specific")
+
+  const handleSupportFocusChange = (e) => {
+    const val = e.target.value
+    h("supportFocus", val)
+    // Reset subtype when main focus changes
+    h("supportFocusSubtype", "")
+  }
 
   return (
     <div style={{ padding: "24px", maxWidth: "1100px" }}>
@@ -452,61 +492,122 @@ export default function CatalystProgramBriefMatchingPreference({ data = {}, upda
         <h3 style={sectionTitleStyle}>Section 2 — Support Focus</h3>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
 
+          {/* Support Focus — single select, matching SME */}
           <div>
             <label style={labelStyle}>Support Focus</label>
-            <MultiSelect
-              options={supportFocusOptions}
-              selected={supportFocusArray}
-              onChange={(val) => {
-                h("supportFocus", val)
-                // Clear subtypes that no longer apply
-                const validSubtypes = val.flatMap((f) => (supportFocusSubtypes[f] || []).map((s) => s.value))
-                const currentSubtypes = Array.isArray(data.supportFocusSubtype) ? data.supportFocusSubtype : []
-                h("supportFocusSubtype", currentSubtypes.filter((s) => validSubtypes.includes(s)))
-              }}
-              placeholder="Select support focus areas..."
-            />
+            <select
+              value={data.supportFocus || ""}
+              onChange={handleSupportFocusChange}
+              style={selectStyle}
+            >
+              <option value="">Select Support Focus</option>
+              {supportFocusOptions.map((opt) => (
+                <option key={opt.value} value={opt.value} title={opt.tooltip || ""}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
           </div>
 
+          {/* Support Focus Subtype — single select, matching SME */}
           <div>
             <label style={labelStyle}>Support Focus Sub-type</label>
-            {availableSubtypes.length > 0 ? (
-              <MultiSelect
-                options={availableSubtypes}
-                selected={data.supportFocusSubtype || []}
-                onChange={(val) => h("supportFocusSubtype", val)}
-                placeholder="Select sub-types..."
-              />
-            ) : (
-              <div style={{ ...inputStyle, color: "#a0826d", display: "flex", alignItems: "center", minHeight: "42px" }}>
-                Select a Support Focus first
-              </div>
-            )}
+            <select
+              value={data.supportFocusSubtype || ""}
+              onChange={(e) => h("supportFocusSubtype", e.target.value)}
+              style={selectStyle}
+              disabled={!data.supportFocus}
+            >
+              <option value="">
+                {data.supportFocus ? "Select Support Focus Sub-type" : "Select Support Focus first"}
+              </option>
+              {availableSubtypes.map((opt) => (
+                <option key={opt.value} value={opt.value} title={opt.tooltip || ""}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
           </div>
 
-          {/* Conditional funding fields */}
+          {/* Conditional funding fields — matching SME funding ask section */}
           {isFundingSelected && (
-            <>
-              <div style={{ gridColumn: "1 / -1" }}>
-                <div style={{
-                  backgroundColor: "#fffbf5",
-                  border: "1px dashed #d2b48c",
-                  borderRadius: "8px",
-                  padding: "16px",
-                }}>
-                  <p style={{ fontSize: "13px", fontWeight: "600", color: "#8B4513", marginBottom: "16px" }}>
-                    ℹ️ Funding Support selected — please complete the additional fields below:
-                  </p>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "16px" }}>
+            <div style={{ gridColumn: "1 / -1" }}>
+              <div style={{
+                backgroundColor: "#fffbf5",
+                border: "1px dashed #d2b48c",
+                borderRadius: "8px",
+                padding: "16px",
+              }}>
+                <p style={{ fontSize: "13px", fontWeight: "600", color: "#8B4513", marginBottom: "16px" }}>
+                  ℹ️ Funding Support selected — please complete the additional fields below:
+                </p>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+
+                  {/* Funding Instrument — MultiSelect matching SME */}
+                  <div>
+                    <label style={labelStyle}>Funding Instrument Preferred</label>
+                    <MultiSelect
+                      options={fundingInstrumentOptions}
+                      selected={data.fundingInstruments || []}
+                      onChange={(val) => h("fundingInstruments", val)}
+                      placeholder="Select Funding Instruments"
+                      includeSelectAll={false}
+                    />
+                  </div>
+
+                  {/* Type of Funder — MultiSelect matching SME */}
+                  <div>
+                    <label style={labelStyle}>Type of Funder Preferred</label>
+                    <MultiSelect
+                      options={funderTypeOptions}
+                      selected={data.funderTypes || []}
+                      onChange={(val) => h("funderTypes", val)}
+                      placeholder="Select Funder Types"
+                      includeSelectAll={false}
+                    />
+                  </div>
+
+                  {/* Other instrument — conditional, matching SME */}
+                  {(data.fundingInstruments || []).includes("Other") && (
                     <div>
-                      <label style={labelStyle}>Target Business Stage</label>
-                      <MultiSelect
-                        options={businessStageOptions}
-                        selected={data.targetBusinessStage || []}
-                        onChange={(val) => h("targetBusinessStage", val)}
-                        placeholder="Select stage(s)..."
+                      <label style={labelStyle}>Please specify other funding instrument</label>
+                      <input
+                        type="text"
+                        value={data.fundingInstrumentOther || ""}
+                        onChange={(e) => h("fundingInstrumentOther", e.target.value)}
+                        style={inputStyle}
+                        placeholder="Please specify the funding instrument"
                       />
                     </div>
+                  )}
+
+                  {/* Other funder type — conditional, matching SME */}
+                  {(data.funderTypes || []).includes("Other (specify)") && (
+                    <div>
+                      <label style={labelStyle}>Please specify other funder type</label>
+                      <input
+                        type="text"
+                        value={data.funderTypeOther || ""}
+                        onChange={(e) => h("funderTypeOther", e.target.value)}
+                        style={inputStyle}
+                        placeholder="Please specify the type of funder"
+                      />
+                    </div>
+                  )}
+
+                  {/* Target Business Stage */}
+                  <div>
+                    <label style={labelStyle}>Target Business Stage</label>
+                    <MultiSelect
+                      options={businessStageOptions}
+                      selected={data.targetBusinessStage || []}
+                      onChange={(val) => h("targetBusinessStage", val)}
+                      placeholder="Select stage(s)..."
+                    />
+                  </div>
+
+                  {/* Ticket range */}
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", gridColumn: "1 / -1" }}>
                     <div>
                       <label style={labelStyle}>Minimum Support Ticket (ZAR)</label>
                       <input
@@ -528,9 +629,10 @@ export default function CatalystProgramBriefMatchingPreference({ data = {}, upda
                       />
                     </div>
                   </div>
+
                 </div>
               </div>
-            </>
+            </div>
           )}
 
         </div>
