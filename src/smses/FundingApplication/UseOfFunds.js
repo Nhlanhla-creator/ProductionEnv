@@ -72,6 +72,11 @@ const funderTypeOptions = [
     label: "Angel Investment",
     tooltip: "Individual investors using personal funds for early-stage companies"
   },
+    { 
+    value: "Banks & Financial Institutions", 
+    label: "Banks & Financial Institutions",
+    tooltip: "Individual investors using personal funds for early-stage companies"
+  },
   { 
     value: "Private Equity", 
     label: "Private Equity",

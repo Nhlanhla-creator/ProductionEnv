@@ -1,7 +1,7 @@
 "use client"
 import { useState, useEffect } from "react"
 import { Eye, X, Trophy, Calendar, FileText, Users, MapPin, GraduationCap, Briefcase } from "lucide-react"
-// import InternApplication from "../../smses/InternApplication/internapplication"
+// REMOVED: import InternApplication from "../../smses/InternApplication/internapplication"
 import { InternTablePage } from "./intern-table"
 import { db, auth } from "../../firebaseConfig"
 import { collection, query, where, onSnapshot, doc, getDoc } from "firebase/firestore"
@@ -921,7 +921,7 @@ const InternTabbedTables = ({
   filters,
   stageFilter,
   loading,
-  activeTab = "my-matches", // Changed default to "application"
+  activeTab = "my-matches", // Changed default to "my-matches"
   setActiveTab,
   onDealComplete,
   profiles,
@@ -990,28 +990,7 @@ const InternTabbedTables = ({
           boxShadow: "0 2px 8px rgba(0, 0, 0, 0.1)",
         }}
       >
-        {/* Intern Application Tab - FIRST */}
-        {/* <button
-          onClick={() => handleTabChange("application")}
-          style={tabStyle(currentActiveTab === "application")}
-          onMouseEnter={(e) => {
-            if (currentActiveTab !== "application") {
-              e.target.style.backgroundColor = "#8d6e63"
-              e.target.style.color = "white"
-            }
-          }}
-          onMouseLeave={(e) => {
-            if (currentActiveTab !== "application") {
-              e.target.style.backgroundColor = "transparent"
-              e.target.style.color = "#5d4037"
-            }
-          }}
-        >
-          <FileText size={18} style={{ flexShrink: 0, display: "block" }} />
-          <span style={{ whiteSpace: "nowrap", lineHeight: "1", display: "block" }}>Intern Application</span>
-        </button> */}
-
-        {/* My Matches Tab - SECOND */}
+        {/* My Matches Tab - FIRST */}
         <button
           onClick={() => handleTabChange("my-matches")}
           style={tabStyle(currentActiveTab === "my-matches")}
@@ -1050,7 +1029,7 @@ const InternTabbedTables = ({
           </span>
         </button>
 
-        {/* Successful Deals Tab - THIRD */}
+        {/* Successful Deals Tab - SECOND */}
         <button
           onClick={() => handleTabChange("successful-deals")}
           style={tabStyle(currentActiveTab === "successful-deals")}
@@ -1103,26 +1082,7 @@ const InternTabbedTables = ({
           borderTop: "none",
         }}
       >
-        {/* Intern Application Content - FIRST - FIXED ALIGNMENT */}
-        {/* {currentActiveTab === "application" && (
-          <div style={{ 
-            width: "100%", 
-            display: "flex", 
-            justifyContent: "flex-start", 
-            alignItems: "flex-start" 
-          }}>
-            <div style={{ 
-              width: "100%", 
-              maxWidth: "100%", 
-              margin: 0, 
-              padding: 0 
-            }}>
-              <InternApplication />
-            </div>
-          </div>
-        )} */}
-
-        {/* My Matches Content - SECOND */}
+        {/* My Matches Content - FIRST */}
         {currentActiveTab === "my-matches" && (
           <div>
             <InternTablePage
@@ -1135,7 +1095,7 @@ const InternTabbedTables = ({
           </div>
         )}
 
-        {/* Successful Deals Content - THIRD */}
+        {/* Successful Deals Content - SECOND */}
         {currentActiveTab === "successful-deals" && <SuccessfulInternDealsTable />}
       </div>
 
