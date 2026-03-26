@@ -1044,12 +1044,15 @@ function App() {
         <Route path="/applications/funding" element={withProtection(FundingApplication, {}, renderSMERoute)} />
         <Route path="/applications/funding/:section" element={withProtection(FundingApplication, {}, renderSMERoute)} />
         <Route path="/applications/product" element={withProtection(ProductApplication, {}, renderSMERoute)} />
+        <Route path="/applications/products-services" element={withProtection(ProductApplication, {}, renderSMERoute)} />
         <Route path="/applications/product/:section" element={withProtection(ProductApplication, {}, renderSMERoute)} />
         <Route path="/applications/advisory" element={withProtection(AdvisoryApplication, {}, renderSMERoute)} />
+        <Route path="/applications/advisors" element={withProtection(AdvisoryApplication, {}, renderSMERoute)} />
         <Route path="/applications/advisory/:section" element={withProtection(AdvisoryApplication, {}, renderSMERoute)} />
         
         {/* Intern Application Routes */}
         <Route path="/applications/intern" element={withProtection(InternApplication, {}, renderSMERoute)} />
+        <Route path="/applications/interns" element={withProtection(InternApplication, {}, renderSMERoute)} />
         <Route path="/applications/intern/:section" element={withProtection(InternApplication, {}, renderSMERoute)} />
         <Route path="/applications/intern/instructions" element={withProtection(Instructions, {}, renderSMERoute)} />
         <Route path="/applications/intern/job-overview" element={withProtection(InternJobOverview, {}, renderSMERoute)} />

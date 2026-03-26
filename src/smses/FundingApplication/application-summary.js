@@ -101,7 +101,7 @@ const ApplicationSummary = ({ formData, onEdit }) => {
       `}</style>
 
       <div
-        className="application-summary-container"
+        className="px-4 py-2"
         style={{
           fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
           minHeight: '100vh',

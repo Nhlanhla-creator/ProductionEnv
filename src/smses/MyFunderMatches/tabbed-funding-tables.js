@@ -682,7 +682,7 @@ const TabbedFundingTables = ({
   filters,
   onInsightsData,
   onPrimaryMatchCount,
-  activeTab = "application", // Changed default to "application"
+  activeTab = "matches", // Changed default to "application"
   setActiveTab,
   onDealComplete,
 }) => {
@@ -741,7 +741,7 @@ const TabbedFundingTables = ({
           boxShadow: "0 2px 8px rgba(0, 0, 0, 0.1)",
         }}
       >
-        {/* Funding Application Tab - FIRST */}
+        {/* Funding Application Tab - FIRST
         <button
           onClick={() => setActiveTab && setActiveTab("application")}
           style={tabStyle(activeTab === "application")}
@@ -760,7 +760,7 @@ const TabbedFundingTables = ({
         >
           <FileText size={18} />
           Funding Application
-        </button>
+        </button> */}
 
         {/* My Matches Tab - SECOND */}
         <button
@@ -835,12 +835,12 @@ const TabbedFundingTables = ({
           borderTop: "none",
         }}
       >
-        {/* Funding Application Content - FIRST */}
+        {/* Funding Application Content - FIRST
         {activeTab === "application" && (
           <div>
             <FundingApplication />
           </div>
-        )}
+        )} */}
 
         {/* My Matches Content - SECOND */}
         {activeTab === "matches" && (

@@ -379,9 +379,8 @@ const ProductApplication = ({
         width: "100%",
         maxWidth: "100%",
         margin: 0,
-        padding: "10px",
+        padding: "100px",
         backgroundColor: "#f9f9f9",
-        borderRadius: "8px",
         minHeight: "auto", // Don't force full height
         boxSizing: "border-box"
       };

@@ -1,7 +1,7 @@
 "use client"
 import { useState, useRef, useEffect } from "react"
 import { Eye, ChevronDown, Search, X, Trophy, TrendingUp, Calendar, DollarSign, FileText, Users, MapPin, GraduationCap, Briefcase, RefreshCw, BarChart3, Package, Star, MessageSquare, Send } from "lucide-react"
-import AdvisoryApplication from "../../smses/AdvisorApplication/AdvisorApplication"
+// import AdvisoryApplication from "../../smses/AdvisorApplication/AdvisorApplication"
 import { AdvisorTable } from "./advisor-table"
 import { db, auth } from "../../firebaseConfig"
 import { collection, query, where, onSnapshot, doc, getDoc, updateDoc, arrayUnion, serverTimestamp } from "firebase/firestore"
@@ -1349,7 +1349,7 @@ const AdvisorTabbedTables = ({
   applications,
   successfulDeals,
 }) => {
-  const [activeTab, setActiveTab] = useState("application") // Changed default to "application"
+  const [activeTab, setActiveTab] = useState("my-matches") // Changed default to "application"
   const [myMatchesCount, setMyMatchesCount] = useState(0)
   const [successfulDealsCount, setSuccessfulDealsCount] = useState(0)
 
@@ -1404,7 +1404,7 @@ const AdvisorTabbedTables = ({
         }}
       >
         {/* Advisory Application Tab - FIRST */}
-        <button
+        {/* <button
           onClick={() => setActiveTab("application")}
           style={tabStyle(activeTab === "application")}
           onMouseEnter={(e) => {
@@ -1422,7 +1422,7 @@ const AdvisorTabbedTables = ({
         >
           <FileText size={18} />
           Advisory Application
-        </button>
+        </button> */}
 
         {/* My Matches Tab - SECOND */}
         <button
@@ -1514,11 +1514,11 @@ const AdvisorTabbedTables = ({
         }}
       >
         {/* Advisory Application Content - FIRST */}
-        {activeTab === "application" && (
+        {/* {activeTab === "application" && (
           <div>
             <AdvisoryApplication />
           </div>
-        )}
+        )} */}
 
         {/* My Matches Content - SECOND */}
         {activeTab === "my-matches" && (
