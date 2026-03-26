@@ -181,8 +181,6 @@ const getContainerStyles = () => ({
   minHeight: "100vh",
   maxWidth: "100vw",
   overflowX: "hidden",
-  padding: "0", // Remove all dynamic padding
-  margin: "0",
   boxSizing: "border-box",
   position: "relative",
 })

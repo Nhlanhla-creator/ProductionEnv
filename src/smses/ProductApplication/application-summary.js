@@ -78,7 +78,7 @@ const ApplicationSummary = ({ data, onEdit }) => {
       `}</style>
 
       <div
-        className="main-container"
+        className="px-4 py-2"
         style={{
           fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
           minHeight: "100vh",

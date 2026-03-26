@@ -178,13 +178,14 @@ function Sidebar({
             {item.subItems?.map((subItem) => (
               <div
                 key={subItem.id}
+                title={subItem.label}
                 className={`${styles.submenuItem} ${
                   location.pathname === subItem.route ? styles.active : ""
                 }`}
                 onClick={(e) => handleSubItemClick(subItem, e)}
               >
                 <div className={styles.submenuIcon}>{subItem.icon}</div>
-                <span className={styles.submenuLabel}>{subItem.label}</span>
+                <span className={`${styles.submenuLabel} truncate pr-1`}>{subItem.label}</span>
               </div>
             ))}
           </div>

@@ -1,7 +1,7 @@
 "use client"
 import { useState, useRef, useEffect } from "react"
 import { Eye, ChevronDown, Search, X, Trophy, TrendingUp, Calendar, DollarSign, FileText, Users, MapPin, GraduationCap, Briefcase, RefreshCw, BarChart3, Package, Star, MessageSquare, Send, Truck, Award } from "lucide-react"
-import ProductServiceApplication from "../../smses/ProductApplication/ProductApplication"
+// import ProductServiceApplication from "../../smses/ProductApplication/ProductApplication"
 import { SupplierTable } from "./supplier-table"
 
 import { db, auth } from "../../firebaseConfig"
@@ -756,58 +756,58 @@ const SuccessfulSupplierDealsTable = ({ acceptedSuppliers }) => {
   )
 }
 
-// Product Application Wrapper to prevent redirects
-const ProductApplicationWrapper = () => {
-  const [isMounted, setIsMounted] = useState(false);
+// // Product Application Wrapper to prevent redirects
+// const ProductApplicationWrapper = () => {
+//   const [isMounted, setIsMounted] = useState(false);
 
-  useEffect(() => {
-    setIsMounted(true);
-  }, []);
+//   useEffect(() => {
+//     setIsMounted(true);
+//   }, []);
 
-  if (!isMounted) {
-    return (
-      <div style={{
-        display: "flex",
-        justifyContent: "center",
-        alignItems: "center",
-        minHeight: "400px",
-        backgroundColor: "#f9f9f9",
-        borderRadius: "8px",
-        border: "2px dashed #e0e0e0"
-      }}>
-        <div style={{ textAlign: "center" }}>
-          <RefreshCw size={32} style={{ color: "#999", marginBottom: "16px", animation: "spin 2s linear infinite" }} />
-          <p style={{ color: "#666", margin: 0 }}>Loading Product Application...</p>
-        </div>
-      </div>
-    );
-  }
+//   if (!isMounted) {
+//     return (
+//       <div style={{
+//         display: "flex",
+//         justifyContent: "center",
+//         alignItems: "center",
+//         minHeight: "400px",
+//         backgroundColor: "#f9f9f9",
+//         borderRadius: "8px",
+//         border: "2px dashed #e0e0e0"
+//       }}>
+//         <div style={{ textAlign: "center" }}>
+//           <RefreshCw size={32} style={{ color: "#999", marginBottom: "16px", animation: "spin 2s linear infinite" }} />
+//           <p style={{ color: "#666", margin: 0 }}>Loading Product Application...</p>
+//         </div>
+//       </div>
+//     );
+//   }
 
-  return (
-    <div style={{
-      width: "100%",
-      border: "2px solid #e0e0e0",
-      borderRadius: "12px",
-      overflow: "hidden",
-      boxShadow: "0 4px 12px rgba(0,0,0,0.1)"
-    }}>
-      <div style={{
-        backgroundColor: "#f8f9fa",
-        padding: "16px",
-        borderBottom: "1px solid #e0e0e0",
-        display: "flex",
-        alignItems: "center",
-        gap: "8px"
-      }}>
-        <FileText size={20} style={{ color: "#5d4037" }} />
-        <h3 style={{ margin: 0, color: "#5d4037", fontSize: "18px" }}>Product & Service Application</h3>
-      </div>
-      <div style={{ padding: "0" }}>
-        <ProductServiceApplication />
-      </div>
-    </div>
-  );
-};
+//   return (
+//     <div style={{
+//       width: "100%",
+//       border: "2px solid #e0e0e0",
+//       borderRadius: "12px",
+//       overflow: "hidden",
+//       boxShadow: "0 4px 12px rgba(0,0,0,0.1)"
+//     }}>
+//       <div style={{
+//         backgroundColor: "#f8f9fa",
+//         padding: "16px",
+//         borderBottom: "1px solid #e0e0e0",
+//         display: "flex",
+//         alignItems: "center",
+//         gap: "8px"
+//       }}>
+//         <FileText size={20} style={{ color: "#5d4037" }} />
+//         <h3 style={{ margin: 0, color: "#5d4037", fontSize: "18px" }}>Product & Service Application</h3>
+//       </div>
+//       <div style={{ padding: "0" }}>
+//         <ProductServiceApplication />
+//       </div>
+//     </div>
+//   );
+// };
 
 // Main Tabbed Component for Suppliers
 const SupplierTabbedTables = ({
@@ -920,7 +920,7 @@ const SupplierTabbedTables = ({
           boxShadow: "0 2px 8px rgba(0, 0, 0, 0.1)",
         }}
       >
-        <button
+        {/* <button
           onClick={() => handleTabChange("application")}
           style={tabStyle(activeTab === "application")}
           onMouseEnter={(e) => {
@@ -938,7 +938,7 @@ const SupplierTabbedTables = ({
         >
           <FileText size={18} style={{ flexShrink: 0, display: "block" }} />
           <span style={{ whiteSpace: "nowrap", lineHeight: "1", display: "block" }}>Product & Service Application</span>
-        </button>
+        </button> */}
 
         <button
           onClick={() => handleTabChange("my-matches")}
@@ -1028,7 +1028,7 @@ const SupplierTabbedTables = ({
           borderTop: "none",
         }}
       >
-        {activeTab === "application" && (
+        {/* {activeTab === "application" && (
           <div style={{ width: "100%" }}>
             <ProductServiceApplication
               key={resetApplicationKey} // This will reset the component when key changes
@@ -1037,9 +1037,7 @@ const SupplierTabbedTables = ({
               onNewRequest={() => { }} // Already in application tab
             />
           </div>
-        )}
-
-
+        )} */}
         {activeTab === "my-matches" && (
           <div>
             <SupplierTable

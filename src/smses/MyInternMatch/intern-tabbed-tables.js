@@ -1,7 +1,7 @@
 "use client"
 import { useState, useEffect } from "react"
 import { Eye, X, Trophy, Calendar, FileText, Users, MapPin, GraduationCap, Briefcase } from "lucide-react"
-import InternApplication from "../../smses/InternApplication/internapplication"
+// import InternApplication from "../../smses/InternApplication/internapplication"
 import { InternTablePage } from "./intern-table"
 import { db, auth } from "../../firebaseConfig"
 import { collection, query, where, onSnapshot, doc, getDoc } from "firebase/firestore"
@@ -921,7 +921,7 @@ const InternTabbedTables = ({
   filters,
   stageFilter,
   loading,
-  activeTab = "application", // Changed default to "application"
+  activeTab = "my-matches", // Changed default to "application"
   setActiveTab,
   onDealComplete,
   profiles,
@@ -991,7 +991,7 @@ const InternTabbedTables = ({
         }}
       >
         {/* Intern Application Tab - FIRST */}
-        <button
+        {/* <button
           onClick={() => handleTabChange("application")}
           style={tabStyle(currentActiveTab === "application")}
           onMouseEnter={(e) => {
@@ -1009,7 +1009,7 @@ const InternTabbedTables = ({
         >
           <FileText size={18} style={{ flexShrink: 0, display: "block" }} />
           <span style={{ whiteSpace: "nowrap", lineHeight: "1", display: "block" }}>Intern Application</span>
-        </button>
+        </button> */}
 
         {/* My Matches Tab - SECOND */}
         <button
@@ -1104,7 +1104,7 @@ const InternTabbedTables = ({
         }}
       >
         {/* Intern Application Content - FIRST - FIXED ALIGNMENT */}
-        {currentActiveTab === "application" && (
+        {/* {currentActiveTab === "application" && (
           <div style={{ 
             width: "100%", 
             display: "flex", 
@@ -1120,7 +1120,7 @@ const InternTabbedTables = ({
               <InternApplication />
             </div>
           </div>
-        )}
+        )} */}
 
         {/* My Matches Content - SECOND */}
         {currentActiveTab === "my-matches" && (
