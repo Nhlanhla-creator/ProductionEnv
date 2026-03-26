@@ -687,7 +687,10 @@ useEffect(() => {
     }
     const normalizeToken = (s) => s.toString().toLowerCase().trim().replace(/[_\-\s]+/g, "")
     const normalizeList = (v) => toArray(v).flatMap(item => item.split(/\s*,\s*/)).map(normalizeToken).filter(Boolean)
-    const normalize = (val) => Array.isArray(val) ? val.map(v => v.toLowerCase().trim()) : val?.toLowerCase().trim()
+  const normalize = (val) => {
+      const clean = (s) => s?.toString().toLowerCase().replace(/[\s_\-\/]+/g, "").trim() ?? ""
+      return Array.isArray(val) ? val.map(clean) : clean(val)
+    }
     const cleanCurrency = (value) => { if (!value) return 0; return parseFloat(value.toString().replace(/[^0-9.]/g, "")) || 0 }
     const cleanString = (input) => {
       if (Array.isArray(input)) return input.map(str => typeof str === "string" ? str.replace(/[_-]/g, " ").toLowerCase() : str)
@@ -749,11 +752,23 @@ useEffect(() => {
     const programData = program || catalystFormData?.programmeDetails?.programs?.[0] || {}
     const matchPrefs = catalystFormData?.programBriefMatchingPreference || catalystFormData?.generalMatchingPreference || {}
 
-    // 1. Funding Stage
-    const smeStage = smeProfileData.entityOverview?.operationStage
-    const accelStage = matchPrefs.programStage
-    const stageMatch = normalize(smeStage) === normalize(accelStage)
-    breakdown.fundingStage.details = { smeValue: smeStage, accelValue: accelStage }
+      // 1. Funding Stage
+    const smeStage = smeProfileData.applicationOverview?.fundingStage
+    const accelStageRaw = matchPrefs.businessLifecycleStage
+ 
+    const accelStages = Array.isArray(accelStageRaw)
+      ? accelStageRaw.map((s) => normalize(s)).filter(Boolean)
+      : accelStageRaw
+        ? [normalize(accelStageRaw)].filter(Boolean)
+        : []
+ 
+    const normSmeStage = normalize(smeStage)
+    const stageMatch = !!normSmeStage && accelStages.includes(normSmeStage)
+ 
+    breakdown.fundingStage.details = {
+      smeValue: smeStage,
+      accelValue: accelStages.join(", ") || accelStageRaw,
+    }
     breakdown.fundingStage.matched = stageMatch
     if (stageMatch) { breakdown.fundingStage.score = 12.5; matched++ }
 
@@ -800,21 +815,28 @@ useEffect(() => {
     if (instrumentMatch) { breakdown.instrumentFit.score = 12.5; matched++ }
 
     // 6. Support Match
-    const smeSupportCategory = smeProfileData.useOfFunds?.additionalSupportFocus
-    const smeSupportSubtype = smeProfileData.useOfFunds?.additionalSupportFocusSubtype
-    const accelSupportCategory = programData.supportFocusType || matchPrefs.supportFocus
-    const accelSupportSubtype = programData.supportFocusSubtype || matchPrefs.supportFocusSubtype
+    const smeSupportCategory   = smeProfileData.useOfFunds?.additionalSupportFocus
+    const smeSupportSubtype    = smeProfileData.useOfFunds?.additionalSupportFocusSubtype
+ const accelSupportCategory = programData.supportFocusType || matchPrefs.supportFocusType || matchPrefs.supportFocus
+const accelSupportSubtype  = programData.supportFocusSubtype || matchPrefs.supportFocusSubtype || matchPrefs.supportFocusType
+
+    const normSmeCat    = normalize(smeSupportCategory)
+    const normSmeSubtype = normalize(smeSupportSubtype)
+    const normAccelCat  = normalize(accelSupportCategory)
+    const normAccelSubtype = normalize(accelSupportSubtype)
+ 
     let supportMatchScore = 0, supportMatched = false
-    if (smeSupportSubtype && accelSupportSubtype && smeSupportSubtype === accelSupportSubtype) {
+    if (normSmeSubtype && normAccelSubtype && normSmeSubtype === normAccelSubtype) {
       supportMatchScore = 12.5; supportMatched = true; matched++
-    } else if (smeSupportCategory && accelSupportCategory && smeSupportCategory === accelSupportCategory) {
-      supportMatchScore = 6.25; supportMatched = true
-    }
+    } else if (normSmeCat && normAccelCat && (normSmeCat === normAccelCat || hasOverlap(smeSupportCategory, accelSupportCategory))) {
+  supportMatchScore = 6.25; supportMatched = true
+}
+ 
     breakdown.supportMatch.details = {
-      smeValue: smeSupportSubtype ? `${smeSupportCategory} – ${smeSupportSubtype}` : smeSupportCategory,
+      smeValue:   smeSupportSubtype  ? `${smeSupportCategory} – ${smeSupportSubtype}`   : smeSupportCategory,
       accelValue: accelSupportSubtype ? `${accelSupportCategory} – ${accelSupportSubtype}` : accelSupportCategory,
     }
-    breakdown.supportMatch.score = supportMatchScore
+    breakdown.supportMatch.score   = supportMatchScore
     breakdown.supportMatch.matched = supportMatched
 
     // 7. Legal Entity Fit
@@ -833,7 +855,10 @@ useEffect(() => {
     breakdown.revenueThreshold.matched = revenueMatch
     if (revenueMatch) { breakdown.revenueThreshold.score = 12.5; matched++ }
 
-    return { score: Math.round((matched / totalFields) * 100), breakdown }
+    // Replace the final return with this:
+const totalScore = Object.values(breakdown).reduce((sum, b) => sum + (b.score || 0), 0)
+
+return { score: Math.round(totalScore), breakdown }
   }
 
   // ── Match breakdown ────────────────────────────────────────────────────────

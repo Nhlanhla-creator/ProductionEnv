@@ -80,6 +80,22 @@ const africanCountries = [
   { value: "Zambia", label: "Zambia" }, { value: "Zimbabwe", label: "Zimbabwe" },
 ];
 
+// Committee Membership options
+const committeeMembershipOptions = [
+  { value: "Audit Committee", label: "Audit Committee" },
+  { value: "Risk Committee", label: "Risk Committee" },
+  { value: "Audit & Risk Committee", label: "Audit & Risk Committee" },
+  { value: "Remuneration Committee", label: "Remuneration Committee" },
+  { value: "Nomination Committee", label: "Nomination Committee" },
+  { value: "Remuneration & Nomination Committee", label: "Remuneration & Nomination Committee" },
+  { value: "Social & Ethics Committee", label: "Social & Ethics Committee (SA-critical)" },
+  { value: "Investment Committee", label: "Investment Committee" },
+  { value: "Strategy Committee", label: "Strategy Committee" },
+  { value: "Technology / IT Committee", label: "Technology / IT Committee" },
+  { value: "ESG / Sustainability Committee", label: "ESG / Sustainability Committee" },
+  { value: "Other", label: "Other (specify)" },
+];
+
 // ─── Business Leadership options ─────────────────────────────────────────────
 const leadershipOptions = {
   ownerLed: [
@@ -120,14 +136,14 @@ const leadershipOptions = {
 };
 
 const DEFAULT_SHAREHOLDER = {
-  name: "", country: "", linkedin: "", shareholding: "", race: "",
+  name: "", country: "", linkedin: "", shareholding: "", issuedShares: "", race: "",
   gender: "", isYouth: false, isDisabled: false, isAlsoDirector: false, directorId: null, idDocument: null,
 };
 
 const DEFAULT_DIRECTOR = {
   name: "", position: "", customPosition: "", nationality: "", linkedin: "",
   execType: "", race: "", gender: "", isYouth: false, isDisabled: false,
-  linkedShareholderId: null, cv: null,
+  linkedShareholderId: null, cv: null, committeeMembership: [], customCommittee: "",
 };
 
 const DEFAULT_EXECUTIVE = {
@@ -142,6 +158,94 @@ const DEFAULT_BUSINESS_LEADERSHIP = {
   founderFullTime: "",
   opennessToAdvice: "",
   decisionGovernance: "",
+};
+
+// Committee Membership Multi-Select Dropdown Component
+const CommitteeMultiSelect = ({ selected = [], onChange, onCustomChange, customValue = "" }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const safeSelected = Array.isArray(selected) ? selected : [];
+
+  const toggleOption = (value) => {
+    const newSelected = safeSelected.includes(value)
+      ? safeSelected.filter((item) => item !== value)
+      : [...safeSelected, value];
+    onChange(newSelected);
+  };
+
+  return (
+    <div style={{ position: 'relative' }}>
+      <div
+        onClick={() => setIsOpen(!isOpen)}
+        style={{
+          border: '1px solid #ccc',
+          borderRadius: '4px',
+          padding: '4px 8px',
+          cursor: 'pointer',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          minHeight: '32px',
+          backgroundColor: 'white',
+          fontSize: '12px',
+        }}
+      >
+        {safeSelected.length > 0 ? (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2px' }}>
+            {safeSelected.map((val) => (
+              <span key={val} style={{ backgroundColor: '#e0e0e0', padding: '1px 6px', borderRadius: '10px', fontSize: '11px' }}>
+                {val === "Other" ? (customValue || "Other") : committeeMembershipOptions.find(o => o.value === val)?.label || val}
+              </span>
+            ))}
+          </div>
+        ) : (
+          <span style={{ color: '#999', fontSize: '12px' }}>Select committees</span>
+        )}
+        <span style={{ fontSize: '10px' }}>{isOpen ? '▲' : '▼'}</span>
+      </div>
+      {isOpen && (
+        <div style={{
+          position: 'absolute', top: '100%', left: 0, right: 0, backgroundColor: 'white',
+          border: '1px solid #ccc', borderRadius: '4px', marginTop: '2px', zIndex: 1000,
+          maxHeight: '250px', overflow: 'auto', boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+        }}>
+          <div style={{ padding: '4px' }}>
+            {committeeMembershipOptions.map((option) => (
+              <div
+                key={option.value}
+                onClick={() => toggleOption(option.value)}
+                style={{
+                  padding: '6px 8px', cursor: 'pointer', fontSize: '12px',
+                  backgroundColor: safeSelected.includes(option.value) ? '#f0f0f0' : 'white',
+                  display: 'flex', alignItems: 'center', gap: '6px',
+                }}
+              >
+                <input type="checkbox" checked={safeSelected.includes(option.value)} onChange={() => {}} style={{ cursor: 'pointer' }} />
+                <span>{option.label}</span>
+              </div>
+            ))}
+          </div>
+          {safeSelected.includes("Other") && (
+            <div style={{ padding: '4px 8px', borderTop: '1px solid #eee' }}>
+              <input
+                type="text"
+                placeholder="Specify committee"
+                value={customValue}
+                onChange={(e) => onCustomChange(e.target.value)}
+                className="w-full px-2 py-1 border border-brown-300 rounded-md text-xs"
+                onClick={(e) => e.stopPropagation()}
+              />
+            </div>
+          )}
+          <div style={{ padding: '4px 8px', borderTop: '1px solid #ccc' }}>
+            <button type="button" onClick={() => setIsOpen(false)}
+              style={{ width: '100%', padding: '6px', backgroundColor: '#8B4513', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>
+              Done
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 };
 
 export default function OwnershipManagement({ data = { shareholders: [], directors: [], executives: [] }, updateData }) {
@@ -170,6 +274,7 @@ export default function OwnershipManagement({ data = { shareholders: [], directo
         gender: director.gender,
         isYouth: director.isYouth,
         isDisabled: director.isDisabled,
+        committeeMembership: director.committeeMembership || [],
       }));
       const growthSuiteRef = doc(db, "growthSuite", userId);
       await setDoc(growthSuiteRef, { boardOfDirectors: boardMembers, lastUpdated: new Date().toISOString() }, { merge: true });
@@ -392,16 +497,12 @@ export default function OwnershipManagement({ data = { shareholders: [], directo
 
   const removeDirector = (index) => {
     const director = formData.directors[index];
+    if (director.linkedShareholderId !== null) {
+      alert("To remove this director, uncheck 'Also Director' in the shareholder table.");
+      return;
+    }
     if (director.cv) handleDeleteCV('director', index);
     const newDirectors = formData.directors.filter((_, i) => i !== index);
-    if (director.linkedShareholderId !== null) {
-      const newShareholders = [...formData.shareholders];
-      if (director.linkedShareholderId < newShareholders.length) {
-        newShareholders[director.linkedShareholderId] = { ...newShareholders[director.linkedShareholderId], isAlsoDirector: false, directorId: null };
-        updateFormData({ ...formData, directors: newDirectors, shareholders: newShareholders });
-        return;
-      }
-    }
     updateFormData({ ...formData, directors: newDirectors });
   };
 
@@ -432,28 +533,30 @@ export default function OwnershipManagement({ data = { shareholders: [], directo
   };
 
   const shareholderColumns = [
-    { label: "Name", style: { width: "25%", minWidth: "180px" } },
-    { label: "Country", style: { width: "15%", minWidth: "130px" } },
-    { label: "LinkedIn", style: { width: "25%", minWidth: "180px" } },
-    { label: "%Shareholding", style: { width: "10%" } },
-    { label: "Race", style: { width: "10%" } },
-    { label: "Gender", style: { width: "10%" } },
-    { label: "Youth?", style: { width: "7%" } },
-    { label: "Disabled?", style: { width: "7%" } },
-    { label: "Also Director?", style: { width: "10%" } },
-    { label: "Actions", style: { width: "60px" } },
-  ];
-
-  const directorColumns = [
     { label: "Name", style: { width: "20%", minWidth: "160px" } },
-    { label: "Position", style: { width: "15%", minWidth: "120px" } },
-    { label: "Nationality", style: { width: "10%" } },
-    { label: "LinkedIn & CV", style: { width: "25%", minWidth: "180px" } },
-    { label: "Exec/Non-Exec", style: { width: "10%" } },
+    { label: "Country", style: { width: "12%", minWidth: "120px" } },
+    { label: "LinkedIn", style: { width: "18%", minWidth: "150px" } },
+    { label: "% Shareholding", style: { width: "10%" } },
+    { label: "Issued Shares", style: { width: "10%" } },
     { label: "Race", style: { width: "8%" } },
     { label: "Gender", style: { width: "8%" } },
     { label: "Youth?", style: { width: "6%" } },
     { label: "Disabled?", style: { width: "6%" } },
+    { label: "Also Director?", style: { width: "8%" } },
+    { label: "Actions", style: { width: "60px" } },
+  ];
+
+  const directorColumns = [
+    { label: "Name", style: { width: "15%", minWidth: "140px" } },
+    { label: "Position", style: { width: "12%", minWidth: "110px" } },
+    { label: "Nationality", style: { width: "10%" } },
+    { label: "LinkedIn & CV", style: { width: "18%", minWidth: "160px" } },
+    { label: "Committee Membership", style: { width: "15%", minWidth: "160px" } },
+    { label: "Exec/Non-Exec", style: { width: "8%" } },
+    { label: "Race", style: { width: "7%" } },
+    { label: "Gender", style: { width: "7%" } },
+    { label: "Youth?", style: { width: "5%" } },
+    { label: "Disabled?", style: { width: "5%" } },
     { label: "Actions", style: { width: "60px" } },
   ];
 
@@ -481,53 +584,42 @@ export default function OwnershipManagement({ data = { shareholders: [], directo
   const bl = formData.businessLeadership || DEFAULT_BUSINESS_LEADERSHIP;
 
   const leadershipQuestions = [
-    {
-      field: "ownerLed",
-      question: "Q1 – Is the business owner-led?",
-      options: leadershipOptions.ownerLed,
-    },
-    {
-      field: "primaryMotivation",
-      question: "Q2 – What best describes the primary motivation for building this business?",
-      options: leadershipOptions.primaryMotivation,
-    },
-    {
-      field: "growthAmbition",
-      question: "Q3 – Growth ambition (next 5 years)",
-      options: leadershipOptions.growthAmbition,
-    },
-    {
-      field: "founderFullTime",
-      question: "Q4 – Is the founder working in the business full-time?",
-      options: leadershipOptions.founderFullTime,
-    },
-    {
-      field: "opennessToAdvice",
-      question: "Q5 – Openness to advice",
-      options: leadershipOptions.opennessToAdvice,
-    },
-    {
-      field: "decisionGovernance",
-      question: "Q6 – Decision governance",
-      options: leadershipOptions.decisionGovernance,
-    },
+    { field: "ownerLed", question: "Q1 – Is the business owner-led?", options: leadershipOptions.ownerLed },
+    { field: "primaryMotivation", question: "Q2 – What best describes the primary motivation for building this business?", options: leadershipOptions.primaryMotivation },
+    { field: "growthAmbition", question: "Q3 – Growth ambition (next 5 years)", options: leadershipOptions.growthAmbition },
+    { field: "founderFullTime", question: "Q4 – Is the founder working in the business full-time?", options: leadershipOptions.founderFullTime },
+    { field: "opennessToAdvice", question: "Q5 – Openness to advice", options: leadershipOptions.opennessToAdvice },
+    { field: "decisionGovernance", question: "Q6 – Decision governance", options: leadershipOptions.decisionGovernance },
   ];
 
   return (
     <div>
       <h2 className="text-2xl font-bold text-brown-800 mb-6">Ownership & Management</h2>
 
+      {/* Total Authorised Shares & Total Issued Shares */}
       <div className="mb-8">
-        <FormField label="Total Shares" required>
-          <input
-            type="number"
-            name="totalShares"
-            value={formData.totalShares || ""}
-            onChange={handleChange}
-            className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
-            required
-          />
-        </FormField>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <FormField label="Total Authorised Shares" required>
+            <input
+              type="number"
+              name="totalAuthorisedShares"
+              value={formData.totalAuthorisedShares || formData.totalShares || ""}
+              onChange={(e) => updateFormData({ ...formData, totalAuthorisedShares: e.target.value })}
+              className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
+              required
+            />
+          </FormField>
+          <FormField label="Total Issued Shares" required>
+            <input
+              type="number"
+              name="totalIssuedShares"
+              value={formData.totalIssuedShares || ""}
+              onChange={(e) => updateFormData({ ...formData, totalIssuedShares: e.target.value })}
+              className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
+              required
+            />
+          </FormField>
+        </div>
       </div>
 
       {/* Shareholder Table */}
@@ -559,6 +651,7 @@ export default function OwnershipManagement({ data = { shareholders: [], directo
                   </td>
                   <td className="px-4 py-2 border-b"><input type="text" value={shareholder.linkedin || ""} onChange={(e) => updateShareholder(index, "linkedin", e.target.value)} className="w-full px-2 py-1 border border-brown-300 rounded-md focus:outline-none focus:ring-1 focus:ring-brown-500" /></td>
                   <td className="px-4 py-2 border-b"><input type="number" value={shareholder.shareholding || ""} onChange={(e) => updateShareholder(index, "shareholding", e.target.value)} className="w-full px-2 py-1 border border-brown-300 rounded-md focus:outline-none focus:ring-1 focus:ring-brown-500" min="0" max="100" step="0.01" /></td>
+                  <td className="px-4 py-2 border-b"><input type="number" value={shareholder.issuedShares || ""} onChange={(e) => updateShareholder(index, "issuedShares", e.target.value)} className="w-full px-2 py-1 border border-brown-300 rounded-md focus:outline-none focus:ring-1 focus:ring-brown-500" min="0" placeholder="0" /></td>
                   <td className="px-4 py-2 border-b">
                     <select value={shareholder.race || ""} onChange={(e) => updateShareholder(index, "race", e.target.value)} className="w-full px-2 py-1 border border-brown-300 rounded-md focus:outline-none focus:ring-1 focus:ring-brown-500">
                       <option value="">Select</option>
@@ -650,6 +743,15 @@ export default function OwnershipManagement({ data = { shareholders: [], directo
                       </div>
                     </div>
                   </td>
+                  {/* Committee Membership Multi-Select */}
+                  <td className="px-4 py-2 border-b">
+                    <CommitteeMultiSelect
+                      selected={director.committeeMembership || []}
+                      onChange={(val) => updateDirector(index, "committeeMembership", val)}
+                      onCustomChange={(val) => updateDirector(index, "customCommittee", val)}
+                      customValue={director.customCommittee || ""}
+                    />
+                  </td>
                   <td className="px-4 py-2 border-b">
                     <select value={director.execType || ""} onChange={(e) => updateDirector(index, "execType", e.target.value)} className="w-full px-2 py-1 border border-brown-300 rounded-md focus:outline-none focus:ring-1 focus:ring-brown-500">
                       <option value="">Select</option>
@@ -671,7 +773,7 @@ export default function OwnershipManagement({ data = { shareholders: [], directo
                   <td className="px-4 py-2 border-b text-center"><input type="checkbox" checked={director.isYouth || false} onChange={(e) => updateDirector(index, "isYouth", e.target.checked)} className="h-4 w-4 text-brown-600 focus:ring-brown-500 border-brown-300 rounded" disabled={director.linkedShareholderId !== null} /></td>
                   <td className="px-4 py-2 border-b text-center"><input type="checkbox" checked={director.isDisabled || false} onChange={(e) => updateDirector(index, "isDisabled", e.target.checked)} className="h-4 w-4 text-brown-600 focus:ring-brown-500 border-brown-300 rounded" disabled={director.linkedShareholderId !== null} /></td>
                   <td className="px-4 py-2 border-b">
-                    <button type="button" onClick={() => removeDirector(index)} className="text-red-500 hover:text-red-700" disabled={director.linkedShareholderId !== null} title={director.linkedShareholderId !== null ? "Uncheck 'Also Director' in shareholder table to remove" : "Remove director"}>
+                    <button type="button" onClick={() => removeDirector(index)} className={`text-red-500 hover:text-red-700 ${director.linkedShareholderId !== null ? 'opacity-30 cursor-not-allowed' : ''}`} disabled={director.linkedShareholderId !== null} title={director.linkedShareholderId !== null ? "Uncheck 'Also Director' in shareholder table to remove" : "Remove director"}>
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </td>
@@ -766,31 +868,15 @@ export default function OwnershipManagement({ data = { shareholders: [], directo
       <div className="mb-8">
         <div className="mb-4">
           <h3 className="text-lg font-semibold text-brown-700">Business Leadership – Profile Assessment</h3>
-          <p className="text-xs text-brown-500 mt-1">
-            Help us understand how the business is led and where it is headed.
-          </p>
+          <p className="text-xs text-brown-500 mt-1">Help us understand how the business is led and where it is headed.</p>
         </div>
-
         <div className="bg-white border border-brown-200 rounded-lg overflow-hidden">
           {leadershipQuestions.map((item, i) => (
-            <div
-              key={item.field}
-              className={`px-6 py-5 ${i < leadershipQuestions.length - 1 ? "border-b border-brown-100" : ""} ${i % 2 === 0 ? "bg-white" : "bg-brown-50"}`}
-            >
-              <label className="block text-sm font-semibold text-brown-700 mb-2">
-                {item.question}
-              </label>
-              <select
-                value={bl[item.field] || ""}
-                onChange={(e) => updateBusinessLeadership(item.field, e.target.value)}
-                className="w-full max-w-xl px-3 py-2 border border-brown-300 rounded-md text-sm text-brown-800 focus:outline-none focus:ring-2 focus:ring-brown-500 bg-white"
-              >
+            <div key={item.field} className={`px-6 py-5 ${i < leadershipQuestions.length - 1 ? "border-b border-brown-100" : ""} ${i % 2 === 0 ? "bg-white" : "bg-brown-50"}`}>
+              <label className="block text-sm font-semibold text-brown-700 mb-2">{item.question}</label>
+              <select value={bl[item.field] || ""} onChange={(e) => updateBusinessLeadership(item.field, e.target.value)} className="w-full max-w-xl px-3 py-2 border border-brown-300 rounded-md text-sm text-brown-800 focus:outline-none focus:ring-2 focus:ring-brown-500 bg-white">
                 <option value="">— Select an answer —</option>
-                {item.options.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
+                {item.options.map((opt) => (<option key={opt.value} value={opt.value}>{opt.label}</option>))}
               </select>
             </div>
           ))}

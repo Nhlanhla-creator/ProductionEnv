@@ -1,7 +1,7 @@
 "use client"
 import { useState, useRef, useEffect } from "react"
 import { Eye, ChevronDown, Search, X, Trophy, TrendingUp, Calendar, DollarSign, FileText } from "lucide-react"
-import FundingApplication from "../../smses/FundingApplication/FundingApplication"
+// REMOVED: import FundingApplication from "../../smses/FundingApplication/FundingApplication"
 import { FundingTable } from "./funding-table"
 import styles from "./funding.module.css"
 import { db } from "../../firebaseConfig"
@@ -98,7 +98,7 @@ const calculateDuration = (startDate, endDate) => {
 
 // Empty table row component for when there are no deals
 const EmptyTableRow = () => (
-  <tr>
+   <tr>
     <td
       colSpan="11"
       style={{
@@ -682,7 +682,7 @@ const TabbedFundingTables = ({
   filters,
   onInsightsData,
   onPrimaryMatchCount,
-  activeTab = "matches", // Changed default to "application"
+  activeTab = "matches", // Changed default to "matches" since application tab is removed
   setActiveTab,
   onDealComplete,
 }) => {
@@ -741,28 +741,7 @@ const TabbedFundingTables = ({
           boxShadow: "0 2px 8px rgba(0, 0, 0, 0.1)",
         }}
       >
-        {/* Funding Application Tab - FIRST
-        <button
-          onClick={() => setActiveTab && setActiveTab("application")}
-          style={tabStyle(activeTab === "application")}
-          onMouseEnter={(e) => {
-            if (activeTab !== "application") {
-              e.target.style.backgroundColor = "#8d6e63"
-              e.target.style.color = "white"
-            }
-          }}
-          onMouseLeave={(e) => {
-            if (activeTab !== "application") {
-              e.target.style.backgroundColor = "transparent"
-              e.target.style.color = "#5d4037"
-            }
-          }}
-        >
-          <FileText size={18} />
-          Funding Application
-        </button> */}
-
-        {/* My Matches Tab - SECOND */}
+        {/* My Matches Tab - FIRST */}
         <button
           onClick={() => setActiveTab && setActiveTab("matches")}
           style={tabStyle(activeTab === "matches")}
@@ -781,10 +760,9 @@ const TabbedFundingTables = ({
         >
           <Search size={18} />
           My Matches
-        
         </button>
 
-        {/* Successful Deals Tab - THIRD */}
+        {/* Successful Deals Tab - SECOND */}
         <button
           onClick={() => setActiveTab && setActiveTab("successful")}
           style={tabStyle(activeTab === "successful")}
@@ -835,14 +813,7 @@ const TabbedFundingTables = ({
           borderTop: "none",
         }}
       >
-        {/* Funding Application Content - FIRST
-        {activeTab === "application" && (
-          <div>
-            <FundingApplication />
-          </div>
-        )} */}
-
-        {/* My Matches Content - SECOND */}
+        {/* My Matches Content - FIRST */}
         {activeTab === "matches" && (
           <div>
             <FundingTable
@@ -854,7 +825,7 @@ const TabbedFundingTables = ({
           </div>
         )}
 
-        {/* Successful Deals Content - THIRD */}
+        {/* Successful Deals Content - SECOND */}
         {activeTab === "successful" && <SuccessfulDealsTable />}
       </div>
 

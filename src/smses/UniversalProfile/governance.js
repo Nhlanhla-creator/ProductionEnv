@@ -8,7 +8,7 @@ import { db, auth, storage } from "../../firebaseConfig"
 import { doc, getDoc, updateDoc } from "firebase/firestore"
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage"
 
-// Governance Checklist Items (Ethics Policy and Whistleblowing moved here)
+// Governance Checklist Items (updated with Customer Agreements)
 const governanceChecklistItems = [
   {
     category: "Agreements",
@@ -16,7 +16,8 @@ const governanceChecklistItems = [
       { name: "Employment Contract (Basic)", id: "employmentContract" },
       { name: "NDA (Non-Disclosure Agreement)", id: "nda" },
       { name: "MOU (Memorandum of Understanding)", id: "mou" },
-      { name: "Supplier Contracts", id: "suppliercontract" }
+      { name: "Supplier Contracts", id: "suppliercontract" },
+      { name: "Customer Agreements", id: "customerAgreements" },
     ]
   },
   {
@@ -45,6 +46,208 @@ const governanceChecklistItems = [
     ]
   }
 ]
+
+// Strategic Clarity & Planning questions
+const strategicClarityQuestions = [
+  {
+    field: "strategicDirection",
+    question: "Q1 – Do you have clearly defined strategic priorities for the next 12–24 months?",
+    dimension: "Strategic Direction",
+    options: [
+      { value: "documented_shared", label: "Documented & shared" },
+      { value: "informal", label: "Informal" },
+      { value: "none", label: "None" },
+    ],
+  },
+  {
+    field: "planningDepth",
+    question: "Q2 – Which of the following do you have? (Business plan, financial model, GTM, ops plan)",
+    dimension: "Planning Depth",
+    options: [
+      { value: "3_4_selected", label: "3–4 selected" },
+      { value: "1_2_selected", label: "1–2 selected" },
+      { value: "none", label: "None" },
+    ],
+  },
+  {
+    field: "marketStrategy",
+    question: "Q3 – Do you have a clearly defined target market and value proposition?",
+    dimension: "Market Strategy",
+    options: [
+      { value: "clearly_defined", label: "Clearly defined & validated" },
+      { value: "partially_defined", label: "Partially defined" },
+      { value: "unclear", label: "Unclear" },
+    ],
+  },
+  {
+    field: "executionRoadmap",
+    question: "Q4 – Do you have a clear roadmap to achieve your strategy?",
+    dimension: "Execution Roadmap",
+    options: [
+      { value: "detailed_roadmap", label: "Detailed roadmap with milestones" },
+      { value: "high_level_plan", label: "High-level plan" },
+      { value: "no_roadmap", label: "No roadmap" },
+    ],
+  },
+  {
+    field: "decisionMaking",
+    question: "Q5 – How are key strategic decisions made?",
+    dimension: "Decision-Making",
+    options: [
+      { value: "structured_data_driven", label: "Structured & data-driven" },
+      { value: "semi_structured", label: "Semi-structured" },
+      { value: "informal_reactive", label: "Informal/reactive" },
+    ],
+  },
+  {
+    field: "adaptability",
+    question: "Q6 – When strategy is not working, how do you respond?",
+    dimension: "Adaptability",
+    options: [
+      { value: "structured_review", label: "Structured review + adjustment" },
+      { value: "some_adjustment", label: "Some adjustment" },
+      { value: "reactive_none", label: "Reactive / none" },
+    ],
+  },
+];
+
+// Risk Management questions
+const riskManagementQuestions = [
+  {
+    field: "riskIdentification",
+    question: "Q1 – Do you formally identify key business risks?",
+    dimension: "Risk Identification",
+    options: [
+      { value: "documented_risk_register", label: "Documented risk register" },
+      { value: "informal_awareness", label: "Informal awareness" },
+      { value: "no_structured_identification", label: "No structured identification" },
+    ],
+  },
+  {
+    field: "riskAssessment",
+    question: "Q2 – How do you assess the impact and likelihood of risks?",
+    dimension: "Risk Assessment",
+    options: [
+      { value: "structured_assessment", label: "Structured assessment (scoring/prioritisation)" },
+      { value: "basic_informal", label: "Basic / informal assessment" },
+      { value: "no_formal_assessment", label: "No formal assessment" },
+    ],
+  },
+  {
+    field: "riskMitigation",
+    question: "Q3 – Do you have mitigation plans for key risks?",
+    dimension: "Risk Mitigation",
+    options: [
+      { value: "defined_mitigation_plans", label: "Defined mitigation plans" },
+      { value: "some_mitigation_actions", label: "Some mitigation actions" },
+      { value: "no_clear_approach", label: "No clear mitigation approach" },
+    ],
+  },
+  {
+    field: "businessContinuity",
+    question: "Q4 – Do you have a business continuity or contingency plan?",
+    dimension: "Business Continuity",
+    options: [
+      { value: "formal_documented_plan", label: "Formal documented plan" },
+      { value: "partial_informal_plan", label: "Partial / informal plan" },
+      { value: "none", label: "None" },
+    ],
+  },
+  {
+    field: "crisisPreparedness",
+    question: "Q5 – How prepared are you to respond to unexpected disruptions?",
+    dimension: "Crisis Preparedness",
+    options: [
+      { value: "clear_response_protocols", label: "Clear response protocols & roles" },
+      { value: "some_readiness", label: "Some readiness" },
+      { value: "reactive_unprepared", label: "Reactive / unprepared" },
+    ],
+  },
+  {
+    field: "riskOwnership",
+    question: "Q6 – Is risk management assigned to specific roles or leadership?",
+    dimension: "Risk Ownership",
+    options: [
+      { value: "clear_ownership", label: "Clear ownership & accountability" },
+      { value: "shared_unclear", label: "Shared but unclear ownership" },
+      { value: "no_ownership_defined", label: "No ownership defined" },
+    ],
+  },
+];
+
+// Transparency & Reporting questions (replacing old multi-selects and textareas)
+const transparencyReportingQuestions = [
+  {
+    field: "reportingFrequency",
+    question: "Q1 – How often do you report to stakeholders?",
+    dimension: "Reporting Frequency",
+    options: [
+      { value: "monthly", label: "Monthly" },
+      { value: "quarterly", label: "Quarterly" },
+      { value: "ad_hoc_none", label: "Ad hoc / none" },
+    ],
+  },
+  {
+    field: "performanceReviewCycle",
+    question: "Q2 – How often is performance formally reviewed internally?",
+    dimension: "Performance Review Cycle",
+    options: [
+      { value: "monthly", label: "Monthly" },
+      { value: "quarterly_biannual", label: "Quarterly / Bi-annual" },
+      { value: "ad_hoc_none", label: "Ad hoc / none" },
+    ],
+  },
+  {
+    field: "kpiMonitoring",
+    question: "Q3 – How structured is your KPI tracking?",
+    dimension: "KPI Monitoring",
+    options: [
+      { value: "defined_kpis_tracked", label: "Defined KPIs + tracked regularly" },
+      { value: "some_kpis_tracked", label: "Some KPIs tracked" },
+      { value: "no_structured_tracking", label: "No structured tracking" },
+    ],
+  },
+  {
+    field: "stakeholderCommunication",
+    question: "Q4 – How do you communicate performance?",
+    dimension: "Stakeholder Communication",
+    options: [
+      { value: "structured_reports", label: "Structured (reports, dashboards, meetings)" },
+      { value: "informal_updates", label: "Informal updates" },
+      { value: "minimal", label: "Minimal" },
+    ],
+  },
+  {
+    field: "complianceAndRisk",
+    question: "Q5 – Do you have formal compliance & risk processes?",
+    dimension: "Compliance & Risk",
+    options: [
+      { value: "formal_risk_register_audits", label: "Formal (risk register + audits)" },
+      { value: "partial_some_controls", label: "Partial (some controls)" },
+      { value: "none", label: "None" },
+    ],
+  },
+  {
+    field: "dataGovernance",
+    question: "Q6 – How is data managed and protected?",
+    dimension: "Data Governance",
+    options: [
+      { value: "formal_popia_aligned", label: "Formal policies + controls (POPIA aligned)" },
+      { value: "basic_controls", label: "Basic controls" },
+      { value: "no_formal_approach", label: "No formal approach" },
+    ],
+  },
+  {
+    field: "auditAndAssurance",
+    question: "Q7 – Do you conduct internal/external audits?",
+    dimension: "Audit & Assurance",
+    options: [
+      { value: "regular_internal_external", label: "Regular internal + external audits" },
+      { value: "occasional_audits", label: "Occasional audits" },
+      { value: "none", label: "None" },
+    ],
+  },
+];
 
 // Tooltip Component
 const Tooltip = ({ children, content, position = "top" }) => {
@@ -78,122 +281,6 @@ const Tooltip = ({ children, content, position = "top" }) => {
   )
 }
 
-// MultiSelect component - matching EntityOverview exactly with fix
-function MultiSelect({ options, selected = [], onChange, label }) {
-  const [isOpen, setIsOpen] = useState(false)
-
-  // Ensure selected is always an array
-  const safeSelected = Array.isArray(selected) ? selected : []
-
-  const toggleDropdown = () => setIsOpen(!isOpen)
-  const closeDropdown = () => setIsOpen(false)
-
-  const handleSelect = (value) => {
-    const newSelected = safeSelected.includes(value) 
-      ? safeSelected.filter((item) => item !== value) 
-      : [...safeSelected, value]
-    onChange(newSelected)
-  }
-
-  return (
-    <div style={{ position: 'relative' }}>
-      <div 
-        onClick={toggleDropdown}
-        style={{
-          border: '1px solid #ccc',
-          borderRadius: '4px',
-          padding: '8px 12px',
-          cursor: 'pointer',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          minHeight: '40px',
-          backgroundColor: 'white'
-        }}
-      >
-        {safeSelected.length > 0 ? (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
-            {safeSelected.map((freq) => (
-              <span 
-                key={freq}
-                style={{
-                  backgroundColor: '#e0e0e0',
-                  padding: '2px 8px',
-                  borderRadius: '12px',
-                  fontSize: '14px'
-                }}
-              >
-                {options.find((opt) => opt.value === freq)?.label || freq}
-              </span>
-            ))}
-          </div>
-        ) : (
-          <span style={{ color: '#999' }}>Select {label}</span>
-        )}
-        {isOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-      </div>
-
-      {isOpen && (
-        <div style={{
-          position: 'absolute',
-          top: '100%',
-          left: 0,
-          right: 0,
-          backgroundColor: 'white',
-          border: '1px solid #ccc',
-          borderRadius: '4px',
-          marginTop: '4px',
-          zIndex: 1000,
-          maxHeight: '300px',
-          overflow: 'auto'
-        }}>
-          <div style={{ padding: '8px' }}>
-            {options.map((option) => (
-              <div
-                key={option.value}
-                onClick={() => handleSelect(option.value)}
-                style={{
-                  padding: '8px',
-                  cursor: 'pointer',
-                  backgroundColor: safeSelected.includes(option.value) ? '#f0f0f0' : 'white',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px'
-                }}
-              >
-                <input
-                  type="checkbox"
-                  checked={safeSelected.includes(option.value)}
-                  onChange={() => {}}
-                  style={{ cursor: 'pointer' }}
-                />
-                <span>{option.label}</span>
-              </div>
-            ))}
-          </div>
-          <div style={{ padding: '8px', borderTop: '1px solid #ccc' }}>
-            <button 
-              type="button"
-              onClick={closeDropdown}
-              style={{
-                width: '100%',
-                padding: '8px',
-                backgroundColor: '#8B4513',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer'
-              }}
-            >
-              Done
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
 const Governance = ({ data, updateData }) => {
   const [formData, setFormData] = useState({
     governanceChecklist: {},
@@ -201,13 +288,12 @@ const Governance = ({ data, updateData }) => {
     hasConflictResolution: "",
     ethicsTrainingFrequency: "",
     lastEthicsTrainingDate: "",
-    // Transparency & Reporting
-    stakeholderReportingFrequency: [],
-    performanceReviewCycle: [],
-    stakeholderCommunicationMethods: "",
-    performanceReviewProcess: "",
-    complianceProcedures: "",
-    dataManagementPolicies: "",
+    // Strategic Clarity & Planning
+    strategicClarity: {},
+    // Risk Management
+    riskManagement: {},
+    // Transparency & Reporting (new dropdown-based)
+    transparencyReporting: {},
   })
   const [isLoading, setIsLoading] = useState(true)
 
@@ -222,48 +308,33 @@ const Governance = ({ data, updateData }) => {
           if (docSnap.exists()) {
             const userData = docSnap.data()
             if (userData.governance) {
-              // Ensure arrays are properly initialized
               const governanceData = {
                 ...userData.governance,
-                stakeholderReportingFrequency: Array.isArray(userData.governance.stakeholderReportingFrequency) 
-                  ? userData.governance.stakeholderReportingFrequency 
-                  : [],
-                performanceReviewCycle: Array.isArray(userData.governance.performanceReviewCycle)
-                  ? userData.governance.performanceReviewCycle
-                  : []
               }
               setFormData(governanceData)
               updateData("governance", governanceData)
             } else {
-              // Initialize with default structure
               const initialData = {
                 governanceChecklist: {},
                 hasConflictResolution: "",
                 ethicsTrainingFrequency: "",
                 lastEthicsTrainingDate: "",
-                stakeholderReportingFrequency: [],
-                performanceReviewCycle: [],
-                stakeholderCommunicationMethods: "",
-                performanceReviewProcess: "",
-                complianceProcedures: "",
-                dataManagementPolicies: "",
+                strategicClarity: {},
+                riskManagement: {},
+                transparencyReporting: {},
               }
               setFormData(initialData)
               updateData("governance", initialData)
             }
           } else {
-            // No profile exists yet, initialize with defaults
             const initialData = {
               governanceChecklist: {},
               hasConflictResolution: "",
               ethicsTrainingFrequency: "",
               lastEthicsTrainingDate: "",
-              stakeholderReportingFrequency: [],
-              performanceReviewCycle: [],
-              stakeholderCommunicationMethods: "",
-              performanceReviewProcess: "",
-              complianceProcedures: "",
-              dataManagementPolicies: "",
+              strategicClarity: {},
+              riskManagement: {},
+              transparencyReporting: {},
             }
             setFormData(initialData)
             updateData("governance", initialData)
@@ -281,50 +352,54 @@ const Governance = ({ data, updateData }) => {
 
   const handleChange = (e) => {
     const { name, value } = e.target
-    const updatedFormData = {
-      ...formData,
-      [name]: value,
-    }
+    const updatedFormData = { ...formData, [name]: value }
     setFormData(updatedFormData)
     updateData("governance", updatedFormData)
   }
 
   const handleDateChange = (e) => {
     const { name, value } = e.target
-    const updatedFormData = {
-      ...formData,
-      [name]: value,
-    }
+    const updatedFormData = { ...formData, [name]: value }
     setFormData(updatedFormData)
     updateData("governance", updatedFormData)
   }
 
   const handleChecklistChange = async (itemId, isChecked) => {
-    const updatedChecklist = {
-      ...formData.governanceChecklist,
-      [itemId]: isChecked,
-    }
-
-    const updatedFormData = {
-      ...formData,
-      governanceChecklist: updatedChecklist,
-    }
-
+    const updatedChecklist = { ...formData.governanceChecklist, [itemId]: isChecked }
+    const updatedFormData = { ...formData, governanceChecklist: updatedChecklist }
     setFormData(updatedFormData)
     updateData("governance", updatedFormData)
 
-    // Save to Firebase
     try {
       const user = auth.currentUser
       if (user) {
         const docRef = doc(db, "universalProfiles", user.uid)
-        await updateDoc(docRef, {
-          "governance.governanceChecklist": updatedChecklist,
-        })
+        await updateDoc(docRef, { "governance.governanceChecklist": updatedChecklist })
       }
     } catch (error) {
       console.error("Error saving checklist to Firebase:", error)
     }
+  }
+
+  // Strategic Clarity handler
+  const handleStrategicClarityChange = (field, value) => {
+    const updated = { ...formData, strategicClarity: { ...(formData.strategicClarity || {}), [field]: value } }
+    setFormData(updated)
+    updateData("governance", updated)
+  }
+
+  // Risk Management handler
+  const handleRiskManagementChange = (field, value) => {
+    const updated = { ...formData, riskManagement: { ...(formData.riskManagement || {}), [field]: value } }
+    setFormData(updated)
+    updateData("governance", updated)
+  }
+
+  // Transparency & Reporting handler
+  const handleTransparencyChange = (field, value) => {
+    const updated = { ...formData, transparencyReporting: { ...(formData.transparencyReporting || {}), [field]: value } }
+    setFormData(updated)
+    updateData("governance", updated)
   }
 
   // Calculate completed checklist items
@@ -334,12 +409,10 @@ const Governance = ({ data, updateData }) => {
   }
 
   const totalChecklistItems = governanceChecklistItems.reduce(
-    (total, category) => total + category.items.length,
-    0
+    (total, category) => total + category.items.length, 0
   )
   const completedCount = getCompletedChecklistCount()
 
-  // Show loading state while fetching data
   if (isLoading) {
     return (
       <div className="governance-loading">
@@ -349,15 +422,34 @@ const Governance = ({ data, updateData }) => {
     )
   }
 
-  // Frequency options for multi-select
-  const frequencyOptions = [
-    { value: "weekly", label: "Weekly" },
-    { value: "monthly", label: "Monthly" },
-    { value: "quarterly", label: "Quarterly" },
-    { value: "biannually", label: "Bi-annually" },
-    { value: "annually", label: "Annually" },
-    { value: "as_needed", label: "As needed" },
-  ]
+  // Generic section renderer for dropdown-based question sets
+  const renderQuestionSection = (title, subtitle, questions, dataObject, changeHandler) => (
+    <div className="mb-8">
+      <h3 className="text-xl font-semibold text-brown-700 mt-6 mb-2 border-b border-brown-200 pb-2">{title}</h3>
+      {subtitle && <p className="text-xs text-brown-500 mb-4">{subtitle}</p>}
+      <div className="bg-white border border-brown-200 rounded-lg overflow-hidden">
+        {questions.map((item, i) => (
+          <div
+            key={item.field}
+            className={`px-6 py-5 ${i < questions.length - 1 ? "border-b border-brown-100" : ""} ${i % 2 === 0 ? "bg-white" : "bg-brown-50"}`}
+          >
+            <label className="block text-sm font-semibold text-brown-700 mb-1">{item.question}</label>
+            <span className="text-xs text-brown-400 mb-2 block">{item.dimension}</span>
+            <select
+              value={(dataObject || {})[item.field] || ""}
+              onChange={(e) => changeHandler(item.field, e.target.value)}
+              className="w-full max-w-xl px-3 py-2 border border-brown-300 rounded-md text-sm text-brown-800 focus:outline-none focus:ring-2 focus:ring-brown-500 bg-white"
+            >
+              <option value="">— Select an answer —</option>
+              {item.options.map((opt) => (
+                <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 
   return (
     <div>
@@ -389,35 +481,25 @@ const Governance = ({ data, updateData }) => {
             ></div>
           </div>
           <p className="text-sm text-brown-600 mt-2">
-            Tick the boxes to track which governance documents you already have in place.
+            Add checkmark if you have these policies and they are enforced. Leave blank if you do not have them or they are not enforced.
           </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {governanceChecklistItems.map((category, categoryIndex) => (
-            <div
-              key={categoryIndex}
-              className="bg-white border border-brown-200 rounded-lg p-4"
-            >
-              <h5 className="font-semibold text-brown-800 mb-3 text-lg">
-                {category.category}
-              </h5>
+            <div key={categoryIndex} className="bg-white border border-brown-200 rounded-lg p-4">
+              <h5 className="font-semibold text-brown-800 mb-3 text-lg">{category.category}</h5>
               <div className="space-y-3">
-                {category.items.map((item, itemIndex) => (
+                {category.items.map((item) => (
                   <div key={item.id} className="flex items-start space-x-2">
                     <input
                       type="checkbox"
                       id={item.id}
                       checked={formData.governanceChecklist?.[item.id] || false}
-                      onChange={(e) =>
-                        handleChecklistChange(item.id, e.target.checked)
-                      }
+                      onChange={(e) => handleChecklistChange(item.id, e.target.checked)}
                       className="h-4 w-4 text-brown-600 focus:ring-brown-500 border-brown-300 rounded mt-0.5 flex-shrink-0"
                     />
-                    <label
-                      htmlFor={item.id}
-                      className="text-sm text-brown-700 cursor-pointer leading-tight"
-                    >
+                    <label htmlFor={item.id} className="text-sm text-brown-700 cursor-pointer leading-tight">
                       {item.name}
                     </label>
                   </div>
@@ -483,118 +565,34 @@ const Governance = ({ data, updateData }) => {
             </FormField>
           </div>
         </div>
-
-        <div className="bg-brown-50 p-4 rounded-md border border-brown-200 mt-6">
-          <h4 className="text-sm font-medium text-brown-700 mb-2">Ethics & Compliance Notes</h4>
-          <p className="text-xs text-brown-600 leading-relaxed">
-            Having proper ethics policies and conflict resolution procedures demonstrates good corporate governance
-            and helps protect your organization from potential disputes and reputational risks. These documents
-            are often required by investors and partners.
-          </p>
-        </div>
       </div>
 
-      {/* Transparency & Reporting Section */}
-      <div className="mb-8">
-        <h3 className="text-xl font-semibold text-brown-700 mt-6 mb-6 border-b border-brown-200 pb-2">
-          Transparency & Reporting
-        </h3>
+      {/* Strategic Clarity & Planning Section */}
+      {renderQuestionSection(
+        "Strategic Clarity & Planning",
+        "Help us understand how strategically your business is planned and directed.",
+        strategicClarityQuestions,
+        formData.strategicClarity,
+        handleStrategicClarityChange
+      )}
 
-        {/* Stakeholder Reporting - Multi-select */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-          <div>
-            <FormField label="Stakeholder Reporting Frequency (Select all that apply)">
-              <MultiSelect
-                options={frequencyOptions}
-                selected={formData.stakeholderReportingFrequency || []}
-                onChange={(value) => {
-                  const updatedFormData = {
-                    ...formData,
-                    stakeholderReportingFrequency: value,
-                  }
-                  setFormData(updatedFormData)
-                  updateData("governance", updatedFormData)
-                }}
-                label="Frequency"
-              />
-            </FormField>
-          </div>
+      {/* Risk Management Section */}
+      {renderQuestionSection(
+        "Risk Management",
+        "Assess how your business identifies, evaluates, and manages risk.",
+        riskManagementQuestions,
+        formData.riskManagement,
+        handleRiskManagementChange
+      )}
 
-          <div>
-            <FormField label="Performance Review Cycle (Select all that apply)">
-              <MultiSelect
-                options={frequencyOptions}
-                selected={formData.performanceReviewCycle || []}
-                onChange={(value) => {
-                  const updatedFormData = {
-                    ...formData,
-                    performanceReviewCycle: value,
-                  }
-                  setFormData(updatedFormData)
-                  updateData("governance", updatedFormData)
-                }}
-                label="Cycle"
-              />
-            </FormField>
-          </div>
-        </div>
-
-        {/* Reporting Methods */}
-        <div className="mb-6">
-          <FormField label="Stakeholder Communication Methods">
-            <textarea
-              name="stakeholderCommunicationMethods"
-              value={formData.stakeholderCommunicationMethods || ""}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
-              placeholder="Describe how you communicate with stakeholders (e.g., annual reports, quarterly meetings, digital dashboards, newsletters)"
-              rows={3}
-            />
-          </FormField>
-        </div>
-
-        {/* Performance Review Process */}
-        <div className="mb-6">
-          <FormField label="Performance Review & KPI Monitoring Process">
-            <textarea
-              name="performanceReviewProcess"
-              value={formData.performanceReviewProcess || ""}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
-              placeholder="Describe your performance review process, key performance indicators (KPIs), and how progress is measured and reported"
-              rows={4}
-            />
-          </FormField>
-        </div>
-
-        {/* Compliance Procedures */}
-        <div className="mb-6">
-          <FormField label="Compliance Monitoring & Risk Management Procedures">
-            <textarea
-              name="complianceProcedures"
-              value={formData.complianceProcedures || ""}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
-              placeholder="Describe your compliance monitoring procedures, risk management framework, audit processes, and regulatory reporting requirements"
-              rows={4}
-            />
-          </FormField>
-        </div>
-
-        {/* Data Management & Privacy */}
-        <div className="mb-6">
-          <FormField label="Data Management & Privacy Policies">
-            <textarea
-              name="dataManagementPolicies"
-              value={formData.dataManagementPolicies || ""}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
-              placeholder="Describe your data management practices, privacy policies, and information security measures"
-              rows={3}
-            />
-          </FormField>
-        </div>
-      </div>
+      {/* Transparency & Reporting Section (new dropdown-based) */}
+      {renderQuestionSection(
+        "Transparency & Reporting",
+        "Evaluate how your business reports, monitors performance, and manages compliance.",
+        transparencyReportingQuestions,
+        formData.transparencyReporting,
+        handleTransparencyChange
+      )}
 
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-6">
         <h4 className="font-semibold text-blue-800 mb-2 flex items-center gap-2">
