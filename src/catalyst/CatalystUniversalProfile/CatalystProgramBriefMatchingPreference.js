@@ -4,46 +4,15 @@ import { ChevronDown, ChevronUp } from "lucide-react"
 
 // ─── Option Lists ─────────────────────────────────────────────────────────────
 
-const supportFocusOptions = [
-  { value: "funding", label: "Funding Support", tooltip: "Direct financial assistance and capital access" },
+const intangibleSupportOptions = [
+  { value: "advisory_services", label: "Advisory Services", tooltip: "Strategic guidance and expert consultation" },
+  { value: "mentorship", label: "Mentorship", tooltip: "One-on-one guidance from experienced professionals" },
   { value: "capacity_building", label: "Capacity Building", tooltip: "Skills development, training, and operational improvement" },
+  { value: "networking", label: "Networking & Partnerships", tooltip: "Connections to potential partners, clients, and collaborators" },
   { value: "market_access", label: "Market Access", tooltip: "Connections, distribution channels, and market entry support" },
   { value: "technology", label: "Technology & Innovation", tooltip: "Tech infrastructure, digital tools, and innovation resources" },
-  { value: "social_impact", label: "Social Impact", tooltip: "Support for community development and social responsibility" },
+  { value: "social_impact", label: "Social Impact Support", tooltip: "Support for community development and social responsibility" },
 ]
-
-const supportFocusSubtypes = {
-  funding: [
-    { value: "grants", label: "Grants (non-repayable funding)", tooltip: "Funding that does not require repayment or equity exchange" },
-    { value: "low_interest_loans", label: "Low-Interest Loans", tooltip: "Loans with below-market interest rates" },
-    { value: "seed_funding", label: "Seed Funding", tooltip: "Early-stage capital for product development and market testing" },
-    { value: "crowdfunding_support", label: "Crowdfunding Support", tooltip: "Assistance with raising funds from many small investors online" },
-  ],
-  capacity_building: [
-    { value: "skills_training", label: "Skills Training & Development", tooltip: "Workshops and courses for employee skills enhancement" },
-    { value: "business_mentorship", label: "Business Mentorship", tooltip: "One-on-one guidance from experienced entrepreneurs" },
-    { value: "leadership_development", label: "Leadership Development", tooltip: "Training for management and executive team building" },
-    { value: "financial_literacy", label: "Financial Literacy", tooltip: "Education on financial management, accounting, and planning" },
-  ],
-  market_access: [
-    { value: "networking", label: "Networking & Partnerships", tooltip: "Connections to potential partners, clients, and collaborators" },
-    { value: "market_linkages", label: "Market Linkages", tooltip: "Direct connections to buyers, distributors, or suppliers" },
-    { value: "trade_facilitation", label: "Trade Facilitation", tooltip: "Support with export/import procedures and documentation" },
-    { value: "export_support", label: "Export Support", tooltip: "Assistance with entering and succeeding in international markets" },
-  ],
-  technology: [
-    { value: "digital_tools", label: "Digital Tools & Platforms", tooltip: "Software, apps, and digital infrastructure" },
-    { value: "tech_training", label: "Technology Training", tooltip: "Education on using specific technologies or software" },
-    { value: "innovation_labs", label: "Innovation Labs", tooltip: "Access to research facilities and experimental spaces" },
-    { value: "research_development", label: "Research & Development", tooltip: "Support for product research and technological innovation" },
-  ],
-  social_impact: [
-    { value: "community_development", label: "Community Development", tooltip: "Projects benefiting local communities and stakeholders" },
-    { value: "environmental_programs", label: "Environmental Programs", tooltip: "Initiatives focused on sustainability and environmental protection" },
-    { value: "youth_development", label: "Youth Development", tooltip: "Programs supporting young entrepreneurs and employees" },
-    { value: "women_empowerment", label: "Women Empowerment", tooltip: "Initiatives supporting women-led businesses and gender equality" },
-  ],
-}
 
 // Matches SME FundingApplication exactly
 const fundingInstrumentOptions = [
@@ -57,19 +26,6 @@ const fundingInstrumentOptions = [
   { value: "Secondary Market Strategies", label: "Secondary Market Strategies", tooltip: "Investments in existing shares rather than new company equity" },
   { value: "Special Strategies", label: "Special Strategies", tooltip: "Customized or non-traditional funding approaches" },
   { value: "Other", label: "Other (please specify)" },
-]
-
-// Matches SME FundingApplication exactly
-const funderTypeOptions = [
-  { value: "Any", label: "Any" },
-  { value: "Venture Capital", label: "Venture Capital", tooltip: "Professional investors in high-growth startups, typically taking equity" },
-  { value: "Angel Investment", label: "Angel Investment", tooltip: "Individual investors using personal funds for early-stage companies" },
-  { value: "Private Equity", label: "Private Equity", tooltip: "Investment in established companies for expansion or restructuring" },
-  { value: "Government Fund", label: "Government Fund", tooltip: "Public sector funding through agencies or development programs" },
-  { value: "Grant / Non-Profit", label: "Grant / Non-Profit", tooltip: "Non-repayable funding from foundations or charitable organizations" },
-  { value: "Development Finance", label: "Development Finance", tooltip: "Funding from development banks focused on economic growth" },
-  { value: "Corporate Investment", label: "Corporate Investment", tooltip: "Investment from established companies for strategic partnerships" },
-  { value: "Other (specify)", label: "Other (specify)" },
 ]
 
 const businessStageOptions = [
@@ -390,17 +346,10 @@ const formatRand = (val) => {
 export default function CatalystProgramBriefMatchingPreference({ data = {}, updateData = () => {} }) {
   const h = (field, value) => updateData({ [field]: value })
 
-  const isFundingSelected = data.supportFocus === "funding"
-  const availableSubtypes = data.supportFocus ? (supportFocusSubtypes[data.supportFocus] || []) : []
+  const isFundingSelected = data.fundingSupport === "yes"
+
   const showProvinces = (data.geographicFocus || []).includes("province_specific")
   const showCountries = (data.geographicFocus || []).includes("country_specific")
-
-  const handleSupportFocusChange = (e) => {
-    const val = e.target.value
-    h("supportFocus", val)
-    // Reset subtype when main focus changes
-    h("supportFocusSubtype", "")
-  }
 
   return (
     <div style={{ padding: "24px", maxWidth: "1100px" }}>
@@ -490,18 +439,18 @@ export default function CatalystProgramBriefMatchingPreference({ data = {}, upda
       {/* ── Section 2: Support Focus ─────────────────────────────────────────── */}
       <div style={sectionBoxStyle}>
         <h3 style={sectionTitleStyle}>Section 2 — Support Focus</h3>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
-
-          {/* Support Focus — single select, matching SME */}
+        
+        {/* Row 1: Intangible Support, Intangible Support Sub-type, and Funding Support */}
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "20px", marginBottom: "20px" }}>
           <div>
-            <label style={labelStyle}>Support Focus</label>
+            <label style={labelStyle}>Intangible Support</label>
             <select
-              value={data.supportFocus || ""}
-              onChange={handleSupportFocusChange}
+              value={data.intangibleSupport || ""}
+              onChange={(e) => h("intangibleSupport", e.target.value)}
               style={selectStyle}
             >
-              <option value="">Select Support Focus</option>
-              {supportFocusOptions.map((opt) => (
+              <option value="">Select Intangible Support</option>
+              {intangibleSupportOptions.map((opt) => (
                 <option key={opt.value} value={opt.value} title={opt.tooltip || ""}>
                   {opt.label}
                 </option>
@@ -509,133 +458,88 @@ export default function CatalystProgramBriefMatchingPreference({ data = {}, upda
             </select>
           </div>
 
-          {/* Support Focus Subtype — single select, matching SME */}
           <div>
-            <label style={labelStyle}>Support Focus Sub-type</label>
+            <label style={labelStyle}>Intangible Support Sub-type</label>
             <select
-              value={data.supportFocusSubtype || ""}
-              onChange={(e) => h("supportFocusSubtype", e.target.value)}
+              value={data.intangibleSupportSubtype || ""}
+              onChange={(e) => h("intangibleSupportSubtype", e.target.value)}
               style={selectStyle}
-              disabled={!data.supportFocus}
+              disabled={!data.intangibleSupport}
             >
               <option value="">
-                {data.supportFocus ? "Select Support Focus Sub-type" : "Select Support Focus first"}
+                {data.intangibleSupport ? "Select Sub-type" : "Select Intangible Support first"}
               </option>
-              {availableSubtypes.map((opt) => (
-                <option key={opt.value} value={opt.value} title={opt.tooltip || ""}>
-                  {opt.label}
-                </option>
-              ))}
+              {/* You can add sub-types for each intangible support option here if needed */}
             </select>
           </div>
 
-          {/* Conditional funding fields — matching SME funding ask section */}
-          {isFundingSelected && (
-            <div style={{ gridColumn: "1 / -1" }}>
-              <div style={{
-                backgroundColor: "#fffbf5",
-                border: "1px dashed #d2b48c",
-                borderRadius: "8px",
-                padding: "16px",
-              }}>
-                <p style={{ fontSize: "13px", fontWeight: "600", color: "#8B4513", marginBottom: "16px" }}>
-                  ℹ️ Funding Support selected — please complete the additional fields below:
-                </p>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
-
-                  {/* Funding Instrument — MultiSelect matching SME */}
-                  <div>
-                    <label style={labelStyle}>Funding Instrument Preferred</label>
-                    <MultiSelect
-                      options={fundingInstrumentOptions}
-                      selected={data.fundingInstruments || []}
-                      onChange={(val) => h("fundingInstruments", val)}
-                      placeholder="Select Funding Instruments"
-                      includeSelectAll={false}
-                    />
-                  </div>
-
-                  {/* Type of Funder — MultiSelect matching SME */}
-                  <div>
-                    <label style={labelStyle}>Type of Funder Preferred</label>
-                    <MultiSelect
-                      options={funderTypeOptions}
-                      selected={data.funderTypes || []}
-                      onChange={(val) => h("funderTypes", val)}
-                      placeholder="Select Funder Types"
-                      includeSelectAll={false}
-                    />
-                  </div>
-
-                  {/* Other instrument — conditional, matching SME */}
-                  {(data.fundingInstruments || []).includes("Other") && (
-                    <div>
-                      <label style={labelStyle}>Please specify other funding instrument</label>
-                      <input
-                        type="text"
-                        value={data.fundingInstrumentOther || ""}
-                        onChange={(e) => h("fundingInstrumentOther", e.target.value)}
-                        style={inputStyle}
-                        placeholder="Please specify the funding instrument"
-                      />
-                    </div>
-                  )}
-
-                  {/* Other funder type — conditional, matching SME */}
-                  {(data.funderTypes || []).includes("Other (specify)") && (
-                    <div>
-                      <label style={labelStyle}>Please specify other funder type</label>
-                      <input
-                        type="text"
-                        value={data.funderTypeOther || ""}
-                        onChange={(e) => h("funderTypeOther", e.target.value)}
-                        style={inputStyle}
-                        placeholder="Please specify the type of funder"
-                      />
-                    </div>
-                  )}
-
-                  {/* Target Business Stage */}
-                  <div>
-                    <label style={labelStyle}>Target Business Stage</label>
-                    <MultiSelect
-                      options={businessStageOptions}
-                      selected={data.targetBusinessStage || []}
-                      onChange={(val) => h("targetBusinessStage", val)}
-                      placeholder="Select stage(s)..."
-                    />
-                  </div>
-
-                  {/* Ticket range */}
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", gridColumn: "1 / -1" }}>
-                    <div>
-                      <label style={labelStyle}>Minimum Support Ticket (ZAR)</label>
-                      <input
-                        type="text"
-                        value={data.minimumSupportTicket || ""}
-                        onChange={(e) => h("minimumSupportTicket", formatRand(e.target.value))}
-                        style={inputStyle}
-                        placeholder="R 10,000"
-                      />
-                    </div>
-                    <div>
-                      <label style={labelStyle}>Maximum Support Ticket (ZAR)</label>
-                      <input
-                        type="text"
-                        value={data.maximumSupportTicket || ""}
-                        onChange={(e) => h("maximumSupportTicket", formatRand(e.target.value))}
-                        style={inputStyle}
-                        placeholder="R 1,000,000"
-                      />
-                    </div>
-                  </div>
-
-                </div>
-              </div>
-            </div>
-          )}
-
+          <div>
+            <label style={labelStyle}>Funding Support</label>
+            <select
+              value={data.fundingSupport || ""}
+              onChange={(e) => h("fundingSupport", e.target.value)}
+              style={selectStyle}
+            >
+              <option value="">Select Funding Support</option>
+              <option value="yes">Yes</option>
+              <option value="no">No</option>
+            </select>
+          </div>
         </div>
+
+        {/* Row 2: Instrument Fit, Ticket Size, and Revenue Threshold (only when Funding Support is Yes) */}
+        {isFundingSelected && (
+          <div style={{
+            backgroundColor: "#fffbf5",
+            border: "1px dashed #d2b48c",
+            borderRadius: "8px",
+            padding: "20px",
+            marginTop: "8px"
+          }}>
+            <p style={{ fontSize: "13px", fontWeight: "600", color: "#8B4513", marginBottom: "16px" }}>
+              💰 Funding Configuration
+            </p>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "20px" }}>
+              
+              {/* Instrument Fit */}
+              <div>
+                <label style={labelStyle}>Instrument Fit</label>
+                <MultiSelect
+                  options={fundingInstrumentOptions}
+                  selected={data.fundingInstruments || []}
+                  onChange={(val) => h("fundingInstruments", val)}
+                  placeholder="Select funding instruments"
+                  includeSelectAll={false}
+                />
+              </div>
+
+              {/* Ticket Size */}
+              <div>
+                <label style={labelStyle}>Ticket Size (ZAR)</label>
+                <input
+                  type="text"
+                  value={data.ticketSize || ""}
+                  onChange={(e) => h("ticketSize", formatRand(e.target.value))}
+                  style={inputStyle}
+                  placeholder="R 100,000"
+                />
+              </div>
+
+              {/* Revenue Threshold */}
+              <div>
+                <label style={labelStyle}>Revenue Threshold (ZAR)</label>
+                <input
+                  type="text"
+                  value={data.revenueThreshold || ""}
+                  onChange={(e) => h("revenueThreshold", formatRand(e.target.value))}
+                  style={inputStyle}
+                  placeholder="R 5,000,000"
+                />
+              </div>
+
+            </div>
+          </div>
+        )}
       </div>
 
       {/* ── Section 3: Target Beneficiaries ─────────────────────────────────── */}
