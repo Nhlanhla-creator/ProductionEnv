@@ -1,12 +1,12 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, query, where, getDocs, onSnapshot } from 'firebase/firestore';
 import { auth, db } from "../../firebaseConfig";
 import { Info } from 'lucide-react';
 import styles from "./pipeline.module.css";
 
-export function InternDealflowPage({profiles}) {
+export function InternDealflowPage({ profiles }) {
   const [stages, setStages] = useState([
     {
       id: "requested",
@@ -20,7 +20,7 @@ export function InternDealflowPage({profiles}) {
       id: "matched",
       name: "Matched",
       count: 0,
-     
+
       colorClass: styles.stageApplication,
       iconColor: "#795548",
     },
@@ -36,7 +36,7 @@ export function InternDealflowPage({profiles}) {
       id: "interviewed",
       name: "Interviewed",
       count: 0,
-    
+
       colorClass: styles.stageApproved,
       iconColor: "#5d4037",
     },
@@ -44,7 +44,7 @@ export function InternDealflowPage({profiles}) {
       id: "confirmed",
       name: "Confirmed",
       count: 0,
-   
+
       colorClass: styles.stageFeedback,
       iconColor: "#4e342e",
     },
@@ -60,7 +60,7 @@ export function InternDealflowPage({profiles}) {
       id: "contract_signed",
       name: "Contract_signed",
       count: 0,
-   
+
       colorClass: styles.stageDeals,
       iconColor: "#2e1b13",
     },
@@ -68,7 +68,7 @@ export function InternDealflowPage({profiles}) {
       id: "active",
       name: "Active",
       count: 0,
-      
+
       colorClass: styles.stageWithdrawn,
       iconColor: "#1e0e09",
     },
@@ -76,47 +76,47 @@ export function InternDealflowPage({profiles}) {
       id: "completed",
       name: "Completed",
       count: 0,
-      
+
       colorClass: styles.stageWithdrawn,
       iconColor: "#1e0e09",
     },
-     {
+    {
       id: "decline",
       name: "Decline",
       count: 0,
-      
+
       colorClass: styles.stageWithdrawn,
       iconColor: "#1e0e09",
     },
 
-    
+
   ]);
 
   const [loading, setLoading] = useState(true);
   const [totalApplications, setTotalApplications] = useState(0);
-const [count,setCount] = useState(0)
+  const [count, setCount] = useState(0)
   // Stage mappings for status calculation
   const stageMapping = {
     requested: { statusMapping: ["Requested"] },
     matched: { useProfilesCount: true }, // Use profiles count instead of status mapping
-    shortlisted: { statusMapping: ["Shortlisted","Applied"] },
+    shortlisted: { statusMapping: ["Shortlisted", "Applied"] },
     interviewed: { statusMapping: ["Contacted/Interview",] },
     confirmed: { statusMapping: ["Confirmed"] },
     accepted: { statusMapping: ["Accepted"] },
-    contract_signed: { statusMapping: ["Active","Confirmed/Term Sheet Sign"] },
+    contract_signed: { statusMapping: ["Active", "Confirmed/Term Sheet Sign"] },
     active: { statusMapping: ["Active"] },
-    completed:{ statusMapping: ["Completed"] },
-    decline:{ statusMapping: ["Declined"] },
+    completed: { statusMapping: ["Completed"] },
+    decline: { statusMapping: ["Declined"] },
   };
 
-    //   useEffect(() => {
-    //   setCount(count)
-    // }, [profiles])
-  
+  //   useEffect(() => {
+  //   setCount(count)
+  // }, [profiles])
+
   console.log(profiles)
-   const calculateStageCounts = (applications) => {
+  const calculateStageCounts = (applications) => {
     const counts = {};
-    
+
     stages.forEach(stage => {
       const mapping = stageMapping[stage.id];
       if (mapping?.countFromRequests) {
@@ -125,7 +125,7 @@ const [count,setCount] = useState(0)
         // Use profiles count for matched stage
         counts[stage.id] = profiles || 0;
       } else if (mapping?.statusMapping) {
-        counts[stage.id] = applications.filter(app => 
+        counts[stage.id] = applications.filter(app =>
           mapping.statusMapping.includes(app.status || "New Match")
         ).length;
       } else {
@@ -137,48 +137,37 @@ const [count,setCount] = useState(0)
   };
 
   useEffect(() => {
-    const fetchPipelineData = async () => {
-      const user = auth.currentUser;
-      if (!user) {
-        setLoading(false);
-        return;
-      }
+    const user = auth.currentUser;
+    if (!user) {
+      setLoading(false);
+      return;
+    }
 
-      try {
-        const sponsorId = user.uid;
-        
-        // Fetch all internship applications for this sponsor
-        const q = query(collection(db, "internshipApplications"), where("sponsorId", "==", sponsorId));
-        const snapshot = await getDocs(q);
-        
-        const applications = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        }));
+    const sponsorId = user.uid;
+    const q = query(collection(db, "internshipApplications"), where("sponsorId", "==", sponsorId));
 
-        setTotalApplications(applications.length);
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const applications = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
 
-        // Calculate counts for each stage
-        const stageCounts = calculateStageCounts(applications);
+      setTotalApplications(applications.length);
+      const stageCounts = calculateStageCounts(applications);
+      setStages(current =>
+        current.map(stage => ({
+          ...stage,
+          count: stageCounts[stage.id] || 0,
+        }))
+      );
+      setLoading(false);
+    }, (error) => {
+      console.error("Error fetching pipeline data:", error);
+      setLoading(false);
+    });
 
-        // Update stages with calculated counts
-        setStages(current =>
-          current.map(stage => ({
-            ...stage,
-            count: stageCounts[stage.id] || 0,
-          }))
-        );
-
-        setLoading(false);
-
-      } catch (error) {
-        console.error("Error fetching pipeline data:", error);
-        setLoading(false);
-      }
-    };
-
-    fetchPipelineData();
-  }, [profiles]); // Add profiles to dependency array
+    return () => unsubscribe();
+  }, [profiles]);
 
   if (loading) {
     return (
@@ -214,7 +203,7 @@ const [count,setCount] = useState(0)
                   <p className={styles.stageCount}>{stage.count}</p>
                 </div>
               </div>
-              
+
               {/* Tooltip for stage description */}
               <div className={styles.stageTooltip}>
                 {stage.description}
