@@ -1,3 +1,4 @@
+// components/Subscriptions/Styles.js
 import { colors } from "../../shared/theme";
 
 const getSubStyles = () => ({
@@ -7,6 +8,9 @@ const getSubStyles = () => ({
     fontFamily: "'Inter', 'Segoe UI', 'Roboto', sans-serif",
     boxSizing: "border-box",
     transition: "all 0.3s ease",
+    width: "100%",
+    maxWidth: "100%",
+    overflowX: "hidden",
   },
   mainCard: {
     background: `linear-gradient(135deg, ${colors.offWhite} 0%, ${colors.cream} 100%)`,
@@ -16,8 +20,9 @@ const getSubStyles = () => ({
     border: `1px solid ${colors.lightTan}`,
     position: "relative",
     overflow: "hidden",
-    maxWidth: "100%",
+    maxWidth: "1400px",
     margin: "0 auto",
+    width: "100%",
   },
   decorativeElement: {
     position: "absolute",
@@ -74,6 +79,7 @@ const getSubStyles = () => ({
     alignItems: "center",
     margin: "2rem auto",
     gap: "1rem",
+    flexWrap: "wrap",
   },
   billingToggle: {
     display: "flex",
@@ -117,7 +123,7 @@ const getSubStyles = () => ({
     padding: "1.5rem",
     boxShadow: `0 12px 40px ${colors.darkBrown}0A`,
     border: `1px solid ${colors.lightTan}`,
-    overflow: "auto",
+    overflowX: "auto",
   },
   featureComparisonTitle: {
     fontSize: "clamp(1.25rem, 3vw, 1.75rem)",
@@ -141,6 +147,7 @@ const getSubStyles = () => ({
     boxShadow: `0 4px 12px ${colors.darkBrown}0A`,
     border: `1px solid ${colors.lightTan}`,
     fontSize: "clamp(0.8rem, 1.5vw, 0.95rem)",
+    minWidth: "600px",
   },
   featureTh: {
     background: `linear-gradient(135deg, ${colors.cream} 0%, ${colors.lightTan} 100%)`,
@@ -173,19 +180,13 @@ const getSubStyles = () => ({
     fontSize: "clamp(0.8rem, 1.5vw, 0.9rem)",
     color: colors.darkBrown,
   },
-  planGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(3, minmax(200px, 1fr))",
-    gap: "1.5rem",
-    margin: "3rem 0",
-    justifyContent: "center",
-    maxWidth: "100%",
-  },
+
+  // Plan Card Styles - Adjusted for better fit
   planCard: {
     background: colors.offWhite,
     border: `1px solid ${colors.lightTan}`,
     borderRadius: "16px",
-    padding: "2rem",
+    padding: "1.5rem",
     textAlign: "center",
     transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
     cursor: "pointer",
@@ -194,19 +195,18 @@ const getSubStyles = () => ({
     overflow: "hidden",
     display: "flex",
     flexDirection: "column",
-    minHeight: "450px",
+    minHeight: "auto",
+    height: "100%",
   },
   planCardPopular: {
-    background: colors.engageCardBg,
-    color: colors.lightText,
-    transform: "scale(1.03)",
+    transform: "scale(1.02)",
     zIndex: 2,
-    boxShadow: `0 20px 60px ${colors.darkBrown}33`,
-    border: `1px solid ${colors.accentGold}`,
+    boxShadow: `0 20px 40px ${colors.darkBrown}33`,
+    border: `2px solid ${colors.accentGold}`,
   },
   planCardHover: {
-    // transform: "translateY(-8px)",
-    // boxShadow: `0 16px 40px ${colors.darkBrown}26`,
+    transform: "translateY(-4px)",
+    boxShadow: `0 16px 32px ${colors.darkBrown}1F`,
   },
   planCardSelected: {
     border: `2px solid ${colors.accentGold}`,
@@ -225,46 +225,46 @@ const getSubStyles = () => ({
     textTransform: "uppercase",
     letterSpacing: "0.8px",
     boxShadow: `0 2px 8px ${colors.accentGold}4D`,
+    zIndex: 2,
   },
   planName: {
-    fontSize: "clamp(1.75rem, 3vw, 2.25rem)",
+    fontSize: "clamp(1.4rem, 2.5vw, 1.8rem)",
     fontWeight: 800,
     marginBottom: "0.75rem",
     letterSpacing: "-1px",
-    color: colors.lightText,
   },
   planPrice: {
-    fontSize: "clamp(2.5rem, 4vw, 3.5rem)",
+    fontSize: "clamp(2rem, 3.5vw, 3.5rem)",
     fontWeight: 900,
     marginBottom: "0.5rem",
     lineHeight: "1",
-    color: colors.lightText,
   },
   planPriceFree: {
-    color: colors.lightText,
-    fontSize: "clamp(2.5rem, 4vw, 3.5rem)",
+    fontSize: "clamp(2rem, 3.5vw, 3.5rem)",
     fontWeight: 900,
+    marginBottom: "0.5rem",
+    lineHeight: "1",
   },
   planPricePeriod: {
-    fontSize: "clamp(1rem, 1.5vw, 1.25rem)",
+    fontSize: "clamp(0.9rem, 1.5vw, 1.2rem)",
     fontWeight: 500,
     opacity: 0.8,
-    color: colors.lightText,
+    marginLeft: "0.25rem",
   },
   planDescriptionText: {
-    fontSize: "clamp(0.9rem, 1.5vw, 1rem)",
-    color: colors.lightText,
-    marginBottom: "2rem",
+    fontSize: "clamp(0.82rem, 1.5vw, 0.95rem)",
+    marginBottom: "1.25rem",
     lineHeight: "1.6",
+    opacity: 0.9,
   },
   freeMonthsBadge: {
     background: `linear-gradient(90deg, ${colors.trialBrown} 0%, ${colors.accentGold} 100%)`,
     color: colors.lightText,
-    padding: "0.8rem 1.2rem",
+    padding: "0.7rem 1rem",
     borderRadius: "12px",
-    fontSize: "1rem",
+    fontSize: "0.9rem",
     fontWeight: 700,
-    marginBottom: "1rem",
+    marginBottom: "0.75rem",
     textAlign: "center",
     boxShadow: `0 4px 12px ${colors.trialBrown}4D`,
     display: "inline-block",
@@ -274,38 +274,32 @@ const getSubStyles = () => ({
     background: `linear-gradient(135deg, ${colors.cream} 0%, ${colors.lightTan} 100%)`,
     border: `1px solid ${colors.lightTan}`,
     borderRadius: "8px",
-    padding: "0.8rem",
-    marginBottom: "1.5rem",
-    fontSize: "0.9rem",
-    color: colors.mediumBrown,
+    padding: "0.7rem",
+    marginBottom: "1rem",
+    fontSize: "0.82rem",
     fontWeight: 600,
   },
   planFeaturesList: {
     listStyle: "none",
     padding: "0",
-    margin: "0 0 2.5rem 0",
+    margin: "0 0 1.5rem 0",
     flex: 1,
     textAlign: "left",
   },
   planFeatureItem: {
-    padding: "0.6rem 0",
-    fontSize: "clamp(0.9rem, 1.5vw, 1rem)",
+    padding: "0.5rem 0",
+    fontSize: "clamp(0.82rem, 1.5vw, 0.95rem)",
     display: "flex",
     alignItems: "center",
     lineHeight: "1.5",
-    color: colors.lightText,
   },
   featureIcon: {
     marginRight: "0.8rem",
     fontSize: "1.1rem",
     flexShrink: 0,
   },
-  featureCheckIcon: {
-    color: colors.featureCheck,
-  },
-  featureCrossIcon: {
-    color: colors.featureCross,
-  },
+  featureCheckIcon: { color: colors.featureCheck },
+  featureCrossIcon: { color: colors.featureCross },
   currentPlanBadge: {
     display: "inline-block",
     background: colors.accentGold,
@@ -315,6 +309,7 @@ const getSubStyles = () => ({
     padding: "0.5rem 1rem",
     fontSize: "0.875rem",
     letterSpacing: "0.5px",
+    marginTop: "auto",
   },
   selectedBadge: {
     display: "inline-block",
@@ -325,22 +320,23 @@ const getSubStyles = () => ({
     padding: "0.5rem 1rem",
     fontSize: "0.875rem",
     letterSpacing: "0.5px",
+    marginTop: "auto",
   },
   selectButton: {
     width: "100%",
-    padding: "1rem 2rem",
+    padding: "0.9rem 1.5rem",
     background: `linear-gradient(135deg, ${colors.accentGold} 0%, ${colors.mediumBrown} 100%)`,
     color: colors.lightText,
     border: "none",
     borderRadius: "10px",
     fontWeight: 700,
     cursor: "pointer",
-    fontSize: "clamp(1rem, 1.8vw, 1.1rem)",
+    fontSize: "clamp(0.88rem, 1.5vw, 1rem)",
     transition: "all 0.3s ease",
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
-    gap: "0.75rem",
+    gap: "0.5rem",
     marginTop: "auto",
     boxShadow: `0 6px 18px ${colors.accentGold}4D`,
     textTransform: "uppercase",
@@ -364,7 +360,7 @@ const getSubStyles = () => ({
   },
   addOnsGrid: {
     display: "grid",
-    gridTemplateColumns: "repeat(2, minmax(250px, 1fr))",
+    gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
     gap: "1.5rem",
   },
   addOnItem: {
@@ -537,458 +533,94 @@ const getSubStyles = () => ({
 });
 
 const getBillingHistoryStyles = (userType = "investor") => {
-  // Base styles common to all user types
   const baseStyles = {
-    // Container styles
     billingContainer: {
       maxWidth: "none",
       padding: "0",
-      backgroundColor: "red",
       borderRadius: "1.25rem",
       boxShadow: `0 10px 25px ${colors.darkBrown}1A`,
       border: `1px solid ${colors.lightTan}`,
       overflow: "hidden",
     },
-
     billingContainerDynamic: {
       maxWidth: "none",
       marginBottom: "2rem",
       padding: "0",
-      backgroundColor: "blue",
       borderRadius: "1.25rem",
       boxShadow: `0 10px 25px ${colors.darkBrown}1A`,
       border: `1px solid ${colors.lightTan}`,
       overflow: "hidden",
       transition: "all 0.3s ease",
     },
-
-    // Typography
-    sectionTitle: {
-      fontSize: "1.75rem",
-      fontWeight: 700,
-      color: colors.darkBrown,
-      marginBottom: "2rem",
-      letterSpacing: "-0.025em",
-    },
-
-    // Tab Navigation
-    tabNavigation: {
-      display: "flex",
-      backgroundColor: colors.cream,
-      borderBottom: `1px solid ${colors.lightTan}`,
-      padding: "0",
-    },
-
-    tabButton: {
-      padding: "1rem 2rem",
-      fontWeight: 600,
-      textAlign: "center",
-      transition: "all 0.3s ease",
-      cursor: "pointer",
-      border: "none",
-      fontSize: "0.9rem",
-      letterSpacing: "0.025em",
-      position: "relative",
-      color: colors.mediumBrown,
-    },
-
-    tabButtonActive: {
-      backgroundColor: colors.accentGold,
-      color: colors.lightText,
-      boxShadow: `inset 0 2px 4px ${colors.darkBrown}1A`,
-    },
-
-    tabButtonInactive: {
-      backgroundColor: "transparent",
-      color: colors.darkBrown,
-    },
-
-    tabButtonInactiveHover: {
-      backgroundColor: colors.cream,
-      color: colors.darkBrown,
-    },
-
-    tabContent: {
-      padding: "2.5rem 3rem",
-      backgroundColor: colors.offWhite,
-    },
-
-    // Table Styles
-    tableResponsive: {
-      width: "100%",
-      overflowX: "auto",
-      backgroundColor: colors.offWhite,
-      borderRadius: "1rem",
-      padding: "1rem",
-      border: `1px solid ${colors.lightTan}`,
-    },
-
-    transactionTable: {
-      width: "100%",
-      borderCollapse: "collapse",
-      fontSize: "0.875rem",
-      backgroundColor: colors.offWhite,
-      borderRadius: "0.75rem",
-      overflow: "hidden",
-      border: `1px solid ${colors.lightTan}`,
-      boxShadow: `0 4px 12px ${colors.darkBrown}1A`,
-    },
-
-    transactionThTd: {
-      padding: "1rem 1.25rem",
-      border: `1px solid ${colors.lightTan}`,
-      textAlign: "left",
-      verticalAlign: "middle",
-      color: colors.darkBrown,
-    },
-
-    transactionTh: {
-      backgroundColor: colors.cream,
-      fontWeight: 600,
-      color: colors.darkBrown,
-      fontSize: "0.85rem",
-      letterSpacing: "0.025em",
-    },
-
-    transactionId: {
-      fontFamily: "monospace",
-      fontSize: "0.75rem",
-      backgroundColor: colors.offWhite,
-      padding: "0.25rem 0.5rem",
-      borderRadius: "0.375rem",
-      color: colors.darkBrown,
-      border: `1px solid ${colors.lightTan}`,
-    },
-
-    datetimeCell: {
-      display: "flex",
-      flexDirection: "column",
-      fontSize: "0.875rem",
-      color: colors.mediumBrown,
-    },
-
-    // Amount Styles
-    amountFree: {
-      color: colors.featureCheck,
-      fontWeight: 600,
-    },
-
-    amountPaid: {
-      color: colors.darkBrown,
-      fontWeight: 600,
-    },
-
-    // Status Badges
-    statusBadgeSuccess: {
-      backgroundColor: colors.cream,
-      color: colors.darkBrown,
-      padding: "0.35rem 0.8rem",
-      borderRadius: "9999px",
-      fontSize: "0.75rem",
-      fontWeight: 600,
-      textTransform: "capitalize",
-      border: `1px solid ${colors.lightTan}`,
-    },
-
-    statusBadge: {
-      display: "inline-block",
-      padding: "0.35rem 0.8rem",
-      borderRadius: "9999px",
-      fontSize: "0.75rem",
-      fontWeight: 600,
-      textTransform: "capitalize",
-      border: "1px solid",
-    },
-
-    statusSuccess: {
-      backgroundColor: colors.cream,
-      color: colors.featureCheck,
-      borderColor: colors.lightTan,
-    },
-
-    statusCancelled: {
-      backgroundColor: colors.cream,
-      color: colors.mediumBrown,
-      borderColor: colors.lightTan,
-    },
-
-    statusActive: {
-      backgroundColor: colors.cream,
-      color: colors.mediumBrown,
-      borderColor: colors.lightTan,
-    },
-
-    // Action Buttons
-    actionButtons: {
-      display: "flex",
-      gap: "0.5rem",
-      flexWrap: "wrap",
-    },
-
-    downloadBtn: {
-      display: "flex",
-      alignItems: "center",
-      gap: "0.3rem",
-      backgroundColor: colors.accentGold,
-      color: colors.lightText,
-      border: "none",
-      padding: "0.5rem 0.85rem",
-      fontSize: "0.75rem",
-      borderRadius: "0.5rem",
-      cursor: "pointer",
-      transition: "all 0.3s ease",
-      fontWeight: 500,
-      boxShadow: `0 2px 4px ${colors.accentGold}33`,
-    },
-
-    downloadBtnHover: {
-      backgroundColor: colors.mediumBrown,
-      transform: "translateY(-1px)",
-      boxShadow: `0 4px 8px ${colors.accentGold}4D`,
-    },
-
-    viewBtn: {
-      display: "flex",
-      alignItems: "center",
-      gap: "0.3rem",
-      backgroundColor: colors.mediumBrown,
-      color: colors.lightText,
-      border: "none",
-      padding: "0.5rem 0.85rem",
-      fontSize: "0.75rem",
-      borderRadius: "0.5rem",
-      cursor: "pointer",
-      transition: "all 0.3s ease",
-      fontWeight: 500,
-      boxShadow: `0 2px 4px ${colors.mediumBrown}33`,
-    },
-
-    viewBtnHover: {
-      backgroundColor: colors.darkBrown,
-      transform: "translateY(-1px)",
-      boxShadow: `0 4px 8px ${colors.mediumBrown}4D`,
-    },
-
-    // Text Styles
-    cancelledText: {
-      fontSize: "0.75rem",
-      fontWeight: 500,
-      color: colors.mediumBrown,
-      fontStyle: "italic",
-    },
-
-    freeText: {
-      fontSize: "0.75rem",
-      fontWeight: 500,
-      color: colors.mediumBrown,
-      fontStyle: "italic",
-    },
-
-    // Empty State
-    emptyState: {
-      padding: "3rem 2rem",
-      textAlign: "center",
-      backgroundColor: colors.cream,
-      borderRadius: "0.75rem",
-      border: `1px solid ${colors.lightTan}`,
-      color: colors.mediumBrown,
-      fontStyle: "italic",
-      fontSize: "0.95rem",
-    },
-
-    // Note/Label Styles
-    formLabel: {
-      display: "block",
-      fontSize: "0.875rem",
-      fontWeight: 600,
-      color: colors.darkBrown,
-      marginBottom: "0.75rem",
-      letterSpacing: "0.025em",
-    },
-
-    // Tier Badges (for growth tools)
-    tierBadge: {
-      padding: "0.35rem 0.8rem",
-      borderRadius: "9999px",
-      fontSize: "0.75rem",
-      fontWeight: 600,
-      textTransform: "capitalize",
-    },
-
-    tierPremium: {
-      backgroundColor: colors.cream,
-      color: colors.mediumBrown,
-      border: `1px solid ${colors.lightTan}`,
-    },
-
-    tierSilver: {
-      backgroundColor: colors.offWhite,
-      color: colors.darkBrown,
-      border: `1px solid ${colors.lightTan}`,
-    },
-
-    tierGold: {
-      backgroundColor: colors.cream,
-      color: colors.mediumBrown,
-      border: `1px solid ${colors.lightTan}`,
-    },
+    sectionTitle: { fontSize: "1.75rem", fontWeight: 700, color: colors.darkBrown, marginBottom: "2rem" },
+    tabNavigation: { display: "flex", backgroundColor: colors.cream, borderBottom: `1px solid ${colors.lightTan}`, padding: "0", overflowX: "auto" },
+    tabButton: { padding: "1rem 2rem", fontWeight: 600, textAlign: "center", transition: "all 0.3s ease", cursor: "pointer", border: "none", fontSize: "0.9rem", color: colors.mediumBrown, whiteSpace: "nowrap" },
+    tabButtonActive: { backgroundColor: colors.accentGold, color: colors.lightText },
+    tabButtonInactive: { backgroundColor: "transparent", color: colors.darkBrown },
+    tabContent: { padding: "2.5rem 3rem", backgroundColor: colors.offWhite, overflowX: "auto" },
+    tableResponsive: { width: "100%", overflowX: "auto", backgroundColor: colors.offWhite, borderRadius: "1rem", padding: "1rem", border: `1px solid ${colors.lightTan}` },
+    transactionTable: { width: "100%", borderCollapse: "collapse", fontSize: "0.875rem", backgroundColor: colors.offWhite, borderRadius: "0.75rem", overflow: "hidden", border: `1px solid ${colors.lightTan}` },
+    transactionThTd: { padding: "1rem 1.25rem", border: `1px solid ${colors.lightTan}`, textAlign: "left", verticalAlign: "middle", color: colors.darkBrown },
+    transactionTh: { backgroundColor: colors.cream, fontWeight: 600, color: colors.darkBrown, fontSize: "0.85rem" },
+    transactionId: { fontFamily: "monospace", fontSize: "0.75rem", backgroundColor: colors.offWhite, padding: "0.25rem 0.5rem", borderRadius: "0.375rem", color: colors.darkBrown, border: `1px solid ${colors.lightTan}` },
+    datetimeCell: { display: "flex", flexDirection: "column", fontSize: "0.875rem", color: colors.mediumBrown },
+    amountFree: { color: colors.featureCheck, fontWeight: 600 },
+    amountPaid: { color: colors.darkBrown, fontWeight: 600 },
+    statusBadgeSuccess: { backgroundColor: colors.cream, color: colors.darkBrown, padding: "0.35rem 0.8rem", borderRadius: "9999px", fontSize: "0.75rem", fontWeight: 600, border: `1px solid ${colors.lightTan}` },
+    statusBadge: { display: "inline-block", padding: "0.35rem 0.8rem", borderRadius: "9999px", fontSize: "0.75rem", fontWeight: 600, border: "1px solid" },
+    statusSuccess: { backgroundColor: colors.cream, color: colors.featureCheck, borderColor: colors.lightTan },
+    statusCancelled: { backgroundColor: colors.cream, color: colors.mediumBrown, borderColor: colors.lightTan },
+    statusActive: { backgroundColor: colors.cream, color: colors.mediumBrown, borderColor: colors.lightTan },
+    actionButtons: { display: "flex", gap: "0.5rem", flexWrap: "wrap" },
+    downloadBtn: { display: "flex", alignItems: "center", gap: "0.3rem", backgroundColor: colors.accentGold, color: colors.lightText, border: "none", padding: "0.5rem 0.85rem", fontSize: "0.75rem", borderRadius: "0.5rem", cursor: "pointer", transition: "all 0.3s ease", fontWeight: 500 },
+    viewBtn: { display: "flex", alignItems: "center", gap: "0.3rem", backgroundColor: colors.mediumBrown, color: colors.lightText, border: "none", padding: "0.5rem 0.85rem", fontSize: "0.75rem", borderRadius: "0.5rem", cursor: "pointer", transition: "all 0.3s ease", fontWeight: 500 },
+    cancelledText: { fontSize: "0.75rem", fontWeight: 500, color: colors.mediumBrown, fontStyle: "italic" },
+    freeText: { fontSize: "0.75rem", fontWeight: 500, color: colors.mediumBrown, fontStyle: "italic" },
+    emptyState: { padding: "3rem 2rem", textAlign: "center", backgroundColor: colors.cream, borderRadius: "0.75rem", border: `1px solid ${colors.lightTan}`, color: colors.mediumBrown, fontStyle: "italic", fontSize: "0.95rem" },
+    formLabel: { display: "block", fontSize: "0.875rem", fontWeight: 600, color: colors.darkBrown, marginBottom: "0.75rem" },
+    tierBadge: { padding: "0.35rem 0.8rem", borderRadius: "9999px", fontSize: "0.75rem", fontWeight: 600 },
+    tierPremium: { backgroundColor: colors.cream, color: colors.mediumBrown, border: `1px solid ${colors.lightTan}` },
+    tierSilver: { backgroundColor: colors.offWhite, color: colors.darkBrown, border: `1px solid ${colors.lightTan}` },
+    tierGold: { backgroundColor: colors.cream, color: colors.mediumBrown, border: `1px solid ${colors.lightTan}` },
   };
 
-  // User-type specific configurations
   const userTypeConfigs = {
     investor: {
       tabLabels: ["Subscription History", "Success Fee History"],
       tabKeys: ["billing-history", "billing-info"],
       showGrowthTools: false,
-      successFeeColumnNames: {
-        transactionId: "Transaction ID",
-        counterparty: "SMSE",
-        dealValue: "Deal value",
-        successFeeAmount: "Success fee amount(3%)",
-      },
+      successFeeColumnNames: { transactionId: "Transaction ID", counterparty: "SMSE", dealValue: "Deal value", successFeeAmount: "Success fee amount(3%)" },
     },
     catalyst: {
       tabLabels: ["Subscription History", "Success Fee History"],
       tabKeys: ["billing-history", "billing-info"],
       showGrowthTools: false,
-      successFeeColumnNames: {
-        transactionId: "Transaction ID",
-        counterparty: "SMSE",
-        dealValue: "Deal value",
-        successFeeAmount: "Success fee amount(3%)",
-      },
+      successFeeColumnNames: { transactionId: "Transaction ID", counterparty: "SMSE", dealValue: "Deal value", successFeeAmount: "Success fee amount(3%)" },
     },
     sme: {
-      tabLabels: [
-        "Subscription History",
-        "Success Fee History",
-        "Growth Tools",
-      ],
+      tabLabels: ["Subscription History", "Success Fee History", "Growth Tools"],
       tabKeys: ["billing-history", "billing-info", "payment-methods"],
       showGrowthTools: true,
-      successFeeColumnNames: {
-        transactionId: "Transaction ID",
-        counterparty: "Investor",
-        dealValue: "Deal Value",
-        successFeeAmount: "Success Fee Amount",
-      },
+      successFeeColumnNames: { transactionId: "Transaction ID", counterparty: "Investor", dealValue: "Deal Value", successFeeAmount: "Success Fee Amount" },
     },
   };
 
-  // Get user-specific config
   const userConfig = userTypeConfigs[userType] || userTypeConfigs.investor;
-
-  return {
-    ...baseStyles,
-    userConfig,
-  };
+  return { ...baseStyles, userConfig };
 };
 
 const getBillingInfoStyles = (userType) => ({
-  fullPageContainer: {
-    display: "flex",
-    justifyContent: "center",
-    maxWidth: "none",
-    marginBottom: "2rem",
-    padding: "0",
-    backgroundColor: colors.offWhite,
-    borderRadius: "1.25rem",
-    boxShadow: `0 10px 25px ${colors.darkBrown}1A`,
-    border: `1px solid ${colors.lightTan}`,
-    overflow: "hidden",
-    transition: "margin-left 0.3s ease",
-  },
-  contentWrapper: {
-    borderRadius: "24px",
-    padding: "clamp(1rem, 3vw, 2rem)",
-    position: "relative",
-    overflow: "hidden",
-    maxWidth: "800px",
-    width: "100%",
-  },
-  pageTitle: {
-    fontSize: "clamp(2rem, 4vw, 2.75rem)",
-    fontWeight: 800,
-    background: `linear-gradient(135deg, ${colors.darkBrown} 0%, ${colors.mediumBrown} 100%)`,
-    backgroundClip: "text",
-    WebkitBackgroundClip: "text",
-    color: "transparent",
-    textAlign: "center",
-    marginBottom: "0.5rem",
-    letterSpacing: "-1.5px",
-    lineHeight: "1.2",
-  },
-  subtitle: {
-    fontSize: "clamp(1rem, 2vw, 1.125rem)",
-    color: colors.mediumBrown,
-    textAlign: "center",
-    marginBottom: "2rem",
-    fontWeight: 400,
-    opacity: 0.9,
-  },
-  formGroup: {
-    marginBottom: "1.5rem",
-  },
-  label: {
-    display: "block",
-    fontSize: "0.95rem",
-    fontWeight: 600,
-    color: colors.darkBrown,
-    marginBottom: "0.6rem",
-  },
-  input: {
-    width: "100%",
-    padding: "0.8rem 1rem",
-    borderRadius: "10px",
-    border: `1px solid ${colors.lightTan}`,
-    backgroundColor: colors.offWhite,
-    color: colors.darkText,
-    fontSize: "1rem",
-    boxShadow: `inset 0 1px 3px ${colors.darkBrown}0A`,
-    transition: "border-color 0.2s ease, box-shadow 0.2s ease",
-  },
-  inputFocus: {
-    borderColor: colors.accentGold,
-    boxShadow: `0 0 0 3px ${colors.accentGold}33`,
-    outline: "none",
-  },
-  error: {
-    fontSize: "0.85rem",
-    color: colors.featureCross,
-    marginTop: "0.5rem",
-  },
-  button: {
-    padding: "1rem 2.5rem",
-    background: `linear-gradient(135deg, ${colors.accentGold} 0%, ${colors.mediumBrown} 100%)`,
-    color: colors.lightText,
-    border: "none",
-    borderRadius: "12px",
-    fontWeight: 700,
-    fontSize: "1rem",
-    cursor: "pointer",
-    marginTop: "2rem",
-    transition: "all 0.3s ease",
-    boxShadow: `0 4px 12px ${colors.accentGold}4D`,
-    letterSpacing: "0.5px",
-    textTransform: "uppercase",
-    width: "100%",
-  },
-  buttonDisabled: {
-    opacity: 0.6,
-    cursor: "not-allowed",
-    background: `linear-gradient(135deg, ${colors.lightTan} 0%, ${colors.cream} 100%)`,
-    color: colors.mediumBrown,
-    boxShadow: `0 2px 8px ${colors.lightTan}33`,
-  },
-  loadingSpinner: {
-    width: "60px",
-    height: "60px",
-    border: `4px solid ${colors.lightTan}`,
-    borderTop: `4px solid ${colors.accentGold}`,
-    borderRadius: "50%",
-    animation: "spin 1s linear infinite",
-    margin: "0 auto 2rem auto",
-  },
+  fullPageContainer: { display: "flex", justifyContent: "center", maxWidth: "none", marginBottom: "2rem", padding: "0", backgroundColor: colors.offWhite, borderRadius: "1.25rem", boxShadow: `0 10px 25px ${colors.darkBrown}1A`, border: `1px solid ${colors.lightTan}`, overflow: "hidden" },
+  contentWrapper: { borderRadius: "24px", padding: "clamp(1rem, 3vw, 2rem)", position: "relative", overflow: "hidden", maxWidth: "800px", width: "100%" },
+  pageTitle: { fontSize: "clamp(2rem, 4vw, 2.75rem)", fontWeight: 800, background: `linear-gradient(135deg, ${colors.darkBrown} 0%, ${colors.mediumBrown} 100%)`, backgroundClip: "text", WebkitBackgroundClip: "text", color: "transparent", textAlign: "center", marginBottom: "0.5rem" },
+  subtitle: { fontSize: "clamp(1rem, 2vw, 1.125rem)", color: colors.mediumBrown, textAlign: "center", marginBottom: "2rem" },
+  formGroup: { marginBottom: "1.5rem" },
+  label: { display: "block", fontSize: "0.95rem", fontWeight: 600, color: colors.darkBrown, marginBottom: "0.6rem" },
+  input: { width: "100%", padding: "0.8rem 1rem", borderRadius: "10px", border: `1px solid ${colors.lightTan}`, backgroundColor: colors.offWhite, color: colors.darkText, fontSize: "1rem" },
+  error: { fontSize: "0.85rem", color: colors.featureCross, marginTop: "0.5rem" },
+  button: { padding: "1rem 2.5rem", background: `linear-gradient(135deg, ${colors.accentGold} 0%, ${colors.mediumBrown} 100%)`, color: colors.lightText, border: "none", borderRadius: "12px", fontWeight: 700, fontSize: "1rem", cursor: "pointer", marginTop: "2rem", width: "100%" },
+  buttonDisabled: { opacity: 0.6, cursor: "not-allowed" },
+  loadingSpinner: { width: "60px", height: "60px", border: `4px solid ${colors.lightTan}`, borderTop: `4px solid ${colors.accentGold}`, borderRadius: "50%", animation: "spin 1s linear infinite", margin: "0 auto 2rem auto" },
 });
 
 const defaultFields = [
