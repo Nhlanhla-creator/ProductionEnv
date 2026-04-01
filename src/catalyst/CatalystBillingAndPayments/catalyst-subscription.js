@@ -1,93 +1,11 @@
+// components/Subscriptions/CatalystSubscriptions.js
 "use client"
 import { useState, useEffect } from "react"
-import { v4 as uuidv4 } from "uuid"
 import { getAuth } from "firebase/auth"
-import { collection, getFirestore, query, where, getDocs, doc, getDoc } from "firebase/firestore"
-// Remove the actions import since you've fixed it separately
-import { validate, saveToFirebase, updateCurrentPlan } from "./actions"
+import { collection, getFirestore, doc, getDoc, addDoc } from "firebase/firestore"
 import { useNavigate } from "react-router-dom"
-import EmbeddedCheckout from "../../components/EmbeddedCheckout"
 
-const createSubscriptionCheckout = async (
-  amount,
-  currency,
-  userId,
-  planName,
-  billingCycle,
-  actionType = "subscription",
-) => {
-  try {
-    console.log("🔄 Creating subscription checkout:", { amount, currency, userId, planName, billingCycle, actionType })
-
-    // Use the NEW subscription endpoint for PeachPayments
-    const response = await fetch(`${process.env.REACT_APP_API_URL}/api/payments/create-subscription`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        userId,
-        planName,
-        billingCycle,
-        amount,
-        currency,
-        customerEmail: getAuth().currentUser?.email,
-        customerName: getAuth().currentUser?.displayName,
-        actionType,
-      }),
-    })
-
-    const data = await response.json()
-    console.log("✅ Subscription checkout response:", data)
-
-    if (!data.success) {
-      throw new Error(data.error || "Failed to create subscription checkout")
-    }
-
-    return data
-  } catch (error) {
-    console.error("❌ Subscription checkout error:", error)
-    throw error
-  }
-}
-
-const createOneTimeCheckout = async (amount, currency, userId, planName, billingCycle, actionType = "one_time") => {
-  try {
-    console.log("💳 Creating one-time checkout:", { amount, currency, userId, planName, billingCycle, actionType })
-
-    // Use the existing checkout endpoint for one-time payments
-    const response = await fetch(`${process.env.REACT_APP_API_URL}/api/payments/create-checkout`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        userId,
-        planName,
-        billingCycle,
-        amount,
-        currency,
-        customerEmail: getAuth().currentUser?.email,
-        customerName: getAuth().currentUser?.displayName,
-        actionType,
-      }),
-    })
-
-    const data = await response.json()
-    console.log("✅ One-time checkout response:", data)
-
-    if (!data.success) {
-      throw new Error(data.error || "Failed to create one-time checkout")
-    }
-
-    return data
-  } catch (error) {
-    console.error("❌ One-time checkout error:", error)
-    throw error
-  }
-}
-
-// Define your color palette
+// ─── Colors ──────────────────────────────────────────────────────────────────
 const colors = {
   darkBrown: "#372C27",
   mediumBrown: "#5D4037",
@@ -98,2252 +16,738 @@ const colors = {
   lightTan: "#D7CCC8",
   darkText: "#2C2927",
   lightText: "#F5F2F0",
-  gradientStart: "#4A352F",
-  gradientEnd: "#7D5A50",
-  // Card specific gradients for Catalyst
-  discoverCardBg: "linear-gradient(160deg, #8D6E63 0%, #6D4C41 100%)",
-  engageCardBg: "linear-gradient(160deg, #5D4037 0%, #4A352F 100%)",
-  partnerCardBg: "linear-gradient(160deg, #A67C52 0%, #8D6E63 100%)",
   featureCheck: "#A67C52",
   featureCross: "#D32F2F",
-  // CHANGED: Trial colors from green to brown
-  trialBrown: "#8D6E63", // Changed from trialGreen to trialBrown
+  successGreen: "#2E7D32",
+  pendingBlue: "#1565C0",
 }
 
+// ─── Catalyst Plans ───────────────────────────────────────────────────────────
+const catalystPlans = {
+  core: {
+    name: "Core Programme",
+    targetCohort: "10–20 SMEs",
+    annualCostPerSme: "R140k – R180k",
+    platformFee: "R250k – R400k",
+    contractTerm: "12 months",
+    cardBg: "linear-gradient(160deg, #8D6E63 0%, #6D4C41 100%)",
+    description: "Structured governance and monitoring for emerging ESD programmes.",
+    highlights: [
+      "10–20 SME cohort size",
+      "Structured Intake Portal",
+      "BIG Score Pre-Vetting (initial + periodic)",
+      "Basic Deal Flow Management",
+      "Basic Growth Suite Tracking",
+      "Standard KPI Tracking",
+      "Monthly Compliance Monitoring",
+      "Basic Dashboard Access",
+      "Quarterly Portfolio Reporting",
+      "2–5 Corporate Users",
+      "Standard Support",
+    ],
+  },
+  scaled: {
+    name: "Scaled Programme",
+    targetCohort: "20–50 SMEs",
+    annualCostPerSme: "R130k – R150k",
+    platformFee: "R400k – R700k",
+    contractTerm: "12–36 months",
+    cardBg: "linear-gradient(160deg, #5D4037 0%, #4A352F 100%)",
+    description: "Enhanced infrastructure for growing accelerators and incubators.",
+    highlights: [
+      "20–50 SME cohort size",
+      "SME Onboarding & Data Capture",
+      "Continuous BIG Score Pre-Vetting",
+      "Structured Deal Flow Pipeline",
+      "Full Growth Suite Tracking",
+      "Custom KPI Tracking per cohort",
+      "Monthly Compliance + Alerts",
+      "Cohort Dashboards",
+      "Monthly + Quarterly Reporting",
+      "5–15 Corporate Users",
+      "Priority Support",
+    ],
+    isPopular: true,
+  },
+  enterprise: {
+    name: "Enterprise Portfolio",
+    targetCohort: "50–100+ SMEs",
+    annualCostPerSme: "R95k – R130k",
+    platformFee: "R700k – R1.5m+",
+    contractTerm: "24–36 months",
+    cardBg: "linear-gradient(160deg, #A67C52 0%, #8D6E63 100%)",
+    description: "Full-suite enterprise infrastructure with advanced analytics and multi-division support.",
+    highlights: [
+      "50–100+ SME cohort size",
+      "Multi-division Onboarding",
+      "Advanced BIG Score + Segmentation",
+      "Advanced Deal Flow Workflows",
+      "Advanced Growth Analytics",
+      "Multi-layer KPI Mapping",
+      "Real-time Compliance Monitoring",
+      "Executive Dashboards",
+      "Custom + Board-ready Reporting",
+      "Unlimited Users (role-based)",
+      "Dedicated + Strategic Support",
+    ],
+  },
+}
+
+// ─── Feature rows — flat, section headers interleaved ────────────────────────
+const featureRows = [
+  { section: "Core Infrastructure" },
+  { label: "Structured Intake Portal",      core: true,                  scaled: true,                           enterprise: "Multi-division" },
+  { label: "SME Onboarding & Data Capture", core: true,                  scaled: true,                           enterprise: "Advanced" },
+  { label: "BIG Score Pre-Vetting",         core: "Initial + periodic",  scaled: "Continuous",                   enterprise: "Advanced + segmentation" },
+  { label: "SME Digital Profiles",          core: true,                  scaled: true,                           enterprise: true },
+  { label: "Deal Flow Management",          core: "Basic tracking",      scaled: "Structured pipeline",          enterprise: "Advanced workflows" },
+
+  { section: "Growth & Monitoring" },
+  { label: "Growth Suite Tracking",         core: "Basic",               scaled: "Full",                         enterprise: "Advanced analytics" },
+  { label: "KPI Tracking",                  core: "Standard",            scaled: "Custom per cohort",            enterprise: "Multi-layer KPI mapping" },
+  { label: "Milestone Tracking",            core: true,                  scaled: true,                           enterprise: "Advanced" },
+  { label: "SME Progress Tracking",         core: "Basic",               scaled: "Full lifecycle",               enterprise: "Full + predictive insights" },
+  { label: "Consultant Commentary",         core: "Optional",            scaled: "Included",                     enterprise: "Fully integrated" },
+
+  { section: "Governance & Compliance" },
+  { label: "Compliance Monitoring",         core: "Monthly",             scaled: "Monthly + alerts",             enterprise: "Real-time" },
+  { label: "Governance Calendar",           core: "Standard",            scaled: "Structured programme calendar",enterprise: "Multi-layer (group + division)" },
+  { label: "Audit Trail",                   core: "Basic",               scaled: "Full",                         enterprise: "Full + historical" },
+  { label: "Risk Indicators",              core: false,                 scaled: "Basic",                        enterprise: "Advanced modelling" },
+
+  { section: "Reporting & Dashboards" },
+  { label: "Dashboard Access",              core: "Basic",               scaled: "Cohort dashboards",            enterprise: "Executive dashboards" },
+  { label: "Portfolio Reporting",           core: "Quarterly",           scaled: "Monthly + quarterly",          enterprise: "Custom + board-ready" },
+  { label: "Benchmarking",                  core: false,                 scaled: "Basic",                        enterprise: "Advanced" },
+  { label: "Executive Reports",             core: false,                 scaled: "Optional",                     enterprise: "Included" },
+
+  { section: "Access & Support" },
+  { label: "Corporate Users",               core: "2–5 users",           scaled: "5–15 users",                   enterprise: "Unlimited (role-based)" },
+  { label: "Multi-Division Support",        core: false,                 scaled: "Limited",                      enterprise: true },
+  { label: "Support Level",                 core: "Standard",            scaled: "Priority",                     enterprise: "Dedicated + strategic" },
+]
+
+// ─── Add-ons ──────────────────────────────────────────────────────────────────
+const catalystAddOns = [
+  {
+    id: "reporting-customisation",
+    name: "Reporting Customisation",
+    price: "R250,000 (once-off)",
+    items: ["Custom templates", "KPI mapping", "Executive formatting", "QA + testing"],
+  },
+  {
+    id: "advanced-analytics",
+    name: "Advanced Analytics & Intelligence",
+    price: "R450k – R600k / year",
+    items: ["Executive dashboards", "Benchmarking", "Risk modelling", "Board packs"],
+  },
+  {
+    id: "integration-build",
+    name: "Integration / Custom Build",
+    price: "R150k – R500k+ (once-off, scoped)",
+    items: ["API integrations", "ERP / procurement integration", "Custom workflows"],
+  },
+]
+
+const emptyForm = {
+  organisationName: "",
+  contactPerson: "",
+  email: "",
+  phone: "",
+  programmeType: "",
+  cohortSize: "",
+  duration: "",
+  requiresCustomReporting: "",
+  requiresIntegration: "",
+  requiresMultiDivision: "",
+  notes: "",
+  selectedPlan: "",
+}
+
+// ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
 const CatalystSubscriptions = () => {
   const auth = getAuth()
   const db = getFirestore()
   const user = auth.currentUser
   const navigate = useNavigate()
 
-  // Enhanced state for subscription management
-  const [currentSubscription, setCurrentSubscription] = useState(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [isExistingUser, setIsExistingUser] = useState(false)
-  const [upgradeDowngradeAction, setUpgradeDowngradeAction] = useState(null)
-  const [showPlanChangeConfirm, setShowPlanChangeConfirm] = useState(false)
-  const [showDowngradeOptions, setShowDowngradeOptions] = useState(false)
-  const [hoveredPlan, setHoveredPlan] = useState(null)
-  const [paymentProcessing, setPaymentProcessing] = useState(false)
-  const [checkoutId, setCheckoutId] = useState(null)
-  const [showCheckout, setShowCheckout] = useState(false)
+  const [isLoading, setIsLoading]       = useState(true)
+  const [catalystStatus, setCatalystStatus] = useState(null)
+  const [showProposalForm, setShowProposalForm] = useState(false)
+  const [form, setForm]                 = useState(emptyForm)
+  const [formErrors, setFormErrors]     = useState({})
+  const [submitting, setSubmitting]     = useState(false)
+  const [submitted, setSubmitted]       = useState(false)
+  const [hoveredPlan, setHoveredPlan]   = useState(null)
 
-  const plans = {
-    discover: {
-      name: "Discover",
-      price: { monthly: 0, annually: 0 },
-      currency: "ZAR",
-      description: "Essential features for getting started.",
-      features: {
-        "Access to BIG Score Profiles": "View public SME profiles",
-        "Funder/Buyer Matching Tools": false,
-        "Submit Funding/ESD Criteria": false,
-        "Deal Room Participation": false,
-        "Analytics Dashboard": false,
-        "Custom Reporting": false,
-        "Mentorship Participation": false,
-        "Brand Visibility (on platform)": false,
-        "Pilot Program Participation": false,
-        "Priority Support": false,
-        "Annual Event Access (BIG Pulse etc.)": false,
-      },
-      highlights: ["View public SME profiles", "Standard search functionality", "Email support"],
-    },
-    engage: {
-      name: "Engage",
-      price: { monthly: 2000, annually: 20000 },
-      currency: "ZAR",
-      description: "Everything in Discover Plan + Engage Plan",
-      features: {
-        "Access to BIG Score Profiles": "Full profile access + filters",
-        "Funder/Buyer Matching Tools": "Smart filters (stage, sector, score)",
-        "Submit Funding/ESD Criteria": "Via smart intake form",
-        "Deal Room Participation": "Join SME deal rooms by invite",
-        "Analytics Dashboard": "Basic insights (SME profiles viewed)",
-        "Custom Reporting": false,
-        "Mentorship Participation": "Invite to mentor SMEs (opt-in)",
-        "Brand Visibility (on platform)": "Logo in partner list",
-        "Pilot Program Participation": "Invite only",
-        "Priority Support": "Email",
-        "Annual Event Access (BIG Pulse etc.)": "1 free ticket",
-      },
-      highlights: [
-        "Full profile access + filters",
-        "Smart filters (stage, sector, score)",
-        "Join SME deal rooms by invite",
-        "Basic insights dashboard",
-      ],
-    },
-    partner: {
-      name: "Partner",
-      price: { monthly: 6500, annually: 65000 },
-      currency: "ZAR",
-      description: "Everything in Discover Plan + Partner",
-      features: {
-        "Access to BIG Score Profiles": "Full access + private deal room",
-        "Funder/Buyer Matching Tools": "Priority-matching dashboard + alerts",
-        "Submit Funding/ESD Criteria": "API integration + automated screening",
-        "Deal Room Participation": "Create private deal rooms & invite SMEs",
-        "Analytics Dashboard": "Full engagement metrics + conversion data",
-        "Custom Reporting": "Quarterly impact or portfolio reports",
-        "Mentorship Participation": "Featured mentor + visibility boost",
-        "Brand Visibility (on platform)": "Logo + featured spotlight, homepage links",
-        "Pilot Program Participation": "Guaranteed inclusion in funded pilots",
-        "Priority Support": "Dedicated account manager",
-        "Annual Event Access (BIG Pulse etc.)": "3 VIP tickets + speaking opportunities",
-      },
-      highlights: [
-        "Full access + private deal room",
-        "Priority-matching dashboard + alerts",
-        "Create private deal rooms & invite SMEs",
-        "Full engagement metrics + conversion data",
-        "Dedicated account manager",
-      ],
-    },
-  }
-
-  // Feature order for the comparison table
-  const featureOrder = [
-    "Access to BIG Score Profiles",
-    "Funder/Buyer Matching Tools",
-    "Submit Funding/ESD Criteria",
-    "Deal Room Participation",
-    "Analytics Dashboard",
-    "Custom Reporting",
-    "Mentorship Participation",
-    "Brand Visibility (on platform)",
-    "Pilot Program Participation",
-    "Priority Support",
-    "Annual Event Access (BIG Pulse etc.)",
-  ]
-
-  const [selectedPlan, setSelectedPlan] = useState("discover")
-  const [billingCycle, setBillingCycle] = useState("monthly")
-  const [email, setEmail] = useState("")
-  const [fullName, setFullName] = useState("")
-  const [companyName, setCompanyName] = useState("")
-  const [history, setHistory] = useState([])
-  const [errors, setErrors] = useState({})
-
-  // Helper function to check if user is new (for trial eligibility)
-  const isNewUser = () => {
-    return !isExistingUser || !currentSubscription || currentSubscription.plan === "Discover"
-  }
-
-  // Helper function to safely get plan name for catalyst only
-  const getCurrentPlanKey = () => {
-    if (!currentSubscription || !currentSubscription.plan) {
-      return "discover"
-    }
-
-    // For catalyst plans only - no mapping needed
-    const catalystPlan = currentSubscription.plan.toLowerCase()
-
-    // Ensure it's a valid catalyst plan
-    if (catalystPlan === "discover" || catalystPlan === "engage" || catalystPlan === "partner") {
-      return catalystPlan
-    }
-
-    // Default to discover for any invalid plan
-    return "discover"
-  }
-
-  // Helper function to get the correct plan display name
-  const getCurrentPlanDisplayName = () => {
-    const planKey = getCurrentPlanKey()
-    return plans[planKey]?.name || "Discover"
-  }
-
-  // Helper function to get the correct plan amount for display
-  const getCurrentPlanAmount = () => {
-    if (!currentSubscription) return 0
-
-    const planKey = getCurrentPlanKey()
-    const cycle = currentSubscription?.cycle || "monthly"
-
-    // Safety check: ensure the plan exists
-    if (!plans[planKey]) {
-      console.warn(`Plan "${planKey}" not found, defaulting to discover`)
-      return 0
-    }
-
-    return plans[planKey]?.price?.[cycle] || 0
-  }
-
-  // Enhanced load user subscription data
-  const loadUserSubscription = async (userId) => {
-    console.log("🔍 Loading subscription for user:", userId)
-    setIsLoading(true)
-
-    try {
-      // First, check user document for current subscription
-      const userRef = doc(db, "users", userId)
-      const userDoc = await getDoc(userRef)
-
-      if (userDoc.exists()) {
-        const userData = userDoc.data()
-        console.log("👤 User data:", userData)
-
-        if (userData.currentSubscription && userData.currentSubscription.plan) {
-          console.log("✅ Found current subscription in user doc:", userData.currentSubscription)
-
-          // Create subscription object from user data
-          const subscriptionFromUser = {
-            id: `user_${userId}`,
-            plan: userData.currentSubscription.plan,
-            status: userData.currentSubscription.status || "Success",
-            amount: userData.currentSubscription.amount || 0,
-            cycle: userData.currentSubscription.cycle || "monthly",
-            createdAt: userData.currentSubscription.lastUpdated || userData.subscriptionUpdatedAt,
-            userId: userId,
-            transactionRef: userData.currentSubscription.transactionRef,
-            autoRenew:
-              userData.currentSubscription.status === "active" || userData.currentSubscription.status === "Success",
-            isTrialPeriod: userData.currentSubscription.isTrialPeriod || false,
-            originalAmount: userData.currentSubscription.originalAmount,
-            trialStartDate: userData.currentSubscription.trialStartDate,
-            trialEndDate: userData.currentSubscription.trialEndDate
-          }
-
-          setCurrentSubscription(subscriptionFromUser)
-          setIsExistingUser(true)
-
-          // Safely set selected plan with mapping
-          const planKey = getCurrentPlanKeyFromName(userData.currentSubscription.plan)
-          setSelectedPlan(planKey)
-          console.log("✅ Set subscription from user document")
-        }
-      }
-
-      // Also check subscriptions collection as backup
-      const subscriptionsRef = collection(db, "subscriptions")
-      const queries = [
-        query(subscriptionsRef, where("userId", "==", userId), where("status", "==", "Success")),
-        query(subscriptionsRef, where("userId", "==", userId), where("status", "==", "Active")),
-        query(subscriptionsRef, where("userId", "==", userId), where("status", "==", "active")),
-      ]
-
-      const queryResults = await Promise.all(queries.map((q) => getDocs(q)))
-      const allSubscriptions = []
-
-      queryResults.forEach((querySnapshot) => {
-        querySnapshot.forEach((doc) => {
-          const data = doc.data()
-          // Filter out add-on purchases from subscription data
-          if (!data.type || data.type !== "addon") {
-            allSubscriptions.push({ id: doc.id, ...data })
-          }
-        })
-      })
-
-      console.log("📄 Found subscription records in collection:", allSubscriptions.length)
-
-      if (allSubscriptions.length > 0) {
-        // Get the most recent subscription
-        const latestSubscription = allSubscriptions.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0]
-
-        console.log("📄 Latest subscription from collection:", latestSubscription)
-
-        // Use collection data if user doc doesn't have subscription or if collection is more recent
-        if (
-          !currentSubscription ||
-          new Date(latestSubscription.createdAt) > new Date(currentSubscription.createdAt || 0)
-        ) {
-          setCurrentSubscription(latestSubscription)
-          setIsExistingUser(true)
-
-          // Safely set selected plan with mapping
-          const planKey = getCurrentPlanKeyFromName(latestSubscription.plan)
-          setSelectedPlan(planKey)
-          console.log("✅ Set subscription from collection")
-        }
-      }
-
-      // Set history (filter out add-ons from main history)
-      const subscriptionHistory = allSubscriptions
-        .filter((record) => !record.type || record.type !== "addon")
-        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-
-      setHistory(subscriptionHistory)
-    } catch (error) {
-      console.error("❌ Error loading user subscription:", error)
-      // Don't throw - just log and continue with default state
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  // Helper function to safely map plan names to keys (catalyst plans only)
-  const getCurrentPlanKeyFromName = (planName) => {
-    if (!planName) return "discover"
-
-    const catalystPlan = planName.toLowerCase()
-
-    // Only accept valid catalyst plans
-    if (catalystPlan === "discover" || catalystPlan === "engage" || catalystPlan === "partner") {
-      return catalystPlan
-    }
-
-    // Default to discover for any other plan
-    return "discover"
-  }
-
-  // NEW: Billing cycle toggle component
-  const BillingCycleToggle = () => (
-    <div style={styles.billingToggleContainer}>
-      <span style={{ color: colors.mediumBrown, fontWeight: 600, marginRight: "1rem" }}>Billing:</span>
-      <div style={styles.billingToggle}>
-        <div
-          style={{
-            ...styles.billingToggleOption,
-            ...(billingCycle === "monthly" ? styles.billingToggleActive : {}),
-          }}
-          onClick={() => setBillingCycle("monthly")}
-        >
-          Monthly
-        </div>
-        <div
-          style={{
-            ...styles.billingToggleOption,
-            ...(billingCycle === "annually" ? styles.billingToggleActive : {}),
-          }}
-          onClick={() => setBillingCycle("annually")}
-        >
-          Annual
-          <span style={styles.savingsBadge}>Save up to R13k</span>
-        </div>
-      </div>
-    </div>
-  )
-
-  // UPDATED: Feature comparison table component with correct plan keys and detailed descriptions
-  const FeatureComparisonTable = () => (
-    <div style={styles.featureComparisonContainer}>
-      <div style={styles.featureComparisonTitle}>
-        <span>Plan Features Comparison</span>
-      </div>
-      {/* Add billing cycle toggle */}
-      <BillingCycleToggle />
-      <div style={{ overflowX: "auto" }}>
-        <table style={styles.featureComparisonTable}>
-          <thead>
-            <tr>
-              <th style={styles.featureTh}>Feature</th>
-              <th style={styles.featureTh}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }}>
-                  <div
-                    style={{ width: "12px", height: "12px", background: colors.accentGold, borderRadius: "50%" }}
-                  ></div>
-                  Discover (Free)
-                </div>
-              </th>
-              <th style={styles.featureTh}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }}>
-                  <div
-                    style={{ width: "12px", height: "12px", background: colors.mediumBrown, borderRadius: "50%" }}
-                  ></div>
-                  Engage {billingCycle === "monthly" ? "" : ""}
-                </div>
-              </th>
-              <th style={styles.featureTh}>
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }}>
-                  <div
-                    style={{ width: "12px", height: "12px", background: colors.darkBrown, borderRadius: "50%" }}
-                  ></div>
-                  Partner {billingCycle === "monthly" ? "" : ""}
-                </div>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {featureOrder.map((feature, index) => (
-              <tr key={feature} style={{ backgroundColor: index % 2 === 0 ? `${colors.cream}4D` : "transparent" }}>
-                <td style={{ ...styles.featureTd, ...styles.featureTdLeft }}>{feature}</td>
-                <td style={styles.featureTd}>
-                  {typeof plans.discover.features[feature] === "boolean" ? (
-                    plans.discover.features[feature] ? (
-                      <span style={{ color: colors.darkBrown, fontWeight: "bold" }}>✓</span>
-                    ) : (
-                      <span style={{ color: colors.featureCross, fontWeight: "bold" }}>✗</span>
-                    )
-                  ) : (
-                    plans.discover.features[feature]
-                  )}
-                </td>
-                <td style={styles.featureTd}>
-                  {typeof plans.engage.features[feature] === "boolean" ? (
-                    plans.engage.features[feature] ? (
-                      <span style={{ color: colors.darkBrown, fontWeight: "bold" }}>✓</span>
-                    ) : (
-                      <span style={{ color: colors.featureCross, fontWeight: "bold" }}>✗</span>
-                    )
-                  ) : (
-                    plans.engage.features[feature]
-                  )}
-                </td>
-                <td style={styles.featureTd}>
-                  {typeof plans.partner.features[feature] === "boolean" ? (
-                    plans.partner.features[feature] ? (
-                      <span style={{ color: colors.darkBrown, fontWeight: "bold" }}>✓</span>
-                    ) : (
-                      <span style={{ color: colors.featureCross, fontWeight: "bold" }}>✗</span>
-                    )
-                  ) : (
-                    plans.partner.features[feature]
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-      {billingCycle === "annually" && (
-        <div
-          style={{
-            marginTop: "1.5rem",
-            padding: "1rem",
-            background: colors.cream,
-            border: `1px solid ${colors.lightTan}`,
-            borderRadius: "8px",
-            fontSize: "clamp(0.8rem, 1.5vw, 0.9rem)",
-            color: colors.darkBrown,
-          }}
-        >
-          <strong>Annual Discount Options:</strong>
-          <div style={{ marginTop: "0.5rem" }}>
-            Discover: N/A | Engage: R20,000/year (save R4,000) | Partner: R65,000/year (save R13,000)
-          </div>
-        </div>
-      )}
-    </div>
-  )
-
-  // Handle plan selection
-  const handlePlanSelect = (planKey) => {
-    console.log("Plan selected:", planKey)
-    setSelectedPlan(planKey)
-    setErrors({})
-
-    if (isExistingUser && currentSubscription) {
-      const currentPlanKey = getCurrentPlanKey()
-      if (planKey !== currentPlanKey) {
-        const planOrder = { discover: 0, engage: 1, partner: 2 }
-        const action = planOrder[planKey] > planOrder[currentPlanKey] ? "upgrade" : "downgrade"
-        setUpgradeDowngradeAction(action)
-        setShowPlanChangeConfirm(true)
-        setShowDowngradeOptions(false)
-      }
-    }
-  }
-
-  // Handle downgrade options
-  const handleDowngradeClick = () => {
-    setShowDowngradeOptions(true)
-  }
-
-  const handleDowngradeSelect = (targetPlan) => {
-    setSelectedPlan(targetPlan)
-    setUpgradeDowngradeAction("downgrade")
-    setShowDowngradeOptions(false)
-    setShowPlanChangeConfirm(true)
-  }
-
-  const cancelDowngradeOptions = () => {
-    setShowDowngradeOptions(false)
-  }
-
-  // Confirm plan change
-  const confirmPlanChange = () => {
-    console.log("=== CONFIRM PLAN CHANGE DEBUG ===")
-    console.log("upgradeDowngradeAction:", upgradeDowngradeAction)
-    console.log("selectedPlan:", selectedPlan)
-    console.log("currentSubscription:", currentSubscription)
-
-    if (upgradeDowngradeAction === "downgrade" && selectedPlan === "discover") {
-      console.log("Calling handleDowngradeToFree...")
-      handleDowngradeToFree()
-    } else {
-      console.log("Calling handlePay for upgrade/downgrade...")
-      setShowPlanChangeConfirm(false)
-      handlePay()
-    }
-  }
-
-  const handleDowngradeToFree = async () => {
-    console.log("Starting downgrade to free...")
-    try {
-      const newRecord = {
-        id: uuidv4(),
-        email,
-        plan: plans[selectedPlan].name,
-        cycle: billingCycle,
-        amount: 0,
-        fullName,
-        companyName,
-        createdAt: new Date().toISOString(),
-        status: "Success",
-        autoRenew: true,
-        userId: user.uid,
-        action: "downgrade",
-        transactionRef: `downgrade_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      }
-
-      await saveToFirebase(newRecord)
-      await updateCurrentPlan(plans[selectedPlan].name, billingCycle)
-      setHistory([newRecord, ...history])
-      setCurrentSubscription(newRecord)
-      setIsExistingUser(true)
-      alert(`Successfully downgraded to ${plans[selectedPlan].name} plan!`)
-      setShowPlanChangeConfirm(false)
-      setUpgradeDowngradeAction(null)
-
-      setTimeout(() => {
-        loadUserSubscription(user.uid)
-      }, 1000)
-    } catch (error) {
-      console.error("Error in handleDowngradeToFree:", error)
-      alert("An error occurred during downgrade. Please try again.")
-    }
-  }
-
-  const cancelPlanChange = () => {
-    setSelectedPlan(getCurrentPlanKey())
-    setShowPlanChangeConfirm(false)
-    setShowDowngradeOptions(false)
-    setUpgradeDowngradeAction(null)
-  }
-
-  // Handle subscription cancellation
-  const handleCancelSubscription = async () => {
-    if (!currentSubscription || !user) {
-      alert("No active subscription found.")
-      return
-    }
-
-    const confirmMessage = `Are you sure you want to cancel your ${currentSubscription.plan} subscription?\n\nThis will:\n• Stop automatic renewals\n• Downgrade you to Discover plan\n• Remove premium features\n\nThis action cannot be undone.`
-
-    if (!window.confirm(confirmMessage)) {
-      return
-    }
-
-    try {
-      // Create cancellation record
-      const cancellationRecord = {
-        id: uuidv4(),
-        email: email,
-        plan: "Discover",
-        cycle: "monthly",
-        amount: 0,
-        fullName: fullName,
-        companyName: companyName,
-        createdAt: new Date().toISOString(),
-        status: "Success",
-        autoRenew: false,
-        userId: user.uid,
-        action: "cancellation",
-        previousPlan: currentSubscription.plan,
-        transactionRef: `cancellation_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      }
-
-      // Save cancellation record
-      await saveToFirebase(cancellationRecord)
-
-      // Update current plan to Discover
-      await updateCurrentPlan("Discover", "monthly")
-
-      // Update local state
-      setHistory([cancellationRecord, ...history])
-      setCurrentSubscription(cancellationRecord)
-      setSelectedPlan("discover")
-
-      alert(
-        `Subscription cancelled successfully!\n\nYou've been downgraded to the Discover plan.\nYour premium features will remain active until the end of your current billing period.`,
-      )
-
-      // Reload subscription data
-      setTimeout(() => {
-        loadUserSubscription(user.uid)
-      }, 1000)
-    } catch (error) {
-      console.error("Error cancelling subscription:", error)
-      alert("Failed to cancel subscription. Please try again or contact support.")
-    }
-  }
-
-  // UPDATED: Handle payment with proper subscription vs one-time logic
-  const handlePay = async () => {
-    console.log("Starting payment process for plan:", selectedPlan)
-
-    if (!user) {
-      alert("Please log in to subscribe")
-      return
-    }
-
-    const planPrice = plans[selectedPlan].price[billingCycle]
-
-    // Handle free discover plan
-    if (selectedPlan === "discover") {
-      try {
-        const newRecord = {
-          id: uuidv4(),
-          email: email,
-          plan: plans[selectedPlan].name,
-          cycle: billingCycle,
-          amount: 0,
-          fullName: fullName,
-          companyName: companyName,
-          createdAt: new Date().toISOString(),
-          status: "Success",
-          autoRenew: true,
-          userId: user.uid,
-          action: isExistingUser ? upgradeDowngradeAction || "downgrade" : "new_subscription",
-        }
-
-        setHistory([newRecord, ...history])
-        await saveToFirebase(newRecord)
-        await updateCurrentPlan(plans[selectedPlan].name, billingCycle)
-        setCurrentSubscription(newRecord)
-        setIsExistingUser(true)
-        alert("Discover plan activated successfully!")
-
-        // Clear any upgrade/downgrade state
-        setUpgradeDowngradeAction(null)
-        setShowPlanChangeConfirm(false)
-
-        return
-      } catch (error) {
-        console.error("Error activating discover plan:", error)
-        alert("Failed to activate discover plan. Please try again.")
-        return
-      }
-    }
-
-    // Validate for paid plans
-    const validationResult = validate(email, fullName)
-    if (!validationResult.isValid) {
-      setErrors(validationResult.errors)
-      return
-    }
-
-    console.log("Creating subscription checkout...")
-    setPaymentProcessing(true)
-
-    try {
-      const checkoutData = await createSubscriptionCheckout(
-        planPrice,
-        "ZAR",
-        user.uid,
-        plans[selectedPlan].name,
-        billingCycle,
-        isExistingUser ? upgradeDowngradeAction || "upgrade" : "subscription",
-      )
-
-      console.log("Subscription checkout created:", checkoutData)
-
-      if (checkoutData.success && checkoutData.checkoutId) {
-        setCheckoutId(checkoutData.checkoutId)
-        setShowCheckout(true)
-      } else {
-        throw new Error(checkoutData.error || "Failed to create subscription checkout")
-      }
-    } catch (error) {
-      console.error("Subscription checkout creation error:", error)
-      alert(`Failed to initialize subscription payment: ${error.message}. Please try again.`)
-    } finally {
-      setPaymentProcessing(false)
-    }
-  }
-
-  // UPDATED: Handle checkout completion with enhanced Firebase saving
-  const handleCheckoutCompleted = async (event) => {
-    console.log("🎉 Payment completed:", event)
-    setPaymentProcessing(true) // Show processing state
-
-    try {
-      // Handle subscription/plan payment with trial period
-      const isTrialEligible = isNewUser()
-      const trialStartDate = new Date()
-      const trialEndDate = new Date()
-      trialEndDate.setMonth(trialEndDate.getMonth() + 3)
-
-      const newRecord = {
-        id: uuidv4(),
-        email: email,
-        plan: plans[selectedPlan].name,
-        cycle: billingCycle,
-        amount: 0, // First 3 months are free
-        originalAmount: plans[selectedPlan].price[billingCycle], // Store original price
-        fullName: fullName,
-        companyName,
-        createdAt: new Date().toISOString(),
-        status: "Success",
-        autoRenew: true,
-        transactionRef: event.id || event.transactionId || `trial_${Date.now()}`,
-        userId: user.uid,
-        subscriptionType: "recurring",
-        isTrialPeriod: isTrialEligible,
-        trialStartDate: isTrialEligible ? trialStartDate.toISOString() : null,
-        trialEndDate: isTrialEligible ? trialEndDate.toISOString() : null,
-        // Handle potentially undefined registrationId
-        ...(event.registrationId && { registrationId: event.registrationId }),
-        ...(event.cardBrand && { cardBrand: event.cardBrand }),
-        ...(event.cardLast4 && { cardLast4: event.cardLast4 }),
-        action: isExistingUser ? upgradeDowngradeAction || "upgrade" : "new_subscription",
-        paymentCompleted: true,
-        paymentDate: new Date().toISOString(),
-      }
-
-      console.log("💾 Saving subscription record:", newRecord)
-
-      // Save to Firebase with enhanced error handling
-      try {
-        const saveResult = await saveToFirebase(newRecord)
-        console.log("✅ Firebase save result:", saveResult)
-      } catch (saveError) {
-        console.error("❌ Firebase save failed:", saveError)
-        throw new Error(`Failed to save subscription: ${saveError.message}`)
-      }
-
-      // Update current plan
-      try {
-        const updateResult = await updateCurrentPlan(plans[selectedPlan].name, billingCycle)
-        console.log("✅ Plan update result:", updateResult)
-      } catch (updateError) {
-        console.error("❌ Plan update failed:", updateError)
-        // Don't throw here - subscription was saved, plan update is secondary
-      }
-
-      // Update local state
-      setHistory([newRecord, ...history])
-      setCurrentSubscription(newRecord)
-      setIsExistingUser(true)
-      setShowCheckout(false)
-      setPaymentProcessing(false)
-
-      // Clear upgrade/downgrade state
-      setUpgradeDowngradeAction(null)
-      setShowPlanChangeConfirm(false)
-
-      // Show success message with trial information
-      const successMessage = isTrialEligible
-        ? `🎉 Welcome to your ${plans[selectedPlan].name} plan!\n\n✨ You're getting 3 MONTHS FREE!\n• Trial period: ${trialStartDate.toLocaleDateString()} - ${trialEndDate.toLocaleDateString()}\n• Regular billing starts: ${trialEndDate.toLocaleDateString()}\n• Monthly rate after trial: R${plans[selectedPlan].price[billingCycle]}\n\nEnjoy all premium features at no cost for the first 3 months!`
-        : `🎉 Subscription activated successfully!\n\nYour ${plans[selectedPlan].name} plan is now active with automatic renewals.\n\nYou can now access all premium features!`
-
-      alert(successMessage)
-
-      // Reload subscription data to ensure sync
-      setTimeout(async () => {
-        console.log("🔄 Reloading subscription data...")
-        await loadUserSubscription(user.uid)
-      }, 2000)
-    } catch (error) {
-      console.error("❌ Error processing completed payment:", error)
-      setPaymentProcessing(false)
-      alert(
-        `❌ Payment Error\n\nYour payment was processed but there was an error saving your subscription:\n\n${error.message}\n\nPlease contact support with your transaction ID: ${event.id || event.transactionId}`,
-      )
-    }
-  }
-
-  const handleCheckoutCancelled = () => {
-    console.log("Payment cancelled")
-    setShowCheckout(false)
-    alert("Payment cancelled")
-  }
-
-  const handleCheckoutExpired = () => {
-    console.log("Payment expired")
-    setShowCheckout(false)
-    alert("Payment session expired. Please try again.")
-  }
-
-  // UPDATED: Enhanced user data loading
   useEffect(() => {
-    const loadUserData = async () => {
+    const load = async () => {
       if (user) {
         try {
           const userDoc = await getDoc(doc(db, "users", user.uid))
-          if (userDoc.exists()) {
-            const userData = userDoc.data()
-            setEmail(userData.email || user.email || "")
-            setFullName(userData.displayName || userData.fullName || "")
-            setCompanyName(userData.companyName || "")
-          } else {
-            setEmail(user.email || "")
-            setFullName(user.displayName || "")
-          }
-
-          await loadUserSubscription(user.uid)
-        } catch (error) {
-          console.error("Error loading user data:", error)
-          setEmail(user.email || "")
-          setFullName(user.displayName || "")
-          await loadUserSubscription(user.uid)
-        }
+          if (userDoc.exists()) setCatalystStatus(userDoc.data().catalystStatus || null)
+        } catch (e) { console.error(e) }
       }
+      setIsLoading(false)
     }
-
-    loadUserData()
+    load()
   }, [user])
 
-  // Handle billing cycle change
-  const handleBillingCycleChange = (cycle) => {
-    setBillingCycle(cycle)
-    console.log("Billing cycle changed to:", cycle)
+  // ── Form helpers ────────────────────────────────────────────────────────────
+  // Simple controlled update — NO scroll restoration needed because the modal
+  // is no longer a nested component; React keeps the same DOM nodes across renders.
+  const updateForm = (field, value) => {
+    setForm(prev => ({ ...prev, [field]: value }))
+    if (formErrors[field]) setFormErrors(prev => ({ ...prev, [field]: undefined }))
   }
 
-  // Dynamic styles based on sidebar state
-  const styles = {
-    container: {
-      width: "100%",
-      minHeight: "100vh",
-      padding: "1rem",
-      background: colors.offWhite,
-      fontFamily: "'Inter', 'Segoe UI', 'Roboto', sans-serif",
-      boxSizing: "border-box",
-      width: "100%",
-      transition: "all 0.3s ease",
-    },
-    mainCard: {
-      background: `linear-gradient(135deg, ${colors.offWhite} 0%, ${colors.cream} 100%)`,
-      borderRadius: "24px",
-      padding: "clamp(1rem, 3vw, 2rem)",
-      boxShadow: `0 20px 60px ${colors.darkBrown}15, 0 8px 24px ${colors.darkBrown}0A`,
-      border: `1px solid ${colors.lightTan}`,
-      position: "relative",
-      overflow: "hidden",
-      maxWidth: "100%",
-      margin: "0 auto",
-    },
-    decorativeElement: {
-      position: "absolute",
-      top: "-100px",
-      right: "-100px",
-      width: "300px",
-      height: "300px",
-      background: `radial-gradient(circle, ${colors.accentGold}14 0%, transparent 70%)`,
-      borderRadius: "50%",
-      pointerEvents: "none",
-    },
-    pageTitle: {
-      fontSize: "clamp(2rem, 4vw, 2.75rem)",
-      fontWeight: 800,
-      background: `linear-gradient(135deg, ${colors.darkBrown} 0%, ${colors.mediumBrown} 100%)`,
-      backgroundClip: "text",
-      WebkitBackgroundClip: "text",
-      color: "transparent",
-      textAlign: "center",
-      marginBottom: "1rem",
-      letterSpacing: "-1.5px",
-      lineHeight: "1.2",
-    },
-    subtitle: {
-      fontSize: "clamp(1rem, 2vw, 1.125rem)",
-      color: colors.mediumBrown,
-      textAlign: "center",
-      marginBottom: "3rem",
-      fontWeight: 400,
-      opacity: 0.9,
-    },
-    betaNotice: {
-      background: `linear-gradient(135deg, ${colors.trialBrown}20 0%, ${colors.accentGold}20 100%)`,
-      color: colors.darkBrown,
-      border: `2px solid ${colors.trialBrown}`,
-      borderRadius: "16px",
-      padding: "1.5rem 2rem",
-      margin: "0 auto 3rem auto",
-      maxWidth: "800px",
-      fontWeight: 600,
-      fontSize: "clamp(1rem, 2vw, 1.125rem)",
-      textAlign: "center",
-      boxShadow: `0 8px 24px ${colors.trialBrown}1F`,
-      position: "relative",
-    },
-    betaIcon: {
-      display: "inline-block",
-      marginRight: "0.5rem",
-      fontSize: "1.25rem",
-    },
-    billingToggleContainer: {
-      display: "flex",
-      justifyContent: "center",
-      alignItems: "center",
-      margin: "2rem auto",
-      gap: "1rem",
-    },
-    billingToggle: {
-      display: "flex",
-      background: colors.cream,
-      borderRadius: "12px",
-      padding: "4px",
-      border: `1px solid ${colors.lightTan}`,
-      boxShadow: `0 4px 12px ${colors.darkBrown}0A`,
-    },
-    billingToggleOption: {
-      padding: "0.75rem 1.5rem",
-      borderRadius: "8px",
-      cursor: "pointer",
-      fontWeight: 600,
-      fontSize: "0.95rem",
-      transition: "all 0.3s ease",
-      color: colors.mediumBrown,
-      position: "relative",
-    },
-    billingToggleActive: {
-      background: colors.accentGold,
-      color: colors.lightText,
-      boxShadow: `0 2px 8px ${colors.accentGold}33`,
-    },
-    savingsBadge: {
-      background: colors.mediumBrown,
-      color: colors.lightText,
-      fontSize: "0.75rem",
-      padding: "0.25rem 0.5rem",
-      borderRadius: "6px",
-      fontWeight: 700,
-      marginLeft: "0.5rem",
-      textTransform: "uppercase",
-      letterSpacing: "0.5px",
-    },
-    featureComparisonContainer: {
-      margin: "3rem auto",
-      maxWidth: "100%",
-      background: `linear-gradient(135deg, ${colors.offWhite} 0%, ${colors.cream} 100%)`,
-      borderRadius: "20px",
-      padding: "1.5rem",
-      boxShadow: `0 12px 40px ${colors.darkBrown}0A`,
-      border: `1px solid ${colors.lightTan}`,
-      overflow: "auto",
-    },
-    featureComparisonTitle: {
-      fontSize: "clamp(1.25rem, 3vw, 1.75rem)",
-      fontWeight: 700,
-      color: colors.darkBrown,
-      marginBottom: "2rem",
-      textAlign: "center",
-      position: "relative",
-      display: "flex",
-      flexDirection: "column",
-      gap: "1rem",
-      alignItems: "center",
-    },
-    featureComparisonTable: {
-      width: "100%",
-      borderCollapse: "separate",
-      borderSpacing: "0",
-      background: colors.offWhite,
-      borderRadius: "12px",
-      overflow: "hidden",
-      boxShadow: `0 4px 12px ${colors.darkBrown}0A`,
-      border: `1px solid ${colors.lightTan}`,
-      fontSize: "clamp(0.8rem, 1.5vw, 0.95rem)",
-    },
-    featureTh: {
-      background: `linear-gradient(135deg, ${colors.cream} 0%, ${colors.lightTan} 100%)`,
-      fontWeight: 700,
-      padding: "1rem",
-      color: colors.darkBrown,
-      fontSize: "clamp(0.9rem, 1.5vw, 1.05rem)",
-      borderBottom: `2px solid ${colors.lightTan}`,
-      position: "relative",
-    },
-    featureTd: {
-      padding: "0.75rem",
-      textAlign: "center",
-      fontSize: "clamp(0.8rem, 1.5vw, 0.95rem)",
-      color: colors.mediumBrown,
-      borderBottom: `1px solid ${colors.lightTan}26`,
-      transition: "background-color 0.2s ease",
-    },
-    featureTdLeft: {
-      textAlign: "left",
-      fontWeight: 600,
-      color: colors.darkBrown,
-    },
-    planGrid: {
-      display: "grid",
-      gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-      gap: "1.5rem",
-      margin: "3rem 0",
-      justifyContent: "center",
-      maxWidth: "100%",
-    },
-    planCard: {
-      background: colors.offWhite,
-      border: `1px solid ${colors.lightTan}`,
-      borderRadius: "16px",
-      padding: "2rem",
-      textAlign: "center",
-      transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-      cursor: "pointer",
-      boxShadow: `0 8px 24px ${colors.darkBrown}14`,
-      position: "relative",
-      overflow: "hidden",
-      display: "flex",
-      flexDirection: "column",
-      minHeight: "450px",
-    },
-    planCardPopular: {
-      background: colors.engageCardBg,
-      color: colors.lightText,
-      transform: "scale(1.03)",
-      zIndex: 2,
-      boxShadow: `0 20px 60px ${colors.darkBrown}33`,
-      border: `1px solid ${colors.accentGold}`,
-    },
-    planCardHover: {
-      transform: "translateY(-8px)",
-      boxShadow: `0 16px 40px ${colors.darkBrown}26`,
-    },
-    planCardSelected: {
-      border: `2px solid ${colors.accentGold}`,
-      boxShadow: `0 12px 30px ${colors.accentGold}33`,
-    },
-    popularBadge: {
-      position: "absolute",
-      top: "1.5rem",
-      right: "1.5rem",
-      background: colors.accentGold,
-      color: colors.lightText,
-      padding: "0.4rem 1rem",
-      borderRadius: "20px",
-      fontSize: "0.8rem",
-      fontWeight: 700,
-      textTransform: "uppercase",
-      letterSpacing: "0.8px",
-      boxShadow: `0 2px 8px ${colors.accentGold}4D`,
-    },
-    planName: {
-      fontSize: "clamp(1.75rem, 3vw, 2.25rem)",
-      fontWeight: 800,
-      marginBottom: "0.75rem",
-      letterSpacing: "-1px",
-      color: colors.darkBrown,
-    },
-    planPrice: {
-      fontSize: "clamp(2.5rem, 4vw, 3.5rem)",
-      fontWeight: 900,
-      marginBottom: "0.5rem",
-      lineHeight: "1",
-      color: colors.darkBrown,
-    },
-    planPriceFree: {
-      color: colors.trialBrown, // CHANGED: From trialGreen to trialBrown
-      fontSize: "clamp(2.5rem, 4vw, 3.5rem)",
-      fontWeight: 900,
-    },
-    planPricePeriod: {
-      fontSize: "clamp(1rem, 1.5vw, 1.25rem)",
-      fontWeight: 500,
-      opacity: 0.8,
-      color: colors.mediumBrown,
-    },
-    planDescriptionText: {
-      fontSize: "clamp(0.9rem, 1.5vw, 1rem)",
-      color: colors.mediumBrown,
-      marginBottom: "2rem",
-      lineHeight: "1.6",
-    },
-    freeMonthsBadge: {
-      background: `linear-gradient(90deg, ${colors.trialBrown} 0%, ${colors.accentGold} 100%)`, // CHANGED: From trialGreen to trialBrown
-      color: colors.lightText,
-      padding: "0.8rem 1.2rem",
-      borderRadius: "12px",
-      fontSize: "1rem",
-      fontWeight: 700,
-      marginBottom: "1rem",
-      textAlign: "center",
-      boxShadow: `0 4px 12px ${colors.trialBrown}4D`, // CHANGED: From trialGreen to trialBrown
-      display: "inline-block",
-      border: `2px solid ${colors.trialBrown}`, // CHANGED: From trialGreen to trialBrown
-    },
-    afterTrialPrice: {
-      background: `linear-gradient(135deg, ${colors.cream} 0%, ${colors.lightTan} 100%)`,
-      border: `1px solid ${colors.lightTan}`,
-      borderRadius: "8px",
-      padding: "0.8rem",
-      marginBottom: "1.5rem",
-      fontSize: "0.9rem",
-      color: colors.mediumBrown,
-      fontWeight: 600,
-    },
-    planFeaturesList: {
-      listStyle: "none",
-      padding: "0",
-      margin: "0 0 2.5rem 0",
-      flex: 1,
-      textAlign: "left",
-    },
-    planFeatureItem: {
-      padding: "0.6rem 0",
-      fontSize: "clamp(0.9rem, 1.5vw, 1rem)",
-      display: "flex",
-      alignItems: "center",
-      lineHeight: "1.5",
-      color: colors.darkText,
-    },
-    featureIcon: {
-      marginRight: "0.8rem",
-      fontSize: "1.1rem",
-      flexShrink: 0,
-    },
-    featureCheckIcon: {
-      color: colors.featureCheck,
-    },
-    featureCrossIcon: {
-      color: colors.featureCross,
-    },
-    currentPlanBadge: {
-      display: "inline-block",
-      background: colors.accentGold,
-      color: colors.lightText,
-      fontWeight: 600,
-      borderRadius: "8px",
-      padding: "0.5rem 1rem",
-      fontSize: "0.875rem",
-      letterSpacing: "0.5px",
-    },
-    selectedBadge: {
-      display: "inline-block",
-      background: colors.mediumBrown,
-      color: colors.lightText,
-      fontWeight: 600,
-      borderRadius: "8px",
-      padding: "0.5rem 1rem",
-      fontSize: "0.875rem",
-      letterSpacing: "0.5px",
-    },
-    selectButton: {
-      width: "100%",
-      padding: "1rem 2rem",
-      background: `linear-gradient(135deg, ${colors.accentGold} 0%, ${colors.mediumBrown} 100%)`,
-      color: colors.lightText,
-      border: "none",
-      borderRadius: "10px",
-      fontWeight: 700,
-      cursor: "pointer",
-      fontSize: "clamp(1rem, 1.8vw, 1.1rem)",
-      transition: "all 0.3s ease",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      gap: "0.75rem",
-      marginTop: "auto",
-      boxShadow: `0 6px 18px ${colors.accentGold}4D`,
-      textTransform: "uppercase",
-      letterSpacing: "0.5px",
-    },
-    downgradeSection: {
-      textAlign: "center",
-      margin: "2.5rem 0",
-      padding: "2rem",
-      background: `linear-gradient(135deg, ${colors.cream} 0%, ${colors.lightTan} 100%)`,
-      borderRadius: "16px",
-      border: `1px solid ${colors.lightTan}`,
-    },
-    button: {
-      padding: "1rem 2rem",
-      background: `linear-gradient(135deg, ${colors.accentGold} 0%, ${colors.mediumBrown} 100%)`,
-      color: colors.lightText,
-      border: "none",
-      borderRadius: "12px",
-      fontWeight: 700,
-      fontSize: "clamp(0.9rem, 1.5vw, 1rem)",
-      cursor: "pointer",
-      margin: "0.5rem",
-      transition: "all 0.3s ease",
-      boxShadow: `0 4px 12px ${colors.accentGold}4D`,
-      letterSpacing: "0.5px",
-      textTransform: "uppercase",
-    },
-    buttonSecondary: {
-      background: `linear-gradient(135deg, ${colors.lightTan} 0%, ${colors.cream} 100%)`,
-      color: colors.darkBrown,
-      border: `2px solid ${colors.lightTan}`,
-      fontWeight: 700,
-      borderRadius: "12px",
-      padding: "1rem 2rem",
-      fontSize: "clamp(0.9rem, 1.5vw, 1rem)",
-      cursor: "pointer",
-      margin: "0.5rem",
-      transition: "all 0.3s ease",
-      boxShadow: `0 4px 12px ${colors.lightTan}33`,
-      letterSpacing: "0.5px",
-      textTransform: "uppercase",
-    },
-    planChangeModal: {
-      position: "fixed",
-      top: 0,
-      left: 0,
-      width: "100vw",
-      height: "100vh",
-      backgroundColor: `${colors.darkBrown}66`,
-      backdropFilter: "blur(8px)",
-      display: "flex",
-      justifyContent: "center",
-      alignItems: "center",
-      zIndex: 1000,
-      animation: "fadeIn 0.3s ease",
-      padding: "1rem",
-      boxSizing: "border-box",
-    },
-    modalContent: {
-      background: `linear-gradient(135deg, ${colors.offWhite} 0%, ${colors.cream} 100%)`,
-      padding: "2rem",
-      borderRadius: "24px",
-      maxWidth: "500px",
-      width: "100%",
-      boxShadow: `0 24px 60px ${colors.darkBrown}33`,
-      textAlign: "center",
-      border: `1px solid ${colors.lightTan}`,
-      position: "relative",
-      maxHeight: "90vh",
-      overflow: "auto",
-    },
-    modalTitle: {
-      fontSize: "clamp(1.25rem, 3vw, 1.75rem)",
-      fontWeight: 800,
-      color: colors.darkBrown,
-      marginBottom: "1rem",
-      letterSpacing: "-0.5px",
-    },
-    modalText: {
-      fontSize: "clamp(1rem, 2vw, 1.125rem)",
-      color: colors.mediumBrown,
-      marginBottom: "2rem",
-      lineHeight: "1.6",
-    },
-    modalActions: {
-      display: "flex",
-      justifyContent: "center",
-      gap: "1rem",
-      marginTop: "2rem",
-      flexWrap: "wrap",
-    },
-    paymentButton: {
-      padding: "1rem 2rem",
-      background: `linear-gradient(135deg, ${colors.accentGold} 0%, ${colors.mediumBrown} 100%)`,
-      color: colors.lightText,
-      border: "none",
-      borderRadius: "12px",
-      fontWeight: 700,
-      fontSize: "1rem",
-      cursor: "pointer",
-      transition: "all 0.3s ease",
-      boxShadow: `0 4px 12px ${colors.accentGold}4D`,
-      letterSpacing: "0.5px",
-      textTransform: "uppercase",
-      minWidth: "200px",
-      minHeight: "50px",
-    },
-    paymentButtonDisabled: {
-      opacity: 0.6,
-      cursor: "not-allowed",
-      background: `linear-gradient(135deg, ${colors.lightTan} 0%, ${colors.cream} 100%)`,
-      color: colors.mediumBrown,
-      boxShadow: `0 2px 8px ${colors.lightTan}33`,
-    },
-    subscriptionInfo: {
-      background: `linear-gradient(135deg, ${colors.cream} 0%, ${colors.lightTan} 100%)`,
-      borderRadius: "16px",
-      padding: "1.5rem",
-      marginBottom: "2rem",
-      border: `1px solid ${colors.lightTan}`,
-    },
-    subscriptionTitle: {
-      fontSize: "1.25rem",
-      fontWeight: 700,
-      color: colors.darkBrown,
-      marginBottom: "1rem",
-    },
-    subscriptionDetail: {
-      display: "flex",
-      justifyContent: "space-between",
-      alignItems: "center",
-      padding: "0.5rem 0",
-      fontSize: "1rem",
-      color: colors.darkText,
-      borderBottom: `1px solid ${colors.lightTan}33`,
-    },
+  const openProposalForm = (planKey) => {
+    setForm({ ...emptyForm, selectedPlan: catalystPlans[planKey].name })
+    setFormErrors({})
+    setSubmitted(false)
+    setShowProposalForm(true)
+  }
+
+  const closeProposalForm = () => {
+    setShowProposalForm(false)
+    setSubmitted(false)
+  }
+
+  const validateForm = () => {
+    const errs = {}
+    if (!form.organisationName.trim()) errs.organisationName = "Required"
+    if (!form.contactPerson.trim())    errs.contactPerson    = "Required"
+    if (!form.email.trim() || !form.email.includes("@")) errs.email = "Valid email required"
+    if (!form.phone.trim())            errs.phone            = "Required"
+    if (!form.programmeType)           errs.programmeType    = "Required"
+    if (!form.cohortSize)              errs.cohortSize       = "Required"
+    if (!form.duration)                errs.duration         = "Required"
+    return errs
+  }
+
+  const handleSubmit = async () => {
+    const errs = validateForm()
+    if (Object.keys(errs).length > 0) { setFormErrors(errs); return }
+    setSubmitting(true)
+    try {
+      await addDoc(collection(db, "catalystLeads"), {
+        ...form,
+        userId: user?.uid || "anonymous",
+        userEmail: user?.email || form.email,
+        status: "new_lead",
+        plan_type: "catalyst",
+        billing_model: "cohort_based",
+        payment_required: false,
+        subscription_activation: "manual",
+        submittedAt: new Date().toISOString(),
+      })
+      if (user) {
+        const userRef  = doc(db, "users", user.uid)
+        const userSnap = await getDoc(userRef)
+        const { setDoc, updateDoc } = await import("firebase/firestore")
+        const data = {
+          catalystStatus: "pending_review",
+          catalystLeadSubmittedAt: new Date().toISOString(),
+          catalystSelectedPlan: form.selectedPlan,
+        }
+        if (userSnap.exists()) { await updateDoc(userRef, data) } else { await setDoc(userRef, data) }
+        setCatalystStatus("pending_review")
+      }
+      try {
+        await fetch(`${process.env.REACT_APP_API_URL}/api/catalyst/proposal-request`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            to: "sales@bigmarketplace.africa",
+            subject: `New Catalyst Proposal Request – ${form.organisationName}`,
+            formData: form,
+          }),
+        })
+      } catch (e) { console.warn("Email non-blocking:", e) }
+      setSubmitted(true)
+    } catch (err) {
+      console.error(err)
+      alert("Submission failed. Please try again.")
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  // ── Feature value renderer ──────────────────────────────────────────────────
+  const renderVal = (val) => {
+    if (val === true)  return <span style={{ color: colors.accentGold, fontWeight: 800, fontSize: "1.05rem" }}>✓</span>
+    if (val === false) return <span style={{ color: colors.featureCross, fontWeight: 700 }}>✗</span>
+    return <span style={{ color: colors.mediumBrown, fontSize: "0.8rem" }}>{val}</span>
+  }
+
+  // ─── Styles (defined once at component level, not inside render) ────────────
+  const s = {
+    // Layout
+    container:  { width: "100%", minHeight: "100vh", padding: "1rem", background: colors.offWhite, fontFamily: "'Georgia', 'Times New Roman', serif", boxSizing: "border-box" },
+    mainCard:   { background: `linear-gradient(135deg, ${colors.offWhite} 0%, ${colors.cream} 100%)`, borderRadius: "24px", padding: "clamp(1rem, 3vw, 2.5rem)", boxShadow: `0 20px 60px ${colors.darkBrown}15`, border: `1px solid ${colors.lightTan}`, position: "relative", overflow: "hidden", maxWidth: "100%", margin: "0 auto" },
+    decorative: { position: "absolute", top: "-100px", right: "-100px", width: "300px", height: "300px", background: `radial-gradient(circle, ${colors.accentGold}14 0%, transparent 70%)`, borderRadius: "50%", pointerEvents: "none" },
+    // Header
+    headerBadge: { display: "inline-block", background: `linear-gradient(135deg, ${colors.accentGold} 0%, ${colors.mediumBrown} 100%)`, color: colors.lightText, padding: "0.4rem 1.2rem", borderRadius: "20px", fontSize: "0.78rem", fontWeight: 700, letterSpacing: "1.5px", textTransform: "uppercase", marginBottom: "1rem" },
+    pageTitle:   { fontSize: "clamp(1.8rem, 4vw, 2.75rem)", fontWeight: 800, background: `linear-gradient(135deg, ${colors.darkBrown} 0%, ${colors.mediumBrown} 100%)`, backgroundClip: "text", WebkitBackgroundClip: "text", color: "transparent", textAlign: "center", marginBottom: "0.75rem", letterSpacing: "-1px", lineHeight: "1.2" },
+    subtitle:    { fontSize: "clamp(0.95rem, 2vw, 1.1rem)", color: colors.mediumBrown, textAlign: "center", fontWeight: 400, lineHeight: "1.7", maxWidth: "700px", margin: "0 auto 1rem auto" },
+    footerNote:  { fontSize: "0.88rem", color: colors.lightBrown, textAlign: "center", fontStyle: "italic", padding: "1rem", background: `${colors.accentGold}10`, borderRadius: "10px", border: `1px solid ${colors.accentGold}30`, margin: "0 auto 2rem auto", maxWidth: "700px" },
+    statusBanner:{ display: "flex", alignItems: "center", gap: "1rem", padding: "1.25rem 1.5rem", borderRadius: "14px", marginBottom: "2rem", background: `linear-gradient(135deg, ${colors.pendingBlue}15 0%, ${colors.accentGold}10 100%)`, border: `2px solid ${colors.pendingBlue}44` },
+    // Feature table
+    comparisonWrap:  { background: `linear-gradient(135deg, ${colors.offWhite} 0%, ${colors.cream} 100%)`, borderRadius: "20px", padding: "1.5rem", border: `1px solid ${colors.lightTan}`, marginBottom: "2.5rem", overflowX: "auto" },
+    comparisonTitle: { fontSize: "1.3rem", fontWeight: 700, color: colors.darkBrown, marginBottom: "1.25rem", textAlign: "center" },
+    featureTable:    { width: "100%", borderCollapse: "collapse", fontSize: "0.85rem", minWidth: "580px" },
+    featureTh:       { background: `linear-gradient(135deg, ${colors.darkBrown} 0%, ${colors.mediumBrown} 100%)`, color: colors.lightText, padding: "0.85rem 1rem", fontWeight: 700, textAlign: "center", fontSize: "0.88rem", letterSpacing: "0.3px", border: "none" },
+    featureThFirst:  { textAlign: "left", width: "32%" },
+    sectionRow:      { background: `linear-gradient(90deg, ${colors.accentGold}20 0%, ${colors.cream} 100%)` },
+    sectionCell:     { padding: "0.55rem 1rem", fontWeight: 700, color: colors.darkBrown, fontSize: "0.76rem", letterSpacing: "1.2px", textTransform: "uppercase", borderTop: `2px solid ${colors.accentGold}55`, borderBottom: `1px solid ${colors.lightTan}` },
+    featureRowEven:  { background: `${colors.cream}80` },
+    featureRowOdd:   { background: "transparent" },
+    featureTd:       { padding: "0.62rem 1rem", borderBottom: `1px solid ${colors.lightTan}22`, textAlign: "center", verticalAlign: "middle" },
+    featureTdLabel:  { textAlign: "left", fontWeight: 500, color: colors.darkBrown },
+    // Pricing bar
+    pricingOverview:      { background: `linear-gradient(135deg, ${colors.darkBrown} 0%, ${colors.mediumBrown} 100%)`, borderRadius: "16px", padding: "1.5rem 2rem", marginBottom: "2rem", color: colors.lightText },
+    pricingOverviewTitle: { fontSize: "0.75rem", fontWeight: 700, letterSpacing: "1.5px", textTransform: "uppercase", opacity: 0.55, marginBottom: "1rem" },
+    pricingOverviewGrid:  { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "1.25rem" },
+    pricingOverviewItem:  { textAlign: "center", padding: "1rem", background: "rgba(255,255,255,0.08)", borderRadius: "10px", border: "1px solid rgba(255,255,255,0.1)" },
+    pricingPlanName:      { fontSize: "0.78rem", fontWeight: 700, opacity: 0.6, textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: "0.4rem" },
+    pricingPrice:         { fontSize: "1rem", fontWeight: 800, marginBottom: "0.2rem" },
+    pricingSub:           { fontSize: "0.7rem", opacity: 0.5 },
+    // Plan cards
+    planGrid:    { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "1.25rem", margin: "0 0 2rem 0" },
+    planCard:    { borderRadius: "20px", padding: "2rem 1.5rem", display: "flex", flexDirection: "column", position: "relative", overflow: "hidden", transition: "transform 0.3s ease, box-shadow 0.3s ease", minHeight: "450px" },
+    popularBadge:{ position: "absolute", top: "1rem", right: "1rem", background: colors.accentGold, color: colors.lightText, padding: "0.28rem 0.8rem", borderRadius: "20px", fontSize: "0.7rem", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.8px" },
+    planName:    { fontSize: "1.3rem", fontWeight: 800, color: colors.lightText, marginBottom: "0.4rem" },
+    cohortBadge: { display: "inline-flex", alignItems: "center", gap: "0.3rem", background: "rgba(255,255,255,0.18)", color: colors.lightText, padding: "0.25rem 0.65rem", borderRadius: "20px", fontSize: "0.74rem", fontWeight: 600, marginBottom: "0.6rem", width: "fit-content" },
+    planDesc:    { fontSize: "0.84rem", color: "rgba(255,255,255,0.75)", marginBottom: "0.9rem", lineHeight: "1.55" },
+    divider:     { height: "1px", background: "rgba(255,255,255,0.15)", margin: "0.75rem 0" },
+    feeLabel:    { fontSize: "0.68rem", fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase", color: "rgba(255,255,255,0.52)", marginBottom: "0.18rem" },
+    feeValue:    { fontSize: "1.4rem", fontWeight: 900, color: colors.lightText, lineHeight: "1", marginBottom: "0.2rem" },
+    feeSub:      { fontSize: "0.71rem", color: "rgba(255,255,255,0.52)", marginBottom: "1rem" },
+    highlights:  { listStyle: "none", padding: 0, margin: "0 0 1.2rem 0", flex: 1 },
+    hlItem:      { display: "flex", alignItems: "flex-start", gap: "0.5rem", padding: "0.32rem 0", fontSize: "0.81rem", color: "rgba(255,255,255,0.88)", lineHeight: "1.4" },
+    checkIcon:   { color: colors.accentGold, flexShrink: 0, marginTop: "2px" },
+    proposalBtn: { width: "100%", padding: "0.9rem", background: "rgba(255,255,255,0.14)", color: colors.lightText, border: "2px solid rgba(255,255,255,0.38)", borderRadius: "12px", fontWeight: 700, fontSize: "0.9rem", cursor: "pointer", transition: "all 0.3s ease", textTransform: "uppercase", letterSpacing: "0.8px", marginTop: "auto" },
+    // Add-ons
+    addOnsWrap:  { background: `${colors.darkBrown}05`, borderRadius: "20px", padding: "2rem", border: `2px dashed ${colors.lightTan}`, margin: "0 0 2rem 0" },
+    addOnTitle:  { fontSize: "1.1rem", fontWeight: 700, color: colors.darkBrown, marginBottom: "0.35rem" },
+    addOnSub:    { fontSize: "0.84rem", color: colors.mediumBrown, marginBottom: "1.2rem", fontStyle: "italic" },
+    addOnsGrid:  { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "1rem" },
+    addOnCard:   { background: colors.offWhite, borderRadius: "12px", padding: "1.15rem", border: `1px solid ${colors.lightTan}` },
+    addOnName:   { fontSize: "0.9rem", fontWeight: 700, color: colors.darkBrown, marginBottom: "0.38rem" },
+    addOnPrice:  { fontSize: "0.8rem", fontWeight: 700, color: colors.accentGold, marginBottom: "0.6rem" },
+    addOnItem:   { fontSize: "0.76rem", color: colors.mediumBrown, padding: "0.15rem 0", display: "flex", gap: "0.38rem" },
+    // Modal overlay — scrollable container; card inside is plain block, no overflow
+    overlay: { position: "fixed", top: 0, left: 0, width: "100vw", height: "100vh", background: `${colors.darkBrown}88`, backdropFilter: "blur(8px)", overflowY: "auto", zIndex: 1000, padding: "2rem 1rem", boxSizing: "border-box" },
+    modal:   { background: `linear-gradient(135deg, ${colors.offWhite} 0%, ${colors.cream} 100%)`, borderRadius: "24px", padding: "2.5rem", maxWidth: "620px", width: "100%", margin: "0 auto", boxShadow: `0 32px 80px ${colors.darkBrown}44`, border: `1px solid ${colors.lightTan}` },
+    // Form elements
+    modalTitle:     { fontSize: "1.5rem", fontWeight: 800, color: colors.darkBrown, marginBottom: "0.4rem" },
+    modalSub:       { fontSize: "0.92rem", color: colors.mediumBrown, marginBottom: "1.5rem", lineHeight: "1.6" },
+    planBadge:      { display: "inline-flex", alignItems: "center", gap: "0.5rem", background: `linear-gradient(135deg, ${colors.accentGold} 0%, ${colors.mediumBrown} 100%)`, color: colors.lightText, padding: "0.42rem 1.1rem", borderRadius: "20px", fontSize: "0.82rem", fontWeight: 700, marginBottom: "1.4rem" },
+    sectionLbl:     { display: "flex", alignItems: "center", gap: "0.7rem", fontSize: "0.7rem", fontWeight: 700, color: colors.accentGold, letterSpacing: "1.5px", textTransform: "uppercase", marginBottom: "0.85rem", marginTop: "1.4rem" },
+    sectionLine:    { flex: 1, height: "1px", background: `${colors.accentGold}33` },
+    formGrid:       { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.85rem" },
+    formLabel:      { display: "block", fontSize: "0.79rem", fontWeight: 600, color: colors.darkBrown, marginBottom: "0.32rem" },
+    formInput:      { width: "100%", padding: "0.72rem 0.9rem", borderRadius: "10px", border: `1.5px solid ${colors.lightTan}`, background: colors.offWhite, color: colors.darkText, fontSize: "0.92rem", outline: "none", boxSizing: "border-box", fontFamily: "inherit" },
+    formInputErr:   { borderColor: colors.featureCross },
+    formSelect:     { width: "100%", padding: "0.72rem 0.9rem", borderRadius: "10px", border: `1.5px solid ${colors.lightTan}`, background: colors.offWhite, color: colors.darkText, fontSize: "0.92rem", outline: "none", boxSizing: "border-box", fontFamily: "inherit", cursor: "pointer" },
+    formTextarea:   { width: "100%", padding: "0.72rem 0.9rem", borderRadius: "10px", border: `1.5px solid ${colors.lightTan}`, background: colors.offWhite, color: colors.darkText, fontSize: "0.92rem", outline: "none", boxSizing: "border-box", fontFamily: "inherit", resize: "vertical", minHeight: "90px" },
+    errText:        { fontSize: "0.74rem", color: colors.featureCross, marginTop: "0.25rem" },
+    radioGroup:     { display: "flex", gap: "0.55rem", flexWrap: "wrap", marginTop: "0.35rem" },
+    radioOpt:       { fontSize: "0.85rem", color: colors.darkBrown, cursor: "pointer", padding: "0.42rem 0.85rem", borderRadius: "8px", border: `1.5px solid ${colors.lightTan}`, background: colors.offWhite, fontFamily: "inherit", userSelect: "none", transition: "all 0.15s ease" },
+    radioOptActive: { background: `${colors.accentGold}18`, border: `1.5px solid ${colors.accentGold}`, fontWeight: 600 },
+    submitBtn:      { width: "100%", padding: "1rem", background: `linear-gradient(135deg, ${colors.accentGold} 0%, ${colors.mediumBrown} 100%)`, color: colors.lightText, border: "none", borderRadius: "12px", fontWeight: 700, fontSize: "0.96rem", cursor: "pointer", marginTop: "1.6rem", letterSpacing: "0.5px", textTransform: "uppercase", boxShadow: `0 6px 18px ${colors.accentGold}4D` },
+    cancelBtn:      { width: "100%", padding: "0.82rem", background: "transparent", color: colors.mediumBrown, border: `1.5px solid ${colors.lightTan}`, borderRadius: "12px", fontWeight: 600, fontSize: "0.92rem", cursor: "pointer", marginTop: "0.6rem" },
+    successIcon:    { width: "68px", height: "68px", borderRadius: "50%", background: `linear-gradient(135deg, ${colors.accentGold} 0%, ${colors.mediumBrown} 100%)`, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 1.2rem auto", fontSize: "1.9rem" },
+    successTitle:   { fontSize: "1.45rem", fontWeight: 800, color: colors.darkBrown, textAlign: "center", marginBottom: "0.85rem" },
+    successText:    { fontSize: "0.96rem", color: colors.mediumBrown, textAlign: "center", lineHeight: "1.7", marginBottom: "1.6rem" },
   }
 
   if (isLoading) {
     return (
-      <div style={styles.container}>
-        <div style={styles.mainCard}>
+      <div style={s.container}>
+        <div style={s.mainCard}>
           <div style={{ textAlign: "center", padding: "4rem 0" }}>
-            <div
-              style={{
-                width: "60px",
-                height: "60px",
-                border: `4px solid ${colors.lightTan}`,
-                borderTop: `4px solid ${colors.accentGold}`,
-                borderRadius: "50%",
-                animation: "spin 1s linear infinite",
-                margin: "0 auto 2rem auto",
-              }}
-            ></div>
-            <h2 style={{ color: colors.darkBrown, fontSize: "1.5rem", fontWeight: 600 }}>
-              Loading your subscription details...
-            </h2>
+            <div style={{ width: "60px", height: "60px", border: `4px solid ${colors.lightTan}`, borderTop: `4px solid ${colors.accentGold}`, borderRadius: "50%", animation: "spin 1s linear infinite", margin: "0 auto 2rem auto" }} />
+            <h2 style={{ color: colors.darkBrown, fontSize: "1.5rem", fontWeight: 600 }}>Loading...</h2>
           </div>
         </div>
       </div>
     )
   }
 
+  // ─── RENDER ───────────────────────────────────────────────────────────────
+  // IMPORTANT: The modal form is rendered directly inside the main return, NOT
+  // as a nested component function. This means React keeps the same DOM nodes
+  // across re-renders — inputs never unmount/remount, so typing works normally.
   return (
-    <div style={styles.container}>
-      <div style={styles.mainCard}>
-        <div style={styles.decorativeElement}></div>
+    <div style={s.container}>
+      <div style={s.mainCard}>
+        <div style={s.decorative} />
 
-        {/* Updated Beta Notice with Trial Information - CHANGED: Green to Brown */}
-        <div style={styles.betaNotice}>
-          <span style={styles.betaIcon}>🎉</span>
-          <strong>Special Launch Offer:</strong> Get your first{" "}
-          <span style={{ color: colors.trialBrown, fontWeight: 800 }}>3 MONTHS FREE</span> on any paid plan!
-          <br />
-          <small style={{ opacity: 0.8, marginTop: "0.5rem", display: "block" }}>
-            Start your trial today - billing begins after 3 months at regular rates
-          </small>
+        {/* ── Header ── */}
+        <div style={{ textAlign: "center", marginBottom: "1.75rem" }}>
+          <div style={s.headerBadge}>ESD / Accelerators / Incubators</div>
+          <h1 style={s.pageTitle}>Catalyst Plans – SME Programme Infrastructure</h1>
+          <p style={s.subtitle}>
+            Structured governance, monitoring, and reporting infrastructure for ESD programmes,
+            accelerators, and enterprise development initiatives.
+          </p>
+          <p style={s.footerNote}>
+            Customisation, integrations, and advanced analytics are scoped separately based on programme requirements.
+          </p>
         </div>
 
-        {isExistingUser && currentSubscription ? (
-          <>
-            <h1 style={styles.pageTitle}>Manage Your Subscription</h1>
-            <p style={styles.subtitle}>Upgrade, downgrade, or manage your current plan with ease</p>
-
-            {/* Enhanced Current subscription info with trial details */}
-            <div style={styles.subscriptionInfo}>
-              <h3 style={styles.subscriptionTitle}>Current Subscription</h3>
-              <div style={styles.subscriptionDetail}>
-                <span>Plan:</span>
-                <span style={{ fontWeight: 600 }}>{getCurrentPlanDisplayName()}</span>
+        {/* ── Status Banner ── */}
+        {catalystStatus === "pending_review" && (
+          <div style={s.statusBanner}>
+            <span style={{ fontSize: "1.8rem" }}>⏳</span>
+            <div>
+              <div style={{ fontWeight: 700, color: colors.darkBrown, fontSize: "1rem" }}>Proposal Under Review</div>
+              <div style={{ fontSize: "0.86rem", color: colors.mediumBrown, marginTop: "0.2rem" }}>
+                Your request has been received. Our team will be in touch. You can still submit another inquiry.
               </div>
-              <div style={styles.subscriptionDetail}>
-                <span>Billing Cycle:</span>
-                <span style={{ fontWeight: 600 }}>{currentSubscription.cycle || "Monthly"}</span>
-              </div>
-              <div style={styles.subscriptionDetail}>
-                <span>Current Amount:</span>
-                <span
-                  style={{
-                    fontWeight: 600,
-                    color:
-                      currentSubscription.isTrialPeriod ? colors.trialBrown : colors.darkText,
-                  }}
-                >
-                  {currentSubscription.amount === 0 && currentSubscription.isTrialPeriod
-                    ? "FREE (Trial)"
-                    : currentSubscription.amount === 0
-                      ? "Free"
-                      : `R${getCurrentPlanAmount().toLocaleString()}`}
-                </span>
-              </div>
-              {currentSubscription.originalAmount && currentSubscription.originalAmount > 0 && (
-                <div style={styles.subscriptionDetail}>
-                  <span>Regular Price:</span>
-                  <span style={{ fontWeight: 600 }}>
-                    R{currentSubscription.originalAmount}/
-                    {currentSubscription.cycle?.slice(0, -2) || "month"}
-                  </span>
-                </div>
-              )}
-              {currentSubscription.isTrialPeriod && currentSubscription.trialEndDate && (
-                <div style={styles.subscriptionDetail}>
-                  <span>Trial Ends:</span>
-                  <span style={{ fontWeight: 600, color: colors.trialBrown }}>
-                    {new Date(currentSubscription.trialEndDate).toLocaleDateString()}
-                  </span>
-                </div>
-              )}
-              <div style={styles.subscriptionDetail}>
-                <span>Status:</span>
-                <span
-                  style={{
-                    fontWeight: 600,
-                    color:
-                      currentSubscription.status === "Success" || currentSubscription.status === "active"
-                        ? colors.featureCheck
-                        : colors.featureCross,
-                  }}
-                >
-                  {currentSubscription.status === "Success" ? "Active" : currentSubscription.status}
-                </span>
-              </div>
-              {currentSubscription.autoRenew && (
-                <div style={styles.subscriptionDetail}>
-                  <span>Auto Renewal:</span>
-                  <span style={{ fontWeight: 600, color: colors.featureCheck }}>Enabled</span>
-                </div>
-              )}
-              {currentSubscription.cardLast4 && (
-                <div style={styles.subscriptionDetail}>
-                  <span>Payment Method:</span>
-                  <span style={{ fontWeight: 600 }}>
-                    {currentSubscription.cardBrand || "Card"} ending in {currentSubscription.cardLast4}
-                  </span>
-                </div>
-              )}
             </div>
-          </>
-        ) : (
-          <>
-            <h1 style={styles.pageTitle}>Choose Your Plan</h1>
-            <p style={styles.subtitle}>Select the perfect plan for your business needs - first 3 months free!</p>
-          </>
+          </div>
         )}
 
-        {/* Feature Comparison Table */}
-        <FeatureComparisonTable />
+        {/* ── Full Feature Comparison — always open, at the top ── */}
+        <div style={s.comparisonWrap}>
+          <h2 style={s.comparisonTitle}>Full Feature Comparison</h2>
+          <table style={s.featureTable}>
+            <thead>
+              <tr>
+                <th style={{ ...s.featureTh, ...s.featureThFirst }}>Feature</th>
+                <th style={s.featureTh}>Core Programme</th>
+                <th style={s.featureTh}>Scaled Programme</th>
+                <th style={s.featureTh}>Enterprise Portfolio</th>
+              </tr>
+            </thead>
+            <tbody>
+              {featureRows.map((row, i) => {
+                if (row.section) {
+                  return (
+                    <tr key={`s${i}`} style={s.sectionRow}>
+                      <td colSpan={4} style={s.sectionCell}>{row.section}</td>
+                    </tr>
+                  )
+                }
+                const dataIdx = featureRows.slice(0, i).filter(r => !r.section).length
+                return (
+                  <tr key={`r${i}`} style={dataIdx % 2 === 0 ? s.featureRowEven : s.featureRowOdd}>
+                    <td style={{ ...s.featureTd, ...s.featureTdLabel }}>{row.label}</td>
+                    <td style={s.featureTd}>{renderVal(row.core)}</td>
+                    <td style={s.featureTd}>{renderVal(row.scaled)}</td>
+                    <td style={s.featureTd}>{renderVal(row.enterprise)}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
 
-        {/* UPDATED: Pricing Cards with Zero Prices and "After Trial" Information - CHANGED: Green to Brown */}
-        <div style={styles.planGrid}>
-          {Object.entries(plans).map(([planKey, plan]) => {
-            const isCurrentPlan = isExistingUser && getCurrentPlanKey() === planKey
-            const isSelected = selectedPlan === planKey
+        {/* ── Pricing Overview Bar ── */}
+        <div style={s.pricingOverview}>
+          <div style={s.pricingOverviewTitle}>Annual Platform Fee Overview</div>
+          <div style={s.pricingOverviewGrid}>
+            {Object.entries(catalystPlans).map(([key, plan]) => (
+              <div key={key} style={s.pricingOverviewItem}>
+                <div style={s.pricingPlanName}>{plan.name}</div>
+                <div style={s.pricingPrice}>{plan.platformFee}</div>
+                <div style={s.pricingSub}>{plan.targetCohort} · {plan.contractTerm}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* ── Plan Cards ── */}
+        <div style={s.planGrid}>
+          {Object.entries(catalystPlans).map(([planKey, plan]) => {
             const isHovered = hoveredPlan === planKey
-            const isPopular = planKey === "engage"
-            const showTrialOffer = planKey !== "discover" && isNewUser()
-
-            let cardBackground = colors.offWhite
-            let nameColor = colors.darkBrown
-            let priceColor = colors.darkBrown
-            let periodColor = colors.mediumBrown
-            let featureTextColor = colors.darkText
-            let buttonBg = `linear-gradient(135deg, ${colors.accentGold} 0%, ${colors.mediumBrown} 100%)`
-            const buttonColor = colors.lightText
-
-            if (planKey === "discover") {
-              cardBackground = colors.discoverCardBg
-              nameColor = colors.lightText
-              priceColor = colors.lightText
-              periodColor = colors.lightText
-              featureTextColor = colors.lightText
-            } else if (planKey === "engage") {
-              cardBackground = colors.engageCardBg
-              nameColor = colors.lightText
-              priceColor = colors.lightText
-              periodColor = colors.lightText
-              featureTextColor = colors.lightText
-              buttonBg = `linear-gradient(135deg, ${colors.accentGold} 0%, ${colors.lightBrown} 100%)`
-            } else if (planKey === "partner") {
-              cardBackground = colors.partnerCardBg
-              nameColor = colors.lightText
-              priceColor = colors.lightText
-              periodColor = colors.lightText
-              featureTextColor = colors.lightText
-            }
-
             return (
               <div
                 key={planKey}
                 style={{
-                  ...styles.planCard,
-                  background: cardBackground,
-                  ...(isPopular ? styles.planCardPopular : {}),
-                  ...(isSelected && !isPopular ? styles.planCardSelected : {}),
-                  ...(isHovered && !isSelected && !isPopular ? styles.planCardHover : {}),
+                  ...s.planCard,
+                  background: plan.cardBg,
+                  ...(plan.isPopular
+                    ? { transform: isHovered ? "translateY(-6px) scale(1.01)" : "scale(1.01)", zIndex: 2, boxShadow: `0 20px 50px ${colors.darkBrown}33` }
+                    : { transform: isHovered ? "translateY(-6px)" : "none", boxShadow: isHovered ? `0 20px 50px ${colors.darkBrown}33` : `0 8px 24px ${colors.darkBrown}18` }
+                  ),
                 }}
                 onMouseEnter={() => setHoveredPlan(planKey)}
                 onMouseLeave={() => setHoveredPlan(null)}
-                onClick={() => handlePlanSelect(planKey)}
               >
-                {isPopular && <div style={styles.popularBadge}>POPULAR</div>}
-                <h3 style={{ ...styles.planName, color: nameColor }}>{plan.name}</h3>
-
-                {/* UPDATED: Show R0/FREE for paid plans during trial, regular price for discover - CHANGED: Green to Brown */}
-                {plan.price[billingCycle] === 0 ? (
-                  <div style={{ ...styles.planPrice, color: priceColor }}>Free</div>
-                ) : (
-                  <>
-                    {/* Show FREE/R0 prominently for trial-eligible users */}
-                    {showTrialOffer ? (
-                      <div style={{ ...styles.planPriceFree, color: colors.trialBrown }}>FREE</div>
-                    ) : (
-                      <div style={{ ...styles.planPrice, color: priceColor }}>R{plan.price[billingCycle]}</div>
-                    )}
-
-                    {/* Show period for non-trial or regular price display */}
-                    {!showTrialOffer && (
-                      <span style={{ ...styles.planPricePeriod, color: periodColor }}>
-                        / {billingCycle === "monthly" ? "month" : "year"}
-                      </span>
-                    )}
-                  </>
-                )}
-
-                <p style={{ ...styles.planDescriptionText, color: featureTextColor }}>{plan.description}</p>
-
-                {/* Trial Badge for eligible plans */}
-                {showTrialOffer && <div style={styles.freeMonthsBadge}>🎉 First 3 Months FREE!</div>}
-
-                {/* UPDATED: "After Trial" pricing information */}
-                {showTrialOffer && (
-                  <div style={styles.afterTrialPrice}>
-                    <strong>After 3-month trial:</strong>
-                    <br />
-                    R{plan.price[billingCycle]} / {billingCycle === "monthly" ? "month" : "year"}
-                  </div>
-                )}
-
-                <ul style={styles.planFeaturesList}>
-                  {plan.highlights.map((feature, index) => {
-                    const isIncluded = true
-                    const iconStyle = isIncluded ? styles.featureCheckIcon : styles.featureCrossIcon
-                    const icon = isIncluded ? "✓" : "✗"
-                    return (
-                      <li key={index} style={{ ...styles.planFeatureItem, color: featureTextColor }}>
-                        <span style={{ ...styles.featureIcon, ...iconStyle }}>{icon}</span>
-                        <span>{feature}</span>
-                      </li>
-                    )
-                  })}
+                {plan.isPopular && <div style={s.popularBadge}>POPULAR</div>}
+                <h3 style={s.planName}>{plan.name}</h3>
+                <div style={s.cohortBadge}>👥 {plan.targetCohort}</div>
+                <p style={s.planDesc}>{plan.description}</p>
+                <div style={s.divider} />
+                <div style={s.feeLabel}>Annual Platform Fee</div>
+                <div style={s.feeValue}>{plan.platformFee}</div>
+                <div style={s.feeSub}>Per SME: {plan.annualCostPerSme} · Min {plan.contractTerm}</div>
+                <div style={s.divider} />
+                <ul style={s.highlights}>
+                  {plan.highlights.map((item, i) => (
+                    <li key={i} style={s.hlItem}>
+                      <span style={s.checkIcon}>✓</span>
+                      <span>{item}</span>
+                    </li>
+                  ))}
                 </ul>
-
-                {isCurrentPlan ? (
-                  <div
-                    style={{
-                      ...styles.currentPlanBadge,
-                      width: "100%",
-                      textAlign: "center",
-                      padding: "1rem 1.5rem",
-                      borderRadius: "8px",
-                    }}
-                  >
-                    Current Plan
-                  </div>
-                ) : isSelected ? (
-                  <div
-                    style={{
-                      ...styles.selectedBadge,
-                      width: "100%",
-                      textAlign: "center",
-                      padding: "1rem 1.5rem",
-                      borderRadius: "8px",
-                    }}
-                  >
-                    Selected Plan
-                  </div>
-                ) : (
-                  <button
-                    style={{
-                      ...styles.selectButton,
-                      background: buttonBg,
-                      color: buttonColor,
-                    }}
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      handlePlanSelect(planKey)
-                    }}
-                    onMouseEnter={(e) => {
-                      e.target.style.background = colors.mediumBrown
-                    }}
-                    onMouseLeave={(e) => {
-                      e.target.style.background = buttonBg
-                    }}
-                  >
-                    {isExistingUser ? (
-                      planKey === "discover" ? "Downgrade" : showTrialOffer ? "Start Free Trial" : "Upgrade"
-                    ) : (
-                      showTrialOffer ? "Start Free Trial" : "Subscribe"
-                    )}
-                    <span>→</span>
-                  </button>
-                )}
+                <button
+                  style={{
+                    ...s.proposalBtn,
+                    ...(isHovered ? { background: colors.accentGold, border: `2px solid ${colors.accentGold}`, boxShadow: `0 8px 24px ${colors.accentGold}55` } : {}),
+                  }}
+                  onClick={() => openProposalForm(planKey)}
+                >
+                  Request Proposal →
+                </button>
               </div>
             )
           })}
         </div>
 
-        {/* Enhanced Payment Button */}
-        {(!isExistingUser || (isExistingUser && selectedPlan !== getCurrentPlanKey())) && !showPlanChangeConfirm && (
-          <div style={{ textAlign: "center", marginTop: "2rem" }}>
-            <button
-              style={{
-                ...styles.paymentButton,
-                ...(paymentProcessing ? styles.paymentButtonDisabled : {}),
-              }}
-              onClick={handlePay}
-              disabled={paymentProcessing}
-            >
-              {paymentProcessing ? (
-                <>
-                  <div
-                    style={{
-                      width: "20px",
-                      height: "20px",
-                      border: "2px solid transparent",
-                      borderTop: "2px solid currentColor",
-                      borderRadius: "50%",
-                      animation: "spin 1s linear infinite",
-                      marginRight: "0.5rem",
-                    }}
-                  ></div>
-                  Processing...
-                </>
-              ) : (
-                (() => {
-                  if (plans[selectedPlan].price[billingCycle] === 0) {
-                    return "Activate Discover Plan"
-                  } else if (isExistingUser) {
-                    if (upgradeDowngradeAction === "upgrade") {
-                      return isNewUser()
-                        ? `Start ${plans[selectedPlan].name} Trial (FREE)`
-                        : `Upgrade to ${plans[selectedPlan].name}`
-                    } else {
-                      return `Change to ${plans[selectedPlan].name}`
-                    }
-                  } else {
-                    return isNewUser()
-                      ? `Start ${plans[selectedPlan].name} Trial (FREE)`
-                      : `Subscribe to ${plans[selectedPlan].name}`
-                  }
-                })()
-              )}
-            </button>
-
-            {/* Enhanced Payment info for subscriptions with trial details - CHANGED: Green to Brown */}
-            {plans[selectedPlan].price[billingCycle] > 0 && (
-              <div
-                style={{
-                  background: `linear-gradient(135deg, ${colors.offWhite} 0%, ${colors.cream} 100%)`,
-                  borderRadius: "12px",
-                  padding: "1.5rem",
-                  marginTop: "1.5rem",
-                  border: `1px solid ${colors.lightTan}`,
-                  textAlign: "left",
-                }}
-              >
-                <h4
-                  style={{
-                    color: colors.darkBrown,
-                    marginBottom: "1rem",
-                    fontSize: "1.1rem",
-                    fontWeight: 700,
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "0.5rem",
-                  }}
-                >
-                  🎉 {isNewUser() ? "Free Trial Setup" : "Secure Subscription Payment"}
-                </h4>
-
-                {isNewUser() && (
-                  <div
-                    style={{
-                      background: `linear-gradient(135deg, ${colors.trialBrown}20 0%, ${colors.accentGold}20 100%)`,
-                      borderRadius: "8px",
-                      padding: "1rem",
-                      marginBottom: "1rem",
-                      border: `1px solid ${colors.trialBrown}`,
-                    }}
-                  >
-                    <p
-                      style={{
-                        color: colors.darkBrown,
-                        margin: 0,
-                        fontSize: "0.95rem",
-                        fontWeight: 600,
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "0.5rem",
-                      }}
-                    >
-                      ✨ <strong>3-Month Free Trial:</strong> No charges for 3 months!
-                    </p>
-                    <p
-                      style={{
-                        color: colors.mediumBrown,
-                        margin: "0.5rem 0 0 1.5rem",
-                        fontSize: "0.85rem",
-                        lineHeight: "1.4",
-                      }}
-                    >
-                      Your card will be saved for automatic billing after the trial period ends. Cancel anytime during
-                      the trial with no charges.
-                    </p>
-                  </div>
-                )}
-
-                <div
-                  style={{
-                    background: `linear-gradient(135deg, ${colors.accentGold}20 0%, ${colors.lightTan}40 100%)`,
-                    borderRadius: "8px",
-                    padding: "1rem",
-                    marginBottom: "1rem",
-                    border: `1px solid ${colors.accentGold}`,
-                  }}
-                >
-                  <p
-                    style={{
-                      color: colors.darkBrown,
-                      margin: 0,
-                      fontSize: "0.95rem",
-                      fontWeight: 600,
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "0.5rem",
-                    }}
-                  >
-                    💳 <strong>Important:</strong> For automatic renewals, please pay with a{" "}
-                    <strong>Credit or Debit Card</strong>
-                  </p>
-                  <p
-                    style={{
-                      color: colors.mediumBrown,
-                      margin: "0.5rem 0 0 1.5rem",
-                      fontSize: "0.85rem",
-                      lineHeight: "1.4",
-                    }}
-                  >
-                    Other payment methods (Scan to Pay, EFT) will complete this payment but won't enable automatic
-                    subscription renewals.
-                  </p>
-                </div>
-
-                <ul
-                  style={{
-                    listStyle: "none",
-                    padding: 0,
-                    margin: 0,
-                    color: colors.darkText,
-                    fontSize: "0.95rem",
-                    lineHeight: "1.6",
-                  }}
-                >
-                  <li style={{ marginBottom: "0.5rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                    <span style={{ color: colors.featureCheck }}>✓</span>
-                    {isNewUser() ? "Free for first 3 months" : "Immediate access to premium features"}
-                  </li>
-                  <li style={{ marginBottom: "0.5rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                    <span style={{ color: colors.featureCheck }}>✓</span>
-                    Cards are securely saved for automatic {billingCycle} renewals
-                  </li>
-                  <li style={{ marginBottom: "0.5rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                    <span style={{ color: colors.featureCheck }}>✓</span>
-                    {isNewUser()
-                      ? `Billing starts at R${plans[selectedPlan].price[billingCycle]} per ${billingCycle.slice(0, -2)} after trial`
-                      : `Automatic billing at R${plans[selectedPlan].price[billingCycle]} per ${billingCycle.slice(0, -2)}`}
-                  </li>
-                  <li style={{ marginBottom: "0.5rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                    <span style={{ color: colors.featureCheck }}>✓</span>
-                    Cancel anytime from your account settings
-                  </li>
-                  <li style={{ marginBottom: "0.5rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                    <span style={{ color: colors.featureCheck }}>✓</span>
-                    256-bit SSL encryption for all transactions
-                  </li>
-                </ul>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Downgrade Section */}
-        {isExistingUser && currentSubscription && getCurrentPlanKey() !== "discover" && (
-          <div style={styles.downgradeSection}>
-            <h3 style={{ color: colors.darkBrown, marginBottom: "1rem", fontSize: "1.25rem" }}>
-              Need to change your plan?
-            </h3>
-            <p style={{ color: colors.mediumBrown, marginBottom: "1.5rem" }}>
-              You can downgrade to a lower-tier plan anytime.
-            </p>
-            <button
-              style={styles.button}
-              onMouseEnter={(e) => {
-                e.target.style.transform = "translateY(-2px)"
-                e.target.style.boxShadow = `0 8px 20px ${colors.accentGold}66`
-              }}
-              onMouseLeave={(e) => {
-                e.target.style.transform = "translateY(0)"
-                e.target.style.boxShadow = `0 4px 12px ${colors.accentGold}4D`
-              }}
-              onClick={handleDowngradeClick}
-            >
-              Downgrade Plan
-            </button>
-          </div>
-        )}
-
-        {/* Enhanced Checkout Modal with Loading States */}
-        {showCheckout && checkoutId && (
-          <div
-            style={{
-              position: "fixed",
-              top: 0,
-              left: 0,
-              width: "100vw",
-              height: "100vh",
-              backgroundColor: `${colors.darkBrown}66`,
-              backdropFilter: "blur(8px)",
-              display: "flex",
-              justifyContent: "center",
-              alignItems: "center",
-              zIndex: 1000,
-              padding: "1rem",
-              boxSizing: "border-box",
-            }}
-          >
-            <div
-              style={{
-                background: colors.offWhite,
-                padding: "2rem",
-                borderRadius: "24px",
-                maxWidth: "600px",
-                width: "100%",
-                maxHeight: "90vh",
-                overflow: "auto",
-                boxShadow: `0 24px 60px ${colors.darkBrown}33`,
-                border: `1px solid ${colors.lightTan}`,
-                position: "relative",
-              }}
-            >
-              <h2
-                style={{
-                  color: colors.darkBrown,
-                  marginBottom: "0.5rem",
-                  textAlign: "center",
-                  fontSize: "1.5rem",
-                  fontWeight: 700,
-                }}
-              >
-                {isNewUser() ? "Start Your Free Trial" : "Complete Your Subscription"}
-              </h2>
-
-              <div
-                style={{
-                  background: `linear-gradient(135deg, ${colors.cream} 0%, ${colors.lightTan} 100%)`,
-                  borderRadius: "12px",
-                  padding: "1rem",
-                  marginBottom: "1.5rem",
-                  border: `1px solid ${colors.lightTan}`,
-                  textAlign: "center",
-                }}
-              >
-                <p
-                  style={{
-                    color: colors.darkBrown,
-                    margin: 0,
-                    fontSize: "1rem",
-                    fontWeight: 600,
-                  }}
-                >
-                  {isNewUser() ? (
-                    <>🎉 Starting {plans[selectedPlan].name} Free Trial</>
-                  ) : (
-                    <>🔄 Setting up {plans[selectedPlan].name} Plan</>
-                  )}
-                </p>
-                <p
-                  style={{
-                    color: colors.mediumBrown,
-                    margin: "0.5rem 0 0 0",
-                    fontSize: "0.9rem",
-                  }}
-                >
-                  {isNewUser()
-                    ? "Free for 3 months, then automatic billing begins"
-                    : `Your card will be saved for automatic ${billingCycle} renewals`}
-                </p>
-              </div>
-
-              <EmbeddedCheckout
-                checkoutId={checkoutId}
-                onCompleted={handleCheckoutCompleted}
-                onCancelled={handleCheckoutCancelled}
-                onExpired={handleCheckoutExpired}
-                paymentType="subscription"
-                amount={0} // Always 0 for trial
-                planName={plans[selectedPlan].name}
-                userEmail={email}
-                userName={fullName}
-              />
-
-              <div style={{ textAlign: "center", marginTop: "1rem" }}>
-                <button
-                  style={{
-                    padding: "1rem 2rem",
-                    background: `linear-gradient(135deg, ${colors.lightTan} 0%, ${colors.cream} 100%)`,
-                    color: colors.darkBrown,
-                    border: "none",
-                    borderRadius: "12px",
-                    fontWeight: 700,
-                    fontSize: "1rem",
-                    cursor: "pointer",
-                    opacity: paymentProcessing ? 0.5 : 1,
-                  }}
-                  onClick={() => {
-                    if (!paymentProcessing) {
-                      setShowCheckout(false)
-                      setPaymentProcessing(false)
-                    }
-                  }}
-                  disabled={paymentProcessing}
-                >
-                  {paymentProcessing ? "Processing..." : "Cancel"}
-                </button>
-              </div>
-
-              {/* Processing Overlay */}
-              {paymentProcessing && (
-                <div
-                  style={{
-                    position: "absolute",
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    background: `${colors.offWhite}F5`,
-                    backdropFilter: "blur(6px)",
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    zIndex: 1001,
-                    borderRadius: "24px",
-                    boxShadow: `inset 0 0 20px ${colors.darkBrown}20`,
-                  }}
-                >
-                  <div
-                    style={{
-                      width: "80px",
-                      height: "80px",
-                      border: `6px solid ${colors.lightTan}`,
-                      borderTop: `6px solid ${colors.accentGold}`,
-                      borderRadius: "50%",
-                      animation: "spin 1s linear infinite",
-                      marginBottom: "2rem",
-                    }}
-                  ></div>
-                  <h3
-                    style={{
-                      color: colors.darkBrown,
-                      fontSize: "1.75rem",
-                      fontWeight: 800,
-                      marginBottom: "1rem",
-                      textAlign: "center",
-                      textShadow: `0 2px 4px ${colors.darkBrown}20`,
-                    }}
-                  >
-                    {isNewUser() ? "Setting up Your Free Trial..." : "Processing Subscription..."}
-                  </h3>
-                  <p
-                    style={{
-                      color: colors.mediumBrown,
-                      fontSize: "1.1rem",
-                      textAlign: "center",
-                      lineHeight: "1.6",
-                      maxWidth: "350px",
-                      fontWeight: 500,
-                      textShadow: `0 1px 2px ${colors.darkBrown}10`,
-                    }}
-                  >
-                    🔒 {isNewUser() ? "Activating your 3-month free trial" : "Securing your subscription"}...
-                    <br />
-                    <strong>Please do not close this window.</strong>
-                  </p>
-
-                  {/* Progress indicator */}
-                  <div
-                    style={{
-                      marginTop: "2rem",
-                      width: "200px",
-                      height: "4px",
-                      background: colors.lightTan,
-                      borderRadius: "2px",
-                      overflow: "hidden",
-                      position: "relative",
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: "50%",
-                        height: "100%",
-                        background: `linear-gradient(90deg, ${colors.accentGold} 0%, ${colors.mediumBrown} 100%)`,
-                        borderRadius: "2px",
-                        animation: "progressSlide 2s linear infinite",
-                      }}
-                    ></div>
-                  </div>
-                </div>
-              )}
+        {/* ── No self-serve note ── */}
+        <div style={{ background: `${colors.accentGold}10`, border: `2px solid ${colors.accentGold}33`, borderRadius: "14px", padding: "1.1rem 1.4rem", marginBottom: "2rem", display: "flex", gap: "0.9rem", alignItems: "flex-start" }}>
+          <span style={{ fontSize: "1.3rem", flexShrink: 0 }}>💡</span>
+          <div>
+            <div style={{ fontWeight: 700, color: colors.darkBrown, fontSize: "0.91rem", marginBottom: "0.18rem" }}>Cohort-Based Pricing – No Instant Activation</div>
+            <div style={{ fontSize: "0.84rem", color: colors.mediumBrown, lineHeight: "1.6" }}>
+              Catalyst plans are priced based on programme structure, cohort size, governance complexity, and customisation requirements. All plans go through a structured sales process before activation.
             </div>
           </div>
-        )}
+        </div>
 
-        {/* Plan Change Confirmation Modal */}
-        {showPlanChangeConfirm && (
-          <div style={styles.planChangeModal}>
-            <div style={styles.modalContent}>
-              <h3 style={styles.modalTitle}>Confirm Plan Change</h3>
-              <p style={styles.modalText}>
-                You are about to <strong style={{ color: colors.accentGold }}>{upgradeDowngradeAction}</strong> from{" "}
-                <strong style={{ color: colors.darkBrown }}>{currentSubscription?.plan || "Discover"}</strong> to{" "}
-                <strong style={{ color: colors.darkBrown }}>{plans[selectedPlan].name}</strong>.
-              </p>
-              <div
-                style={{
-                  margin: "2rem 0",
-                  padding: "1.5rem",
-                  background: `linear-gradient(135deg, ${colors.cream} 0%, ${colors.lightTan} 100%)`,
-                  borderRadius: "12px",
-                  border: `1px solid ${colors.lightTan}`,
-                }}
-              >
-                <div style={{ marginBottom: "0.5rem", color: colors.mediumBrown }}>
-                  <strong>Current:</strong> R{currentSubscription?.amount || 0}/
-                  {currentSubscription?.cycle || "monthly"}
-                </div>
-                <div style={{ color: colors.mediumBrown }}>
-                  <strong>New:</strong>{" "}
-                  {plans[selectedPlan].price[billingCycle] === 0
-                    ? "Free"
-                    : isNewUser()
-                      ? `FREE for 3 months, then R${plans[selectedPlan].price[billingCycle]}/${billingCycle === "monthly" ? "month" : "year"}`
-                      : `R${plans[selectedPlan].price[billingCycle]}/${billingCycle === "monthly" ? "month" : "year"}`}
-                </div>
-              </div>
-              <div style={styles.modalActions}>
-                <button
-                  style={styles.buttonSecondary}
-                  onMouseEnter={(e) => {
-                    e.target.style.transform = "translateY(-2px)"
-                    e.target.style.boxShadow = `0 8px 20px ${colors.lightTan}4D`
-                  }}
-                  onMouseLeave={(e) => {
-                    e.target.style.transform = "translateY(0)"
-                    e.target.style.boxShadow = `0 4px 12px ${colors.lightTan}33`
-                  }}
-                  onClick={cancelPlanChange}
-                >
-                  Cancel
-                </button>
-                <button
-                  style={styles.button}
-                  onMouseEnter={(e) => {
-                    e.target.style.transform = "translateY(-2px)"
-                    e.target.style.boxShadow = `0 8px 20px ${colors.accentGold}66`
-                  }}
-                  onMouseLeave={(e) => {
-                    e.target.style.transform = "translateY(0)"
-                    e.target.style.boxShadow = `0 4px 12px ${colors.accentGold}4D`
-                  }}
-                  onClick={confirmPlanChange}
-                >
-                  {upgradeDowngradeAction === "downgrade" && selectedPlan === "discover"
-                    ? "Confirm Downgrade"
-                    : isNewUser()
-                      ? `Start Free Trial`
-                      : `Pay & ${upgradeDowngradeAction}`}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Downgrade Options Modal */}
-        {showDowngradeOptions && (
-          <div style={styles.planChangeModal}>
-            <div style={styles.modalContent}>
-              <h3 style={styles.modalTitle}>Choose Downgrade Option</h3>
-              <p style={styles.modalText}>Select which plan you'd like to downgrade to:</p>
-              <div style={{ margin: "2rem 0" }}>
-                {getCurrentPlanKey() === "partner" && (
-                  <div
-                    style={{
-                      cursor: "pointer",
-                      padding: "1.5rem",
-                      borderBottom: `1px solid ${colors.lightTan}`,
-                      borderRadius: "12px 12px 0 0",
-                      background: `linear-gradient(135deg, ${colors.cream} 0%, ${colors.lightTan} 100%)`,
-                      marginBottom: "1rem",
-                      transition: "all 0.3s ease",
-                    }}
-                    onMouseEnter={(e) => {
-                      e.target.style.background = `linear-gradient(135deg, ${colors.lightTan} 0%, ${colors.lightBrown} 100%)`
-                    }}
-                    onMouseLeave={(e) => {
-                      e.target.style.background = `linear-gradient(135deg, ${colors.cream} 0%, ${colors.lightTan} 100%)`
-                    }}
-                    onClick={() => handleDowngradeSelect("engage")}
-                  >
-                    <div style={{ fontWeight: 700, color: colors.darkBrown, fontSize: "1.125rem" }}>Engage Plan</div>
-                    <div style={{ color: colors.mediumBrown, marginTop: "0.5rem" }}>
-                      R {plans.engage.price.monthly}/month
-                    </div>
-                    <p style={{ margin: "0.5rem 0 0 0", color: colors.accentGold, fontSize: "0.95rem" }}>
-                      Keep most features, save R{plans.partner.price.monthly - plans.engage.price.monthly}/month
-                    </p>
+        {/* ── Add-ons ── */}
+        <div style={s.addOnsWrap}>
+          <h3 style={s.addOnTitle}>🛠️ Customisation & Add-Ons</h3>
+          <p style={s.addOnSub}>⚠️ NOT included in base plans — quoted and contracted separately.</p>
+          <div style={s.addOnsGrid}>
+            {catalystAddOns.map(addon => (
+              <div key={addon.id} style={s.addOnCard}>
+                <div style={s.addOnName}>{addon.name}</div>
+                <div style={s.addOnPrice}>{addon.price}</div>
+                {addon.items.map((item, i) => (
+                  <div key={i} style={s.addOnItem}>
+                    <span style={{ color: colors.accentGold }}>·</span>
+                    <span>{item}</span>
                   </div>
-                )}
-                <div
-                  style={{
-                    cursor: "pointer",
-                    padding: "1.5rem",
-                    borderRadius: "12px",
-                    background: `linear-gradient(135deg, ${colors.cream} 0%, ${colors.lightTan} 100%)`,
-                    transition: "all 0.3s ease",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.target.style.background = `linear-gradient(135deg, ${colors.lightTan} 0%, ${colors.lightBrown} 100%)`
-                  }}
-                  onMouseLeave={(e) => {
-                    e.target.style.background = `linear-gradient(135deg, ${colors.cream} 0%, ${colors.lightTan} 100%)`
-                  }}
-                  onClick={() => handleDowngradeSelect("discover")}
-                >
-                  <div style={{ fontWeight: 700, color: colors.darkBrown, fontSize: "1.125rem" }}>Discover Plan</div>
-                  <div style={{ color: colors.mediumBrown, marginTop: "0.5rem" }}>Free</div>
-                  <p style={{ margin: "0.5rem 0 0 0", color: colors.accentGold, fontSize: "0.95rem" }}>
-                    Basic features only, no monthly fee
-                  </p>
-                </div>
+                ))}
               </div>
-              <div style={styles.modalActions}>
-                <button
-                  style={styles.buttonSecondary}
-                  onMouseEnter={(e) => {
-                    e.target.style.transform = "translateY(-2px)"
-                    e.target.style.boxShadow = `0 8px 20px ${colors.lightTan}4D`
-                  }}
-                  onMouseLeave={(e) => {
-                    e.target.style.transform = "translateY(0)"
-                    e.target.style.boxShadow = `0 4px 12px ${colors.lightTan}33`
-                  }}
-                  onClick={cancelDowngradeOptions}
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
+            ))}
           </div>
-        )}
+        </div>
 
-        {/* Subscription management options for existing users */}
-        {isExistingUser && currentSubscription && (
-          <div
-            style={{
-              background: `linear-gradient(135deg, ${colors.cream} 0%, ${colors.lightTan} 100%)`,
-              borderRadius: "16px",
-              padding: "2rem",
-              marginTop: "3rem",
-              border: `1px solid ${colors.lightTan}`,
-            }}
-          >
-            <h3
-              style={{
-                color: colors.darkBrown,
-                marginBottom: "1.5rem",
-                fontSize: "1.5rem",
-                fontWeight: 700,
-                textAlign: "center",
-              }}
-            >
-              Subscription Management
-            </h3>
-
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-                gap: "1rem",
-                marginTop: "1.5rem",
-              }}
-            >
+        {/* ── Bottom CTA ── */}
+        <div style={{ textAlign: "center", padding: "1.25rem 0 0.25rem" }}>
+          <p style={{ fontSize: "0.98rem", color: colors.mediumBrown, marginBottom: "1rem" }}>
+            Ready to structure your SME programme infrastructure?
+          </p>
+          <div style={{ display: "flex", gap: "0.85rem", justifyContent: "center", flexWrap: "wrap" }}>
+            {Object.entries(catalystPlans).map(([key, plan]) => (
               <button
-                style={{
-                  padding: "1rem 1.5rem",
-                  background: `linear-gradient(135deg, ${colors.accentGold} 0%, ${colors.lightBrown} 100%)`,
-                  color: colors.lightText,
-                  border: "none",
-                  borderRadius: "12px",
-                  fontWeight: 600,
-                  fontSize: "0.95rem",
-                  cursor: "pointer",
-                  transition: "all 0.3s ease",
-                  textAlign: "center",
-                }}
-                onClick={() => {
-                  alert("Update payment method feature coming soon!")
-                }}
+                key={key}
+                style={{ padding: "0.82rem 1.65rem", background: `linear-gradient(135deg, ${colors.accentGold} 0%, ${colors.mediumBrown} 100%)`, color: colors.lightText, border: "none", borderRadius: "12px", fontWeight: 700, fontSize: "0.86rem", cursor: "pointer", boxShadow: `0 4px 12px ${colors.accentGold}4D` }}
+                onClick={() => openProposalForm(key)}
               >
-                💳 Update Payment Method
+                {plan.name} →
               </button>
-
-              <button
-                style={{
-                  padding: "1rem 1.5rem",
-                  background: `linear-gradient(135deg, ${colors.featureCross} 0%, #B71C1C 100%)`,
-                  color: colors.lightText,
-                  border: "none",
-                  borderRadius: "12px",
-                  fontWeight: 600,
-                  fontSize: "0.95rem",
-                  cursor: "pointer",
-                  transition: "all 0.3s ease",
-                  textAlign: "center",
-                }}
-                onClick={handleCancelSubscription}
-              >
-                ❌ Cancel Subscription
-              </button>
-            </div>
+            ))}
           </div>
-        )}
+        </div>
       </div>
 
+      {/* ════════════════════════════════════════════════════════════════════
+          PROPOSAL FORM MODAL
+          Rendered here, at the root level of the return — NOT as a nested
+          component function. This is the fix: React preserves the same DOM
+          nodes across re-renders, so text inputs never lose focus or reset.
+          ════════════════════════════════════════════════════════════════════ */}
+      {showProposalForm && (
+        <div style={s.overlay}>
+          <div style={s.modal}>
+
+            {/* ── Success state ── */}
+            {submitted ? (
+              <div style={{ textAlign: "center", padding: "1rem 0" }}>
+                <div style={s.successIcon}>🎉</div>
+                <h2 style={s.successTitle}>Request Received</h2>
+                <p style={s.successText}>
+                  Thank you for your interest in BIG Marketplace.<br /><br />
+                  Our team will review your requirements and be in touch to structure a tailored
+                  proposal based on your programme scope, cohort size, and reporting needs.
+                </p>
+                <button style={s.submitBtn} onClick={closeProposalForm}>Close</button>
+              </div>
+            ) : (
+              /* ── Form ── */
+              <>
+                <h2 style={s.modalTitle}>Request Programme Proposal</h2>
+                <p style={s.modalSub}>
+                  Complete the form below and our team will prepare a tailored proposal for your programme.
+                </p>
+                <div style={s.planBadge}>📋 {form.selectedPlan || "Catalyst Plan"}</div>
+
+                {/* Section 1 — Organisation Details */}
+                <div style={s.sectionLbl}>
+                  <span style={s.sectionLine} />
+                  Organisation Details
+                  <span style={s.sectionLine} />
+                </div>
+                <div style={s.formGrid}>
+                  <div>
+                    <label style={s.formLabel}>Organisation Name *</label>
+                    <input
+                      style={{ ...s.formInput, ...(formErrors.organisationName ? s.formInputErr : {}) }}
+                      value={form.organisationName}
+                      onChange={e => updateForm("organisationName", e.target.value)}
+                      placeholder="e.g. Acme ESD Programme"
+                    />
+                    {formErrors.organisationName && <div style={s.errText}>{formErrors.organisationName}</div>}
+                  </div>
+                  <div>
+                    <label style={s.formLabel}>Contact Person *</label>
+                    <input
+                      style={{ ...s.formInput, ...(formErrors.contactPerson ? s.formInputErr : {}) }}
+                      value={form.contactPerson}
+                      onChange={e => updateForm("contactPerson", e.target.value)}
+                      placeholder="Full Name"
+                    />
+                    {formErrors.contactPerson && <div style={s.errText}>{formErrors.contactPerson}</div>}
+                  </div>
+                  <div>
+                    <label style={s.formLabel}>Email Address *</label>
+                    <input
+                      style={{ ...s.formInput, ...(formErrors.email ? s.formInputErr : {}) }}
+                      type="email"
+                      value={form.email}
+                      onChange={e => updateForm("email", e.target.value)}
+                      placeholder="you@company.com"
+                    />
+                    {formErrors.email && <div style={s.errText}>{formErrors.email}</div>}
+                  </div>
+                  <div>
+                    <label style={s.formLabel}>Phone Number *</label>
+                    <input
+                      style={{ ...s.formInput, ...(formErrors.phone ? s.formInputErr : {}) }}
+                      value={form.phone}
+                      onChange={e => updateForm("phone", e.target.value)}
+                      placeholder="+27 ..."
+                    />
+                    {formErrors.phone && <div style={s.errText}>{formErrors.phone}</div>}
+                  </div>
+                </div>
+
+                {/* Section 2 — Programme Details */}
+                <div style={s.sectionLbl}>
+                  <span style={s.sectionLine} />
+                  Programme Details
+                  <span style={s.sectionLine} />
+                </div>
+                <div style={{ marginBottom: "0.85rem" }}>
+                  <label style={s.formLabel}>Programme Type *</label>
+                  <div style={s.radioGroup}>
+                    {["ESD Programme", "Accelerator", "Incubator", "Other"].map(opt => (
+                      <span
+                        key={opt}
+                        style={{ ...s.radioOpt, ...(form.programmeType === opt ? s.radioOptActive : {}) }}
+                        onClick={() => updateForm("programmeType", opt)}
+                      >
+                        {opt}
+                      </span>
+                    ))}
+                  </div>
+                  {formErrors.programmeType && <div style={s.errText}>{formErrors.programmeType}</div>}
+                </div>
+                <div style={s.formGrid}>
+                  <div>
+                    <label style={s.formLabel}>Expected Number of SMEs *</label>
+                    <select
+                      style={{ ...s.formSelect, ...(formErrors.cohortSize ? s.formInputErr : {}) }}
+                      value={form.cohortSize}
+                      onChange={e => updateForm("cohortSize", e.target.value)}
+                    >
+                      <option value="">Select range</option>
+                      {["10–20", "20–50", "50–100", "100+"].map(o => <option key={o} value={o}>{o}</option>)}
+                    </select>
+                    {formErrors.cohortSize && <div style={s.errText}>{formErrors.cohortSize}</div>}
+                  </div>
+                  <div>
+                    <label style={s.formLabel}>Programme Duration *</label>
+                    <select
+                      style={{ ...s.formSelect, ...(formErrors.duration ? s.formInputErr : {}) }}
+                      value={form.duration}
+                      onChange={e => updateForm("duration", e.target.value)}
+                    >
+                      <option value="">Select duration</option>
+                      {["12 months", "24 months", "36 months"].map(o => <option key={o} value={o}>{o}</option>)}
+                    </select>
+                    {formErrors.duration && <div style={s.errText}>{formErrors.duration}</div>}
+                  </div>
+                </div>
+
+                {/* Section 3 — Requirements */}
+                <div style={s.sectionLbl}>
+                  <span style={s.sectionLine} />
+                  Requirements
+                  <span style={s.sectionLine} />
+                </div>
+                {[
+                  { field: "requiresCustomReporting", label: "Custom Reporting" },
+                  { field: "requiresIntegration",     label: "Integration" },
+                  { field: "requiresMultiDivision",   label: "Multi-Division Support" },
+                ].map(({ field, label }) => (
+                  <div key={field} style={{ marginBottom: "0.7rem" }}>
+                    <label style={s.formLabel}>{label}</label>
+                    <div style={s.radioGroup}>
+                      {["Yes", "No"].map(opt => (
+                        <span
+                          key={opt}
+                          style={{ ...s.radioOpt, ...(form[field] === opt ? s.radioOptActive : {}) }}
+                          onClick={() => updateForm(field, opt)}
+                        >
+                          {opt}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+
+                {/* Section 4 — Notes */}
+                <div style={s.sectionLbl}>
+                  <span style={s.sectionLine} />
+                  Additional Notes
+                  <span style={s.sectionLine} />
+                </div>
+                <textarea
+                  style={s.formTextarea}
+                  value={form.notes}
+                  onChange={e => updateForm("notes", e.target.value)}
+                  placeholder="Describe your programme and any specific requirements..."
+                />
+
+                <button
+                  style={{ ...s.submitBtn, opacity: submitting ? 0.7 : 1 }}
+                  onClick={handleSubmit}
+                  disabled={submitting}
+                >
+                  {submitting ? "Submitting..." : "Submit Proposal Request →"}
+                </button>
+                <button style={s.cancelBtn} onClick={closeProposalForm}>Cancel</button>
+              </>
+            )}
+
+          </div>
+        </div>
+      )}
+
       <style>{`
-        @keyframes spin {
-          0% { transform: rotate(0deg); }
-          100% { transform: rotate(360deg); }
-        }
-
-        @keyframes fadeIn {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
-
-        @keyframes progressSlide {
-          0% { transform: translateX(-100%); }
-          100% { transform: translateX(300%); }
-        }
-
-        /* Sidebar responsive adjustments */
-        @media (max-width: 1400px) {
-          .subscription-container {
-            width: "100%" !important;
-          }
-        }
-
-        @media (max-width: 1200px) {
-          .subscription-container {
-            width: "100%" !important;
-          }
-        }
-
-        @media (max-width: 1024px) {
-          .subscription-container {
-            width: "100%" !important;
-          }
-        }
-
-        @media (max-width: 768px) {
-          .subscription-container {
-            margin-left: 0px !important;
-            width: 100% !important;
-            padding: 0.5rem !important;
-          }
-        }
-
-        @media (max-width: 640px) {
-          .subscription-container {
-            padding: 0.25rem !important;
-          }
-          .subscription-main-card {
-            padding: 1rem !important;
-            border-radius: 16px !important;
-          }
+        @keyframes spin { 0%{transform:rotate(0deg)} 100%{transform:rotate(360deg)} }
+        @media(max-width:900px){
+          .cat-plan-grid { grid-template-columns: 1fr !important; }
+          .cat-addons-grid { grid-template-columns: 1fr !important; }
+          .cat-pricing-grid { grid-template-columns: 1fr !important; }
         }
       `}</style>
     </div>
