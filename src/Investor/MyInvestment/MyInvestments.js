@@ -49,11 +49,9 @@ import PipelineFutureOpportunities from './PipelineFutureOpportunities';
 const styles = `
 /* Main container */
 .investments-container {
-  margin-left: 250px;
   padding: 20px;
   min-height: 100vh;
   background-color: #f9f9f9;
-  margin-top: 60px;
 }
 
 /* Content area */
@@ -439,7 +437,6 @@ document.head.appendChild(styleSheet);
 
 const MyInvestments = () => {
   const [activeCategory, setActiveCategory] = useState('Portfolio Overview');
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [showDownloadOptions, setShowDownloadOptions] = useState(false);
   const [popupContent, setPopupContent] = useState(null);
   const [showPopup, setShowPopup] = useState(false);
@@ -470,22 +467,6 @@ const MyInvestments = () => {
     };
 
     getCurrentUser();
-  }, []);
-
-  useEffect(() => {
-    const checkSidebarState = () => {
-      setIsSidebarCollapsed(document.body.classList.contains("sidebar-collapsed"));
-    };
-
-    checkSidebarState();
-
-    const observer = new MutationObserver(checkSidebarState);
-    observer.observe(document.body, {
-      attributes: true,
-      attributeFilter: ["class"],
-    });
-
-    return () => observer.disconnect();
   }, []);
 
   // Popup functionality
@@ -709,7 +690,7 @@ const MyInvestments = () => {
     minHeight: "100vh",
     maxWidth: "100vw",
     overflowX: "hidden",
-    padding: `70px 20px 20px ${isSidebarCollapsed ? "100px" : "270px"}`,
+    padding: `20px`,
     margin: "0",
     boxSizing: "border-box",
     position: "relative",
@@ -737,7 +718,6 @@ const MyInvestments = () => {
         subtitle={"Access portfolio analytics, AI insights, and exportable reports on our Engage & Partner plans."}
         features={["Portfolio & Cohort analytics", "AI recommendations & alerts", "Exportable reports & PDFs", "Priority support and account setup"]}
         variant={"center"}
-        mainMarginLeft={`${isSidebarCollapsed ? "100px" : "270px"}`}
         plans={["Partner"]}
         upgradeMessage={"Upgrade your subscription to unlock comprehensive portfolio analytics, AI-driven insights, and exportable reports to optimize your investment strategy."}
         primaryLabel={"View Available Plans"}

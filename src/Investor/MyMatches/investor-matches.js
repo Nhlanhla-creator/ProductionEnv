@@ -55,7 +55,6 @@ export default function InvestorDashboardPage() {
   const [showWelcomePopup, setShowWelcomePopup] = useState(false)
   const [currentOnboardingStep, setCurrentOnboardingStep] = useState(0)
   const [loading, setLoading] = useState(false)
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
 
   // Initialize filters and stage filter state
   const [filters, setFilters] = useState({
@@ -81,31 +80,12 @@ export default function InvestorDashboardPage() {
     return () => unsubscribe()
   }, [])
 
-  useEffect(() => {
-    const checkSidebarState = () => {
-      setIsSidebarCollapsed(document.body.classList.contains("sidebar-collapsed"))
-    }
-
-    // Check initial state
-    checkSidebarState()
-
-    // Watch for changes
-    const observer = new MutationObserver(checkSidebarState)
-    observer.observe(document.body, {
-      attributes: true,
-      attributeFilter: ["class"],
-    })
-
-    return () => observer.disconnect()
-  }, [])
-
   const getContainerStyles = () => ({
     width: "100%",
     minHeight: "100vh",
     maxWidth: "100vw",
     overflowX: "hidden",
-    padding: `80px 10px 20px ${isSidebarCollapsed ? "100px" : "280px"}`,
-    marginLeft: "-20px",
+    padding: `20px`,
     boxSizing: "border-box",
     position: "relative",
     backgroundImage: "url('../../assets/BiGBackround.png')",

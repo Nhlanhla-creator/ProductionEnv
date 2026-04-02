@@ -48,29 +48,9 @@ function MyCohorts() {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [selectedCohort, setSelectedCohort] = useState(null)
-  const [isSidebarOpen, setIsSidebarOpen] = useState(true)
-
+  
   const { currentPlan, subscriptionLoading } = useSubscriptionPlan()
   const navigate = useNavigate()
-
-  useEffect(() => {
-    // Check sidebar state from localStorage or a global state
-    const checkSidebarState = () => {
-      const sidebarState = localStorage.getItem('sidebarOpen')
-      setIsSidebarOpen(sidebarState !== 'false')
-    }
-
-    checkSidebarState()
-
-    // Listen for sidebar toggle events
-    window.addEventListener('sidebarToggle', checkSidebarState)
-    window.addEventListener('storage', checkSidebarState)
-
-    return () => {
-      window.removeEventListener('sidebarToggle', checkSidebarState)
-      window.removeEventListener('storage', checkSidebarState)
-    }
-  }, [])
 
   // Load cohorts only after subscription is known and the user is allowed to view cohorts
   useEffect(() => {
@@ -282,8 +262,6 @@ function MyCohorts() {
     animation: "slideUp 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)",
   }
 
-  const mainMarginLeft = isSidebarOpen ? "250px" : "80px"
-
   if (subscriptionLoading) {
     return (
       <div style={{
@@ -291,7 +269,6 @@ function MyCohorts() {
         justifyContent: "center",
         alignItems: "center",
         minHeight: "60vh",
-        marginLeft: mainMarginLeft,
         padding: "20px",
         transition: "margin-left 0.3s ease"
       }}>
@@ -310,7 +287,6 @@ function MyCohorts() {
         minHeight: "100vh",
         flexDirection: "column",
         gap: "16px",
-        marginLeft: mainMarginLeft,
         padding: "20px",
         transition: "margin-left 0.3s ease"
       }}>
@@ -327,7 +303,6 @@ function MyCohorts() {
         subtitle={"The My Cohorts feature is available on our Engage and Partner plans. Upgrade now to manage your investment cohorts, access detailed portfolio analytics and priority support."}
         features={["Portfolio & cohort analytics", "Manage and track SME investments", "Private deal room access", "Priority support and reporting"]}
         variant={"center"}
-        mainMarginLeft={mainMarginLeft}
         plans={["Engage", "Partner"]}
         upgradeMessage={"Upgrade your subscription to manage your investment cohorts, access detailed portfolio analytics and priority support."}
         primaryLabel={"View Available Plans"}
@@ -337,8 +312,7 @@ function MyCohorts() {
 
   return (
     <div style={{ 
-      marginLeft: mainMarginLeft,
-      padding: "60px",
+      padding: "20px",
       backgroundColor: "#faf7f2", 
       minHeight: "100vh",
       boxSizing: "border-box",

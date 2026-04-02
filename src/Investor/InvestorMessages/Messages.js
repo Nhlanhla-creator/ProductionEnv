@@ -5,24 +5,6 @@ import useSubscriptionPlan from "../../hooks/useSubscriptionPlan"
 
 const InvestorMessages = () => {
   const { currentPlan, subscriptionLoading } = useSubscriptionPlan()
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
-
-  useEffect(() => {
-    const checkSidebarState = () => {
-      setIsSidebarCollapsed(document.body.classList.contains("sidebar-collapsed"))
-    }
-
-    checkSidebarState()
-    window.addEventListener("sidebarToggle", checkSidebarState)
-    window.addEventListener("storage", checkSidebarState)
-
-    return () => {
-      window.removeEventListener("sidebarToggle", checkSidebarState)
-      window.removeEventListener("storage", checkSidebarState)
-    }
-  }, [])
-
-
 
   const config = {
     supportAttachments: true,
@@ -35,7 +17,6 @@ const InvestorMessages = () => {
     minHeight: "100vh",
     maxWidth: "100vw",
     overflowX: "hidden",
-    padding: `72px 20px 20px ${isSidebarCollapsed ? "80px" : "280px"}`,
     margin: "0",
     boxSizing: "border-box",
     position: "relative",

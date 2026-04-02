@@ -46,32 +46,10 @@ const Documents = () => {
   const [statusFilter, setStatusFilter] = useState("all")
   const [searchTerm, setSearchTerm] = useState("")
   const [loading, setLoading] = useState(true)
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const [isUploading, setIsUploading] = useState(false)
   const [isOverlayVisible, setIsOverlayVisible] = useState(false)
   const [validationResults, setValidationResults] = useState({})
   const [showStatusFilter, setShowStatusFilter] = useState(false)
-
-  useEffect(() => {
-    const observer = new MutationObserver((mutations) => {
-      mutations.forEach((mutation) => {
-        if (mutation.type === "attributes" && mutation.attributeName === "class") {
-          const hasCollapsedClass = document.body.classList.contains("sidebar-collapsed")
-          setIsSidebarCollapsed(hasCollapsedClass)
-        }
-      })
-    })
-
-    observer.observe(document.body, {
-      attributes: true,
-      attributeFilter: ["class"],
-    })
-
-    const hasCollapsedClass = document.body.classList.contains("sidebar-collapsed")
-    setIsSidebarCollapsed(hasCollapsedClass)
-
-    return () => observer.disconnect()
-  }, [])
 
   // Handle click outside for status filter
   useEffect(() => {
@@ -440,10 +418,8 @@ const Documents = () => {
           fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
           minHeight: "100vh",
           backgroundColor: "#faf8f6",
-          padding: "24px",
-          paddingLeft: isSidebarCollapsed ? "100px" : "280px",
+          padding: "20px",
           transition: "padding 0.3s ease",
-          marginTop: "60px",
           width: "100%",
           boxSizing: "border-box",
           overflowX: "hidden",

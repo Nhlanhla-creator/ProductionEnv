@@ -549,12 +549,25 @@ function App() {
   // Investor Protected Layout
   const InvestorLayout = ({ children }) => {
     const location = useLocation()
+    const [collapsed, setCollapsed] = useState(true);
+
+    useEffect(() => {
+      const check = () => setCollapsed(document.body.classList.contains("sidebar-collapsed"));
+      check();
+      const obs = new MutationObserver(check);
+      obs.observe(document.body, {
+        attributes: true,
+        attributeFilter: ["class"],
+      });
+      return () => obs.disconnect();
+    }, []);
+
     return (
       <div className="app-layout">
         <InvestorSidebar companyName={companyName} />
-        <div className="main-content">
+        <div className={`${styles.mainContent} ${collapsed ? styles.sidebarCollapsed : styles.sidebarExpanded}`}>
           <InvestorHeader companyName={companyName} profileImage={profileImage} setProfileImage={setProfileImage} />
-          <div className="page-content">{children}</div>
+          <div>{children}</div>
         </div>
       </div>
     )

@@ -10,24 +10,12 @@ export default function Upsell({
   primaryLabel = "View Available Plans",
   onPrimary,
   variant = "card", // 'popup' or 'card'
-  expandedWidth = 270,
-  collapsedWidth = 100,
   plans = ["Standard", "Premium"],
   upgradeMessage = null,
   inModal = false,
   onClose,
 }) {
   const navigate = useNavigate()
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
-    try {
-      if (typeof document !== "undefined" && document.body) {
-        return document.body.classList.contains("sidebar-collapsed")
-      }
-      return localStorage.getItem("sidebarOpen") === "false"
-    } catch (e) {
-      return false
-    }
-  })
 
   const modalInnerStyle = {
     backgroundColor: "#ffffff",
@@ -58,43 +46,6 @@ export default function Upsell({
     justifyContent: 'center',
     transition: 'all 0.3s ease'
   }
-
-  useEffect(() => {
-    const update = () => {
-      try {
-        if (document && document.body) {
-          setIsSidebarCollapsed(document.body.classList.contains("sidebar-collapsed"))
-        } else {
-          setIsSidebarCollapsed(localStorage.getItem("sidebarOpen") === "false")
-        }
-      } catch (e) {
-        setIsSidebarCollapsed(false)
-      }
-    }
-
-    // MutationObserver watches body class changes like in MyInvestments
-    let observer = null
-    try {
-      if (document && document.body && window.MutationObserver) {
-        observer = new MutationObserver(() => update())
-        observer.observe(document.body, { attributes: true, attributeFilter: ["class"] })
-      }
-    } catch (e) {
-      // noop
-    }
-
-    // Also listen to events used elsewhere in the app
-    window.addEventListener("sidebarToggle", update)
-    window.addEventListener("storage", update)
-
-    return () => {
-      if (observer) observer.disconnect()
-      window.removeEventListener("sidebarToggle", update)
-      window.removeEventListener("storage", update)
-    }
-  }, [])
-
-  const effectiveLeft = `${isSidebarCollapsed ? collapsedWidth : expandedWidth}px`
 
   const handlePrimary = () => {
     if (typeof onPrimary === "function") return onPrimary()
@@ -237,9 +188,7 @@ export default function Upsell({
   return (
     <div
       style={{
-        paddingTop: "40px",
-        paddingLeft: effectiveLeft,
-        paddingRight: "20px",
+        padding: "20px",
         minHeight: "100vh",
         backgroundColor: "#fafafa",
         display: "flex",

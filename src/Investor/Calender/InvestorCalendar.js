@@ -9,26 +9,7 @@ import useSubscriptionPlan from "../../hooks/useSubscriptionPlan"
 
 const InvestorCalendar = () => {
   const [events, setEvents] = useState([]);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const { currentPlan, subscriptionLoading } = useSubscriptionPlan()
-
-  useEffect(() => {
-    const checkSidebarState = () => {
-      setIsSidebarCollapsed(document.body.classList.contains("sidebar-collapsed"))
-    }
-
-    // Check initial state
-    checkSidebarState()
-
-    // Watch for changes
-    const observer = new MutationObserver(checkSidebarState)
-    observer.observe(document.body, {
-      attributes: true,
-      attributeFilter: ["class"],
-    })
-
-    return () => observer.disconnect()
-  }, [])
 
   useEffect(() => {
     // Sample data initialization (deferred until subscription check completes)
@@ -71,7 +52,7 @@ const InvestorCalendar = () => {
     minHeight: "100vh",
     maxWidth: "100vw",
     overflowX: "hidden",
-    padding: `72px 20px 20px ${isSidebarCollapsed ? "80px" : "280px"}`,
+    padding: `2px`,
     margin: "0",
     boxSizing: "border-box",
     position: "relative",
