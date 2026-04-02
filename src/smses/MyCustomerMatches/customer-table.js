@@ -881,15 +881,20 @@ export function CustomerTable() {
             let matchDetails = null
 
             // Fetch additional document data
-            const docRef = doc(db, "productApplications", data.supplierId)
-            const docSnap = await getDoc(docRef)
-            const product = docSnap.data()
-            setProductProfiles(product)
-
-            if (product && supplierProfile) {
-              const matchResult = calculateMatchScore(product, supplierProfile, ratingsData)
-              matchPercentage = matchResult.totalScore
-              matchDetails = matchResult.breakdown
+            // Use the match score saved at the time of contact — never recalculate
+            if (data.matchPercentage !== undefined && data.matchPercentage !== null) {
+              matchPercentage = data.matchPercentage
+              matchDetails = data.matchBreakdown?.breakdown || null
+            } else {
+              // Fallback for older records that don't have a stored score
+              const docRef = doc(db, "productApplications", data.supplierId)
+              const docSnap = await getDoc(docRef)
+              const product = docSnap.data()
+              if (product && supplierProfile) {
+                const matchResult = calculateMatchScore(product, supplierProfile, ratingsData)
+                matchPercentage = matchResult.totalScore
+                matchDetails = matchResult.breakdown
+              }
             }
 
             return {
@@ -933,12 +938,14 @@ export function CustomerTable() {
   }
 
   const getServiceRequested = (application) => {
-    // Get from the current user's product application (what the customer is requesting)
-    if (currentUserApplication?.requestOverview?.purpose) {
-      return currentUserApplication.requestOverview.purpose
+    // Use the service requested that was saved at the time of contact
+    if (
+      application.originalRequest?.purpose &&
+      application.originalRequest.purpose !== "Not specified"
+    ) {
+      return application.originalRequest.purpose
     }
 
-    // Fallback to original request data
     if (
       application.originalRequest?.serviceRequested &&
       application.originalRequest.serviceRequested !== "Not specified"
@@ -974,30 +981,15 @@ export function CustomerTable() {
   }
 
   const getBudgetText = (application) => {
-    // First try to get from current user application (what the customer is requesting)
-    if (currentUserApplication?.requestOverview) {
-      const minBudget = currentUserApplication.requestOverview.minBudget || "0"
-      const maxBudget = currentUserApplication.requestOverview.maxBudget || "0"
-
-      const min = parseInt(minBudget.replace(/\D/g, "")) || 0
-      const max = parseInt(maxBudget.replace(/\D/g, "")) || 0
-
-      if (min > 0 || max > 0) {
-        return `R${min.toLocaleString()} - R${max.toLocaleString()}`
-      }
-    }
-
-    // Fallback to original request data
+    // Use the budget saved at the time of contact, not the current live application
     const budgetRange = application.originalRequest?.budgetRange
     if (budgetRange) {
       const min = parseInt((budgetRange.min || "0").replace(/\D/g, "")) || 0
       const max = parseInt((budgetRange.max || "0").replace(/\D/g, "")) || 0
-
       if (min > 0 || max > 0) {
         return `R${min.toLocaleString()} - R${max.toLocaleString()}`
       }
     }
-
     return "Not specified"
   }
 

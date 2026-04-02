@@ -284,9 +284,51 @@ export function LeadershipScoreCard({ styles, profileData, onScoreUpdate, apiKey
     setEvaluationError("")
 
     try {
-      const evaluationData = prepareDataForAiEvaluation(profileData)
+      // Extract CV text for all directors and executives before building evaluation data
+      const cvTextMap = {}
+      const allPeople = [
+        ...(profileData?.ownershipManagement?.directors || []).map((d, i) => ({ ...d, role: 'director', index: i })),
+        ...(profileData?.ownershipManagement?.executives || []).map((e, i) => ({ ...e, role: 'executive', index: i }))
+      ]
 
-      // Enhanced system prompt with guardrails and improved "How to Improve" section matching fundability-score-card
+      for (const person of allPeople) {
+        if (person?.cv?.url) {
+          try {
+            console.log(`Extracting CV for ${person.role} ${person.index} via server`)
+
+            const functionsInstance = getFunctions()
+            const extractDocumentText = httpsCallable(functionsInstance, 'extractDocumentText')
+            const result = await extractDocumentText({
+              fileUrl: person.cv.url,
+              fileName: person.cv.name || 'cv.pdf',
+              documentType: 'CV'
+            })
+
+            console.log(`Extraction result for ${person.role} ${person.index}:`, {
+              hasText: !!result?.data?.text,
+              textLength: result?.data?.text?.length,
+              success: result?.data?.success
+            })
+
+            if (result?.data?.text) {
+              cvTextMap[`${person.role}_${person.index}`] = {
+                name: person.name || `${person.role} ${person.index + 1}`,
+                text: result.data.text.substring(0, 2000)
+              }
+              console.log(`✅ CV text extracted for ${person.name || person.role} ${person.index}`)
+            } else {
+              console.warn(`⚠️ No text returned for ${person.role} ${person.index}`)
+            }
+          } catch (e) {
+            console.error(`❌ CV extraction failed for ${person.role} ${person.index}:`, e.message)
+          }
+        }
+      }
+
+      console.log('CV extraction complete. Keys extracted:', Object.keys(cvTextMap))
+
+      const evaluationData = prepareDataForAiEvaluation(profileData, cvTextMap)
+
       const systemPrompt = `You are a board-level business analyst evaluating leadership strength.
     
 CRITICAL RULES:
@@ -322,10 +364,8 @@ SCORING RULES PER CATEGORY:
 
 Leadership Credentials (40%) — score based on:
   - Directors count, CVs uploaded, LinkedIn profiles, executive designations, nationalities
-  - B-BBEE Certificate, Company Registration Certificate, Tax Clearance Certificate, Industry Accreditations
-  - Score 0 if no directors and none of the 4 certifications present
-  - Score 5 if all directors have CVs + LinkedIn + all 4 certifications present
-  - Client References & Support Letters: DO NOT factor into the base score. If provided and verified, award +1 bonus point on top of the calculated score (max total still capped at 5)
+  - READ THE CV CONTENT SECTIONS carefully — extract degrees, diplomas, professional designations, and certifications from each director's CV text
+  - Score 0 if no directors and no qualifications found. Score 5 if all directors have CVs with strong qualifications + LinkedIn profiles.
 
 Leadership Structure (30%) — score based on:
   - Executives count, positions filled, CVs uploaded, LinkedIn profiles, department coverage
@@ -342,15 +382,15 @@ OUTPUT FORMAT - YOU MUST FOLLOW THIS EXACTLY:
 
 ### 1. Leadership Credentials
 **Score:** [0-5]
-**Evidence:** [Cite: Directors Count = X, CVs = Y, LinkedIn = Z, B-BBEE = X, Company Reg = X, Tax Clearance = X, Industry Accreditations = X, Client References = X (bonus)]
-**Rationale:** [2-3 sentences based on director profiles, CVs, LinkedIn presence and the 4 certifications. Note if Client References bonus point was applied.]
+**Evidence:** [Cite: Directors Count = X, CVs = Y, LinkedIn = Z, Qualifications found in CVs = list them e.g. "BCom, CFA, MBA"]
+**Confidence:** [High/Medium/Low]
+**Rationale:** [2-3 sentences based on director profiles, CVs, LinkedIn presence and qualifications extracted from CV content]
 **How to Improve:** 
 - → Ownership & Management section: add directors with positions, CVs and LinkedIn profiles
-- → Documents section: upload B-BBEE Certificate, Company Registration Certificate and Tax Clearance Certificate
-- → Documents section: upload Industry Accreditations to strengthen credentials
-- → Documents section: upload Client References & Support Letters for a bonus point (does not affect base score)
-- 💡 All 4 core certifications present alongside director CVs and LinkedIn profiles achieves the highest credentials score
-- 💡 Client References are a bonus — they cannot lower your score but can push it above the base calculation
+- → Ownership & Management section: ensure CVs include professional certifications and qualifications
+- → Ownership & Management section: complete LinkedIn profiles for all directors
+- 💡 Directors whose CVs list formal qualifications and industry certifications score significantly higher
+- 💡 LinkedIn profiles that reflect certifications and designations further strengthen credentials
 
 ### 2. Leadership Structure
 **Score:** [0-5]
@@ -381,7 +421,7 @@ OUTPUT FORMAT - YOU MUST FOLLOW THIS EXACTLY:
 **Normalized to 100:** [Y]%
 **Leadership Band:** [Scaler/Builder/Visionary/Survivalist/Passenger - based on behaviour score]
 **Overall Confidence:** [High/Medium/Low]
-**Evidence Summary:** [Brief summary referencing directors, executives, certifications and behaviour score]
+**Evidence Summary:** [Brief summary referencing directors, executives, qualifications found in CVs and behaviour score]
 **Final Analysis:** [Brief overall assessment referencing all three pillars]
 
 ### Leadership Behaviour Score Interpretation
@@ -393,9 +433,9 @@ OUTPUT FORMAT - YOU MUST FOLLOW THIS EXACTLY:
 
       const result = await sendMessageToChatGPT(combinedMessage)
 
-      const userId = auth?.currentUser?.uid;
-      if (userId) {
-        const aiEvalRef = doc(db, "aiLeadershipEvaluation", userId);
+      const currentUserId = auth?.currentUser?.uid
+      if (currentUserId) {
+        const aiEvalRef = doc(db, "aiLeadershipEvaluation", currentUserId)
         await updateDoc(aiEvalRef, {
           result,
           timestamp: new Date(),
@@ -405,8 +445,8 @@ OUTPUT FORMAT - YOU MUST FOLLOW THIS EXACTLY:
             result,
             timestamp: new Date(),
             profileSnapshot: profileData,
-          });
-        });
+          })
+        })
       }
 
       setAiEvaluationResult(result)
@@ -420,7 +460,8 @@ OUTPUT FORMAT - YOU MUST FOLLOW THIS EXACTLY:
     }
   }
 
-  const prepareDataForAiEvaluation = (data) => {
+
+  const prepareDataForAiEvaluation = (data, cvTextMap = {}) => {
     let evaluationData = ""
 
     // ── LEADERSHIP CREDENTIALS (Directors) ──────────────────────────────
@@ -438,19 +479,18 @@ OUTPUT FORMAT - YOU MUST FOLLOW THIS EXACTLY:
     })
     evaluationData += `\nDirectors with LinkedIn: ${directors.filter(d => d?.linkedin).length}\n`
     evaluationData += `Directors with CVs: ${directors.filter(d => d?.cv).length}\n`
-    const bbbeeUrl = data?.documents?.bbbee || data?.verification?.bbbee?.url || null
-    const companyRegUrl = data?.documents?.companyRegistration || data?.verification?.companyRegistration?.url || null
-    const taxClearanceUrl = data?.documents?.taxClearance || data?.verification?.taxClearance?.url || null
-    const industryAccreditations = data?.documents?.industry_accreditations_multiple || []
-    const clientReferences = data?.documents?.client_references_support_letters_multiple || []
 
-    evaluationData += `\nB-BBEE Certificate: ${bbbeeUrl ? "Provided" : "Not provided"}\n`
-    evaluationData += `Company Registration Certificate: ${companyRegUrl ? "Provided" : "Not provided"}\n`
-    evaluationData += `Tax Clearance Certificate: ${taxClearanceUrl ? "Provided" : "Not provided"}\n`
-    evaluationData += `Industry Accreditations Count: ${industryAccreditations.filter(d => d.url && d.url !== "").length}\n`
-    evaluationData += `Industry Accreditations Provided: ${industryAccreditations.some(d => d.url && d.url !== "") ? "Yes" : "No"}\n`
-    evaluationData += `Client References & Support Letters Count: ${clientReferences.filter(d => d.url && d.url !== "").length}\n`
-    evaluationData += `Client References Provided (Bonus Only): ${clientReferences.some(d => d.url && d.url !== "") ? "Yes" : "No"}\n`
+    directors.forEach((director, index) => {
+      const cvKey = `director_${index}`
+      const cvData = cvTextMap[cvKey]
+      if (cvData?.text) {
+        evaluationData += `\nDirector ${index + 1} CV Content (READ THIS to extract qualifications):\n${cvData.text}\n`
+      } else if (director?.cv?.url) {
+        evaluationData += `\nDirector ${index + 1} CV: Uploaded (text could not be extracted)\n`
+      } else {
+        evaluationData += `\nDirector ${index + 1} CV: Not uploaded\n`
+      }
+    })
 
     // ── LEADERSHIP STRUCTURE (Executives) ───────────────────────────────
     evaluationData += `\n=== LEADERSHIP STRUCTURE (EXECUTIVES) ===\n`
@@ -470,6 +510,18 @@ OUTPUT FORMAT - YOU MUST FOLLOW THIS EXACTLY:
     evaluationData += `Total Leadership Team: ${directors.length + executives.length}\n`
     evaluationData += `Total with LinkedIn: ${directors.filter(d => d?.linkedin).length + executives.filter(e => e?.linkedin).length}\n`
     evaluationData += `Total with CVs: ${directors.filter(d => d?.cv).length + executives.filter(e => e?.cv).length}\n`
+
+    executives.forEach((executive, index) => {
+      const cvKey = `executive_${index}`
+      const cvData = cvTextMap[cvKey]
+      if (cvData?.text) {
+        evaluationData += `\nExecutive ${index + 1} CV Content (READ THIS to extract qualifications):\n${cvData.text}\n`
+      } else if (executive?.cv?.url) {
+        evaluationData += `\nExecutive ${index + 1} CV: Uploaded (text could not be extracted)\n`
+      } else {
+        evaluationData += `\nExecutive ${index + 1} CV: Not uploaded\n`
+      }
+    })
 
     // ── LEADERSHIP BEHAVIOUR (Q1–Q6) ────────────────────────────────────
     const behaviour = data?.ownershipManagement?.businessLeadership || {}

@@ -39,7 +39,9 @@ const SuccessfulSupportDealsTable = ({ successfulDeals }) => {
     return `${prefix}${seatsPart}${randomPart}`
   }
 
-  const handleGenerateVoucher = (type) => {
+  const handleGenerateVoucher = (deal, type) => {
+    console.log("🎫 Generating voucher for deal:", deal)
+    setSelectedDeal(deal)  // Set the selected deal first
     setVoucherType(type)
     setShowVoucherModal(true)
     setGeneratedVoucher(null)
@@ -53,17 +55,41 @@ const SuccessfulSupportDealsTable = ({ successfulDeals }) => {
       return
     }
 
+    if (!selectedDeal) {
+      alert("No deal selected. Please try again.")
+      console.error("❌ No selected deal found")
+      return
+    }
+
     const code = generateVoucherCode(voucherType)
     setSavingVoucher(true)
 
     try {
+      // Get the correct SME user ID - check multiple possible fields
+      const smeUserId = selectedDeal?.smeUserId || selectedDeal?.userId || selectedDeal?.uid || selectedDeal?.smeId
+      
+      console.log("🔍 Generating voucher for SME:", {
+        dealId: selectedDeal?.id,
+        smeUserId: smeUserId,
+        smeName: selectedDeal?.smseName,
+        dealData: selectedDeal
+      })
+
+      if (!smeUserId) {
+        console.error("❌ No SME user ID found in deal:", selectedDeal)
+        alert("Error: Cannot find SME user ID. Please contact support.")
+        setSavingVoucher(false)
+        return
+      }
+
       const voucherData = {
         code: code,
         type: voucherType,
         seats: voucherSeats,
         planName: voucherType === "premium" ? "Premium" : 
-                   voucherType === "legitimacy" ? "Standard" : 
-                   voucherType === "capital" ? "Premium" : "Standard",
+                   voucherType === "legitimacy" ? "Legitimacy Boost" : 
+                   voucherType === "capital" ? "Capital Appeal Boost" : 
+                   voucherType === "governance" ? "Governance Boost" : "Standard",
         createdAt: new Date().toISOString(),
         expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
         status: "active",
@@ -73,20 +99,32 @@ const SuccessfulSupportDealsTable = ({ successfulDeals }) => {
         createdBy: user.uid,
         createdForSME: selectedDeal?.id || null,
         catalystId: user.uid,
-        smeId: selectedDeal?.id || null,
-        smeName: selectedDeal?.smseName || null
+        smeId: smeUserId,
+        smeName: selectedDeal?.smseName || null,
+        catalystName: user.displayName || user.email || "Catalyst",
+        dealId: selectedDeal?.id,
+        createdAtTimestamp: Date.now()
       }
 
       // Save to Firebase
       const vouchersRef = collection(db, "vouchers")
       const docRef = await addDoc(vouchersRef, voucherData)
       
+      console.log("✅ Voucher saved to Firebase:", {
+        id: docRef.id,
+        smeId: voucherData.smeId,
+        code: voucherData.code,
+        type: voucherData.type
+      })
+      
       setGeneratedVoucher({
         ...voucherData,
         id: docRef.id
       })
       
-      console.log("✅ Voucher saved to Firebase:", docRef.id)
+      // Show success message
+      alert(`✅ Voucher ${code} successfully generated for ${selectedDeal?.smseName}! The SME can now view it in their Successful Deals table.`)
+      
     } catch (error) {
       console.error("❌ Error saving voucher:", error)
       alert("Failed to save voucher. Please try again.")
@@ -228,80 +266,82 @@ const SuccessfulSupportDealsTable = ({ successfulDeals }) => {
         </div>
       </div>
 
-      <div style={{ overflowX: "auto", borderRadius: "8px", border: "1px solid #E8D5C4", boxShadow: "0 4px 24px rgba(139, 69, 19, 0.08)" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", background: "white", fontSize: "0.875rem", backgroundColor: "#FEFCFA", tableLayout: "fixed" }}>
-          <thead>
-            <tr>
-              {[
-                { label: "SMSE Name", w: "12%" },
-                { label: "Funding Required", w: "8%" },
-                { label: "Equity Offered", w: "7%" },
-                { label: "Start Date", w: "8%" },
-                { label: "Sector", w: "8%" },
-                { label: "Location", w: "8%" },
-                { label: "Guarantees", w: "8%" },
-                { label: "Services Required", w: "7%" },
-                { label: "Status", w: "9%" },
-                { label: "Actions", w: "25%", align: "center", noBorderRight: true },
-              ].map(({ label, w, align, noBorderRight }) => (
-                <th key={label} style={{ ...TH, width: w, textAlign: align || "left", borderRight: noBorderRight ? "none" : "1px solid #1a0c02" }}>
-                  {label}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {successfulDeals.length === 0 ? (
-              <tr>
-                <td colSpan="10" style={{ padding: "2rem", textAlign: "center", color: "#666", fontStyle: "italic" }}>
-                  No successful deals yet. When your matches reach "Support Approved" or "Active Support" status, they will appear here.
-                </td>
-              </tr>
-            ) : (
-              successfulDeals.map((deal) => (
-                <tr key={deal.id}
-                  style={{ borderBottom: "1px solid #E8D5C4", transition: "all 0.2s ease" }}
-                  onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "#f5f5f5" }}
-                  onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "white" }}
-                >
-                  <td style={TD}>
-                    <span style={{ color: "#a67c52", fontWeight: "500" }}><TruncatedText text={deal.smseName} maxLength={30} /></span>
-                  </td>
-                  <td style={TD}><TruncatedText text={deal.fundingRequired} maxLength={15} /></td>
-                  <td style={TD}>
-                    <span style={{ backgroundColor: "#fff3e0", color: "#e65100", padding: "4px 8px", borderRadius: "12px", fontSize: "11px", fontWeight: "600" }}>{deal.equityOffered}</span>
-                  </td>
-                  <td style={TD}><span style={{ fontSize: "13px" }}>{formatDate(deal.startDate)}</span></td>
-                  <td style={TD}><TruncatedText text={deal.sector} maxLength={15} /></td>
-                  <td style={TD}><TruncatedText text={deal.location} maxLength={15} /></td>
-                  <td style={TD}><TruncatedGuarantees text={deal.guarantees} maxLines={2} /></td>
-                  <td style={TD}><TruncatedText text={deal.servicesRequired} maxLength={15} /></td>
-                  <td style={TD}>
-                    <span style={{ backgroundColor: getStatusColor(deal.currentStatus) + "20", color: getStatusColor(deal.currentStatus), padding: "4px 8px", borderRadius: "12px", fontSize: "11px", fontWeight: "600", display: "inline-block" }}>
-                      {deal.currentStatus}
-                    </span>
-                  </td>
-                  <td style={{ ...TD, borderRight: "none", textAlign: "center" }}>
-                    <div style={{ display: "flex", gap: "6px", justifyContent: "center", flexWrap: "wrap" }}>
-                      <button onClick={() => setSelectedDeal(deal)}
-                        style={{ backgroundColor: "#5d4037", color: "white", border: "none", borderRadius: "6px", padding: "6px 10px", fontSize: "11px", fontWeight: "600", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px" }}>
-                        <Eye size={12} /> View
-                      </button>
-                      <button onClick={() => handleGenerateVoucher("premium")}
-                        style={{ backgroundColor: "#a67c52", color: "white", border: "none", borderRadius: "6px", padding: "6px 10px", fontSize: "11px", fontWeight: "600", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px" }}>
-                        <Ticket size={12} /> Voucher
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+     
+
+<div style={{ overflowX: "auto", borderRadius: "8px", border: "1px solid #E8D5C4", boxShadow: "0 4px 24px rgba(139, 69, 19, 0.08)" }}>
+  <table style={{ width: "100%", borderCollapse: "collapse", background: "white", fontSize: "0.875rem", backgroundColor: "#FEFCFA", tableLayout: "fixed" }}>
+    <thead>
+      <tr>
+        {[
+          { label: "SMSE Name", w: "12%" },
+          { label: "Funding Required", w: "8%" },
+          { label: "Equity Offered", w: "7%" },
+          { label: "Start Date", w: "8%" },
+          { label: "Sector", w: "8%" },
+          { label: "Location", w: "8%" },
+          { label: "Guarantees", w: "8%" },
+          { label: "Services Required", w: "7%" },
+          { label: "Status", w: "9%" },
+          { label: "Actions", w: "25%", align: "center", noBorderRight: true },
+        ].map(({ label, w, align, noBorderRight }) => (
+          <th key={label} style={{ ...TH, width: w, textAlign: align || "left", borderRight: noBorderRight ? "none" : "1px solid #1a0c02" }}>
+            {label}
+          </th>
+        ))}
+      </tr>
+    </thead>
+    <tbody>
+      {successfulDeals.length === 0 ? (
+        <tr>
+          <td colSpan="10" style={{ padding: "2rem", textAlign: "center", color: "#666", fontStyle: "italic" }}>
+            No successful deals yet. When your matches reach "Support Approved" or "Active Support" status, they will appear here.
+          </td>
+        </tr>
+      ) : (
+        successfulDeals.map((deal) => (
+          <tr key={deal.id}
+            style={{ borderBottom: "1px solid #E8D5C4", transition: "all 0.2s ease" }}
+            onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "#f5f5f5" }}
+            onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "white" }}
+          >
+            <td style={TD}>
+              <span style={{ color: "#a67c52", fontWeight: "500" }}><TruncatedText text={deal.smseName} maxLength={30} /></span>
+            </td>
+            <td style={TD}><TruncatedText text={deal.fundingRequired} maxLength={15} /></td>
+            <td style={TD}>
+              <span style={{ backgroundColor: "#fff3e0", color: "#e65100", padding: "4px 8px", borderRadius: "12px", fontSize: "11px", fontWeight: "600" }}>{deal.equityOffered}</span>
+            </td>
+            <td style={TD}><span style={{ fontSize: "13px" }}>{formatDate(deal.startDate)}</span></td>
+            <td style={TD}><TruncatedText text={deal.sector} maxLength={15} /></td>
+            <td style={TD}><TruncatedText text={deal.location} maxLength={15} /></td>
+            <td style={TD}><TruncatedGuarantees text={deal.guarantees} maxLines={2} /></td>
+            <td style={TD}><TruncatedText text={deal.servicesRequired} maxLength={15} /></td>
+            <td style={TD}>
+              <span style={{ backgroundColor: getStatusColor(deal.currentStatus) + "20", color: getStatusColor(deal.currentStatus), padding: "4px 8px", borderRadius: "12px", fontSize: "11px", fontWeight: "600", display: "inline-block" }}>
+                {deal.currentStatus}
+              </span>
+            </td>
+            <td style={{ ...TD, borderRight: "none", textAlign: "center" }}>
+              <div style={{ display: "flex", gap: "6px", justifyContent: "center", flexWrap: "wrap" }}>
+                <button onClick={() => setSelectedDeal(deal)}
+                  style={{ backgroundColor: "#5d4037", color: "white", border: "none", borderRadius: "6px", padding: "6px 10px", fontSize: "11px", fontWeight: "600", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px" }}>
+                  <Eye size={12} /> View
+                </button>
+                <button onClick={() => handleGenerateVoucher(deal, "premium")}
+                  style={{ backgroundColor: "#a67c52", color: "white", border: "none", borderRadius: "6px", padding: "6px 10px", fontSize: "11px", fontWeight: "600", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px" }}>
+                  <Ticket size={12} /> Generate Voucher
+                </button>
+              </div>
+            </td>
+          </tr>
+        ))
+      )}
+    </tbody>
+  </table>
+</div>
 
       {/* View Details Modal */}
-      {selectedDeal && (
+      {selectedDeal && !showVoucherModal && (
         <div style={modalOverlayStyle} onClick={() => setSelectedDeal(null)}>
           <div style={modalContentStyle} onClick={(e) => e.stopPropagation()}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "32px", paddingBottom: "24px", borderBottom: "3px solid #8d6e63" }}>
@@ -333,7 +373,7 @@ const SuccessfulSupportDealsTable = ({ successfulDeals }) => {
               <p style={{ color: "#666", lineHeight: "1.6" }}>{selectedDeal.servicesRequired}</p>
             </div>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px" }}>
-              <button onClick={() => { setSelectedDeal(null); handleGenerateVoucher("premium") }}
+              <button onClick={() => { handleGenerateVoucher(selectedDeal, "premium") }}
                 style={{ backgroundColor: "#a67c52", color: "white", border: "none", borderRadius: "8px", padding: "12px 24px", fontSize: "14px", fontWeight: "600", cursor: "pointer" }}>
                 <Ticket size={16} style={{ marginRight: "8px", display: "inline" }} />
                 Generate Voucher
@@ -353,7 +393,7 @@ const SuccessfulSupportDealsTable = ({ successfulDeals }) => {
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px" }}>
               <h2 style={{ fontSize: "22px", fontWeight: "700", color: "#3e2723", margin: 0, display: "flex", alignItems: "center", gap: "8px" }}>
                 <Ticket size={24} style={{ color: "#a67c52" }} />
-                Generate Voucher
+                Generate Voucher for {selectedDeal?.smseName}
               </h2>
               <button onClick={() => setShowVoucherModal(false)} style={{ background: "none", border: "none", cursor: "pointer" }}>
                 <X size={20} />
@@ -557,24 +597,25 @@ const SupportTabbedTables = ({ filters, stageFilter, loading, onStageOverride })
   // Track whether we've seen data at least once so we don't fire notifications on initial load
   const isFirstLoad = useRef(true)
 
-  const extractSuccessfulDeals = (smes) =>
-    smes
-      .filter((sme) =>
-        ["support approved", "active support"].includes((sme.currentStatus || "").toLowerCase()) ||
-        ["support approved", "active support"].includes((sme.pipelineStage || "").toLowerCase())
-      )
-      .map((sme) => ({
-        id: sme.id,
-        smseName: sme.name,
-        fundingRequired: sme.fundingRequired,
-        equityOffered: sme.equityOffered,
-        startDate: sme.applicationDate,
-        sector: sme.sector,
-        location: sme.location,
-        guarantees: sme.guarantees,
-        servicesRequired: sme.servicesRequired,
-        currentStatus: sme.currentStatus || sme.pipelineStage,
-      }))
+const extractSuccessfulDeals = (smes) =>
+  smes
+    .filter((sme) =>
+      ["support approved", "active support"].includes((sme.currentStatus || "").toLowerCase()) ||
+      ["support approved", "active support"].includes((sme.pipelineStage || "").toLowerCase())
+    )
+    .map((sme) => ({
+      id: sme.id,
+      smeUserId: sme.userId || sme.smeId || sme.uid,
+      smseName: sme.name,
+      fundingRequired: sme.fundingRequired,
+      equityOffered: sme.equityOffered,
+      startDate: sme.applicationDate,
+      sector: sme.sector,
+      location: sme.location,
+      guarantees: sme.guarantees,
+      servicesRequired: sme.servicesRequired,
+      currentStatus: sme.currentStatus || sme.pipelineStage,
+    }))
 
   useEffect(() => {
     if (smeMatches.length > 0) setSuccessfulDeals(extractSuccessfulDeals(smeMatches))
