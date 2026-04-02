@@ -1920,13 +1920,16 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
         }))
       }
 
-      const docRef = doc(db, "internshipApplications", internId)
+      const applicationDocId = selectedInternForStage.id
+      const docRef = doc(db, "internshipApplications", applicationDocId)
 
       const docSnapshot = await getDoc(docRef)
-      if (!docSnapshot.exists()) throw new Error(`Application with ID ${internId} not found`)
+      if (!docSnapshot.exists()) {
+        throw new Error(`Application document ${applicationDocId} not found`)
+      }
 
       const applicationData = docSnapshot.data()
-      const internUid = applicationData.applicantId // This is the intern's profile ID
+      const internUid = applicationData.applicantId
 
       await updateDoc(docRef, updateData)
       console.log("Document updated in internshipApplications")
@@ -3590,7 +3593,7 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
 
       {/* Stage Update Modal */}
       {showStageModal &&
-        selectedIntern &&
+        selectedInternForStage &&
         createPortal(
           <div style={modalOverlayStyle} onClick={() => setShowStageModal(false)}>
             <div style={{ ...modalContentStyle, maxWidth: "600px" }} onClick={(e) => e.stopPropagation()}>
@@ -3598,7 +3601,7 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
                 style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px" }}
               >
                 <h3 style={{ fontSize: "24px", fontWeight: "800", color: "#3e2723", margin: 0 }}>
-                  Update Stage - {selectedIntern.internName}
+                  Update Stage - {selectedInternForStage.internName}
                 </h3>
                 <button
                   onClick={() => {

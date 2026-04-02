@@ -404,17 +404,20 @@ Digital Presence platform actions:
 
 Track Record platform actions:
 - Entity Overview section → update years in operation
-- Products & Services section → add key clients and references
-- Enterprise Readiness section → confirm paying customers status
+- Products & Services section → add key clients with industry and revenue contribution
 - Financial Overview section → update annual revenue
 - Financial Overview section → confirm revenue generation status
+- 💡 Having named clients with known industries signals real commercial activity, even at early stage
 
 Third-Party Validation platform actions:
 - Documents section → upload B-BBEE certificate
-- Documents section → upload industry accreditations
+- Documents section → upload company registration certificate
+- Documents section → upload tax clearance certificate
+- Documents section → upload industry accreditations and professional body memberships
+- Documents section → upload certifications and awards
 - Document Upload section → upload support/reference letters
+- Products & Services section → add named key clients to increase bonus points
 - Enterprise Readiness section → confirm mentor/business advisor
-- Documents section → upload any awards or recognition certificates
 
 SCORING RUBRIC (use strictly):
 - 0 = No evidence or very poor
@@ -423,6 +426,13 @@ SCORING RUBRIC (use strictly):
 - 3 = Average/acceptable
 - 4 = Good/strong evidence
 - 5 = Excellent/outstanding
+
+INDUSTRY CONTEXT RULES FOR DIGITAL PRESENCE:
+- Agriculture / Farming / Primary industry: Website + Facebook + WhatsApp/phone are the primary channels. Missing X (Twitter) or YouTube is NOT a gap — score based on relevant platforms only.
+- Construction / Trade / Property: Website + LinkedIn + Facebook are relevant. X and YouTube rarely apply.
+- Retail / Hospitality / Consumer: Instagram + Facebook + Website matter most.
+- Professional Services / Consulting / Technology: LinkedIn + Website + X are relevant.
+- RULE: Only score against the 3-4 platforms most relevant to the business industry. Missing irrelevant platforms must not reduce the score.
 
 OUTPUT FORMAT - YOU MUST FOLLOW THIS EXACTLY:
 
@@ -439,7 +449,7 @@ OUTPUT FORMAT - YOU MUST FOLLOW THIS EXACTLY:
 
 ### 2. Digital Presence
 **Score:** [0-5]
-**Evidence:** [Cite specific data: Social links present = X of 6, Website present = Y]
+**Evidence:** [Cite specific data: Industry = X, Relevant platforms for this industry = Y, Present = Z of Y relevant platforms, Website present = W]
 **Confidence:** [High/Medium/Low]
 **Rationale:** [2-3 sentences]
 **How to Improve:** 
@@ -450,9 +460,9 @@ OUTPUT FORMAT - YOU MUST FOLLOW THIS EXACTLY:
 
 ### 3. Track Record
 **Score:** [0-5]
-**Evidence:** [Cite specific data: Years in operation = X, Key clients = Y, Revenue = Z]
+**Evidence:** [Cite specific data: Years in operation = X, Named clients = Y with industries, Revenue = Z]
 **Confidence:** [High/Medium/Low]
-**Rationale:** [2-3 sentences]
+**Rationale:** [2-3 sentences. Score ONLY based on: (1) years in operation, (2) quality and number of named clients and their industries, (3) revenue figures. IGNORE paying customer status entirely — it is not provided and is not relevant to this score. Named clients with known industries are strong evidence of commercial activity.]
 **How to Improve:** 
 - → [Platform Section Name]: [specific action with measurable goal]
 - → [Platform Section Name]: [specific action with measurable goal]
@@ -460,8 +470,9 @@ OUTPUT FORMAT - YOU MUST FOLLOW THIS EXACTLY:
 - 💡 [General real-world guidance for obtaining/creating missing items if critical gaps exist]
 
 ### 4. Third-Party Validation
-**Score:** [0-5]
-**Evidence:** [Cite specific data: Certifications = X, Accreditations = Y, Support letters = Z]
+**Score:** [0-5] (base score, max 5)
+**Bonus Points:** [+0 to +5 from client references, does not affect base score]
+**Evidence:** [Cite: BBBEE = X, Company Reg = Y, Tax Clearance = Z, Industry Accreditations = W, Support Letters = V, Client References = U]
 **Confidence:** [High/Medium/Low]
 **Rationale:** [2-3 sentences]
 **How to Improve:** 
@@ -555,17 +566,71 @@ If all claims are supported, respond with "VALIDATION PASSED". If unsupported cl
     evaluationData += `\n=== TRACK RECORD ===\n`
     evaluationData += `Years in Operation: ${data?.entityOverview?.yearsInOperation || "Not specified"}\n`
     evaluationData += `Operation Stage: ${data?.entityOverview?.operationStage || "Not specified"}\n`
-    evaluationData += `Key Clients: ${data?.productsServices?.keyClients?.map(c => c?.name || "").filter(Boolean).join(", ") || "Not provided"}\n`
-    evaluationData += `Has Paying Customers: ${data?.enterpriseReadiness?.hasPayingCustomers || "Not specified"}\n`
+    const keyClientsDetail = (data?.productsServices?.keyClients || []).filter(c => c?.name).map(c => {
+      const industries = c.industries?.join(", ") || "industry not specified"
+      const revenue = c.revenuePercentage ? `${c.revenuePercentage}% of revenue` : ""
+      const growth = c.revenueGrowthPotential === "Yes" ? "growth potential noted" : ""
+      const extras = [industries, revenue, growth].filter(Boolean).join(", ")
+      return `${c.name} (${extras})`
+    }).join(" | ")
+    evaluationData += `Key Clients: ${keyClientsDetail || "Not provided"}\n`
+    evaluationData += `Number of Named Clients: ${(data?.productsServices?.keyClients || []).filter(c => c?.name).length}\n`
     evaluationData += `Annual Revenue: ${data?.financialOverview?.annualRevenue || "Not provided"}\n`
     evaluationData += `Generates Revenue: ${data?.financialOverview?.generatesRevenue || "Not specified"}\n`
 
-    // Third-Party Validation
     evaluationData += `\n=== THIRD-PARTY VALIDATION ===\n`
-    evaluationData += `BBBEE Certificate: ${data?.documents?.bbbeeCert?.length > 0 ? "Available" : "Not provided"}\n`
-    evaluationData += `Industry Accreditations: ${data?.documents?.industryAccreditationDocs || "Not provided"}\n`
-    evaluationData += `Support Letters: ${data?.documentUpload?.supportLetters?.length > 0 ? "Available" : "Not provided"}\n`
+
+    // B-BBEE: single upload stored at documents.bbbeeCert or verification.bbbeeCert
+    const bbbeeAvailable = !!(
+      data?.documents?.bbbeeCert ||
+      data?.documents?.bbbeeCert_multiple?.some(d => d?.url) ||
+      data?.verification?.bbbeeCert?.url
+    )
+    evaluationData += `BBBEE Certificate: ${bbbeeAvailable ? "Available" : "Not provided"}\n`
+
+    // Company Registration: single upload
+    const companyRegAvailable = !!(
+      data?.documents?.companyRegistrationCertificate ||
+      data?.documents?.companyReg ||
+      data?.verification?.companyRegistrationCertificate?.url ||
+      data?.verification?.companyReg?.url
+    )
+    evaluationData += `Company Registration: ${companyRegAvailable ? "Available" : "Not provided"}\n`
+
+    // Tax Clearance: single upload
+    const taxClearanceAvailable = !!(
+      data?.documents?.taxClearanceCertificate ||
+      data?.documents?.taxClearance ||
+      data?.verification?.taxClearanceCertificate?.url ||
+      data?.verification?.taxClearance?.url
+    )
+    evaluationData += `Tax Clearance Certificate: ${taxClearanceAvailable ? "Available" : "Not provided"}\n`
+
+    // Industry Accreditations: multi-upload stored at documents.industryAccreditations_multiple
+    const accreditationDocs = data?.documents?.industryAccreditations_multiple ||
+      data?.documents?.industryAccreditationDocs_multiple || []
+    const accreditationCount = accreditationDocs.filter(d => d?.url).length
+    // Also check single upload fallback
+    const accreditationSingle = !!(data?.documents?.industryAccreditations || data?.documents?.industryAccreditationDocs)
+    const accreditationTotal = accreditationCount > 0 ? accreditationCount : (accreditationSingle ? 1 : 0)
+    evaluationData += `Industry Accreditations: ${accreditationTotal > 0 ? `${accreditationTotal} document(s) uploaded` : "Not provided"}\n`
+
+    // Support Letters / Client References: multi-upload stored at documents.clientReferencesAndSupportLetters_multiple
+    const supportLetterDocs = data?.documents?.clientReferencesAndSupportLetters_multiple ||
+      data?.documents?.clientReferences_multiple ||
+      data?.documentUpload?.supportLetters || []
+    const supportLetterCount = Array.isArray(supportLetterDocs)
+      ? supportLetterDocs.filter(d => d?.url).length
+      : 0
+    evaluationData += `Support Letters: ${supportLetterCount > 0 ? `${supportLetterCount} document(s) uploaded` : "Not provided"}\n`
+
     evaluationData += `Has Mentor: ${data?.enterpriseReadiness?.hasMentor || "Not specified"}\n`
+
+    const keyClients = data?.productsServices?.keyClients || []
+    const clientReferenceCount = keyClients.filter(c => c?.name).length
+    evaluationData += `\n[BONUS — does not affect base score, max +5 points]\n`
+    evaluationData += `Client References / Key Clients Listed: ${clientReferenceCount}\n`
+    evaluationData += `Client Reference Bonus: ${clientReferenceCount >= 3 ? "+5 pts" : clientReferenceCount === 2 ? "+3 pts" : clientReferenceCount === 1 ? "+2 pts" : "+0 pts"}\n`
 
     // Additional context
     evaluationData += `\n=== ADDITIONAL CONTEXT ===\n`

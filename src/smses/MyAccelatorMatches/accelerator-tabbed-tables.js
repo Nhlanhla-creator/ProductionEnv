@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { Eye, X, Trophy, TrendingUp, Calendar, DollarSign, Package, Building, Award, Ticket, Copy, CheckCircle } from "lucide-react"
-import { collection, getDocs, query, where } from "firebase/firestore"
+import { collection, getDocs, query, where, doc, updateDoc, onSnapshot } from "firebase/firestore"
 import { auth, db } from "../../firebaseConfig"
 import { AcceleratorTable } from "./accelator-table"
 
@@ -151,101 +151,131 @@ const SuccessfulAcceleratorDealsTable = () => {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    const fetchCompletedDeals = async () => {
+    const fetchData = async () => {
       try {
         const user = auth.currentUser
-        if (!user) return
+        if (!user) {
+          console.log("No user logged in")
+          setLoading(false)
+          return
+        }
 
-        console.log("🔍 Fetching deals for user:", user.uid)
+        console.log("🔍 Fetching deals for SME user:", user.uid)
 
+        // Query for deals where this SME is involved
         const dealsQuery = query(
           collection(db, "smeCatalystApplications"),
           where("smeId", "==", user.uid),
           where("status", "in", ["Support Approved", "Active Support", "Successful Deals", "Graduated Successfully"])
         )
 
-        const snapshot = await getDocs(dealsQuery)
-        console.log("📊 Found deals count:", snapshot.size)
+        const dealsSnapshot = await getDocs(dealsQuery)
+        console.log("📊 Found deals count:", dealsSnapshot.size)
 
-        // Fetch all vouchers for this SME
+        // Set up real-time listener for vouchers
         const vouchersQuery = query(
           collection(db, "vouchers"),
           where("smeId", "==", user.uid),
           where("status", "==", "active")
         )
+
+        // Function to process deals with vouchers
+        const processDealsWithVouchers = async (vouchersList) => {
+          const completedDealsArray = []
+
+          for (const docSnap of dealsSnapshot.docs) {
+            const dealData = docSnap.data()
+            
+            // Get catalyst details
+            const catalystQuery = query(collection(db, "catalystProfiles"), where("__name__", "==", dealData.catalystId))
+            const catalystSnapshot = await getDocs(catalystQuery)
+            
+            let catalystDetails = {}
+            if (!catalystSnapshot.empty) {
+              catalystDetails = catalystSnapshot.docs[0].data()
+            }
+
+            const formData = catalystDetails.formData || {}
+            const overview = formData.entityOverview || {}
+            const matchPrefs = formData.generalMatchingPreference || {}
+            const programs = formData?.programmeDetails?.programs || []
+            const program = programs[dealData.programIndex || 0] || {}
+
+            // Check if there are any vouchers for this deal (by checking if any voucher exists for this SME)
+            const hasVoucher = vouchersList.length > 0
+            const voucher = hasVoucher ? vouchersList[0] : null
+
+            completedDealsArray.push({
+              id: docSnap.id,
+              acceleratorName: dealData.acceleratorName || overview.registeredName || "Unknown",
+              sectorFocus: matchPrefs.sectorFocus || dealData.sector || "-",
+              fundingType: program.supportType || matchPrefs.supportFocusSubtype || dealData.fundingType || "-",
+              completionDate: dealData.applicationDate || dealData.createdAt?.toDate?.() || new Date(),
+              ticketSize: program.budget || `${program.minimumSupport || "0"} - ${program.maximumSupport || "0"}` || dealData.fundingRequired || "-",
+              geographicFocus: matchPrefs.geographicFocus || overview.province || dealData.location || "-",
+              deadline: formData.applicationBrief?.applicationWindow || "Rolling",
+              fundingStage: matchPrefs.programStage || dealData.fundingStage || "-",
+              currentStatus: dealData.status || "Active Support",
+              nextMilestone: dealData.nextStage || "N/A",
+              servicesDelivered: program.servicesOffered || matchPrefs.supportFocus || "Standard accelerator services",
+              contractValue: dealData.fundingRequired || program.budget || "-",
+              performanceRating: dealData.matchPercentage ? `${Math.round(dealData.matchPercentage / 20)}/5` : "4.5/5",
+              programCohort: `Program ${dealData.programIndex + 1 || 1}`,
+              graduationStatus: dealData.pipelineStage === "Graduated Successfully" ? "Graduated" : "In Progress",
+              acceleratorType: formData.entityOverview?.entityType || "Accelerator",
+              equityTaken: program.equityRequirement || "N/A",
+              dealStructure: `${program.duration || "12"}-month program`,
+              dealDuration: program.duration || "12 months",
+              sector: matchPrefs.sectorFocus || dealData.sector || "-",
+              location: overview.province || dealData.location || "-",
+              dealAmount: dealData.fundingRequired || program.budget || "-",
+              dealType: program.supportType || dealData.fundingType || "-",
+              hasVoucher: hasVoucher,
+              voucher: voucher
+            })
+          }
+
+          setDeals(completedDealsArray)
+          console.log("✅ Processed deals with vouchers:", completedDealsArray.length)
+        }
+
+        // Initial fetch of vouchers
         const vouchersSnapshot = await getDocs(vouchersQuery)
-        
-        console.log("🎫 Found vouchers count:", vouchersSnapshot.size)
-        
-        const vouchersList = []
+        const initialVouchers = []
         vouchersSnapshot.docs.forEach(doc => {
           const voucherData = doc.data()
           if (voucherData.remainingSeats > 0) {
-            vouchersList.push({ id: doc.id, ...voucherData })
+            initialVouchers.push({ id: doc.id, ...voucherData })
           }
         })
-
-        const completedDealsArray = []
-
-        for (const docSnap of snapshot.docs) {
-          const dealData = docSnap.data()
-          
-          const catalystQuery = query(collection(db, "catalystProfiles"), where("__name__", "==", dealData.catalystId))
-          const catalystSnapshot = await getDocs(catalystQuery)
-          
-          let catalystDetails = {}
-          if (!catalystSnapshot.empty) {
-            catalystDetails = catalystSnapshot.docs[0].data()
-          }
-
-          const formData = catalystDetails.formData || {}
-          const overview = formData.entityOverview || {}
-          const matchPrefs = formData.generalMatchingPreference || {}
-          const programs = formData?.programmeDetails?.programs || []
-          const program = programs[dealData.programIndex || 0] || {}
-
-          const hasVoucher = vouchersList.length > 0
-          const voucher = vouchersList[0] || null
-
-          completedDealsArray.push({
-            id: docSnap.id,
-            acceleratorName: dealData.acceleratorName || overview.registeredName || "Unknown",
-            sectorFocus: matchPrefs.sectorFocus || dealData.sector || "-",
-            fundingType: program.supportType || matchPrefs.supportFocusSubtype || dealData.fundingType || "-",
-            completionDate: dealData.applicationDate || dealData.createdAt?.toDate?.() || new Date(),
-            ticketSize: program.budget || `${program.minimumSupport || "0"} - ${program.maximumSupport || "0"}` || dealData.fundingRequired || "-",
-            geographicFocus: matchPrefs.geographicFocus || overview.province || dealData.location || "-",
-            deadline: formData.applicationBrief?.applicationWindow || "Rolling",
-            fundingStage: matchPrefs.programStage || dealData.fundingStage || "-",
-            currentStatus: dealData.status || "Active Support",
-            nextMilestone: dealData.nextStage || "N/A",
-            servicesDelivered: program.servicesOffered || matchPrefs.supportFocus || "Standard accelerator services",
-            contractValue: dealData.fundingRequired || program.budget || "-",
-            performanceRating: dealData.matchPercentage ? `${Math.round(dealData.matchPercentage / 20)}/5` : "4.5/5",
-            programCohort: `Program ${dealData.programIndex + 1 || 1}`,
-            graduationStatus: dealData.pipelineStage === "Graduated Successfully" ? "Graduated" : "In Progress",
-            acceleratorType: formData.entityOverview?.entityType || "Accelerator",
-            equityTaken: program.equityRequirement || "N/A",
-            dealStructure: `${program.duration || "12"}-month program`,
-            dealDuration: program.duration || "12 months",
-            sector: matchPrefs.sectorFocus || dealData.sector || "-",
-            location: overview.province || dealData.location || "-",
-            dealAmount: dealData.fundingRequired || program.budget || "-",
-            dealType: program.supportType || dealData.fundingType || "-",
-            hasVoucher: hasVoucher,
-            voucher: voucher
+        console.log("🎫 Found initial vouchers count:", initialVouchers.length)
+        
+        await processDealsWithVouchers(initialVouchers)
+        
+        // Set up real-time listener for new vouchers
+        const unsubscribeVouchers = onSnapshot(vouchersQuery, async (snapshot) => {
+          console.log("🔄 Vouchers updated, refreshing deals...")
+          const updatedVouchers = []
+          snapshot.docs.forEach(doc => {
+            const voucherData = doc.data()
+            if (voucherData.remainingSeats > 0) {
+              updatedVouchers.push({ id: doc.id, ...voucherData })
+            }
           })
-        }
+          await processDealsWithVouchers(updatedVouchers)
+          setLoading(false)
+        })
 
-        setDeals(completedDealsArray)
+        // Cleanup listener
+        return () => unsubscribeVouchers()
+        
       } catch (error) {
         console.error("Error fetching completed deals:", error)
-      } finally {
         setLoading(false)
       }
     }
 
-    fetchCompletedDeals()
+    fetchData()
   }, [])
 
   const getStatusColor = (status) => {
@@ -275,12 +305,15 @@ const SuccessfulAcceleratorDealsTable = () => {
   }
 
   const handleViewDetails = (deal) => setSelectedDeal(deal)
-  const handleViewVoucher = (deal) => {
-    if (deal.voucher) {
-      setSelectedVoucher(deal.voucher)
-      setShowVoucherModal(true)
-    }
+const handleViewVoucher = (deal) => {
+  if (deal.hasVoucher && deal.voucher) {
+    setSelectedVoucher(deal.voucher);
+    setShowVoucherModal(true);
+  } else {
+    // Show message that no voucher is available
+    alert("📭 No voucher available yet. Your catalyst will send you a voucher when they're ready to support your growth!");
   }
+}
 
   if (loading) {
     return <div style={{ display: "flex", justifyContent: "center", alignItems: "center", padding: "2rem", color: "#a67c52" }}><p>Loading completed deals...</p></div>
@@ -330,14 +363,21 @@ const SuccessfulAcceleratorDealsTable = () => {
                   <td style={tableCellStyle}><span style={{ fontSize: "0.8rem" }}>{deal.deadline}</span></td>
                   <td style={tableCellStyle}><span style={{ fontSize: "0.8rem" }}>{deal.fundingStage}</span></td>
                   <td style={tableCellStyle}><span style={{ backgroundColor: getStatusColor(deal.currentStatus) + "20", color: getStatusColor(deal.currentStatus), padding: "4px 8px", borderRadius: "12px", fontSize: "0.7rem", display: "inline-block" }}>{deal.currentStatus}</span></td>
-                  <td style={{ ...tableCellStyle, borderRight: "none", textAlign: "center" }}>
-                    <div style={{ display: "flex", gap: "6px", justifyContent: "center" }}>
-                      <button onClick={() => handleViewDetails(deal)} style={{ backgroundColor: "#5d4037", color: "white", border: "none", borderRadius: "6px", padding: "6px", fontSize: "0.7rem", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}><Eye size={12} /></button>
-                      {deal.hasVoucher && deal.voucher && (
-                        <button onClick={() => handleViewVoucher(deal)} style={{ backgroundColor: "#a67c52", color: "white", border: "none", borderRadius: "6px", padding: "6px", fontSize: "0.7rem", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }} title="View Voucher"><Ticket size={12} /></button>
-                      )}
-                    </div>
-                  </td>
+                
+
+<td style={{ ...tableCellStyle, borderRight: "none", textAlign: "center" }}>
+  <div style={{ display: "flex", gap: "6px", justifyContent: "center" }}>
+    <button onClick={() => handleViewDetails(deal)} 
+      style={{ backgroundColor: "#5d4037", color: "white", border: "none", borderRadius: "6px", padding: "6px", fontSize: "0.7rem", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <Eye size={12} />
+    </button>
+    <button onClick={() => handleViewVoucher(deal)} 
+      style={{ backgroundColor: deal.hasVoucher ? "#a67c52" : "#ccc", color: "white", border: "none", borderRadius: "6px", padding: "6px", fontSize: "0.7rem", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }} 
+      title={deal.hasVoucher ? "View Voucher" : "No Voucher Available"}>
+      <Ticket size={12} />
+    </button>
+  </div>
+</td>
                 </tr>
               ))
             )}
@@ -395,7 +435,10 @@ const SuccessfulAcceleratorDealsTable = () => {
                     <p style={{ margin: "0 0 4px 0", color: "#3e2723" }}><strong>Type:</strong> {selectedDeal.voucher.type === "legitimacy" ? "Boost Your Legitimacy Score" : selectedDeal.voucher.type === "capital" ? "Boost Capital Appeal Score" : selectedDeal.voucher.type === "governance" ? "Boost Governance Score" : "Premium Subscription"}</p>
                     <p style={{ margin: 0, color: "#3e2723" }}><strong>Seats:</strong> {selectedDeal.voucher.seats}</p>
                   </div>
-                  <button onClick={() => { setSelectedVoucher(selectedDeal.voucher); setShowVoucherModal(true) }} style={{ backgroundColor: "#a67c52", color: "white", border: "none", borderRadius: "8px", padding: "10px 20px", fontSize: "14px", fontWeight: "600", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}><Ticket size={16} />View Voucher</button>
+                  <button onClick={() => { setSelectedVoucher(selectedDeal.voucher); setShowVoucherModal(true) }} 
+                    style={{ backgroundColor: "#a67c52", color: "white", border: "none", borderRadius: "8px", padding: "10px 20px", fontSize: "14px", fontWeight: "600", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}>
+                    <Ticket size={16} />View Voucher
+                  </button>
                 </div>
               </div>
             )}
