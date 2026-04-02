@@ -373,8 +373,7 @@ const handleChangePassword = async () => {
         style={{
           backgroundColor: "white",
           minHeight: "100vh",
-          marginLeft: "240px",
-          padding: "32px 48px",
+          padding: "20px",
           fontFamily: "system-ui, -apple-system, sans-serif",
           display: "flex",
           justifyContent: "center",
@@ -391,8 +390,7 @@ const handleChangePassword = async () => {
       style={{
         backgroundColor: "white",
         minHeight: "100vh",
-        marginLeft: "240px",
-        padding: "32px 48px",
+        padding: "20px",
         fontFamily: "system-ui, -apple-system, sans-serif",
       }}
     >
@@ -404,7 +402,6 @@ const handleChangePassword = async () => {
             fontWeight: "600",
             color: colors.textBrown,
             margin: "0",
-            marginTop: "5rem",
           }}
         >
           Settings

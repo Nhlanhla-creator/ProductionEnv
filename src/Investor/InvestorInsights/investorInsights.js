@@ -1044,9 +1044,7 @@ export function InvestorInsights() {
     return (
       <div
         style={{
-          paddingTop: "40px",
-          paddingLeft: "280px",
-          paddingRight: "20px",
+          padding: "20px",
           minHeight: "100vh",
           backgroundColor: "#fafafa",
           display: "flex",
@@ -1065,9 +1063,7 @@ export function InvestorInsights() {
   return (
     <div
       style={{
-        paddingTop: "40px",
-        paddingLeft: "280px", // Account for sidebar
-        paddingRight: "20px",
+        padding: "20px",
         minHeight: "100vh",
         backgroundColor: "#fafafa",
         boxSizing: "border-box",

@@ -199,10 +199,6 @@ const renderDocsStatus = () => {
             gap: 24px !important;
           }
         }
-           /* ADD THIS NEW RULE */
-  body.sidebar-collapsed .main-container {
-    padding-left: var(--sidebar-collapsed-width) !important;
-  }
         
         @media (max-width: 768px) {
           .investor-profile-container {
@@ -213,10 +209,6 @@ const renderDocsStatus = () => {
           }
         }
         
-        /* For collapsed sidebar state */
-        .sidebar-collapsed .investor-profile-container {
-          padding-left: max(24px, calc(80px + 24px)) !important;
-        }
       `}</style>
 
       <div
@@ -224,8 +216,7 @@ const renderDocsStatus = () => {
         style={{
           fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
           minHeight: '100vh',
-          padding: "24px 24px 24px max(24px, calc(280px + 24px))",
-          marginTop: "60px",
+          padding: '20px',
           transition: 'all 0.3s ease'
         }}>
         <div style={{

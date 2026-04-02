@@ -542,8 +542,7 @@ const getBillingHistoryStyles = (userType = "investor") => {
     // Container styles
     billingContainer: {
       maxWidth: "none",
-      padding: "0",
-      backgroundColor: "red",
+      margin: "20px",
       borderRadius: "1.25rem",
       boxShadow: `0 10px 25px ${colors.darkBrown}1A`,
       border: `1px solid ${colors.lightTan}`,
