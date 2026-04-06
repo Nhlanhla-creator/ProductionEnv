@@ -20,7 +20,7 @@ import { useNavigate } from "react-router-dom"
 import { onAuthStateChanged } from "firebase/auth"
 import { collection, query, where, getDocs, addDoc } from "firebase/firestore"
 import { evaluateProfile } from "../../utils/profileEvaluator"
-import { API_KEYS } from "../../API"
+import API_KEYS from "../../API"
 
 // Updated sections array with Guarantees
 const sectionsWithGuarantees = [
@@ -136,45 +136,19 @@ const FundingApplication = () => {
   const [error, setError] = useState(null)
   const [validationModal, setValidationModal] = useState({ open: false, title: "", messages: [] })
   const [popupSeen, setPopupSeen] = useState(false)
-  const apiKey = API_KEYS.OPENAI
+  const apiKey = API_KEYS.OPENAI;
+  
   // New state for popups
   const [showWelcomePopup, setShowWelcomePopup] = useState(false)
   const [showCongratulationsPopup, setShowCongratulationsPopup] = useState(false)
   const [currentOnboardingStep, setCurrentOnboardingStep] = useState(0)
   const [isApiKeyLoading, setIsApiKeyLoading] = useState(true)
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
-
+  
   useEffect(() => {
     if (apiKey != null) {
       setIsApiKeyLoading(false)
     }
   }, [apiKey])
-
-  useEffect(() => {
-    const checkSidebarState = () => {
-      const sidebarCollapsed = document.body.classList.contains("sidebar-collapsed")
-      setIsSidebarCollapsed(sidebarCollapsed)
-    }
-    console.log(apiKey)
-    // Check initial state
-    checkSidebarState()
-
-    // Create observer to watch for class changes on body
-    const observer = new MutationObserver((mutations) => {
-      mutations.forEach((mutation) => {
-        if (mutation.type === "attributes" && mutation.attributeName === "class") {
-          checkSidebarState()
-        }
-      })
-    })
-
-    observer.observe(document.body, {
-      attributes: true,
-      attributeFilter: ["class"],
-    })
-
-    return () => observer.disconnect()
-  }, [])
 
 const getContainerStyles = () => ({
   width: "100%",
