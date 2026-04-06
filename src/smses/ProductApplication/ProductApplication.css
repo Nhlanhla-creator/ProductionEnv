@@ -37,15 +37,13 @@
   color: var(--up-brown-900);
   line-height: 1.6;
   min-height: 100vh;
-background-image: url('../../assets/BiGBackround.png'); 
+  background-image: url('../../assets/BiGBackround.png'); 
   background-size: cover;
   background-repeat: no-repeat;
   background-position: center;
   max-width: 1200px;
   margin: 0 auto;
   padding: 2rem 1rem;
-  margin-top: 53px;
-  margin-left: 250px;
   }
   
   

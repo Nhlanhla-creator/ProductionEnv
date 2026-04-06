@@ -1170,9 +1170,8 @@ const [isCompanyMember, setIsCompanyMember] = useState(false);
 const [effectiveUserId, setEffectiveUserId] = useState(null);
 const [userRole, setUserRole] = useState(null);
 
-  const apiKey = API_KEYS.OPENAI
-  console.log(apiKey)
-  const user = auth.currentUser
+  const apiKey = API_KEYS.OPENAI;
+  const user = auth.currentUser;
   const userName = user ? user.email : "User"
 
   const dashboardSteps = [
