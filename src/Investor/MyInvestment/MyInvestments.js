@@ -711,7 +711,7 @@ const MyInvestments = () => {
     )
   } 
 
-  if (currentPlan === "basic" || currentPlan === "engage") {
+  if (currentPlan === "basic") {
     return (
       <Upsell
         title={"My Portfolio"}

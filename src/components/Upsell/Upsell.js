@@ -49,6 +49,8 @@ export default function Upsell({
 
   const handlePrimary = () => {
     if (typeof onPrimary === "function") return onPrimary()
+
+    
     
     switch (userType) {
       case "investor":
@@ -56,7 +58,7 @@ export default function Upsell({
       case "sme":
         navigate("/billing/subscriptions")
       default:
-        navigate("/billing/subscriptions")
+        navigate("/investor/billing/subscriptions")
     }
   }
 
