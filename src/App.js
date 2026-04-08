@@ -229,9 +229,9 @@ import InvestorLegalCompliance from "./Investor/InvestorUniversalProfile/LegalCo
 import InvestorProductsServices from "./Investor/InvestorUniversalProfile/FundDetails​"
 import InvestorHowDidYouHear from "./Investor/InvestorUniversalProfile/ApplicationBrief​"
 import InvestorDeclarationConsent from "./Investor/InvestorUniversalProfile/DeclarationConsent"
-import InvestorMessages from "Investor/InvestorMessages/Messages"
+import InvestorMessages from "./Investor/InvestorMessages/Messages"
 import InvestorCalendar from "./Investor/Calender/InvestorCalendar"
-import MyInvestments from "Investor/MyInvestment/MyInvestments"
+import MyInvestments from "./Investor/MyInvestment/MyInvestments"
 
 // Accelerator Programs Universal Profile Components
 import CatalystUniversalProfile from "./catalyst/CatalystUniversalProfile/catalyst-universal-profile"
