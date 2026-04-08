@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { v4 as uuidv4 } from "uuid"
 import { getAuth } from "firebase/auth"
-import { collection, getFirestore, query, where, getDocs, doc, getDoc, setDoc,addDoc, updateDoc } from "firebase/firestore"
+import { collection, getFirestore, query, where, getDocs, doc, getDoc, setDoc, addDoc, updateDoc } from "firebase/firestore"
 import { useNavigate } from "react-router-dom"
 import { 
   Check, 
@@ -176,41 +176,33 @@ const ReusableSubscription = ({
   }
 
   const isVerifiedActive = () => {
-    if (!isSme) return true // non-SME don't need verification gate
+    if (!isSme) return true
     const scoreState = getCurrentScoreState()
     return scoreState?.is_verified === true
   }
 
-  // Show stale warning when user had verified but cancelled
   const showStaleWarning = () => {
     if (!isSme || !isExistingUser) return false
     const planKey = getCurrentPlanKey()
-    // On free plan but was previously on a higher plan? or score_status=stale
     if (planKey === freePlanKey && history.length > 1) return true
     return false
   }
-  // ─────────────────────────────────────────────────────────────────────────
 
-  // Get number of plans to determine grid columns
-  const planCount = Object.keys(plans).length
-  
- const styles = {
-  ...baseStyles,
-  planGrid: {
-    display: "grid",
-    // Dynamic grid columns based on number of plans
-    gridTemplateColumns: `repeat(${Object.keys(plans).length}, minmax(200px, 1fr))`,
-    gap: "1.5rem",
-    margin: "3rem 0",
-    justifyContent: "center",
-    maxWidth: "100%",
-  },
-   planCard: {
-    ...(baseStyles.planCard || {}),
-    minHeight: "450px",
-    padding: "2rem",
-  },
-    // ── score-state badge ───────────────────────────────────────────────────
+  const styles = {
+    ...baseStyles,
+    planGrid: {
+      display: "grid",
+      gridTemplateColumns: `repeat(${Object.keys(plans).length}, minmax(200px, 1fr))`,
+      gap: "1.5rem",
+      margin: "3rem 0",
+      justifyContent: "center",
+      maxWidth: "100%",
+    },
+    planCard: {
+      ...(baseStyles.planCard || {}),
+      minHeight: "450px",
+      padding: "2rem",
+    },
     scoreBadge: {
       display: "inline-flex",
       alignItems: "center",
@@ -357,13 +349,11 @@ const ReusableSubscription = ({
     voucherInfoHighlight: { fontWeight: "700", color: colors.accentGold },
   }
 
-  // ── Helper: is new user (for trial eligibility) ────────────────────────
   const isNewUser = () => {
     return !isExistingUser || !currentSubscription || 
            currentSubscription.plan === plans[freePlanKey].name
   }
 
-  // ── Helper: get current plan key ──────────────────────────────────────
   const getCurrentPlanKey = () => {
     if (!currentSubscription || !currentSubscription.plan) return freePlanKey
     for (const [key, plan] of Object.entries(plans)) {
@@ -385,7 +375,6 @@ const ReusableSubscription = ({
     return plans[planKey]?.price?.[cycle] || 0
   }
 
-  // ── Load subscription data ─────────────────────────────────────────────
   const loadUserSubscription = async (userId) => {
     console.log(`🔍 Loading ${userType} subscription for user:`, userId)
     setIsLoading(true)
@@ -502,7 +491,6 @@ const ReusableSubscription = ({
       const voucherData = voucherDoc.data()
       if (voucherData.remainingSeats <= 0) { setVoucherMessage("No seats remaining for this voucher"); setVoucherMessageType("error"); setAppliedVoucher(null); setValidatingVoucher(false); return }
 
-      // Determine scoreState for the redeemed plan
       let scoreState = null
       if (isSme) {
         const planKey = Object.keys(plans).find(k => plans[k].name === appliedVoucher.planName)
@@ -626,136 +614,223 @@ const ReusableSubscription = ({
     )
   }
 
-  // ── SME Score State Banner ────────────────────────────────────────────
-  const SmeScoreBanner = () => {
-    if (!isSme || !isExistingUser) return null
-    const stale = showStaleWarning()
-    if (stale) {
-      return (
-        <div style={styles.staleWarningBanner}>
-          <ShieldOff size={22} style={{ flexShrink: 0, marginTop: "2px" }} />
-          <div>
-            <strong>Verification expired — update required</strong>
-            <div style={{ fontWeight: 400, fontSize: "0.88rem", marginTop: "0.25rem" }}>
-              Your BIG Score is now <em>stale</em>. Upgrade to <strong>Verified</strong> to restore live scoring and ecosystem access.
-            </div>
-          </div>
-        </div>
-      )
-    }
-    const scoreState = getCurrentScoreState()
-    if (!scoreState) return null
-    if (scoreState.score_status === "active") {
-      return (
-        <div style={{ ...styles.scoreBadge, ...styles.scoreBadgeActive, marginBottom: "1.5rem", display: "inline-flex" }}>
-          <ShieldCheck size={14} /> BIG Score: Live & Active
-        </div>
-      )
-    }
-    if (scoreState.score_status === "snapshot") {
-      return (
-        <div style={{ ...styles.scoreBadge, ...styles.scoreBadgeSnapshot, marginBottom: "1.5rem", display: "inline-flex" }}>
-          <AlertTriangle size={14} /> BIG Score: Initial Snapshot (static)
-        </div>
-      )
-    }
-    return null
-  }
-
-  // ── Plan selection ────────────────────────────────────────────────────
-  const handlePlanSelect = (planKey) => {
-    setSelectedPlan(planKey)
-    setErrors({})
-    if (isExistingUser && currentSubscription) {
-      const currentPlanKey = getCurrentPlanKey()
-      if (planKey !== currentPlanKey) {
-        const action = planOrder[planKey] > planOrder[currentPlanKey] ? "upgrade" : "downgrade"
-        setUpgradeDowngradeAction(action)
-        setShowPlanChangeConfirm(true)
-        setShowDowngradeOptions(false)
-      }
-    }
-  }
-
-  const handleDowngradeClick = () => { setShowDowngradeOptions(true) }
-  const handleDowngradeSelect = (targetPlan) => { setSelectedPlan(targetPlan); setUpgradeDowngradeAction("downgrade"); setShowDowngradeOptions(false); setShowPlanChangeConfirm(true) }
-  const cancelDowngradeOptions = () => { setShowDowngradeOptions(false) }
-
-  const confirmPlanChange = () => {
-    if (upgradeDowngradeAction === "downgrade" && selectedPlan === freePlanKey) { handleDowngradeToFree() }
-    else { setShowPlanChangeConfirm(false); handlePay() }
-  }
-
-  const handleDowngradeToFree = async () => {
-    try {
-      const scoreState = isSme ? getSmeScoreState(freePlanKey) : null
-      const newRecord = { id: uuidv4(), email, plan: plans[selectedPlan].name, cycle: billingCycle, amount: 0, fullName, companyName, createdAt: new Date().toISOString(), status: "Success", autoRenew: true, userId: user.uid, userType, action: "downgrade", transactionRef: `downgrade_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`, scoreState }
-      await saveSubscriptionToFirebase(newRecord)
-      await updateCurrentPlan(plans[selectedPlan].name, billingCycle, { userType, scoreState })
-      setHistory([newRecord, ...history]); setCurrentSubscription(newRecord); setIsExistingUser(true)
-      alert(`Successfully downgraded to ${plans[selectedPlan].name} plan!`)
-      setShowPlanChangeConfirm(false); setUpgradeDowngradeAction(null)
-      setTimeout(() => { loadUserSubscription(user.uid) }, 1000)
-    } catch (error) { console.error("Error in handleDowngradeToFree:", error); alert("An error occurred during downgrade. Please try again.") }
-  }
-
-  const cancelPlanChange = () => { setSelectedPlan(getCurrentPlanKey()); setShowPlanChangeConfirm(false); setShowDowngradeOptions(false); setUpgradeDowngradeAction(null) }
-
-  const handleCancelSubscription = async () => {
-    if (!currentSubscription || !user) { alert("No active subscription found."); return }
-    const confirmMessage = `Are you sure you want to cancel your ${currentSubscription.plan} subscription?\n\nThis will:\n• Stop automatic renewals\n• Downgrade you to ${plans[freePlanKey].name} plan\n• Remove premium features\n\nThis action cannot be undone.`
-    if (!window.confirm(confirmMessage)) return
-    try {
-      const scoreState = isSme ? getSmeScoreState(freePlanKey) : null
-      const cancellationRecord = { id: uuidv4(), email, plan: plans[freePlanKey].name, cycle: "monthly", amount: 0, fullName, companyName, createdAt: new Date().toISOString(), status: "Success", autoRenew: false, userId: user.uid, userType, action: "cancellation", previousPlan: currentSubscription.plan, transactionRef: `cancellation_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`, scoreState }
-      await saveSubscriptionToFirebase(cancellationRecord)
-      await updateCurrentPlan(plans[freePlanKey].name, "monthly", { userType, scoreState })
-      setHistory([cancellationRecord, ...history]); setCurrentSubscription(cancellationRecord); setSelectedPlan(freePlanKey)
-      alert(`Subscription cancelled successfully!\n\nYou've been downgraded to the ${plans[freePlanKey].name} plan.\nYour premium features will remain active until the end of your current billing period.`)
-      setTimeout(() => { loadUserSubscription(user.uid) }, 1000)
-    } catch (error) { console.error("Error cancelling subscription:", error); alert("Failed to cancel subscription. Please try again or contact support.") }
-  }
-
-  // ── Payment handler ───────────────────────────────────────────────────
-  const handlePay = async () => {
-    if (!user) { alert("Please log in to subscribe"); return }
-    const planPrice = plans[selectedPlan].price[billingCycle]
-    const scoreState = isSme ? getSmeScoreState(selectedPlan) : null
-
-    if (planPrice === 0) {
-      try {
-        const newRecord = { id: uuidv4(), email, plan: plans[selectedPlan].name, cycle: billingCycle, amount: 0, fullName, companyName, createdAt: new Date().toISOString(), status: "Success", autoRenew: true, userId: user.uid, userType, action: isExistingUser ? upgradeDowngradeAction || "downgrade" : "new_subscription", scoreState }
-        setHistory([newRecord, ...history])
-        await saveSubscriptionToFirebase(newRecord)
-        await updateCurrentPlan(plans[selectedPlan].name, billingCycle, { userType, scoreState })
-        setCurrentSubscription(newRecord); setIsExistingUser(true)
-        alert(`${plans[selectedPlan].name} plan activated successfully!`)
-        setUpgradeDowngradeAction(null); setShowPlanChangeConfirm(false)
-        return
-      } catch (error) { console.error("Error activating free plan:", error); alert("Failed to activate plan. Please try again."); return }
+  // ─── FIXED: Direct upgrade/downgrade handler ───────────────────────────
+  const handleUpgradeDowngrade = async (targetPlanKey) => {
+    if (!user) {
+      alert("Please log in to manage your subscription")
+      return
     }
 
-    const validationResult = validate(email, fullName)
-    if (!validationResult.isValid) { setErrors(validationResult.errors); return }
+    const currentPlanKey = getCurrentPlanKey()
+    
+    // If no current subscription or same plan, just subscribe
+    if (!currentSubscription || currentPlanKey === targetPlanKey) {
+      setSelectedPlan(targetPlanKey)
+      await processSubscription(targetPlanKey)
+      return
+    }
 
+    const isUpgrade = planOrder[targetPlanKey] > planOrder[currentPlanKey]
+    const action = isUpgrade ? "upgrade" : "downgrade"
+
+    // Show confirmation modal
+    setUpgradeDowngradeAction(action)
+    setSelectedPlan(targetPlanKey)
+    setShowPlanChangeConfirm(true)
+  }
+
+ const processSubscription = async (planKey, skipConfirm = false) => {
+  const plan = plans[planKey]
+  const planPrice = plan.price[billingCycle]
+  const scoreState = isSme ? getSmeScoreState(planKey) : null
+
+  // Get user details from Firebase Auth as fallback
+  const userEmail = user?.email
+  const userFullName = user?.displayName || user?.email?.split('@')[0] || "Valued Customer"
+  
+  // For existing users, use their auth data automatically
+  if (isExistingUser && currentSubscription) {
+    if (!userEmail) {
+      alert("Please ensure your account has a valid email address")
+      return
+    }
+    // Set the state if not already set
+    if (!email) setEmail(userEmail)
+    if (!fullName) setFullName(userFullName)
+  } else {
+    // For new users, validate the form
+    const validationResult = validate(email || userEmail, fullName || userFullName)
+    if (!validationResult.isValid) {
+      setErrors(validationResult.errors)
+      alert("Please fill in your name and email before subscribing")
+      return
+    }
+  }
+
+  // For free plan
+  if (planPrice === 0) {
     setPaymentProcessing(true)
     try {
-      const mockPaymentResult = await processMockPayment({ amount: planPrice, currency: "ZAR", userId: user.uid, planName: plans[selectedPlan].name, billingCycle })
-      if (mockPaymentResult.success) {
-        const isTrialEligible = isNewUser()
-        const trialStartDate = new Date(); const trialEndDate = new Date(); trialEndDate.setMonth(trialEndDate.getMonth() + 3)
-        const newRecord = { id: uuidv4(), email, plan: plans[selectedPlan].name, cycle: billingCycle, amount: 0, originalAmount: plans[selectedPlan].price[billingCycle], fullName, companyName, createdAt: new Date().toISOString(), status: "Success", autoRenew: true, transactionRef: mockPaymentResult.transactionId, userId: user.uid, userType, subscriptionType: "recurring", isTrialPeriod: isTrialEligible, trialStartDate: isTrialEligible ? trialStartDate.toISOString() : null, trialEndDate: isTrialEligible ? trialEndDate.toISOString() : null, action: isExistingUser ? upgradeDowngradeAction || "upgrade" : "new_subscription", paymentCompleted: true, paymentDate: new Date().toISOString(), scoreState }
-        await saveSubscriptionToFirebase(newRecord)
-        await updateCurrentPlan(plans[selectedPlan].name, billingCycle, { amount: newRecord.amount, originalAmount: newRecord.originalAmount, isTrialPeriod: newRecord.isTrialPeriod, trialStartDate: newRecord.trialStartDate, trialEndDate: newRecord.trialEndDate, transactionRef: newRecord.transactionRef, userType, scoreState })
-        setHistory([newRecord, ...history]); setCurrentSubscription(newRecord); setIsExistingUser(true); setPaymentProcessing(false)
-        setUpgradeDowngradeAction(null); setShowPlanChangeConfirm(false)
-        const successMessage = isTrialEligible
-          ? `🎉 Welcome to your ${plans[selectedPlan].name} plan!\n\n✨ You're getting 3 MONTHS FREE!\n• Trial period: ${trialStartDate.toLocaleDateString()} - ${trialEndDate.toLocaleDateString()}\n• Regular billing starts: ${trialEndDate.toLocaleDateString()}\n• Monthly rate after trial: R${plans[selectedPlan].price[billingCycle]}\n\nEnjoy all premium features at no cost for the first 3 months!`
-          : `🎉 Subscription activated successfully!\n\nYour ${plans[selectedPlan].name} plan is now active.\n\nYou can now access all features!`
-        alert(successMessage)
-        setTimeout(async () => { await loadUserSubscription(user.uid) }, 2000)
-      } else { throw new Error(mockPaymentResult.error || "Payment failed") }
-    } catch (error) { console.error("Payment processing error:", error); alert(`Failed to process payment: ${error.message}. Please try again.`); setPaymentProcessing(false) }
+      const newRecord = {
+        id: uuidv4(),
+        email: email || userEmail,
+        plan: plan.name,
+        cycle: billingCycle,
+        amount: 0,
+        fullName: fullName || userFullName,
+        companyName,
+        createdAt: new Date().toISOString(),
+        status: "Success",
+        autoRenew: true,
+        userId: user.uid,
+        userType,
+        action: isExistingUser ? (planOrder[planKey] > planOrder[getCurrentPlanKey()] ? "upgrade" : "downgrade") : "new_subscription",
+        scoreState
+      }
+      await saveSubscriptionToFirebase(newRecord)
+      await updateCurrentPlan(plan.name, billingCycle, { userType, scoreState })
+      setCurrentSubscription(newRecord)
+      setIsExistingUser(true)
+      alert(`${plan.name} plan activated successfully!`)
+      setUpgradeDowngradeAction(null)
+      setShowPlanChangeConfirm(false)
+      setTimeout(() => loadUserSubscription(user.uid), 1000)
+    } catch (error) {
+      console.error("Error activating plan:", error)
+      alert("Failed to activate plan. Please try again.")
+    } finally {
+      setPaymentProcessing(false)
+    }
+    return
+  }
+
+  // For paid plan - continue with payment processing
+  setPaymentProcessing(true)
+  try {
+    const mockPaymentResult = await processMockPayment({
+      amount: planPrice,
+      currency: "ZAR",
+      userId: user.uid,
+      planName: plan.name,
+      billingCycle
+    })
+
+    if (mockPaymentResult.success) {
+      const isTrialEligible = isNewUser()
+      const trialStartDate = new Date()
+      const trialEndDate = new Date()
+      trialEndDate.setMonth(trialEndDate.getMonth() + 3)
+
+      const newRecord = {
+        id: uuidv4(),
+        email: email || userEmail,
+        plan: plan.name,
+        cycle: billingCycle,
+        amount: 0,
+        originalAmount: planPrice,
+        fullName: fullName || userFullName,
+        companyName,
+        createdAt: new Date().toISOString(),
+        status: "Success",
+        autoRenew: true,
+        transactionRef: mockPaymentResult.transactionId,
+        userId: user.uid,
+        userType,
+        subscriptionType: "recurring",
+        isTrialPeriod: isTrialEligible,
+        trialStartDate: isTrialEligible ? trialStartDate.toISOString() : null,
+        trialEndDate: isTrialEligible ? trialEndDate.toISOString() : null,
+        action: isExistingUser ? (planOrder[planKey] > planOrder[getCurrentPlanKey()] ? "upgrade" : "downgrade") : "new_subscription",
+        paymentCompleted: true,
+        paymentDate: new Date().toISOString(),
+        scoreState
+      }
+
+      await saveSubscriptionToFirebase(newRecord)
+      await updateCurrentPlan(plan.name, billingCycle, {
+        amount: newRecord.amount,
+        originalAmount: newRecord.originalAmount,
+        isTrialPeriod: newRecord.isTrialPeriod,
+        trialStartDate: newRecord.trialStartDate,
+        trialEndDate: newRecord.trialEndDate,
+        transactionRef: newRecord.transactionRef,
+        userType,
+        scoreState
+      })
+
+      setCurrentSubscription(newRecord)
+      setIsExistingUser(true)
+      
+      const successMessage = isTrialEligible
+        ? `🎉 Welcome to your ${plan.name} plan!\n\n✨ You're getting 3 MONTHS FREE!\n• Trial period: ${trialStartDate.toLocaleDateString()} - ${trialEndDate.toLocaleDateString()}\n• Regular billing starts: ${trialEndDate.toLocaleDateString()}\n• Monthly rate after trial: R${planPrice}\n\nEnjoy all premium features at no cost for the first 3 months!`
+        : `🎉 Subscription ${isExistingUser ? (planOrder[planKey] > planOrder[getCurrentPlanKey()] ? "upgraded" : "downgraded") : "activated"} successfully!\n\nYour ${plan.name} plan is now active.`
+
+      alert(successMessage)
+      setUpgradeDowngradeAction(null)
+      setShowPlanChangeConfirm(false)
+      setTimeout(() => loadUserSubscription(user.uid), 2000)
+    } else {
+      throw new Error(mockPaymentResult.error || "Payment failed")
+    }
+  } catch (error) {
+    console.error("Payment processing error:", error)
+    alert(`Failed to process payment: ${error.message}. Please try again.`)
+  } finally {
+    setPaymentProcessing(false)
+  }
+}
+
+  const confirmPlanChange = async () => {
+    setShowPlanChangeConfirm(false)
+    await processSubscription(selectedPlan)
+  }
+
+  const cancelPlanChange = () => {
+    setSelectedPlan(getCurrentPlanKey())
+    setShowPlanChangeConfirm(false)
+    setShowDowngradeOptions(false)
+    setUpgradeDowngradeAction(null)
+  }
+
+  const handleCancelSubscription = async () => {
+    if (!currentSubscription || !user) {
+      alert("No active subscription found.")
+      return
+    }
+    const confirmMessage = `Are you sure you want to cancel your ${currentSubscription.plan} subscription?\n\nThis will:\n• Stop automatic renewals\n• Downgrade you to ${plans[freePlanKey].name} plan\n• Remove premium features\n\nThis action cannot be undone.`
+    if (!window.confirm(confirmMessage)) return
+
+    try {
+      const scoreState = isSme ? getSmeScoreState(freePlanKey) : null
+      const cancellationRecord = {
+        id: uuidv4(),
+        email: email || user?.email,
+        plan: plans[freePlanKey].name,
+        cycle: "monthly",
+        amount: 0,
+        fullName: fullName || user?.displayName,
+        companyName,
+        createdAt: new Date().toISOString(),
+        status: "Success",
+        autoRenew: false,
+        userId: user.uid,
+        userType,
+        action: "cancellation",
+        previousPlan: currentSubscription.plan,
+        transactionRef: `cancellation_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        scoreState
+      }
+      await saveSubscriptionToFirebase(cancellationRecord)
+      await updateCurrentPlan(plans[freePlanKey].name, "monthly", { userType, scoreState })
+      setHistory([cancellationRecord, ...history])
+      setCurrentSubscription(cancellationRecord)
+      setSelectedPlan(freePlanKey)
+      alert(`Subscription cancelled successfully!\n\nYou've been downgraded to the ${plans[freePlanKey].name} plan.\nYour premium features will remain active until the end of your current billing period.`)
+      setTimeout(() => loadUserSubscription(user.uid), 1000)
+    } catch (error) {
+      console.error("Error cancelling subscription:", error)
+      alert("Failed to cancel subscription. Please try again or contact support.")
+    }
   }
 
   // ── Add-on handlers ───────────────────────────────────────────────────
@@ -785,11 +860,15 @@ const ReusableSubscription = ({
             setEmail(userData.email || user.email || defaultData.email)
             setFullName(userData.displayName || userData.fullName || defaultData.fullName)
             setCompanyName(userData.companyName || "")
-          } else { setEmail(user.email || defaultData.email); setFullName(user.displayName || defaultData.fullName) }
+          } else {
+            setEmail(user.email || defaultData.email)
+            setFullName(user.displayName || defaultData.fullName)
+          }
           await loadUserSubscription(user.uid)
         } catch (error) {
           console.error("Error loading user data:", error)
-          setEmail(user.email || defaultData.email); setFullName(user.displayName || defaultData.fullName)
+          setEmail(user.email || defaultData.email)
+          setFullName(user.displayName || defaultData.fullName)
           await loadUserSubscription(user.uid)
         }
       }
@@ -831,7 +910,17 @@ const ReusableSubscription = ({
         </div>
 
         {/* SME Score State Banner */}
-        <SmeScoreBanner />
+        {isSme && showStaleWarning() && (
+          <div style={styles.staleWarningBanner}>
+            <ShieldOff size={22} style={{ flexShrink: 0, marginTop: "2px" }} />
+            <div>
+              <strong>Verification expired — update required</strong>
+              <div style={{ fontWeight: 400, fontSize: "0.88rem", marginTop: "0.25rem" }}>
+                Your BIG Score is now <em>stale</em>. Upgrade to <strong>Verified</strong> to restore live scoring and ecosystem access.
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Voucher Section */}
         <div style={styles.voucherToggle} onClick={() => setShowVoucherInput(!showVoucherInput)}>
@@ -866,7 +955,7 @@ const ReusableSubscription = ({
                   <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.5rem" }}><span style={{ color: colors.mediumBrown }}>Voucher Code:</span><span style={{ fontFamily: "'Courier New', monospace", fontWeight: "600", color: colors.darkBrown }}>{appliedVoucher.code}</span></div>
                   <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: colors.mediumBrown }}>Remaining Seats:</span><span style={{ fontWeight: "600", color: colors.darkBrown }}>{appliedVoucher.remainingSeats}</span></div>
                 </div>
-                <button style={styles.voucherRedeemButton} onClick={redeemVoucher} disabled={validatingVoucher} onMouseEnter={(e) => { e.target.style.transform = "translateY(-2px)"; e.target.style.boxShadow = `0 8px 20px ${colors.successGreen}66` }} onMouseLeave={(e) => { e.target.style.transform = "translateY(0)"; e.target.style.boxShadow = "none" }}>{validatingVoucher ? "Redeeming..." : "Redeem Voucher Now"}</button>
+                <button style={styles.voucherRedeemButton} onClick={redeemVoucher} disabled={validatingVoucher}>{validatingVoucher ? "Redeeming..." : "Redeem Voucher Now"}</button>
                 <button style={{ ...styles.voucherButton, background: "transparent", color: colors.mediumBrown, border: `2px solid ${colors.lightTan}`, marginTop: "0.5rem" }} onClick={clearVoucher}>Cancel</button>
               </div>
             )}
@@ -881,20 +970,12 @@ const ReusableSubscription = ({
             <p style={baseStyles.subtitle}>{customSubtitle || "Upgrade, downgrade, or manage your current plan with ease"}</p>
             <div style={baseStyles.subscriptionInfo}>
               <h3 style={baseStyles.subscriptionTitle}>Current Subscription</h3>
-
-              {/* SME score state inline badge */}
-              {isSme && (() => {
-                const ss = getCurrentScoreState()
-                if (!ss) return null
-                const isActive = ss.score_status === "active"
-                return (
-                  <div style={{ ...styles.scoreBadge, ...(isActive ? styles.scoreBadgeActive : styles.scoreBadgeSnapshot), marginBottom: "1rem" }}>
-                    {isActive ? <ShieldCheck size={13} /> : <AlertTriangle size={13} />}
-                    {isActive ? "BIG Score: Live & Active" : "BIG Score: Initial Snapshot (static)"}
-                  </div>
-                )
-              })()}
-
+              {isSme && getCurrentScoreState() && (
+                <div style={{ ...styles.scoreBadge, ...(getCurrentScoreState().score_status === "active" ? styles.scoreBadgeActive : styles.scoreBadgeSnapshot), marginBottom: "1rem" }}>
+                  {getCurrentScoreState().score_status === "active" ? <ShieldCheck size={13} /> : <AlertTriangle size={13} />}
+                  {getCurrentScoreState().score_status === "active" ? "BIG Score: Live & Active" : "BIG Score: Initial Snapshot (static)"}
+                </div>
+              )}
               <div style={baseStyles.subscriptionDetail}><span>Plan:</span><span style={{ fontWeight: 600 }}>{getCurrentPlanDisplayName()}{currentSubscription.source === "voucher" && <span style={{ marginLeft: "0.5rem", padding: "0.2rem 0.5rem", background: colors.accentGold, color: colors.lightText, borderRadius: "4px", fontSize: "0.7rem", fontWeight: "600" }}>VOUCHER</span>}</span></div>
               <div style={baseStyles.subscriptionDetail}><span>Billing Cycle:</span><span style={{ fontWeight: 600 }}>{currentSubscription.cycle || "Monthly"}</span></div>
               <div style={baseStyles.subscriptionDetail}><span>Current Amount:</span><span style={{ fontWeight: 600, color: currentSubscription.isTrialPeriod ? colors.trialBrown : colors.darkText }}>{currentSubscription.amount === 0 && currentSubscription.isTrialPeriod ? "FREE (Trial)" : currentSubscription.amount === 0 ? currentSubscription.source === "voucher" ? "FREE (Voucher)" : "Free" : `R${getCurrentPlanAmount().toLocaleString()}`}</span></div>
@@ -914,19 +995,29 @@ const ReusableSubscription = ({
         {/* Feature Comparison Table */}
         <FeatureComparisonTable />
 
-        {/* ── Pricing Cards ────────────────────────────────────────────────── */}
+        {/* ── PRICING CARDS WITH DIRECT UPGRADE/DOWNGRADE BUTTONS ── */}
         <div style={styles.planGrid}>
           {Object.entries(plans).map(([planKey, plan]) => {
             const isCurrentPlan = isExistingUser && getCurrentPlanKey() === planKey
-            const isSelected = selectedPlan === planKey
-            const isHovered = hoveredPlan === planKey
             const isPopular = planKey === popularPlanKey
             const showTrialOffer = plan.price[billingCycle] > 0 && isNewUser()
             const needsVerified = isSme && requiresVerifiedPlan(planKey)
             const cardBackground = cardBackgrounds[planKey] || colors.offWhite
-
-            // SME score state for this card
             const cardScoreState = isSme ? getSmeScoreState(planKey) : null
+
+            // Determine button text based on subscription state
+            const getButtonText = () => {
+              if (isCurrentPlan) return "Current Plan"
+              if (!isExistingUser) {
+                return showTrialOffer ? "Start Free Trial" : "Subscribe"
+              }
+              const currentPlanKey = getCurrentPlanKey()
+              const isUpgrade = planOrder[planKey] > planOrder[currentPlanKey]
+              return isUpgrade ? "Upgrade" : "Downgrade"
+            }
+
+            const buttonText = getButtonText()
+            const isDisabled = isCurrentPlan
 
             return (
               <div
@@ -935,28 +1026,20 @@ const ReusableSubscription = ({
                   ...styles.planCard,
                   background: cardBackground,
                   ...(isPopular ? baseStyles.planCardPopular : {}),
-                  ...(isSelected && !isPopular ? baseStyles.planCardSelected : {}),
-                  ...(isHovered && !isSelected && !isPopular ? baseStyles.planCardHover : {}),
-                  cursor: "pointer",
                   position: "relative",
                   overflow: "hidden",
                   display: "flex",
                   flexDirection: "column",
                 }}
-                onMouseEnter={() => setHoveredPlan(planKey)}
-                onMouseLeave={() => setHoveredPlan(null)}
-                onClick={() => handlePlanSelect(planKey)}
               >
                 {isPopular && <div style={baseStyles.popularBadge}>POPULAR</div>}
 
-                {/* Verified gate badge for Standard & Premium */}
                 {needsVerified && (
                   <div style={styles.verifiedGateBadge}>
                     <ShieldCheck size={11} /> Requires Verified
                   </div>
                 )}
 
-                {/* SME score state badge on card */}
                 {cardScoreState && (
                   <div style={{
                     ...styles.scoreBadge,
@@ -990,12 +1073,6 @@ const ReusableSubscription = ({
                 <p style={{ ...baseStyles.planDescriptionText, fontSize: "0.85rem", color: plan.price[billingCycle] === 0 ? colors.mediumBrown : colors.lightText }}>{plan.description}</p>
 
                 {showTrialOffer && <div style={baseStyles.freeMonthsBadge}>🎉 First 3 Months FREE!</div>}
-                {showTrialOffer && (
-                  <div style={{ ...baseStyles.afterTrialPrice, fontSize: "0.82rem" }}>
-                    <strong>After 3-month trial:</strong><br />
-                    R{plan.price[billingCycle]} / {billingCycle === "monthly" ? "month" : "year"}
-                  </div>
-                )}
 
                 <ul style={baseStyles.planFeaturesList}>
                   {plan.highlights.map((feature, index) => (
@@ -1006,69 +1083,43 @@ const ReusableSubscription = ({
                   ))}
                 </ul>
 
-                {isCurrentPlan ? (
-                  <div style={{ ...baseStyles.currentPlanBadge, width: "100%", textAlign: "center", padding: "0.9rem 1rem", borderRadius: "8px" }}>Current Plan</div>
-                ) : isSelected ? (
-                  <div style={{ ...baseStyles.selectedBadge, width: "100%", textAlign: "center", padding: "0.9rem 1rem", borderRadius: "8px" }}>Selected</div>
-                ) : (
-                  <button
-                    style={{ ...baseStyles.selectButton, fontSize: "0.9rem", padding: "0.9rem 1rem" }}
-                    onClick={(e) => { e.stopPropagation(); handlePlanSelect(planKey) }}
-                    onMouseEnter={(e) => { e.target.style.background = colors.mediumBrown }}
-                    onMouseLeave={(e) => { e.target.style.background = `linear-gradient(135deg, ${colors.accentGold} 0%, ${colors.mediumBrown} 100%)` }}
-                  >
-                    {isExistingUser
-                      ? plan.price[billingCycle] === 0 ? "Downgrade" : showTrialOffer ? "Start Free Trial" : "Upgrade"
-                      : showTrialOffer ? "Start Free Trial" : "Subscribe"
+                <button
+                  style={{
+                    ...baseStyles.selectButton,
+                    fontSize: "0.9rem",
+                    padding: "0.9rem 1rem",
+                    ...(isDisabled ? { opacity: 0.6, cursor: "not-allowed" } : {}),
+                    marginTop: "auto"
+                  }}
+                  onClick={() => !isDisabled && handleUpgradeDowngrade(planKey)}
+                  disabled={isDisabled || paymentProcessing}
+                  onMouseEnter={(e) => {
+                    if (!isDisabled) {
+                      e.target.style.background = colors.mediumBrown
                     }
-                    <span>→</span>
-                  </button>
-                )}
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isDisabled) {
+                      e.target.style.background = `linear-gradient(135deg, ${colors.accentGold} 0%, ${colors.mediumBrown} 100%)`
+                    }
+                  }}
+                >
+                  {paymentProcessing && selectedPlan === planKey ? (
+                    <>
+                      <div style={{ width: "16px", height: "16px", border: "2px solid transparent", borderTop: "2px solid currentColor", borderRadius: "50%", animation: "spin 1s linear infinite", marginRight: "0.5rem" }}></div>
+                      Processing...
+                    </>
+                  ) : (
+                    <>
+                      {buttonText}
+                      <span>→</span>
+                    </>
+                  )}
+                </button>
               </div>
             )
           })}
         </div>
-
-        {/* Payment Button */}
-        {(!isExistingUser || (isExistingUser && selectedPlan !== getCurrentPlanKey())) && !showPlanChangeConfirm && (
-          <div style={{ textAlign: "center", marginTop: "2rem" }}>
-            <button
-              style={{ ...baseStyles.paymentButton, ...(paymentProcessing ? baseStyles.paymentButtonDisabled : {}) }}
-              onClick={handlePay}
-              disabled={paymentProcessing}
-            >
-              {paymentProcessing ? (
-                <><div style={{ width: "20px", height: "20px", border: "2px solid transparent", borderTop: "2px solid currentColor", borderRadius: "50%", animation: "spin 1s linear infinite", marginRight: "0.5rem" }}></div>Processing...</>
-              ) : (() => {
-                if (plans[selectedPlan].price[billingCycle] === 0) return `Activate ${plans[selectedPlan].name} Plan`
-                else if (isExistingUser) { if (upgradeDowngradeAction === "upgrade") return isNewUser() ? `Start ${plans[selectedPlan].name} Trial (FREE)` : `Upgrade to ${plans[selectedPlan].name}`; else return `Change to ${plans[selectedPlan].name}` }
-                else return isNewUser() ? `Start ${plans[selectedPlan].name} Trial (FREE)` : `Subscribe to ${plans[selectedPlan].name}`
-              })()}
-            </button>
-
-            {plans[selectedPlan].price[billingCycle] > 0 && (
-              <div style={{ background: `linear-gradient(135deg, ${colors.offWhite} 0%, ${colors.cream} 100%)`, borderRadius: "12px", padding: "1.5rem", marginTop: "1.5rem", border: `1px solid ${colors.lightTan}`, textAlign: "left" }}>
-                <h4 style={{ color: colors.darkBrown, marginBottom: "1rem", fontSize: "1.1rem", fontWeight: 700, display: "flex", alignItems: "center", gap: "0.5rem" }}>🎉 {isNewUser() ? "Free Trial Setup" : "Secure Subscription Payment"}</h4>
-                {isNewUser() && (
-                  <div style={{ background: `linear-gradient(135deg, ${colors.trialBrown}20 0%, ${colors.accentGold}20 100%)`, borderRadius: "8px", padding: "1rem", marginBottom: "1rem", border: `1px solid ${colors.trialBrown}` }}>
-                    <p style={{ color: colors.darkBrown, margin: 0, fontSize: "0.95rem", fontWeight: 600 }}>✨ <strong>3-Month Free Trial:</strong> No charges for 3 months!</p>
-                    <p style={{ color: colors.mediumBrown, margin: "0.5rem 0 0 1.5rem", fontSize: "0.85rem", lineHeight: "1.4" }}>Your subscription will be saved for automatic billing after the trial period ends. Cancel anytime.</p>
-                  </div>
-                )}
-                <div style={{ background: `linear-gradient(135deg, ${colors.accentGold}20 0%, ${colors.lightTan}40 100%)`, borderRadius: "8px", padding: "1rem", marginBottom: "1rem", border: `1px solid ${colors.accentGold}` }}>
-                  <p style={{ color: colors.darkBrown, margin: 0, fontSize: "0.95rem", fontWeight: 600 }}>💳 <strong>Demo Mode:</strong> No actual payment will be processed</p>
-                  <p style={{ color: colors.mediumBrown, margin: "0.5rem 0 0 1.5rem", fontSize: "0.85rem", lineHeight: "1.4" }}>This is a demonstration. Clicking "Subscribe" will simulate a successful payment.</p>
-                </div>
-                <ul style={{ listStyle: "none", padding: 0, margin: 0, color: colors.darkText, fontSize: "0.95rem", lineHeight: "1.6" }}>
-                  <li style={{ marginBottom: "0.5rem", display: "flex", alignItems: "center", gap: "0.5rem" }}><span style={{ color: colors.featureCheck }}>✓</span>{isNewUser() ? "Free for first 3 months" : "Immediate access to features"}</li>
-                  <li style={{ marginBottom: "0.5rem", display: "flex", alignItems: "center", gap: "0.5rem" }}><span style={{ color: colors.featureCheck }}>✓</span>Subscription saved for automatic {billingCycle} renewals</li>
-                  <li style={{ marginBottom: "0.5rem", display: "flex", alignItems: "center", gap: "0.5rem" }}><span style={{ color: colors.featureCheck }}>✓</span>{isNewUser() ? `Billing starts at R${plans[selectedPlan].price[billingCycle]} per ${billingCycle.slice(0, -2)} after trial` : `Automatic billing at R${plans[selectedPlan].price[billingCycle]} per ${billingCycle.slice(0, -2)}`}</li>
-                  <li style={{ marginBottom: "0.5rem", display: "flex", alignItems: "center", gap: "0.5rem" }}><span style={{ color: colors.featureCheck }}>✓</span>Cancel anytime from your account settings</li>
-                </ul>
-              </div>
-            )}
-          </div>
-        )}
 
         {/* Add-ons */}
         {showAddOns && addOns.length > 0 && (
@@ -1091,7 +1142,18 @@ const ReusableSubscription = ({
           <div style={baseStyles.downgradeSection}>
             <h3 style={{ color: colors.darkBrown, marginBottom: "1rem", fontSize: "1.25rem" }}>Need to change your plan?</h3>
             <p style={{ color: colors.mediumBrown, marginBottom: "1.5rem" }}>You can downgrade to a lower-tier plan anytime.</p>
-            <button style={baseStyles.button} onMouseEnter={(e) => { e.target.style.transform = "translateY(-2px)"; e.target.style.boxShadow = `0 8px 20px ${colors.accentGold}66` }} onMouseLeave={(e) => { e.target.style.transform = "translateY(0)"; e.target.style.boxShadow = `0 4px 12px ${colors.accentGold}4D` }} onClick={handleDowngradeClick}>Downgrade Plan</button>
+            <button style={baseStyles.button} onClick={() => setShowDowngradeOptions(true)}>Downgrade Plan</button>
+          </div>
+        )}
+
+        {/* Subscription Management */}
+        {isExistingUser && currentSubscription && (
+          <div style={{ background: `linear-gradient(135deg, ${colors.cream} 0%, ${colors.lightTan} 100%)`, borderRadius: "16px", padding: "2rem", marginTop: "3rem", border: `1px solid ${colors.lightTan}` }}>
+            <h3 style={{ color: colors.darkBrown, marginBottom: "1.5rem", fontSize: "1.5rem", fontWeight: 700, textAlign: "center" }}>Subscription Management</h3>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "1rem", marginTop: "1.5rem" }}>
+              <button style={{ padding: "1rem 1.5rem", background: `linear-gradient(135deg, ${colors.accentGold} 0%, ${colors.lightBrown} 100%)`, color: colors.lightText, border: "none", borderRadius: "12px", fontWeight: 600, fontSize: "0.95rem", cursor: "pointer", transition: "all 0.3s ease", textAlign: "center" }} onClick={() => { alert("Update payment method feature coming soon!") }}>💳 Update Payment Method</button>
+              <button style={{ padding: "1rem 1.5rem", background: `linear-gradient(135deg, ${colors.featureCross} 0%, #B71C1C 100%)`, color: colors.lightText, border: "none", borderRadius: "12px", fontWeight: 600, fontSize: "0.95rem", cursor: "pointer", transition: "all 0.3s ease", textAlign: "center" }} onClick={handleCancelSubscription}>❌ Cancel Subscription</button>
+            </div>
           </div>
         )}
 
@@ -1132,21 +1194,16 @@ const ReusableSubscription = ({
               <p style={baseStyles.modalText}>Select which plan you'd like to downgrade to:</p>
               <div style={{ margin: "2rem 0" }}>
                 {Object.entries(plans)
-                  .filter(([planKey]) => planOrder[planKey] < planOrder[getCurrentPlanKey()] && planOrder[planKey] > 0)
+                  .filter(([planKey]) => planOrder[planKey] < planOrder[getCurrentPlanKey()])
                   .map(([planKey, plan]) => (
-                    <div key={planKey} style={{ cursor: "pointer", padding: "1.5rem", borderBottom: `1px solid ${colors.lightTan}`, borderRadius: "12px 12px 0 0", background: `linear-gradient(135deg, ${colors.cream} 0%, ${colors.lightTan} 100%)`, marginBottom: "1rem", transition: "all 0.3s ease" }} onClick={() => handleDowngradeSelect(planKey)}>
+                    <div key={planKey} style={{ cursor: "pointer", padding: "1.5rem", borderBottom: `1px solid ${colors.lightTan}`, borderRadius: "12px 12px 0 0", background: `linear-gradient(135deg, ${colors.cream} 0%, ${colors.lightTan} 100%)`, marginBottom: "1rem", transition: "all 0.3s ease" }} onClick={() => handleUpgradeDowngrade(planKey)}>
                       <div style={{ fontWeight: 700, color: colors.darkBrown, fontSize: "1.125rem" }}>{plan.name} Plan</div>
                       <div style={{ color: colors.mediumBrown, marginTop: "0.5rem" }}>{plan.price[billingCycle] === 0 ? "Free" : `R ${plan.price[billingCycle]}/${billingCycle === "monthly" ? "month" : "year"}`}</div>
                       <p style={{ margin: "0.5rem 0 0 0", color: colors.accentGold, fontSize: "0.95rem" }}>Save R{getCurrentPlanAmount() - plan.price[billingCycle]}/month</p>
                     </div>
                   ))}
-                <div style={{ cursor: "pointer", padding: "1.5rem", borderRadius: "12px", background: `linear-gradient(135deg, ${colors.cream} 0%, ${colors.lightTan} 100%)`, transition: "all 0.3s ease" }} onClick={() => handleDowngradeSelect(freePlanKey)}>
-                  <div style={{ fontWeight: 700, color: colors.darkBrown, fontSize: "1.125rem" }}>{plans[freePlanKey].name} Plan</div>
-                  <div style={{ color: colors.mediumBrown, marginTop: "0.5rem" }}>Free</div>
-                  <p style={{ margin: "0.5rem 0 0 0", color: colors.accentGold, fontSize: "0.95rem" }}>Basic features only, no monthly fee</p>
-                </div>
               </div>
-              <div style={baseStyles.modalActions}><button style={baseStyles.buttonSecondary} onClick={cancelDowngradeOptions}>Cancel</button></div>
+              <div style={baseStyles.modalActions}><button style={baseStyles.buttonSecondary} onClick={() => setShowDowngradeOptions(false)}>Cancel</button></div>
             </div>
           </div>
         )}
@@ -1165,17 +1222,6 @@ const ReusableSubscription = ({
                 <button style={baseStyles.buttonSecondary} onClick={() => setShowAddOnModal(false)}>Close</button>
                 <button style={baseStyles.button} onClick={handleAddOnPayment} disabled={paymentProcessing}>{paymentProcessing ? "Processing..." : `Purchase for ${selectedAddOn.price}`}</button>
               </div>
-            </div>
-          </div>
-        )}
-
-        {/* Subscription Management */}
-        {isExistingUser && currentSubscription && (
-          <div style={{ background: `linear-gradient(135deg, ${colors.cream} 0%, ${colors.lightTan} 100%)`, borderRadius: "16px", padding: "2rem", marginTop: "3rem", border: `1px solid ${colors.lightTan}` }}>
-            <h3 style={{ color: colors.darkBrown, marginBottom: "1.5rem", fontSize: "1.5rem", fontWeight: 700, textAlign: "center" }}>Subscription Management</h3>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "1rem", marginTop: "1.5rem" }}>
-              <button style={{ padding: "1rem 1.5rem", background: `linear-gradient(135deg, ${colors.accentGold} 0%, ${colors.lightBrown} 100%)`, color: colors.lightText, border: "none", borderRadius: "12px", fontWeight: 600, fontSize: "0.95rem", cursor: "pointer", transition: "all 0.3s ease", textAlign: "center" }} onClick={() => { alert("Update payment method feature coming soon!") }}>💳 Update Payment Method</button>
-              <button style={{ padding: "1rem 1.5rem", background: `linear-gradient(135deg, ${colors.featureCross} 0%, #B71C1C 100%)`, color: colors.lightText, border: "none", borderRadius: "12px", fontWeight: 600, fontSize: "0.95rem", cursor: "pointer", transition: "all 0.3s ease", textAlign: "center" }} onClick={handleCancelSubscription}>❌ Cancel Subscription</button>
             </div>
           </div>
         )}
