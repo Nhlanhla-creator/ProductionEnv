@@ -898,7 +898,7 @@ export function CustomerTable() {
             }
 
             return {
-              id: doc.id,
+              id: docSnapshot.id,
               ...data,
               matchPercentage,
               matchDetails,
@@ -1403,78 +1403,84 @@ export function CustomerTable() {
     }
   }
 
+  // FIXED: Completely rewritten handleStatusChange function
   const handleStatusChange = async (applicationId, newStatus) => {
     try {
-      const application = applications.find((app) => app.id === applicationId)
-      if (!application) return
-
-      let stageUpdate = {}
-      let shouldOpenModal = false
-      let shouldOpenShortlistModal = false
-
-      // Determine the current stage and next stage based on the new status
-      if (newStatus === "Pending") {
-        stageUpdate = {
-          currentStage: "Application Submitted",
-          nextStage: "Shortlist",
-        }
-      } else if (newStatus === "Shortlisted") {
-        stageUpdate = {
-          currentStage: "Shortlist",
-          nextStage: "Proposal Sent",
-        }
-        shouldOpenShortlistModal = true
-      } else if (newStatus === "Proposal/Quote") {
-        stageUpdate = {
-          currentStage: "Proposal Sent",
-          nextStage: "Accept/Decline",
-        }
-        shouldOpenModal = true
-      } else if (newStatus === "Accepted" || newStatus === "Rejected") {
-        stageUpdate = {
-          currentStage: newStatus,
-          nextStage: "Deal Closed",
-        }
-        shouldOpenModal = true
+      // Find the application in current state
+      const application = applications.find((app) => app.id === applicationId);
+      
+      if (!application) {
+        console.error("Application not found:", applicationId);
+        setNotification({
+          type: "error",
+          message: "Application not found",
+        });
+        setTimeout(() => setNotification(null), 3000);
+        return;
       }
 
-      // Update the status in Firestore
-      await updateDoc(doc(db, "supplierApplications", applicationId), {
+      console.log("Updating status to:", newStatus, "for application:", applicationId);
+
+      // Prepare the update data
+      const updateData = {
         status: newStatus,
-        ...stageUpdate,
         updatedAt: serverTimestamp(),
         updatedBy: currentCustomerId,
-      })
+      };
 
-      // Update local state
-      setApplications(
-        applications.map((app) => (app.id === applicationId ? { ...app, status: newStatus, ...stageUpdate } : app)),
-      )
-
-      // Set temporary status for highlighting
-      setTemporaryStatus(newStatus)
-
-      // Open appropriate modals
-      if (shouldOpenShortlistModal) {
-        setShowShortlistModal(true)
-      } else if (shouldOpenModal) {
-        setShowMessageModal(true)
+      // Add stage information based on status
+      if (newStatus === "Pending") {
+        updateData.currentStage = "Application Submitted";
+        updateData.nextStage = "Shortlist";
+      } else if (newStatus === "Shortlisted") {
+        updateData.currentStage = "Shortlist";
+        updateData.nextStage = "Proposal Sent";
       } else if (newStatus === "Proposal/Quote") {
-        setShowProposalModal(true)
+        updateData.currentStage = "Proposal Sent";
+        updateData.nextStage = "Accept/Decline";
+      } else if (newStatus === "Accepted") {
+        updateData.currentStage = "Accepted";
+        updateData.nextStage = "Deal Closed";
+      } else if (newStatus === "Rejected") {
+        updateData.currentStage = "Rejected";
+        updateData.nextStage = "Deal Closed";
       }
 
+      // Update Firestore
+      const applicationRef = doc(db, "supplierApplications", applicationId);
+      await updateDoc(applicationRef, updateData);
+      
+      console.log("Firestore update successful");
+
+      // Update local state immediately
+      setApplications(prevApplications => 
+        prevApplications.map(app => 
+          app.id === applicationId 
+            ? { ...app, ...updateData, updatedAt: new Date() }
+            : app
+        )
+      );
+
+      // Show success notification
       setNotification({
         type: "success",
-        message: `Status updated to ${newStatus} and stages updated`,
-      })
+        message: `Status updated to ${newStatus} successfully`,
+      });
+      
+      // Clear notification after 3 seconds
+      setTimeout(() => setNotification(null), 3000);
+      
+      // Return success
+      return true;
+      
     } catch (err) {
-      console.error("Error updating status:", err)
+      console.error("Error updating status:", err);
       setNotification({
         type: "error",
-        message: "Failed to update status",
-      })
-    } finally {
-      setTimeout(() => setNotification(null), 3000)
+        message: `Failed to update status: ${err.message}`,
+      });
+      setTimeout(() => setNotification(null), 3000);
+      return false;
     }
   }
 
@@ -1611,26 +1617,26 @@ export function CustomerTable() {
                             <span style={{ color: "#5d2a0a", fontSize: "0.75rem" }}>Not specified</span>
                           )}
                         </div>
-                      </td>
+                       </td>
 
                       {/* Customer Type */}
                       <td style={tableCellStyle}>
                         <span style={{ color: "#5d2a0a", fontSize: "0.75rem" }}>
                           {application.customerType?.toLowerCase() || "Not specified"}
                         </span>
-                      </td>
+                       </td>
 
                       {/* Budget Range */}
                       <td style={tableCellStyle}>
                         <span style={{ color: "#5d2a0a", fontSize: "0.75rem" }}>{budgetText}</span>
-                      </td>
+                       </td>
 
                       {/* Service Requested */}
                       <td style={tableCellStyle}>
                         <div style={{ color: "#5d2a0a", fontSize: "0.75rem" }}>
                           <TruncatedText text={getServiceRequested(application)} maxLength={30} />
                         </div>
-                      </td>
+                       </td>
 
                       {/* Last Activity */}
                       <td style={tableCellStyle}>{new Date(application.lastActivity).toLocaleDateString() || "N/A"}</td>
@@ -1638,7 +1644,7 @@ export function CustomerTable() {
                       {/* Delivery Turnaround */}
                       <td style={tableCellStyle}>
                         {application.originalRequest?.deliveryTurnaround || "Not specified"}
-                      </td>
+                       </td>
 
                       {/* Match Percentage */}
                       <td style={tableCellStyle}>
@@ -1682,12 +1688,12 @@ export function CustomerTable() {
                             />
                           </div>
                         </div>
-                      </td>
+                       </td>
 
                       {/* Current Stage */}
                       <td style={tableCellStyle}>
                         <span style={statusBadgeStyle}>{application.currentStage || "Application Submitted"}</span>
-                      </td>
+                       </td>
 
                       {/* Next Stage */}
                       <td style={tableCellStyle}>
@@ -1707,7 +1713,7 @@ export function CustomerTable() {
                                   ? "Accept/Decline"
                                   : "Deal Closed")}
                         </span>
-                      </td>
+                       </td>
 
                       {/* Action */}
                       <td style={tableCellStyle}>
@@ -1730,8 +1736,8 @@ export function CustomerTable() {
                             Message
                           </button>
                         </div>
-                      </td>
-                    </tr>
+                       </td>
+                     </tr>
                   )
                 })
               )}
@@ -2144,59 +2150,97 @@ export function CustomerTable() {
                   </div>
                 </div>
 
-                {/* Status Actions */}
+                {/* Status Actions - FIXED BUTTONS */}
                 <div style={statusActionsStyle}>
                   <h4 style={detailCardTitleStyle}>Update Status</h4>
                   <p style={{ fontSize: "0.875rem", color: "#5D2A0A", marginBottom: "1rem" }}>
-                    Changing status will notify the supplier automatically
+                    Click a button below to update the status
                   </p>
                   <div style={statusButtonsContainer}>
                     <button
-                      onClick={() => handleStatusChange(selectedApplication.id, "Pending")}
+                      onClick={async () => {
+                        console.log("Pending button clicked for:", selectedApplication.id);
+                        await handleStatusChange(selectedApplication.id, "Pending");
+                        // Refresh the modal data after status change
+                        const updatedApp = applications.find(app => app.id === selectedApplication.id);
+                        if (updatedApp) {
+                          setSelectedApplication(updatedApp);
+                        }
+                      }}
                       style={{
                         ...statusButtonStyle,
-                        backgroundColor: temporaryStatus === "Pending" ? "#5D2A0A" : "#F5EBE0",
-                        color: temporaryStatus === "Pending" ? "white" : "#5D2A0A",
+                        backgroundColor: selectedApplication.status === "Pending" ? "#5D2A0A" : "#F5EBE0",
+                        color: selectedApplication.status === "Pending" ? "white" : "#5D2A0A",
                       }}
                     >
                       Pending
                     </button>
                     <button
-                      onClick={() => handleStatusChange(selectedApplication.id, "Shortlisted")}
+                      onClick={async () => {
+                        console.log("Shortlisted button clicked for:", selectedApplication.id);
+                        await handleStatusChange(selectedApplication.id, "Shortlisted");
+                        const updatedApp = applications.find(app => app.id === selectedApplication.id);
+                        if (updatedApp) {
+                          setSelectedApplication(updatedApp);
+                        }
+                      }}
                       style={{
                         ...statusButtonStyle,
-                        backgroundColor: temporaryStatus === "Shortlisted" ? "#5D2A0A" : "#F5EBE0",
-                        color: temporaryStatus === "Shortlisted" ? "white" : "#5D2A0A",
+                        backgroundColor: selectedApplication.status === "Shortlisted" ? "#5D2A0A" : "#F5EBE0",
+                        color: selectedApplication.status === "Shortlisted" ? "white" : "#5D2A0A",
                       }}
                     >
                       Shortlist
                     </button>
                     <button
-                      onClick={() => handleOpenProposalModal(selectedApplication)}
+                      onClick={async () => {
+                        console.log("Proposal/Quote button clicked for:", selectedApplication.id);
+                        await handleStatusChange(selectedApplication.id, "Proposal/Quote");
+                        const updatedApp = applications.find(app => app.id === selectedApplication.id);
+                        if (updatedApp) {
+                          setSelectedApplication(updatedApp);
+                        }
+                        setShowModal(false);
+                        handleOpenProposalModal(selectedApplication);
+                      }}
                       style={{
                         ...statusButtonStyle,
-                        backgroundColor: temporaryStatus === "Proposal/Quote" ? "#5D2A0A" : "#F5EBE0",
-                        color: temporaryStatus === "Proposal/Quote" ? "white" : "#5D2A0A",
+                        backgroundColor: selectedApplication.status === "Proposal/Quote" ? "#5D2A0A" : "#F5EBE0",
+                        color: selectedApplication.status === "Proposal/Quote" ? "white" : "#5D2A0A",
                       }}
                     >
                       Proposal/Quote
                     </button>
                     <button
-                      onClick={() => handleStatusChange(selectedApplication.id, "Accepted")}
+                      onClick={async () => {
+                        console.log("Accepted button clicked for:", selectedApplication.id);
+                        await handleStatusChange(selectedApplication.id, "Accepted");
+                        const updatedApp = applications.find(app => app.id === selectedApplication.id);
+                        if (updatedApp) {
+                          setSelectedApplication(updatedApp);
+                        }
+                      }}
                       style={{
                         ...statusButtonStyle,
-                        backgroundColor: temporaryStatus === "Accepted" ? "#5D2A0A" : "#F5EBE0",
-                        color: temporaryStatus === "Accepted" ? "white" : "#5D2A0A",
+                        backgroundColor: selectedApplication.status === "Accepted" ? "#5D2A0A" : "#F5EBE0",
+                        color: selectedApplication.status === "Accepted" ? "white" : "#5D2A0A",
                       }}
                     >
                       Accepted
                     </button>
                     <button
-                      onClick={() => handleStatusChange(selectedApplication.id, "Rejected")}
+                      onClick={async () => {
+                        console.log("Rejected button clicked for:", selectedApplication.id);
+                        await handleStatusChange(selectedApplication.id, "Rejected");
+                        const updatedApp = applications.find(app => app.id === selectedApplication.id);
+                        if (updatedApp) {
+                          setSelectedApplication(updatedApp);
+                        }
+                      }}
                       style={{
                         ...statusButtonStyle,
-                        backgroundColor: temporaryStatus === "Rejected" ? "#5D2A0A" : "#F5EBE0",
-                        color: temporaryStatus === "Rejected" ? "white" : "#5D2A0A",
+                        backgroundColor: selectedApplication.status === "Rejected" ? "#5D2A0A" : "#F5EBE0",
+                        color: selectedApplication.status === "Rejected" ? "white" : "#5D2A0A",
                       }}
                     >
                       Rejected
@@ -2207,9 +2251,6 @@ export function CustomerTable() {
               <div style={modalActionsStyle}>
                 <button
                   onClick={async () => {
-                    if (temporaryStatus) {
-                      await handleStatusChange(selectedApplication.id, temporaryStatus)
-                    }
                     setShowModal(false)
                     handleMessage(selectedApplication)
                   }}

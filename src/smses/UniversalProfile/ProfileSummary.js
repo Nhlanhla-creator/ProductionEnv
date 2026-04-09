@@ -18,19 +18,26 @@ import {
   FileCheck,
   Target,
   AlertTriangle,
+  Phone,
+  MapPin,
+  Award,
+  Clock,
+  Layers,
+  Truck,
+  Briefcase,
 } from "lucide-react"
 
 const ProfileSummary = ({ data, onEdit }) => {
   const [expandedSections, setExpandedSections] = useState({
     entityOverview: false,
+     productsServices: false,
     ownershipManagement: false,
     contactDetails: false,
     legalCompliance: false,
     operationsOverview: false,
     financialOverview: false,
     governance: false,
-    productsServices: false,
-    documents: false,
+   
     howDidYouHear: false,
     declarationConsent: false,
   })
@@ -41,6 +48,7 @@ const ProfileSummary = ({ data, onEdit }) => {
 
   const formatLabel = (value) => {
     if (!value) return "Not provided"
+    if (typeof value === "boolean") return value ? "Yes" : "No"
     return value.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
   }
 
@@ -71,21 +79,6 @@ const ProfileSummary = ({ data, onEdit }) => {
   const formatBoolean = (value) => (value ? "✅ Yes" : "❌ No")
 
   const handleEdit = () => { if (onEdit) onEdit() }
-
-  const renderDocumentsList = (files, documentName) => {
-    if (!files) return <div style={{ fontSize: "14px", color: "#7d5a50", fontStyle: "italic" }}>No documents uploaded</div>
-    const filesArray = Array.isArray(files) ? files : [files]
-    if (filesArray.length === 0) return <div style={{ fontSize: "14px", color: "#7d5a50", fontStyle: "italic" }}>No documents uploaded</div>
-    return (
-      <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-        {filesArray.map((file, index) => {
-          const fileUrl = typeof file === "string" ? file : file.url
-          const fileName = typeof file === "string" ? `${documentName} ${index + 1}` : file.name
-          return <div key={index}>{renderDocumentLink(fileUrl, fileName)}</div>
-        })}
-      </div>
-    )
-  }
 
   // ── Shared styles ──────────────────────────────────────────────────────────
   const sectionCardStyle = {
@@ -189,6 +182,386 @@ const ProfileSummary = ({ data, onEdit }) => {
     { field: "auditAndAssurance", dimension: "Audit & Assurance", options: [{ value: "regular_internal_external", label: "Regular internal + external" }, { value: "occasional_audits", label: "Occasional" }, { value: "none", label: "None" }] },
   ]
 
+  // ── Contact Details Section ──────────────────────────────────────────────
+  const renderContactDetails = () => {
+    const contact = data?.contactDetails || {}
+    return (
+      <div style={sectionCardStyle}>
+        {renderSectionHeader("contactDetails", Mail, "Contact Details")}
+        {expandedSections.contactDetails && (
+          <div style={sectionContentStyle}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px", marginBottom: "20px" }}>
+              <div style={fieldCardStyle}>
+                <span style={fieldLabelStyle}>Primary Contact</span>
+                <div style={{ fontSize: "15px", fontWeight: "600", color: "#4a352f" }}>{contact.contactTitle || ""} {contact.contactName || "Not provided"}</div>
+                <div style={{ fontSize: "13px", color: "#7d5a50", marginTop: "4px" }}>{contact.position || "Position not specified"}</div>
+              </div>
+              <div style={fieldCardStyle}>
+                <span style={fieldLabelStyle}>Contact ID / Passport</span>
+                <span style={fieldValueStyle}>{contact.contactId || "Not provided"}</span>
+              </div>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px", marginBottom: "20px" }}>
+              <div style={fieldCardStyle}>
+                <span style={fieldLabelStyle}><Phone size={12} style={{ display: "inline", marginRight: "4px" }} /> Business Phone</span>
+                <span style={fieldValueStyle}>{contact.businessPhone || "Not provided"}</span>
+              </div>
+              <div style={fieldCardStyle}>
+                <span style={fieldLabelStyle}><Phone size={12} style={{ display: "inline", marginRight: "4px" }} /> Mobile</span>
+                <span style={fieldValueStyle}>{contact.mobile || "Not provided"}</span>
+              </div>
+              <div style={fieldCardStyle}>
+                <span style={fieldLabelStyle}><Mail size={12} style={{ display: "inline", marginRight: "4px" }} /> Email</span>
+                <span style={fieldValueStyle}>{contact.email || "Not provided"}</span>
+              </div>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px" }}>
+              <div style={fieldCardStyle}>
+                <span style={fieldLabelStyle}><MapPin size={12} style={{ display: "inline", marginRight: "4px" }} /> Physical Address</span>
+                <span style={fieldValueStyle}>{contact.physicalAddress || "Not provided"}</span>
+              </div>
+              <div style={fieldCardStyle}>
+                <span style={fieldLabelStyle}><MapPin size={12} style={{ display: "inline", marginRight: "4px" }} /> Postal Address</span>
+                <span style={fieldValueStyle}>{contact.sameAsPhysical ? "Same as physical address" : (contact.postalAddress || "Not provided")}</span>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // ── Legal & Compliance Section ───────────────────────────────────────────
+  const renderLegalCompliance = () => {
+    const legal = data?.legalCompliance || {}
+    return (
+      <div style={sectionCardStyle}>
+        {renderSectionHeader("legalCompliance", Shield, "Legal & Compliance")}
+        {expandedSections.legalCompliance && (
+          <div style={sectionContentStyle}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px", marginBottom: "20px" }}>
+              <div style={fieldCardStyle}>
+                <span style={fieldLabelStyle}>Tax Number</span>
+                <span style={fieldValueStyle}>{legal.taxNumber || "Not provided"}</span>
+              </div>
+              <div style={fieldCardStyle}>
+                <span style={fieldLabelStyle}>Tax Clearance PIN</span>
+                <span style={fieldValueStyle}>{legal.taxClearancePin || "Not provided"}</span>
+              </div>
+              <div style={fieldCardStyle}>
+                <span style={fieldLabelStyle}>PAYE Number</span>
+                <span style={fieldValueStyle}>{legal.payeNumber || "Not provided"}</span>
+              </div>
+              <div style={fieldCardStyle}>
+                <span style={fieldLabelStyle}>VAT Number</span>
+                <span style={fieldValueStyle}>{legal.vatNumber || "Not provided"}</span>
+              </div>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px", marginBottom: "20px" }}>
+              <div style={fieldCardStyle}>
+                <span style={fieldLabelStyle}>UIF Status</span>
+                <span style={fieldValueStyle}>{formatLabel(legal.uifStatus) || "Not provided"}</span>
+              </div>
+              <div style={fieldCardStyle}>
+                <span style={fieldLabelStyle}>UIF Number</span>
+                <span style={fieldValueStyle}>{legal.uifNumber || "Not provided"}</span>
+              </div>
+              <div style={fieldCardStyle}>
+                <span style={fieldLabelStyle}>COIDA Number</span>
+                <span style={fieldValueStyle}>{legal.coidaNumber || "Not provided"}</span>
+              </div>
+              <div style={fieldCardStyle}>
+                <span style={fieldLabelStyle}>B-BBEE Level</span>
+                <span style={fieldValueStyle}>{legal.bbbeeLevel || "Not provided"}</span>
+              </div>
+            </div>
+
+            {legal.industryAccreditations?.length > 0 && (
+              <div style={fieldCardStyle}>
+                <span style={fieldLabelStyle}><Award size={12} /> Industry Accreditations</span>
+                <span style={fieldValueStyle}>{legal.industryAccreditations.map(a => formatLabel(a)).join(" • ")}</span>
+              </div>
+            )}
+
+            <div style={fieldCardStyle}>
+              <span style={fieldLabelStyle}><AlertTriangle size={12} /> Pending Legal Judgments</span>
+              <span style={fieldValueStyle}>{formatLabel(legal.pendingLegalJudgments)}</span>
+              {legal.pendingLegalJudgments === "yes" && legal.pendingLegalJudgmentsDetails && (
+                <div style={{ marginTop: "8px", padding: "8px", background: "rgba(166,124,82,0.05)", borderRadius: "6px", fontSize: "13px" }}>
+                  {legal.pendingLegalJudgmentsDetails}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // ── Products & Services Section (Full Version) ──────────────────────────
+  const renderProductsServices = () => {
+    const ps = data?.productsServices || {}
+    
+    const getOfferingTypeLabel = () => {
+      const type = ps.offeringType
+      if (type === "products") return "Products only"
+      if (type === "services") return "Services only"
+      if (type === "both") return "Both products and services"
+      return "Not specified"
+    }
+
+    const renderProductCategories = () => {
+      const categories = ps.productCategories || []
+      if (categories.length === 0) return null
+      return (
+        <div style={{ marginBottom: "24px" }}>
+          <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginBottom: "12px" }}>
+            <Layers size={16} style={{ display: "inline", marginRight: "8px" }} /> Product Categories
+          </h3>
+          {categories.map((category, idx) => (
+            <div key={idx} style={{ ...fieldCardStyle, marginBottom: "16px" }}>
+              <div style={{ marginBottom: "12px" }}>
+                <span style={fieldLabelStyle}>Category Name(s)</span>
+                <span style={fieldValueStyle}>
+                  {category.categories?.length > 0 
+                    ? category.categories.map(c => formatLabel(c)).join(" • ")
+                    : "Not specified"}
+                </span>
+              </div>
+              {category.products?.length > 0 && (
+                <div>
+                  <span style={fieldLabelStyle}>Products</span>
+                  {category.products.map((product, pIdx) => (
+                    <div key={pIdx} style={{ marginTop: "12px", padding: "12px", background: "rgba(166,124,82,0.05)", borderRadius: "8px" }}>
+                      <div style={{ fontWeight: "600", color: "#4a352f", marginBottom: "6px" }}>{product.name || "Unnamed product"}</div>
+                      <div style={{ fontSize: "13px", color: "#7d5a50" }}>{product.description || "No description provided"}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )
+    }
+
+    const renderServiceCategories = () => {
+      const categories = ps.serviceCategories || []
+      if (categories.length === 0) return null
+      return (
+        <div style={{ marginBottom: "24px" }}>
+          <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginBottom: "12px" }}>
+            <Briefcase size={16} style={{ display: "inline", marginRight: "8px" }} /> Service Categories
+          </h3>
+          {categories.map((category, idx) => (
+            <div key={idx} style={{ ...fieldCardStyle, marginBottom: "16px" }}>
+              <div style={{ marginBottom: "12px" }}>
+                <span style={fieldLabelStyle}>Category Name(s)</span>
+                <span style={fieldValueStyle}>
+                  {category.categories?.length > 0 
+                    ? category.categories.map(c => formatLabel(c)).join(" • ")
+                    : "Not specified"}
+                </span>
+              </div>
+              {category.services?.length > 0 && (
+                <div>
+                  <span style={fieldLabelStyle}>Services</span>
+                  {category.services.map((service, sIdx) => (
+                    <div key={sIdx} style={{ marginTop: "12px", padding: "12px", background: "rgba(166,124,82,0.05)", borderRadius: "8px" }}>
+                      <div style={{ fontWeight: "600", color: "#4a352f", marginBottom: "6px" }}>{service.name || "Unnamed service"}</div>
+                      <div style={{ fontSize: "13px", color: "#7d5a50" }}>{service.description || "No description provided"}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )
+    }
+
+    const renderDeliveryStandards = () => {
+      const deliveryModes = ps.deliveryModes || []
+      const minLeadTime = ps.minLeadTime
+      const maxLeadTime = ps.maxLeadTime
+      const minUnit = ps.minLeadTimeUnit || "days"
+      const maxUnit = ps.maxLeadTimeUnit || "days"
+      
+      if (deliveryModes.length === 0 && !minLeadTime && !maxLeadTime) return null
+      
+      return (
+        <div style={{ marginBottom: "24px" }}>
+          <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginBottom: "12px" }}>
+            <Truck size={16} style={{ display: "inline", marginRight: "8px" }} /> Delivery Standards
+          </h3>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px" }}>
+            {deliveryModes.length > 0 && (
+              <div style={fieldCardStyle}>
+                <span style={fieldLabelStyle}>Delivery Modes</span>
+                <span style={fieldValueStyle}>{deliveryModes.map(m => formatLabel(m)).join(" • ")}</span>
+              </div>
+            )}
+            {(minLeadTime || maxLeadTime) && (
+              <div style={fieldCardStyle}>
+                <span style={fieldLabelStyle}>Lead Time</span>
+                <span style={fieldValueStyle}>
+                  {minLeadTime && maxLeadTime
+                    ? `${minLeadTime} ${minUnit} - ${maxLeadTime} ${maxUnit}`
+                    : minLeadTime
+                      ? `Minimum ${minLeadTime} ${minUnit}`
+                      : `Maximum ${maxLeadTime} ${maxUnit}`}
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+      )
+    }
+
+    const renderTargetMarket = () => {
+      if (!ps.targetMarket) return null
+      return (
+        <div style={{ marginBottom: "24px" }}>
+          <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginBottom: "12px" }}>
+            <Target size={16} style={{ display: "inline", marginRight: "8px" }} /> Target Market
+          </h3>
+          <div style={fieldCardStyle}>
+            <span style={fieldValueStyle}>{ps.targetMarket}</span>
+          </div>
+        </div>
+      )
+    }
+
+    const renderKeyClients = () => {
+      const clients = ps.keyClients || []
+      if (clients.length === 0) return null
+      
+      const totalRevenuePercent = clients.reduce((sum, c) => {
+        const val = parseFloat(c.revenuePercentage) || 0
+        return sum + val
+      }, 0)
+      
+      return (
+        <div>
+          <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginBottom: "12px" }}>Key Clients / Customers</h3>
+          {totalRevenuePercent > 0 && (
+            <div style={{ 
+              ...fieldCardStyle, 
+              marginBottom: "16px",
+              background: totalRevenuePercent > 100 ? "rgba(207, 19, 34, 0.05)" : "rgba(56, 158, 13, 0.05)",
+              border: `1px solid ${totalRevenuePercent > 100 ? "#ffccc7" : "#b7eb8f"}`
+            }}>
+              <span style={fieldLabelStyle}>Revenue Allocation</span>
+              <span style={{ 
+                fontSize: "14px", 
+                fontWeight: "600",
+                color: totalRevenuePercent > 100 ? "#cf1322" : "#389e0d"
+              }}>
+                {totalRevenuePercent > 100 
+                  ? `⚠️ Total exceeds 100% (${totalRevenuePercent}%)`
+                  : totalRevenuePercent === 100 
+                    ? `✅ Full revenue allocated (${totalRevenuePercent}%)`
+                    : `Revenue allocated: ${totalRevenuePercent}% of 100%`}
+              </span>
+            </div>
+          )}
+          
+          {clients.map((client, idx) => (
+            <div key={idx} style={{ ...fieldCardStyle, marginBottom: "16px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "12px" }}>
+                <div>
+                  <span style={fieldLabelStyle}>Client Name</span>
+                  <span style={fieldValueStyle}>{client.name || "Not provided"}</span>
+                </div>
+                <div>
+                  <span style={fieldLabelStyle}>% of Revenue</span>
+                  <span style={fieldValueStyle}>{client.revenuePercentage ? `${client.revenuePercentage}%` : "Not provided"}</span>
+                </div>
+                <div style={{ gridColumn: "1 / -1" }}>
+                  <span style={fieldLabelStyle}>Industries</span>
+                  <span style={fieldValueStyle}>
+                    {client.industries?.length > 0 
+                      ? client.industries.map(i => formatLabel(i)).join(" • ")
+                      : "Not specified"}
+                  </span>
+                </div>
+                <div style={{ gridColumn: "1 / -1" }}>
+                  <span style={fieldLabelStyle}>Revenue Growth Potential</span>
+                  <span style={fieldValueStyle}>{client.revenueGrowthPotential || "Not specified"}</span>
+                </div>
+                {client.revenueGrowthPotential === "Yes" && client.revenueGrowthDetails && (
+                  <div style={{ gridColumn: "1 / -1" }}>
+                    <span style={fieldLabelStyle}>Growth Opportunity Details</span>
+                    <span style={fieldValueStyle}>{client.revenueGrowthDetails}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )
+    }
+
+    return (
+      <div style={sectionCardStyle}>
+        {renderSectionHeader("productsServices", Package, "Products & Services")}
+        {expandedSections.productsServices && (
+          <div style={sectionContentStyle}>
+            <div style={fieldCardStyle}>
+              <span style={fieldLabelStyle}>Offering Type</span>
+              <span style={fieldValueStyle}>{getOfferingTypeLabel()}</span>
+            </div>
+            
+            {renderProductCategories()}
+            {renderServiceCategories()}
+            {renderDeliveryStandards()}
+            {renderTargetMarket()}
+            {renderKeyClients()}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // ── How Did You Hear Section ─────────────────────────────────────────────
+  const renderHowDidYouHear = () => {
+    const how = data?.howDidYouHear || {}
+    return (
+      <div style={sectionCardStyle}>
+        {renderSectionHeader("howDidYouHear", MessageCircle, "How Did You Hear About Us?")}
+        {expandedSections.howDidYouHear && (
+          <div style={sectionContentStyle}>
+            <div style={fieldCardStyle}>
+              <span style={fieldLabelStyle}>Referral Source</span>
+              <span style={fieldValueStyle}>{formatLabel(how.referralSource) || "Not provided"}</span>
+            </div>
+            {how.referralSource === "other" && how.otherSource && (
+              <div style={fieldCardStyle}>
+                <span style={fieldLabelStyle}>Other Source Details</span>
+                <span style={fieldValueStyle}>{how.otherSource}</span>
+              </div>
+            )}
+            {how.referredByName && (
+              <div style={fieldCardStyle}>
+                <span style={fieldLabelStyle}>Referred By</span>
+                <span style={fieldValueStyle}>{how.referredByName}</span>
+              </div>
+            )}
+            {how.referredByContact && (
+              <div style={fieldCardStyle}>
+                <span style={fieldLabelStyle}>Referrer Contact</span>
+                <span style={fieldValueStyle}>{how.referredByContact}</span>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    )
+  }
+
   return (
     <div>
       <style>{`
@@ -240,6 +613,9 @@ const ProfileSummary = ({ data, onEdit }) => {
                 </div>
               )}
             </div>
+            
+            {/* ── Products & Services ─────────────────────────────────── */}
+            {renderProductsServices()}
 
             {/* ── Ownership & Management ─────────────────────────────── */}
             <div style={sectionCardStyle}>
@@ -360,7 +736,7 @@ const ProfileSummary = ({ data, onEdit }) => {
                                 <td style={{ padding: "10px 6px", color: "#4a352f", fontSize: "13px" }}>{ex.gender || "Not provided"}</td>
                                 <td style={{ padding: "10px 6px", fontSize: "13px" }}>{formatBoolean(ex.isYouth)}</td>
                                 <td style={{ padding: "10px 6px", fontSize: "13px" }}>{formatBoolean(ex.isDisabled)}</td>
-                              </tr>
+                               </tr>
                             ))}
                           </tbody>
                         </table>
@@ -391,6 +767,12 @@ const ProfileSummary = ({ data, onEdit }) => {
                 </div>
               )}
             </div>
+
+            {/* ── Contact Details ────────────────────────────────────── */}
+            {renderContactDetails()}
+
+            {/* ── Legal & Compliance ─────────────────────────────────── */}
+            {renderLegalCompliance()}
 
             {/* ── Financial Overview ─────────────────────────────────── */}
             <div style={sectionCardStyle}>
@@ -449,6 +831,25 @@ const ProfileSummary = ({ data, onEdit }) => {
               )}
             </div>
 
+            {/* ── Operations Overview ─────────────────────────────────── */}
+            <div style={sectionCardStyle}>
+              {renderSectionHeader("operationsOverview", FileCheck, "Operations Overview")}
+              {expandedSections.operationsOverview && (
+                <div style={sectionContentStyle}>
+                  <p style={{ fontSize: "14px", color: "#7d5a50", marginBottom: "20px", fontWeight: "500", fontStyle: "italic" }}>BIG Score – Operational Strength (Risk-Based Yes/No Model)</p>
+                  {renderFieldGrid([
+                    { label: "Q1. Multiple Key Suppliers", value: data?.operationsOverview?.multipleSuppliers === "yes" ? "✅ Yes" : data?.operationsOverview?.multipleSuppliers === "no" ? "❌ No" : "Not answered" },
+                    { label: "Q2. Documented Contingency Plan", value: data?.operationsOverview?.contingencyPlan === "yes" ? "✅ Yes" : data?.operationsOverview?.contingencyPlan === "no" ? "❌ No" : "Not answered" },
+                    { label: "Q3. Track Performance Metrics", value: data?.operationsOverview?.trackPerformanceMetrics === "yes" ? "✅ Yes" : data?.operationsOverview?.trackPerformanceMetrics === "no" ? "❌ No" : "Not answered" },
+                    { label: "Q4. 3+ Successful Deliveries", value: data?.operationsOverview?.threeSuccessfulDeliveries === "yes" ? "✅ Yes" : data?.operationsOverview?.threeSuccessfulDeliveries === "no" ? "❌ No" : "Not answered" },
+                    { label: "Q5. Capacity to Increase Output", value: data?.operationsOverview?.hasCapacityToIncrease === "yes" ? "✅ Yes" : data?.operationsOverview?.hasCapacityToIncrease === "no" ? "❌ No" : "Not answered" },
+                    { label: "Q6. Formal Safety/Compliance", value: data?.operationsOverview?.hasFormalProcedures === "yes" ? "✅ Yes" : data?.operationsOverview?.hasFormalProcedures === "no" ? "❌ No" : "Not answered" },
+                    { label: "Q7. Major Incidents (24 months)", value: data?.operationsOverview?.hasMajorIncidents === "yes" ? "✅ Yes" : data?.operationsOverview?.hasMajorIncidents === "no" ? "❌ No" : "Not answered" },
+                  ])}
+                </div>
+              )}
+            </div>
+
             {/* ── Governance ─────────────────────────────────────────── */}
             <div style={sectionCardStyle}>
               {renderSectionHeader("governance", FileCheck, "Governance")}
@@ -502,24 +903,9 @@ const ProfileSummary = ({ data, onEdit }) => {
               )}
             </div>
 
-            {/* ── Operations Overview (kept same) ─────────────────── */}
-            <div style={sectionCardStyle}>
-              {renderSectionHeader("operationsOverview", FileCheck, "Operations Overview")}
-              {expandedSections.operationsOverview && (
-                <div style={sectionContentStyle}>
-                  <p style={{ fontSize: "14px", color: "#7d5a50", marginBottom: "20px", fontWeight: "500", fontStyle: "italic" }}>BIG Score – Operational Strength (Risk-Based Yes/No Model)</p>
-                  {renderFieldGrid([
-                    { label: "Q1. Multiple Key Suppliers", value: data?.operationsOverview?.multipleSuppliers === "yes" ? "✅ Yes" : data?.operationsOverview?.multipleSuppliers === "no" ? "❌ No" : "Not answered" },
-                    { label: "Q2. Documented Contingency Plan", value: data?.operationsOverview?.contingencyPlan === "yes" ? "✅ Yes" : data?.operationsOverview?.contingencyPlan === "no" ? "❌ No" : "Not answered" },
-                    { label: "Q3. Track Performance Metrics", value: data?.operationsOverview?.trackPerformanceMetrics === "yes" ? "✅ Yes" : data?.operationsOverview?.trackPerformanceMetrics === "no" ? "❌ No" : "Not answered" },
-                    { label: "Q4. 3+ Successful Deliveries", value: data?.operationsOverview?.threeSuccessfulDeliveries === "yes" ? "✅ Yes" : data?.operationsOverview?.threeSuccessfulDeliveries === "no" ? "❌ No" : "Not answered" },
-                    { label: "Q5. Capacity to Increase Output", value: data?.operationsOverview?.hasCapacityToIncrease === "yes" ? "✅ Yes" : data?.operationsOverview?.hasCapacityToIncrease === "no" ? "❌ No" : "Not answered" },
-                    { label: "Q6. Formal Safety/Compliance", value: data?.operationsOverview?.hasFormalProcedures === "yes" ? "✅ Yes" : data?.operationsOverview?.hasFormalProcedures === "no" ? "❌ No" : "Not answered" },
-                    { label: "Q7. Major Incidents (24 months)", value: data?.operationsOverview?.hasMajorIncidents === "yes" ? "✅ Yes" : data?.operationsOverview?.hasMajorIncidents === "no" ? "❌ No" : "Not answered" },
-                  ])}
-                </div>
-              )}
-            </div>
+         
+            {/* ── How Did You Hear ────────────────────────────────────── */}
+            {renderHowDidYouHear()}
 
             {/* ── Declaration & Consent ──────────────────────────────── */}
             <div style={sectionCardStyle}>
