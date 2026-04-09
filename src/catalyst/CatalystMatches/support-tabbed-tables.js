@@ -590,6 +590,7 @@ const SuccessfulSupportDealsTable = ({ successfulDeals }) => {
 }
 
 // ── Main Tabbed Component ─────────────────────────────────────────────────────
+// ── Main Tabbed Component ─────────────────────────────────────────────────────
 const SupportTabbedTables = ({ filters, stageFilter, loading, onStageOverride }) => {
   const [activeTab, setActiveTab] = useState("my-matches")
   const [successfulDeals, setSuccessfulDeals] = useState([])
@@ -599,10 +600,13 @@ const SupportTabbedTables = ({ filters, stageFilter, loading, onStageOverride })
 
 const extractSuccessfulDeals = (smes) =>
   smes
-    .filter((sme) =>
-      ["support approved", "active support"].includes((sme.currentStatus || "").toLowerCase()) ||
-      ["support approved", "active support"].includes((sme.pipelineStage || "").toLowerCase())
-    )
+    .filter((sme) => {
+      const status = (sme.currentStatus || sme.pipelineStage || "").toLowerCase()
+      // Check for both new and old terminology
+      return status === "active" || 
+             status === "active support" || 
+             status === "support approved"
+    })
     .map((sme) => ({
       id: sme.id,
       smeUserId: sme.userId || sme.smeId || sme.uid,
