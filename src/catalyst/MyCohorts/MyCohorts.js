@@ -71,12 +71,12 @@ const TableRowSkeleton = ({ index }) => {
           <div className={`w-24 h-3 bg-shimmer-mid bg-shimmer ${delays[1]} rounded`} />
           <div className={`w-20 h-3 bg-shimmer-light bg-shimmer ${delays[2]} rounded`} />
         </div>
-      </td>
+       </td>
       
       {/* Support Value */}
       <td className="p-5">
         <div className={`w-20 h-5 bg-shimmer-dark bg-shimmer ${delays[1]} rounded`} />
-      </td>
+       </td>
       
       {/* Sector & Location */}
       <td className="p-5">
@@ -84,17 +84,17 @@ const TableRowSkeleton = ({ index }) => {
           <div className={`w-24 h-3 bg-shimmer-mid bg-shimmer ${delays[2]} rounded`} />
           <div className={`w-20 h-3 bg-shimmer-light bg-shimmer ${delays[3]} rounded`} />
         </div>
-      </td>
+       </td>
       
       {/* Start Date */}
       <td className="p-5">
         <div className={`w-16 h-3 bg-shimmer-mid bg-shimmer ${delays[2]} rounded`} />
-      </td>
+       </td>
       
       {/* Status */}
       <td className="p-5">
         <div className={`w-20 h-6 bg-shimmer-light bg-shimmer ${delays[3]} rounded-full`} />
-      </td>
+       </td>
       
       {/* Actions */}
       <td className="p-5">
@@ -102,8 +102,8 @@ const TableRowSkeleton = ({ index }) => {
           <div className={`w-20 h-8 bg-shimmer-dark bg-shimmer ${delays[4]} rounded`} />
           <div className={`w-16 h-8 bg-shimmer-mid bg-shimmer ${delays[0]} rounded`} />
         </div>
-      </td>
-    </tr>
+       </td>
+     </tr>
   )
 }
 
@@ -171,15 +171,23 @@ function MyCohorts() {
         return
       }
 
-      // Query catalystApplications for successful deals
+      // UPDATED: Only include Active and Active Support statuses
+      // Old: "Active Support" (legacy)
+      // New: "Active" (current stage name)
+      const successfulStatuses = [
+        "Active Support",      // legacy status
+        "Active"               // NEW: current stage name
+      ]
+
       const q = query(
         collection(db, "catalystApplications"),
         where("catalystId", "==", currentUser.uid),
-        where("status", "in", ["Support Approved", "Active Support", "Deal Closed"])
+        where("status", "in", successfulStatuses)
       )
 
       const querySnapshot = await getDocs(q)
       console.log("Found successful support deals:", querySnapshot.docs.length)
+      console.log("Statuses found:", querySnapshot.docs.map(doc => doc.data().status))
 
       const cohortsData = await Promise.all(
         querySnapshot.docs.map(async (docSnap) => {
@@ -230,6 +238,10 @@ function MyCohorts() {
             const programIndex = docIdParts[2] || '0'
             const programSuffix = programIndex !== '0' ? ` (Program ${parseInt(programIndex) + 1})` : ""
 
+            // Format the status for display - map "Active" to "Active Support" for consistent display
+            let displayStatus = data.status || "Active Support"
+            if (displayStatus === "Active") displayStatus = "Active Support"
+
             return {
               id: docSnap.id,
               smeId: smeId,
@@ -241,7 +253,7 @@ function MyCohorts() {
               location: location,
               teamSize: teamSize,
               description: description,
-              currentStatus: data.status || "Active Support",
+              currentStatus: displayStatus,
               lastUpdated: new Date().toISOString(),
               dealStructure: "Support Program",
               dealDuration: "Ongoing",
@@ -291,7 +303,7 @@ function MyCohorts() {
     window.location.href = '/overall-company-health'
   }
 
-    const handleViewDocuments = (cohort) => {
+  const handleViewDocuments = (cohort) => {
     sessionStorage.setItem('viewingSMEId', cohort.smeId)
     sessionStorage.setItem('viewingSMEName', cohort.smeName)
     sessionStorage.setItem('investorViewMode', 'true')
@@ -306,9 +318,7 @@ function MyCohorts() {
     switch (status) {
       case "Active Support":
         return "#4caf50"
-      case "Support Approved":
-        return "#2196f3"
-      case "Deal Closed":
+      case "Active":
         return "#4caf50"
       default:
         return "#666"
@@ -338,7 +348,7 @@ function MyCohorts() {
               My Support Portfolio
             </h1>
             <p className="text-[#7d5a50] text-base">
-              View and manage your portfolio of successful SME support deals
+              View and manage your portfolio of active SME support deals
             </p>
           </div>
           
@@ -358,7 +368,7 @@ function MyCohorts() {
             <div className="flex items-center gap-3 mb-2">
               <Trophy size={20} className="text-[#a67c52]" />
               <h3 className="text-sm font-semibold text-[#7d5a50] m-0">
-                Total Support Deals
+                Active Support Deals
               </h3>
             </div>
             <p className="text-3xl font-bold text-[#a67c52] m-0">
@@ -395,7 +405,7 @@ function MyCohorts() {
           <div className="bg-white rounded-2xl shadow-md overflow-hidden w-full border border-[#e6d7c3]">
             <div className="p-5 border-b-2 border-[#e6d7c3] bg-[#f5f0e1] flex justify-between items-center">
               <h2 className="text-xl font-semibold text-[#4a352f] m-0">
-                Portfolio Companies
+                Active Support Companies
               </h2>
               <span className="text-xs text-[#7d5a50] bg-[#a67c52]/15 px-3 py-1.5 rounded-md font-semibold">
                 {cohorts.length} {cohorts.length === 1 ? 'company' : 'companies'}
@@ -452,14 +462,14 @@ function MyCohorts() {
                             </span>
                           </div>
                         </div>
-                      </td>
+                       </td>
 
                       {/* Investment Amount */}
                       <td className="p-5 min-w-[140px]">
                         <div className="text-base font-bold text-[#4a352f] flex items-center gap-1">
                           {formatCurrency(cohort.dealAmount)}
                         </div>
-                      </td>
+                       </td>
 
                       {/* Sector & Location */}
                       <td className="p-5 min-w-[200px]">
@@ -477,7 +487,7 @@ function MyCohorts() {
                             </span>
                           </div>
                         </div>
-                      </td>
+                       </td>
 
                       {/* Date */}
                       <td className="p-5 min-w-[130px]">
@@ -487,7 +497,7 @@ function MyCohorts() {
                             {formatDate(cohort.completionDate)}
                           </span>
                         </div>
-                      </td>
+                       </td>
 
                       {/* Status */}
                       <td className="p-5 min-w-[150px]">
@@ -498,108 +508,108 @@ function MyCohorts() {
                           }}>
                           {cohort.currentStatus}
                         </span>
+                       </td>
+
+                      {/* Actions */}
+                      <td style={{ padding: "8px", minWidth: "150px" }}>
+                        <div style={{ 
+                          display: "flex", 
+                          flexDirection: "column",
+                          gap: "6px",
+                          alignItems: "center"
+                        }}>
+                          <button
+                            onClick={() => handleViewGrowthSuite(cohort)}
+                            style={{
+                              backgroundColor: "#a67c52",
+                              color: "white",
+                              border: "none",
+                              borderRadius: "6px",
+                              padding: "6px 8px",
+                              fontSize: "11px",
+                              fontWeight: "600",
+                              cursor: "pointer",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "3px",
+                              transition: "all 0.2s ease",
+                              whiteSpace: "nowrap",
+                              flex: "0 1 auto"
+                            }}
+                            onMouseEnter={(e) => {
+                              e.target.style.backgroundColor = "#8d6e63"
+                              e.target.style.transform = "translateY(-1px)"
+                            }}
+                            onMouseLeave={(e) => {
+                              e.target.style.backgroundColor = "#a67c52"
+                              e.target.style.transform = "translateY(0)"
+                            }}
+                          >
+                            <Wrench size={11} />
+                            Growth Suite
+                          </button>
+
+                          <button
+                            onClick={() => handleViewDocuments(cohort)}
+                            style={{
+                              backgroundColor: "#74635b",
+                              color: "white",
+                              border: "none",
+                              borderRadius: "6px",
+                              padding: "6px 8px",
+                              fontSize: "11px",
+                              fontWeight: "600",
+                              cursor: "pointer",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "3px",
+                              transition: "all 0.2s ease",
+                              whiteSpace: "nowrap",
+                              flex: "0 1 auto"
+                            }}
+                            onMouseEnter={(e) => {
+                              e.target.style.backgroundColor = "#357abd"
+                              e.target.style.transform = "translateY(-1px)"
+                            }}
+                            onMouseLeave={(e) => {
+                              e.target.style.backgroundColor = "#4a90e2"
+                              e.target.style.transform = "translateY(0)"
+                            }}
+                          >
+                            <FileText size={11} />
+                            Documents
+                          </button>
+
+                          <button
+                            onClick={() => handleViewDetails(cohort)}
+                            style={{
+                              backgroundColor: "white",
+                              color: "#a67c52",
+                              border: "1.5px solid #a67c52",
+                              borderRadius: "6px",
+                              padding: "6px 8px",
+                              fontSize: "11px",
+                              fontWeight: "600",
+                              cursor: "pointer",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "3px",
+                              transition: "all 0.2s ease",
+                              whiteSpace: "nowrap",
+                              flex: "0 1 auto"
+                            }}
+                            onMouseEnter={(e) => {
+                              e.target.style.backgroundColor = "#faf7f2"
+                            }}
+                            onMouseLeave={(e) => {
+                              e.target.style.backgroundColor = "white"
+                            }}
+                          >
+                            <Eye size={11} />
+                            View Summary
+                          </button>
+                        </div>
                       </td>
-
-                    {/* Actions */}
-<td style={{ padding: "8px", minWidth: "150px" }}>
-<div style={{ 
-  display: "flex", 
-  flexDirection: "column",
-  gap: "6px",
-  alignItems: "center"
-}}>
-    <button
-      onClick={() => handleViewGrowthSuite(cohort)}
-      style={{
-        backgroundColor: "#a67c52",
-        color: "white",
-        border: "none",
-        borderRadius: "6px",
-        padding: "6px 8px",
-        fontSize: "11px",
-        fontWeight: "600",
-        cursor: "pointer",
-        display: "flex",
-        alignItems: "center",
-        gap: "3px",
-        transition: "all 0.2s ease",
-        whiteSpace: "nowrap",
-        flex: "0 1 auto"
-      }}
-      onMouseEnter={(e) => {
-        e.target.style.backgroundColor = "#8d6e63"
-        e.target.style.transform = "translateY(-1px)"
-      }}
-      onMouseLeave={(e) => {
-        e.target.style.backgroundColor = "#a67c52"
-        e.target.style.transform = "translateY(0)"
-      }}
-    >
-      <Wrench size={11} />
-     Growth Suite
-    </button>
-
-    <button
-      onClick={() => handleViewDocuments(cohort)}
-      style={{
-        backgroundColor: "#74635b",
-        color: "white",
-        border: "none",
-        borderRadius: "6px",
-        padding: "6px 8px",
-        fontSize: "11px",
-        fontWeight: "600",
-        cursor: "pointer",
-        display: "flex",
-        alignItems: "center",
-        gap: "3px",
-        transition: "all 0.2s ease",
-        whiteSpace: "nowrap",
-        flex: "0 1 auto"
-      }}
-      onMouseEnter={(e) => {
-        e.target.style.backgroundColor = "#357abd"
-        e.target.style.transform = "translateY(-1px)"
-      }}
-      onMouseLeave={(e) => {
-        e.target.style.backgroundColor = "#4a90e2"
-        e.target.style.transform = "translateY(0)"
-      }}
-    >
-      <FileText size={11} />
-      Documents
-    </button>
-
-    <button
-      onClick={() => handleViewDetails(cohort)}
-      style={{
-        backgroundColor: "white",
-        color: "#a67c52",
-        border: "1.5px solid #a67c52",
-        borderRadius: "6px",
-        padding: "6px 8px",
-        fontSize: "11px",
-        fontWeight: "600",
-        cursor: "pointer",
-        display: "flex",
-        alignItems: "center",
-        gap: "3px",
-        transition: "all 0.2s ease",
-        whiteSpace: "nowrap",
-        flex: "0 1 auto"
-      }}
-      onMouseEnter={(e) => {
-        e.target.style.backgroundColor = "#faf7f2"
-      }}
-      onMouseLeave={(e) => {
-        e.target.style.backgroundColor = "white"
-      }}
-    >
-      <Eye size={11} />
-      View Summary
-    </button>
-  </div>
-</td>
                     </tr>
                   ))}
                 </tbody>
@@ -610,13 +620,13 @@ function MyCohorts() {
           <div className="text-center p-[60px_20px] bg-white rounded-2xl shadow-md border border-[#e6d7c3] w-full">
             <Trophy size={60} className="text-[#c8b6a6] mx-auto mb-5" />
             <h3 className="text-2xl font-semibold text-[#4a352f] mb-3">
-              No Support Portfolio Yet
+              No Active Support Deals Yet
             </h3>
             <p className="text-[#7d5a50] text-base max-w-[500px] mx-auto">
-              Your successful support deals will appear here once you approve support for SMEs.
+              Your active support deals will appear here once you approve support for SMEs and they reach the "Active" stage.
               <br />
               <span className="text-xs text-[#a67c52]">
-                Current statuses that appear: "Support Approved", "Active Support", "Deal Closed"
+                Statuses that appear: "Active Support" or "Active"
               </span>
             </p>
           </div>
