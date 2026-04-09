@@ -97,6 +97,8 @@ const MyDocuments = () => {
   // State for editing document names
   const [editingDoc, setEditingDoc] = useState({ docLabel: null, docIndex: null });
   const [editNameValue, setEditNameValue] = useState("");
+  // State for guidelines expand/collapse
+  const [showFullGuidelines, setShowFullGuidelines] = useState(false);
 
  // Use the synchronization hook
  useDocumentSync(setSubmittedDocuments, setProfileData, null);
@@ -1490,7 +1492,7 @@ const badgeStyles = (status) => {
         <tr style={{ backgroundColor: "#faf8f6", borderBottom: "1px solid #e8d8cf" }}>
           <td colSpan="6" style={{ padding: "20px", textAlign: "center", color: "#6d4c41" }}>
             No CVs uploaded
-           </td>
+          </td>
         </tr>
       );
     }
@@ -2136,6 +2138,7 @@ const badgeStyles = (status) => {
                 : "Track all your submitted documents in one place"}
             </p>
 
+           {/* Updated Document Submission Guidelines with See More button */}
            <div style={{
              backgroundColor: "#f5f2f0",
              border: "2px solid #d7ccc8",
@@ -2150,96 +2153,150 @@ const badgeStyles = (status) => {
                marginBottom: "16px",
                display: "flex",
                alignItems: "center",
-               gap: "8px"
+               justifyContent: "space-between",
+               gap: "8px",
+               flexWrap: "wrap"
              }}>
-               📋 Document Submission Guidelines
+               <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                 📋 Document Submission Guidelines
+               </div>
+               <button
+                 onClick={() => setShowFullGuidelines(!showFullGuidelines)}
+                 style={{
+                   display: "inline-flex",
+                   alignItems: "center",
+                   gap: "6px",
+                   padding: "6px 12px",
+                   backgroundColor: "transparent",
+                   color: "#8d6e63",
+                   border: "1px solid #8d6e63",
+                   borderRadius: "6px",
+                   fontSize: "12px",
+                   fontWeight: "500",
+                   cursor: "pointer",
+                   transition: "all 0.2s ease"
+                 }}
+                 onMouseEnter={(e) => {
+                   e.target.style.backgroundColor = "#8d6e63";
+                   e.target.style.color = "white";
+                 }}
+                 onMouseLeave={(e) => {
+                   e.target.style.backgroundColor = "transparent";
+                   e.target.style.color = "#8d6e63";
+                 }}
+               >
+                 {showFullGuidelines ? "See Less" : "See More"}
+                 {showFullGuidelines ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+               </button>
              </h3>
+             
+             {/* Always show summary/initial text */}
              <p style={{
                color: "#6d4c41",
                lineHeight: "1.6",
-               marginBottom: "20px"
+               marginBottom: showFullGuidelines ? "20px" : "0"
              }}>
-               To ensure smooth processing and consistent formatting across our systems, we only accept the following file types and sizes:
+               To ensure smooth processing and consistent formatting across our systems, we only accept specific file types and sizes.
+               {!showFullGuidelines && " Click 'See More' for detailed guidelines."}
              </p>
 
-             <div style={{
-               display: "grid",
-               gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
-               gap: "20px"
-             }}>
+             {/* Full guidelines - only shown when expanded */}
+             {showFullGuidelines && (
                <div style={{
-                 backgroundColor: "#efebe9",
-                 padding: "16px",
-                 borderRadius: "8px",
-                 borderLeft: "4px solid #4caf50"
+                 display: "grid",
+                 gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
+                 gap: "20px",
+                 marginTop: "20px",
+                 animation: "fadeIn 0.3s ease"
                }}>
-                 <h4 style={{
-                   fontSize: "14px",
-                   fontWeight: "600",
-                   color: "#2e7d32",
-                   marginBottom: "12px"
-                 }}>✅ Accepted File Formats</h4>
-                 <ul style={{
-                   margin: "0",
-                   paddingLeft: "20px",
-                   color: "#5d4037",
-                   fontSize: "14px",
-                   lineHeight: "1.5"
+                 <div style={{
+                   backgroundColor: "#efebe9",
+                   padding: "16px",
+                   borderRadius: "8px",
+                   borderLeft: "4px solid #4caf50"
                  }}>
-                   <li style={{ marginBottom: "4px" }}><strong>PDF</strong> (.pdf) – Preferred format for all official documents</li>
-                   <li style={{ marginBottom: "4px" }}><strong>Excel Spreadsheets</strong> (.xls, .xlsx) – For financials or data tables</li>
-                   <li style={{ marginBottom: "4px" }}><strong>Image Files</strong> (.jpg, .jpeg, .png) – For scanned IDs or proof of address</li>
-                 </ul>
-               </div>
+                   <h4 style={{
+                     fontSize: "14px",
+                     fontWeight: "600",
+                     color: "#2e7d32",
+                     marginBottom: "12px"
+                   }}>✅ Accepted File Formats</h4>
+                   <ul style={{
+                     margin: "0",
+                     paddingLeft: "20px",
+                     color: "#5d4037",
+                     fontSize: "14px",
+                     lineHeight: "1.5"
+                   }}>
+                     <li style={{ marginBottom: "4px" }}><strong>PDF</strong> (.pdf) – Preferred format for all official documents</li>
+                     <li style={{ marginBottom: "4px" }}><strong>Excel Spreadsheets</strong> (.xls, .xlsx) – For financials or data tables</li>
+                     <li style={{ marginBottom: "4px" }}><strong>Image Files</strong> (.jpg, .jpeg, .png) – For scanned IDs or proof of address</li>
+                   </ul>
+                 </div>
 
-               <div style={{
-                 backgroundColor: "#efebe9",
-                 padding: "16px",
-                 borderRadius: "8px",
-                 borderLeft: "4px solid #ff9800"
-               }}>
-                 <h4 style={{
-                   fontSize: "14px",
-                   fontWeight: "600",
-                   color: "#f57c00",
-                   marginBottom: "12px"
-                 }}>⚠️ File Size Limit</h4>
-                 <ul style={{
-                   margin: "0",
-                   paddingLeft: "20px",
-                   color: "#5d4037",
-                   fontSize: "14px",
-                   lineHeight: "1.5"
+                 <div style={{
+                   backgroundColor: "#efebe9",
+                   padding: "16px",
+                   borderRadius: "8px",
+                   borderLeft: "4px solid #ff9800"
                  }}>
-                   <li>Maximum upload size: <strong>10 MB per file</strong></li>
-                 </ul>
-               </div>
+                   <h4 style={{
+                     fontSize: "14px",
+                     fontWeight: "600",
+                     color: "#f57c00",
+                     marginBottom: "12px"
+                   }}>⚠️ File Size Limit</h4>
+                   <ul style={{
+                     margin: "0",
+                     paddingLeft: "20px",
+                     color: "#5d4037",
+                     fontSize: "14px",
+                     lineHeight: "1.5"
+                   }}>
+                     <li>Maximum upload size: <strong>10 MB per file</strong></li>
+                   </ul>
+                 </div>
 
-               <div style={{
-                 backgroundColor: "#efebe9",
-                 padding: "16px",
-                 borderRadius: "8px",
-                 borderLeft: "4px solid #f44336"
-               }}>
-                 <h4 style={{
-                   fontSize: "14px",
-                   fontWeight: "600",
-                   color: "#c62828",
-                   marginBottom: "12px"
-                 }}>🚫 Unsupported Formats</h4>
-                 <ul style={{
-                   margin: "0",
-                   paddingLeft: "20px",
-                   color: "#5d4037",
-                   fontSize: "14px",
-                   lineHeight: "1.5"
+                 <div style={{
+                   backgroundColor: "#efebe9",
+                   padding: "16px",
+                   borderRadius: "8px",
+                   borderLeft: "4px solid #f44336"
                  }}>
-                   <li style={{ marginBottom: "4px" }}>No ZIP/RAR folders, executable files (.exe), or Google Docs/Drive links</li>
-                   <li style={{ marginBottom: "4px" }}>Please download and upload original files directly (no screenshots or photos of screens)</li>
-                 </ul>
+                   <h4 style={{
+                     fontSize: "14px",
+                     fontWeight: "600",
+                     color: "#c62828",
+                     marginBottom: "12px"
+                   }}>🚫 Unsupported Formats</h4>
+                   <ul style={{
+                     margin: "0",
+                     paddingLeft: "20px",
+                     color: "#5d4037",
+                     fontSize: "14px",
+                     lineHeight: "1.5"
+                   }}>
+                     <li style={{ marginBottom: "4px" }}>No ZIP/RAR folders, executable files (.exe), or Google Docs/Drive links</li>
+                     <li style={{ marginBottom: "4px" }}>Please download and upload original files directly (no screenshots or photos of screens)</li>
+                   </ul>
+                 </div>
                </div>
-             </div>
+             )}
            </div>
+
+           {/* Add animation styles */}
+           <style>{`
+             @keyframes fadeIn {
+               from {
+                 opacity: 0;
+                 transform: translateY(-10px);
+               }
+               to {
+                 opacity: 1;
+                 transform: translateY(0);
+               }
+             }
+           `}</style>
          </div>
 
          <div className="document-controls" style={{
@@ -2830,7 +2887,7 @@ const badgeStyles = (status) => {
               </div>
             )}
            </td>
-         </tr>
+           </tr>
         
         {isMultiUpload && renderExpandedRows(docLabel, allDocs, true)}
         
@@ -2839,7 +2896,7 @@ const badgeStyles = (status) => {
     );
   })}
 </tbody>
-               </table>
+                </table>
               </div>
           )}
         </div>
