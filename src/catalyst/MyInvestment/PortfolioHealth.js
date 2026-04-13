@@ -283,7 +283,7 @@ const PortfolioHealth = () => {
   if (!portfolioMetrics || portfolioMetrics.totalSMEs === 0) {
     return (
       <div style={{ padding: "2rem", textAlign: "center", color: B.warm, fontStyle: "italic" }}>
-        No SMEs with "Active Support" or "Support Approved" status yet.
+        No SMEs with "Active" status yet.
       </div>
     );
   }

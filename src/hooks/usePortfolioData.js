@@ -35,12 +35,12 @@ const normalizeStage = (stage) => {
   const s = norm(stage);
   if (["evaluation", "under review", "in review"].includes(s)) return "review";
   if (["due diligence"].includes(s)) return "approved";
-  if (["support approved"].includes(s)) return "supported";
-  if (["active support"].includes(s)) return "active";
+  // if (["support approved"].includes(s)) return "supported";
+  if (["active support", "active"].includes(s)) return "active";
   if (["decision", "funding approved"].includes(s)) return "funding";
   if (["term sheet"].includes(s)) return "termsheet";
   if (["deal closed"].includes(s)) return "closed";
-  if (["rejected", "withdrawn", "declined", "support declined"].includes(s))
+  if (["rejected", "withdrawn", "decline", "declined", "support declined"].includes(s))
     return "rejected";
   return "application";
 };
@@ -49,7 +49,7 @@ const normalizeStage = (stage) => {
 // Only SMEs with these pipeline stages are included in portfolio charts
 // (PortfolioHealth, Performance, Outcomes).
 // CohortSelection continues to use the full enriched array.
-const PORTFOLIO_STAGES = new Set(["active", "supported"]);
+const PORTFOLIO_STAGES = new Set(["active"]);
 
 const headcountBucket = (n) => {
   const v = parseInt(n) || 0;
@@ -149,9 +149,10 @@ function computeMetrics(enriched) {
     "Due Diligence",
     "Support Approved",
     "Decision",
-    "Active Support",
+    "Active",
     "Term Sheet",
     "Deal Closed",
+    "Decline",
   ];
   const stageMap = {
     application: "Application",
@@ -159,9 +160,10 @@ function computeMetrics(enriched) {
     approved: "Due Diligence",
     supported: "Support Approved",
     funding: "Decision",
-    active: "Active Support",
+    active: "Active",
     termsheet: "Term Sheet",
     closed: "Deal Closed",
+    rejected: "Decline",
   };
   const stageDist = Object.fromEntries(STAGE_LABELS.map((l) => [l, 0]));
   enriched.forEach((a) => {
@@ -449,7 +451,7 @@ function enrichApps(rawApps, profiles, scoresById) {
 export const usePortfolioData = () => {
   const [enriched, setEnriched] = useState([]);
   const [metrics, setMetrics] = useState(null);
-  // Filtered to "Active Support" + "Support Approved" — used by PortfolioHealth,
+  // Filtered to "Active" pipeline stage — used by PortfolioHealth,
   // Performance and Outcomes dashboards only.
   const [portfolioEnriched, setPortfolioEnriched] = useState([]);
   const [portfolioMetrics, setPortfolioMetrics] = useState(null);
@@ -505,6 +507,7 @@ export const usePortfolioData = () => {
         });
 
       const rawApps = parseAppDocs(appSnap);
+      // console.log("[usePortfolioData] rawApps:", rawApps);
       const rawAllApps = parseAppDocs(allAppSnap);
 
       // ── 5. Batch-fetch unique universalProfiles across BOTH sets ──────────
@@ -560,10 +563,11 @@ export const usePortfolioData = () => {
       setEnriched(enrichedApps);
       setMetrics(computed);
 
-      // ── 9. Filter to Active Support + Support Approved for portfolio pages ─
+      // ── 9. Filter to Active pipeline stage for portfolio pages ─
       const portfolioApps = enrichedApps.filter((a) =>
         PORTFOLIO_STAGES.has(normalizeStage(a.pipelineStage)),
       );
+
       const portfolioComputed = computeMetrics(portfolioApps);
       setPortfolioEnriched(portfolioApps);
       setPortfolioMetrics(portfolioComputed);
@@ -572,9 +576,6 @@ export const usePortfolioData = () => {
       const universalComputed = computeMetrics(enrichedAllApps);
       setUniversalEnriched(enrichedAllApps);
       setUniversalMetrics(universalComputed);
-
-      console.log("[usePortfolioData] portfolio metrics:", portfolioComputed);
-      console.log("[usePortfolioData] universal metrics:", universalComputed);
     } catch (err) {
       console.error("usePortfolioData:", err);
       setError(err.message);
@@ -595,7 +596,7 @@ export const usePortfolioData = () => {
   return {
     enriched, // user's apps — for CohortSelection
     metrics, // metrics for user's apps — for CohortSelection
-    portfolioEnriched, // Active Support + Support Approved (user) — for portfolio pages
+    portfolioEnriched, // Active (user) — for portfolio pages
     portfolioMetrics, // metrics for user's portfolio SMEs — for portfolio pages
     universalEnriched, // all apps across every catalyst — for Catalyst Insights
     universalMetrics, // metrics for all apps across every catalyst — for Catalyst Insights

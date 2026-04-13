@@ -197,7 +197,7 @@ const PortfolioQualityGauge = () => {
 
 // ── Key Clients per SME ───────────────────────────────────────────────────────
 const ClientsPerSME = () => {
-  // portfolioEnriched is already filtered to Active Support + Support Approved
+  // portfolioEnriched is already filtered to Active pipeline stage
   const { portfolioEnriched } = usePortfolio();
   const smeClients = (portfolioEnriched || [])
     .map(a => ({
@@ -238,7 +238,7 @@ const Performance = () => {
   if (!portfolioMetrics || portfolioMetrics.totalSMEs === 0) {
     return (
       <div style={{ padding: "2rem", textAlign: "center", color: B.warm, fontStyle: "italic" }}>
-        No SMEs with "Active Support" or "Support Approved" status yet.
+        No SMEs with "Active" status yet.
       </div>
     );
   }
