@@ -1,7 +1,6 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { /* useNavigate, useParams */ } from "react-router-dom" // keep for non-embedded usage
 import { CheckCircle, ChevronRight, ChevronLeft, Save, X, ArrowRight } from "lucide-react"
 import { sections } from "./applicationOptions"
 import RequestOverview from "./RequestOverview"
@@ -9,11 +8,10 @@ import ProductsServices from "./ProductsServices"
 import MatchingPreferences from "./MatchingPreferences"
 import ApplicationSummary from "./application-summary"
 import "./ProductApplication.css"
-import { doc, setDoc } from "firebase/firestore"
+import { doc, setDoc, getDoc, serverTimestamp } from "firebase/firestore"
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage"
 import { auth, db, storage } from "../../firebaseConfig"
 
-// Onboarding steps for the welcome popup
 const onboardingSteps = [
   { title: "Welcome to Products/Services Application", content: "This application will help us understand your product and service needs so we can match you with the right providers.", icon: "🛍️" },
   { title: "Step 1: Matching Preferences", content: "Start by specifying your preferences for B-BBEE level, ownership type, and sector experience.", icon: "🎯" },
@@ -21,40 +19,25 @@ const onboardingSteps = [
   { title: "Step 3: Products & Services", content: "Specify the categories and details of the products or services you need.", icon: "📦" },
 ]
 
-/**
- * New props for embedded use:
- * - embedded: boolean (default false)
- * - onNavigateToMatches: () => void  (parent switches to "My Matches" tab)
- * - onNavigateToDashboard: () => void (parent decides what "dashboard" means in-tab)
- * - initialSectionId: string (optional — start at a specific section)
- */
 const ProductApplication = ({
   embedded = false,
   onNavigateToMatches,
   onNavigateToDashboard,
+  onNavigateBack,
   initialSectionId,
+  applicationId = null,
 }) => {
-  // Router only used when not embedded
-  // eslint-disable-next-line react-hooks/rules-of-hooks
-  // const { section: urlSectionRaw } = embedded ? { section: null } : useParams()
-  // eslint-disable-next-line react-hooks/rules-of-hooks
-  // const navigate = embedded ? (() => {}) : useNavigate()
-
-  const urlSection = embedded ? null : null /* replace with urlSectionRaw if you re-enable routing */
-
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const [applicationSubmitted, setApplicationSubmitted] = useState(false)
   const [showSummary, setShowSummary] = useState(false)
+  const [loadingApplication, setLoadingApplication] = useState(!!applicationId)
 
-  const [forceShowTitle, setForceShowTitle] = useState(true);
   const [showWelcomePopup, setShowWelcomePopup] = useState(false)
   const [showCongratulationsPopup, setShowCongratulationsPopup] = useState(false)
   const [currentOnboardingStep, setCurrentOnboardingStep] = useState(0)
-  const [forceShowPopup, setForceShowPopup] = useState(false)
 
   const [activeSection, setActiveSection] = useState(() => {
-    const byUrl = sections.find((s) => s.path === urlSection)?.id
-    return initialSectionId || byUrl || sections[0].id
+    return initialSectionId || sections[0].id
   })
 
   const getUserSpecificKey = (baseKey) => {
@@ -63,81 +46,104 @@ const ProductApplication = ({
   }
 
   const [completedSections, setCompletedSections] = useState(() => {
-    const userId = auth.currentUser?.uid
-    const key = userId ? `productApplicationCompletedSections_${userId}` : "productApplicationCompletedSections"
-    const saved = localStorage.getItem(key)
-    return saved ? JSON.parse(saved) : Object.fromEntries(sections.map((s) => [s.id, false]))
+    return Object.fromEntries(sections.map((s) => [s.id, false]))
   })
 
-  const [formData, setFormData] = useState(() => {
-    const userId = auth.currentUser?.uid
-    const key = userId ? `productApplicationData_${userId}` : "productApplicationData"
-    const saved = localStorage.getItem(key)
-    const parsedData = saved ? JSON.parse(saved) : {}
-
-    return {
-      matchingPreferences: {
-        bbeeLevel: "",
-        ownershipPrefs: [],
-        sectorExperience: "",
-        ...(parsedData.matchingPreferences || {}),
-      },
-      requestOverview: {
-        purpose: "",
-        engagementType: "",
-        deliveryModes: [],
-        startDate: "",
-        endDate: "",
-        location: "",
-        minBudget: "",
-        maxBudget: "",
-        esdProgram: null,
-        ...(parsedData.requestOverview || {}),
-      },
-      productsServices: {
-        categories: [],
-        keywords: "",
-        scopeOfWorkFiles: [],
-        ...(parsedData.productsServices || {}),
-      },
-    }
+  const [formData, setFormData] = useState({
+    matchingPreferences: {
+      bbeeLevel: "",
+      ownershipPrefs: [],
+      sectorExperience: "",
+      engagementType: "",
+      engagementTypeOther: "",
+      deliveryModes: [],
+      startDate: "",
+      endDate: "",
+      location: "",
+      minBudget: "",
+      maxBudget: "",
+      esdProgram: null,
+    },
+    requestOverview: {
+      purpose: "",
+      categories: [],
+      subcategories: [],
+      keywords: "",
+      scopeOfWorkFiles: [],
+    },
+    productsServices: {
+      categories: [],
+      keywords: "",
+      scopeOfWorkFiles: [],
+    },
   })
 
-  // First-load popup / submission status (works the same embedded vs routed)
+  console.log("📍 ProductApplication rendered - App ID:", applicationId, "Embedded:", embedded)
+
+  // Load existing application data
   useEffect(() => {
-    const userId = auth.currentUser?.uid
-    if (!userId) return
-
-    const savedSubmissionStatus = localStorage.getItem(getUserSpecificKey("applicationSubmitted"))
-    const hasSeenWelcome = localStorage.getItem(getUserSpecificKey("hasSeenProductWelcomePopup")) === "true"
-
-    if (!hasSeenWelcome) {
-      setShowWelcomePopup(true)
-      setShowSummary(false)
-    } else if (savedSubmissionStatus === "true" && !forceShowPopup) {
-      setApplicationSubmitted(true)
-      setShowSummary(true)
+    if (applicationId) {
+      loadApplication(applicationId)
     }
-  }, [forceShowPopup])
+  }, [applicationId])
 
-  // Persistence
-  useEffect(() => {
-    const userId = auth.currentUser?.uid
-    if (!userId) return
-    localStorage.setItem(getUserSpecificKey("productApplicationData"), JSON.stringify(formData))
-  }, [formData])
-
-  useEffect(() => {
-    const userId = auth.currentUser?.uid
-    if (!userId) return
-    localStorage.setItem(getUserSpecificKey("productApplicationCompletedSections"), JSON.stringify(completedSections))
-  }, [completedSections])
-
-  useEffect(() => {
-    const userId = auth.currentUser?.uid
-    if (!userId) return
-    localStorage.setItem(getUserSpecificKey("applicationSubmitted"), applicationSubmitted.toString())
-  }, [applicationSubmitted])
+  const loadApplication = async (appId) => {
+    try {
+      setLoadingApplication(true)
+      console.log("📡 Loading application:", appId)
+      
+      const docRef = doc(db, "productApplications", appId)
+      const docSnap = await getDoc(docRef)
+      
+      if (docSnap.exists()) {
+        const data = docSnap.data()
+        console.log("✅ Application loaded successfully")
+        
+        setFormData({
+          matchingPreferences: {
+            bbeeLevel: data.matchingPreferences?.bbeeLevel || "",
+            ownershipPrefs: data.matchingPreferences?.ownershipPrefs || [],
+            sectorExperience: data.matchingPreferences?.sectorExperience || "",
+            engagementType: data.matchingPreferences?.engagementType || "",
+            engagementTypeOther: data.matchingPreferences?.engagementTypeOther || "",
+            deliveryModes: data.matchingPreferences?.deliveryModes || [],
+            startDate: data.matchingPreferences?.startDate || "",
+            endDate: data.matchingPreferences?.endDate || "",
+            location: data.matchingPreferences?.location || "",
+            minBudget: data.matchingPreferences?.minBudget || "",
+            maxBudget: data.matchingPreferences?.maxBudget || "",
+            esdProgram: data.matchingPreferences?.esdProgram ?? null,
+          },
+          requestOverview: {
+            purpose: data.requestOverview?.purpose || "",
+            categories: data.requestOverview?.categories || [],
+            subcategories: data.requestOverview?.subcategories || [],
+            keywords: data.requestOverview?.keywords || "",
+            scopeOfWorkFiles: data.requestOverview?.scopeOfWorkFiles || [],
+          },
+          productsServices: {
+            categories: data.productsServices?.categories || [],
+            keywords: data.productsServices?.keywords || "",
+            scopeOfWorkFiles: data.productsServices?.scopeOfWorkFiles || [],
+          },
+        })
+        
+        setCompletedSections(data.completedSections || Object.fromEntries(sections.map((s) => [s.id, false])))
+        setApplicationSubmitted(data.status === 'submitted')
+        
+        if (data.status === 'submitted') {
+          setShowSummary(true)
+        }
+      } else {
+        console.log("⚠️ Application not found, creating new")
+      }
+    } catch (err) {
+      console.error("❌ Error loading application:", err)
+      alert("Failed to load application data.")
+    } finally {
+      setLoadingApplication(false)
+    }
+  }
 
   const goToSection = (sectionId) => {
     const section = sections.find((s) => s.id === sectionId)
@@ -148,47 +154,9 @@ const ProductApplication = ({
   }
 
   const handleEditApplication = () => {
-    const hasSeen = localStorage.getItem(getUserSpecificKey("hasSeenProductWelcomePopup")) === "true"
-    if (!hasSeen) setForceShowPopup(true)
     setShowSummary(false)
     setActiveSection(sections[0].id)
     window.scrollTo(0, 0)
-  }
-
-  const handleNextOnboardingStep = () => {
-    if (currentOnboardingStep < onboardingSteps.length - 1) {
-      setCurrentOnboardingStep((s) => s + 1)
-    } else {
-      handleCloseWelcomePopup()
-    }
-  }
-
-  const handleCloseWelcomePopup = () => {
-    setShowWelcomePopup(false)
-    setForceShowPopup(false)
-    localStorage.setItem(getUserSpecificKey("hasSeenProductWelcomePopup"), "true")
-    if (applicationSubmitted) setShowSummary(true)
-  }
-
-  const handleCloseCongratulationsPopup = () => {
-    setShowCongratulationsPopup(false)
-    setShowSummary(true)
-  }
-
-  // NEW: In embedded mode, these call back up instead of routing
-  const handleNavigateToDashboard = () => {
-    if (embedded) {
-      onNavigateToDashboard?.()
-    } else {
-      // navigate("/dashboard")
-    }
-  }
-  const handleViewMatches = () => {
-    if (embedded) {
-      onNavigateToMatches?.()
-    } else {
-      // navigate("/funding-matches")
-    }
   }
 
   const updateFormData = (section, newData) => {
@@ -196,14 +164,6 @@ const ProductApplication = ({
       ...prev,
       [section]: { ...prev[section], ...newData },
     }))
-  }
-
-  const saveCurrentSection = () => {
-    const userId = auth.currentUser?.uid
-    if (!userId) return
-    localStorage.setItem(getUserSpecificKey("productApplicationData"), JSON.stringify(formData))
-    setCompletedSections((prev) => ({ ...prev, [activeSection]: true }))
-    alert("Section saved successfully!")
   }
 
   const goToNextSection = () => {
@@ -242,37 +202,30 @@ const ProductApplication = ({
 
   const saveDataToFirebase = async (section = null) => {
     try {
-      const userId = auth.currentUser?.uid
-      if (!userId) throw new Error("User not logged in.")
-      const docRef = doc(db, "productApplications", userId)
+      const user = auth.currentUser
+      if (!user) throw new Error("User not logged in.")
+      
+      const docId = applicationId || `${user.uid}_${Date.now()}`
+      const docRef = doc(db, "productApplications", docId)
 
-      const sectionData = section ? formData[section] : formData
-      const uploaded = section
-        ? { [section]: await uploadFilesAndReplaceWithURLs(sectionData, section) }
-        : await uploadFilesAndReplaceWithURLs(formData, "full")
+      console.log("💾 Saving to Firestore - Doc ID:", docId)
 
       const dataToSave = {
-        ...uploaded,
+        ...formData,
+        userId: user.uid,
         completedSections: { ...completedSections },
-        lastUpdated: new Date().toISOString(),
+        lastUpdated: serverTimestamp(),
+        status: applicationSubmitted ? 'submitted' : 'draft',
       }
 
-      if (section) {
-        await setDoc(
-          docRef,
-          {
-            ...uploaded,
-            [`completedSections.${section}`]: completedSections[section],
-            lastUpdated: new Date().toISOString(),
-          },
-          { merge: true },
-        )
-      } else {
-        await setDoc(docRef, dataToSave, { merge: true })
-      }
+      await setDoc(docRef, dataToSave, { merge: true })
+      console.log("✅ Saved successfully")
+      
+      return docId
     } catch (err) {
-      console.error("Error saving to Firebase:", err)
+      console.error("❌ Error saving to Firebase:", err)
       alert("Failed to save to Firebase.")
+      return null
     }
   }
 
@@ -292,100 +245,65 @@ const ProductApplication = ({
 
   const submitApplication = async () => {
     try {
+      const user = auth.currentUser
+      if (!user) throw new Error("User not logged in.")
+
       const allCompleted = Object.fromEntries(sections.map((s) => [s.id, true]))
       setCompletedSections(allCompleted)
       setApplicationSubmitted(true)
-      await saveDataToFirebase()
+      
+      const docId = applicationId || `${user.uid}_${Date.now()}`
+      
+      await setDoc(doc(db, "productApplications", docId), {
+        ...formData,
+        userId: user.uid,
+        completedSections: allCompleted,
+        lastUpdated: serverTimestamp(),
+        status: 'submitted'
+      }, { merge: true })
 
-      const hasSeenCongrats = localStorage.getItem(getUserSpecificKey("hasSeenProductCongratulationsPopup")) === "true"
-      if (!hasSeenCongrats) {
-        setShowCongratulationsPopup(true)
-        localStorage.setItem(getUserSpecificKey("hasSeenProductCongratulationsPopup"), "true")
-      } else {
-        setShowSummary(true) // no route change in embedded
-      }
+      console.log("🎉 Application submitted:", docId)
+      setShowSummary(true)
       window.scrollTo(0, 0)
     } catch (err) {
-      console.error("Failed to submit application:", err)
+      console.error("❌ Failed to submit application:", err)
       alert("Failed to submit application.")
     }
   }
 
   const renderActiveSection = () => {
-    const sectionData = formData[activeSection] || {};
+    const sectionData = formData[activeSection] || {}
     const sectionProps = {
       data: sectionData,
       updateData: (newData) => updateFormData(activeSection, newData),
-      // Update this to handle submission properly
-      onSubmit: activeSection === "matchingPreferences" ? handleMatchingPreferencesSubmit : undefined
-    };
+      onSubmit: activeSection === "matchingPreferences" ? submitApplication : undefined,
+      applicationId: applicationId,
+    }
 
     switch (activeSection) {
       case "matchingPreferences":
-        return <MatchingPreferences {...sectionProps} />;
+        return <MatchingPreferences {...sectionProps} />
       case "requestOverview":
-        return <RequestOverview {...sectionProps} />;
+        return <RequestOverview {...sectionProps} />
       case "productsServices":
-        return <ProductsServices {...sectionProps} />;
+        return <ProductsServices {...sectionProps} />
       default:
-        return <MatchingPreferences {...sectionProps} />;
+        return <MatchingPreferences {...sectionProps} />
     }
   }
 
-  const handleMatchingPreferencesSubmit = async () => {
-    try {
-      // Save the application data
-      await submitApplication(); // This already exists in your code
-
-      // After successful submission:
-      if (embedded) {
-        // If embedded, notify parent to switch to matches tab
-        if (onNavigateToMatches) {
-          onNavigateToMatches();
-        }
-      } else {
-        // If not embedded, navigate to matches
-        // navigate('/supplier-matches'); // Commented out since we'll handle in MatchingPreferences
-      }
-    } catch (error) {
-      console.error("Error submitting application:", error);
-    }
-  };
-
-  const isLastSection = activeSection === sections[sections.length - 1].id
-  const isFirstSection = activeSection === sections[0].id
-
-  // Sidebar class watcher — optional while embedded (kept harmless)
-  useEffect(() => {
-    if (embedded) return
-    const checkSidebarState = () => {
-      const sidebarCollapsed = document.body.classList.contains("sidebar-collapsed")
-      setIsSidebarCollapsed(sidebarCollapsed)
-    }
-    checkSidebarState()
-    const observer = new MutationObserver((mutations) => {
-      mutations.forEach((m) => {
-        if (m.type === "attributes" && m.attributeName === "class") checkSidebarState()
-      })
-    })
-    observer.observe(document.body, { attributes: true, attributeFilter: ["class"] })
-    return () => observer.disconnect()
-  }, [embedded])
-
-  // Embedded gets tight, route page gets padded
   const getContainerStyles = () => {
     if (embedded) {
       return {
         width: "100%",
         maxWidth: "100%",
         margin: 0,
-        padding: "100px",
+        padding: "20px",
         backgroundColor: "#f9f9f9",
-        minHeight: "auto", // Don't force full height
+        minHeight: "auto",
         boxSizing: "border-box"
-      };
+      }
     } else {
-      // Original non-embedded styles
       return {
         width: "100%",
         minHeight: "100vh",
@@ -394,71 +312,63 @@ const ProductApplication = ({
         margin: "0",
         boxSizing: "border-box",
         position: "relative",
-        transition: "padding 0.3s ease",
-      };
+      }
     }
   }
 
+  // Loading state
+  if (loadingApplication) {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        minHeight: '400px' 
+      }}>
+        <div>Loading application...</div>
+      </div>
+    )
+  }
 
-  // Summary: in embedded mode, don't gate on urlSection
-  if (showSummary && !showWelcomePopup && (embedded || !urlSection)) {
-    return <ApplicationSummary data={formData} onEdit={handleEditApplication} />
+  // Summary view
+  if (showSummary) {
+    return (
+      <ApplicationSummary 
+        data={formData} 
+        onEdit={handleEditApplication}
+        applicationId={applicationId}
+        onBack={embedded ? onNavigateBack : undefined}
+      />
+    )
   }
 
   return (
-    <div
-      style={getContainerStyles()}
-      className={`product-application-container ${embedded ? 'embedded' : ''}`}
-    >
-      {/* Welcome Popup */}
-      {showWelcomePopup && (
-        <div className="popup-overlay" style={{ position: "fixed", top: 0, left: 0, width: "100vw", height: "100vh", backgroundColor: "rgba(0, 0, 0, 0.5)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 9999, padding: 20, boxSizing: "border-box" }}>
-          <div className="welcome-popup" style={{ backgroundColor: "white", borderRadius: 8, padding: 20, maxWidth: "90vw", maxHeight: "90vh", overflow: "auto", position: "relative", width: "100%", maxWidth: 600 }}>
-            <button className="close-popup" onClick={handleCloseWelcomePopup} style={{ position: "absolute", top: 10, right: 10, background: "none", border: "none", cursor: "pointer", padding: 5 }}>
-              <X size={24} />
-            </button>
-            <div className="popup-content">
-              <div className="popup-icon">{onboardingSteps[currentOnboardingStep].icon}</div>
-              <h2>{onboardingSteps[currentOnboardingStep].title}</h2>
-              <p>{onboardingSteps[currentOnboardingStep].content}</p>
-              <div className="popup-progress">
-                {onboardingSteps.map((_, index) => (
-                  <div key={index} className={`progress-dot ${index === currentOnboardingStep ? "active" : ""}`} />
-                ))}
-              </div>
-              <div className="popup-buttons" style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap", marginTop: 20 }}>
-                <button className="btn btn-secondary" onClick={handleCloseWelcomePopup}>Skip</button>
-                <button className="btn btn-primary" onClick={handleNextOnboardingStep}>
-                  {currentOnboardingStep < onboardingSteps.length - 1 ? "Next" : "Get Started"} <ArrowRight size={16} />
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+    <div style={getContainerStyles()} className={`product-application-container ${embedded ? 'embedded' : ''}`}>
+      {/* Back button */}
+      {embedded && onNavigateBack && (
+        <button 
+          className="btn-back"
+          onClick={onNavigateBack}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            padding: '8px 0',
+            background: 'none',
+            border: 'none',
+            color: '#a67c52',
+            cursor: 'pointer',
+            marginBottom: '16px',
+            fontSize: '14px',
+            fontWeight: '500'
+          }}
+          type="button"
+        >
+          <ChevronLeft size={20} /> Back to Applications
+        </button>
       )}
 
-      {/* Congratulations Popup */}
-      {showCongratulationsPopup && (
-        <div className="popup-overlay" style={{ position: "fixed", top: 0, left: 0, width: "100vw", height: "100vh", backgroundColor: "rgba(0, 0, 0, 0.5)", display: "flex", justifyContent: "center", alignItems: "center", zIndex: 9999, padding: 20, boxSizing: "border-box" }}>
-          <div className="congratulations-popup" style={{ backgroundColor: "white", borderRadius: 8, padding: 20, maxWidth: "90vw", maxHeight: "90vh", overflow: "auto", position: "relative", width: "100%", maxWidth: 600 }}>
-            <button className="close-popup" onClick={handleCloseCongratulationsPopup} style={{ position: "absolute", top: 10, right: 10, background: "none", border: "none", cursor: "pointer", padding: 5 }}>
-              <X size={24} />
-            </button>
-            <div className="popup-content">
-              <h2>Congratulations!</h2>
-              <p>You've successfully completed your Products/Services Application!</p>
-              <p>Your application has been submitted and our team will start matching you with suitable providers. You can view your application summary, go to your dashboard, or view your matches right away!</p>
-              <div className="popup-buttons-group" style={{ display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap", marginTop: 20 }}>
-                <button className="btn btn-secondary" onClick={handleCloseCongratulationsPopup}>View Summary</button>
-                <button className="btn btn-primary" onClick={handleViewMatches}>View Matches</button>
-                <button className="btn btn-secondary" onClick={handleNavigateToDashboard}>Go to Dashboard</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Title - only show if not embedded or force show */}
+      {/* Title */}
       <h1 style={{
         width: "100%",
         textAlign: "center",
@@ -467,13 +377,12 @@ const ProductApplication = ({
         lineHeight: 1.2,
         wordBreak: "break-word",
         color: embedded ? "#333" : "inherit",
-        display: embedded ? "block" : "block" // Always show
+        display: "block"
       }}>
-        Products/Services Request
+        {applicationId ? 'Edit Application' : 'Products/Services Request'}
       </h1>
 
-
-      {/* Progress Tracker - make it more compact for embedded */}
+      {/* Progress Tracker */}
       <div className="profile-tracker" style={{
         width: "100%",
         maxWidth: "100%",
@@ -498,6 +407,7 @@ const ProductApplication = ({
             <button
               key={section.id}
               onClick={() => goToSection(section.id)}
+              type="button"
               className={`profile-tracker-button ${activeSection === section.id ? "active" : completedSections[section.id] ? "completed" : "pending"}`}
               style={{
                 minWidth: embedded ? "80px" : "100px",
@@ -509,7 +419,6 @@ const ProductApplication = ({
                 cursor: "pointer",
                 transition: "all 0.3s ease",
                 wordBreak: "break-word",
-                hyphens: "auto",
                 display: "flex",
                 flexDirection: "column",
                 alignItems: "center",
@@ -557,34 +466,20 @@ const ProductApplication = ({
       }}>
         <div style={{ width: "100%", overflowX: "auto" }}>{renderActiveSection()}</div>
 
-        {/* Navigation Buttons - make more compact for embedded */}
-        {activeSection !== "matchingPreferences" && (
-          <div className="action-buttons" style={{
-            display: "flex",
-            gap: embedded ? "8px" : "10px",
-            justifyContent: "space-between",
-            alignItems: "center",
-            marginTop: embedded ? "20px" : "30px",
-            padding: embedded ? "15px 0" : "20px 0",
-            borderTop: "1px solid #eee",
-            flexWrap: embedded ? "wrap" : "wrap",
-            width: "100%"
-          }}>
-            {activeSection !== sections[0].id && (
-              <button type="button" onClick={goToPreviousSection} className="btn btn-secondary" style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 5,
-                padding: embedded ? "8px 12px" : "10px 15px",
-                fontSize: embedded ? "0.8rem" : "clamp(0.8rem, 2vw, 1rem)",
-                minWidth: embedded ? "80px" : "100px",
-                justifyContent: "center"
-              }}>
-                <ChevronLeft size={embedded ? 14 : 16} /> Previous
-              </button>
-            )}
-
-            <button type="button" onClick={handleSaveSection} className="btn btn-secondary" style={{
+        {/* Navigation Buttons */}
+        <div className="action-buttons" style={{
+          display: "flex",
+          gap: embedded ? "8px" : "10px",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginTop: embedded ? "20px" : "30px",
+          padding: embedded ? "15px 0" : "20px 0",
+          borderTop: "1px solid #eee",
+          flexWrap: embedded ? "wrap" : "wrap",
+          width: "100%"
+        }}>
+          {activeSection !== sections[0].id && (
+            <button type="button" onClick={goToPreviousSection} className="btn btn-secondary" style={{
               display: "flex",
               alignItems: "center",
               gap: 5,
@@ -593,24 +488,36 @@ const ProductApplication = ({
               minWidth: embedded ? "80px" : "100px",
               justifyContent: "center"
             }}>
-              <Save size={embedded ? 14 : 16} /> Save
+              <ChevronLeft size={embedded ? 14 : 16} /> Previous
             </button>
+          )}
 
-            {activeSection !== sections[sections.length - 1].id && (
-              <button type="button" onClick={handleSaveAndContinue} className="btn btn-primary" style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 5,
-                padding: embedded ? "8px 12px" : "10px 15px",
-                fontSize: embedded ? "0.8rem" : "clamp(0.8rem, 2vw, 1rem)",
-                minWidth: embedded ? "120px" : "140px",
-                justifyContent: "center"
-              }}>
-                Save & Continue <ChevronRight size={embedded ? 14 : 16} />
-              </button>
-            )}
-          </div>
-        )}
+          <button type="button" onClick={handleSaveSection} className="btn btn-secondary" style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 5,
+            padding: embedded ? "8px 12px" : "10px 15px",
+            fontSize: embedded ? "0.8rem" : "clamp(0.8rem, 2vw, 1rem)",
+            minWidth: embedded ? "80px" : "100px",
+            justifyContent: "center"
+          }}>
+            <Save size={embedded ? 14 : 16} /> Save
+          </button>
+
+          {activeSection !== sections[sections.length - 1].id && (
+            <button type="button" onClick={handleSaveAndContinue} className="btn btn-primary" style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 5,
+              padding: embedded ? "8px 12px" : "10px 15px",
+              fontSize: embedded ? "0.8rem" : "clamp(0.8rem, 2vw, 1rem)",
+              minWidth: embedded ? "120px" : "140px",
+              justifyContent: "center"
+            }}>
+              Save & Continue <ChevronRight size={embedded ? 14 : 16} />
+            </button>
+          )}
+        </div>
       </div>
     </div>
   )
