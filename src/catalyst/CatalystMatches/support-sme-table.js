@@ -1,5 +1,3 @@
-"use client"
-
 import { useState, useEffect } from "react"
 import { BarChart3, MapPin, Calendar, Filter, X, Eye } from "lucide-react"
 import { db, auth, storage } from "../../firebaseConfig"
@@ -28,22 +26,22 @@ const getScoreColor = (score) => {
 
 const STATUS_TYPES = {
   // current labels
-  "New Application":  {  text: "text-blue-700"    },
-  "Application Sent": { text: "text-blue-700"    },
-  "Under Review":     {  text: "text-orange-700"  },
-  "In Review":        { text: "text-purple-700"  },
-  Evaluation:         {  text: "text-purple-700"  },
-  "Due Diligence":    { text: "text-indigo-700"  },
-  Shortlisted:        {  text: "text-green-700"   },
-  Decision:           { text: "text-yellow-700"  },
-  "Term Sheet":       {    text: "text-cyan-700"    },
-  Active:             {  text: "text-[#2d5016]"   },
-  Decline:            {    text: "text-red-700"     },
-  // legacy labels — map to same colours so old records render correctly
-  "Support Approved": {    text: "text-cyan-700"    },
-  "Active Support":   {  text: "text-[#2d5016]"   },
-  "Support Declined": { text: "text-red-700"     },
-  Rejected:           {     text: "text-red-700"     },
+  "New Application":  { bg: "bg-blue-100", text: "text-blue-700"    },
+  "Application Sent": { bg: "bg-blue-100", text: "text-blue-700"    },
+  "Under Review":     { bg: "bg-orange-100", text: "text-orange-700"  },
+  "In Review":        { bg: "bg-purple-100", text: "text-purple-700"  },
+  Evaluation:         { bg: "bg-purple-100", text: "text-purple-700"  },
+  "Due Diligence":    { bg: "bg-indigo-100", text: "text-indigo-700"  },
+  Shortlisted:        { bg: "bg-green-100", text: "text-green-700"   },
+  Decision:           { bg: "bg-yellow-100", text: "text-yellow-700"  },
+  "Term Sheet":       { bg: "bg-cyan-100", text: "text-cyan-700"    },
+  Active:             { bg: "bg-green-100", text: "text-[#2d5016]"   },
+  Decline:            { bg: "bg-red-100", text: "text-red-700"     },
+  // legacy labels
+  "Support Approved": { bg: "bg-cyan-100", text: "text-cyan-700"    },
+  "Active Support":   { bg: "bg-green-100", text: "text-[#2d5016]"   },
+  "Support Declined": { bg: "bg-red-100", text: "text-red-700"     },
+  Rejected:           { bg: "bg-red-100", text: "text-red-700"     },
 }
 const getStatusClasses = (status) => STATUS_TYPES[status] || { bg: "bg-gray-100", text: "text-gray-600" }
 
@@ -57,7 +55,7 @@ const PIPELINE_STAGES = {
   "TERM SHEET":       { label: "Term Sheet",        next: "Active"           },
   ACTIVE:             { label: "Active",            next: "N/A"              },
   DECLINE:            { label: "Decline",           next: "N/A"              },
-  // legacy — keep next-stage pointers so old records still advance correctly
+  // legacy
   "SUPPORT APPROVED": { label: "Support Approved",  next: "Active"           },
   "ACTIVE SUPPORT":   { label: "Active Support",    next: "N/A"              },
   "SUPPORT DECLINED": { label: "Support Declined",  next: "N/A"              },
@@ -66,7 +64,6 @@ const getNextStage = (stage) => {
   if (stage?.toUpperCase() === "TERM SHEET") return "Active/Decline"
   return PIPELINE_STAGES[stage?.toUpperCase()]?.next || "N/A"
 }
-
 
 // ─── TruncatedText ─────────────────────────────────────────────────────────────
 const TruncatedText = ({ text, maxLines = 2, maxLength = 25 }) => {
@@ -119,9 +116,9 @@ const TableSkeleton = () => (
               <td key={col} className="py-1.5 px-0.5 border-r border-lightTan align-top">
                 <div className={`h-3 rounded bg-shimmer-light bg-shimmer ${["animate-shimmer", "animate-shimmer-d1", "animate-shimmer-d2", "animate-shimmer-d3", "animate-shimmer-d4", "animate-shimmer-d5"][col % 6]
                   } ${col === 0 ? "w-3/4" : col % 3 === 0 ? "w-1/2" : "w-5/6"}`} />
-              </td>
+               </td>
             ))}
-          </tr>
+           </tr>
         ))}
       </tbody>
     </table>
@@ -334,30 +331,14 @@ if (!stageFilter) { setSmes(mapped); onSMEsLoaded?.(mapped); return }
       application: ["new application", "application sent"],
       review:      ["under review", "in review", "evaluation"],
       approved:    ["due diligence", "shortlisted"],
-      // kept for any legacy pipeline cards that still emit "supported"
       supported:   ["support approved"],
       funding:     ["decision"],
-      // new: "term sheet"
       termsheet:   ["term sheet"],
-      // new: "active" | old: "active support", "support approved"
       active:      ["active", "active support", "support approved"],
-      // new: "decline" | old: "support declined", "rejected", "withdrawn", "declined"
       rejected:    ["decline", "support declined", "rejected", "withdrawn", "declined"],
     }
-    const allOtherStages = [
-      ...stageMapping.application,
-      ...stageMapping.review,
-      ...stageMapping.approved,
-      ...stageMapping.supported,
-      ...stageMapping.funding,
-      ...stageMapping.active,
-      ...stageMapping.termsheet,
-      ...stageMapping.closed,
-      ...stageMapping.rejected,
-    ]
     let filtered
     if (stageFilter === "initial") {
-      // "Matching" card = ALL applications (pipeline.initial === total count)
       filtered = mapped
     } else {
       const valid = stageMapping[stageFilter] || []
@@ -367,9 +348,6 @@ if (!stageFilter) { setSmes(mapped); onSMEsLoaded?.(mapped); return }
       )
     }
    setSmes([...filtered].sort((a, b) => b.matchPercentage - a.matchPercentage))
-    // Always pass the full mapped set to the parent for notification tracking.
-    // Passing the filtered subset caused the notification system to treat
-    // disappearing IDs (due to filtering) as stage-changes → spurious badges.
     onSMEsLoaded?.(mapped)
   }, [enriched, stageFilter])
 
@@ -400,7 +378,8 @@ if (!stageFilter) { setSmes(mapped); onSMEsLoaded?.(mapped); return }
   }, [smes])
 
   const renderSupportAgreementStatus = (sme) => {
-    const currentStage = updatedStages[`${sme.id}_${sme.programIndex}`] || sme.pipelineStage
+    const stageKey = `${sme.id}_${sme.programIndex}`
+    const currentStage = updatedStages[stageKey] || sme.pipelineStage
     if (!["Term Sheet", "Support Approved"].includes(currentStage)) return null
 
     const status = supportAgreementStatuses[sme.file_id]
@@ -433,6 +412,7 @@ if (!stageFilter) { setSmes(mapped); onSMEsLoaded?.(mapped); return }
 
     return null
   }
+  
   // ── Filter helpers ─────────────────────────────────────────────────────────
   const handleFilterChange = (key, value) => setLocalFilters((prev) => ({ ...prev, [key]: value }))
   const clearFilters = () => setLocalFilters({ location: "", matchScore: 50, minFunding: "", maxFunding: "", instruments: [], stages: [], sectors: [], supportTypes: [], smeType: "", sortBy: "" })
@@ -504,11 +484,20 @@ if (!stageFilter) { setSmes(mapped); onSMEsLoaded?.(mapped); return }
           })
         } catch (e) { console.error("Error creating calendar event:", e) }
       }
+      
+      // Update local state with the new stage
+      const stageKey = `${smeId}_${programIndex}`
+      setUpdatedStages((prev) => ({ ...prev, [stageKey]: nextStage }))
+      
       setSmes((prev) => {
         const next = prev.map((s) =>
           s.id === smeId && s.programIndex === programIndex
             ? {
-              ...s, status: nextStage, nextStage: computedNextStage, pipelineStage: nextStage,
+              ...s, 
+              status: nextStage, 
+              nextStage: computedNextStage, 
+              pipelineStage: nextStage,
+              currentStatus: nextStage,
               ...(message && { lastMessage: message }),
               ...(stageFields.showMeeting && { meetingDetails: { time: meetingTime, location: meetingLocation, purpose: meetingPurpose } }),
               ...(updateData.availableDates && { availableDates: updateData.availableDates })
@@ -518,10 +507,11 @@ if (!stageFilter) { setSmes(mapped); onSMEsLoaded?.(mapped); return }
         onSMEsLoaded?.(next)
         return next
       })
-      setUpdatedStages((prev) => ({ ...prev, [`${smeId}_${programIndex}`]: nextStage }))
-      setSmes((current) => {
-        onStageOverride?.(
-          current.map(s => ({
+      
+      // Call onStageOverride to notify parent component about stage changes
+      if (onStageOverride) {
+        onStageOverride(
+          smes.map(s => ({
             smeId: s.id,
             programIndex: s.programIndex,
             pipelineStage: s.id === smeId && s.programIndex === programIndex
@@ -532,13 +522,13 @@ if (!stageFilter) { setSmes(mapped); onSMEsLoaded?.(mapped); return }
               : (s.currentStatus || s.pipelineStage),
           }))
         )
-        return current
-      })
+      }
+      
       setNotification({ type: "success", message: `Application status updated to ${nextStage} successfully` })
       setShowStageModal(false)
       resetStageModal()
+      
       const subject = `Update: ${nextStage} Stage for Your Application`
-      // Replace the content building section with this more detailed version:
       let content = `Dear ${selectedSMEForStage.name},\n\nWe are pleased to inform you that your application has progressed to the "${nextStage}" stage.\n\n${message}`
 
      if (stageFields.showMeeting && meetingLocation && meetingPurpose) {
@@ -608,13 +598,12 @@ useEffect(() => {
       
       snapshot.docs.forEach(doc => {
         const data = doc.data()
-        // Use compound key of smeId and programIndex to track per SME per program
         const smeKey = `${data.smeId}_${data.programIndex}`
         sentMap[smeKey] = true
       })
       
       setSentNDAs(sentMap)
-      console.log("Loaded sent NDAs:", sentMap) // Debug log
+      console.log("Loaded sent NDAs:", sentMap)
     } catch (error) {
       console.error("Error loading sent NDAs:", error)
     }
@@ -623,7 +612,7 @@ useEffect(() => {
   if (auth.currentUser) {
     loadSentNDAs()
   }
-}, []) // Run once on mount
+}, [])
 
   // ── Modal helpers ──────────────────────────────────────────────────────────
   const handleViewDetails = (sme) => {
@@ -698,15 +687,12 @@ useEffect(() => {
       return input
     }
     const checkGeographicMatch = () => {
-      // programBriefMatchingPreference is the source of truth for geo;
-      // fall back to generalMatchingPreference for older records
       const briefPrefs = catalystFormData?.programBriefMatchingPreference || {}
       const generalPrefs = catalystFormData?.generalMatchingPreference || {}
 
       const accelGeoFocus = toArray(briefPrefs.geographicFocus?.length ? briefPrefs.geographicFocus : generalPrefs.geographicFocus)
         .map(s => s.toLowerCase().trim())
 
-      // Global / regional → always match
       if (accelGeoFocus.includes("global")) return true
       if (
         accelGeoFocus.includes("regional_emea") ||
@@ -714,7 +700,6 @@ useEffect(() => {
         accelGeoFocus.includes("regional_apac")
       ) return true
 
-      // ── SME location fields ──
       const smeCountries = toArray(smeProfileData.entityOverview?.operatingCountries)
         .map(s => s.toLowerCase().trim())
       const smeLocationFallback = (smeProfileData.entityOverview?.location || "").toLowerCase().trim()
@@ -723,7 +708,6 @@ useEffect(() => {
       const smeProvinceFallback = (smeProfileData.entityOverview?.province || "").toLowerCase().trim()
 
       if (accelGeoFocus.includes("country_specific")) {
-        // selectedCountries lives on programBriefMatchingPreference, fall back to generalMatchingPreference
         const accelCountries = toArray(
           briefPrefs.selectedCountries?.length ? briefPrefs.selectedCountries : generalPrefs.selectedCountries
         ).map(s => s.toLowerCase().trim().replace(/[_\-\s]+/g, ""))
@@ -855,7 +839,6 @@ const accelSupportSubtype  = programData.supportFocusSubtype || matchPrefs.suppo
     breakdown.revenueThreshold.matched = revenueMatch
     if (revenueMatch) { breakdown.revenueThreshold.score = 12.5; matched++ }
 
-    // Replace the final return with this:
 const totalScore = Object.values(breakdown).reduce((sum, b) => sum + (b.score || 0), 0)
 
 return { score: Math.round(totalScore), breakdown }
@@ -878,6 +861,7 @@ return { score: Math.round(totalScore), breakdown }
   }
 
   const currentStageFields = getStageFields(nextStage)
+  
 // ── Share NDA function ────────────────────────────────────────────────────────
 const handleShareNDA = async (sme) => {
   const smeKey = `${sme.id}_${sme.programIndex}`
@@ -908,7 +892,6 @@ const handleShareNDA = async (sme) => {
     console.log("NDA document data:", ndaData)
     console.log("PDF URL:", ndaData.pdfUrl)
 
-    // Check for pdfUrl
     if (!ndaData.pdfUrl) {
       console.error("No pdfUrl found in NDA document. Available fields:", Object.keys(ndaData))
       setNotification({ 
@@ -918,7 +901,6 @@ const handleShareNDA = async (sme) => {
       return
     }
 
-    // Create NDA share record
     const shareData = {
       catalystId: user.uid,
       catalystName: user.displayName || "Catalyst",
@@ -937,7 +919,6 @@ const handleShareNDA = async (sme) => {
       applicationId: `${user.uid}_${sme.id}_${sme.programIndex}`
     }
 
-    // Check if NDA already shared with this specific SME
     const existingShareQuery = query(
       collection(db, "shared_nda"),
       where("catalystId", "==", user.uid),
@@ -960,7 +941,6 @@ const handleShareNDA = async (sme) => {
       console.log("Updated existing share record for SME:", sme.id)
     }
 
-    // Send notification to SME
     await addDoc(collection(db, "messages"), {
       to: sme.id,
       from: user.uid,
@@ -997,6 +977,7 @@ const handleShareNDA = async (sme) => {
     setIsNDASharing(prev => ({ ...prev, [smeKey]: false }))
   }
 }
+
   // ────────────────────────────────────────────────────────────────────────────
   return (
     <div className="p-5 w-full max-w-full overflow-x-hidden">
@@ -1070,10 +1051,12 @@ const handleShareNDA = async (sme) => {
                 </tr>
               ) : (
                 smes.map((sme) => {
-                  const currentStatus = updatedStages[sme.id] || sme.pipelineStage || sme.currentStatus
+                  // FIXED: Use composite key with programIndex for stage lookup
+                  const stageKey = `${sme.id}_${sme.programIndex}`
+                  const currentStatus = updatedStages[stageKey] || sme.pipelineStage || sme.currentStatus
                   const statusClasses = getStatusClasses(currentStatus)
                   return (
-                    <tr key={`${sme.id}_${sme.programIndex}`} className="border-b border-lightTan hover:bg-cream/50">
+                    <tr key={stageKey} className="border-b border-lightTan hover:bg-cream/50">
                       {/* Name */}
                       <td className={TD}>
                         <button
@@ -1140,8 +1123,8 @@ const handleShareNDA = async (sme) => {
                             {sme.bigScore}%<BarChart3 size={8} />
                           </button>
                         </div>
-                      </td>
-                {/* Status */}
+                       </td>
+                      {/* Status */}
                       <td className={TD}>
                         <div className="flex items-center flex-wrap gap-0.5">
                           <span className={`${statusClasses.bg} ${statusClasses.text} py-0.5 px-1 rounded text-[0.65rem] font-medium inline-block whitespace-nowrap`}>
@@ -1149,45 +1132,44 @@ const handleShareNDA = async (sme) => {
                           </span>
                           {renderSupportAgreementStatus(sme)}
                         </div>
-                      </td>
-                    
-                   {/* Action */}
-<td className={`${TD} border-r-0`}>
-  <div className="flex flex-col gap-1"> {/* Added flex column with gap */}
-    <button
-      onClick={() => handleStageAction(sme)}
-      className="px-1.5 py-0.5 bg-mediumBrown text-white border-none rounded cursor-pointer text-[0.7rem] font-medium w-full whitespace-nowrap hover:bg-darkBrown transition-colors"
-    >
-      Set Stage
-    </button>
+                       </td>
+                      {/* Action */}
+                      <td className={`${TD} border-r-0`}>
+                        <div className="flex flex-col gap-1">
+                          <button
+                            onClick={() => handleStageAction(sme)}
+                            className="px-1.5 py-0.5 bg-mediumBrown text-white border-none rounded cursor-pointer text-[0.7rem] font-medium w-full whitespace-nowrap hover:bg-darkBrown transition-colors"
+                          >
+                            Set Stage
+                          </button>
 
-    {/* Only show NDA button when stage is Evaluation */}
-    {(currentStatus === "Evaluation") && (
-      (() => {
-        const smeKey = `${sme.id}_${sme.programIndex}`
-        const isSharing = isNDASharing[smeKey]
-        const isSent = sentNDAs[smeKey]
-        
-        return isSent ? (
-          <button
-            disabled
-            className="px-1.5 py-0.5 bg-gray-400 text-white border-none rounded cursor-not-allowed text-[0.7rem] font-medium w-full whitespace-nowrap opacity-60"
-          >
-            NDA Sent
-          </button>
-        ) : (
-          <button
-            onClick={() => handleShareNDA(sme)}
-            disabled={isSharing}
-            className="px-1.5 py-0.5 bg-mediumBrown text-white border-none rounded cursor-pointer text-[0.7rem] font-medium w-full whitespace-nowrap hover:bg-darkBrown transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isSharing ? "Sharing..." : "Share NDA"}
-          </button>
-        )
-      })()
-    )}
-  </div>
-</td>
+                          {/* Only show NDA button when stage is Evaluation */}
+                          {(currentStatus === "Evaluation") && (
+                            (() => {
+                              const smeKey = `${sme.id}_${sme.programIndex}`
+                              const isSharing = isNDASharing[smeKey]
+                              const isSent = sentNDAs[smeKey]
+                              
+                              return isSent ? (
+                                <button
+                                  disabled
+                                  className="px-1.5 py-0.5 bg-gray-400 text-white border-none rounded cursor-not-allowed text-[0.7rem] font-medium w-full whitespace-nowrap opacity-60"
+                                >
+                                  NDA Sent
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => handleShareNDA(sme)}
+                                  disabled={isSharing}
+                                  className="px-1.5 py-0.5 bg-mediumBrown text-white border-none rounded cursor-pointer text-[0.7rem] font-medium w-full whitespace-nowrap hover:bg-darkBrown transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                  {isSharing ? "Sharing..." : "Share NDA"}
+                                </button>
+                              )
+                            })()
+                          )}
+                        </div>
+                      </td>
                     </tr>
                   )
                 })
@@ -1247,19 +1229,17 @@ const handleShareNDA = async (sme) => {
         </div>
       )}
 
-    {/* ── BIG Score Modal ─────────────────────────────────────────────────── */}
+      {/* ── BIG Score Modal ─────────────────────────────────────────────────── */}
       {selectedSME && modalType === "bigScore" && (
         <div className={MODAL_OVERLAY} onClick={resetModal}>
           <div
             className="relative bg-white rounded-[24px] w-[95%] max-w-[520px] max-h-[90vh] overflow-y-auto shadow-[0_32px_80px_rgba(62,39,35,0.45)]"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* ── Header band ── */}
             <div
               className="relative rounded-t-[24px] px-8 pt-8 pb-6 overflow-hidden"
               style={{ background: "linear-gradient(135deg, #140905 0%, #6D4C41 60%, #8D6E63 100%)" }}
             >
-              {/* decorative circles */}
               <div className="absolute -top-6 -right-6 w-32 h-32 rounded-full bg-white/5 pointer-events-none" />
               <div className="absolute top-4 -right-2 w-16 h-16 rounded-full bg-white/5 pointer-events-none" />
 
@@ -1272,7 +1252,6 @@ const handleShareNDA = async (sme) => {
                   <p className="text-[#C4A882] text-sm mt-1 m-0">Support Readiness Breakdown</p>
                 </div>
 
-                {/* Total score ring */}
                 <div className="flex flex-col items-center flex-shrink-0 ml-4">
                   <div
                     className="w-[72px] h-[72px] rounded-full flex items-center justify-center shadow-[0_4px_20px_rgba(0,0,0,0.4)]"
@@ -1296,7 +1275,6 @@ const handleShareNDA = async (sme) => {
                 </div>
               </div>
 
-              {/* close button */}
               <button
                 onClick={resetModal}
                 className="absolute top-4 right-4 w-7 h-7 rounded-full bg-white/10 border-none cursor-pointer flex items-center justify-center text-white/70 hover:bg-white/20 hover:text-white transition-all text-base z-20"
@@ -1305,7 +1283,6 @@ const handleShareNDA = async (sme) => {
               </button>
             </div>
 
-            {/* ── Score cards ── */}
             <div className="px-8 py-6 flex flex-col gap-4">
               {(() => {
                 const META = {
@@ -1323,7 +1300,6 @@ const handleShareNDA = async (sme) => {
                       key={key}
                       className="rounded-2xl overflow-hidden border border-[#e8ddd5] shadow-sm hover:shadow-md transition-shadow"
                     >
-                      {/* card top strip */}
                       <div className={`bg-gradient-to-r ${meta.grad} px-5 py-3 flex justify-between items-center`}>
                         <div className="flex items-center gap-2">
                           <span className="text-base">{meta.icon}</span>
@@ -1335,7 +1311,6 @@ const handleShareNDA = async (sme) => {
                         <span className="text-white text-[22px] font-extrabold leading-none">{score}%</span>
                       </div>
 
-                      {/* progress bar */}
                       <div className="bg-[#fdf8f4] px-5 py-3">
                         <div className="flex justify-between text-[10px] text-[#9e7b65] mb-1.5 font-medium">
                           <span>0%</span>
@@ -1361,7 +1336,6 @@ const handleShareNDA = async (sme) => {
               })()}
             </div>
 
-            {/* ── Footer ── */}
             <div className="px-8 pb-7 flex justify-end">
               <button
                 onClick={resetModal}
@@ -1441,7 +1415,6 @@ const handleShareNDA = async (sme) => {
               <p className="text-base text-gray-500 m-0">{selectedSMEForStage.name}</p>
             </div>
 
-            {/* Stage select */}
             <div className="mb-6">
               <label className={LABEL}>Select Next Stage:</label>
               <select
@@ -1457,7 +1430,6 @@ const handleShareNDA = async (sme) => {
 
             {nextStage && (
               <>
-                {/* Message */}
                 {currentStageFields.showMessage && (
                   <div className="mb-6">
                     <label className={LABEL}>Message to SMSE:</label>
@@ -1471,7 +1443,6 @@ const handleShareNDA = async (sme) => {
                   </div>
                 )}
 
-                {/* Availability */}
                 {currentStageFields.showAvailability && (
                   <div className="bg-[#f8f5f3] p-5 rounded-xl mb-6">
                     <div className="flex justify-between items-center mb-4">
@@ -1504,7 +1475,6 @@ const handleShareNDA = async (sme) => {
                   </div>
                 )}
 
-                {/* Meeting details */}
                 {currentStageFields.showMeeting && (
                   <div className="bg-[#f8f5f3] p-5 rounded-xl mb-6">
                     <h4 className="text-base font-semibold text-textBrown mb-4 m-0">Schedule Meeting</h4>
@@ -1531,7 +1501,6 @@ const handleShareNDA = async (sme) => {
                   </div>
                 )}
 
-                {/* Term sheet upload */}
                 {currentStageFields.showTermSheet && (
                   <div className="mb-6">
                     <label className={LABEL}>Support Agreement Upload:</label>
@@ -1571,7 +1540,6 @@ const handleShareNDA = async (sme) => {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[1200]" onClick={() => setShowMatchBreakdown(false)}>
           <div className="bg-white rounded-xl max-w-[800px] w-[95%] max-h-[90vh] overflow-y-auto shadow-[0_20px_40px_rgba(0,0,0,0.15)]"
             onClick={(e) => e.stopPropagation()}>
-            {/* Header */}
             <div className="flex justify-between items-center px-6 py-5 border-b border-lightTan bg-[#F5EBE0]">
               <h3 className="m-0 text-[1.1rem] font-semibold text-[#5D2A0A]">
                 Match Breakdown — {selectedAcceleratorForBreakdown.name}
@@ -1579,9 +1547,7 @@ const handleShareNDA = async (sme) => {
               <button onClick={() => setShowMatchBreakdown(false)} className="bg-transparent border-none text-[1.5rem] cursor-pointer text-[#5D2A0A] hover:opacity-70">✖</button>
             </div>
 
-            {/* Body */}
             <div className="p-6">
-              {/* Overall score */}
               <div className="text-center mb-8 pb-4 border-b-2 border-lightTan">
                 <div className="text-5xl font-bold mb-2"
                   style={{ color: selectedAcceleratorForBreakdown.matchPercentage >= 80 ? "#388E3C" : selectedAcceleratorForBreakdown.matchPercentage >= 60 ? "#F57C00" : "#D32F2F" }}>
@@ -1590,7 +1556,6 @@ const handleShareNDA = async (sme) => {
                 <p className="text-base text-lightBrown m-0">Overall Match Score</p>
               </div>
 
-              {/* Breakdown cards */}
               <div className="grid gap-4 mb-8" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(350px, 1fr))" }}>
                 {selectedAcceleratorForBreakdown.matchBreakdown &&
                   Object.entries(selectedAcceleratorForBreakdown.matchBreakdown).map(([key, breakdown]) => {
@@ -1624,7 +1589,6 @@ const handleShareNDA = async (sme) => {
               </div>
             </div>
 
-            {/* Footer */}
             <div className="flex justify-end px-6 py-5 border-t border-lightTan">
               <button onClick={() => setShowMatchBreakdown(false)}
                 className="bg-[#F5EBE0] text-[#5D2A0A] border-none px-4 py-2 rounded-md cursor-pointer text-[0.8rem] hover:bg-lightTan transition-colors">
