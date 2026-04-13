@@ -1185,6 +1185,7 @@ const PipelineTable = ({
   isInvestorView,
   selectedYear,
   onAddData,
+  onDealChange, // Add callback for when deals change
 }) => {
   const [deals, setDeals] = useState([]);
   const [filteredDeals, setFilteredDeals] = useState([]);
@@ -1237,6 +1238,10 @@ const PipelineTable = ({
       });
       setDeals(dealsData);
       setFilteredDeals(dealsData);
+      // Notify parent component that deals have changed
+      if (onDealChange) {
+        onDealChange(dealsData);
+      }
     } catch (error) {
       console.error("Error loading deals:", error);
     } finally {
@@ -2091,6 +2096,12 @@ const PipelineVisibility = ({
           "up",
         )}
       </KpiGrid2>
+      <PipelineTable
+        currentUser={currentUser}
+        isInvestorView={isInvestorView}
+        selectedYear={toDate ? parseInt(toDate.split("-")[0]) : new Date().getFullYear()}
+        onAddData={onAddData}
+      />
       <CalculationModal
         isOpen={showCalculationModal}
         onClose={() => setShowCalculationModal(false)}
@@ -2286,12 +2297,6 @@ const PipelineSufficiency = ({
           "up",
         )}
       </KpiGrid2>
-      <PipelineTable
-        currentUser={currentUser}
-        isInvestorView={isInvestorView}
-        selectedYear={toYear}
-        onAddData={onAddData}
-      />
       <CalculationModal
         isOpen={showCalculationModal}
         onClose={() => setShowCalculationModal(false)}
