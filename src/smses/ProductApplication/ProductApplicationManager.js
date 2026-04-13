@@ -11,49 +11,49 @@ const ProductApplicationManager = ({ embedded = false, onNavigateToMatches }) =>
   const [selectedApplicationId, setSelectedApplicationId] = useState(null)
   const [selectedApplicationData, setSelectedApplicationData] = useState(null)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
+  // When true, ProductApplication skips the auto-summary even if status==='submitted'
+  const [forceEdit, setForceEdit] = useState(false)
 
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged((user) => {
       setIsAuthenticated(!!user)
-      console.log("🔐 ProductApplicationManager - Auth:", user?.uid || "No user")
     })
     return () => unsubscribe()
   }, [])
 
   const handleViewSummary = (applicationId, applicationData) => {
-    console.log("📋 Manager - View Summary:", applicationId)
     setSelectedApplicationId(applicationId)
     setSelectedApplicationData(applicationData)
+    setForceEdit(false)
     setCurrentView('summary')
   }
 
   const handleEditApplication = (applicationId) => {
-    console.log("✏️ Manager - Edit:", applicationId)
     setSelectedApplicationId(applicationId)
     setSelectedApplicationData(null)
+    setForceEdit(true)          // skip auto-summary inside ProductApplication
     setCurrentView('edit')
   }
 
   const handleCreateNew = () => {
-    console.log("🆕 Manager - Create New")
     setSelectedApplicationId(null)
     setSelectedApplicationData(null)
+    setForceEdit(false)
     setCurrentView('edit')
   }
 
   const handleBackToList = () => {
-    console.log("⬅️ Manager - Back to List")
     setCurrentView('list')
     setSelectedApplicationId(null)
     setSelectedApplicationData(null)
+    setForceEdit(false)
   }
 
+  // Called from ApplicationSummary's "Edit Application" button
   const handleEditFromSummary = () => {
-    console.log("✏️ Manager - Edit from Summary")
+    setForceEdit(true)          // ← this is what was missing
     setCurrentView('edit')
   }
-
-  console.log("🎯 Manager - View:", currentView, "AppId:", selectedApplicationId)
 
   if (!isAuthenticated) {
     return (
@@ -64,7 +64,6 @@ const ProductApplicationManager = ({ embedded = false, onNavigateToMatches }) =>
     )
   }
 
-  // RENDER BASED ON CURRENT VIEW
   if (currentView === 'list') {
     return (
       <ApplicationsList
@@ -81,6 +80,7 @@ const ProductApplicationManager = ({ embedded = false, onNavigateToMatches }) =>
       <ProductApplication
         embedded={embedded}
         applicationId={selectedApplicationId}
+        forceEdit={forceEdit}               // ← new prop
         onNavigateBack={handleBackToList}
         onNavigateToMatches={onNavigateToMatches || handleBackToList}
         onNavigateToDashboard={handleBackToList}
@@ -99,7 +99,6 @@ const ProductApplicationManager = ({ embedded = false, onNavigateToMatches }) =>
     )
   }
 
-  // Fallback
   return (
     <ApplicationsList
       onViewSummary={handleViewSummary}
