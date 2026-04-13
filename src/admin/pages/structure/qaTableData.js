@@ -25,7 +25,7 @@ export const CATEGORY_OPTIONS    = ['Security', 'Unit Tests', 'Integration Tests
 export const STATUS_OPTIONS      = ['Pass', 'Fail', 'Not started', 'In progress', 'Blocked'];
 export const ACTION_STATUS_OPTIONS = ['Done', 'Not started', 'In progress'];
 export const TEST_TYPE_OPTIONS   = ['Security', 'Integration', 'Functionality', 'Performance'];
-export const ASSIGNEE_OPTIONS    = ['Lindelani', 'Nhlanhla Msomi', 'Makha', 'Lerato Nama', 'Molefi', 'Owami Ngobese', 'Lethabo Mashimby'];
+export const ASSIGNEE_OPTIONS    = ['Lindelani', 'Nhlanhla Msomi', 'Makha', 'Lerato Nama', 'Molefi', 'Owami Ngobese', 'Lethabo', 'Sbonelo'];
 
 // ============================================================================
 // COLOR MAPS
