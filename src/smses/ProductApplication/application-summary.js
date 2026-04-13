@@ -1,9 +1,10 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import {
   ChevronDown,
   ChevronUp,
+  ChevronLeft,
   Edit,
   FileText,
   Package,
@@ -13,12 +14,48 @@ import {
   MapPin,
   Calendar,
 } from "lucide-react"
+import { doc, getDoc } from "firebase/firestore"
+import { db, auth } from "../../firebaseConfig"
 
-const ApplicationSummary = ({ data, onEdit }) => {
+const ApplicationSummary = ({ data: propData, onEdit, applicationId, onBack }) => {
   const [expandedSections, setExpandedSections] = useState({
     matchingPreferences: false,
     requestOverview: false,
   })
+  const [loading, setLoading] = useState(!propData && !!applicationId)
+  const [applicationData, setApplicationData] = useState(propData || null)
+
+  console.log("📄 Summary - AppId:", applicationId, "Has data:", !!applicationData)
+
+  useEffect(() => {
+    if (applicationId && !propData) {
+      loadApplicationData(applicationId)
+    } else if (propData) {
+      setApplicationData(propData)
+      setLoading(false)
+    }
+  }, [applicationId, propData])
+
+  const loadApplicationData = async (appId) => {
+    try {
+      setLoading(true)
+      console.log("📡 Summary - Loading:", appId)
+      
+      const docRef = doc(db, "productApplications", appId)
+      const docSnap = await getDoc(docRef)
+      
+      if (docSnap.exists()) {
+        console.log("✅ Summary - Data loaded")
+        setApplicationData(docSnap.data())
+      } else {
+        console.warn("⚠️ Summary - Not found")
+      }
+    } catch (err) {
+      console.error("❌ Summary - Error:", err)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const toggleSection = (section) => {
     setExpandedSections((prev) => ({
@@ -43,7 +80,7 @@ const ApplicationSummary = ({ data, onEdit }) => {
   const formatCurrency = (value) => {
     if (!value) return "R 0"
     // Remove existing 'R ' prefix if present
-    const cleanValue = value.toString().replace(/R\s?/g, '').replace(/,/g, '');
+    const cleanValue = value.toString().replace(/R\s?/g, '').replace(/,/g, '')
     return new Intl.NumberFormat("en-ZA", {
       style: "currency",
       currency: "ZAR",
@@ -53,6 +90,72 @@ const ApplicationSummary = ({ data, onEdit }) => {
 
   const handleEdit = () => {
     if (onEdit) onEdit()
+  }
+
+  // Loading state
+  if (loading) {
+    return (
+      <div style={{
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        minHeight: '400px',
+        background: 'linear-gradient(135deg, #faf7f2 0%, #f5f0e1 50%, #f0e6d9 100%)'
+      }}>
+        <div style={{ textAlign: 'center' }}>
+          <div className="loading-spinner" style={{
+            width: '40px',
+            height: '40px',
+            border: '3px solid rgba(166, 124, 82, 0.1)',
+            borderTopColor: '#a67c52',
+            borderRadius: '50%',
+            animation: 'spin 0.8s linear infinite',
+            margin: '0 auto 16px'
+          }} />
+          <p style={{ color: '#7d5a50' }}>Loading application summary...</p>
+        </div>
+        <style>{`
+          @keyframes spin {
+            to { transform: rotate(360deg); }
+          }
+        `}</style>
+      </div>
+    )
+  }
+
+  // No data state
+  if (!applicationData) {
+    return (
+      <div style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        minHeight: '400px',
+        background: 'linear-gradient(135deg, #faf7f2 0%, #f5f0e1 50%, #f0e6d9 100%)',
+        padding: '40px',
+        textAlign: 'center'
+      }}>
+        <FileText size={48} style={{ color: '#c8b6a6', marginBottom: '16px' }} />
+        <h3 style={{ color: '#4a352f', marginBottom: '8px' }}>No Application Data</h3>
+        <p style={{ color: '#6b7280', marginBottom: '20px' }}>Unable to load application details.</p>
+        {onBack && (
+          <button
+            onClick={onBack}
+            style={{
+              padding: '10px 20px',
+              background: '#a67c52',
+              color: 'white',
+              border: 'none',
+              borderRadius: '8px',
+              cursor: 'pointer'
+            }}
+          >
+            Go Back
+          </button>
+        )}
+      </div>
+    )
   }
 
   return (
@@ -74,7 +177,6 @@ const ApplicationSummary = ({ data, onEdit }) => {
             max-height: 1000px;
           }
         }
-           
       `}</style>
 
       <div
@@ -84,7 +186,6 @@ const ApplicationSummary = ({ data, onEdit }) => {
           minHeight: "100vh",
           width: "100%",
           background: "linear-gradient(135deg, #faf7f2 0%, #f5f0e1 50%, #f0e6d9 100%)",
-       
           boxSizing: "border-box",
           transition: "all 0.3s ease",
         }}
@@ -95,6 +196,37 @@ const ApplicationSummary = ({ data, onEdit }) => {
             maxWidth: "none",
           }}
         >
+          {/* Back Button */}
+          {onBack && (
+            <button
+              onClick={onBack}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '12px 0',
+                marginBottom: '16px',
+                background: 'none',
+                border: 'none',
+                color: '#a67c52',
+                cursor: 'pointer',
+                fontSize: '15px',
+                fontWeight: '500',
+                transition: 'all 0.2s ease',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.gap = '12px'
+                e.currentTarget.style.color = '#7d5a50'
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.gap = '8px'
+                e.currentTarget.style.color = '#a67c52'
+              }}
+            >
+              <ChevronLeft size={20} /> Back to Applications
+            </button>
+          )}
+
           {/* Header */}
           <div
             style={{
@@ -264,37 +396,39 @@ const ApplicationSummary = ({ data, onEdit }) => {
                     }}
                   >
                     {[
-                      { label: "Preferred B-BBEE Level", value: data?.matchingPreferences?.bbeeLevel, icon: FileText },
+                      { label: "Preferred B-BBEE Level", value: applicationData?.matchingPreferences?.bbeeLevel || "Not specified", icon: FileText },
                       {
                         label: "Ownership Preferences",
-                        value: formatArray(data?.matchingPreferences?.ownershipPrefs),
+                        value: formatArray(applicationData?.matchingPreferences?.ownershipPrefs),
                         icon: Users,
                       },
                       {
                         label: "Sector Experience Required",
-                        value: data?.matchingPreferences?.sectorExperience,
+                        value: applicationData?.matchingPreferences?.sectorExperience || "Not specified",
                         icon: Package,
                       },
-                      { label: "Type of Engagement", value: data?.matchingPreferences?.engagementType, icon: Users },
+                      { label: "Type of Engagement", value: applicationData?.matchingPreferences?.engagementType === 'Other' 
+                        ? applicationData?.matchingPreferences?.engagementTypeOther || 'Other'
+                        : applicationData?.matchingPreferences?.engagementType || "Not specified", icon: Users },
                       {
                         label: "Preferred Delivery Mode",
-                        value: formatArray(data?.matchingPreferences?.deliveryModes),
+                        value: formatArray(applicationData?.matchingPreferences?.deliveryModes),
                         icon: Package,
                       },
-                      { label: "Start Date", value: data?.matchingPreferences?.startDate, icon: Calendar },
-                      { label: "End Date", value: data?.matchingPreferences?.endDate, icon: Calendar },
-                      { label: "Location", value: data?.matchingPreferences?.location, icon: MapPin },
+                      { label: "Start Date", value: applicationData?.matchingPreferences?.startDate || "Not specified", icon: Calendar },
+                      { label: "End Date", value: applicationData?.matchingPreferences?.endDate || "Not specified", icon: Calendar },
+                      { label: "Location", value: applicationData?.matchingPreferences?.location || "Not specified", icon: MapPin },
                       {
                         label: "Budget Range",
-                        value: `${formatCurrency(data?.matchingPreferences?.minBudget)} to ${formatCurrency(data?.matchingPreferences?.maxBudget)}`,
+                        value: `${formatCurrency(applicationData?.matchingPreferences?.minBudget)} to ${formatCurrency(applicationData?.matchingPreferences?.maxBudget)}`,
                         icon: DollarSign,
                       },
                       {
                         label: "Linked to ESD/CSR Program",
                         value:
-                          data?.matchingPreferences?.esdProgram === null
+                          applicationData?.matchingPreferences?.esdProgram === null
                             ? "Not specified"
-                            : formatBoolean(data?.matchingPreferences?.esdProgram),
+                            : formatBoolean(applicationData?.matchingPreferences?.esdProgram),
                         icon: FileText,
                       },
                     ].map((item, i) => (
@@ -338,7 +472,7 @@ const ApplicationSummary = ({ data, onEdit }) => {
                             lineHeight: "1.4",
                           }}
                         >
-                          {item.value || "Not specified"}
+                          {item.value}
                         </span>
                       </div>
                     ))}
@@ -443,7 +577,7 @@ const ApplicationSummary = ({ data, onEdit }) => {
                         fontWeight: "400",
                       }}
                     >
-                      {data?.requestOverview?.purpose || "Not provided"}
+                      {applicationData?.requestOverview?.purpose || "Not provided"}
                     </p>
                   </div>
 
@@ -455,16 +589,16 @@ const ApplicationSummary = ({ data, onEdit }) => {
                     }}
                   >
                     {[
-                      { label: "Product/Service Categories", value: formatArray(data?.requestOverview?.categories), icon: Package },
+                      { label: "Product/Service Categories", value: formatArray(applicationData?.requestOverview?.categories), icon: Package },
                       {
                         label: "Specific Subcategories",
-                        value: formatArray(data?.requestOverview?.subcategories),
+                        value: formatArray(applicationData?.requestOverview?.subcategories),
                         icon: Package,
                       },
-                      { label: "Keywords / Specific Needs", value: data?.requestOverview?.keywords, icon: FileText },
+                      { label: "Keywords / Specific Needs", value: applicationData?.requestOverview?.keywords || "Not specified", icon: FileText },
                       {
                         label: "Scope of Work Files",
-                        value: formatFiles(data?.requestOverview?.scopeOfWorkFiles),
+                        value: formatFiles(applicationData?.requestOverview?.scopeOfWorkFiles),
                         icon: FileText,
                       },
                     ].map((item, i) => (
@@ -508,7 +642,7 @@ const ApplicationSummary = ({ data, onEdit }) => {
                             lineHeight: "1.4",
                           }}
                         >
-                          {item.value || "Not provided"}
+                          {item.value}
                         </span>
                       </div>
                     ))}

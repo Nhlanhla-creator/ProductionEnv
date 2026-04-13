@@ -248,6 +248,8 @@ import CatalystInvestments from "./catalyst/MyInvestment/MyInvestments"
 // Application Components
 import FundingApplication from "./smses/FundingApplication/FundingApplication"
 import ProductApplication from "./smses/ProductApplication/ProductApplication"
+// Add this import near your other application imports
+import ProductApplicationManager from "./smses/ProductApplication/ProductApplicationManager"
 import AdvisoryApplication from "./smses/AdvisorApplication/AdvisorApplication"
 
 // Matches Components
@@ -1056,9 +1058,10 @@ function App() {
         {/* Application Routes */}
         <Route path="/applications/funding" element={withProtection(FundingApplication, {}, renderSMERoute)} />
         <Route path="/applications/funding/:section" element={withProtection(FundingApplication, {}, renderSMERoute)} />
-        <Route path="/applications/product" element={withProtection(ProductApplication, {}, renderSMERoute)} />
-        <Route path="/applications/products-services" element={withProtection(ProductApplication, {}, renderSMERoute)} />
-        <Route path="/applications/product/:section" element={withProtection(ProductApplication, {}, renderSMERoute)} />
+      <Route path="/applications/product" element={withProtection(ProductApplicationManager, {}, renderSMERoute)} />
+<Route path="/applications/products-services" element={withProtection(ProductApplicationManager, {}, renderSMERoute)} />
+<Route path="/applications/product/:section" element={withProtection(ProductApplicationManager, {}, renderSMERoute)} />
+<Route path="/applications/product-application" element={<Navigate to="/applications/product" replace />} />
         <Route path="/applications/advisory" element={withProtection(AdvisoryApplication, {}, renderSMERoute)} />
         <Route path="/applications/advisors" element={withProtection(AdvisoryApplication, {}, renderSMERoute)} />
         <Route path="/applications/advisory/:section" element={withProtection(AdvisoryApplication, {}, renderSMERoute)} />
