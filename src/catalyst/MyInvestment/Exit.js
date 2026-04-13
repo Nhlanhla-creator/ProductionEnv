@@ -79,7 +79,7 @@ const AverageTimeInProgram = () => {
           </>
         ) : (
           <div style={{ color: B.light, fontSize: "12px", fontStyle: "italic", textAlign: "center", padding: "1rem" }}>
-            Time-in-programme data will appear once SMEs reach Active Support or Deal Closed stages.
+            Time-in-programme data will appear once SMEs reach Active or Deal Closed stages.
           </div>
         )}
       </div>
