@@ -1,7 +1,7 @@
 "use client"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { ChevronDown, CheckCircle, TrendingUp, AlertCircle, FileText } from 'lucide-react'
-import { doc, updateDoc, setDoc, serverTimestamp } from "firebase/firestore"
+import { doc, updateDoc, setDoc, serverTimestamp, getDoc } from "firebase/firestore"
 import { db } from "../../firebaseConfig"
 import NeedHelp from "../../NeedHelp"
 import { useNavigate } from "react-router-dom"
@@ -15,7 +15,7 @@ export function BigScoreCard({
   pisScore,
   leadershipScore,
   onScoreUpdate,
-  setActiveTab, // Changed from onTabChange
+  setActiveTab,
 }) {
   const [showModal, setShowModal] = useState(false)
   const [bigScore, setBigScore] = useState(null)
@@ -24,8 +24,15 @@ export function BigScoreCard({
   const [showScoreBreakdown, setShowScoreBreakdown] = useState(false)
   const [showDetailedAnalysis, setShowDetailedAnalysis] = useState(false)
   const [showBoostScoreModal, setShowBoostScoreModal] = useState(false)
-const navigate = useNavigate()
-const [showCatalystPopup, setShowCatalystPopup] = useState(false)
+  const navigate = useNavigate()
+  const [showCatalystPopup, setShowCatalystPopup] = useState(false)
+  
+  // FIX 1: Track state more carefully with refs
+  const savedBigScoreRef = useRef(null)
+  const pendingSaveTimeoutRef = useRef(null)
+  const isSavingRef = useRef(false)
+  const initialLoadCompleteRef = useRef(false)
+  const lastCalculatedScoreRef = useRef(null) // Track the last calculated score
 
   useEffect(() => {
     if (showModal) {
@@ -41,38 +48,149 @@ const [showCatalystPopup, setShowCatalystPopup] = useState(false)
     }
   }, [showModal])
 
+  // FIX 2: Load saved BIG Score from database on mount
   useEffect(() => {
-    if (
-      complianceScore !== undefined &&
-      complianceScore !== null &&
-      legitimacyScore !== undefined &&
-      legitimacyScore !== null &&
-      fundabilityScore !== undefined &&
-      fundabilityScore !== null &&
-      pisScore !== undefined &&
-      pisScore !== null &&
-      leadershipScore !== undefined &&
-      leadershipScore !== null &&
-      profileData?.id &&
-      profileData?.formData
-    ) {
-      const result = calculateBigScore(
-        complianceScore,
-        legitimacyScore,
-        fundabilityScore,
-        pisScore,
-        leadershipScore,
-        profileData.formData,
-      )
-      setBigScore(result.totalScore)
-      setScoreBreakdown(result.breakdown)
-      if (onScoreUpdate) {
-        onScoreUpdate(result.totalScore)
+    const loadSavedScore = async () => {
+      if (!profileData?.id) return
+      
+      try {
+        const evaluationRef = doc(db, "bigEvaluations", profileData.id)
+        const evaluationSnap = await getDoc(evaluationRef)
+        
+        if (evaluationSnap.exists()) {
+          const savedBigScore = evaluationSnap.data()?.scores?.bigScore
+          if (savedBigScore !== undefined && savedBigScore !== null) {
+            console.log("Loaded saved BIG Score from DB:", savedBigScore)
+            savedBigScoreRef.current = savedBigScore
+          }
+        }
+      } catch (err) {
+        console.error("Error loading saved BIG Score:", err)
+      } finally {
+        initialLoadCompleteRef.current = true
       }
+    }
+    
+    loadSavedScore()
+  }, [profileData?.id])
 
+  // FIX 3: Separate calculation and save logic
+  // Calculate score and update UI immediately
+  useEffect(() => {
+    // Skip if we don't have all required data or initial load not complete
+    if (!profileData?.id || !profileData?.formData || !initialLoadCompleteRef.current) return
+    
+    // Check if all scores are valid numbers
+    if (typeof complianceScore !== 'number') return
+    if (typeof legitimacyScore !== 'number') return
+    if (typeof fundabilityScore !== 'number') return
+    if (typeof pisScore !== 'number') return
+    if (typeof leadershipScore !== 'number') return
+    
+    // Calculate the BIG Score
+    const result = calculateBigScore(
+      complianceScore,
+      legitimacyScore,
+      fundabilityScore,
+      pisScore,
+      leadershipScore,
+      profileData.formData,
+    )
+    
+    const newBigScore = result.totalScore
+    
+    // FIX 4: Only update state if score actually changed
+    if (lastCalculatedScoreRef.current !== newBigScore) {
+      console.log(`Score calculated: ${lastCalculatedScoreRef.current} → ${newBigScore}`)
+      lastCalculatedScoreRef.current = newBigScore
+      
+      // Update UI display immediately
+      setBigScore(newBigScore)
+      setScoreBreakdown(result.breakdown)
+      
+      // Notify parent
+      if (onScoreUpdate) {
+        onScoreUpdate(newBigScore)
+      }
+      
+      // Handle saving to database with delay logic
+      handleSaveWithDelay(newBigScore)
+    }
+    
+  }, [complianceScore, legitimacyScore, fundabilityScore, pisScore, leadershipScore, profileData?.id, profileData?.formData, onScoreUpdate])
+
+  // FIX 5: Improved save delay logic
+  const handleSaveWithDelay = (newScore) => {
+    // Clear any pending save timeout
+    if (pendingSaveTimeoutRef.current) {
+      clearTimeout(pendingSaveTimeoutRef.current)
+      pendingSaveTimeoutRef.current = null
+    }
+    
+    const savedScore = savedBigScoreRef.current
+    
+    // Case 1: First save (no saved score yet)
+    if (savedScore === null) {
+      console.log(`[SAVE DECISION] First save detected - saving ${newScore} immediately`)
+      executeSave(newScore)
+      return
+    }
+    
+    // Case 2: Score improved
+    if (newScore > savedScore) {
+      console.log(`[SAVE DECISION] Score improved: ${savedScore} → ${newScore} - saving immediately`)
+      executeSave(newScore)
+      return
+    }
+    
+    // Case 3: Score decreased - delay save
+    if (newScore < savedScore) {
+      console.log(`[SAVE DECISION] Score decreased: ${savedScore} → ${newScore} - delaying 5s`)
+      
+      // Set timeout to save after 5 seconds
+      pendingSaveTimeoutRef.current = setTimeout(() => {
+        // Check if user is still on this score after 5 seconds
+        if (lastCalculatedScoreRef.current === newScore && newScore < savedBigScoreRef.current) {
+          console.log(`[SAVE EXECUTION] Delayed save executed for score: ${newScore}`)
+          executeSave(newScore)
+        } else if (lastCalculatedScoreRef.current > newScore) {
+          console.log(`[SAVE EXECUTION] Delayed save cancelled - score improved to ${lastCalculatedScoreRef.current}`)
+        }
+        pendingSaveTimeoutRef.current = null
+      }, 5000)
+      return
+    }
+    
+    // Case 4: Score unchanged
+    if (newScore === savedScore) {
+      console.log(`[SAVE DECISION] Score unchanged at ${newScore} - skipping save`)
+      return
+    }
+  }
+  
+  // FIX 6: Simplified and more robust save execution
+  const executeSave = async (bigScoreValue) => {
+    // Prevent multiple simultaneous saves
+    if (isSavingRef.current) {
+      console.log("[SAVE] Save already in progress - skipping")
+      return
+    }
+    
+    // Don't save if we already have this exact score saved
+    if (savedBigScoreRef.current === bigScoreValue) {
+      console.log(`[SAVE] Score ${bigScoreValue} already saved - skipping`)
+      return
+    }
+    
+    isSavingRef.current = true
+    
+    try {
       const smeName = profileData?.formData?.entityOverview?.registeredName || "Unnamed SME"
+      const now = new Date().toISOString()
+      
+      // Save to bigEvaluations collection
       const evaluationRef = doc(db, "bigEvaluations", profileData.id)
-      setDoc(
+      await setDoc(
         evaluationRef,
         {
           smeName: smeName,
@@ -82,39 +200,60 @@ const [showCatalystPopup, setShowCatalystPopup] = useState(false)
             fundability: fundabilityScore,
             pis: pisScore,
             leadership: leadershipScore,
-            bigScore: result.totalScore,
-            lastUpdated: new Date().toISOString(),
+            bigScore: bigScoreValue,
+            lastUpdated: now,
           },
-          updatedAt: new Date().toISOString(),
+          updatedAt: now,
           createdAt: serverTimestamp(),
         },
         { merge: true },
-      ).catch((err) => console.error("Failed to update BIG evaluation in Firestore:", err))
-
+      )
+      
+      // Update universalProfiles collection
       const profileRef = doc(db, "universalProfiles", profileData.id)
-      updateDoc(profileRef, {
-        bigScore: result.totalScore,
-        bigScoreUpdatedAt: new Date().toISOString(),
-      }).catch((err) => console.error("Failed to update BIG Score in Firestore:", err))
+      await updateDoc(profileRef, {
+        bigScore: bigScoreValue,
+        bigScoreUpdatedAt: now,
+      })
+      
+      console.log(`[SAVE SUCCESS] BIG Score ${bigScoreValue} saved to database`)
+      
+      // FIX 7: Update saved score ref ONLY after successful save
+      savedBigScoreRef.current = bigScoreValue
+      
+    } catch (err) {
+      console.error("[SAVE ERROR] Failed to update BIG Score in Firestore:", err)
+      // Don't update savedBigScoreRef on error - let it retry next time
+    } finally {
+      isSavingRef.current = false
     }
-  }, [complianceScore, legitimacyScore, fundabilityScore, pisScore, leadershipScore, profileData, onScoreUpdate])
-
-useEffect(() => {
-  const hasDismissedCatalystPopup = sessionStorage.getItem('catalystPopupDismissed')
-  
-  if (bigScore !== null && bigScore < 50 && !hasDismissedCatalystPopup) {
-    const timer = setTimeout(() => {
-      setShowCatalystPopup(true)
-    }, 1000)
-    return () => clearTimeout(timer)
   }
-}, [bigScore])
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (pendingSaveTimeoutRef.current) {
+        clearTimeout(pendingSaveTimeoutRef.current)
+      }
+    }
+  }, [])
+
+  // Catalyst popup on low score
+  useEffect(() => {
+    const hasDismissedCatalystPopup = sessionStorage.getItem('catalystPopupDismissed')
+    
+    if (bigScore !== null && bigScore < 50 && !hasDismissedCatalystPopup) {
+      const timer = setTimeout(() => {
+        setShowCatalystPopup(true)
+      }, 1000)
+      return () => clearTimeout(timer)
+    }
+  }, [bigScore])
 
   // Generate smart recommendations based on scores
   const getRecommendations = () => {
     const recommendations = []
 
-    // Legitimacy Tools
     recommendations.push({
       category: "Legitimacy",
       title: "Legitimacy Tools",
@@ -126,7 +265,6 @@ useEffect(() => {
       color: "#6D4C41",
     })
 
-    // Governance Tools
     recommendations.push({
       category: "Governance",
       title: "Governance Tools",
@@ -138,19 +276,17 @@ useEffect(() => {
       color: "#B8860B",
     })
 
-    // Compliance Tools
     recommendations.push({
       category: "Compliance",
       title: "Compliance Templates",
       description:
         "Professional legal and regulatory templates to ensure your business meets all compliance requirements and reduces risk.",
-      action: "Compliance Tools",
+      action: "Compliance Templates",
       tab: "compliance",
       priority: "high",
       color: "#8D6E63",
     })
 
-    // Capital Appeal Tools
     recommendations.push({
       category: "Capital Appeal",
       title: "Capital Appeal Tools",
@@ -162,7 +298,6 @@ useEffect(() => {
       color: "#A67C52",
     })
 
-    // HR Templates
     recommendations.push({
       category: "Team Development",
       title: "HR Templates",
@@ -174,7 +309,6 @@ useEffect(() => {
       color: "#A0522D",
     })
 
-    // Find Service Provider
     recommendations.push({
       category: "Services",
       title: "Find Service Provider",
@@ -186,7 +320,6 @@ useEffect(() => {
       color: "#4CAF50",
     })
 
-    // Sort by priority
     const priorityOrder = { critical: 0, high: 1, medium: 2, low: 3 }
     return recommendations.sort((a, b) => priorityOrder[a.priority] - priorityOrder[b.priority])
   }
@@ -297,22 +430,19 @@ useEffect(() => {
   }
 
   const scoreLevel = getScoreLevel(bigScore)
-  const ScoreIcon = scoreLevel.icon
   const recommendations = getRecommendations()
 
-  // NEW: Handle tool card click
   const handleToolClick = (rec) => {
     setShowBoostScoreModal(false)
     
     if (rec.url) {
-      // External URL - navigate normally
       window.location.href = rec.url
     } else if (rec.tab && setActiveTab) {
-      // Switch to tools tab and set the category
       setActiveTab("tools", rec.tab)
     }
   }
 
+  
   return (
     <>
       {/* Enhanced Outside Card Design */}
@@ -734,7 +864,7 @@ useEffect(() => {
                 </div>
               </div>
 
-              {/* About the BIG Score section - UPDATED */}
+              {/* About the BIG Score section */}
               <div
                 style={{
                   marginTop: "20px",
@@ -867,7 +997,7 @@ useEffect(() => {
                 )}
               </div>
 
-              {/* Score Breakdown Section - UPDATED ORDER */}
+              {/* Score Breakdown Section */}
               <div
                 style={{
                   marginTop: "20px",
@@ -1095,7 +1225,7 @@ useEffect(() => {
         </div>
       )}
 
-      {/* UPDATED Boost Score Modal - Removed icons, cleaner design */}
+      {/* Boost Score Modal */}
       {showBoostScoreModal && (
         <div
           style={{
@@ -1168,7 +1298,7 @@ useEffect(() => {
                 Boost Your BIG Score
               </h3>
 
-              {/* Low Score Catalyst Message - Only show when score < 50% */}
+              {/* Low Score Catalyst Message */}
               {bigScore !== null && bigScore < 50 && (
                 <div
                   style={{
@@ -1305,7 +1435,6 @@ useEffect(() => {
                           e.currentTarget.style.boxShadow = "0 4px 12px rgba(141, 110, 99, 0.3)"
                         }}
                       >
-                        {/* Priority badge */}
                         {rec.priority === "critical" && (
                           <div
                             style={{
@@ -1423,6 +1552,7 @@ useEffect(() => {
           </div>
         </div>
       )}
+
       {/* Low Score Popup for scores < 50% */}
       {showCatalystPopup && (
   <div

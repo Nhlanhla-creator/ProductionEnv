@@ -33,6 +33,11 @@ import {
 // Chart.js imports for Cap Table pie chart
 import { Pie } from "react-chartjs-2";
 import ChartDataLabels from "chartjs-plugin-datalabels";
+import { useSolvencyScore } from "../../../hooks/useSolvencyScore";
+import { calculateSolvencyScore, normalizeSolvencyScore } from "../data_utils/solvencyScoreUtils";
+ import { useLiquidityData } from "../../../hooks/useFinancialData";
+
+
 
 // ==================== HELPERS ====================
 
@@ -1409,6 +1414,27 @@ const CapitalStructure = ({ activeSection, user, isInvestorView }) => {
   const [trendLoading, setTrendLoading]           = useState(false);
   const [showCalculationModal, setShowCalculationModal] = useState(false);
   const [selectedCalculation, setSelectedCalculation]   = useState({ title: "", calculation: "" });
+const {
+  solvencyScore,
+  solvencyScoreBreakdown,
+  calculateAndSaveSolvencyScore,
+  loadLatestSolvencyScore,
+} = useSolvencyScore(user);
+
+// Inside component, fetch liquidity data
+const { firebaseChartData } = useLiquidityData(user);
+
+// Extract latest liquidity values
+const getLiquidityData = () => {
+  if (!firebaseChartData) return null;
+  
+  return {
+    cashflow: parseFloat(firebaseChartData.cashflow?.actual?.at(-1)) || 0,
+    burnRate: parseFloat(firebaseChartData.burnRate?.actual?.at(-1)) || 0,
+    monthsRunway: parseFloat(firebaseChartData.monthsRunway?.actual?.at(-1)) || 0,
+    currentRatio: parseFloat(firebaseChartData.currentRatio?.actual?.at(-1)) || 0,
+  };
+};
 
   // ── Notes ─────────────────────────────────────────────────────────────────
   const [kpiNotes, setKpiNotes]       = useState({});
@@ -1431,6 +1457,8 @@ const CapitalStructure = ({ activeSection, user, isInvestorView }) => {
     loadTrendData,
   } = useCapitalStructureData(user);
 
+   
+
   // ── Derived snapshot index — always the last month of the selected range ──
   const { year: snapshotYear, monthIndex: snapshotMonthIndex } = parseYM(toDate);
 
@@ -1445,69 +1473,129 @@ const CapitalStructure = ({ activeSection, user, isInvestorView }) => {
     }
   }, [user, toDate]);
 
+//   // ── SAVE SOLVENCY SCORE TO FIREBASE ───────────────────────
+// useEffect(() => {
+//   if (user && balanceSheetData && solvencyData && activeSubTab === "solvency") {
+//     const year = snapshotYear;
+//     const liquidityData = getLiquidityData();
+    
+//     // ✅ Pass liquidity data
+//    // In CapitalStructure.js - when calling calculateAndSaveSolvencyScore
+// calculateAndSaveSolvencyScore(
+//   balanceSheetData,
+//   {
+//     debtToEquity: debtToEquityVal,
+//     debtToAssets: debtToAssetsVal,
+//     equityRatio: equityRatioVal,
+//     interestCoverage: interestCoverageVal,
+//     nav: navVal,
+//   },
+//   liquidityData,
+//   snapshotYear
+// );
+//   }
+// }, [user, balanceSheetData, solvencyData, firebaseChartData, snapshotYear]);
   // ── Auto-calculate solvency / leverage / equity from balance sheet ─────────
-  useEffect(() => {
-    const mi = snapshotMonthIndex;
-    if (mi < 0 || mi >= 12) return;
 
-    const totalAssets_     = calcTotalAssets(mi);
-    const totalLiabilities_= calcTotalLiabilities(mi);
-    const totalEquity_     = calcTotalEquity(mi);
-    const ebit_            = totalAssets_      * 0.1;
-    const intExp_          = totalLiabilities_ * 0.05;
 
-    const ensure = (obj, key) => {
-      if (!Array.isArray(obj[key])) obj[key] = Array(12).fill("0");
-    };
+ useEffect(() => {
+  if (!user || !balanceSheetData || activeSubTab !== "solvency") return;
 
-    setSolvencyData((prev) => {
-      const s = { ...prev };
-      ["debtToEquity", "debtToAssets", "equityRatio", "interestCoverage", "nav"].forEach((k) => ensure(s, k));
-      s.debtToEquity[mi]      = (totalEquity_     !== 0 ? totalLiabilities_ / totalEquity_     : 0).toFixed(2);
-      s.debtToAssets[mi]      = (totalAssets_     !== 0 ? totalLiabilities_ / totalAssets_     : 0).toFixed(2);
-      s.equityRatio[mi]       = (totalAssets_     !== 0 ? (totalEquity_  / totalAssets_) * 100 : 0).toFixed(2);
-      s.interestCoverage[mi]  = (intExp_          !== 0 ? ebit_ / intExp_ : 0).toFixed(2);
-      s.nav[mi]               = ((totalAssets_ - totalLiabilities_) / 1_000_000).toFixed(2);
-      return s;
+  const mi = snapshotMonthIndex;
+  if (mi < 0 || mi >= 12) return;
+
+  const totalAssets_ = calcTotalAssets(mi);
+  const totalLiabilities_ = calcTotalLiabilities(mi);
+  const totalEquity_ = calcTotalEquity(mi);
+
+  if (totalAssets_ === 0 && totalLiabilities_ === 0 && totalEquity_ === 0) {
+    console.warn("⚠️ Skipping solvency save – balance sheet data is empty");
+    return;
+  }
+
+  // Calculate values (as numbers, not strings)
+  const debtToEquityVal = totalEquity_ !== 0 ? totalLiabilities_ / totalEquity_ : 0;
+  const debtToAssetsVal = totalAssets_ !== 0 ? totalLiabilities_ / totalAssets_ : 0;
+  const equityRatioVal = totalAssets_ !== 0 ? (totalEquity_ / totalAssets_) * 100 : 0;
+  const navVal = (totalAssets_ - totalLiabilities_) / 1_000_000;
+
+  const ebit_ = totalAssets_ * 0.1;
+  const intExp_ = totalLiabilities_ * 0.05;
+  const interestCoverageVal = intExp_ !== 0 ? ebit_ / intExp_ : 0;
+
+  // Update local state (arrays for UI)
+  setSolvencyData(prev => {
+    const s = { ...prev };
+    ["debtToEquity", "debtToAssets", "equityRatio", "interestCoverage", "nav"].forEach(k => {
+      if (!Array.isArray(s[k])) s[k] = Array(12).fill("0");
     });
+    s.debtToEquity[mi] = debtToEquityVal.toFixed(2);
+    s.debtToAssets[mi] = debtToAssetsVal.toFixed(2);
+    s.equityRatio[mi] = equityRatioVal.toFixed(2);
+    s.interestCoverage[mi] = interestCoverageVal.toFixed(2);
+    s.nav[mi] = navVal.toFixed(2);
+    return s;
+  });
 
-    setLeverageData((prev) => {
-      const l = { ...prev };
-      ["totalDebtRatio", "longTermDebtRatio", "equityMultiplier"].forEach((k) => ensure(l, k));
-      const ltDebt = calculateTotal(balanceSheetData.liabilities.nonCurrentLiabilities, mi);
-      l.totalDebtRatio[mi]    = (totalAssets_  !== 0 ? totalLiabilities_ / totalAssets_        : 0).toFixed(2);
-      l.longTermDebtRatio[mi] = (totalAssets_  !== 0 ? ltDebt             / totalAssets_        : 0).toFixed(2);
-      l.equityMultiplier[mi]  = (totalEquity_  !== 0 ? totalAssets_        / totalEquity_       : 0).toFixed(2);
-      return l;
-    });
+  // Get liquidity data
+  const liquidityData = {
+    cashflow: parseFloat(firebaseChartData?.cashflow?.actual?.at(-1)) || 0,
+    burnRate: parseFloat(firebaseChartData?.burnRate?.actual?.at(-1)) || 0,
+    monthsRunway: parseFloat(firebaseChartData?.monthsRunway?.actual?.at(-1)) || 0,
+    currentRatio: parseFloat(firebaseChartData?.currentRatio?.actual?.at(-1)) || 0,
+  };
 
-    setEquityData((prev) => {
-      const e = { ...prev };
-      ensure(e, "equityRatio");
-      e.equityRatio[mi] = (totalAssets_ !== 0 ? (totalEquity_ / totalAssets_) * 100 : 0).toFixed(2);
-      return e;
-    });
-  }, [balanceSheetData, toDate]);
+  // ✅ PASS AS SIMPLE OBJECT WITH NUMBERS, NOT ARRAYS
+  calculateAndSaveSolvencyScore(
+    balanceSheetData,
+    {
+      debtToEquity: debtToEquityVal,
+      debtToAssets: debtToAssetsVal,
+      equityRatio: equityRatioVal,
+      interestCoverage: interestCoverageVal,
+      nav: navVal,
+    },
+    liquidityData,
+    snapshotYear
+  );
+
+  console.log("✅ Solvency saved/updated:", {
+    nav: navVal,
+    equityRatio: equityRatioVal,
+    debtToEquity: debtToEquityVal,
+  });
+}, [user, balanceSheetData, firebaseChartData, snapshotMonthIndex, snapshotYear, activeSubTab]);
+
 
   // ── Balance sheet calculation helpers ─────────────────────────────────────
-  const calcTotalAssets = (mi) => {
-    const { bank, currentAssets, nonCurrentAssets, customCategories } = balanceSheetData.assets;
-    const sumObj = (obj) =>
-      Object.values(obj || {}).reduce((s, a) => s + (parseFloat(a?.[mi]) || 0), 0);
-    let custom = 0;
-    (customCategories || []).forEach((c) => {
-      if (c?.items)
-        Object.values(c.items).forEach((a) => { custom += parseFloat(a?.[mi]) || 0; });
-    });
-    return (
-      sumObj(bank) +
-      calculateTotal(currentAssets, mi) +
-      calcFixedAssets(mi) +
-      calcIntangibles(mi) +
-      calculateTotal(nonCurrentAssets, mi) +
-      custom
-    );
-  };
+const calcTotalAssets = (mi) => {
+  const assets = balanceSheetData.assets || {};
+  const bank = assets.bank || {};
+  const currentAssets = assets.currentAssets || {};
+  const nonCurrentAssets = assets.nonCurrentAssets || {};
+  const customCategories = assets.customCategories || [];
+
+  const sumObj = (obj) =>
+    Object.values(obj).reduce((s, a) => s + (parseFloat(a?.[mi]) || 0), 0);
+
+  let custom = 0;
+  customCategories.forEach((c) => {
+    if (c?.items) {
+      Object.values(c.items).forEach((arr) => {
+        custom += parseFloat(arr?.[mi]) || 0;
+      });
+    }
+  });
+
+  return (
+    sumObj(bank) +
+    calculateTotal(currentAssets, mi) +
+    calcFixedAssets(mi) +
+    calcIntangibles(mi) +
+    calculateTotal(nonCurrentAssets, mi) +
+    custom
+  );
+};
 
   const calcFixedAssets = (mi) => {
     const fa = balanceSheetData.assets?.fixedAssets;
@@ -2064,7 +2152,7 @@ const CapitalStructure = ({ activeSection, user, isInvestorView }) => {
           />
           <div className="grid grid-cols-2 gap-5">
             {renderKPICard("Net Asset Value", solvencyData.nav,       "nav",        false, "solvencyData.nav")}
-            {renderKPICard("Equity Ratio",    solvencyData.equityRatio, "equityRatio", true, "solvencyData.equityRatio")}
+            {renderKPICard("Equity Ratio",  solvencyData.equityRatio, "equityRatio", true, "solvencyData.equityRatio")}
           </div>
         </div>
       )}
