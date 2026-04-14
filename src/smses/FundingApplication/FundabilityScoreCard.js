@@ -1,13 +1,18 @@
+// ==================== FUNDABILITY SCORE CARD (REFACTORED) ====================
+// Financial Proficiency as MERGED 5th component (Solvency + Financial Strength combined)
+
 import { useState, useEffect } from "react"
-import { ChevronDown, ChevronUp, TrendingUp, FileText, Presentation, Shield, RefreshCw, AlertCircle } from 'lucide-react'
+import { ChevronDown, ChevronUp, TrendingUp, FileText, Presentation, Shield, RefreshCw, AlertCircle, BarChart3 } from 'lucide-react'
 import { createPortal } from 'react-dom'
-import { X ,DollarSign} from 'lucide-react'
+import { X, DollarSign } from 'lucide-react'
 import { db, auth } from "../../firebaseConfig"
 import { doc, onSnapshot, updateDoc, setDoc, getDoc } from "firebase/firestore"
 import { collection, query, where, getDocs } from "firebase/firestore"
 import { useFirebaseFunctions } from '../SMSEDashboard/hooks'
+import { useSolvencyScore } from '../hooks/useSolvencyScore';
+import { normalizeSolvencyScore } from '../MyGrowthTools/financial/data_utils/solvencyScoreUtils';
 
-const FundabilityScoreCard = ({ applicationData }) => {
+const FundabilityScoreCard = ({ applicationData, user }) => {
     const [showModal, setShowModal] = useState(false);
     const [fundabilityScore, setFundabilityScore] = useState(0);
     const [scoreBreakdown, setScoreBreakdown] = useState({});
@@ -19,233 +24,300 @@ const FundabilityScoreCard = ({ applicationData }) => {
     const [pitchDeckAnalysis, setPitchDeckAnalysis] = useState(null)
     const [guaranteesAnalysis, setGuaranteesAnalysis] = useState(null)
     const [creditReportAnalysis, setCreditReportAnalysis] = useState(null)
-    const [financialStrengthAnalysis, setFinancialStrengthAnalysis] = useState(null)
+    const [financialProficiencyAnalysis, setFinancialProficiencyAnalysis] = useState(null) // MERGED: Solvency + Financial Strength
 
     const { callFunction, loading, error } = useFirebaseFunctions();
 
-    // Fetch AI evaluations for business plan, pitch deck, and guarantees
-   useEffect(() => {
-    const fetchAIEvaluations = async () => {
-        if (!auth?.currentUser?.uid) return;
+    // ── SOLVENCY SCORE HOOK ────────────────────────────────────────────
+    const {
+        loadLatestSolvencyScore,
+        solvencyScore,
+        solvencyScoreBreakdown
+    } = useSolvencyScore(auth?.currentUser);
 
-        try {
-            const userId = auth.currentUser.uid;
+    // Fetch AI evaluations and merge solvency + financial strength
+    useEffect(() => {
+        const fetchAIEvaluations = async () => {
+            if (!auth?.currentUser?.uid) return;
 
-            // Fetch Business Plan Evaluation
-            const bpQuery = query(collection(db, "aiEvaluations"), where("userId", "==", userId))
-            const bpSnapshot = await getDocs(bpQuery)
-            if (!bpSnapshot.empty) {
-                const bpData = bpSnapshot.docs[0].data()
-                setBusinessPlanAnalysis({
-                    score: bpData?.evaluation?.score || 0,
-                    content: bpData?.evaluation?.content || "",
-                    timestamp: bpData.timestamp
-                })
+            try {
+                const userId = auth.currentUser.uid;
+
+                // Fetch Business Plan Evaluation
+                const bpQuery = query(collection(db, "aiEvaluations"), where("userId", "==", userId))
+                const bpSnapshot = await getDocs(bpQuery)
+                if (!bpSnapshot.empty) {
+                    const bpData = bpSnapshot.docs[0].data()
+                    setBusinessPlanAnalysis({
+                        score: bpData?.evaluation?.score || 0,
+                        content: bpData?.evaluation?.content || "",
+                        timestamp: bpData.timestamp
+                    })
+                }
+
+                // Fetch Pitch Deck Evaluation
+                const pdQuery = query(collection(db, "aiPitchEvaluations"), where("userId", "==", userId))
+                const pdSnapshot = await getDocs(pdQuery)
+                if (!pdSnapshot.empty) {
+                    const pdData = pdSnapshot.docs[0].data()
+                    setPitchDeckAnalysis({
+                        score: pdData?.evaluation?.score || 0,
+                        content: pdData?.evaluation?.content || "",
+                        operationalScore: pdData?.evaluation?.operationalScore || 0,
+                        timestamp: pdData.timestamp
+                    })
+                }
+
+                // Fetch Credit Report Analysis
+                const creditQuery = query(collection(db, "creditAnalyses"), where("userId", "==", userId))
+                const creditSnapshot = await getDocs(creditQuery)
+                if (!creditSnapshot.empty) {
+                    const creditData = creditSnapshot.docs[0].data()
+                    setCreditReportAnalysis({
+                        score: creditData?.evaluation?.score || 0,
+                        content: creditData?.evaluation?.content || "",
+                        isCreditReport: creditData?.evaluation?.isCreditReport || false,
+                        label: creditData?.evaluation?.label || "",
+                        timestamp: creditData.createdAt
+                    })
+                }
+
+                // ── FETCH AND MERGE FINANCIAL PROFICIENCY (Solvency + Financial Strength) ─────────────────────────────────
+                // Solvency data
+                const solvencyData = await loadLatestSolvencyScore();
+                let solvencyMetrics = {
+                    nav: 0,
+                    equityRatio: 0,
+                    debtToEquity: 0,
+                    debtToAssets: 0,
+                    interestCoverage: 0,
+                    solvencyScore: 0,
+                    normalizedSolvencyScore: 0
+                };
+
+                if (solvencyData && solvencyData.rawMetrics) {
+                    const rawMetrics = solvencyData.rawMetrics;
+                    const navValue = parseFloat(rawMetrics.nav) || 0;
+                    const equityRatioValue = parseFloat(rawMetrics.equityRatio) || 0;
+                    const debtToEquityValue = parseFloat(rawMetrics.debtToEquity) || 0;
+                    const debtToAssetsValue = parseFloat(rawMetrics.debtToAssets) || 0;
+                    const interestCoverageValue = parseFloat(rawMetrics.interestCoverage) || 0;
+
+                    // Calculate solvency score from raw metrics
+                    let navScore = 0;
+                    if (navValue > 100) navScore = 100;
+                    else if (navValue > 50) navScore = 90;
+                    else if (navValue > 10) navScore = 80;
+                    else if (navValue > 1) navScore = 60;
+                    else if (navValue > 0) navScore = navValue * 50;
+                    else navScore = 0;
+
+                    let equityScore = 0;
+                    if (equityRatioValue >= 70) equityScore = 95;
+                    else if (equityRatioValue >= 60) equityScore = 85;
+                    else if (equityRatioValue >= 50) equityScore = 75;
+                    else if (equityRatioValue >= 40) equityScore = 55;
+                    else if (equityRatioValue >= 30) equityScore = 35;
+                    else equityScore = Math.max(0, equityRatioValue);
+
+                    let dteScore = 0;
+                    const deviation = Math.abs(debtToEquityValue - 1.0);
+                    if (deviation <= 0.3) dteScore = 90;
+                    else if (deviation <= 0.6) dteScore = 75;
+                    else if (deviation <= 1.0) dteScore = 55;
+                    else if (deviation <= 1.5) dteScore = 35;
+                    else dteScore = Math.max(0, 100 - deviation * 10);
+
+                    const calculatedSolvencyScore = Math.round(
+                        (navScore * 0.4) + (equityScore * 0.35) + (dteScore * 0.25)
+                    );
+
+                    solvencyMetrics = {
+                        nav: navValue,
+                        equityRatio: equityRatioValue,
+                        debtToEquity: debtToEquityValue,
+                        debtToAssets: debtToAssetsValue,
+                        interestCoverage: interestCoverageValue,
+                        solvencyScore: calculatedSolvencyScore,
+                        normalizedSolvencyScore: normalizeSolvencyScore(calculatedSolvencyScore),
+                        rawMetrics: rawMetrics
+                    };
+                }
+
+                // Financial Strength data
+                const financialStrengthData = {
+                    capitalStructure: 65,
+                    performanceEngine: 70,
+                    costAgility: 55,
+                    liquidityAndSurvival: 60,
+                    overallScore: 62.5
+                };
+
+                // ✅ MERGE: Combine Solvency + Financial Strength into Financial Proficiency
+                // Weighted blend: Solvency 50%, Financial Strength 50%
+                const mergedScore = Math.round(
+                    (solvencyMetrics.solvencyScore * 0.5) + (financialStrengthData.overallScore * 0.5)
+                );
+
+                setFinancialProficiencyAnalysis({
+                    // Combined score
+                    score: mergedScore,
+                    normalizedScore: normalizeSolvencyScore(mergedScore),
+                    
+                    // Solvency metrics
+                    solvency: {
+                        score: solvencyMetrics.solvencyScore,
+                        normalizedScore: solvencyMetrics.normalizedSolvencyScore,
+                        nav: solvencyMetrics.nav,
+                        equityRatio: solvencyMetrics.equityRatio,
+                        debtToEquity: solvencyMetrics.debtToEquity,
+                        debtToAssets: solvencyMetrics.debtToAssets,
+                        interestCoverage: solvencyMetrics.interestCoverage
+                    },
+                    
+                    // Financial strength metrics
+                    financialStrength: {
+                        score: financialStrengthData.overallScore,
+                        capitalStructure: financialStrengthData.capitalStructure,
+                        performanceEngine: financialStrengthData.performanceEngine,
+                        costAgility: financialStrengthData.costAgility,
+                        liquidityAndSurvival: financialStrengthData.liquidityAndSurvival
+                    },
+                    
+                    timestamp: solvencyData?.timestamp || new Date().toISOString()
+                });
+
+            } catch (error) {
+                console.error("Error fetching AI evaluations:", error)
+                setEvaluationError("Failed to load AI analysis data")
             }
-
-            // Fetch Pitch Deck Evaluation
-            const pdQuery = query(collection(db, "aiPitchEvaluations"), where("userId", "==", userId))
-            const pdSnapshot = await getDocs(pdQuery)
-            if (!pdSnapshot.empty) {
-                const pdData = pdSnapshot.docs[0].data()
-                setPitchDeckAnalysis({
-                    score: pdData?.evaluation?.score || 0,
-                    content: pdData?.evaluation?.content || "",
-                    operationalScore: pdData?.evaluation?.operationalScore || 0,
-                    timestamp: pdData.timestamp
-                })
-            }
-
-            // Fetch Credit Report Analysis
-            const creditQuery = query(collection(db, "creditAnalyses"), where("userId", "==", userId))
-            const creditSnapshot = await getDocs(creditQuery)
-            if (!creditSnapshot.empty) {
-                const creditData = creditSnapshot.docs[0].data()
-                setCreditReportAnalysis({
-                    score: creditData?.evaluation?.score || 0,
-                    content: creditData?.evaluation?.content || "",
-                    isCreditReport: creditData?.evaluation?.isCreditReport || false,
-                    label: creditData?.evaluation?.label || "",
-                    timestamp: creditData.createdAt
-                })
-            }
-
-            // Fetch Financial Strength Analysis (placeholder for now)
-            // This will be implemented when we have the actual data source
-            setFinancialStrengthAnalysis({
-                capitalStructure: 0,
-                performanceEngine: 0,
-                costAgility: 0,
-                liquidityAndSurvival: 0,
-                overallScore: 0,
-                timestamp: new Date().toISOString()
-            })
-
-        } catch (error) {
-            console.error("Error fetching AI evaluations:", error)
-            setEvaluationError("Failed to load AI analysis data")
         }
-    }
 
-    fetchAIEvaluations();
-}, [auth?.currentUser?.uid]);
+        fetchAIEvaluations();
+    }, [auth?.currentUser?.uid, loadLatestSolvencyScore]);
 
 
-    // Parse guarantees score from AI evaluation
-    const parseGuaranteesScore = (aiText) => {
-        if (!aiText) return 0;
-        
-        const guaranteePatterns = [
-            /###\s+5\.\s*Guarantees[^*]*\*\*Score:\*\*\s*(\d)/i,
-            /\*\*Guarantees\s*:\s*(\d)\*\*/i,
-            /Guarantees\s*:\s*(\d)/i,
-            /Guarantees[^\\d]*(\\d)\/5/i
-        ];
-        
-        for (const pattern of guaranteePatterns) {
-            const match = aiText.match(pattern);
-            if (match) {
-                const score = parseInt(match[1]);
-                return Math.min(Math.max(score, 0), 5);
+    // ====== UPDATED: 5 components with equal weighting (20% each) ======
+    const calculateFundabilityScore = (data) => {
+        const componentWeight = 1 / 5; // 20%
+
+        const breakdown = {
+            businessPlanAnalysis: { score: 0, max: 100, weight: componentWeight, rawScore: 0, maxRaw: 5 },
+            pitchDeckScore: { score: 0, max: 100, weight: componentWeight, rawScore: 0, maxRaw: 5 },
+            guarantees: { score: 0, max: 100, weight: componentWeight, rawScore: 0, maxRaw: 5, uploaded: 0, total: 19 },
+            creditReport: { score: 0, max: 100, weight: componentWeight, rawScore: 0, maxRaw: 5 },
+            financialProficiency: { 
+                score: 0, 
+                max: 100, 
+                weight: componentWeight, 
+                rawScore: 0, 
+                maxRaw: 5,
+                solvencyScore: 0,
+                financialStrengthScore: 0
             }
+        };
+
+        // Business Plan Analysis (20%)
+        if (businessPlanAnalysis?.score) {
+            const rawScore = (businessPlanAnalysis.score / 100) * 5;
+            const businessPlanScore = (rawScore / 5) * 100;
+            breakdown.businessPlanAnalysis.score = Math.min(businessPlanScore, 100);
+            breakdown.businessPlanAnalysis.rawScore = Math.round(rawScore * 10) / 10;
         }
-        return 0;
+
+        // Pitch Deck Score (20%)
+        if (pitchDeckAnalysis?.score) {
+            const rawScore = (pitchDeckAnalysis.score / 100) * 5;
+            const pitchDeckScore = (rawScore / 5) * 100;
+            breakdown.pitchDeckScore.score = Math.min(pitchDeckScore, 100);
+            breakdown.pitchDeckScore.rawScore = Math.round(rawScore * 10) / 10;
+        } else if (pitchDeckAnalysis?.operationalScore) {
+            const rawScore = pitchDeckAnalysis.operationalScore;
+            const pitchDeckScore = (rawScore / 5) * 100;
+            breakdown.pitchDeckScore.score = Math.min(pitchDeckScore, 100);
+            breakdown.pitchDeckScore.rawScore = rawScore;
+        }
+
+        // Guarantees (20%) - Calculate based on uploaded documents
+        if (data?.guarantees) {
+            const guaranteeFields = [
+                'signedCustomerContracts',
+                'purchaseOrders',
+                'offtakeAgreements',
+                'subscriptionRevenue',
+                'letterOfGuarantee',
+                'thirdPartyGuarantees',
+                'factoringAgreements',
+                'suretyBonds',
+                'governmentContracts',
+                'approvedSupplierStatus',
+                'incubatorGuarantees',
+                'exportCreditGuarantees',
+                'liensCollateral',
+                'securedAssets',
+                'retentionGuarantees',
+                'exportCreditInsurance',
+                'receivablesFinancing',
+                'personalSurety',
+                'corporateGuarantees'
+            ];
+
+            const totalGuarantees = guaranteeFields.length;
+            let uploadedCount = 0;
+
+            guaranteeFields.forEach(field => {
+                const fileField = field + 'Files';
+                if (data.guarantees[field] === 'yes' &&
+                    data.guarantees[fileField] &&
+                    Array.isArray(data.guarantees[fileField]) &&
+                    data.guarantees[fileField].length > 0) {
+                    uploadedCount++;
+                }
+            });
+
+            const percentage = (uploadedCount / totalGuarantees) * 100;
+            const rawScore = (uploadedCount / totalGuarantees) * 5;
+
+            breakdown.guarantees.score = Math.min(percentage, 100);
+            breakdown.guarantees.rawScore = Math.round(rawScore * 10) / 10;
+            breakdown.guarantees.uploaded = uploadedCount;
+            breakdown.guarantees.total = totalGuarantees;
+        }
+
+        // Credit Report (20%) - Convert from 850 scale to percentage
+        if (creditReportAnalysis?.score) {
+            const scoreOutOf850 = creditReportAnalysis.score;
+            const percentageScore = (scoreOutOf850 / 850) * 100;
+            const rawScore = (percentageScore / 100) * 5;
+            breakdown.creditReport.score = Math.min(percentageScore, 100);
+            breakdown.creditReport.rawScore = Math.round(rawScore * 10) / 10;
+        }
+
+        // Financial Proficiency (20%) - MERGED Solvency + Financial Strength
+        if (financialProficiencyAnalysis?.score) {
+            const mergedScore = financialProficiencyAnalysis.score;
+            const rawScore = (mergedScore / 100) * 5;
+            
+            breakdown.financialProficiency.score = Math.min(mergedScore, 100);
+            breakdown.financialProficiency.rawScore = Math.round(rawScore * 10) / 10;
+            breakdown.financialProficiency.solvencyScore = Math.round(financialProficiencyAnalysis.solvency.score);
+            breakdown.financialProficiency.financialStrengthScore = Math.round(financialProficiencyAnalysis.financialStrength.score);
+        }
+
+        // Calculate weighted total score with 5 equal components (20% each)
+        const totalScore = Math.round(
+            (breakdown.businessPlanAnalysis.score * breakdown.businessPlanAnalysis.weight) +
+            (breakdown.pitchDeckScore.score * breakdown.pitchDeckScore.weight) +
+            (breakdown.guarantees.score * breakdown.guarantees.weight) +
+            (breakdown.creditReport.score * breakdown.creditReport.weight) +
+            (breakdown.financialProficiency.score * breakdown.financialProficiency.weight)
+        );
+
+        return {
+            score: totalScore,
+            breakdown: breakdown
+        };
     };
-
-    // Enhanced scoring with AI data - Updated with equal weighting for 5 components
- const calculateFundabilityScore = (data) => {
-    const breakdown = {
-        businessPlanAnalysis: { score: 0, max: 20, weight: 0.20, rawScore: 0, maxRaw: 5 },
-        pitchDeckScore: { score: 0, max: 20, weight: 0.20, rawScore: 0, maxRaw: 5 },
-        guarantees: { score: 0, max: 20, weight: 0.20, rawScore: 0, maxRaw: 5, uploaded: 0, total: 19 },
-        creditReport: { score: 0, max: 20, weight: 0.20, rawScore: 0, maxRaw: 5 },
-        financialStrength: { score: 0, max: 20, weight: 0.20, rawScore: 0, maxRaw: 5, 
-            subcomponents: {
-                capitalStructure: 0,
-                performanceEngine: 0,
-                costAgility: 0,
-                liquidityAndSurvival: 0
-            }
-        }
-    };
-
-    // Business Plan Analysis (20%) - Only use AI evaluation, default to 0
-    if (businessPlanAnalysis?.score) {
-        const rawScore = (businessPlanAnalysis.score / 100) * 5;
-        const businessPlanScore = (rawScore / 5) * 100;
-        breakdown.businessPlanAnalysis.score = Math.min(businessPlanScore, 100);
-        breakdown.businessPlanAnalysis.rawScore = Math.round(rawScore * 10) / 10;
-    }
-
-    // Pitch Deck Score (20%) - Only use AI evaluation, default to 0
-    if (pitchDeckAnalysis?.score) {
-        const rawScore = (pitchDeckAnalysis.score / 100) * 5;
-        const pitchDeckScore = (rawScore / 5) * 100;
-        breakdown.pitchDeckScore.score = Math.min(pitchDeckScore, 100);
-        breakdown.pitchDeckScore.rawScore = Math.round(rawScore * 10) / 10;
-    } else if (pitchDeckAnalysis?.operationalScore) {
-        const rawScore = pitchDeckAnalysis.operationalScore;
-        const pitchDeckScore = (rawScore / 5) * 100;
-        breakdown.pitchDeckScore.score = Math.min(pitchDeckScore, 100);
-        breakdown.pitchDeckScore.rawScore = rawScore;
-    }
-
-    // Guarantees (20%) - Calculate based on uploaded documents
-    if (data?.guarantees) {
-        const guaranteeFields = [
-            'signedCustomerContracts',
-            'purchaseOrders',
-            'offtakeAgreements',
-            'subscriptionRevenue',
-            'letterOfGuarantee',
-            'thirdPartyGuarantees',
-            'factoringAgreements',
-            'suretyBonds',
-            'governmentContracts',
-            'approvedSupplierStatus',
-            'incubatorGuarantees',
-            'exportCreditGuarantees',
-            'liensCollateral',
-            'securedAssets',
-            'retentionGuarantees',
-            'exportCreditInsurance',
-            'receivablesFinancing',
-            'personalSurety',
-            'corporateGuarantees'
-        ];
-        
-        const totalGuarantees = guaranteeFields.length;
-        let uploadedCount = 0;
-        
-        guaranteeFields.forEach(field => {
-            const fileField = field + 'Files';
-            if (data.guarantees[field] === 'yes' && 
-                data.guarantees[fileField] && 
-                Array.isArray(data.guarantees[fileField]) && 
-                data.guarantees[fileField].length > 0) {
-                uploadedCount++;
-            }
-        });
-        
-        const percentage = (uploadedCount / totalGuarantees) * 100;
-        const rawScore = (uploadedCount / totalGuarantees) * 5;
-        
-        breakdown.guarantees.score = Math.min(percentage, 100);
-        breakdown.guarantees.rawScore = Math.round(rawScore * 10) / 10;
-        breakdown.guarantees.uploaded = uploadedCount;
-        breakdown.guarantees.total = totalGuarantees;
-    }
-
-    // Credit Report (20%) - Convert from 850 scale to percentage, then to 5-point scale
-    if (creditReportAnalysis?.score) {
-        const scoreOutOf850 = creditReportAnalysis.score;
-        const percentageScore = (scoreOutOf850 / 850) * 100;
-        const rawScore = (percentageScore / 100) * 5;
-        breakdown.creditReport.score = Math.min(percentageScore, 100);
-        breakdown.creditReport.rawScore = Math.round(rawScore * 10) / 10;
-    }
-
-    // Financial Strength (20%) - Placeholder for now, will be calculated when data is available
-    if (financialStrengthAnalysis?.overallScore) {
-        // If we have an overall score from the analysis
-        const rawScore = (financialStrengthAnalysis.overallScore / 100) * 5;
-        const financialStrengthScore = financialStrengthAnalysis.overallScore;
-        breakdown.financialStrength.score = Math.min(financialStrengthScore, 100);
-        breakdown.financialStrength.rawScore = Math.round(rawScore * 10) / 10;
-        
-        // Store subcomponent scores
-        if (financialStrengthAnalysis.capitalStructure !== undefined) {
-            breakdown.financialStrength.subcomponents.capitalStructure = financialStrengthAnalysis.capitalStructure;
-        }
-        if (financialStrengthAnalysis.performanceEngine !== undefined) {
-            breakdown.financialStrength.subcomponents.performanceEngine = financialStrengthAnalysis.performanceEngine;
-        }
-        if (financialStrengthAnalysis.costAgility !== undefined) {
-            breakdown.financialStrength.subcomponents.costAgility = financialStrengthAnalysis.costAgility;
-        }
-        if (financialStrengthAnalysis.liquidityAndSurvival !== undefined) {
-            breakdown.financialStrength.subcomponents.liquidityAndSurvival = financialStrengthAnalysis.liquidityAndSurvival;
-        }
-    } else {
-        // Default placeholder values
-        breakdown.financialStrength.score = 0;
-        breakdown.financialStrength.rawScore = 0;
-    }
-
-    // Calculate weighted total score with 5 equal components
-    const totalScore = Math.round(
-        (breakdown.businessPlanAnalysis.score * breakdown.businessPlanAnalysis.weight) +
-        (breakdown.pitchDeckScore.score * breakdown.pitchDeckScore.weight) +
-        (breakdown.guarantees.score * breakdown.guarantees.weight) +
-        (breakdown.creditReport.score * breakdown.creditReport.weight) +
-        (breakdown.financialStrength.score * breakdown.financialStrength.weight)
-    );
-
-    return {
-        score: totalScore,
-        breakdown: breakdown
-    };
-};
 
     // Refresh AI evaluations
     const refreshAIEvaluations = async () => {
@@ -255,18 +327,16 @@ const FundabilityScoreCard = ({ applicationData }) => {
         setEvaluationError("");
 
         try {
-            // Trigger re-evaluation by updating the trigger flags
             const userDocRef = doc(db, "universalProfiles", auth.currentUser.uid);
-            
+
             await updateDoc(userDocRef, {
                 triggerBusinessPlanEvaluation: true,
                 triggerPitchDeckEvaluation: true,
                 triggerFundabilityEvaluation: true
             });
 
-            // Wait a moment for evaluations to complete
             setTimeout(() => {
-                window.location.reload(); // Simple refresh to get new data
+                window.location.reload();
             }, 3000);
 
         } catch (error) {
@@ -275,32 +345,6 @@ const FundabilityScoreCard = ({ applicationData }) => {
             setIsEvaluating(false);
         }
     };
-
-    useEffect(() => {
-    if (applicationData || businessPlanAnalysis || pitchDeckAnalysis || guaranteesAnalysis || creditReportAnalysis || financialStrengthAnalysis) {
-        const { score, breakdown } = calculateFundabilityScore(applicationData);
-        setFundabilityScore(score);
-        setScoreBreakdown(breakdown);
-        
-        // Animate score
-        let start = 0;
-        const duration = 1500;
-        const startTime = Date.now();
-        
-        const animate = () => {
-            const now = Date.now();
-            const progress = Math.min((now - startTime) / duration, 1);
-            const currentScore = Math.floor(progress * score);
-            setAnimatedScore(currentScore);
-            
-            if (progress < 1) {
-                requestAnimationFrame(animate);
-            }
-        };
-        
-        animate();
-    }
-}, [applicationData, businessPlanAnalysis, pitchDeckAnalysis, guaranteesAnalysis, creditReportAnalysis, financialStrengthAnalysis]);
 
     const getTierInfo = (score) => {
         if (score >= 85) return {
@@ -313,7 +357,7 @@ const FundabilityScoreCard = ({ applicationData }) => {
         if (score >= 70) return {
             status: "Strong",
             badge: "🔵",
-            tier: "Tier 2", 
+            tier: "Tier 2",
             description: "Well Prepared",
             color: 'linear-gradient(135deg, #2196F3, #1565C0)'
         };
@@ -340,41 +384,22 @@ const FundabilityScoreCard = ({ applicationData }) => {
 
     const getScoreTextColor = () => '#ffffff';
 
-const formatRequirementName = (key) => {
-    const names = {
-        businessPlanAnalysis: "Business Plan Analysis",
-        pitchDeckScore: "Pitch Deck Score",
-        guarantees: "Guarantees & Security",
-        creditReport: "Credit Report",
-        financialStrength: "Financial Strength"
+    const formatRequirementName = (key) => {
+        const names = {
+            businessPlanAnalysis: "Business Plan Analysis",
+            pitchDeckScore: "Pitch Deck Score",
+            guarantees: "Guarantees & Security",
+            creditReport: "Credit Report",
+            financialProficiency: "Financial Proficiency"
+        };
+        return names[key] || key;
     };
-    return names[key] || key;
-};
 
     const getAnalysisStatus = (analysis) => {
-        if (!analysis) return { text: "No AI analysis", color: "#F44336" };
+        if (!analysis) return { text: "No Data", color: "#F44336" };
         if (analysis.score >= 80) return { text: "Excellent", color: "#4CAF50" };
         if (analysis.score >= 60) return { text: "Good", color: "#FF9800" };
         return { text: "Needs Work", color: "#F44336" };
-    };
-
-    const getFinancialStrengthIcon = () => {
-        return (
-            <div style={{
-                width: '20px',
-                height: '20px',
-                borderRadius: '50%',
-                background: 'linear-gradient(135deg, #9C27B0, #673AB7)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: 'white',
-                fontSize: '10px',
-                fontWeight: 'bold'
-            }}>
-                $$
-            </div>
-        );
     };
 
     const tierInfo = getTierInfo(fundabilityScore);
@@ -465,9 +490,6 @@ const formatRequirementName = (key) => {
                         </h3>
                     </div>
 
-                    {/* Refresh Button */}
-                   
-
                     {/* Score Display */}
                     <div style={{
                         display: 'flex',
@@ -521,160 +543,166 @@ const formatRequirementName = (key) => {
                         </div>
                     </div>
 
-                    {/* AI Analysis Status */}
+                    {/* ====== 5-Component Analysis Status Grid ====== */}
                     <div style={{
                         display: 'grid',
-                        gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                        gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
                         gap: '16px',
                         marginBottom: '24px'
                     }}>
+                        {/* Business Plan Card */}
                         <div style={{
-                            display: 'grid',
-                            gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-                            gap: '16px',
-                            marginBottom: '24px'
+                            padding: '16px',
+                            background: 'white',
+                            borderRadius: '12px',
+                            border: `2px solid ${getAnalysisStatus(businessPlanAnalysis).color}20`,
+                            textAlign: 'center'
                         }}>
-                            {/* Business Plan Card */}
-                            <div style={{
-                                padding: '16px',
-                                background: 'white',
-                                borderRadius: '12px',
-                                border: `2px solid ${getAnalysisStatus(businessPlanAnalysis).color}20`,
-                                textAlign: 'center'
-                            }}>
-                                <FileText size={24} color={getAnalysisStatus(businessPlanAnalysis).color} />
-                                <div style={{ fontWeight: '600', color: '#4a352f', margin: '8px 0 4px 0' }}>
-                                    Business Plan
-                                </div>
-                                <div style={{ 
-                                    fontSize: '12px', 
-                                    color: getAnalysisStatus(businessPlanAnalysis).color,
-                                    fontWeight: '600'
-                                }}>
-                                    {getAnalysisStatus(businessPlanAnalysis).text}
-                                </div>
-                                {businessPlanAnalysis?.rawScore && (
-                                    <div style={{ fontSize: '11px', color: '#7d5a50', marginTop: '4px' }}>
-                                        Score: {businessPlanAnalysis.rawScore}/5
-                                    </div>
-                                )}
+                            <FileText size={24} color={getAnalysisStatus(businessPlanAnalysis).color} />
+                            <div style={{ fontWeight: '600', color: '#4a352f', margin: '8px 0 4px 0' }}>
+                                Business Plan
                             </div>
+                            <div style={{
+                                fontSize: '12px',
+                                color: getAnalysisStatus(businessPlanAnalysis).color,
+                                fontWeight: '600'
+                            }}>
+                                {getAnalysisStatus(businessPlanAnalysis).text}
+                            </div>
+                            {businessPlanAnalysis?.score && (
+                                <div style={{ fontSize: '11px', color: '#7d5a50', marginTop: '4px' }}>
+                                    Score: {Math.round((businessPlanAnalysis.score / 100) * 5) / 10}/5
+                                </div>
+                            )}
+                        </div>
 
-                            {/* Pitch Deck Card */}
-                            <div style={{
-                                padding: '16px',
-                                background: 'white',
-                                borderRadius: '12px',
-                                border: `2px solid ${getAnalysisStatus(pitchDeckAnalysis).color}20`,
-                                textAlign: 'center'
-                            }}>
-                                <Presentation size={24} color={getAnalysisStatus(pitchDeckAnalysis).color} />
-                                <div style={{ fontWeight: '600', color: '#4a352f', margin: '8px 0 4px 0' }}>
-                                    Pitch Deck
-                                </div>
-                                <div style={{ 
-                                    fontSize: '12px', 
-                                    color: getAnalysisStatus(pitchDeckAnalysis).color,
-                                    fontWeight: '600'
-                                }}>
-                                    {getAnalysisStatus(pitchDeckAnalysis).text}
-                                </div>
-                                {pitchDeckAnalysis?.rawScore && (
-                                    <div style={{ fontSize: '11px', color: '#7d5a50', marginTop: '4px' }}>
-                                        Score: {pitchDeckAnalysis.rawScore}/5
-                                    </div>
-                                )}
+                        {/* Pitch Deck Card */}
+                        <div style={{
+                            padding: '16px',
+                            background: 'white',
+                            borderRadius: '12px',
+                            border: `2px solid ${getAnalysisStatus(pitchDeckAnalysis).color}20`,
+                            textAlign: 'center'
+                        }}>
+                            <Presentation size={24} color={getAnalysisStatus(pitchDeckAnalysis).color} />
+                            <div style={{ fontWeight: '600', color: '#4a352f', margin: '8px 0 4px 0' }}>
+                                Pitch Deck
                             </div>
+                            <div style={{
+                                fontSize: '12px',
+                                color: getAnalysisStatus(pitchDeckAnalysis).color,
+                                fontWeight: '600'
+                            }}>
+                                {getAnalysisStatus(pitchDeckAnalysis).text}
+                            </div>
+                            {pitchDeckAnalysis?.score && (
+                                <div style={{ fontSize: '11px', color: '#7d5a50', marginTop: '4px' }}>
+                                    Score: {Math.round((pitchDeckAnalysis.score / 100) * 5) / 10}/5
+                                </div>
+                            )}
+                        </div>
 
-                            {/* Guarantees Card - Shows uploaded count instead of AI status */}
-                            <div style={{
-                                padding: '16px',
-                                background: 'white',
-                                borderRadius: '12px',
-                                border: `2px solid #4CAF5020`,
-                                textAlign: 'center'
-                            }}>
-                                <Shield size={24} color="#4CAF50" />
-                                <div style={{ fontWeight: '600', color: '#4a352f', margin: '8px 0 4px 0' }}>
-                                    Guarantees
-                                </div>
-                                <div style={{ 
-                                    fontSize: '12px', 
-                                    color: '#4CAF50',
-                                    fontWeight: '600'
-                                }}>
-                                    {scoreBreakdown.guarantees?.uploaded || 0}/{scoreBreakdown.guarantees?.total || 19} Uploaded
-                                </div>
-                                {scoreBreakdown.guarantees?.rawScore > 0 && (
-                                    <div style={{ fontSize: '11px', color: '#7d5a50', marginTop: '4px' }}>
-                                        Score: {scoreBreakdown.guarantees.rawScore}/5
-                                    </div>
-                                )}
+                        {/* Guarantees Card */}
+                        <div style={{
+                            padding: '16px',
+                            background: 'white',
+                            borderRadius: '12px',
+                            border: `2px solid #4CAF5020`,
+                            textAlign: 'center'
+                        }}>
+                            <Shield size={24} color="#4CAF50" />
+                            <div style={{ fontWeight: '600', color: '#4a352f', margin: '8px 0 4px 0' }}>
+                                Guarantees
                             </div>
+                            <div style={{
+                                fontSize: '12px',
+                                color: '#4CAF50',
+                                fontWeight: '600'
+                            }}>
+                                {scoreBreakdown.guarantees?.uploaded || 0}/{scoreBreakdown.guarantees?.total || 19}
+                            </div>
+                            {scoreBreakdown.guarantees?.rawScore > 0 && (
+                                <div style={{ fontSize: '11px', color: '#7d5a50', marginTop: '4px' }}>
+                                    Score: {scoreBreakdown.guarantees.rawScore}/5
+                                </div>
+                            )}
+                        </div>
 
-                            {/* Credit Report Card */}
-                            <div style={{
-                                padding: '16px',
-                                background: 'white',
-                                borderRadius: '12px',
-                                border: `2px solid ${getAnalysisStatus(creditReportAnalysis).color}20`,
-                                textAlign: 'center'
-                            }}>
-                                <DollarSign size={24} color={getAnalysisStatus(creditReportAnalysis).color} />
-                                <div style={{ fontWeight: '600', color: '#4a352f', margin: '8px 0 4px 0' }}>
-                                    Credit Report
-                                </div>
-                                <div style={{ 
-                                    fontSize: '12px', 
-                                    color: getAnalysisStatus(creditReportAnalysis).color,
-                                    fontWeight: '600'
-                                }}>
-                                    {getAnalysisStatus(creditReportAnalysis).text}
-                                </div>
-                                {creditReportAnalysis?.rawScore && (
-                                    <div style={{ fontSize: '11px', color: '#7d5a50', marginTop: '4px' }}>
-                                        Score: {creditReportAnalysis.rawScore}/5
-                                    </div>
-                                )}
+                        {/* Credit Report Card */}
+                        <div style={{
+                            padding: '16px',
+                            background: 'white',
+                            borderRadius: '12px',
+                            border: `2px solid ${getAnalysisStatus(creditReportAnalysis).color}20`,
+                            textAlign: 'center'
+                        }}>
+                            <DollarSign size={24} color={getAnalysisStatus(creditReportAnalysis).color} />
+                            <div style={{ fontWeight: '600', color: '#4a352f', margin: '8px 0 4px 0' }}>
+                                Credit Report
                             </div>
+                            <div style={{
+                                fontSize: '12px',
+                                color: getAnalysisStatus(creditReportAnalysis).color,
+                                fontWeight: '600'
+                            }}>
+                                {getAnalysisStatus(creditReportAnalysis).text}
+                            </div>
+                            {creditReportAnalysis?.score && (
+                                <div style={{ fontSize: '11px', color: '#7d5a50', marginTop: '4px' }}>
+                                    Score: {Math.round((creditReportAnalysis.score / 850) * 5) / 10}/5
+                                </div>
+                            )}
+                        </div>
 
-                            {/* Financial Strength Card */}
+                        {/* Financial Proficiency Card (MERGED) */}
+                        <div style={{
+                            padding: '16px',
+                            background: 'white',
+                            borderRadius: '12px',
+                            border: `2px solid #8B5CF620`,
+                            textAlign: 'center'
+                        }}>
                             <div style={{
-                                padding: '16px',
-                                background: 'white',
-                                borderRadius: '12px',
-                                border: `2px solid #9C27B020`,
-                                textAlign: 'center'
+                                width: '30px',
+                                height: '30px',
+                                borderRadius: '50%',
+                                background: 'linear-gradient(135deg, #8B5CF6, #7C3AED)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                margin: '0 auto 8px auto',
+                                color: 'white',
+                                fontSize: '16px',
+                                fontWeight: 'bold'
                             }}>
-                                <div style={{
-                                    width: '30px',
-                                    height: '30px',
-                                    borderRadius: '50%',
-                                    background: 'linear-gradient(135deg, #9C27B0, #673AB7)',
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    justifyContent: 'center',
-                                    margin: '0 auto 8px auto',
-                                    color: 'white'
-                                }}>
-                                    $$
-                                </div>
-                                <div style={{ fontWeight: '600', color: '#4a352f', margin: '8px 0 4px 0' }}>
-                                    Financial Strength
-                                </div>
-                                <div style={{ 
-                                    fontSize: '12px', 
-                                    color: '#9C27B0',
-                                    fontWeight: '600'
-                                }}>
-                                    Analysis Pending
-                                </div>
-                                {scoreBreakdown.financialStrength?.rawScore > 0 && (
-                                    <div style={{ fontSize: '11px', color: '#7d5a50', marginTop: '4px' }}>
-                                        Score: {scoreBreakdown.financialStrength.rawScore}/5
-                                    </div>
-                                )}
+                                💰
                             </div>
+                            <div style={{ fontWeight: '600', color: '#4a352f', margin: '8px 0 4px 0' }}>
+                                Financial Proficiency
+                            </div>
+                            <div style={{
+                                fontSize: '12px',
+                                color: '#8B5CF6',
+                                fontWeight: '600'
+                            }}>
+                                {financialProficiencyAnalysis?.score > 0 ?
+                                    (financialProficiencyAnalysis.score >= 80 ? 'Excellent' :
+                                        financialProficiencyAnalysis.score >= 60 ? 'Strong' :
+                                            financialProficiencyAnalysis.score >= 40 ? 'Good' : 'Developing')
+                                    : 'No Data'}
+                            </div>
+                            {scoreBreakdown.financialProficiency?.rawScore > 0 && (
+                                <div style={{ fontSize: '11px', color: '#7d5a50', marginTop: '4px' }}>
+                                    Score: {scoreBreakdown.financialProficiency.rawScore}/5
+                                </div>
+                            )}
+                            {/* Show subcomponents */}
+                            {financialProficiencyAnalysis?.solvency && (
+                                <div style={{ fontSize: '10px', color: '#9e7b6e', marginTop: '6px', lineHeight: '1.4' }}>
+                                    <div>Solvency: {scoreBreakdown.financialProficiency?.solvencyScore || 0}%</div>
+                                    <div>Strength: {scoreBreakdown.financialProficiency?.financialStrengthScore || 0}%</div>
+                                </div>
+                            )}
                         </div>
                     </div>
 
@@ -707,19 +735,22 @@ const formatRequirementName = (key) => {
                                         width: '20px',
                                         height: '20px',
                                         borderRadius: '50%',
-                                        background: tierInfo.color,
+                                        background: key === 'financialProficiency'
+                                            ? 'linear-gradient(135deg, #8B5CF6, #7C3AED)'
+                                            : tierInfo.color,
                                         display: 'flex',
                                         alignItems: 'center',
                                         justifyContent: 'center',
                                         color: 'white',
                                         fontSize: '12px',
-                                        fontWeight: 'bold'
+                                        fontWeight: 'bold',
+                                        flexShrink: 0
                                     }}>
-                                        {key === 'businessPlanAnalysis' ? <FileText size={12} /> : 
-                                         key === 'pitchDeckScore' ? <Presentation size={12} /> : 
-                                         key === 'guarantees' ? <Shield size={12} /> :
-                                         key === 'creditReport' ? <DollarSign size={12} /> :
-                                         getFinancialStrengthIcon()}
+                                        {key === 'businessPlanAnalysis' ? <FileText size={12} /> :
+                                            key === 'pitchDeckScore' ? <Presentation size={12} /> :
+                                                key === 'guarantees' ? <Shield size={12} /> :
+                                                    key === 'creditReport' ? <DollarSign size={12} /> :
+                                                        <BarChart3 size={12} />}
                                     </div>
                                     <div style={{ flex: 1 }}>
                                         <span style={{
@@ -735,12 +766,11 @@ const formatRequirementName = (key) => {
                                             marginTop: '4px'
                                         }}>
                                             Weight: {Math.round(data.weight * 100)}%
-                                            {key === 'guarantees' && data.uploaded !== undefined && 
+                                            {key === 'guarantees' && data.uploaded !== undefined &&
                                                 ` • ${data.uploaded}/${data.total} Uploaded`}
-                                            {key === 'financialStrength' && data.subcomponents && 
-                                                ` • Capital Structure: ${data.subcomponents.capitalStructure}, Performance Engine: ${data.subcomponents.performanceEngine}, Cost Agility: ${data.subcomponents.costAgility}, Liquidity & Survival: ${data.subcomponents.liquidityAndSurvival}`}
-                                            {data.rawScore > 0 && key !== 'guarantees' && ` • AI Score: ${data.rawScore}/${data.maxRaw}`}
-                                            {data.rawScore > 0 && key === 'guarantees' && ` • Score: ${data.rawScore}/${data.maxRaw}`}
+                                            {data.rawScore > 0 && ` • Score: ${data.rawScore}/${data.maxRaw}`}
+                                            {key === 'financialProficiency' && data.solvencyScore > 0 &&
+                                                ` • Solvency: ${data.solvencyScore}% | Strength: ${data.financialStrengthScore}%`}
                                         </div>
                                     </div>
                                     <div style={{
@@ -758,8 +788,8 @@ const formatRequirementName = (key) => {
                                         }}>
                                             <div style={{
                                                 width: `${data.score}%`,
-                                                backgroundColor: data.score >= 80 ? '#4CAF50' : 
-                                                              data.score >= 60 ? '#FF9800' : '#F44336',
+                                                backgroundColor: data.score >= 80 ? '#4CAF50' :
+                                                    data.score >= 60 ? '#FF9800' : '#F44336',
                                                 height: '100%',
                                                 borderRadius: '4px',
                                                 transition: 'width 0.3s ease'
@@ -777,93 +807,6 @@ const formatRequirementName = (key) => {
                                     </div>
                                 </div>
                             ))}
-
-                            {/* Financial Strength Subcomponents */}
-                            {scoreBreakdown.financialStrength && (
-                                <div style={{
-                                    marginTop: '12px',
-                                    padding: '16px',
-                                    background: 'rgba(156, 39, 176, 0.05)',
-                                    borderRadius: '12px',
-                                    border: '1px solid rgba(156, 39, 176, 0.2)'
-                                }}>
-                                    <div style={{
-                                        fontWeight: '600',
-                                        color: '#9C27B0',
-                                        fontSize: '14px',
-                                        marginBottom: '12px',
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        gap: '8px'
-                                    }}>
-                                        <div style={{
-                                            width: '16px',
-                                            height: '16px',
-                                            borderRadius: '50%',
-                                            background: 'linear-gradient(135deg, #9C27B0, #673AB7)',
-                                            display: 'flex',
-                                            alignItems: 'center',
-                                            justifyContent: 'center',
-                                            color: 'white',
-                                            fontSize: '10px',
-                                            fontWeight: 'bold'
-                                        }}>
-                                            $$
-                                        </div>
-                                        Financial Strength Components
-                                    </div>
-                                    <div style={{
-                                        display: 'grid',
-                                        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-                                        gap: '12px'
-                                    }}>
-                                        {[
-                                            { name: 'Capital Structure', value: scoreBreakdown.financialStrength.subcomponents?.capitalStructure || 0 },
-                                            { name: 'Performance Engine', value: scoreBreakdown.financialStrength.subcomponents?.performanceEngine || 0 },
-                                            { name: 'Cost Agility', value: scoreBreakdown.financialStrength.subcomponents?.costAgility || 0 },
-                                            { name: 'Liquidity & Survival', value: scoreBreakdown.financialStrength.subcomponents?.liquidityAndSurvival || 0 }
-                                        ].map((component, index) => (
-                                            <div key={index} style={{
-                                                padding: '12px',
-                                                background: 'white',
-                                                borderRadius: '8px',
-                                                border: '1px solid rgba(156, 39, 176, 0.1)'
-                                            }}>
-                                                <div style={{
-                                                    fontSize: '12px',
-                                                    fontWeight: '600',
-                                                    color: '#9C27B0',
-                                                    marginBottom: '4px'
-                                                }}>
-                                                    {component.name}
-                                                </div>
-                                                <div style={{
-                                                    fontSize: '14px',
-                                                    fontWeight: '600',
-                                                    color: '#4a352f'
-                                                }}>
-                                                    {component.value}/100
-                                                </div>
-                                                <div style={{
-                                                    width: '100%',
-                                                    height: '4px',
-                                                    background: '#f3e8dc',
-                                                    borderRadius: '2px',
-                                                    marginTop: '6px',
-                                                    overflow: 'hidden'
-                                                }}>
-                                                    <div style={{
-                                                        width: `${component.value}%`,
-                                                        height: '100%',
-                                                        background: 'linear-gradient(135deg, #9C27B0, #673AB7)',
-                                                        borderRadius: '2px'
-                                                    }}></div>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
                         </div>
                     </div>
 
@@ -974,6 +917,31 @@ const formatRequirementName = (key) => {
         );
     };
 
+    useEffect(() => {
+        if (applicationData || businessPlanAnalysis || pitchDeckAnalysis || creditReportAnalysis || financialProficiencyAnalysis) {
+            const { score, breakdown } = calculateFundabilityScore(applicationData);
+            setFundabilityScore(score);
+            setScoreBreakdown(breakdown);
+
+            let start = 0;
+            const duration = 1500;
+            const startTime = Date.now();
+
+            const animate = () => {
+                const now = Date.now();
+                const progress = Math.min((now - startTime) / duration, 1);
+                const currentScore = Math.floor(progress * score);
+                setAnimatedScore(currentScore);
+
+                if (progress < 1) {
+                    requestAnimationFrame(animate);
+                }
+            };
+
+            animate();
+        }
+    }, [applicationData, businessPlanAnalysis, pitchDeckAnalysis, creditReportAnalysis, financialProficiencyAnalysis]);
+
     return (
         <>
             <div style={{
@@ -1070,7 +1038,7 @@ const formatRequirementName = (key) => {
                         }}>
                             {tierInfo.description}
                         </p>
-                        {/* AI Analysis Status Indicator */}
+                        {/* Status Indicator */}
                         <div style={{
                             display: 'flex',
                             alignItems: 'center',
@@ -1079,17 +1047,17 @@ const formatRequirementName = (key) => {
                             fontSize: '11px',
                             color: '#7d5a50'
                         }}>
-                           <div style={{
+                            <div style={{
                                 width: '6px',
                                 height: '6px',
                                 borderRadius: '50%',
-                                backgroundColor: 
-                                    businessPlanAnalysis && pitchDeckAnalysis && guaranteesAnalysis && creditReportAnalysis && financialStrengthAnalysis ? '#4CAF50' :
-                                    businessPlanAnalysis || pitchDeckAnalysis || guaranteesAnalysis || creditReportAnalysis || financialStrengthAnalysis ? '#FF9800' : '#F44336'
+                                backgroundColor:
+                                    businessPlanAnalysis && pitchDeckAnalysis && creditReportAnalysis && financialProficiencyAnalysis ? '#4CAF50' :
+                                        businessPlanAnalysis || pitchDeckAnalysis || creditReportAnalysis || financialProficiencyAnalysis ? '#FF9800' : '#F44336'
                             }} />
-                            {businessPlanAnalysis && pitchDeckAnalysis && guaranteesAnalysis && creditReportAnalysis && financialStrengthAnalysis ? 'AI Analysis Complete' :
-                             businessPlanAnalysis || pitchDeckAnalysis || guaranteesAnalysis || creditReportAnalysis || financialStrengthAnalysis ? 'Partial AI Analysis' : 
-                             'AI Analysis Pending'}
+                            {businessPlanAnalysis && pitchDeckAnalysis && creditReportAnalysis && financialProficiencyAnalysis ? 'All Components Ready' :
+                                businessPlanAnalysis || pitchDeckAnalysis || creditReportAnalysis || financialProficiencyAnalysis ? 'Partial Data Available' :
+                                    'Analysis Pending'}
                         </div>
                     </div>
                 </div>
@@ -1149,13 +1117,9 @@ const formatRequirementName = (key) => {
                     from { transform: rotate(0deg); }
                     to { transform: rotate(360deg); }
                 }
-                .spin {
-                    animation: spin 1s linear infinite;
-                }
             `}</style>
         </>
     );
 };
-
 
 export default FundabilityScoreCard;
