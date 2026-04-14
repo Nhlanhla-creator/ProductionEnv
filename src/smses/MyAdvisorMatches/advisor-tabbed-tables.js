@@ -1,10 +1,9 @@
 "use client"
 import { useState, useRef, useEffect } from "react"
 import { Eye, ChevronDown, Search, X, Trophy, TrendingUp, Calendar, DollarSign, FileText, Users, MapPin, GraduationCap, Briefcase, RefreshCw, BarChart3, Package, Star, MessageSquare, Send } from "lucide-react"
-// REMOVED: import AdvisoryApplication from "../../smses/AdvisorApplication/AdvisorApplication"
 import { AdvisorTable } from "./advisor-table"
 import { db, auth } from "../../firebaseConfig"
-import { collection, query, where, onSnapshot, doc, getDoc, updateDoc, arrayUnion, serverTimestamp } from "firebase/firestore"
+import { collection, query, where, onSnapshot, doc, getDoc, updateDoc, arrayUnion, serverTimestamp, setDoc } from "firebase/firestore"
 
 // Text truncation component
 const TruncatedText = ({ text, maxLength = 40 }) => {
@@ -46,31 +45,6 @@ const TruncatedText = ({ text, maxLength = 40 }) => {
   )
 }
 
-// Empty table row component for when there are no deals
-const EmptyTableRow = () => (
-  <tr style={{ borderBottom: "1px solid #E8D5C4" }}>
-    <td colSpan="10" style={{ 
-      padding: "2rem",
-      textAlign: "center", 
-      color: "#999",
-      fontStyle: "italic",
-      borderRight: "none"
-    }}>
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "1rem" }}>
-        <Trophy size={48} style={{ color: "#ddd" }} />
-        <div>
-          <p style={{ margin: "0 0 0.5rem 0", fontSize: "1rem", color: "#666" }}>
-            You have not engaged any advisors, so there are no successful deals available.
-          </p>
-          <p style={{ margin: 0, fontSize: "0.9rem", color: "#999" }}>
-            You need to engage advisors first to see your successful deals here.
-          </p>
-        </div>
-      </div>
-    </td>
-  </tr>
-)
-
 // Star Rating Component
 const StarRating = ({ rating, onRatingChange, readOnly = false, size = 24 }) => {
   const [hoverRating, setHoverRating] = useState(0)
@@ -96,9 +70,9 @@ const StarRating = ({ rating, onRatingChange, readOnly = false, size = 24 }) => 
   const getStarColor = (starIndex) => {
     const currentRating = hoverRating || rating
     if (starIndex <= currentRating) {
-      return "#ffd700" // Gold for filled stars
+      return "#ffd700"
     }
-    return "#e0e0e0" // Gray for empty stars
+    return "#e0e0e0"
   }
 
   return (
@@ -187,7 +161,6 @@ const RatingModal = ({ deal, isOpen, onClose, onSubmitRating }) => {
   return (
     <div style={modalOverlayStyle} onClick={onClose}>
       <div style={modalContentStyle} onClick={(e) => e.stopPropagation()}>
-        {/* Header */}
         <div
           style={{
             display: "flex",
@@ -210,7 +183,7 @@ const RatingModal = ({ deal, isOpen, onClose, onSubmitRating }) => {
             }}
           >
             <Star size={24} style={{ color: "#ffd700" }} />
-            Rate {deal.advisorName}
+            Rate {deal?.advisorName}
           </h2>
           <button
             onClick={onClose}
@@ -228,7 +201,7 @@ const RatingModal = ({ deal, isOpen, onClose, onSubmitRating }) => {
         </div>
 
         {/* Current Rating Display */}
-        {deal.performanceRating && (
+        {deal?.performanceRating && (
           <div
             style={{
               backgroundColor: "#f8f9fa",
@@ -240,12 +213,12 @@ const RatingModal = ({ deal, isOpen, onClose, onSubmitRating }) => {
           >
             <h4 style={{ margin: "0 0 8px 0", color: "#3e2723" }}>Current Rating</h4>
             <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-              <StarRating rating={deal.performanceRating} readOnly={true} size={20} />
+              <StarRating rating={Number(deal.performanceRating) || 0} readOnly={true} size={20} />
               <span style={{ fontSize: "16px", fontWeight: "600", color: "#666" }}>
-                {deal.performanceRating.toFixed(1)}/5
+                {deal.performanceRating ? Number(deal.performanceRating).toFixed(1) : "No rating"}/5
               </span>
             </div>
-            {deal.advisorFeedback && (
+            {deal?.advisorFeedback && (
               <p style={{ margin: "8px 0 0 0", color: "#666", fontSize: "14px" }}>"{deal.advisorFeedback}"</p>
             )}
           </div>
@@ -309,7 +282,7 @@ const RatingModal = ({ deal, isOpen, onClose, onSubmitRating }) => {
         </div>
 
         {/* Rating History */}
-        {deal.ratingHistory && deal.ratingHistory.length > 0 && (
+        {deal?.ratingHistory && deal.ratingHistory.length > 0 && (
           <div
             style={{
               backgroundColor: "#f8f9fa",
@@ -405,6 +378,48 @@ const SuccessfulAdvisorDealsTable = ({ successfulDeals = [] }) => {
   const [showRatingModal, setShowRatingModal] = useState(false)
   const [dealToRate, setDealToRate] = useState(null)
   const [notification, setNotification] = useState(null)
+  const [dealsWithRatings, setDealsWithRatings] = useState([])
+
+  // Fetch ratings from SmeToAdvisorRating collection
+  useEffect(() => {
+    if (!successfulDeals || successfulDeals.length === 0) return
+
+    const fetchRatingsForDeals = async () => {
+      const currentUser = auth.currentUser
+      if (!currentUser) {
+        setDealsWithRatings(successfulDeals)
+        return
+      }
+
+      const updatedDeals = await Promise.all(
+        successfulDeals.map(async (deal) => {
+          const ratingDocId = `${currentUser.uid}_${deal.id}`
+          const ratingDoc = await getDoc(doc(db, "SmeToAdvisorRating", ratingDocId))
+          
+          if (ratingDoc.exists()) {
+            const ratingData = ratingDoc.data()
+            return {
+              ...deal,
+              performanceRating: ratingData.rating,
+              advisorFeedback: ratingData.comment,
+              ratingHistory: [ratingData],
+            }
+          }
+          
+          return {
+            ...deal,
+            performanceRating: null,
+            advisorFeedback: null,
+            ratingHistory: [],
+          }
+        })
+      )
+      
+      setDealsWithRatings(updatedDeals)
+    }
+
+    fetchRatingsForDeals()
+  }, [successfulDeals])
 
   const getStatusColor = (status) => {
     switch (status) {
@@ -421,7 +436,7 @@ const SuccessfulAdvisorDealsTable = ({ successfulDeals = [] }) => {
   }
 
   const getRatingColor = (rating) => {
-    // Convert to number if it's a string
+    if (!rating) return "#9e9e9e"
     const score = typeof rating === "string" ? Number.parseFloat(rating.split("/")[0]) : rating
     if (score >= 4.5) return "#4caf50"
     if (score >= 4.0) return "#8bc34a"
@@ -449,16 +464,55 @@ const SuccessfulAdvisorDealsTable = ({ successfulDeals = [] }) => {
 
   const handleSubmitRating = async (ratingData) => {
     try {
-      await updateDoc(doc(db, "SmeAdvisorApplications", ratingData.dealId), {
-        performanceRating: ratingData.rating,
-        advisorFeedback: ratingData.comment,
-        lastRated: serverTimestamp(),
-        ratingHistory: arrayUnion({
-          rating: ratingData.rating,
-          comment: ratingData.comment,
-          date: new Date().toISOString(),
-        }),
-      })
+      const currentUser = auth.currentUser
+      
+      if (!currentUser) {
+        setNotification({
+          type: "error",
+          message: "You must be logged in to rate",
+        })
+        setTimeout(() => setNotification(null), 3000)
+        return
+      }
+
+      // Get SME document
+      const smeDoc = await getDoc(doc(db, "smes", currentUser.uid))
+      const smeData = smeDoc.exists() ? smeDoc.data() : {}
+
+      // Get advisor details
+      const advisorDoc = await getDoc(doc(db, "SmeAdvisorApplications", ratingData.dealId))
+      const advisorData = advisorDoc.exists() ? advisorDoc.data() : {}
+
+      const ratingDocId = `${currentUser.uid}_${ratingData.dealId}`
+
+      const ratingObject = {
+        comment: ratingData.comment,
+        companyEmail: currentUser.email || "",
+        companyId: currentUser.uid,
+        companyName: smeData.companyName || "",
+        createdAt: serverTimestamp(),
+        date: ratingData.date,
+        smename: smeData.companyName || currentUser.displayName || "SME User",
+        advisorId: ratingData.dealId,
+        advisorName: advisorData.advisorName || "",
+        rating: ratingData.rating,
+      }
+
+      await setDoc(doc(db, "SmeToAdvisorRating", ratingDocId), ratingObject)
+
+      // Update local state
+      setDealsWithRatings(prevDeals =>
+        prevDeals.map(deal =>
+          deal.id === ratingData.dealId
+            ? {
+                ...deal,
+                performanceRating: ratingData.rating,
+                advisorFeedback: ratingData.comment,
+                ratingHistory: [ratingObject],
+              }
+            : deal
+        )
+      )
 
       setNotification({
         type: "success",
@@ -470,7 +524,7 @@ const SuccessfulAdvisorDealsTable = ({ successfulDeals = [] }) => {
       console.error("Error submitting rating:", error)
       setNotification({
         type: "error",
-        message: "Failed to submit rating",
+        message: "Failed to submit rating: " + error.message,
       })
       setTimeout(() => setNotification(null), 3000)
     }
@@ -545,372 +599,74 @@ const SuccessfulAdvisorDealsTable = ({ successfulDeals = [] }) => {
         >
           <thead>
             <tr>
-              <th
-                style={{
-                  background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
-                  color: "#FEFCFA",
-                  padding: "0.75rem 0.5rem",
-                  textAlign: "left",
-                  fontWeight: "600",
-                  fontSize: "0.75rem",
-                  letterSpacing: "0.5px",
-                  textTransform: "uppercase",
-                  borderRight: "1px solid #1a0c02",
-                  width: "14%",
-                }}
-              >
-                Advisor Name
-              </th>
-              <th
-                style={{
-                  background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
-                  color: "#FEFCFA",
-                  padding: "0.75rem 0.5rem",
-                  textAlign: "left",
-                  fontWeight: "600",
-                  fontSize: "0.75rem",
-                  letterSpacing: "0.5px",
-                  textTransform: "uppercase",
-                  borderRight: "1px solid #1a0c02",
-                  width: "11%",
-                }}
-              >
-                Deal Amount
-              </th>
-              <th
-                style={{
-                  background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
-                  color: "#FEFCFA",
-                  padding: "0.75rem 0.5rem",
-                  textAlign: "left",
-                  fontWeight: "600",
-                  fontSize: "0.75rem",
-                  letterSpacing: "0.5px",
-                  textTransform: "uppercase",
-                  borderRight: "1px solid #1a0c02",
-                  width: "10%",
-                }}
-              >
-                Deal Type
-              </th>
-              <th
-                style={{
-                  background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
-                  color: "#FEFCFA",
-                  padding: "0.75rem 0.5rem",
-                  textAlign: "left",
-                  fontWeight: "600",
-                  fontSize: "0.75rem",
-                  letterSpacing: "0.5px",
-                  textTransform: "uppercase",
-                  borderRight: "1px solid #1a0c02",
-                  width: "10%",
-                }}
-              >
-                Completion Date
-              </th>
-              <th
-                style={{
-                  background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
-                  color: "#FEFCFA",
-                  padding: "0.75rem 0.5rem",
-                  textAlign: "left",
-                  fontWeight: "600",
-                  fontSize: "0.75rem",
-                  letterSpacing: "0.5px",
-                  textTransform: "uppercase",
-                  borderRight: "1px solid #1a0c02",
-                  width: "8%",
-                }}
-              >
-                Sector
-              </th>
-              <th
-                style={{
-                  background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
-                  color: "#FEFCFA",
-                  padding: "0.75rem 0.5rem",
-                  textAlign: "left",
-                  fontWeight: "600",
-                  fontSize: "0.75rem",
-                  letterSpacing: "0.5px",
-                  textTransform: "uppercase",
-                  borderRight: "1px solid #1a0c02",
-                  width: "8%",
-                }}
-              >
-                Location
-              </th>
-              <th
-                style={{
-                  background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
-                  color: "#FEFCFA",
-                  padding: "0.75rem 0.5rem",
-                  textAlign: "left",
-                  fontWeight: "600",
-                  fontSize: "0.75rem",
-                  letterSpacing: "0.5px",
-                  textTransform: "uppercase",
-                  borderRight: "1px solid #1a0c02",
-                  width: "7%",
-                }}
-              >
-                Duration
-              </th>
-              <th
-                style={{
-                  background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
-                  color: "#FEFCFA",
-                  padding: "0.5rem 0.3rem",
-                  textAlign: "center",
-                  fontWeight: "600",
-                  fontSize: "0.75rem",
-                  letterSpacing: "0.5px",
-                  textTransform: "uppercase",
-                  borderRight: "1px solid #1a0c02",
-                  width: "10%",
-                }}
-              >
-                Rating
-              </th>
-              <th
-                style={{
-                  background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
-                  color: "#FEFCFA",
-                  padding: "0.75rem 0.5rem",
-                  textAlign: "left",
-                  fontWeight: "600",
-                  fontSize: "0.75rem",
-                  letterSpacing: "0.5px",
-                  textTransform: "uppercase",
-                  borderRight: "1px solid #1a0c02",
-                  width: "10%",
-                }}
-              >
-                Current Status
-              </th>
-              <th
-                style={{
-                  background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
-                  color: "#FEFCFA",
-                  padding: "0.75rem 0.5rem",
-                  textAlign: "center",
-                  fontWeight: "600",
-                  fontSize: "0.75rem",
-                  letterSpacing: "0.5px",
-                  textTransform: "uppercase",
-                  borderRight: "none",
-                  width: "12%",
-                }}
-              >
-                Action
-              </th>
+              <th style={{ background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)", color: "#FEFCFA", padding: "0.75rem 0.5rem", textAlign: "left", fontWeight: "600", fontSize: "0.75rem", letterSpacing: "0.5px", textTransform: "uppercase", borderRight: "1px solid #1a0c02", width: "14%" }}>Advisor Name</th>
+              <th style={{ background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)", color: "#FEFCFA", padding: "0.75rem 0.5rem", textAlign: "left", fontWeight: "600", fontSize: "0.75rem", letterSpacing: "0.5px", textTransform: "uppercase", borderRight: "1px solid #1a0c02", width: "11%" }}>Deal Amount</th>
+              <th style={{ background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)", color: "#FEFCFA", padding: "0.75rem 0.5rem", textAlign: "left", fontWeight: "600", fontSize: "0.75rem", letterSpacing: "0.5px", textTransform: "uppercase", borderRight: "1px solid #1a0c02", width: "10%" }}>Deal Type</th>
+              <th style={{ background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)", color: "#FEFCFA", padding: "0.75rem 0.5rem", textAlign: "left", fontWeight: "600", fontSize: "0.75rem", letterSpacing: "0.5px", textTransform: "uppercase", borderRight: "1px solid #1a0c02", width: "10%" }}>Completion Date</th>
+              <th style={{ background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)", color: "#FEFCFA", padding: "0.75rem 0.5rem", textAlign: "left", fontWeight: "600", fontSize: "0.75rem", letterSpacing: "0.5px", textTransform: "uppercase", borderRight: "1px solid #1a0c02", width: "8%" }}>Sector</th>
+              <th style={{ background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)", color: "#FEFCFA", padding: "0.75rem 0.5rem", textAlign: "left", fontWeight: "600", fontSize: "0.75rem", letterSpacing: "0.5px", textTransform: "uppercase", borderRight: "1px solid #1a0c02", width: "8%" }}>Location</th>
+              <th style={{ background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)", color: "#FEFCFA", padding: "0.75rem 0.5rem", textAlign: "left", fontWeight: "600", fontSize: "0.75rem", letterSpacing: "0.5px", textTransform: "uppercase", borderRight: "1px solid #1a0c02", width: "7%" }}>Duration</th>
+              <th style={{ background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)", color: "#FEFCFA", padding: "0.5rem 0.3rem", textAlign: "center", fontWeight: "600", fontSize: "0.75rem", letterSpacing: "0.5px", textTransform: "uppercase", borderRight: "1px solid #1a0c02", width: "10%" }}>Rating</th>
+              <th style={{ background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)", color: "#FEFCFA", padding: "0.75rem 0.5rem", textAlign: "left", fontWeight: "600", fontSize: "0.75rem", letterSpacing: "0.5px", textTransform: "uppercase", borderRight: "1px solid #1a0c02", width: "10%" }}>Current Status</th>
+              <th style={{ background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)", color: "#FEFCFA", padding: "0.75rem 0.5rem", textAlign: "center", fontWeight: "600", fontSize: "0.75rem", letterSpacing: "0.5px", textTransform: "uppercase", borderRight: "none", width: "12%" }}>Action</th>
             </tr>
           </thead>
           <tbody>
-            {successfulDeals.length === 0 ? (
-              <EmptyTableRow />
+            {dealsWithRatings.length === 0 ? (
+              <tr style={{ borderBottom: "1px solid #E8D5C4" }}>
+                <td colSpan="10" style={{ padding: "2rem", textAlign: "center", borderRight: "none", color: "#999", fontStyle: "italic" }}>
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "1rem" }}>
+                    <Trophy size={48} style={{ color: "#ddd" }} />
+                    <div>
+                      <p style={{ margin: "0 0 0.5rem 0", fontSize: "1rem", color: "#666" }}>
+                        You have not engaged any advisors, so there are no successful deals available.
+                      </p>
+                      <p style={{ margin: 0, fontSize: "0.9rem", color: "#999" }}>
+                        You need to engage advisors first to see your successful deals here.
+                      </p>
+                    </div>
+                  </div>
+                </td>
+              </tr>
             ) : (
-              successfulDeals.map((deal) => (
+              dealsWithRatings.map((deal) => (
                 <tr
                   key={deal.id}
-                  style={{
-                    borderBottom: "1px solid #E8D5C4",
-                    transition: "all 0.2s ease",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.backgroundColor = "#f5f5f5"
-                    e.currentTarget.style.transform = "translateY(-1px)"
-                    e.currentTarget.style.boxShadow = "0 4px 12px rgba(0, 0, 0, 0.1)"
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.backgroundColor = "white"
-                    e.currentTarget.style.transform = "translateY(0)"
-                    e.currentTarget.style.boxShadow = "none"
-                  }}
+                  style={{ borderBottom: "1px solid #E8D5C4", transition: "all 0.2s ease" }}
+                  onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "#f5f5f5"; e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.boxShadow = "0 4px 12px rgba(0, 0, 0, 0.1)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "white"; e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "none"; }}
                 >
-                  <td
-                    style={{
-                      padding: "0.75rem 0.5rem",
-                      borderRight: "1px solid #E8D5C4",
-                      verticalAlign: "top",
-                      fontSize: "0.75rem",
-                      color: "#374151",
-                      fontWeight: "400",
-                    }}
-                  >
-                    {deal.advisorName}
-                  </td>
-
-                  <td
-                    style={{
-                      padding: "0.75rem 0.5rem",
-                      borderRight: "1px solid #E8D5C4",
-                      verticalAlign: "top",
-                      fontSize: "0.75rem",
-                      color: "#374151",
-                      fontWeight: "400",
-                    }}
-                  >
-                    {deal.dealAmount}
-                  </td>
-
-                  <td
-                    style={{
-                      padding: "0.75rem 0.5rem",
-                      borderRight: "1px solid #E8D5C4",
-                      verticalAlign: "top",
-                      fontSize: "0.75rem",
-                      color: "#374151",
-                      fontWeight: "400",
-                    }}
-                  >
-                    {deal.dealType}
-                  </td>
-
-                  <td
-                    style={{
-                      padding: "0.75rem 0.5rem",
-                      borderRight: "1px solid #E8D5C4",
-                      verticalAlign: "top",
-                      fontSize: "0.75rem",
-                      color: "#374151",
-                      fontWeight: "400",
-                    }}
-                  >
-                    {formatDate(deal.completionDate)}
-                  </td>
-
-                  <td
-                    style={{
-                      padding: "0.75rem 0.5rem",
-                      borderRight: "1px solid #E8D5C4",
-                      verticalAlign: "top",
-                      fontSize: "0.75rem",
-                      color: "#374151",
-                      fontWeight: "400",
-                    }}
-                  >
-                    <TruncatedText text={deal.sector} maxLength={15} />
-                  </td>
-
-                  <td
-                    style={{
-                      padding: "0.75rem 0.5rem",
-                      borderRight: "1px solid #E8D5C4",
-                      verticalAlign: "top",
-                      fontSize: "0.75rem",
-                      color: "#374151",
-                      fontWeight: "400",
-                    }}
-                  >
-                    <TruncatedText text={deal.location} maxLength={12} />
-                  </td>
-
-                  <td
-                    style={{
-                      padding: "0.75rem 0.5rem",
-                      borderRight: "1px solid #E8D5C4",
-                      verticalAlign: "top",
-                      fontSize: "0.75rem",
-                      color: "#374151",
-                      fontWeight: "400",
-                    }}
-                  >
-                    {deal.dealDuration}
-                  </td>
-
-                  <td
-                    style={{
-                      padding: "0.5rem 0.3rem",
-                      borderRight: "1px solid #E8D5C4",
-                      verticalAlign: "top",
-                      textAlign: "center",
-                    }}
-                  >
+                  <td style={{ padding: "0.75rem 0.5rem", borderRight: "1px solid #E8D5C4", verticalAlign: "top", fontSize: "0.75rem", color: "#374151", fontWeight: "400" }}>{deal.advisorName}</td>
+                  <td style={{ padding: "0.75rem 0.5rem", borderRight: "1px solid #E8D5C4", verticalAlign: "top", fontSize: "0.75rem", color: "#374151", fontWeight: "400" }}>{deal.dealAmount}</td>
+                  <td style={{ padding: "0.75rem 0.5rem", borderRight: "1px solid #E8D5C4", verticalAlign: "top", fontSize: "0.75rem", color: "#374151", fontWeight: "400" }}>{deal.dealType}</td>
+                  <td style={{ padding: "0.75rem 0.5rem", borderRight: "1px solid #E8D5C4", verticalAlign: "top", fontSize: "0.75rem", color: "#374151", fontWeight: "400" }}>{formatDate(deal.completionDate)}</td>
+                  <td style={{ padding: "0.75rem 0.5rem", borderRight: "1px solid #E8D5C4", verticalAlign: "top", fontSize: "0.75rem", color: "#374151", fontWeight: "400" }}><TruncatedText text={deal.sector} maxLength={15} /></td>
+                  <td style={{ padding: "0.75rem 0.5rem", borderRight: "1px solid #E8D5C4", verticalAlign: "top", fontSize: "0.75rem", color: "#374151", fontWeight: "400" }}><TruncatedText text={deal.location} maxLength={12} /></td>
+                  <td style={{ padding: "0.75rem 0.5rem", borderRight: "1px solid #E8D5C4", verticalAlign: "top", fontSize: "0.75rem", color: "#374151", fontWeight: "400" }}>{deal.dealDuration}</td>
+                  <td style={{ padding: "0.5rem 0.3rem", borderRight: "1px solid #E8D5C4", verticalAlign: "top", textAlign: "center" }}>
                     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "2px" }}>
-                      <StarRating rating={Number.parseFloat(deal.performanceRating) || 0} readOnly={true} size={14} />
-                      <span
-                        style={{
-                          color: getRatingColor(Number.parseFloat(deal.performanceRating) || 0),
-                          fontWeight: "600",
-                          fontSize: "0.75rem",
-                        }}
-                      >
-                        {deal.performanceRating
-                          ? typeof deal.performanceRating === "string"
-                            ? deal.performanceRating
-                            : deal.performanceRating.toFixed(1)
-                          : "No rating"}
+                      <StarRating rating={Number(deal.performanceRating) || 0} readOnly={true} size={14} />
+                      <span style={{ color: getRatingColor(deal.performanceRating), fontWeight: "600", fontSize: "0.75rem" }}>
+                        {deal.performanceRating ? Number(deal.performanceRating).toFixed(1) : "No rating"}
                       </span>
                     </div>
                   </td>
-
-                  <td
-                    style={{
-                      padding: "0.75rem 0.5rem",
-                      borderRight: "1px solid #E8D5C4",
-                      verticalAlign: "top",
-                    }}
-                  >
-                    <span
-                      style={{
-                        backgroundColor: getStatusColor(deal.currentStatus) + "20",
-                        color: getStatusColor(deal.currentStatus),
-                        padding: "6px 10px",
-                        borderRadius: "12px",
-                        fontSize: "0.75rem",
-                        fontWeight: "600",
-                        display: "inline-block",
-                      }}
-                    >
-                      {deal.currentStatus}
-                    </span>
+                  <td style={{ padding: "0.75rem 0.5rem", borderRight: "1px solid #E8D5C4", verticalAlign: "top" }}>
+                    <span style={{ backgroundColor: getStatusColor(deal.currentStatus) + "20", color: getStatusColor(deal.currentStatus), padding: "6px 10px", borderRadius: "12px", fontSize: "0.75rem", fontWeight: "600", display: "inline-block" }}>{deal.currentStatus}</span>
                   </td>
-
-                  <td
-                    style={{
-                      padding: "0.75rem 0.5rem",
-                      verticalAlign: "top",
-                      textAlign: "center",
-                    }}
-                  >
+                  <td style={{ padding: "0.75rem 0.5rem", verticalAlign: "top", textAlign: "center" }}>
                     <div style={{ display: "flex", gap: "8px", justifyContent: "center", flexWrap: "wrap" }}>
                       <button
+                        type="button"
                         onClick={() => handleViewDetails(deal)}
-                        style={{
-                          backgroundColor: getRatingColor(Number.parseFloat(deal.performanceRating) || 0),
-                          color: "white",
-                          border: "none",
-                          borderRadius: "8px",
-                          padding: "6px 8px",
-                          fontSize: "0.75rem",
-                          fontWeight: "400",
-                          cursor: "pointer",
-                          transition: "all 0.3s ease",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                        }}
+                        style={{ backgroundColor: "#5d4037", color: "white", border: "none", borderRadius: "8px", padding: "6px 12px", fontSize: "0.75rem", fontWeight: "400", cursor: "pointer", transition: "all 0.3s ease", display: "flex", alignItems: "center", justifyContent: "center" }}
                       >
                         <Eye size={12} />
                       </button>
                       <button
+                        type="button"
                         onClick={() => handleRateDeal(deal)}
-                        style={{
-                          backgroundColor: "#8d6e63",
-                          color: "white",
-                          border: "none",
-                          borderRadius: "8px",
-                          padding: "6px 12px",
-                          fontSize: "0.75rem",
-                          fontWeight: "400",
-                          cursor: "pointer",
-                          transition: "all 0.3s ease",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "4px",
-                        }}
+                        style={{ backgroundColor: "#8d6e63", color: "white", border: "none", borderRadius: "8px", padding: "6px 12px", fontSize: "0.75rem", fontWeight: "400", cursor: "pointer", transition: "all 0.3s ease", display: "flex", alignItems: "center", gap: "4px" }}
                       >
                         <Star size={12} />
                         Rate
@@ -936,310 +692,76 @@ const SuccessfulAdvisorDealsTable = ({ successfulDeals = [] }) => {
       {selectedDeal && (
         <div style={modalOverlayStyle} onClick={() => setSelectedDeal(null)}>
           <div style={modalContentStyle} onClick={(e) => e.stopPropagation()}>
-            {/* Modal Header */}
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: "32px",
-                paddingBottom: "24px",
-                borderBottom: "3px solid #8d6e63",
-              }}
-            >
-              <h2
-                style={{
-                  fontSize: "28px",
-                  fontWeight: "700",
-                  color: "#3e2723",
-                  margin: 0,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "12px",
-                }}
-              >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "32px", paddingBottom: "24px", borderBottom: "3px solid #8d6e63" }}>
+              <h2 style={{ fontSize: "28px", fontWeight: "700", color: "#3e2723", margin: 0, display: "flex", alignItems: "center", gap: "12px" }}>
                 <Trophy size={32} style={{ color: "#ffd700" }} />
                 Advisory Details: {selectedDeal.advisorName}
               </h2>
-              <button
-                onClick={() => setSelectedDeal(null)}
-                style={{
-                  background: "none",
-                  border: "none",
-                  fontSize: "24px",
-                  cursor: "pointer",
-                  color: "#666",
-                  padding: "8px",
-                }}
-              >
+              <button onClick={() => setSelectedDeal(null)} style={{ background: "none", border: "none", fontSize: "24px", cursor: "pointer", color: "#666", padding: "8px" }}>
                 <X size={24} />
               </button>
             </div>
 
-            {/* Deal Overview Cards */}
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
-                gap: "24px",
-                marginBottom: "32px",
-              }}
-            >
-              <div
-                style={{
-                  backgroundColor: "#f8f9fa",
-                  padding: "24px",
-                  borderRadius: "12px",
-                  border: "1px solid #e9ecef",
-                }}
-              >
-                <h3
-                  style={{
-                    color: "#3e2723",
-                    marginBottom: "16px",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                  }}
-                >
-                  <DollarSign size={20} />
-                  Advisory Agreement Details
-                </h3>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "24px", marginBottom: "32px" }}>
+              <div style={{ backgroundColor: "#f8f9fa", padding: "24px", borderRadius: "12px", border: "1px solid #e9ecef" }}>
+                <h3 style={{ color: "#3e2723", marginBottom: "16px", display: "flex", alignItems: "center", gap: "8px" }}><DollarSign size={20} /> Advisory Agreement Details</h3>
                 <div style={{ display: "grid", gap: "12px" }}>
-                  <div>
-                    <strong>Contract Value:</strong> {selectedDeal.contractValue}
-                  </div>
-                  <div>
-                    <strong>Deal Type:</strong> {selectedDeal.dealType}
-                  </div>
-                  <div>
-                    <strong>Deal Structure:</strong> {selectedDeal.dealStructure || "Standard Contract"}
-                  </div>
-                  <div>
-                    <strong>Performance Rating:</strong>
-                    <span
-                      style={{
-                        color: getRatingColor(selectedDeal.performanceRating),
-                        fontWeight: "700",
-                        marginLeft: "8px",
-                      }}
-                    >
-                      {selectedDeal.performanceRating || "Not rated"}
-                    </span>
-                  </div>
+                  <div><strong>Contract Value:</strong> {selectedDeal.contractValue}</div>
+                  <div><strong>Deal Type:</strong> {selectedDeal.dealType}</div>
+                  <div><strong>Deal Structure:</strong> {selectedDeal.dealStructure || "Standard Contract"}</div>
+                  <div><strong>Performance Rating:</strong> {selectedDeal.performanceRating ? Number(selectedDeal.performanceRating).toFixed(1) : "Not rated"}</div>
                 </div>
               </div>
 
-              <div
-                style={{
-                  backgroundColor: "#f8f9fa",
-                  padding: "24px",
-                  borderRadius: "12px",
-                  border: "1px solid #e9ecef",
-                }}
-              >
-                <h3
-                  style={{
-                    color: "#3e2723",
-                    marginBottom: "16px",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                  }}
-                >
-                  <Calendar size={20} />
-                  Timeline & Status
-                </h3>
+              <div style={{ backgroundColor: "#f8f9fa", padding: "24px", borderRadius: "12px", border: "1px solid #e9ecef" }}>
+                <h3 style={{ color: "#3e2723", marginBottom: "16px", display: "flex", alignItems: "center", gap: "8px" }}><Calendar size={20} /> Timeline & Status</h3>
                 <div style={{ display: "grid", gap: "12px" }}>
-                  <div>
-                    <strong>Completion Date:</strong> {formatDate(selectedDeal.completionDate)}
-                  </div>
-                  <div>
-                    <strong>Contract Duration:</strong> {selectedDeal.dealDuration}
-                  </div>
-                  <div>
-                    <strong>Next Renewal:</strong> {selectedDeal.nextRenewal || "N/A"}
-                  </div>
-                  <div>
-                    <strong>Current Status:</strong>
-                    <span
-                      style={{
-                        backgroundColor: getStatusColor(selectedDeal.currentStatus) + "20",
-                        color: getStatusColor(selectedDeal.currentStatus),
-                        padding: "4px 8px",
-                        borderRadius: "8px",
-                        fontSize: "12px",
-                        fontWeight: "600",
-                        marginLeft: "8px",
-                      }}
-                    >
-                      {selectedDeal.currentStatus}
-                    </span>
-                  </div>
+                  <div><strong>Completion Date:</strong> {formatDate(selectedDeal.completionDate)}</div>
+                  <div><strong>Contract Duration:</strong> {selectedDeal.dealDuration}</div>
+                  <div><strong>Next Renewal:</strong> {selectedDeal.nextRenewal || "N/A"}</div>
+                  <div><strong>Current Status:</strong> <span style={{ backgroundColor: getStatusColor(selectedDeal.currentStatus) + "20", color: getStatusColor(selectedDeal.currentStatus), padding: "4px 8px", borderRadius: "8px", fontSize: "12px", fontWeight: "600", marginLeft: "8px" }}>{selectedDeal.currentStatus}</span></div>
                 </div>
               </div>
 
-              <div
-                style={{
-                  backgroundColor: "#f8f9fa",
-                  padding: "24px",
-                  borderRadius: "12px",
-                  border: "1px solid #e9ecef",
-                }}
-              >
-                <h3
-                  style={{
-                    color: "#3e2723",
-                    marginBottom: "16px",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                  }}
-                >
-                  <Users size={20} />
-                  Advisor Information
-                </h3>
+              <div style={{ backgroundColor: "#f8f9fa", padding: "24px", borderRadius: "12px", border: "1px solid #e9ecef" }}>
+                <h3 style={{ color: "#3e2723", marginBottom: "16px", display: "flex", alignItems: "center", gap: "8px" }}><Users size={20} /> Advisor Information</h3>
                 <div style={{ display: "grid", gap: "12px" }}>
-                  <div>
-                    <strong>Advisor Type:</strong> {selectedDeal.advisorType || "Advisor"}
-                  </div>
-                  <div>
-                    <strong>Sector:</strong> {selectedDeal.sector}
-                  </div>
-                  <div>
-                    <strong>Location:</strong> {selectedDeal.location}
-                  </div>
-                  <div>
-                    <strong>Engagement Type:</strong> {selectedDeal.engagementType || "Advisor"}
-                  </div>
+                  <div><strong>Advisor Type:</strong> {selectedDeal.advisorType || "Advisor"}</div>
+                  <div><strong>Sector:</strong> {selectedDeal.sector}</div>
+                  <div><strong>Location:</strong> {selectedDeal.location}</div>
+                  <div><strong>Engagement Type:</strong> {selectedDeal.engagementType || "Advisor"}</div>
                 </div>
               </div>
             </div>
 
             {/* Advisor Rating Section */}
             {selectedDeal.performanceRating && (
-              <div
-                style={{
-                  backgroundColor: "#fff3e0",
-                  padding: "24px",
-                  borderRadius: "12px",
-                  border: "1px solid #ffcc02",
-                  marginBottom: "24px",
-                }}
-              >
-                <h3
-                  style={{
-                    color: "#e65100",
-                    marginBottom: "16px",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                  }}
-                >
-                  <Star size={20} />
-                  Advisor Rating & Feedback
-                </h3>
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "16px",
-                    marginBottom: "12px",
-                  }}
-                >
-                  <StarRating rating={selectedDeal.performanceRating} readOnly={true} size={24} />
-                  <span
-                    style={{
-                      fontSize: "20px",
-                      fontWeight: "400",
-                      color: getRatingColor(selectedDeal.performanceRating),
-                    }}
-                  >
-                    {selectedDeal.performanceRating.toFixed(1)}/5
+              <div style={{ backgroundColor: "#fff3e0", padding: "24px", borderRadius: "12px", border: "1px solid #ffcc02", marginBottom: "24px" }}>
+                <h3 style={{ color: "#e65100", marginBottom: "16px", display: "flex", alignItems: "center", gap: "8px" }}><Star size={20} /> Advisor Rating & Feedback</h3>
+                <div style={{ display: "flex", alignItems: "center", gap: "16px", marginBottom: "12px" }}>
+                  <StarRating rating={Number(selectedDeal.performanceRating) || 0} readOnly={true} size={24} />
+                  <span style={{ fontSize: "20px", fontWeight: "400", color: getRatingColor(selectedDeal.performanceRating) }}>
+                    {Number(selectedDeal.performanceRating).toFixed(1)}/5
                   </span>
                 </div>
                 {selectedDeal.advisorFeedback && (
-                  <p
-                    style={{
-                      fontSize: "16px",
-                      color: "#333",
-                      lineHeight: "1.6",
-                      margin: "0",
-                      fontStyle: "italic",
-                    }}
-                  >
-                    "{selectedDeal.advisorFeedback}"
-                  </p>
+                  <p style={{ fontSize: "16px", color: "#333", lineHeight: "1.6", margin: 0, fontStyle: "italic" }}>"{selectedDeal.advisorFeedback}"</p>
                 )}
               </div>
             )}
 
-            {/* Services Delivered Section */}
-            <div
-              style={{
-                backgroundColor: "#f8f9fa",
-                padding: "24px",
-                borderRadius: "12px",
-                border: "1px solid #e9ecef",
-                marginBottom: "24px",
-              }}
-            >
-              <h3
-                style={{
-                  color: "#3e2723",
-                  marginBottom: "16px",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                }}
-              >
-                <Package size={20} />
-                Advisory Services Delivered
-              </h3>
-              <p style={{ fontSize: "16px", color: "#333", lineHeight: "1.6", margin: 0 }}>
-                {selectedDeal.serviceDelivered}
-              </p>
+            {/* Services Delivered */}
+            <div style={{ backgroundColor: "#f8f9fa", padding: "24px", borderRadius: "12px", border: "1px solid #e9ecef", marginBottom: "24px" }}>
+              <h3 style={{ color: "#3e2723", marginBottom: "16px", display: "flex", alignItems: "center", gap: "8px" }}><Package size={20} /> Advisory Services Delivered</h3>
+              <p style={{ fontSize: "16px", color: "#333", lineHeight: "1.6", margin: 0 }}>{selectedDeal.serviceDelivered}</p>
             </div>
 
-            {/* Key Metrics Summary */}
-            <div
-              style={{
-                backgroundColor: "#e8f5e9",
-                padding: "24px",
-                borderRadius: "12px",
-                border: "1px solid #4caf50",
-                marginBottom: "24px",
-              }}
-            >
-              <h3
-                style={{
-                  color: "#2e7d32",
-                  marginBottom: "16px",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                }}
-              >
-                <BarChart3 size={20} />
-                Advisory Performance Summary
-              </h3>
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-                  gap: "16px",
-                }}
-              >
+            {/* Key Metrics */}
+            <div style={{ backgroundColor: "#e8f5e9", padding: "24px", borderRadius: "12px", border: "1px solid #4caf50", marginBottom: "24px" }}>
+              <h3 style={{ color: "#2e7d32", marginBottom: "16px", display: "flex", alignItems: "center", gap: "8px" }}><BarChart3 size={20} /> Advisory Performance Summary</h3>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "16px" }}>
                 <div style={{ textAlign: "center" }}>
-                  <div
-                    style={{
-                      fontSize: "24px",
-                      fontWeight: "400",
-                      color: getRatingColor(selectedDeal.performanceRating),
-                    }}
-                  >
-                    {selectedDeal.performanceRating || "N/A"}
-                  </div>
+                  <div style={{ fontSize: "24px", fontWeight: "400", color: getRatingColor(selectedDeal.performanceRating) }}>{selectedDeal.performanceRating ? Number(selectedDeal.performanceRating).toFixed(1) : "N/A"}</div>
                   <div style={{ fontSize: "14px", color: "#666" }}>Performance Rating</div>
                 </div>
                 <div style={{ textAlign: "center" }}>
@@ -1247,65 +769,25 @@ const SuccessfulAdvisorDealsTable = ({ successfulDeals = [] }) => {
                   <div style={{ fontSize: "14px", color: "#666" }}>Contract Value</div>
                 </div>
                 <div style={{ textAlign: "center" }}>
-                  <div
-                    style={{ fontSize: "24px", fontWeight: "400", color: getStatusColor(selectedDeal.currentStatus) }}
-                  >
-                    {selectedDeal.currentStatus === "Active Contract" ? "ACTIVE" : "COMPLETED"}
-                  </div>
+                  <div style={{ fontSize: "24px", fontWeight: "400", color: getStatusColor(selectedDeal.currentStatus) }}>{selectedDeal.currentStatus === "Active Contract" ? "ACTIVE" : "COMPLETED"}</div>
                   <div style={{ fontSize: "14px", color: "#666" }}>Contract Status</div>
                 </div>
-                {selectedDeal.performanceRating && (
-                  <div style={{ textAlign: "center" }}>
-                    <div
-                      style={{
-                        fontSize: "24px",
-                        fontWeight: "400",
-                        color: getRatingColor(selectedDeal.performanceRating),
-                      }}
-                    >
-                      {selectedDeal.performanceRating.toFixed(1)}/5
-                    </div>
-                    <div style={{ fontSize: "14px", color: "#666" }}>Advisor Rating</div>
-                  </div>
-                )}
               </div>
             </div>
 
             {/* Action Buttons */}
             <div style={{ display: "flex", justifyContent: "space-between", gap: "12px" }}>
               <button
+                type="button"
                 onClick={() => handleRateDeal(selectedDeal)}
-                style={{
-                  backgroundColor: "#8d6e63",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "12px",
-                  padding: "16px 32px",
-                  fontSize: "16px",
-                  fontWeight: "600",
-                  cursor: "pointer",
-                  transition: "all 0.3s ease",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                }}
+                style={{ backgroundColor: "#8d6e63", color: "white", border: "none", borderRadius: "12px", padding: "16px 32px", fontSize: "16px", fontWeight: "600", cursor: "pointer", transition: "all 0.3s ease", display: "flex", alignItems: "center", gap: "8px" }}
               >
                 <Star size={20} />
                 Rate This Advisor
               </button>
               <button
                 onClick={() => setSelectedDeal(null)}
-                style={{
-                  backgroundColor: "#5d4037",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "12px",
-                  padding: "16px 32px",
-                  fontSize: "16px",
-                  fontWeight: "600",
-                  cursor: "pointer",
-                  transition: "all 0.3s ease",
-                }}
+                style={{ backgroundColor: "#5d4037", color: "white", border: "none", borderRadius: "12px", padding: "16px 32px", fontSize: "16px", fontWeight: "600", cursor: "pointer", transition: "all 0.3s ease" }}
               >
                 Close
               </button>
@@ -1315,26 +797,9 @@ const SuccessfulAdvisorDealsTable = ({ successfulDeals = [] }) => {
       )}
 
       <style>{`
-        @keyframes fadeIn {
-          from { opacity: 0; }
-          to { opacity: 1; }
-        }
-        
-        @keyframes slideUp {
-          from {
-            opacity: 0;
-            transform: translateY(30px) scale(0.95);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0) scale(1);
-          }
-        }
-        
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(30px) scale(0.95); } to { opacity: 1; transform: translateY(0) scale(1); } }
+        @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
       `}</style>
     </>
   )
@@ -1349,7 +814,7 @@ const AdvisorTabbedTables = ({
   applications,
   successfulDeals,
 }) => {
-  const [activeTab, setActiveTab] = useState("my-matches") // Changed default to "my-matches"
+  const [activeTab, setActiveTab] = useState("my-matches")
   const [myMatchesCount, setMyMatchesCount] = useState(0)
   const [successfulDealsCount, setSuccessfulDealsCount] = useState(0)
 
@@ -1372,7 +837,6 @@ const AdvisorTabbedTables = ({
   })
 
   useEffect(() => {
-    // Update counts based on props
     setMyMatchesCount(applications?.length || 0)
     setSuccessfulDealsCount(successfulDeals?.length || 0)
   }, [applications, successfulDeals])
@@ -1392,166 +856,39 @@ const AdvisorTabbedTables = ({
 
   return (
     <div style={{ maxWidth: "100%", margin: "0 auto", padding: "0" }}>
-      {/* Tab Navigation */}
-      <div
-        style={{
-          display: "flex",
-          marginBottom: "0",
-          backgroundColor: "#f5f5f5",
-          borderRadius: "12px 12px 0 0",
-          padding: "4px",
-          boxShadow: "0 2px 8px rgba(0, 0, 0, 0.1)",
-        }}
-      >
-        {/* My Matches Tab - FIRST */}
-        <button
-          onClick={() => setActiveTab("my-matches")}
-          style={tabStyle(activeTab === "my-matches")}
-          onMouseEnter={(e) => {
-            if (activeTab !== "my-matches") {
-              e.target.style.backgroundColor = "#8d6e63"
-              e.target.style.color = "white"
-            }
-          }}
-          onMouseLeave={(e) => {
-            if (activeTab !== "my-matches") {
-              e.target.style.backgroundColor = "transparent"
-              e.target.style.color = "#5d4037"
-            }
-          }}
-        >
+      <div style={{ display: "flex", marginBottom: "0", backgroundColor: "#f5f5f5", borderRadius: "12px 12px 0 0", padding: "4px", boxShadow: "0 2px 8px rgba(0, 0, 0, 0.1)" }}>
+        <button onClick={() => setActiveTab("my-matches")} style={tabStyle(activeTab === "my-matches")}>
           <Users size={18} />
           My Matches
-          <span
-            style={{
-              backgroundColor: activeTab === "my-matches" ? "rgba(255, 255, 255, 0.2)" : "rgba(93, 64, 55, 0.1)",
-              color: activeTab === "my-matches" ? "white" : "#5d4037",
-              borderRadius: "50%",
-              width: "24px",
-              height: "24px",
-              fontSize: "12px",
-              fontWeight: "700",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              marginLeft: "4px",
-            }}
-          >
-            {myMatchesCount}
-          </span>
+          <span style={{ backgroundColor: activeTab === "my-matches" ? "rgba(255, 255, 255, 0.2)" : "rgba(93, 64, 55, 0.1)", color: activeTab === "my-matches" ? "white" : "#5d4037", borderRadius: "50%", width: "24px", height: "24px", fontSize: "12px", fontWeight: "700", display: "flex", alignItems: "center", justifyContent: "center", marginLeft: "4px" }}>{myMatchesCount}</span>
         </button>
 
-        {/* Successful Deals Tab - SECOND */}
-        <button
-          onClick={() => setActiveTab("successful-deals")}
-          style={tabStyle(activeTab === "successful-deals")}
-          onMouseEnter={(e) => {
-            if (activeTab !== "successful-deals") {
-              e.target.style.backgroundColor = "#8d6e63"
-              e.target.style.color = "white"
-            }
-          }}
-          onMouseLeave={(e) => {
-            if (activeTab !== "successful-deals") {
-              e.target.style.backgroundColor = "transparent"
-              e.target.style.color = "#5d4037"
-            }
-          }}
-        >
+        <button onClick={() => setActiveTab("successful-deals")} style={tabStyle(activeTab === "successful-deals")}>
           <Trophy size={18} />
           Successful Deals
-          <span
-            style={{
-              backgroundColor: activeTab === "successful-deals" ? "rgba(255, 255, 255, 0.2)" : "rgba(93, 64, 55, 0.1)",
-              color: activeTab === "successful-deals" ? "white" : "#5d4037",
-              borderRadius: "50%",
-              width: "24px",
-              height: "24px",
-              fontSize: "12px",
-              fontWeight: "700",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              marginLeft: "4px",
-            }}
-          >
-            {successfulDealsCount}
-          </span>
+          <span style={{ backgroundColor: activeTab === "successful-deals" ? "rgba(255, 255, 255, 0.2)" : "rgba(93, 64, 55, 0.1)", color: activeTab === "successful-deals" ? "white" : "#5d4037", borderRadius: "50%", width: "24px", height: "24px", fontSize: "12px", fontWeight: "700", display: "flex", alignItems: "center", justifyContent: "center", marginLeft: "4px" }}>{successfulDealsCount}</span>
         </button>
       </div>
 
-      {/* Tab Content */}
-      <div
-        style={{
-          backgroundColor: "white",
-          borderRadius: "0 0 16px 16px",
-          padding: "24px",
-          minHeight: "600px",
-          boxShadow: "0 4px 20px rgba(0, 0, 0, 0.08)",
-          border: "1px solid #e8e8e8",
-          borderTop: "none",
-        }}
-      >
-        {/* My Matches Content - FIRST */}
+      <div style={{ backgroundColor: "white", borderRadius: "0 0 16px 16px", padding: "24px", minHeight: "600px", boxShadow: "0 4px 20px rgba(0, 0, 0, 0.08)", border: "1px solid #e8e8e8", borderTop: "none" }}>
         {activeTab === "my-matches" && (
-          <div>
-            <AdvisorTable
-              filters={filters}
-              onConnectionRequested={handleConnectionRequestedWrapper}
-              onCountChange={handleCountChangeWrapper}
-              loading={loading}
-            />
-          </div>
+          <AdvisorTable
+            filters={filters}
+            onConnectionRequested={handleConnectionRequestedWrapper}
+            onCountChange={handleCountChangeWrapper}
+            loading={loading}
+          />
         )}
-
-        {/* Successful Deals Content - SECOND */}
         {activeTab === "successful-deals" && <SuccessfulAdvisorDealsTable successfulDeals={successfulDeals} />}
       </div>
 
-      {/* Enhanced styling for tab transitions */}
       <style>{`
-        @keyframes fadeIn {
-          from { 
-            opacity: 0; 
-            transform: translateY(10px);
-          }
-          to { 
-            opacity: 1;
-            transform: translateY(0);
-          }
-        }
-        
-        @keyframes slideUp {
-          from {
-            opacity: 0;
-            transform: translateY(30px) scale(0.95);
-          }
-          to {
-            opacity: 1;
-            transform: translateY(0) scale(1);
-          }
-        }
-        
-        /* Tab content animation */
-        div[style*="backgroundColor: white"] > div {
-          animation: fadeIn 0.3s ease-out;
-        }
-        
-        /* Button hover effects */
-        button:hover {
-          transform: translateY(-1px);
-        }
-        
-        /* Table row hover effects */
-        tr:hover {
-          transition: all 0.2s ease !important;
-        }
-        
-        /* Input and button focus styles */
-        button:focus {
-          outline: 2px solid #5d4037;
-          outline-offset: 2px;
-        }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(30px) scale(0.95); } to { opacity: 1; transform: translateY(0) scale(1); } }
+        div[style*="backgroundColor: white"] > div { animation: fadeIn 0.3s ease-out; }
+        button:hover { transform: translateY(-1px); }
+        tr:hover { transition: all 0.2s ease !important; }
+        button:focus { outline: 2px solid #5d4037; outline-offset: 2px; }
       `}</style>
     </div>
   )

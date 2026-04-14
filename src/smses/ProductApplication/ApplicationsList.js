@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { collection, query, where, getDocs, orderBy, deleteDoc, doc } from "firebase/firestore"
 import { db, auth } from "../../firebaseConfig"
-import { Eye, Edit, FileText, Package, Calendar, Plus, RefreshCw, Trash2, CheckCircle, Clock, AlertCircle } from "lucide-react"
+import { Eye, FileText, Package, Calendar, Plus, RefreshCw, Trash2, CheckCircle, Clock, AlertCircle, Zap } from "lucide-react"
 
 const ApplicationsList = ({ onViewSummary, onEditApplication, onCreateNew, embedded = false }) => {
   const [applications, setApplications] = useState([])
@@ -14,628 +14,276 @@ const ApplicationsList = ({ onViewSummary, onEditApplication, onCreateNew, embed
 
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged((user) => {
-      if (user) {
-        fetchApplications(user.uid)
-      } else {
-        setLoading(false)
-        setError("Please log in")
-      }
+      if (user) fetchApplications(user.uid)
+      else { setLoading(false); setError("Please log in") }
     })
     return () => unsubscribe()
   }, [])
 
   const fetchApplications = async (userId) => {
     try {
-      setLoading(true)
-      setError(null)
-
+      setLoading(true); setError(null)
       try {
-        const q = query(
-          collection(db, "productApplications"),
-          where("userId", "==", userId),
-          orderBy("lastUpdated", "desc")
-        )
-        
+        const q = query(collection(db, "productApplications"), where("userId", "==", userId), orderBy("lastUpdated", "desc"))
         const snapshot = await getDocs(q)
-        const apps = []
-        snapshot.forEach((doc) => {
-          apps.push(formatAppData(doc.id, doc.data()))
-        })
-        
+        const apps = []; snapshot.forEach((d) => apps.push(formatAppData(d.id, d.data())))
         setApplications(apps)
-      } catch (indexErr) {
-        const q = query(
-          collection(db, "productApplications"),
-          where("userId", "==", userId)
-        )
-        
+      } catch {
+        const q = query(collection(db, "productApplications"), where("userId", "==", userId))
         const snapshot = await getDocs(q)
-        const apps = []
-        snapshot.forEach((doc) => {
-          apps.push(formatAppData(doc.id, doc.data()))
-        })
-        
+        const apps = []; snapshot.forEach((d) => apps.push(formatAppData(d.id, d.data())))
         apps.sort((a, b) => (b.lastUpdatedTimestamp || 0) - (a.lastUpdatedTimestamp || 0))
         setApplications(apps)
       }
-    } catch (err) {
-      console.error("Error:", err)
-      setError(err.message)
-    } finally {
-      setLoading(false)
-    }
+    } catch (err) { setError(err.message) }
+    finally { setLoading(false) }
   }
 
   const formatAppData = (docId, data) => {
-    let lastUpdatedFormatted = 'N/A'
-    let lastUpdatedTimestamp = 0
-    
+    let lastUpdatedFormatted = "N/A", lastUpdatedTimestamp = 0
     if (data.lastUpdated) {
       try {
-        const date = data.lastUpdated.toDate()
+        const date = data.lastUpdated.toDate ? data.lastUpdated.toDate() : new Date(data.lastUpdated)
         lastUpdatedTimestamp = date.getTime()
-        lastUpdatedFormatted = date.toLocaleDateString('en-ZA', {
-          year: 'numeric', month: 'short', day: 'numeric'
-        })
-      } catch (e) {
-        try {
-          const date = new Date(data.lastUpdated)
-          lastUpdatedTimestamp = date.getTime()
-          lastUpdatedFormatted = date.toLocaleDateString('en-ZA', {
-            year: 'numeric', month: 'short', day: 'numeric'
-          })
-        } catch (e2) {}
-      }
+        lastUpdatedFormatted = date.toLocaleDateString("en-ZA", { year:"numeric", month:"short", day:"numeric" })
+      } catch {}
     }
-    
-    // Get data from various possible structures
-    const matchingPrefs = data.matchingPreferences || {}
-    const requestOverview = data.requestOverview || {}
-    
-    const categories = requestOverview.categories || data.categories || []
-    const primaryCategory = categories[0] || 'Uncategorized'
-    const purpose = requestOverview.purpose || data.purpose || ''
-    
-    // Check completion
+    const mp = data.matchingPreferences || {}, ro = data.requestOverview || {}
+    const categories = ro.categories || data.categories || []
+    const primaryCategory = categories[0] || "Uncategorized"
+    const purpose = ro.purpose || data.purpose || ""
     const completedSections = data.completedSections || {}
-    const sectionsArray = Object.values(completedSections)
-    const isComplete = sectionsArray.length > 0 && sectionsArray.every(v => v === true)
-    
-    // Format budget
-    const minBudget = matchingPrefs.minBudget || ''
-    const maxBudget = matchingPrefs.maxBudget || ''
-    let budgetDisplay = 'Not specified'
-    
-    if (minBudget || maxBudget) {
-      const fmt = (v) => {
-        if (!v) return null
-        const clean = v.toString().replace(/[^\d]/g, '')
-        const n = parseInt(clean)
-        if (isNaN(n)) return null
-        if (n >= 1000000) return `R ${(n/1000000).toFixed(1)}M`
-        if (n >= 1000) return `R ${(n/1000).toFixed(0)}K`
-        return `R ${n.toLocaleString()}`
-      }
-      
-      const minFmt = fmt(minBudget)
-      const maxFmt = fmt(maxBudget)
-      
-      if (minFmt && maxFmt) {
-        budgetDisplay = `${minFmt} - ${maxFmt}`
-      } else if (minFmt) {
-        budgetDisplay = `From ${minFmt}`
-      } else if (maxFmt) {
-        budgetDisplay = `Up to ${maxFmt}`
-      }
-    }
-    
-    // Generate name
-    let name = 'Product Request'
-    if (purpose && purpose.trim()) {
-      const words = purpose.trim().split(/\s+/).slice(0, 3).join(' ')
-      name = words || 'Product Request'
-    } else if (primaryCategory !== 'Uncategorized') {
-      name = `${primaryCategory} Request`
-    }
-    
-    return {
-      id: docId,
-      name,
-      primaryCategory,
-      categories,
-      purposePreview: purpose.slice(0, 50) + (purpose.length > 50 ? '...' : ''),
-      budgetDisplay,
-      lastUpdatedFormatted,
-      lastUpdatedTimestamp,
-      isComplete,
-      status: data.status || (isComplete ? 'complete' : 'draft'),
-    }
+    const sectionsArr = Object.values(completedSections)
+    const isComplete = sectionsArr.length > 0 && sectionsArr.every((v) => v === true)
+    const fmt = (v) => { if (!v) return null; const n = parseInt(v.toString().replace(/[^\d]/g,"")); if (isNaN(n)) return null; if (n>=1000000) return `R ${(n/1000000).toFixed(1)}M`; if (n>=1000) return `R ${(n/1000).toFixed(0)}K`; return `R ${n.toLocaleString()}` }
+    const minFmt = fmt(mp.minBudget), maxFmt = fmt(mp.maxBudget)
+    let budgetDisplay = "Not specified"
+    if (minFmt && maxFmt) budgetDisplay = `${minFmt} – ${maxFmt}`
+    else if (minFmt) budgetDisplay = `From ${minFmt}`
+    else if (maxFmt) budgetDisplay = `Up to ${maxFmt}`
+    let name = "Product Request"
+    if (purpose?.trim()) name = purpose.trim().split(/\s+/).slice(0, 5).join(" ")
+    else if (primaryCategory !== "Uncategorized") name = `${primaryCategory} Request`
+    return { id:docId, name, primaryCategory, purposePreview: purpose.length > 55 ? purpose.slice(0,55)+"…" : purpose, budgetDisplay, lastUpdatedFormatted, lastUpdatedTimestamp, isComplete, status: data.status || (isComplete ? "complete" : "draft") }
   }
 
   const handleDelete = async (appId) => {
-    try {
-      setDeleting(true)
-      await deleteDoc(doc(db, "productApplications", appId))
-      setApplications(prev => prev.filter(app => app.id !== appId))
-      setShowDeleteConfirm(null)
-    } catch (err) {
-      console.error("Error deleting:", err)
-      alert("Failed to delete application. Please try again.")
-    } finally {
-      setDeleting(false)
-    }
+    try { setDeleting(true); await deleteDoc(doc(db,"productApplications",appId)); setApplications((p) => p.filter((a) => a.id !== appId)); setShowDeleteConfirm(null) }
+    catch { alert("Failed to delete. Please try again.") }
+    finally { setDeleting(false) }
   }
 
   const getStatusBadge = (app) => {
-    if (app.status === 'submitted') {
-      return { label: 'Submitted', color: '#10b981', bgColor: '#d1fae5', icon: CheckCircle }
-    }
-    if (app.isComplete) {
-      return { label: 'Ready', color: '#f59e0b', bgColor: '#fef3c7', icon: AlertCircle }
-    }
-    return { label: 'Draft', color: '#6b7280', bgColor: '#f3f4f6', icon: Clock }
+    if (app.status === "submitted") return { label:"Submitted", color:"#10b981", bg:"#d1fae5", Icon:CheckCircle }
+    if (app.isComplete)             return { label:"Ready",     color:"#f59e0b", bg:"#fef3c7", Icon:AlertCircle }
+    return                                 { label:"Draft",     color:"#6b7280", bg:"#f3f4f6", Icon:Clock }
   }
 
-  // Loading State
-  if (loading) {
-    return (
-      <div style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        minHeight: '100vh',
-        background: 'linear-gradient(135deg, #faf7f2 0%, #f5f0e1 50%, #f0e6d9 100%)'
-      }}>
-        <div style={{
-          width: '48px',
-          height: '48px',
-          border: '3px solid rgba(166, 124, 82, 0.1)',
-          borderTopColor: '#a67c52',
-          borderRadius: '50%',
-          animation: 'spin 0.8s linear infinite'
-        }} />
-        <p style={{ marginTop: '20px', color: '#7d5a50', fontSize: '16px' }}>Loading your applications...</p>
-        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-      </div>
-    )
-  }
+  if (loading) return (
+    <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", minHeight:"60vh" }}>
+      <div style={{ width:44, height:44, border:"3px solid rgba(166,124,82,0.15)", borderTopColor:"#a67c52", borderRadius:"50%", animation:"al-spin 0.8s linear infinite" }} />
+      <p style={{ marginTop:14, color:"#7d5a50", fontSize:15 }}>Loading your applications…</p>
+      <style>{`@keyframes al-spin{to{transform:rotate(360deg)}}`}</style>
+    </div>
+  )
 
-  // Error State
-  if (error && applications.length === 0) {
-    return (
-      <div style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        justifyContent: 'center',
-        minHeight: '100vh',
-        padding: '40px',
-        background: 'linear-gradient(135deg, #faf7f2 0%, #f5f0e1 50%, #f0e6d9 100%)'
-      }}>
-        <div style={{ fontSize: '48px', marginBottom: '20px' }}>⚠️</div>
-        <h3 style={{ color: '#4a352f', marginBottom: '12px' }}>Error Loading Applications</h3>
-        <p style={{ color: '#dc2626', marginBottom: '20px' }}>{error}</p>
-        <button 
-          onClick={() => auth.currentUser && fetchApplications(auth.currentUser.uid)} 
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '8px',
-            padding: '12px 24px',
-            background: 'linear-gradient(135deg, #a67c52, #7d5a50)',
-            color: 'white',
-            border: 'none',
-            borderRadius: '12px',
-            fontSize: '14px',
-            fontWeight: '600',
-            cursor: 'pointer',
-            boxShadow: '0 4px 16px rgba(166, 124, 82, 0.3)',
-          }}
-        >
-          <RefreshCw size={16} /> Retry
-        </button>
-      </div>
-    )
-  }
+  if (error && applications.length === 0) return (
+    <div style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", minHeight:"60vh", padding:40 }}>
+      <div style={{ fontSize:44, marginBottom:16 }}>⚠️</div>
+      <h3 style={{ color:"#4a352f", marginBottom:8 }}>Error Loading Applications</h3>
+      <p style={{ color:"#dc2626", marginBottom:20 }}>{error}</p>
+      <button onClick={() => auth.currentUser && fetchApplications(auth.currentUser.uid)}
+        style={{ display:"inline-flex", alignItems:"center", gap:8, padding:"10px 22px", background:"linear-gradient(135deg,#a67c52,#7d5a50)", color:"#fff", border:"none", borderRadius:10, fontSize:14, fontWeight:600, cursor:"pointer" }}>
+        <RefreshCw size={15} /> Retry
+      </button>
+    </div>
+  )
 
   return (
     <>
       <style>{`
-        @keyframes fadeIn {
-          from { opacity: 0; transform: translateY(10px); }
-          to { opacity: 1; transform: translateY(0); }
+        @keyframes al-fadein { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
+        @keyframes al-spin   { to{transform:rotate(360deg)} }
+
+        .al-wrap {
+          width:100%; overflow-x:auto; -webkit-overflow-scrolling:touch;
+          border-radius:14px; border:1px solid rgba(200,182,166,0.3);
+          box-shadow:0 10px 26px rgba(74,53,47,0.08);
+          background:linear-gradient(135deg,rgba(250,247,242,0.97),rgba(245,240,225,0.97));
+          animation:al-fadein 0.35s ease-out;
         }
-        @keyframes spin {
-          to { transform: rotate(360deg); }
+
+        /* min-width prevents columns from crushing when sidebar is open */
+        .al-tbl { width:100%; min-width:780px; border-collapse:collapse; table-layout:fixed; }
+
+        /* 5 columns now (no Edit) */
+        .al-tbl col.c1 { width:30%; }   /* Application  */
+        .al-tbl col.c2 { width:14%; }   /* Category     */
+        .al-tbl col.c3 { width:14%; }   /* Budget       */
+        .al-tbl col.c4 { width:13%; }   /* Last updated */
+        .al-tbl col.c5 { width:11%; }   /* Status       */
+        .al-tbl col.c6 { width:18%; }   /* Actions      */
+
+        .al-tbl th {
+          padding:13px 15px; text-align:left;
+          font-size:11px; font-weight:700; color:#4a352f;
+          text-transform:uppercase; letter-spacing:0.55px; white-space:nowrap;
+          background:linear-gradient(135deg,#e6d7c3,#c8b6a6);
+          border-bottom:2px solid rgba(166,124,82,0.2);
         }
-        .table-row:hover {
-          background: rgba(166, 124, 82, 0.04) !important;
+        .al-tbl th.r { text-align:center; }
+        .al-tbl td { padding:12px 15px; vertical-align:middle; overflow:hidden; }
+        .al-tbl tbody tr { border-bottom:1px solid rgba(200,182,166,0.15); transition:background 0.15s; }
+        .al-tbl tbody tr:last-child { border-bottom:none; }
+        .al-tbl tbody tr:hover { background:rgba(166,124,82,0.04); }
+
+        .ell { display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:100%; }
+
+        .al-acts { display:flex; gap:6px; justify-content:center; align-items:center; flex-wrap:nowrap; }
+        .al-btn {
+          display:inline-flex; align-items:center; gap:4px;
+          padding:6px 11px; border-radius:7px;
+          font-size:12px; font-weight:500; cursor:pointer;
+          white-space:nowrap; flex-shrink:0;
+          border:1px solid transparent;
+          transition:transform 0.15s, box-shadow 0.15s; line-height:1;
         }
-        .action-btn {
-          transition: all 0.2s ease;
-        }
-        .action-btn:hover {
-          transform: scale(1.05);
-        }
+        .al-btn:hover { transform:translateY(-1px); box-shadow:0 3px 8px rgba(0,0,0,0.12); }
+        .ab-view    { background:rgba(250,247,242,0.9); color:#4a352f; border-color:rgba(200,182,166,0.4); }
+        .ab-matches { background:linear-gradient(135deg,#a67c52,#7d5a50); color:#faf7f2; box-shadow:0 2px 6px rgba(166,124,82,0.3); }
+        .ab-matches:hover { box-shadow:0 4px 12px rgba(166,124,82,0.45) !important; }
+        .ab-del     { background:rgba(250,247,242,0.9); color:#dc2626; border-color:rgba(220,38,38,0.2); padding:6px 8px; }
       `}</style>
 
-      <div style={{
-        minHeight: "100vh",
-        width: "100%",
-        background: "linear-gradient(135deg, #faf7f2 0%, #f5f0e1 50%, #f0e6d9 100%)",
-        padding: embedded ? "20px" : "24px",
-        boxSizing: "border-box",
-        fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-      }}>
-        <div style={{ maxWidth: "1400px", margin: "0 auto" }}>
-          
-          {/* Header */}
-          <div style={{
-            background: "linear-gradient(135deg, rgba(250, 247, 242, 0.9), rgba(245, 240, 225, 0.9))",
-            backdropFilter: "blur(20px)",
-            borderRadius: "16px",
-            padding: "20px 24px",
-            marginBottom: "24px",
-            boxShadow: "0 20px 40px rgba(74, 53, 47, 0.1)",
-            border: "1px solid rgba(200, 182, 166, 0.3)",
-            position: "relative",
-            overflow: "hidden",
-          }}>
-            <div style={{
-              position: "absolute",
-              top: "-50%",
-              right: "-20%",
-              width: "400px",
-              height: "400px",
-              background: "radial-gradient(circle, rgba(166, 124, 82, 0.1) 0%, transparent 70%)",
-              borderRadius: "50%",
-              pointerEvents: "none",
-            }} />
-            
-            <div style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              position: "relative",
-              zIndex: 2,
-              gap: "16px",
-              flexWrap: "wrap",
-            }}>
-              <div>
-                <h1 style={{
-                  background: "linear-gradient(135deg, #4a352f, #7d5a50)",
-                  WebkitBackgroundClip: "text",
-                  WebkitTextFillColor: "transparent",
-                  fontSize: "clamp(24px, 4vw, 36px)",
-                  fontWeight: "800",
-                  margin: "0 0 8px 0",
-                  letterSpacing: "-0.02em",
-                }}>
-                  My Applications
-                </h1>
-                <p style={{
-                  color: "#7d5a50",
-                  fontSize: "clamp(14px, 2vw, 16px)",
-                  margin: 0,
-                  fontWeight: "500",
-                }}>
-                  Product & Service Requests • {applications.length} {applications.length === 1 ? 'Application' : 'Applications'}
-                </p>
-              </div>
-              
-              <button
-                onClick={() => onCreateNew()}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  padding: "12px 24px",
-                  background: "linear-gradient(135deg, #a67c52, #7d5a50)",
-                  color: "#faf7f2",
-                  border: "none",
-                  borderRadius: "12px",
-                  fontSize: "14px",
-                  fontWeight: "600",
-                  cursor: "pointer",
-                  transition: "all 0.3s ease",
-                  boxShadow: "0 4px 16px rgba(166, 124, 82, 0.3)",
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.transform = "translateY(-2px)"
-                  e.currentTarget.style.boxShadow = "0 8px 24px rgba(166, 124, 82, 0.4)"
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = "translateY(0)"
-                  e.currentTarget.style.boxShadow = "0 4px 16px rgba(166, 124, 82, 0.3)"
-                }}
-              >
-                <Plus size={18} /> Create New Application
-              </button>
-            </div>
-          </div>
+      <div style={{ width:"100%", boxSizing:"border-box", padding: embedded ? "14px" : "22px", fontFamily:"'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif" }}>
 
-          {/* Empty State */}
-          {applications.length === 0 ? (
-            <div style={{
-              background: "linear-gradient(135deg, rgba(250, 247, 242, 0.9), rgba(245, 240, 225, 0.9))",
-              backdropFilter: "blur(20px)",
-              borderRadius: "16px",
-              padding: "80px 40px",
-              textAlign: "center",
-              border: "1px solid rgba(200, 182, 166, 0.3)",
-              boxShadow: "0 16px 32px rgba(74, 53, 47, 0.08)",
-            }}>
-              <FileText size={48} style={{ color: '#c8b6a6', marginBottom: '16px' }} />
-              <h3 style={{ color: '#4a352f', marginBottom: '8px', fontSize: '20px', fontWeight: '700' }}>No Applications Yet</h3>
-              <p style={{ color: '#6b7280', marginBottom: '24px' }}>Create your first product/service request application to get started.</p>
-              <button
-                onClick={() => onCreateNew()}
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  padding: "12px 28px",
-                  background: "linear-gradient(135deg, #a67c52, #7d5a50)",
-                  color: "#faf7f2",
-                  border: "none",
-                  borderRadius: "12px",
-                  fontSize: "14px",
-                  fontWeight: "600",
-                  cursor: "pointer",
-                  boxShadow: "0 4px 16px rgba(166, 124, 82, 0.3)",
-                }}
-              >
-                <Plus size={18} /> Create Application
-              </button>
-            </div>
-          ) : (
-            /* Table */
-            <div style={{
-              background: "linear-gradient(135deg, rgba(250, 247, 242, 0.9), rgba(245, 240, 225, 0.9))",
-              backdropFilter: "blur(20px)",
-              borderRadius: "16px",
-              overflow: "auto",
-              border: "1px solid rgba(200, 182, 166, 0.3)",
-              boxShadow: "0 16px 32px rgba(74, 53, 47, 0.08)",
-              animation: "fadeIn 0.4s ease-out",
-            }}>
-              <table style={{
-                width: "100%",
-                borderCollapse: "collapse",
-                minWidth: "1000px",
-              }}>
-                <thead>
-                  <tr style={{
-                    background: "linear-gradient(135deg, #e6d7c3, #c8b6a6)",
-                    borderBottom: "2px solid rgba(166, 124, 82, 0.2)",
-                  }}>
-                    <th style={{ padding: "16px 20px", textAlign: "left", fontSize: "13px", fontWeight: "700", color: "#4a352f", textTransform: "uppercase", letterSpacing: "0.5px" }}>Application</th>
-                    <th style={{ padding: "16px 20px", textAlign: "left", fontSize: "13px", fontWeight: "700", color: "#4a352f", textTransform: "uppercase", letterSpacing: "0.5px" }}>Category</th>
-                    <th style={{ padding: "16px 20px", textAlign: "left", fontSize: "13px", fontWeight: "700", color: "#4a352f", textTransform: "uppercase", letterSpacing: "0.5px" }}>Budget</th>
-                    <th style={{ padding: "16px 20px", textAlign: "left", fontSize: "13px", fontWeight: "700", color: "#4a352f", textTransform: "uppercase", letterSpacing: "0.5px" }}>Last Updated</th>
-                    <th style={{ padding: "16px 20px", textAlign: "left", fontSize: "13px", fontWeight: "700", color: "#4a352f", textTransform: "uppercase", letterSpacing: "0.5px" }}>Status</th>
-                    <th style={{ padding: "16px 20px", textAlign: "center", fontSize: "13px", fontWeight: "700", color: "#4a352f", textTransform: "uppercase", letterSpacing: "0.5px" }}>Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {applications.map((app) => {
-                    const statusBadge = getStatusBadge(app)
-                    const StatusIcon = statusBadge.icon
-                    
-                    return (
-                      <tr key={app.id} className="table-row" style={{
-                        borderBottom: "1px solid rgba(200, 182, 166, 0.15)",
-                      }}>
-                        <td style={{ padding: "16px 20px" }}>
-                          <div style={{ display: "flex", alignItems: "flex-start", gap: "10px" }}>
-                            <div style={{
-                              width: "36px",
-                              height: "36px",
-                              background: "rgba(166, 124, 82, 0.1)",
-                              borderRadius: "10px",
-                              display: "flex",
-                              alignItems: "center",
-                              justifyContent: "center",
-                              flexShrink: 0,
-                            }}>
-                              <Package size={18} color="#a67c52" />
-                            </div>
-                            <div>
-                              <div style={{ fontWeight: "600", color: "#4a352f", marginBottom: "4px", fontSize: "15px" }}>
-                                {app.name}
-                              </div>
-                              <div style={{ fontSize: "12px", color: "#6b7280", maxWidth: "250px" }}>
-                                {app.purposePreview}
-                              </div>
-                            </div>
-                          </div>
-                        </td>
-                        <td style={{ padding: "16px 20px" }}>
-                          <span style={{
-                            display: "inline-block",
-                            padding: "4px 12px",
-                            background: "rgba(166, 124, 82, 0.1)",
-                            borderRadius: "20px",
-                            fontSize: "12px",
-                            fontWeight: "500",
-                            color: "#7d5a50",
-                          }}>
-                            {app.primaryCategory}
-                          </span>
-                        </td>
-                        <td style={{ padding: "16px 20px", fontWeight: "500", color: "#4a352f" }}>
-                          {app.budgetDisplay}
-                        </td>
-                        <td style={{ padding: "16px 20px" }}>
-                          <div style={{ display: "flex", alignItems: "center", gap: "6px", color: "#6b7280", fontSize: "13px" }}>
-                            <Calendar size={14} />
-                            {app.lastUpdatedFormatted}
-                          </div>
-                        </td>
-                        <td style={{ padding: "16px 20px" }}>
-                          <span style={{
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: "4px",
-                            padding: "4px 12px",
-                            background: statusBadge.bgColor,
-                            color: statusBadge.color,
-                            borderRadius: "20px",
-                            fontSize: "12px",
-                            fontWeight: "600",
-                          }}>
-                            <StatusIcon size={12} />
-                            {statusBadge.label}
-                          </span>
-                        </td>
-                        <td style={{ padding: "16px 20px" }}>
-                          <div style={{ display: "flex", gap: "8px", justifyContent: "center" }}>
-                            <button
-                              className="action-btn"
-                              onClick={() => onViewSummary(app.id, app)}
-                              style={{
-                                display: "flex",
-                                alignItems: "center",
-                                gap: "4px",
-                                padding: "8px 14px",
-                                background: "rgba(250, 247, 242, 0.8)",
-                                color: "#4a352f",
-                                border: "1px solid rgba(200, 182, 166, 0.3)",
-                                borderRadius: "8px",
-                                fontSize: "12px",
-                                fontWeight: "500",
-                                cursor: "pointer",
-                              }}
-                            >
-                              <Eye size={14} /> View
-                            </button>
-                            <button
-                              className="action-btn"
-                              onClick={() => onEditApplication(app.id)}
-                              style={{
-                                display: "flex",
-                                alignItems: "center",
-                                gap: "4px",
-                                padding: "8px 14px",
-                                background: "#fef3c7",
-                                color: "#92400e",
-                                border: "1px solid #fde68a",
-                                borderRadius: "8px",
-                                fontSize: "12px",
-                                fontWeight: "500",
-                                cursor: "pointer",
-                              }}
-                            >
-                              <Edit size={14} /> Edit
-                            </button>
-                            <button
-                              className="action-btn"
-                              onClick={() => setShowDeleteConfirm(app.id)}
-                              style={{
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                padding: "8px",
-                                background: "rgba(250, 247, 242, 0.8)",
-                                color: "#4a352f",
-                                border: "1px solid rgba(200, 182, 166, 0.3)",
-                                borderRadius: "8px",
-                                fontSize: "12px",
-                                cursor: "pointer",
-                              }}
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
+        {/* HEADER */}
+        <div style={{ background:"linear-gradient(135deg,rgba(250,247,242,0.97),rgba(245,240,225,0.97))", borderRadius:14, padding:"16px 20px", marginBottom:18, border:"1px solid rgba(200,182,166,0.3)", boxShadow:"0 8px 22px rgba(74,53,47,0.08)", display:"flex", justifyContent:"space-between", alignItems:"center", gap:14, flexWrap:"wrap" }}>
+          <div>
+            <h1 style={{ background:"linear-gradient(135deg,#4a352f,#7d5a50)", WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent", fontSize:"clamp(20px,3vw,30px)", fontWeight:800, margin:"0 0 5px", letterSpacing:"-0.02em" }}>My Applications</h1>
+            <p style={{ color:"#7d5a50", fontSize:13, margin:0, fontWeight:500 }}>
+              Product &amp; Service Requests &bull; {applications.length} {applications.length === 1 ? "Application" : "Applications"}
+            </p>
+          </div>
+          <button onClick={onCreateNew} style={{ display:"flex", alignItems:"center", gap:7, padding:"10px 20px", background:"linear-gradient(135deg,#a67c52,#7d5a50)", color:"#faf7f2", border:"none", borderRadius:10, fontSize:13, fontWeight:600, cursor:"pointer", boxShadow:"0 4px 14px rgba(166,124,82,0.3)", transition:"all 0.22s" }}
+            onMouseEnter={(e) => { e.currentTarget.style.transform="translateY(-2px)"; e.currentTarget.style.boxShadow="0 7px 20px rgba(166,124,82,0.4)" }}
+            onMouseLeave={(e) => { e.currentTarget.style.transform=""; e.currentTarget.style.boxShadow="0 4px 14px rgba(166,124,82,0.3)" }}
+          >
+            <Plus size={16} /> Create New Application
+          </button>
         </div>
+
+        {/* EMPTY */}
+        {applications.length === 0 ? (
+          <div style={{ background:"linear-gradient(135deg,rgba(250,247,242,0.97),rgba(245,240,225,0.97))", borderRadius:14, padding:"64px 32px", textAlign:"center", border:"1px solid rgba(200,182,166,0.3)", boxShadow:"0 10px 24px rgba(74,53,47,0.07)" }}>
+            <FileText size={42} style={{ color:"#c8b6a6", marginBottom:12 }} />
+            <h3 style={{ color:"#4a352f", marginBottom:6, fontSize:18, fontWeight:700 }}>No Applications Yet</h3>
+            <p style={{ color:"#6b7280", marginBottom:20 }}>Create your first product/service request to get started.</p>
+            <button onClick={onCreateNew} style={{ display:"inline-flex", alignItems:"center", gap:7, padding:"10px 24px", background:"linear-gradient(135deg,#a67c52,#7d5a50)", color:"#faf7f2", border:"none", borderRadius:10, fontSize:13, fontWeight:600, cursor:"pointer", boxShadow:"0 4px 14px rgba(166,124,82,0.3)" }}>
+              <Plus size={16} /> Create Application
+            </button>
+          </div>
+        ) : (
+          <div className="al-wrap">
+            <table className="al-tbl">
+              <colgroup>
+                <col className="c1"/><col className="c2"/><col className="c3"/>
+                <col className="c4"/><col className="c5"/><col className="c6"/>
+              </colgroup>
+              <thead>
+                <tr>
+                  <th>Application</th>
+                  <th>Category</th>
+                  <th>Budget</th>
+                  <th>Last Updated</th>
+                  <th>Status</th>
+                  <th className="r">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {applications.map((app) => {
+                  const { label, color, bg, Icon } = getStatusBadge(app)
+                  return (
+                    <tr key={app.id}>
+
+                      {/* Application */}
+                      <td>
+                        <div style={{ display:"flex", alignItems:"center", gap:9, minWidth:0 }}>
+                          <div style={{ width:32, height:32, flexShrink:0, background:"rgba(166,124,82,0.1)", borderRadius:8, display:"flex", alignItems:"center", justifyContent:"center" }}>
+                            <Package size={15} color="#a67c52" />
+                          </div>
+                          <div style={{ minWidth:0, flex:1 }}>
+                            <span className="ell" style={{ fontWeight:600, color:"#4a352f", fontSize:13, marginBottom:2 }} title={app.name}>{app.name}</span>
+                            <span className="ell" style={{ fontSize:11, color:"#6b7280" }} title={app.purposePreview}>{app.purposePreview}</span>
+                          </div>
+                        </div>
+                      </td>
+
+                      {/* Category */}
+                      <td>
+                        <span className="ell" style={{ display:"inline-block", maxWidth:"100%", padding:"3px 9px", background:"rgba(166,124,82,0.1)", borderRadius:20, fontSize:11, fontWeight:500, color:"#7d5a50" }} title={app.primaryCategory}>
+                          {app.primaryCategory}
+                        </span>
+                      </td>
+
+                      {/* Budget */}
+                      <td>
+                        <span className="ell" style={{ fontWeight:600, color:"#4a352f", fontSize:12 }} title={app.budgetDisplay}>{app.budgetDisplay}</span>
+                      </td>
+
+                      {/* Last Updated */}
+                      <td>
+                        <div style={{ display:"flex", alignItems:"center", gap:5, color:"#6b7280", fontSize:11, whiteSpace:"nowrap" }}>
+                          <Calendar size={12} style={{ flexShrink:0 }} /> {app.lastUpdatedFormatted}
+                        </div>
+                      </td>
+
+                      {/* Status */}
+                      <td>
+                        <span style={{ display:"inline-flex", alignItems:"center", gap:4, padding:"3px 9px", background:bg, color, borderRadius:20, fontSize:11, fontWeight:600, whiteSpace:"nowrap" }}>
+                          <Icon size={10} /> {label}
+                        </span>
+                      </td>
+
+                      {/* Actions — View, Matches, Delete only (no Edit) */}
+                      <td>
+                        <div className="al-acts">
+                          <button className="al-btn ab-view" onClick={() => onViewSummary(app.id, app)}>
+                            <Eye size={12} /> View
+                          </button>
+                          <button className="al-btn ab-matches" onClick={() => (window.location.href = "/supplier-matches")}>
+                            <Zap size={12} /> Matches
+                          </button>
+                          <button className="al-btn ab-del" onClick={() => setShowDeleteConfirm(app.id)} title="Delete">
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+                      </td>
+
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
-      {/* Delete Modal */}
+      {/* DELETE MODAL */}
       {showDeleteConfirm && (
-        <div style={{
-          position: 'fixed',
-          top: 0,
-          left: 0,
-          right: 0,
-          bottom: 0,
-          backgroundColor: 'rgba(0, 0, 0, 0.5)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          zIndex: 9999,
-          padding: '20px',
-          backdropFilter: 'blur(4px)',
-        }} onClick={() => setShowDeleteConfirm(null)}>
-          <div style={{
-            background: 'linear-gradient(135deg, rgba(250, 247, 242, 0.98), rgba(245, 240, 225, 0.98))',
-            backdropFilter: 'blur(20px)',
-            borderRadius: '20px',
-            padding: '32px',
-            maxWidth: '400px',
-            width: '100%',
-            boxShadow: '0 40px 80px rgba(0, 0, 0, 0.2)',
-            border: '1px solid rgba(200, 182, 166, 0.3)',
-          }} onClick={(e) => e.stopPropagation()}>
-            <div style={{
-              width: '60px',
-              height: '60px',
-              margin: '0 auto 20px',
-              background: '#fee2e2',
-              borderRadius: '50%',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}>
-              <Trash2 size={30} color="#dc2626" />
+        <div style={{ position:"fixed", inset:0, backgroundColor:"rgba(0,0,0,0.45)", display:"flex", alignItems:"center", justifyContent:"center", zIndex:9999, padding:20, backdropFilter:"blur(4px)" }}
+          onClick={() => setShowDeleteConfirm(null)}>
+          <div style={{ background:"linear-gradient(135deg,rgba(250,247,242,0.99),rgba(245,240,225,0.99))", borderRadius:16, padding:28, maxWidth:360, width:"100%", boxShadow:"0 28px 56px rgba(0,0,0,0.18)", border:"1px solid rgba(200,182,166,0.3)" }}
+            onClick={(e) => e.stopPropagation()}>
+            <div style={{ width:52, height:52, margin:"0 auto 16px", background:"#fee2e2", borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center" }}>
+              <Trash2 size={26} color="#dc2626" />
             </div>
-            <h3 style={{ textAlign: 'center', fontSize: '20px', fontWeight: '700', color: '#4a352f', marginBottom: '12px' }}>
-              Delete Application?
-            </h3>
-            <p style={{ textAlign: 'center', color: '#6b7280', marginBottom: '24px', lineHeight: '1.6' }}>
-              This action cannot be undone.
-            </p>
-            <div style={{ display: 'flex', gap: '12px' }}>
-              <button
-                onClick={() => setShowDeleteConfirm(null)}
-                style={{
-                  flex: 1,
-                  padding: '12px',
-                  background: '#f3f4f6',
-                  color: '#4a352f',
-                  border: 'none',
-                  borderRadius: '12px',
-                  fontSize: '14px',
-                  fontWeight: '600',
-                  cursor: 'pointer',
-                }}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => handleDelete(showDeleteConfirm)}
-                disabled={deleting}
-                style={{
-                  flex: 1,
-                  padding: '12px',
-                  background: '#dc2626',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '12px',
-                  fontSize: '14px',
-                  fontWeight: '600',
-                  cursor: 'pointer',
-                }}
-              >
-                {deleting ? 'Deleting...' : 'Delete'}
+            <h3 style={{ textAlign:"center", fontSize:18, fontWeight:700, color:"#4a352f", marginBottom:8 }}>Delete Application?</h3>
+            <p style={{ textAlign:"center", color:"#6b7280", marginBottom:20, lineHeight:1.6 }}>This action cannot be undone.</p>
+            <div style={{ display:"flex", gap:10 }}>
+              <button onClick={() => setShowDeleteConfirm(null)} style={{ flex:1, padding:10, background:"#f3f4f6", color:"#4a352f", border:"none", borderRadius:9, fontSize:14, fontWeight:600, cursor:"pointer" }}>Cancel</button>
+              <button onClick={() => handleDelete(showDeleteConfirm)} disabled={deleting} style={{ flex:1, padding:10, background:"#dc2626", color:"#fff", border:"none", borderRadius:9, fontSize:14, fontWeight:600, cursor:"pointer", opacity: deleting ? 0.7 : 1 }}>
+                {deleting ? "Deleting…" : "Delete"}
               </button>
             </div>
           </div>
