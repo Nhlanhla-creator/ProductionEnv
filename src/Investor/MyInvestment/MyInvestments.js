@@ -711,19 +711,19 @@ const MyInvestments = () => {
     )
   } 
 
-  if (currentPlan === "basic") {
-    return (
-      <Upsell
-        title={"My Portfolio"}
-        subtitle={"Access portfolio analytics, AI insights, and exportable reports on our Engage & Partner plans."}
-        features={["Portfolio & Cohort analytics", "AI recommendations & alerts", "Exportable reports & PDFs", "Priority support and account setup"]}
-        variant={"center"}
-        plans={["Partner"]}
-        upgradeMessage={"Upgrade your subscription to unlock comprehensive portfolio analytics, AI-driven insights, and exportable reports to optimize your investment strategy."}
-        primaryLabel={"View Available Plans"}
-      />
-    )
-  }
+  // if (currentPlan === "basic") {
+  //   return (
+  //     <Upsell
+  //       title={"My Portfolio"}
+  //       subtitle={"Access portfolio analytics, AI insights, and exportable reports on our Engage & Partner plans."}
+  //       features={["Portfolio & Cohort analytics", "AI recommendations & alerts", "Exportable reports & PDFs", "Priority support and account setup"]}
+  //       variant={"center"}
+  //       plans={["Partner"]}
+  //       upgradeMessage={"Upgrade your subscription to unlock comprehensive portfolio analytics, AI-driven insights, and exportable reports to optimize your investment strategy."}
+  //       primaryLabel={"View Available Plans"}
+  //     />
+  //   )
+  // }
 
   const allCategories = [
     'Portfolio Overview',
