@@ -18,8 +18,9 @@ export const ASSIGNEES = [
   'Makha',
   'Lerato Nama',
   'Thando',
-  'Edward Molefe',
+  'Edward Molefi',
   'Lethabo',
+  'Tracy',
   'Sbonelo'
 ];
 
