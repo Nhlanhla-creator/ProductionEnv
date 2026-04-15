@@ -23,32 +23,6 @@ import { collection, query, where, getDocs } from "firebase/firestore";
 import { useFirebaseFunctions } from "./hooks";
 import { useSolvencyScore } from '../hooks/useSolvencyScore';
 import { normalizeSolvencyScore } from '../MyGrowthTools/financial/data_utils/solvencyScoreUtils';
-// ─────────────────────────────────────────────────────────────────────────────
-// TIER DETECTION  (4 tiers)
-//
-//  Tier A – Grant only
-//    Triggers: fundingInstruments includes "Grants" (no debt/PO/equity)
-//    Active:   Business Plan (25%) + Pitch Deck (20%) + Impact & Mandate (40%)
-//              + Creditworthiness (15%, reduced weight)
-//    Excluded: Guarantees (0%) — not required for non-repayable funding
-//              Financial Resilience (0%) — not assessed at grant level
-//
-//  Tier B – Purchase Order / Debt
-//    Triggers: fundingInstruments includes "Debt" OR guarantees.purchaseOrders === "yes"
-//    Active:   Business Plan (20%) + Pitch Deck (10%) + Impact & Mandate (10%)
-//              + Creditworthiness (30%) + Guarantees (20%) + Financial Resilience (10%)
-//
-//  Tier C – ESD / Support Programme / Accelerator
-//    Triggers: additionalSupportFocus is set OR funderTypes includes ESD/dev-finance/incubator
-//    Active:   Same weights as Tier A (grant-equivalent profile)
-//    Excluded: Same as Tier A
-//
-//  Tier D – Full / Serious Funding  (equity, convertible, hybrid, or amount >R10M)
-//    Triggers: any equity-type instrument OR amount > R10M
-//    Active:   All six sub-components including Financial Resilience & Efficiency (20%)
-//
-//  No funding application → Fundability block = 0; weight redistributed to FS + Ops
-// ─────────────────────────────────────────────────────────────────────────────
 
 const GRANT_KEYWORDS  = ["grant", "grants"];
 const DEBT_KEYWORDS   = ["debt", "loan"];
@@ -62,10 +36,6 @@ const ESD_FUNDER_KEYWORDS = [
   "development finance", "incubator",
 ];
 
-/**
- * Detect which fundability tier applies.
- * Returns "A" | "B" | "C" | "D" | null
- */
 function detectFundingTier(profileData) {
   const instruments = (profileData?.useOfFunds?.fundingInstruments || [])
     .map((s) => s.toLowerCase().replace(/[\s-]/g, "_"));
@@ -88,22 +58,14 @@ function detectFundingTier(profileData) {
 
   if (!instruments.length && !hasSupportFocus) return null;
 
-  // Tier D: equity-type instruments OR large ticket (>R10M)
   if (hasEquity || isLargeAmount) return "D";
-
-  // Tier B: purchase order / debt
   if (hasPO || hasDebt) return "B";
-
-  // Tier C: ESD / support / accelerator (no PO/debt/equity)
   if (hasESDFunder || hasSupportFocus) return "C";
-
-  // Tier A: grant or any remaining instrument
   if (hasGrant || instruments.length > 0) return "A";
 
   return null;
 }
 
-// Tier labels
 const TIER_LABELS = {
   A: "Grant",
   B: "Purchase Order / Debt",
@@ -118,11 +80,6 @@ const TIER_BADGE_COLORS = {
   D: { bg: "#fce4ec", border: "#c62828", text: "#b71c1c" },
 };
 
-// ─── Sub-weights per tier ─────────────────────────────────────────────────────
-//
-// All weights sum to 100 within the 30% fundability block.
-// Components with weight 0 appear as "excluded" in the UI with an explanation.
-//
 function getFundabilitySubWeights(tier) {
   if (!tier) return null;
 
@@ -196,7 +153,6 @@ function getFundabilitySubWeights(tier) {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
 export function FundabilityScoreCard({
   styles = {},
   profileData,
@@ -233,31 +189,27 @@ export function FundabilityScoreCard({
   const isReevaluatingRef       = useRef(false);
   const fundingCheckCompleteRef = useRef(false);
   const isFundingDataLoadedRef  = useRef(false);
-  // ── SOLVENCY SCORE HOOK ────────────────────────────────────────────
-const { 
-  loadLatestSolvencyScore, 
-  solvencyScore,
-  solvencyScoreBreakdown 
-} = useSolvencyScore(auth?.currentUser);
 
-const [solvencyAnalysis, setSolvencyAnalysis] = useState(null);
+  const { 
+    loadLatestSolvencyScore, 
+    solvencyScore,
+    solvencyScoreBreakdown 
+  } = useSolvencyScore(auth?.currentUser);
 
+  const [solvencyAnalysis, setSolvencyAnalysis] = useState(null);
 
-const isSavingEvaluation = useRef(false);
+  const isSavingEvaluation = useRef(false);
   const { callFunction } = useFirebaseFunctions();
 
-  // ── Derive tier ────────────────────────────────────────────────────────
   useEffect(() => {
     setFundingTier(detectFundingTier(profileData));
   }, [profileData]);
 
-  // ── Body scroll lock ───────────────────────────────────────────────────
   useEffect(() => {
     document.body.style.overflow = showModal ? "hidden" : "";
     return () => (document.body.style.overflow = "");
   }, [showModal]);
 
-  // ── Check funding application status ──────────────────────────────────
   const checkFundingApplicationStatus = useCallback(async () => {
     if (!auth?.currentUser?.uid || fundingCheckComplete) return;
     try {
@@ -303,59 +255,51 @@ const isSavingEvaluation = useRef(false);
     if (auth?.currentUser?.uid) checkFundingApplicationStatus();
   }, [auth?.currentUser?.uid, checkFundingApplicationStatus]);
 
-  // ── Fetch funding application documents ───────────────────────────────
   const fetchFundingApplicationData = useCallback(async () => {
     try {
       const userId = auth.currentUser.uid;
       let loadedCount = 0;
 
-      // Business Plan
-try {
-  const snap = await getDocs(query(collection(db, "aiEvaluations"), where("userId", "==", userId)));
-  if (!snap.empty) {
-    const d = snap.docs[0].data();
-    const content  = d?.evaluation?.content || "";
-    const rawScore = d?.evaluation?.score   || 0; // 0-100, may be float like 6.67
-    // Round to nearest integer for clean conversion
-    const score    = Math.round(rawScore);
-    // Valid only if there's actual analysis content and a non-zero score
-    const isValid  = score > 0 && content.trim().length > 0;
-    setBusinessPlanAnalysis({ score, rawScore, content, isValid });
-    if (isValid) loadedCount++;
-  }
-} catch (e) { console.error("BP load error:", e); }
+      try {
+        const snap = await getDocs(query(collection(db, "aiEvaluations"), where("userId", "==", userId)));
+        if (!snap.empty) {
+          const d = snap.docs[0].data();
+          const content  = d?.evaluation?.content || "";
+          const rawScore = d?.evaluation?.score   || 0;
+          const score    = Math.round(rawScore);
+          const isValid  = score > 0 && content.trim().length > 0;
+          setBusinessPlanAnalysis({ score, rawScore, content, isValid });
+          if (isValid) loadedCount++;
+        }
+      } catch (e) { console.error("BP load error:", e); }
 
-try {
-  const snap = await getDocs(query(collection(db, "aiPitchEvaluations"), where("userId", "==", userId)));
-  if (!snap.empty) {
-    const d = snap.docs[0].data();
-    const content          = d?.evaluation?.content          || "";
-    const score            = d?.evaluation?.score            || 0;   // 0-100
-    const operationalScore = d?.evaluation?.operationalScore || 0;   // 0-5 already
-    // Valid if there's real analysis content and a non-zero score
-    const isValid = score > 0 && content.trim().length > 0;
-    setPitchDeckAnalysis({ score, operationalScore, content, isValid });
-    if (isValid) loadedCount++;
-  }
-} catch (e) { console.error("PD load error:", e); }
+      try {
+        const snap = await getDocs(query(collection(db, "aiPitchEvaluations"), where("userId", "==", userId)));
+        if (!snap.empty) {
+          const d = snap.docs[0].data();
+          const content          = d?.evaluation?.content          || "";
+          const score            = d?.evaluation?.score            || 0;
+          const operationalScore = d?.evaluation?.operationalScore || 0;
+          const isValid = score > 0 && content.trim().length > 0;
+          setPitchDeckAnalysis({ score, operationalScore, content, isValid });
+          if (isValid) loadedCount++;
+        }
+      } catch (e) { console.error("PD load error:", e); }
 
-// Credit Report — must check isCreditReport flag
-try {
-  const snap = await getDocs(query(collection(db, "creditAnalyses"), where("userId", "==", userId)));
-  if (!snap.empty) {
-    const d = snap.docs[0].data();
-    const content       = d?.evaluation?.content       || "";
-    const score         = d?.evaluation?.score         || 0;
-    const label         = d?.evaluation?.label         || "";
-    const isCreditReport = d?.evaluation?.isCreditReport ?? d?.isCreditReport ?? false;
-    // Valid only if the document was actually a credit report AND has a real score
-    const isValid = isCreditReport === true && score > 0 && content.trim().length > 0;
-    setCreditReportAnalysis({ score, content, label, isCreditReport, isValid });
-    if (isValid) loadedCount++;
-  }
-} catch (e) { console.error("CR load error:", e); }
+      try {
+        const snap = await getDocs(query(collection(db, "creditAnalyses"), where("userId", "==", userId)));
+        if (!snap.empty) {
+          const d = snap.docs[0].data();
+          const content       = d?.evaluation?.content       || "";
+          const score         = d?.evaluation?.score         || 0;
+          const label         = d?.evaluation?.label         || "";
+          const isCreditReport = d?.evaluation?.isCreditReport ?? d?.isCreditReport ?? false;
+          const isValid = isCreditReport === true && score > 0 && content.trim().length > 0;
+          setCreditReportAnalysis({ score, content, label, isCreditReport, isValid });
+          if (isValid) loadedCount++;
+        }
+      } catch (e) { console.error("CR load error:", e); }
 
-      // Guarantees — count active guarantee types from profile
       try {
         const profSnap = await getDoc(doc(db, "universalProfiles", userId));
         if (profSnap.exists()) {
@@ -372,7 +316,6 @@ try {
         }
       } catch (e) { console.error("Guarantees load error:", e); }
 
-      // Financial Resilience & Efficiency (used by Tier D)
       try {
         const snap = await getDoc(doc(db, "aiFinancialEvaluations", userId));
         if (snap.exists()) {
@@ -383,95 +326,65 @@ try {
         }
       } catch (e) { console.error("FR load error:", e); }
 
-      // Add this inside fetchFundingApplicationData, after financialResilience fetch
-
-// Solvency Score (from capital structure)
-try {
-  const solvencyData = await loadLatestSolvencyScore();
-  if (solvencyData && solvencyData.rawMetrics) {
-    const rawMetrics = solvencyData.rawMetrics;
-    const nav = parseFloat(rawMetrics.nav) || 0;
-    const equityRatio = parseFloat(rawMetrics.equityRatio) || 0;
-    const debtToEquity = parseFloat(rawMetrics.debtToEquity) || 0;
-    const debtToAssets = parseFloat(rawMetrics.debtToAssets) || 0;
-    const interestCoverage = parseFloat(rawMetrics.interestCoverage) || 0;
-    
-    // Calculate solvency score (0-100) from raw metrics
-    let calculatedSolvencyScore = 0;
-    
-    // NAV Score (0-100)
-    let navScore = 0;
-    if (nav > 100) navScore = 100;
-    else if (nav > 50) navScore = 90;
-    else if (nav > 10) navScore = 80;
-    else if (nav > 1) navScore = 60;
-    else if (nav > 0) navScore = nav * 50;
-    else navScore = 0;
-    
-    // Equity Ratio Score (0-100)
-    let equityScore = 0;
-    if (equityRatio >= 70) equityScore = 95;
-    else if (equityRatio >= 60) equityScore = 85;
-    else if (equityRatio >= 50) equityScore = 75;
-    else if (equityRatio >= 40) equityScore = 55;
-    else if (equityRatio >= 30) equityScore = 35;
-    else equityScore = Math.max(0, equityRatio);
-    
-    // Debt to Equity Score (0-100)
-    let dteScore = 0;
-    const deviation = Math.abs(debtToEquity - 1.0);
-    if (deviation <= 0.3) dteScore = 90;
-    else if (deviation <= 0.6) dteScore = 75;
-    else if (deviation <= 1.0) dteScore = 55;
-    else if (deviation <= 1.5) dteScore = 35;
-    else dteScore = Math.max(0, 100 - deviation * 10);
-    
-    // Weighted overall solvency score (NAV 40%, Equity 35%, DTE 25%)
-    calculatedSolvencyScore = Math.round(
-      (navScore * 0.4) + (equityScore * 0.35) + (dteScore * 0.25)
-    );
-    
-    const normalizedScore = normalizeSolvencyScore(calculatedSolvencyScore);
-    
-    setSolvencyAnalysis({
-      score: calculatedSolvencyScore,
-      normalizedScore: normalizedScore,
-      nav: nav,
-      equityRatio: equityRatio,
-      debtToEquity: debtToEquity,
-      debtToAssets: debtToAssets,
-      interestCoverage: interestCoverage,
-      timestamp: solvencyData.timestamp,
-      rawMetrics: rawMetrics,
-      isValid: calculatedSolvencyScore > 0
-    });
-    
-    if (calculatedSolvencyScore > 0) loadedCount++;
-  } else {
-    setSolvencyAnalysis({
-      score: 0,
-      normalizedScore: 0,
-      nav: 0,
-      equityRatio: 0,
-      debtToEquity: 0,
-      debtToAssets: 0,
-      interestCoverage: 0,
-      isValid: false
-    });
-  }
-} catch (e) {
-  console.error("Solvency load error:", e);
-  setSolvencyAnalysis({
-    score: 0,
-    normalizedScore: 0,
-    nav: 0,
-    equityRatio: 0,
-    debtToEquity: 0,
-    debtToAssets: 0,
-    interestCoverage: 0,
-    isValid: false
-  });
-}
+      try {
+        const solvencyData = await loadLatestSolvencyScore();
+        if (solvencyData && solvencyData.rawMetrics) {
+          const rawMetrics = solvencyData.rawMetrics;
+          const nav = parseFloat(rawMetrics.nav) || 0;
+          const equityRatio = parseFloat(rawMetrics.equityRatio) || 0;
+          const debtToEquity = parseFloat(rawMetrics.debtToEquity) || 0;
+          const debtToAssets = parseFloat(rawMetrics.debtToAssets) || 0;
+          const interestCoverage = parseFloat(rawMetrics.interestCoverage) || 0;
+          
+          let calculatedSolvencyScore = 0;
+          
+          let navScore = 0;
+          if (nav > 100) navScore = 100;
+          else if (nav > 50) navScore = 90;
+          else if (nav > 10) navScore = 80;
+          else if (nav > 1) navScore = 60;
+          else if (nav > 0) navScore = nav * 50;
+          else navScore = 0;
+          
+          let equityScore = 0;
+          if (equityRatio >= 70) equityScore = 95;
+          else if (equityRatio >= 60) equityScore = 85;
+          else if (equityRatio >= 50) equityScore = 75;
+          else if (equityRatio >= 40) equityScore = 55;
+          else if (equityRatio >= 30) equityScore = 35;
+          else equityScore = Math.max(0, equityRatio);
+          
+          let dteScore = 0;
+          const deviation = Math.abs(debtToEquity - 1.0);
+          if (deviation <= 0.3) dteScore = 90;
+          else if (deviation <= 0.6) dteScore = 75;
+          else if (deviation <= 1.0) dteScore = 55;
+          else if (deviation <= 1.5) dteScore = 35;
+          else dteScore = Math.max(0, 100 - deviation * 10);
+          
+          calculatedSolvencyScore = Math.round(
+            (navScore * 0.4) + (equityScore * 0.35) + (dteScore * 0.25)
+          );
+          
+          const normalizedScore = normalizeSolvencyScore(calculatedSolvencyScore);
+          
+          setSolvencyAnalysis({
+            score: calculatedSolvencyScore,
+            normalizedScore: normalizedScore,
+            nav, equityRatio, debtToEquity, debtToAssets, interestCoverage,
+            timestamp: solvencyData.timestamp,
+            rawMetrics,
+            isValid: calculatedSolvencyScore > 0
+          });
+          
+          if (calculatedSolvencyScore > 0) loadedCount++;
+        } else {
+          setSolvencyAnalysis({ score: 0, normalizedScore: 0, nav: 0, equityRatio: 0, debtToEquity: 0, debtToAssets: 0, interestCoverage: 0, isValid: false });
+        }
+      } catch (e) {
+        console.error("Solvency load error:", e);
+        setSolvencyAnalysis({ score: 0, normalizedScore: 0, nav: 0, equityRatio: 0, debtToEquity: 0, debtToAssets: 0, interestCoverage: 0, isValid: false });
+      }
 
       const isLoaded = loadedCount > 0;
       setIsFundingDataLoaded(isLoaded);
@@ -483,7 +396,6 @@ try {
     }
   }, [auth?.currentUser?.uid]);
 
-  // ── Auto re-evaluate when funding data newly arrives ───────────────────
   useEffect(() => {
     if (!auth?.currentUser?.uid || !apiKey) return;
     if (isEvaluating || isReevaluatingRef.current || hasReevaluated.current) return;
@@ -520,273 +432,196 @@ try {
   }, [hasAppliedForFunding, isFundingDataLoaded, aiEvaluationResult,
       auth?.currentUser?.uid, apiKey, isEvaluating, fundingTier]);
 
-  // ── Score recalculation ────────────────────────────────────────────────
-useEffect(() => {
-  if (profileData && aiEvaluationResult) {
-    if (hasAppliedForFunding && !isFundingDataLoaded) return;
-    
-    const result = calculateFundabilityScore(profileData, aiEvaluationResult);
-    
-    // Parse once separately for metadata — does not trigger recalculation
-    const aiScores = parseAiEvaluationScores(aiEvaluationResult);
-    if (aiScores._confidence)   setConfidenceScores(aiScores._confidence);
-    if (aiScores._evidence)     setEvidenceMap(aiScores._evidence);
-    if (aiScores._confRationale) setConfRationaleMap(aiScores._confRationale);
+  useEffect(() => {
+    if (profileData && aiEvaluationResult) {
+      if (hasAppliedForFunding && !isFundingDataLoaded) return;
+      
+      const result = calculateFundabilityScore(profileData, aiEvaluationResult);
+      
+      const aiScores = parseAiEvaluationScores(aiEvaluationResult);
+      if (aiScores._confidence)   setConfidenceScores(aiScores._confidence);
+      if (aiScores._evidence)     setEvidenceMap(aiScores._evidence);
+      if (aiScores._confRationale) setConfRationaleMap(aiScores._confRationale);
 
-    setFundabilityScore(result.totalScore);
-    setScoreBreakdown(result.breakdown);
-    if (onScoreUpdate) onScoreUpdate(result.totalScore);
-  }
-}, [profileData, aiEvaluationResult, onScoreUpdate,
-    businessPlanAnalysis, pitchDeckAnalysis, creditReportAnalysis,
-    guaranteesAnalysis, financialResilienceAnalysis,
-    hasAppliedForFunding, isFundingDataLoaded, fundingTier]);
+      setFundabilityScore(result.totalScore);
+      setScoreBreakdown(result.breakdown);
+      if (onScoreUpdate) onScoreUpdate(result.totalScore);
+    }
+  }, [profileData, aiEvaluationResult, onScoreUpdate,
+      businessPlanAnalysis, pitchDeckAnalysis, creditReportAnalysis,
+      guaranteesAnalysis, financialResilienceAnalysis,
+      hasAppliedForFunding, isFundingDataLoaded, fundingTier]);
 
-const parseAiEvaluationScores = (text) => {
-  const categories = {
-    financialStrength:     ["Financial Strength"],
-    operations:            ["Operational Strength"],
-    impactMandate:         ["Impact & Mandate Alignment"],
-    businessPlanAnalysis:  ["Business Plan / Investment Case", "Business Plan Quality"],
-    pitchDeckScore:        ["Pitch Readiness / Pitch Deck", "Pitch Deck Effectiveness"],
-    creditReport:          ["Creditworthiness"],
-    guarantees:            ["Guarantees / Collateral"],
-    financialResilience:   ["Financial Resilience & Efficiency"],
-  };
+  const parseAiEvaluationScores = (text) => {
+    const categories = {
+      financialStrength:     ["Financial Strength"],
+      operations:            ["Operational Strength"],
+      impactMandate:         ["Impact & Mandate Alignment"],
+      businessPlanAnalysis:  ["Business Plan / Investment Case", "Business Plan Quality"],
+      pitchDeckScore:        ["Pitch Readiness / Pitch Deck", "Pitch Deck Effectiveness"],
+      creditReport:          ["Creditworthiness"],
+      guarantees:            ["Guarantees / Collateral"],
+      financialResilience:   ["Financial Resilience & Efficiency"],
+    };
 
-  const scores = {};
-  const confidenceMap = {};
-  const evidenceMap = {};
-  const confRationaleMap = {};
+    const scores = {};
+    const confidenceMap = {};
+    const evidenceMap = {};
+    const confRationaleMap = {};
 
-  Object.entries(categories).forEach(([key, labels]) => {
-    let foundScore = null; // null = section absent, 0 = explicitly scored zero
+    Object.entries(categories).forEach(([key, labels]) => {
+      let foundScore = null;
 
-    for (const label of labels) {
-      const sectionRe = new RegExp(
-        `###\\s*\\d+\\.\\s*${label}[^\\n]*\\n([\\s\\S]*?)(?=###\\s+\\d+\\.|###\\s+Overall Assessment|$)`,
-        "i"
-      );
-      const sectionMatch = text.match(sectionRe);
-      if (!sectionMatch) continue;
+      for (const label of labels) {
+        const sectionRe = new RegExp(
+          `###\\s*\\d+\\.\\s*${label}[^\\n]*\\n([\\s\\S]*?)(?=###\\s+\\d+\\.|###\\s+Overall Assessment|$)`,
+          "i"
+        );
+        const sectionMatch = text.match(sectionRe);
+        if (!sectionMatch) continue;
 
-      const body = sectionMatch[1];
+        const body = sectionMatch[1];
 
-      const confMatch    = body.match(/Confidence\s*:\s*(High|Medium|Low)/i);
-      const confRatMatch = body.match(/Confidence Rationale\s*:\s*([^\n]+)/i);
-      const evidenceMatch= body.match(/Evidence\s*:\s*([^\n]+)/i);
+        const confMatch    = body.match(/Confidence\s*:\s*(High|Medium|Low)/i);
+        const confRatMatch = body.match(/Confidence Rationale\s*:\s*([^\n]+)/i);
+        const evidenceMatch= body.match(/Evidence\s*:\s*([^\n]+)/i);
 
-      if (confMatch)    confidenceMap[key]   = confMatch[1];
-      if (confRatMatch) confRationaleMap[key] = confRatMatch[1].trim();
-      if (evidenceMatch) evidenceMap[key]     = evidenceMatch[1].trim();
+        if (confMatch)    confidenceMap[key]   = confMatch[1];
+        if (confRatMatch) confRationaleMap[key] = confRatMatch[1].trim();
+        if (evidenceMatch) evidenceMap[key]     = evidenceMatch[1].trim();
 
-      // Score: match "0" through "5" — including explicit zero
-      const scoreMatch = body.match(/\*\*Score:\*\*\s*(\d)|Score:\s*(\d)/i);
-      if (scoreMatch) {
-        foundScore = parseInt(scoreMatch[1] ?? scoreMatch[2], 10);
-        break;
+        const scoreMatch = body.match(/\*\*Score:\*\*\s*(\d)|Score:\s*(\d)/i);
+        if (scoreMatch) {
+          foundScore = parseInt(scoreMatch[1] ?? scoreMatch[2], 10);
+          break;
+        }
       }
-    }
 
-    // Only clamp if a score was actually found; if section was absent, default 0
-    scores[key] = foundScore !== null
-      ? Math.min(Math.max(foundScore, 0), 5)
-      : 0;
-  });
-
-  scores._confidence   = confidenceMap;
-  scores._evidence     = evidenceMap;
-  scores._confRationale = confRationaleMap;
-  return scores;
-};
-
-const validateFundingScores = (aiScores) => {
-  if (!hasAppliedForFunding) return true;
-  
-  const fundingKeys = ['businessPlanAnalysis', 'pitchDeckScore', 'creditReport'];
-  const missingScores = [];
-  
-  fundingKeys.forEach(key => {
-    const score = aiScores[key];
-    if (score === undefined || score === null) {
-      missingScores.push(key);
-    } else {
-      console.log(`✅ ${key} score found: ${score}/5`);
-    }
-  });
-  
-  if (missingScores.length > 0) {
-    console.warn(`⚠️ Missing AI scores for: ${missingScores.join(', ')}`);
-    return false;
-  }
-  
-  return true;
-};
-
-const calculateFundabilityScore = (data, aiEvaluationResult = "") => {
-  console.log("Calculating fundability score with AI result:", !!aiEvaluationResult);
-  const stage = mapStageToCategory(data?.entityOverview?.operationStage || "Not provided");
-  const weightings = weightingsByStage[stage];
-  const aiScores = aiEvaluationResult ? parseAiEvaluationScores(aiEvaluationResult) : {};
-  const subW = getFundabilitySubWeights(fundingTier);
-  
-  console.log("AI scores extracted:", aiScores);
-  console.log("Weightings for stage:", stage, weightings);
-  console.log("Funding tier:", fundingTier, subW);
-  console.log("Has applied for funding:", hasAppliedForFunding);
-  
-  // Define overall weights based on whether user has applied for funding
-  const overallWeights = {
-    financialStrength: hasAppliedForFunding && fundingTier ? 40 : 55,
-    operations: hasAppliedForFunding && fundingTier ? 30 : 45,
-    fundability: hasAppliedForFunding && fundingTier ? 30 : 0,
-  };
-  
-  // Define category mappings for display
-  const categoryMappings = [
-    { key: "financialStrength", name: "Financial Strength", isCore: true },
-    { key: "operations", name: "Operational Strength", isCore: true },
-  ];
-  
-  // Add fundability sections if user has applied for funding
-  if (hasAppliedForFunding && fundingTier && subW) {
-    categoryMappings.push(
-      { key: "businessPlanAnalysis", name: "Business Plan / Investment Case", weight: subW.businessPlan, reductionNote: subW._reduced?.businessPlan, isFundability: true },
-      { key: "pitchDeckScore", name: "Pitch Readiness / Pitch Deck", weight: subW.pitchDeck, reductionNote: subW._reduced?.pitchDeck, isFundability: true },
-      { key: "impactMandate", name: "Impact & Mandate Alignment", weight: subW.impactMandate, reductionNote: subW._reduced?.impactMandate, isFundability: true },
-      { key: "creditReport", name: "Creditworthiness", weight: subW.creditworthiness, reductionNote: subW._reduced?.creditworthiness, isFundability: true },
-      { key: "guarantees", name: "Guarantees / Collateral", weight: subW.guarantees, isExcluded: subW.guarantees === 0, exclusionNote: subW._excluded?.guarantees, isFundability: true },
-      { key: "financialResilience", name: "Financial Resilience & Efficiency", weight: subW.financialResilience, isExcluded: subW.financialResilience === 0, exclusionNote: subW._excluded?.financialResilience, isFundability: true }
-    );
-  } else {
-    // Only core categories when no funding application
-    categoryMappings.push(
-      { key: "impactMandate", name: "Impact & Mandate Alignment", isCore: true }
-    );
-  }
-  
-  const colors = ["#8D6E63", "#6D4C41", "#A67C52", "#D7CCC8", "#4E342E", "#795548", "#5D4037", "#3E2723"];
-  
-  const breakdown = [];
-  
-  // Process core sections (Financial Strength, Operational Strength)
-  for (let i = 0; i < 2; i++) {
-    const cat = categoryMappings[i];
-    if (!cat) continue;
-    
-    const aiScore = aiScores[cat.key] ?? 0;
-    const rawScore = aiScore;
-    const percent = (aiScore / 5) * 100;
-    const weight = overallWeights[cat.key];
-    const weightedContribution = (percent / 100) * weight;
-    
-    console.log(`📊 ${cat.name} - Score: ${aiScore}/5, Weight: ${weight}%, Contribution: ${weightedContribution}`);
-    
-    breakdown.push({
-      name: cat.name,
-      score: Math.round(percent),
-      weight: weight,
-      weightedScore: Math.round(weightedContribution),
-      color: colors[i],
-      rawScore: Math.round(rawScore * 10) / 10,
-      maxScore: 5,
-      tier: null,
-      active: true,
-      excluded: false,
-      exclusionNote: null,
-      reductionNote: null,
+      scores[key] = foundScore !== null
+        ? Math.min(Math.max(foundScore, 0), 5)
+        : 0;
     });
-  }
-  
-  // Process fundability sections if applicable
-  if (hasAppliedForFunding && fundingTier && subW) {
-    const fundabilityWeight = overallWeights.fundability; // 30
-    
-    for (let i = 2; i < categoryMappings.length; i++) {
-      const cat = categoryMappings[i];
-      
-      // ========== SOLVENCY INTEGRATION ==========
-      // For Financial Resilience & Efficiency, use solvency data if available
-      let rawScore = 0;
-      let percent = 0;
-      let sourceType = "ai";
-      
-      if (cat.key === "financialResilience" && solvencyAnalysis?.isValid) {
-        // Use actual solvency score (normalized to 0-5)
-        rawScore = solvencyAnalysis.normalizedScore || 0;
-        percent = (rawScore / 5) * 100;
-        sourceType = "solvency";
-        console.log(`📊 ${cat.name} - Using SOLVENCY score: ${rawScore}/5 (NAV: ${solvencyAnalysis.nav}M, ER: ${solvencyAnalysis.equityRatio}%)`);
-      } else {
-        // Use AI score for other components
-        rawScore = aiScores[cat.key] ?? 0;
-        percent = (rawScore / 5) * 100;
-        sourceType = "ai";
-        console.log(`📊 ${cat.name} - Score: ${rawScore}/5, Weight within block: ${cat.weight}%`);
-      }
-      
-      // Calculate weight within the fundability block, then scaled to overall
-      const weightWithinBlock = cat.weight || 0;
-      const isExcluded = cat.isExcluded || weightWithinBlock === 0;
-      const weightedContribution = isExcluded ? 0 : (percent / 100) * (weightWithinBlock / 100) * fundabilityWeight;
-      
-      breakdown.push({
-        name: cat.name,
-        score: isExcluded ? 0 : Math.round(percent),
-        weight: weightWithinBlock,
-        weightedScore: Math.round(weightedContribution),
-        color: colors[(i + 2) % colors.length],
-        rawScore: Math.round(rawScore * 10) / 10,
-        maxScore: 5,
-        tier: fundingTier,
-        active: !isExcluded && weightWithinBlock > 0,
-        excluded: isExcluded,
-        exclusionNote: cat.exclusionNote || null,
-        reductionNote: cat.reductionNote || null,
-        source: sourceType, // Track where the score came from
-      });
-    }
-  } else {
-    // Add Impact & Mandate as core section when no funding application
-    const cat = categoryMappings[2];
-    if (cat) {
-      const aiScore = aiScores[cat.key] ?? 0;
-      const rawScore = aiScore;
-      const percent = (aiScore / 5) * 100;
-      const weight = weightings[cat.key] || 0;
-      const weightedContribution = (percent / 100) * weight;
-      
-      breakdown.push({
-        name: cat.name,
-        score: Math.round(percent),
-        weight: weight,
-        weightedScore: Math.round(weightedContribution),
-        color: colors[2],
-        rawScore: Math.round(rawScore * 10) / 10,
-        maxScore: 5,
-        tier: null,
-        active: true,
-        excluded: false,
-        exclusionNote: null,
-        reductionNote: null,
-      });
-    }
-  }
-  
-  // Sum the weighted contributions for final score
-  const totalScore = Math.round(breakdown.reduce((sum, item) => sum + (item.weightedScore || 0), 0));
-  
-  console.log("Final calculated score:", totalScore);
-  console.log("Breakdown:", breakdown);
-  
-  return {
-    totalScore: Math.min(Math.max(isNaN(totalScore) ? 0 : totalScore, 0), 100),
-    breakdown,
+
+    scores._confidence   = confidenceMap;
+    scores._evidence     = evidenceMap;
+    scores._confRationale = confRationaleMap;
+    return scores;
   };
-};
 
+  const validateFundingScores = (aiScores) => {
+    if (!hasAppliedForFunding) return true;
+    const fundingKeys = ['businessPlanAnalysis', 'pitchDeckScore', 'creditReport'];
+    const missingScores = [];
+    fundingKeys.forEach(key => {
+      const score = aiScores[key];
+      if (score === undefined || score === null) missingScores.push(key);
+    });
+    if (missingScores.length > 0) {
+      console.warn(`⚠️ Missing AI scores for: ${missingScores.join(', ')}`);
+      return false;
+    }
+    return true;
+  };
 
-  // ── AI evaluation helpers ──────────────────────────────────────────────
+  const calculateFundabilityScore = (data, aiEvaluationResult = "") => {
+    const stage = mapStageToCategory(data?.entityOverview?.operationStage || "Not provided");
+    const weightings = weightingsByStage[stage];
+    const aiScores = aiEvaluationResult ? parseAiEvaluationScores(aiEvaluationResult) : {};
+    const subW = getFundabilitySubWeights(fundingTier);
+    
+    const overallWeights = {
+      financialStrength: hasAppliedForFunding && fundingTier ? 40 : 55,
+      operations: hasAppliedForFunding && fundingTier ? 30 : 45,
+      fundability: hasAppliedForFunding && fundingTier ? 30 : 0,
+    };
+    
+    const categoryMappings = [
+      { key: "financialStrength", name: "Financial Strength", isCore: true },
+      { key: "operations", name: "Operational Strength", isCore: true },
+    ];
+    
+    if (hasAppliedForFunding && fundingTier && subW) {
+      categoryMappings.push(
+        { key: "businessPlanAnalysis", name: "Business Plan / Investment Case", weight: subW.businessPlan, reductionNote: subW._reduced?.businessPlan, isFundability: true },
+        { key: "pitchDeckScore", name: "Pitch Readiness / Pitch Deck", weight: subW.pitchDeck, reductionNote: subW._reduced?.pitchDeck, isFundability: true },
+        { key: "impactMandate", name: "Impact & Mandate Alignment", weight: subW.impactMandate, reductionNote: subW._reduced?.impactMandate, isFundability: true },
+        { key: "creditReport", name: "Creditworthiness", weight: subW.creditworthiness, reductionNote: subW._reduced?.creditworthiness, isFundability: true },
+        { key: "guarantees", name: "Guarantees / Collateral", weight: subW.guarantees, isExcluded: subW.guarantees === 0, exclusionNote: subW._excluded?.guarantees, isFundability: true },
+        { key: "financialResilience", name: "Financial Resilience & Efficiency", weight: subW.financialResilience, isExcluded: subW.financialResilience === 0, exclusionNote: subW._excluded?.financialResilience, isFundability: true }
+      );
+    } else {
+      categoryMappings.push(
+        { key: "impactMandate", name: "Impact & Mandate Alignment", isCore: true }
+      );
+    }
+    
+    const colors = ["#8D6E63", "#6D4C41", "#A67C52", "#D7CCC8", "#4E342E", "#795548", "#5D4037", "#3E2723"];
+    const breakdown = [];
+    
+    for (let i = 0; i < 2; i++) {
+      const cat = categoryMappings[i];
+      if (!cat) continue;
+      const aiScore = aiScores[cat.key] ?? 0;
+      const percent = (aiScore / 5) * 100;
+      const weight = overallWeights[cat.key];
+      const weightedContribution = (percent / 100) * weight;
+      breakdown.push({
+        name: cat.name, score: Math.round(percent), weight, weightedScore: Math.round(weightedContribution),
+        color: colors[i], rawScore: Math.round(aiScore * 10) / 10, maxScore: 5,
+        tier: null, active: true, excluded: false, exclusionNote: null, reductionNote: null,
+      });
+    }
+    
+    if (hasAppliedForFunding && fundingTier && subW) {
+      const fundabilityWeight = overallWeights.fundability;
+      for (let i = 2; i < categoryMappings.length; i++) {
+        const cat = categoryMappings[i];
+        let rawScore = 0, percent = 0, sourceType = "ai";
+        
+        if (cat.key === "financialResilience" && solvencyAnalysis?.isValid) {
+          rawScore = solvencyAnalysis.normalizedScore || 0;
+          percent = (rawScore / 5) * 100;
+          sourceType = "solvency";
+        } else {
+          rawScore = aiScores[cat.key] ?? 0;
+          percent = (rawScore / 5) * 100;
+        }
+        
+        const weightWithinBlock = cat.weight || 0;
+        const isExcluded = cat.isExcluded || weightWithinBlock === 0;
+        const weightedContribution = isExcluded ? 0 : (percent / 100) * (weightWithinBlock / 100) * fundabilityWeight;
+        
+        breakdown.push({
+          name: cat.name, score: isExcluded ? 0 : Math.round(percent),
+          weight: weightWithinBlock, weightedScore: Math.round(weightedContribution),
+          color: colors[(i + 2) % colors.length], rawScore: Math.round(rawScore * 10) / 10,
+          maxScore: 5, tier: fundingTier, active: !isExcluded && weightWithinBlock > 0,
+          excluded: isExcluded, exclusionNote: cat.exclusionNote || null,
+          reductionNote: cat.reductionNote || null, source: sourceType,
+        });
+      }
+    } else {
+      const cat = categoryMappings[2];
+      if (cat) {
+        const aiScore = aiScores[cat.key] ?? 0;
+        const percent = (aiScore / 5) * 100;
+        const weight = weightings[cat.key] || 0;
+        const weightedContribution = (percent / 100) * weight;
+        breakdown.push({
+          name: cat.name, score: Math.round(percent), weight, weightedScore: Math.round(weightedContribution),
+          color: colors[2], rawScore: Math.round(aiScore * 10) / 10, maxScore: 5,
+          tier: null, active: true, excluded: false, exclusionNote: null, reductionNote: null,
+        });
+      }
+    }
+    
+    const totalScore = Math.round(breakdown.reduce((sum, item) => sum + (item.weightedScore || 0), 0));
+    return {
+      totalScore: Math.min(Math.max(isNaN(totalScore) ? 0 : totalScore, 0), 100),
+      breakdown,
+    };
+  };
+
   const prepareDataForEvaluation = async (data) => {
     let out = "";
 
@@ -800,10 +635,10 @@ const calculateFundabilityScore = (data, aiEvaluationResult = "") => {
     out += `Existing debt: ${data?.financialOverview?.existingDebt || "Not specified"}\n`;
     out += `Credit report available: ${data?.financialOverview?.hasCreditReport || "No"}\n`;
     out += `Management accounts: ${data?.financialOverview?.hasManagementAccounts || "Not provided"}\n`;
-out += `Latest management accounts: ${data?.financialOverview?.latestManagementAccounts || "N/A"}\n`;
-out += `Financial statements available: ${data?.financialOverview?.hasFinancialStatements || "No"}\n`;
-out += `Years of financial statements: ${(data?.financialOverview?.financialStatementsYears || []).join(", ") || "None"}\n`;
-out += `Revenue trend (12 months): ${data?.financialOverview?.revenueTrend || "Not specified"}\n`;
+    out += `Latest management accounts: ${data?.financialOverview?.latestManagementAccounts || "N/A"}\n`;
+    out += `Financial statements available: ${data?.financialOverview?.hasFinancialStatements || "No"}\n`;
+    out += `Years of financial statements: ${(data?.financialOverview?.financialStatementsYears || []).join(", ") || "None"}\n`;
+    out += `Revenue trend (12 months): ${data?.financialOverview?.revenueTrend || "Not specified"}\n`;
 
     try {
       const finSnap = await getDoc(doc(db, "aiFinancialEvaluations", auth.currentUser.uid));
@@ -850,40 +685,35 @@ out += `Revenue trend (12 months): ${data?.financialOverview?.revenueTrend || "N
       out += `Amount requested: ${data?.useOfFunds?.amountRequested || "Not specified"}\n`;
       out += `Support focus: ${data?.useOfFunds?.additionalSupportFocus || "None"}\n`;
 
-// Business Plan
-if (businessPlanAnalysis?.isValid) {
-  const bpScore5 = Math.round((businessPlanAnalysis.score / 100) * 5 * 10) / 10;
-  out += `\n--- BUSINESS PLAN ---\n`;
-  out += `Original AI Score: ${businessPlanAnalysis.rawScore}/100 → Converted: ${bpScore5}/5\n`;
-  out += `Full Analysis:\n${businessPlanAnalysis.content}\n`;
-  out += `INSTRUCTION: Use the converted score (${bpScore5}/5) as your base for section 4 (Business Plan / Investment Case). `;
-  out += `You may adjust ±0.5 only if the analysis content clearly justifies it. `;
-  out += `Base your score ONLY on what is explicitly stated in this analysis. Do not infer from profile data.\n`;
-} else {
-  out += `\n--- BUSINESS PLAN ---\nStatus: NOT SUBMITTED or NOT YET ANALYSED. You MUST output Score: 0. Do not infer or estimate from any other data.\n`;
-}
+      if (businessPlanAnalysis?.isValid) {
+        const bpScore5 = Math.round((businessPlanAnalysis.score / 100) * 5 * 10) / 10;
+        out += `\n--- BUSINESS PLAN ---\n`;
+        out += `Original AI Score: ${businessPlanAnalysis.rawScore}/100 → Converted: ${bpScore5}/5\n`;
+        out += `Full Analysis:\n${businessPlanAnalysis.content}\n`;
+        out += `INSTRUCTION: Use the converted score (${bpScore5}/5) as your base for section 4. You may adjust ±0.5 only if the analysis content clearly justifies it.\n`;
+      } else {
+        out += `\n--- BUSINESS PLAN ---\nStatus: NOT SUBMITTED or NOT YET ANALYSED. You MUST output Score: 0.\n`;
+      }
 
-if (pitchDeckAnalysis?.isValid) {
-  // score is 0-100, convert to 0-5 for the AI
-  const pitchScore5 = Math.round((pitchDeckAnalysis.score / 100) * 5 * 10) / 10;
-  out += `\n--- PITCH DECK ---\n`;
-  out += `Original AI Score: ${pitchDeckAnalysis.score}/100 → Converted: ${pitchScore5}/5\n`;
-  out += `Operational Score (already 0-5): ${pitchDeckAnalysis.operationalScore}/5\n`;
-  out += `Full Analysis:\n${pitchDeckAnalysis.content}\n`;
-  out += `INSTRUCTION: Use the converted score (${pitchScore5}/5) as your base. You may adjust ±0.5 based on the analysis content, but ONLY reference what is explicitly stated in the analysis above. Do not infer anything not present in the text.\n`;
-} else {
-  out += `\n--- PITCH DECK ---\nStatus: NOT SUBMITTED or NOT YET ANALYSED. You MUST output Score: 0. Do not infer or estimate from any other data.\n`;
-}
+      if (pitchDeckAnalysis?.isValid) {
+        const pitchScore5 = Math.round((pitchDeckAnalysis.score / 100) * 5 * 10) / 10;
+        out += `\n--- PITCH DECK ---\n`;
+        out += `Original AI Score: ${pitchDeckAnalysis.score}/100 → Converted: ${pitchScore5}/5\n`;
+        out += `Operational Score (already 0-5): ${pitchDeckAnalysis.operationalScore}/5\n`;
+        out += `Full Analysis:\n${pitchDeckAnalysis.content}\n`;
+        out += `INSTRUCTION: Use the converted score (${pitchScore5}/5) as your base.\n`;
+      } else {
+        out += `\n--- PITCH DECK ---\nStatus: NOT SUBMITTED or NOT YET ANALYSED. You MUST output Score: 0.\n`;
+      }
 
-// Credit Report
-if (creditReportAnalysis?.isValid) {
-  out += `\n--- CREDIT REPORT ---\nCredit score: ${creditReportAnalysis.score}/850\nAnalysis:\n${creditReportAnalysis.content}\nCONVERT TO 0-5: 750-850=5, 650-749=4, 550-649=3, 450-549=2, below 450=1. Base your score ONLY on this credit report.\n`;
-} else {
-  const reason = creditReportAnalysis && !creditReportAnalysis.isCreditReport
-    ? "Document uploaded was NOT a credit report."
-    : "NOT SUBMITTED or NOT YET ANALYSED.";
-  out += `\n--- CREDIT REPORT ---\nStatus: ${reason} You MUST output Score: 0. Do not infer or estimate from any other data.\n`;
-}
+      if (creditReportAnalysis?.isValid) {
+        out += `\n--- CREDIT REPORT ---\nCredit score: ${creditReportAnalysis.score}/850\nAnalysis:\n${creditReportAnalysis.content}\nCONVERT TO 0-5: 750-850=5, 650-749=4, 550-649=3, 450-549=2, below 450=1.\n`;
+      } else {
+        const reason = creditReportAnalysis && !creditReportAnalysis.isCreditReport
+          ? "Document uploaded was NOT a credit report."
+          : "NOT SUBMITTED or NOT YET ANALYSED.";
+        out += `\n--- CREDIT REPORT ---\nStatus: ${reason} You MUST output Score: 0.\n`;
+      }
 
       if (subW?.guarantees > 0) {
         if (guaranteesAnalysis) {
@@ -895,30 +725,24 @@ if (creditReportAnalysis?.isValid) {
         out += `\n--- GUARANTEES / COLLATERAL ---\nStatus: EXCLUDED for Tier ${fundingTier} — ${subW?._excluded?.guarantees || "not applicable"}\nScore: 0/5\n`;
       }
 
-      // Inside prepareDataForEvaluation, in the FINANCIAL RESILIENCE & EFFICIENCY section
-if (subW?.financialResilience > 0) {
-  out += `\n--- FINANCIAL RESILIENCE & EFFICIENCY ---\n`;
-  
-  // Add solvency data if available
-  if (solvencyAnalysis?.isValid) {
-    out += `SOLVENCY METRICS (from capital structure):\n`;
-    out += `- Net Asset Value (NAV): R${solvencyAnalysis.nav}M\n`;
-    out += `- Equity Ratio: ${solvencyAnalysis.equityRatio}%\n`;
-    out += `- Debt to Equity: ${solvencyAnalysis.debtToEquity}\n`;
-    out += `- Debt to Assets: ${solvencyAnalysis.debtToAssets}\n`;
-    out += `- Interest Coverage: ${solvencyAnalysis.interestCoverage}\n`;
-    out += `- Solvency Score: ${solvencyAnalysis.score}/100 (${solvencyAnalysis.normalizedScore}/5 normalized)\n`;
-  }
-  
-  if (financialResilienceAnalysis?.content) {
-    out += `Resilience Score: ${financialResilienceAnalysis.score}/5\n`;
-    out += `Analysis:\n${financialResilienceAnalysis.content}\n`;
-  } else {
-    out += `Status: Using solvency metrics from capital structure.\n`;
-    out += `Note: Solvency covers long-term financial stability, debt management, and asset coverage.\n`;
-  }
-  out += `Score: ${solvencyAnalysis?.normalizedScore || 0}/5\n`;
-}
+      if (subW?.financialResilience > 0) {
+        out += `\n--- FINANCIAL RESILIENCE & EFFICIENCY ---\n`;
+        if (solvencyAnalysis?.isValid) {
+          out += `SOLVENCY METRICS (from capital structure):\n`;
+          out += `- Net Asset Value (NAV): R${solvencyAnalysis.nav}M\n`;
+          out += `- Equity Ratio: ${solvencyAnalysis.equityRatio}%\n`;
+          out += `- Debt to Equity: ${solvencyAnalysis.debtToEquity}\n`;
+          out += `- Debt to Assets: ${solvencyAnalysis.debtToAssets}\n`;
+          out += `- Interest Coverage: ${solvencyAnalysis.interestCoverage}\n`;
+          out += `- Solvency Score: ${solvencyAnalysis.score}/100 (${solvencyAnalysis.normalizedScore}/5 normalized)\n`;
+        }
+        if (financialResilienceAnalysis?.content) {
+          out += `Resilience Score: ${financialResilienceAnalysis.score}/5\nAnalysis:\n${financialResilienceAnalysis.content}\n`;
+        } else {
+          out += `Status: Using solvency metrics from capital structure.\n`;
+        }
+        out += `Score: ${solvencyAnalysis?.normalizedScore || 0}/5\n`;
+      }
     }
 
     return out;
@@ -934,51 +758,43 @@ if (subW?.financialResilience > 0) {
     }
   };
 
-const runAiEvaluation = async (userId) => {
-  if (!apiKey?.trim()) { setEvaluationError("API key not configured."); return; }
-  if (!profileData)    { setEvaluationError("No profile data."); return; }
+  const runAiEvaluation = async (userId) => {
+    if (!apiKey?.trim()) { setEvaluationError("API key not configured."); return; }
+    if (!profileData)    { setEvaluationError("No profile data."); return; }
 
-  if (hasAppliedForFunding && !isFundingDataLoaded) {
-    setEvaluationError("Loading funding application data...");
-    const start = Date.now();
-    while (!isFundingDataLoadedRef.current && Date.now() - start < 10000) {
-      await new Promise((r) => setTimeout(r, 500));
+    if (hasAppliedForFunding && !isFundingDataLoaded) {
+      setEvaluationError("Loading funding application data...");
+      const start = Date.now();
+      while (!isFundingDataLoadedRef.current && Date.now() - start < 10000) {
+        await new Promise((r) => setTimeout(r, 500));
+      }
+      if (!isFundingDataLoadedRef.current) {
+        setEvaluationError("Funding data timeout. Please try again.");
+        return;
+      }
     }
-    if (!isFundingDataLoadedRef.current) {
-      setEvaluationError("Funding data timeout. Please try again.");
-      return;
-    }
-  }
 
-  setIsEvaluating(true);
-  setEvaluationError("");
+    setIsEvaluating(true);
+    setEvaluationError("");
 
-  try {
-    const evalData = await prepareDataForEvaluation(profileData);
-    const tier = fundingTier;
-    const subW = getFundabilitySubWeights(tier);
+    try {
+      const evalData = await prepareDataForEvaluation(profileData);
+      const tier = fundingTier;
+      const subW = getFundabilitySubWeights(tier);
 
-    const tierNote = tier
-      ? `\n⚠️ FUNDING TIER: ${tier} — ${TIER_LABELS[tier]}\n`
-      : "";
+      const tierNote = tier ? `\n⚠️ FUNDING TIER: ${tier} — ${TIER_LABELS[tier]}\n` : "";
 
-    const tierInstructions =
-      tier === "A"
-        ? "TIER A (Grant): Business Plan, Pitch Deck, Impact & Mandate are primary. Creditworthiness at REDUCED weight — note this in rationale. Guarantees = 0 (not applicable). Financial Resilience = 0 (not applicable).\n"
-        : tier === "B"
-        ? "TIER B (PO/Debt): Creditworthiness and Guarantees are PRIMARY. Financial Resilience included. Impact & Mandate and Pitch Deck at REDUCED weight — note this in rationale.\n"
-        : tier === "C"
-        ? "TIER C (ESD/Support): Grant-equivalent evaluation. Business Plan, Pitch Deck, Impact & Mandate are primary. Creditworthiness at REDUCED weight. Guarantees = 0 (not applicable). Financial Resilience = 0 (not applicable).\n"
-        : tier === "D"
-        ? "TIER D (Full/Serious Funding): ALL sub-components active. Financial Resilience & Efficiency is CRITICAL — covers solvency, liquidity, leverage ratios. Pitch Deck and Impact at REDUCED weight — note this in rationale. This is underwriting-grade assessment.\n"
+      const tierInstructions =
+        tier === "A" ? "TIER A (Grant): Business Plan, Pitch Deck, Impact & Mandate are primary. Creditworthiness at REDUCED weight. Guarantees = 0. Financial Resilience = 0.\n"
+        : tier === "B" ? "TIER B (PO/Debt): Creditworthiness and Guarantees are PRIMARY. Financial Resilience included. Impact & Mandate and Pitch Deck at REDUCED weight.\n"
+        : tier === "C" ? "TIER C (ESD/Support): Grant-equivalent evaluation. Business Plan, Pitch Deck, Impact & Mandate are primary. Creditworthiness at REDUCED weight. Guarantees = 0. Financial Resilience = 0.\n"
+        : tier === "D" ? "TIER D (Full/Serious Funding): ALL sub-components active. Financial Resilience & Efficiency is CRITICAL. Pitch Deck and Impact at REDUCED weight.\n"
         : "";
 
-    // Build categories based on whether user has applied for funding
-    let categoriesToEvaluate = "";
-    
-    if (hasAppliedForFunding && tier) {
-      // Include all fundability sections
-      categoriesToEvaluate = `
+      let categoriesToEvaluate = "";
+      
+      if (hasAppliedForFunding && tier) {
+        categoriesToEvaluate = `
 ### 1. Financial Strength
 **Score:** [0-5]
 **Evidence:** [cite exact fields used]
@@ -986,7 +802,6 @@ const runAiEvaluation = async (userId) => {
 **Confidence Rationale:** [one sentence]
 **Rationale:** [explanation based only on provided data]
 **How to Improve:** 
-- → [Section]: [specific action]
 - → [Section]: [specific action]
 
 ### 2. Operational Strength
@@ -997,7 +812,6 @@ const runAiEvaluation = async (userId) => {
 **Rationale:** [explanation based only on provided data]
 **How to Improve:** 
 - → [Section]: [specific action]
-- → [Section]: [specific action]
 
 ### 3. Impact & Mandate Alignment
 **Score:** [0-5]
@@ -1007,37 +821,33 @@ const runAiEvaluation = async (userId) => {
 **Rationale:** [explanation based only on provided data]
 **How to Improve:** 
 - → [Section]: [specific action]
-- → [Section]: [specific action]
 
 ### 4. Business Plan / Investment Case
-**Score:** [0-5 - Base this on the business plan analysis content provided in the FUNDING APPLICATION MATERIALS section]
-**Evidence:** [Cite specific elements from the business plan analysis that justify this score]
+**Score:** [0-5 - Base this on the business plan analysis content provided]
+**Evidence:** [Cite specific elements from the business plan analysis]
 **Confidence:** [High | Medium | Low]
-**Confidence Rationale:** [one sentence explaining why this confidence level was chosen]
+**Confidence Rationale:** [one sentence]
 **Rationale:** [explanation based on the business plan analysis content]
 **How to Improve:** 
 - → [Document Uploads]: Upload an updated business plan
-- → [Enterprise Readiness]: Confirm business plan exists and update details
 
 ### 5. Pitch Readiness / Pitch Deck
-**Score:** [0-5 - Base this on the pitch deck analysis content provided in the FUNDING APPLICATION MATERIALS section]
-**Evidence:** [Cite specific elements from the pitch deck analysis that justify this score]
+**Score:** [0-5 - Base this on the pitch deck analysis content provided]
+**Evidence:** [Cite specific elements from the pitch deck analysis]
 **Confidence:** [High | Medium | Low]
-**Confidence Rationale:** [one sentence explaining why this confidence level was chosen]
+**Confidence Rationale:** [one sentence]
 **Rationale:** [explanation based on the pitch deck analysis content]
 **How to Improve:** 
 - → [Document Uploads]: Upload an updated pitch deck
-- → [Enterprise Readiness]: Confirm pitch deck exists and update details
 
 ### 6. Creditworthiness
 **Score:** [${tier === "A" || tier === "C" ? "0-5 — note this is at reduced weight for grant/ESD tier" : "0-5"}]
-**Evidence:** [Cite specific elements from the credit report analysis that justify this score]
+**Evidence:** [Cite specific elements from the credit report analysis]
 **Confidence:** [High | Medium | Low]
-**Confidence Rationale:** [one sentence explaining why this confidence level was chosen]
+**Confidence Rationale:** [one sentence]
 **Rationale:** [explanation based on the credit report analysis content]
 **How to Improve:** 
 - → [Document Uploads]: Upload an updated credit report
-- → [Financial Overview]: Update existing debt, profitability status
 
 ### 7. Guarantees / Collateral
 **Score:** [${tier === "A" || tier === "C" ? "0 — excluded for grant/ESD funding" : "0-5"}]
@@ -1051,12 +861,11 @@ const runAiEvaluation = async (userId) => {
 **Score:** [${tier === "D" ? "0-5 — CRITICAL for Tier D" : "0 — excluded for Tier " + tier}]
 **Evidence:** ${tier !== "D" ? "N/A — excluded for Tier " + tier : "[Cite solvency, liquidity, leverage metrics]"}
 **Confidence:** ${tier !== "D" ? "N/A" : "[High | Medium | Low]"}
-**Confidence Rationale:** ${tier !== "D" ? "Excluded: " + (subW?._excluded?.financialResilience || "not applicable for this tier") : "[one sentence — covers solvency, liquidity, leverage]"}
-**Rationale:** ${tier !== "D" ? "Financial resilience is not assessed for " + TIER_LABELS[tier] + " funding." : "[Cover solvency ratios, liquidity position, leverage, and efficiency metrics from available data]"}
-**How to Improve:** ${tier !== "D" ? "N/A" : "- → [Financial Overview]: Improve debt-to-equity ratio\n- → [Enterprise Readiness]: Provide audited financial statements\n- → [Financial Overview]: Increase liquidity position"}`;
-    } else {
-      // Only core categories
-      categoriesToEvaluate = `
+**Confidence Rationale:** ${tier !== "D" ? "Excluded: " + (subW?._excluded?.financialResilience || "not applicable for this tier") : "[one sentence]"}
+**Rationale:** ${tier !== "D" ? "Financial resilience is not assessed for " + TIER_LABELS[tier] + " funding." : "[Cover solvency ratios, liquidity position, leverage, and efficiency metrics]"}
+**How to Improve:** ${tier !== "D" ? "N/A" : "- → [Financial Overview]: Improve debt-to-equity ratio"}`;
+      } else {
+        categoriesToEvaluate = `
 ### 1. Financial Strength
 **Score:** [0-5]
 **Evidence:** [cite exact fields used]
@@ -1064,7 +873,6 @@ const runAiEvaluation = async (userId) => {
 **Confidence Rationale:** [one sentence]
 **Rationale:** [explanation based only on provided data]
 **How to Improve:** 
-- → [Section]: [specific action]
 - → [Section]: [specific action]
 
 ### 2. Operational Strength
@@ -1075,7 +883,6 @@ const runAiEvaluation = async (userId) => {
 **Rationale:** [explanation based only on provided data]
 **How to Improve:** 
 - → [Section]: [specific action]
-- → [Section]: [specific action]
 
 ### 3. Impact & Mandate Alignment
 **Score:** [0-5]
@@ -1084,70 +891,48 @@ const runAiEvaluation = async (userId) => {
 **Confidence Rationale:** [one sentence]
 **Rationale:** [explanation based only on provided data]
 **How to Improve:** 
-- → [Section]: [specific action]
 - → [Section]: [specific action]`;
-    }
+      }
 
-  const combinedMessage = `Evaluate the fundability...
+      const combinedMessage = `Evaluate the fundability...
 
 ABSOLUTE SCORE RULES — NEVER VIOLATE:
-1. Business Plan, Pitch Deck, and Creditworthiness scores MUST come ONLY from the analysis documents provided. Never derive these from profile fields, financial data, or any other section.
-2. If a section is marked "NOT SUBMITTED", you MUST output Score: 0 for that section. Do not estimate.
-3. If a section is marked "EXCLUDED", you MUST output Score: 0 for that section. Do not score it at all.
+1. Business Plan, Pitch Deck, and Creditworthiness scores MUST come ONLY from the analysis documents provided.
+2. If a section is marked "NOT SUBMITTED", you MUST output Score: 0 for that section.
+3. If a section is marked "EXCLUDED", you MUST output Score: 0 for that section.
 4. A score of 0 is valid and expected when documents are missing.
 
 ${tierNote}
-...
 ${tierInstructions}
-
-CRITICAL INSTRUCTION: You MUST evaluate ALL categories listed below. Do not skip any categories.
 
 STRICT DATA RULES:
 - Only reference data explicitly provided in the input below
-- If a section says "not yet completed" or "not provided", score it 0 and say so — do not guess
-- Do NOT invent operational details, team sizes, infrastructure, or processes
-- Do NOT assume anything about fields marked "Not specified" or "Unknown"
-- For Business Plan, Pitch Deck, and Credit Report sections, base your score SOLELY on the analysis content provided in the FUNDING APPLICATION MATERIALS section
+- If a section says "not yet completed" or "not provided", score it 0
 
-SCORING GUIDE FOR FUNDING SECTIONS:
-- Business Plan Quality (0-5): Base on the analysis content provided. If no business plan was submitted, score 0. If submitted but incomplete/weak, score 1-3. If comprehensive and well-structured, score 4-5.
-- Pitch Deck Effectiveness (0-5): Base on the analysis content provided. If no pitch deck was submitted, score 0. If submitted but lacks clarity or completeness, score 1-3. If compelling and investor-ready, score 4-5.
-- Creditworthiness (0-5): Base on the credit report analysis. Convert score: 750-850 = 5, 650-749 = 4, 550-649 = 3, 450-549 = 2, below 450 = 1. If no credit report, score 0.
+${hasAppliedForFunding && tier ? `⚠️ IMPORTANT: This business HAS APPLIED FOR FUNDING. You MUST include sections 4-8 in your analysis.` : ''}
 
-${hasAppliedForFunding && tier ? `
-⚠️ IMPORTANT: This business HAS APPLIED FOR FUNDING. 
-You MUST include sections 4-8 in your analysis.
-The Business Plan, Pitch Deck, and Credit Report scores MUST be based on the analysis content provided in the FUNDING APPLICATION MATERIALS section below.
-` : ''}
-
-Categories to evaluate (YOU MUST INCLUDE ALL OF THESE IN YOUR RESPONSE):
+Categories to evaluate:
 ${categoriesToEvaluate}
 
 ### Overall Assessment
-**Final Analysis:** [Brief summary referencing only the data provided. End with the top 2 platform sections to complete next.]
+**Final Analysis:** [Brief summary referencing only the data provided.]
 
 INPUT DATA:
 ${evalData}`;
 
-    console.log("📤 Sending prompt to AI with categories:", hasAppliedForFunding && tier ? "All 8 categories" : "3 core categories");
-    const result = await sendMessageToChatGPT(combinedMessage);
-    
-    // Validate the scores after receiving result
-    const aiScores = parseAiEvaluationScores(result);
-    if (hasAppliedForFunding && tier) {
-      validateFundingScores(aiScores);
+      const result = await sendMessageToChatGPT(combinedMessage);
+      
+      const aiScores = parseAiEvaluationScores(result);
+      if (hasAppliedForFunding && tier) validateFundingScores(aiScores);
+      
+      return result;
+    } catch (error) {
+      console.error("AI Evaluation error:", error);
+      setEvaluationError(`Failed: ${error.message}`);
+    } finally {
+      setIsEvaluating(false);
     }
-    
-    // setAiEvaluationResult(result);
-    // setShowDetailedAnalysis(true);
-    return result;
-  } catch (error) {
-    console.error("AI Evaluation error:", error);
-    setEvaluationError(`Failed: ${error.message}`);
-  } finally {
-    setIsEvaluating(false);
-  }
-};
+  };
 
   const refreshAiEvaluation = async () => {
     const userId = auth?.currentUser?.uid;
@@ -1164,7 +949,6 @@ ${evalData}`;
     }
   };
 
-  // ── Firebase listener ──────────────────────────────────────────────────
   const waitForFundingCheck = () =>
     new Promise((resolve, reject) => {
       const start = Date.now();
@@ -1173,75 +957,69 @@ ${evalData}`;
         else if (Date.now() - start > 15000) { clearInterval(iv); reject(new Error("Timeout")); }
       }, 100);
     });
-useEffect(() => {
-  if (!auth?.currentUser?.uid || !apiKey) return;
 
-  const docRef    = doc(db, "universalProfiles", auth.currentUser.uid);
-  const aiEvalRef = doc(db, "aiFundabilityEvaluations", auth.currentUser.uid);
+  useEffect(() => {
+    if (!auth?.currentUser?.uid || !apiKey) return;
 
-  const unsubscribe = onSnapshot(docRef, async (docSnap) => {
-    if (docSnap.exists()) {
-      const data = docSnap.data();
+    const docRef    = doc(db, "universalProfiles", auth.currentUser.uid);
+    const aiEvalRef = doc(db, "aiFundabilityEvaluations", auth.currentUser.uid);
 
-      if (data.triggerFundabilityEvaluation === true && !isEvaluating) {
-        if (!fundingCheckCompleteRef.current) {
-          try { await waitForFundingCheck(); }
-          catch { await updateDoc(docRef, { triggerFundabilityEvaluation: false }); return; }
-        }
-        if (hasAppliedForFunding && !isFundingDataLoaded) {
-          const start = Date.now();
-          while (!isFundingDataLoadedRef.current && Date.now() - start < 15000) {
-            await new Promise((r) => setTimeout(r, 500));
+    const unsubscribe = onSnapshot(docRef, async (docSnap) => {
+      if (docSnap.exists()) {
+        const data = docSnap.data();
+
+        if (data.triggerFundabilityEvaluation === true && !isEvaluating) {
+          if (!fundingCheckCompleteRef.current) {
+            try { await waitForFundingCheck(); }
+            catch { await updateDoc(docRef, { triggerFundabilityEvaluation: false }); return; }
           }
-        }
-
-        setTriggeredByAuto(true);
-        isSavingEvaluation.current = true; // ← block the loader below
-
-        const result = await runAiEvaluation(auth.currentUser.uid);
-
-        if (result) {
-          // Save to Firestore first
-          await setDoc(aiEvalRef, {
-            result,
-            timestamp: new Date(),
-            profileSnapshot: profileData,
-            includedFundingData: hasAppliedForFunding,
-            fundingTier,
-          }, { merge: true });
-
-          // Then set in state — this is now the source of truth
-          setAiEvaluationResult(result);
-          setShowDetailedAnalysis(true);
-        }
-
-        await updateDoc(docRef, { triggerFundabilityEvaluation: false });
-        isSavingEvaluation.current = false; // ← unblock
-      }
-    }
-
-    // Only load saved result if we're NOT in the middle of saving a fresh one
-    if (isSavingEvaluation.current) return;
-
-    try {
-      const aiSnap = await getDoc(aiEvalRef);
-      if (aiSnap.exists()) {
-        const saved = aiSnap.data();
-        if (saved.result) {
-          setAiEvaluationResult(saved.result);
-          if (saved.includedFundingData === true || !hasAppliedForFunding) {
-            hasReevaluated.current = true;
+          if (hasAppliedForFunding && !isFundingDataLoaded) {
+            const start = Date.now();
+            while (!isFundingDataLoadedRef.current && Date.now() - start < 15000) {
+              await new Promise((r) => setTimeout(r, 500));
+            }
           }
+
+          setTriggeredByAuto(true);
+          isSavingEvaluation.current = true;
+
+          const result = await runAiEvaluation(auth.currentUser.uid);
+
+          if (result) {
+            await setDoc(aiEvalRef, {
+              result, timestamp: new Date(), profileSnapshot: profileData,
+              includedFundingData: hasAppliedForFunding, fundingTier,
+            }, { merge: true });
+
+            setAiEvaluationResult(result);
+            setShowDetailedAnalysis(true);
+          }
+
+          await updateDoc(docRef, { triggerFundabilityEvaluation: false });
+          isSavingEvaluation.current = false;
         }
       }
-    } catch (e) { console.error("Load saved eval error:", e); }
-  });
 
-  return () => unsubscribe();
-}, [auth?.currentUser?.uid, apiKey, isEvaluating, hasAppliedForFunding,
-    isFundingDataLoaded, fundingCheckComplete, profileData, fundingTier]);
+      if (isSavingEvaluation.current) return;
 
-  // ── Helpers ────────────────────────────────────────────────────────────
+      try {
+        const aiSnap = await getDoc(aiEvalRef);
+        if (aiSnap.exists()) {
+          const saved = aiSnap.data();
+          if (saved.result) {
+            setAiEvaluationResult(saved.result);
+            if (saved.includedFundingData === true || !hasAppliedForFunding) {
+              hasReevaluated.current = true;
+            }
+          }
+        }
+      } catch (e) { console.error("Load saved eval error:", e); }
+    });
+
+    return () => unsubscribe();
+  }, [auth?.currentUser?.uid, apiKey, isEvaluating, hasAppliedForFunding,
+      isFundingDataLoaded, fundingCheckComplete, profileData, fundingTier]);
+
   const getProgressBarColor = (score) => {
     if (score > 90) return "#1B5E20";
     if (score >= 81) return "#4CAF50";
@@ -1250,80 +1028,24 @@ useEffect(() => {
     return "#B71C1C";
   };
 
-const mapStageToCategory = (stage) => {
-  const s = (stage || "").toLowerCase();
-  if (["pre-seed", "preseed"].includes(s)) return "pre-seed";
-  if (["seed"].includes(s)) return "seed";
-  if (["series a", "seriesa"].includes(s)) return "seriesa";
-  if (["series b", "seriesb"].includes(s)) return "seriesb";
-  if (["early-growth", "growth", "scale-up"].includes(s)) return "growth";
-  return "maturity";
-};
+  const mapStageToCategory = (stage) => {
+    const s = (stage || "").toLowerCase();
+    if (["pre-seed", "preseed"].includes(s)) return "pre-seed";
+    if (["seed"].includes(s)) return "seed";
+    if (["series a", "seriesa"].includes(s)) return "seriesa";
+    if (["series b", "seriesb"].includes(s)) return "seriesb";
+    if (["early-growth", "growth", "scale-up"].includes(s)) return "growth";
+    return "maturity";
+  };
 
-const weightingsByStage = {
-  "pre-seed": {
-    financialStrength: 25,
-    operations: 40,
-    impactMandate: 35,
-    businessPlan: 0,
-    pitchDeck: 0,
-    creditworthiness: 0,
-    guarantees: 0,
-    financialResilience: 0,
-  },
-  seed: {
-    financialStrength: 35,
-    operations: 35,
-    impactMandate: 30,
-    businessPlan: 0,
-    pitchDeck: 0,
-    creditworthiness: 0,
-    guarantees: 0,
-    financialResilience: 0,
-  },
-  seriesa: {
-    financialStrength: 45,
-    operations: 30,
-    impactMandate: 25,
-    businessPlan: 0,
-    pitchDeck: 0,
-    creditworthiness: 0,
-    guarantees: 0,
-    financialResilience: 0,
-  },
-  seriesb: {
-    financialStrength: 55,
-    operations: 25,
-    impactMandate: 20,
-    businessPlan: 0,
-    pitchDeck: 0,
-    creditworthiness: 0,
-    guarantees: 0,
-    financialResilience: 0,
-  },
-  growth: {
-    financialStrength: 65,
-    operations: 20,
-    impactMandate: 15,
-    businessPlan: 0,
-    pitchDeck: 0,
-    creditworthiness: 0,
-    guarantees: 0,
-    financialResilience: 0,
-  },
-  maturity: {
-    financialStrength: 75,
-    operations: 15,
-    impactMandate: 10,
-    businessPlan: 0,
-    pitchDeck: 0,
-    creditworthiness: 0,
-    guarantees: 0,
-    financialResilience: 0,
-  },
-};
-
-
+  const weightingsByStage = {
+    "pre-seed": { financialStrength: 25, operations: 40, impactMandate: 35, businessPlan: 0, pitchDeck: 0, creditworthiness: 0, guarantees: 0, financialResilience: 0 },
+    seed:       { financialStrength: 35, operations: 35, impactMandate: 30, businessPlan: 0, pitchDeck: 0, creditworthiness: 0, guarantees: 0, financialResilience: 0 },
+    seriesa:    { financialStrength: 45, operations: 30, impactMandate: 25, businessPlan: 0, pitchDeck: 0, creditworthiness: 0, guarantees: 0, financialResilience: 0 },
+    seriesb:    { financialStrength: 55, operations: 25, impactMandate: 20, businessPlan: 0, pitchDeck: 0, creditworthiness: 0, guarantees: 0, financialResilience: 0 },
+    growth:     { financialStrength: 65, operations: 20, impactMandate: 15, businessPlan: 0, pitchDeck: 0, creditworthiness: 0, guarantees: 0, financialResilience: 0 },
+    maturity:   { financialStrength: 75, operations: 15, impactMandate: 10, businessPlan: 0, pitchDeck: 0, creditworthiness: 0, guarantees: 0, financialResilience: 0 },
+  };
 
   const getScoreLevel = (score) => {
     if (score > 90)  return { level: "Highly fundable",       color: "#1B5E20", icon: CheckCircle };
@@ -1335,7 +1057,6 @@ const weightingsByStage = {
 
   const scoreLevel = getScoreLevel(fundabilityScore);
 
-  // ── Format AI result ───────────────────────────────────────────────────
   const formatAiResult = (text) => {
     if (!text) return null;
     const cleaned  = text.replace(/\*\*(.*?)\*\*/g, "$1");
@@ -1425,7 +1146,6 @@ const weightingsByStage = {
     }).filter(Boolean);
   };
 
-  // ── Tier badge ─────────────────────────────────────────────────────────
   const renderTierBadge = () => {
     if (!hasAppliedForFunding || !fundingTier) return null;
     const c = TIER_BADGE_COLORS[fundingTier];
@@ -1437,131 +1157,120 @@ const weightingsByStage = {
     );
   };
 
-  // ── Tier sub-weight tables for "About Score" ───────────────────────────
-  const ALL_TIERS = [
+  // ─── UPDATED: Fundability internal weighting table matching image structure ───
+  // Rows: Sub-component | Grants/Catalyst | PO (<10M) | All other + Pos>10M | Why
+  const FUNDABILITY_INTERNAL_ROWS = [
     {
-      tier   : "A",
-      trigger: "Instrument: Grants (no debt, PO or equity)",
-      rows   : [
-        { name: "Business Plan / Investment Case",  w: "25%", note: null,                                             type: "active"   },
-        { name: "Pitch Readiness / Pitch Deck",     w: "20%", note: null,                                             type: "active"   },
-        { name: "Impact & Mandate Alignment",       w: "40%", note: null,                                             type: "active"   },
-        { name: "Creditworthiness",                 w: "15%", note: "Reduced — credit discipline noted, not primary", type: "reduced"  },
-        { name: "Guarantees / Collateral",          w: "0%",  note: "Non-repayable funding — collateral not required",type: "excluded" },
-        { name: "Financial Resilience & Efficiency",w: "0%",  note: "Not assessed at grant level",                    type: "excluded" },
-      ],
+      name:        "Investment Case Strength",
+      grantsW:     "25%",
+      poW:         "20%",
+      allOtherW:   "25%",
+      why:         "Foundation of funding decision",
     },
     {
-      tier   : "B",
-      trigger: 'Instrument: Debt OR guarantees section has "Purchase Orders = Yes"',
-      rows   : [
-        { name: "Business Plan / Investment Case",  w: "20%", note: null,                                                      type: "active"  },
-        { name: "Pitch Readiness / Pitch Deck",     w: "10%", note: "Reduced — pitch secondary to credit & collateral for PO", type: "reduced" },
-        { name: "Impact & Mandate Alignment",       w: "10%", note: "Reduced — not a primary criterion for PO/debt finance",   type: "reduced" },
-        { name: "Creditworthiness",                 w: "30%", note: null,                                                      type: "active"  },
-        { name: "Guarantees / Collateral",          w: "20%", note: null,                                                      type: "active"  },
-        { name: "Financial Resilience & Efficiency",w: "10%", note: null,                                                      type: "active"  },
-      ],
+      name:        "Pitch Readiness",
+      grantsW:     "20%",
+      poW:         "10%",
+      allOtherW:   "10%",
+      why:         "Communication matters",
     },
     {
-      tier   : "C",
-      trigger: "Support focus selected in Use of Funds OR funder type is ESD / Development Finance / Grant / Non-Profit",
-      rows   : [
-        { name: "Business Plan / Investment Case",  w: "25%", note: null,                                                 type: "active"   },
-        { name: "Pitch Readiness / Pitch Deck",     w: "20%", note: null,                                                 type: "active"   },
-        { name: "Impact & Mandate Alignment",       w: "40%", note: null,                                                 type: "active"   },
-        { name: "Creditworthiness",                 w: "15%", note: "Reduced — some ESD programmes note credit history",  type: "reduced"  },
-        { name: "Guarantees / Collateral",          w: "0%",  note: "ESD/support programmes do not require collateral",   type: "excluded" },
-        { name: "Financial Resilience & Efficiency",w: "0%",  note: "Not assessed for accelerator or ESD programmes",     type: "excluded" },
-      ],
+      name:        "Impact & Mandate Alignment",
+      grantsW:     "40%",
+      poW:         "10%",
+      allOtherW:   "15%",
+      why:         "Critical for SA/ESG funding",
     },
     {
-      tier   : "D",
-      trigger: "Equity-type instrument (Equity, Convertible, Hybrid, Revenue-based, Secondary, Special) OR amount requested > R10M",
-      rows   : [
-        { name: "Business Plan / Investment Case",  w: "20%", note: null,                                                    type: "active"  },
-        { name: "Pitch Readiness / Pitch Deck",     w: "10%", note: "Reduced — fundamentals dominate at serious ticket sizes",type: "reduced" },
-        { name: "Impact & Mandate Alignment",       w: "10%", note: "Reduced — ESG/impact is a qualifier, not primary",      type: "reduced" },
-        { name: "Creditworthiness",                 w: "25%", note: null,                                                    type: "active"  },
-        { name: "Guarantees / Collateral",          w: "15%", note: null,                                                    type: "active"  },
-        { name: "Financial Resilience & Efficiency",w: "20%", note: "Critical — covers solvency, liquidity, leverage ratios",type: "active"  },
-      ],
+      name:        "Creditworthiness",
+      grantsW:     "15%",
+      poW:         "30%",
+      allOtherW:   "10%",
+      why:         "Risk filter",
+    },
+    {
+      name:        "Guarantees/Collateral",
+      grantsW:     "0%",
+      poW:         "20%",
+      allOtherW:   "10%",
+      why:         "Debt funding = collateral-driven. DFIs / banks = risk mitigation first",
+    },
+    {
+      name:        "Financial Resilience & Efficiency (solvency, liquidity, leverage ratios)",
+      grantsW:     "0%",
+      poW:         "0%",
+      allOtherW:   "30%",
+      why:         'For serious funding (>R10m), we move from "basic fundability" → "underwriting-grade fundability"',
+      note:        "These come from growth suite. For all other funding instruments (not grant of PO<10M), they should also get a message to subscribe to growth suite first before they can be matched.",
     },
   ];
 
-  const renderTierWeightTables = () => (
-    <div>
-      {ALL_TIERS.map((t) => {
-        const isActive = fundingTier === t.tier;
-        const c = TIER_BADGE_COLORS[t.tier];
-        return (
-          <div key={t.tier} style={{ marginBottom: "14px", border: `2px solid ${isActive ? c.border : "#e0d5cf"}`, borderRadius: "8px", overflow: "hidden" }}>
-            {/* Header */}
-            <div style={{ display: "flex", alignItems: "center", gap: "8px", padding: "10px 14px", backgroundColor: isActive ? c.bg : "#f5f0ec", borderBottom: `1px solid ${isActive ? c.border : "#e0d5cf"}` }}>
-              <div style={{ backgroundColor: c.border, color: "white", borderRadius: "10px", padding: "2px 10px", fontSize: "11px", fontWeight: "700" }}>Tier {t.tier}</div>
-              <div style={{ fontWeight: "700", color: "#5d4037", fontSize: "13px" }}>{TIER_LABELS[t.tier]}</div>
-              {isActive && <div style={{ marginLeft: "auto", fontSize: "11px", color: c.text, fontWeight: "600", backgroundColor: "white", border: `1px solid ${c.border}`, borderRadius: "10px", padding: "1px 8px" }}>✓ Current tier</div>}
-            </div>
-            {/* Trigger */}
-            <div style={{ padding: "6px 14px", backgroundColor: "#faf8f6", borderBottom: "1px solid #ede8e3", fontSize: "11px", color: "#8d6e63" }}>
-              <span style={{ fontWeight: "600" }}>Trigger: </span>{t.trigger}
-            </div>
-            {/* Weights table */}
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
-              <thead>
-                <tr style={{ backgroundColor: "#ede0d9" }}>
-                  <th style={{ padding: "5px 12px", textAlign: "left", color: "#5d4037" }}>Sub-component</th>
-                  <th style={{ padding: "5px 12px", textAlign: "center", color: "#5d4037", width: "60px" }}>Weight</th>
-                  <th style={{ padding: "5px 12px", textAlign: "left", color: "#5d4037" }}>Note</th>
-                </tr>
-              </thead>
-              <tbody>
-                {t.rows.map((r, i) => {
-                  const isExcluded = r.type === "excluded";
-                  const isReduced = r.type === "reduced";
-                  return (
-                    <tr key={i} style={{ 
-                      backgroundColor: i % 2 === 0 ? "white" : "#faf8f6", 
-                      opacity: isExcluded ? 0.65 : 1,
-                      textDecoration: isExcluded ? "line-through" : "none"
-                    }}>
-                      <td style={{ 
-                        padding: "5px 12px", 
-                        color: isExcluded ? "#aaa" : "#5d4037",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "6px"
-                      }}>
-                        {isExcluded && <XCircle size={12} color="#e53935" />}
-                        {isReduced && <Info size={12} color="#f57c00" />}
-                        {r.name}
-                      </td>
-                      <td style={{ 
-                        padding: "5px 12px", 
-                        textAlign: "center", 
-                        fontWeight: "700", 
-                        color: isExcluded ? "#ccc" : isReduced ? "#f57c00" : "#2e7d32" 
-                      }}>
-                        {r.w}
-                      </td>
-                      <td style={{ 
-                        padding: "5px 12px", 
-                        fontStyle: "italic", 
-                        fontSize: "11px", 
-                        color: isExcluded ? "#e53935" : isReduced ? "#f57c00" : "#6d4c41" 
-                      }}>
-                        {r.note || (r.type === "active" ? "Active" : "")}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        );
-      })}
-    </div>
-  );
+  // Highlight the active tier column
+  const getActiveTierCol = () => {
+    if (!fundingTier) return null;
+    if (fundingTier === "A" || fundingTier === "C") return "grants";
+    if (fundingTier === "B") return "po";
+    if (fundingTier === "D") return "allOther";
+    return null;
+  };
+
+  const renderFundabilityInternalTable = () => {
+    const activeCol = getActiveTierCol();
+    const colStyle = (col) => ({
+      padding: "6px 10px",
+      textAlign: "center",
+      fontWeight: activeCol === col ? "700" : "400",
+      backgroundColor: activeCol === col ? "#e8f5e9" : "transparent",
+      color: activeCol === col ? "#1B5E20" : "#5d4037",
+      borderLeft: "1px solid #d7ccc8",
+      fontSize: "12px",
+    });
+
+    return (
+      <div style={{ overflowX: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
+          <thead>
+            <tr style={{ backgroundColor: "#d7ccc8" }}>
+              <th style={{ padding: "7px 10px", textAlign: "left", color: "#5d4037", fontWeight: "600", minWidth: "160px" }}>Sub-component</th>
+              <th style={{ padding: "7px 10px", textAlign: "center", color: "#5d4037", fontWeight: "600", borderLeft: "1px solid #c5b8b0", backgroundColor: activeCol === "grants" ? "#c8e6c9" : "#d7ccc8", minWidth: "90px" }}>
+                Weightings: Grants / Catalyst
+                {activeCol === "grants" && <div style={{ fontSize: "10px", color: "#1B5E20", marginTop: "2px" }}>✓ Your tier</div>}
+              </th>
+              <th style={{ padding: "7px 10px", textAlign: "center", color: "#5d4037", fontWeight: "600", borderLeft: "1px solid #c5b8b0", backgroundColor: activeCol === "po" ? "#c8e6c9" : "#d7ccc8", minWidth: "90px" }}>
+                Weightings PO (&lt;10M)
+                {activeCol === "po" && <div style={{ fontSize: "10px", color: "#1B5E20", marginTop: "2px" }}>✓ Your tier</div>}
+              </th>
+              <th style={{ padding: "7px 10px", textAlign: "center", color: "#5d4037", fontWeight: "600", borderLeft: "1px solid #c5b8b0", backgroundColor: activeCol === "allOther" ? "#c8e6c9" : "#d7ccc8", minWidth: "110px" }}>
+                Weightings All other funding instruments + Pos&gt;10M
+                {activeCol === "allOther" && <div style={{ fontSize: "10px", color: "#1B5E20", marginTop: "2px" }}>✓ Your tier</div>}
+              </th>
+              <th style={{ padding: "7px 10px", textAlign: "left", color: "#5d4037", fontWeight: "600", borderLeft: "1px solid #c5b8b0" }}>Why</th>
+            </tr>
+          </thead>
+          <tbody>
+            {FUNDABILITY_INTERNAL_ROWS.map((row, i) => (
+              <tr key={i} style={{ backgroundColor: i % 2 === 0 ? "white" : "#faf8f6" }}>
+                <td style={{ padding: "7px 10px", color: "#5d4037", verticalAlign: "top" }}>
+                  {row.name}
+                  {row.note && (
+                    <div style={{ fontSize: "11px", color: "#8d6e63", fontStyle: "italic", marginTop: "4px", lineHeight: "1.4" }}>
+                      {row.note}
+                    </div>
+                  )}
+                </td>
+                <td style={colStyle("grants")}>{row.grantsW}</td>
+                <td style={colStyle("po")}>{row.poW}</td>
+                <td style={colStyle("allOther")}>{row.allOtherW}</td>
+                <td style={{ padding: "7px 10px", color: "#6d4c41", fontStyle: "italic", fontSize: "11px", borderLeft: "1px solid #d7ccc8", verticalAlign: "top", lineHeight: "1.4" }}>
+                  {row.why}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
 
   // ─────────────────────────────────────────────────────────────────────────
   // RENDER
@@ -1665,40 +1374,58 @@ const weightingsByStage = {
                       The Capital Appeal Score measures a business's ability to absorb, deploy, and return capital. It assesses financial strength, operational execution, and fundability. The fundability block's sub-component weights adapt automatically to your funding type (tier).
                     </p>
 
-                    {/* Overall weights */}
+                    {/* ── Overall weights table — UPDATED with without/with funding columns ── */}
                     <div style={{ backgroundColor: "#efebe9", padding: "14px", borderRadius: "8px", marginBottom: "16px", borderLeft: "4px solid #8d6e63" }}>
                       <p style={{ fontWeight: "bold", marginBottom: "8px", color: "#6d4c41" }}>Overall score weighting:</p>
                       <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
                         <thead>
                           <tr style={{ backgroundColor: "#d7ccc8" }}>
-                            <th style={{ padding: "6px 10px", textAlign: "left" }}>Component</th>
-                            <th style={{ padding: "6px 10px", textAlign: "center" }}>Weight</th>
-                            <th style={{ padding: "6px 10px", textAlign: "left" }}>Why</th>
+                            <th style={{ padding: "6px 10px", textAlign: "left", color: "#5d4037" }}>Component</th>
+                            <th style={{ padding: "6px 10px", textAlign: "center", color: "#5d4037", borderLeft: "1px solid #c5b8b0" }}>Weight without funding</th>
+                            <th style={{ padding: "6px 10px", textAlign: "center", color: "#5d4037", borderLeft: "1px solid #c5b8b0" }}>Weight with funding</th>
+                            <th style={{ padding: "6px 10px", textAlign: "left", color: "#5d4037", borderLeft: "1px solid #c5b8b0" }}>Why</th>
                           </tr>
                         </thead>
                         <tbody>
-                          <tr><td style={{ padding: "6px 10px" }}>Financial Strength</td><td style={{ padding: "6px 10px", textAlign: "center" }}>40%</td><td style={{ padding: "6px 10px" }}>Core signal of viability</td></tr>
-                          <tr style={{ backgroundColor: "#f5f0ec" }}><td style={{ padding: "6px 10px" }}>Operational Strength</td><td style={{ padding: "6px 10px", textAlign: "center" }}>30%</td><td style={{ padding: "6px 10px" }}>Execution capability + discipline</td></tr>
-                          <tr><td style={{ padding: "6px 10px" }}>Fundability</td><td style={{ padding: "6px 10px", textAlign: "center" }}>{hasAppliedForFunding && fundingTier ? "30%" : "0%"}</td><td style={{ padding: "6px 10px" }}>Trust + investor confidence {!hasAppliedForFunding ? "(activated on funding application)" : ""}</td></tr>
+                          <tr>
+                            <td style={{ padding: "6px 10px" }}>Financial Strength</td>
+                            <td style={{ padding: "6px 10px", textAlign: "center", fontWeight: "600", borderLeft: "1px solid #e0d5cf" }}>40%</td>
+                            <td style={{ padding: "6px 10px", textAlign: "center", fontWeight: "600", borderLeft: "1px solid #e0d5cf" }}>40%</td>
+                            <td style={{ padding: "6px 10px", borderLeft: "1px solid #e0d5cf" }}>Core signal of viability</td>
+                          </tr>
+                          <tr style={{ backgroundColor: "#f5f0ec" }}>
+                            <td style={{ padding: "6px 10px" }}>Operational Strength</td>
+                            <td style={{ padding: "6px 10px", textAlign: "center", fontWeight: "600", borderLeft: "1px solid #e0d5cf" }}>30%</td>
+                            <td style={{ padding: "6px 10px", textAlign: "center", fontWeight: "600", borderLeft: "1px solid #e0d5cf" }}>30%</td>
+                            <td style={{ padding: "6px 10px", borderLeft: "1px solid #e0d5cf" }}>Execution capability + discipline</td>
+                          </tr>
+                          <tr>
+                            <td style={{ padding: "6px 10px" }}>Fundability</td>
+                            <td style={{ padding: "6px 10px", textAlign: "center", fontWeight: "600", color: "#9e9e9e", borderLeft: "1px solid #e0d5cf" }}>0%</td>
+                            <td style={{ padding: "6px 10px", textAlign: "center", fontWeight: "600", color: "#2e7d32", borderLeft: "1px solid #e0d5cf" }}>30%</td>
+                            <td style={{ padding: "6px 10px", fontSize: "12px", color: "#8d6e63", borderLeft: "1px solid #e0d5cf" }}>Trust + investor confidence (activated on funding application)</td>
+                          </tr>
                         </tbody>
                       </table>
                       <p style={{ marginTop: "8px", fontSize: "12px", color: "#8d6e63", fontStyle: "italic" }}>
-                        When Fundability = 0%, its 30% is redistributed: Financial Strength → 55%, Operational Strength → 45%.
+                        Make Fundability conditional in weighting, not value, depending on whether SME needs funding.
                       </p>
                     </div>
 
-                    {/* Tier weight tables */}
+                    {/* ── Fundability Internal Weighting table — matches your image ── */}
                     <div style={{ backgroundColor: "#efebe9", padding: "14px", borderRadius: "8px", marginBottom: "16px", borderLeft: "4px solid #8d6e63" }}>
-                      <p style={{ fontWeight: "bold", marginBottom: "12px", color: "#6d4c41" }}>
-                        Fundability sub-weights by funding tier
-                        {fundingTier && <span style={{ fontSize: "11px", fontWeight: "400", color: "#8d6e63", marginLeft: "8px" }}>(your active tier is highlighted)</span>}:
+                      <p style={{ fontWeight: "bold", marginBottom: "4px", color: "#6d4c41" }}>
+                        Fundability (Internal Weighting)
+                        {fundingTier && (
+                          <span style={{ fontSize: "11px", fontWeight: "400", color: "#8d6e63", marginLeft: "8px" }}>
+                            — your active tier column is highlighted
+                          </span>
+                        )}
                       </p>
-                      {renderTierWeightTables()}
-                      <p style={{ marginTop: "10px", fontSize: "11px", color: "#8d6e63", fontStyle: "italic" }}>
-                        <span style={{ color: "#e53935", fontWeight: "600" }}>✗ Red strikethrough</span> = excluded (0% weight, not scored). &nbsp;
-                        <span style={{ color: "#f57c00", fontWeight: "600" }}>ⓘ Orange</span> = reduced weight (active but lower priority). &nbsp;
-                        <span style={{ color: "#2e7d32", fontWeight: "600" }}>✓ Green</span> = active at full weight.
+                      <p style={{ fontSize: "11px", color: "#8d6e63", marginBottom: "10px", fontStyle: "italic" }}>
+                        Tier A &amp; C → Grants/Catalyst column · Tier B → PO (&lt;10M) column · Tier D → All other + Pos&gt;10M column
                       </p>
+                      {renderFundabilityInternalTable()}
                     </div>
 
                     {/* Score interpretation */}
@@ -1737,15 +1464,7 @@ const weightingsByStage = {
                             </div>
                           )}
                           {groupRows.map((item, i) => (
-                            <div key={i} style={{ 
-                              padding: "12px 15px", 
-                              background: !item.active ? "#faf5f0" : "white", 
-                              marginBottom: "6px", 
-                              borderRadius: "8px", 
-                              opacity: !item.active ? 0.7 : 1, 
-                              border: `1px solid ${!item.active ? "#e0d5cf" : "#f0e8e0"}`,
-                              position: "relative"
-                            }}>
+                            <div key={i} style={{ padding: "12px 15px", background: !item.active ? "#faf5f0" : "white", marginBottom: "6px", borderRadius: "8px", opacity: !item.active ? 0.7 : 1, border: `1px solid ${!item.active ? "#e0d5cf" : "#f0e8e0"}`, position: "relative" }}>
                               <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: "12px" }}>
                                 <div style={{ display: "flex", alignItems: "flex-start", flex: "1", minWidth: "180px" }}>
                                   <div style={{ backgroundColor: !item.active ? "#ccc" : item.color, width: "12px", height: "12px", borderRadius: "50%", marginRight: "12px", marginTop: "3px", flexShrink: 0 }} />
