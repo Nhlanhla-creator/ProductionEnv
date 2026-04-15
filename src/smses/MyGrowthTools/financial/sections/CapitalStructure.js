@@ -80,16 +80,16 @@ const DividendHistory = ({ currentUser, isInvestorView }) => {
       const docSnap = await getDoc(docRef)
       if (docSnap.exists()) {
         const data = docSnap.data()
-        // Handle legacy data - convert amount to amountPerShare if needed
         const dividendsData = data.dividends || []
         const updatedDividends = dividendsData.map(dividend => ({
           ...dividend,
           amountPerShare: dividend.amountPerShare !== undefined ? dividend.amountPerShare : (dividend.amount || 0),
-          totalIssued: dividend.totalIssued !== undefined ? dividend.totalIssued : 0
+          totalShares: dividend.totalShares !== undefined ? dividend.totalShares : 0,
+          totalIssued: dividend.totalIssued !== undefined ? dividend.totalIssued : (dividend.amountPerShare || 0) * (dividend.totalShares || 0),
+          notes: dividend.notes || ""
         }))
         setDividends(updatedDividends)
       } else {
-        // Initialize with empty data if no document exists
         await setDoc(docRef, {
           dividends: [],
           lastUpdated: new Date().toISOString(),
@@ -114,8 +114,19 @@ const DividendHistory = ({ currentUser, isInvestorView }) => {
       newDividends[index][field] = Number.parseInt(value) || 0
     } else if (field === "amountPerShare") {
       newDividends[index][field] = Number.parseFloat(value) || 0
-    } else if (field === "totalIssued") {
+      // Auto-calculate totalIssued when amountPerShare changes
+      const totalShares = newDividends[index].totalShares || 0
+      newDividends[index].totalIssued = (Number.parseFloat(value) || 0) * totalShares
+    } else if (field === "totalShares") {
       newDividends[index][field] = Number.parseFloat(value) || 0
+      // Auto-calculate totalIssued when totalShares changes
+      const amountPerShare = newDividends[index].amountPerShare || 0
+      newDividends[index].totalIssued = amountPerShare * (Number.parseFloat(value) || 0)
+    } else if (field === "totalIssued") {
+      // Allow manual override of totalIssued if needed
+      newDividends[index][field] = Number.parseFloat(value) || 0
+    } else if (field === "notes") {
+      newDividends[index][field] = value
     } else {
       newDividends[index][field] = value
     }
@@ -126,8 +137,10 @@ const DividendHistory = ({ currentUser, isInvestorView }) => {
     setDividends([...dividends, { 
       year: new Date().getFullYear(), 
       amountPerShare: 0, 
+      totalShares: 0,
       totalIssued: 0,
-      paymentDate: "" 
+      paymentDate: "",
+      notes: ""
     }])
   }
 
@@ -139,12 +152,14 @@ const DividendHistory = ({ currentUser, isInvestorView }) => {
   const handleDownload = (type) => {
     if (type === "csv") {
       const csvContent = [
-        ["Year", "Amount per Share", "Total Issued", "Payment Date"],
+        ["Year", "Amount per Share", "Total Shares", "Total Issued", "Payment Date", "Notes"],
         ...dividends.map((div) => [
           div.year, 
           (div.amountPerShare || 0).toFixed(2), 
+          (div.totalShares || 0).toFixed(0),
           (div.totalIssued || 0).toFixed(2), 
-          div.paymentDate
+          div.paymentDate,
+          `"${(div.notes || "").replace(/"/g, '""')}"`
         ]),
       ]
         .map((row) => row.join(","))
@@ -297,7 +312,7 @@ const DividendHistory = ({ currentUser, isInvestorView }) => {
               key={index}
               style={{
                 display: "grid",
-                gridTemplateColumns: "1fr 1fr 1fr 2fr auto",
+                gridTemplateColumns: "1fr 1fr 1fr 1fr 2fr 2fr auto",
                 gap: "10px",
                 alignItems: "center",
                 marginBottom: "10px",
@@ -333,6 +348,19 @@ const DividendHistory = ({ currentUser, isInvestorView }) => {
               />
               <input
                 type="number"
+                step="1"
+                value={dividend.totalShares || 0}
+                onChange={(e) => updateDividend(index, "totalShares", e.target.value)}
+                style={{
+                  padding: "6px",
+                  border: "1px solid #d4c4b0",
+                  borderRadius: "4px",
+                  fontSize: "0.8rem",
+                }}
+                placeholder="Total Shares"
+              />
+              <input
+                type="number"
                 step="0.01"
                 value={dividend.totalIssued || 0}
                 onChange={(e) => updateDividend(index, "totalIssued", e.target.value)}
@@ -341,8 +369,10 @@ const DividendHistory = ({ currentUser, isInvestorView }) => {
                   border: "1px solid #d4c4b0",
                   borderRadius: "4px",
                   fontSize: "0.8rem",
+                  backgroundColor: "#f0e6d9",
                 }}
-                placeholder="Total Issued"
+                placeholder="Total Issued (auto)"
+                readOnly
               />
               <input
                 type="date"
@@ -354,6 +384,18 @@ const DividendHistory = ({ currentUser, isInvestorView }) => {
                   borderRadius: "4px",
                   fontSize: "0.8rem",
                 }}
+              />
+              <input
+                type="text"
+                value={dividend.notes || ""}
+                onChange={(e) => updateDividend(index, "notes", e.target.value)}
+                style={{
+                  padding: "6px",
+                  border: "1px solid #d4c4b0",
+                  borderRadius: "4px",
+                  fontSize: "0.8rem",
+                }}
+                placeholder="Notes (optional)"
               />
               <button
                 onClick={() => removeDividend(index)}
@@ -422,6 +464,7 @@ const DividendHistory = ({ currentUser, isInvestorView }) => {
             backgroundColor: "#f0e6d9",
             padding: "15px",
             borderRadius: "6px",
+            overflowX: "auto",
           }}
         >
           <table
@@ -440,8 +483,10 @@ const DividendHistory = ({ currentUser, isInvestorView }) => {
               >
                 <th style={{ padding: "10px", textAlign: "left" }}>Year</th>
                 <th style={{ padding: "10px", textAlign: "right" }}>Amount per Share</th>
+                <th style={{ padding: "10px", textAlign: "right" }}>Total Shares</th>
                 <th style={{ padding: "10px", textAlign: "right" }}>Total Issued</th>
                 <th style={{ padding: "10px", textAlign: "left" }}>Payment Date</th>
+                <th style={{ padding: "10px", textAlign: "left" }}>Notes</th>
               </tr>
             </thead>
             <tbody>
@@ -456,8 +501,10 @@ const DividendHistory = ({ currentUser, isInvestorView }) => {
                   >
                     <td style={{ padding: "10px" }}>{div.year}</td>
                     <td style={{ padding: "10px", textAlign: "right" }}>R{(div.amountPerShare || 0).toFixed(2)}</td>
+                    <td style={{ padding: "10px", textAlign: "right" }}>{(div.totalShares || 0).toLocaleString()}</td>
                     <td style={{ padding: "10px", textAlign: "right" }}>R{(div.totalIssued || 0).toFixed(2)}</td>
                     <td style={{ padding: "10px" }}>{div.paymentDate}</td>
+                    <td style={{ padding: "10px", maxWidth: "200px", wordBreak: "break-word" }}>{div.notes || "-"}</td>
                   </tr>
                 ))}
             </tbody>
