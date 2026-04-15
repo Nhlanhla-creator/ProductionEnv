@@ -1915,149 +1915,7 @@ const PipelineVisibility = ({
   fromDate,
   toDate,
 }) => {
-  const [loading, setLoading] = useState(false);
-  const [expandedNotes, setExpandedNotes] = useState({});
-  const [kpiNotes, setKpiNotes] = useState({});
-  const [kpiAnalysis, setKpiAnalysis] = useState({});
-  const [showCalculationModal, setShowCalculationModal] = useState(false);
-  const [selectedCalculation, setSelectedCalculation] = useState({
-    title: "",
-    calculation: "",
-  });
-  const [showTrendModal, setShowTrendModal] = useState(false);
-  const [selectedTrendItem, setSelectedTrendItem] = useState(null);
-  // rangeData stores arrays aligned to the exact range months
-  const [rangeData, setRangeData] = useState({
-    newLeads: [],
-    salesVelocity: [],
-    conversionRates: [],
-    labels: [],
-  });
-
-  useEffect(() => {
-    if (currentUser && activeSection === "pipeline-visibility") loadData();
-  }, [currentUser, activeSection, fromDate, toDate]);
-
-  const loadData = async () => {
-    if (!currentUser || !fromDate || !toDate) return;
-    setLoading(true);
-    try {
-      const rangeMonths = getRangeMonths(fromDate, toDate);
-      // Fetch one doc per unique year in range
-      const years = [...new Set(rangeMonths.map((r) => r.year))];
-      const docsByYear = {};
-      await Promise.all(
-        years.map(async (yr) => {
-          const snap = await getDoc(
-            doc(db, "pipelineData", `${currentUser.uid}_visibility_${yr}`),
-          );
-          if (snap.exists()) docsByYear[yr] = snap.data();
-        }),
-      );
-      // Build per-month arrays for exactly the range — handle {actual,budget} and plain array shapes
-      const getActual = (field) =>
-        Array.isArray(field)
-          ? field
-          : Array.isArray(field?.actual)
-            ? field.actual
-            : [];
-      const getBudget = (field) =>
-        Array.isArray(field?.budget) ? field.budget : [];
-      const newLeads = [],
-        salesVelocity = [],
-        conversionRates = [];
-      const newLeadsBudget = [],
-        salesVelocityBudget = [],
-        conversionRatesBudget = [];
-      rangeMonths.forEach(({ year, monthIdx }) => {
-        const d = docsByYear[year];
-        newLeads.push(getActual(d?.newLeads)[monthIdx] ?? 0);
-        salesVelocity.push(getActual(d?.salesVelocity)[monthIdx] ?? 0);
-        conversionRates.push(getActual(d?.conversionRates)[monthIdx] ?? 0);
-        newLeadsBudget.push(getBudget(d?.newLeads)[monthIdx] ?? 0);
-        salesVelocityBudget.push(getBudget(d?.salesVelocity)[monthIdx] ?? 0);
-        conversionRatesBudget.push(
-          getBudget(d?.conversionRates)[monthIdx] ?? 0,
-        );
-      });
-      setRangeData({
-        newLeads,
-        salesVelocity,
-        conversionRates,
-        newLeadsBudget,
-        salesVelocityBudget,
-        conversionRatesBudget,
-        labels: rangeMonths.map((r) => r.label),
-      });
-    } catch (error) {
-      console.error("Error loading pipeline visibility data:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const openTrendModal = (itemName, dataArray, isPercentage = false) => {
-    setSelectedTrendItem({
-      name: itemName,
-      data: dataArray,
-      labels: rangeData.labels,
-      isPercentage,
-    });
-    setShowTrendModal(true);
-  };
-
-  const handleCalculationClick = (title, calculation) => {
-    setSelectedCalculation({ title, calculation });
-    setShowCalculationModal(true);
-  };
-
-  const renderKPICard = (
-    title,
-    dataKey,
-    calculation = "",
-    unit = "number",
-    goodDirection = "up",
-  ) => {
-    const actualArr = rangeData[dataKey] || [];
-    const budgetArr = rangeData[`${dataKey}Budget`] || [];
-    const actualValue =
-      actualArr.length > 0 ? actualArr[actualArr.length - 1] || 0 : 0;
-    const budgetValue =
-      budgetArr.length > 0 ? budgetArr[budgetArr.length - 1] || 0 : 0;
-    return (
-      <KPITripleCard
-        key={dataKey}
-        title={title}
-        actualValue={actualValue}
-        budgetValue={budgetValue}
-        unit={unit}
-        goodDirection={goodDirection}
-        onEyeClick={() => handleCalculationClick(title, calculation)}
-        onAddNotes={(val) =>
-          setKpiNotes((prev) => ({ ...prev, [dataKey]: val }))
-        }
-        onAnalysis={() =>
-          setExpandedNotes((prev) => ({
-            ...prev,
-            [`${dataKey}_analysis`]: !prev[`${dataKey}_analysis`],
-          }))
-        }
-        onTrend={() => openTrendModal(title, actualArr, unit === "percentage")}
-        notes={kpiNotes[dataKey]}
-      />
-    );
-  };
-
   if (activeSection !== "pipeline-visibility") return null;
-
-  const calculationTexts = {
-    newLeads:
-      "New Leads: Number of new leads generated in the period.\n\nCalculation: Count of new leads added to CRM.",
-    salesVelocity:
-      "Sales Velocity = (Number of Opportunities × Deal Value × Win Rate) ÷ Sales Cycle Length\n\nMeasures how quickly deals move through the pipeline.",
-    conversionRates:
-      "Conversion Rate = (Number of Converted Leads ÷ Total Leads) × 100%\n\nMeasures how effectively leads are converted to customers.",
-  };
 
   return (
     <div>
@@ -2073,61 +1931,12 @@ const PipelineVisibility = ({
         showAddData={!isInvestorView}
         showViewMode={false}
       />
-      <KpiGrid2>
-        {renderKPICard(
-          "New Leads",
-          "newLeads",
-          calculationTexts.newLeads,
-          "number",
-          "up",
-        )}
-        {renderKPICard(
-          "Sales Velocity",
-          "salesVelocity",
-          calculationTexts.salesVelocity,
-          "days",
-          "down",
-        )}
-        {renderKPICard(
-          "Conversion Rates",
-          "conversionRates",
-          calculationTexts.conversionRates,
-          "percentage",
-          "up",
-        )}
-      </KpiGrid2>
       <PipelineTable
         currentUser={currentUser}
         isInvestorView={isInvestorView}
         selectedYear={toDate ? parseInt(toDate.split("-")[0]) : new Date().getFullYear()}
         onAddData={onAddData}
       />
-      <CalculationModal
-        isOpen={showCalculationModal}
-        onClose={() => setShowCalculationModal(false)}
-        title={selectedCalculation.title}
-        calculation={selectedCalculation.calculation}
-      />
-      {showTrendModal && selectedTrendItem && (
-        <TrendModal
-          isOpen={showTrendModal}
-          onClose={() => {
-            setShowTrendModal(false);
-            setSelectedTrendItem(null);
-          }}
-          item={{
-            name: selectedTrendItem.name,
-            isPercentage: selectedTrendItem.isPercentage,
-          }}
-          trendData={{
-            labels: selectedTrendItem.labels,
-            actual: selectedTrendItem.data,
-            budget: null,
-          }}
-          currencyUnit="zar"
-          formatValue={(v) => formatCurrency(v)}
-        />
-      )}
     </div>
   );
 };
@@ -2159,6 +1968,16 @@ const PipelineSufficiency = ({
     targetRevenue: 0,
     notes: "",
   });
+  // rangeData stores arrays aligned to the exact range months for charts
+  const [rangeData, setRangeData] = useState({
+    newLeads: [],
+    salesVelocity: [],
+    conversionRates: [],
+    totalPipelineValue: [],
+    probability: [],
+    targetRevenue: [],
+    labels: [],
+  });
 
   // toDate year = most recent year in range — this is what we display
   const toYear = toDate
@@ -2167,31 +1986,88 @@ const PipelineSufficiency = ({
 
   useEffect(() => {
     if (currentUser && activeSection === "pipeline-sufficiency") loadData();
-  }, [currentUser, activeSection, toDate]);
+  }, [currentUser, activeSection, fromDate, toDate]);
 
   const loadData = async () => {
-    if (!currentUser) return;
+    if (!currentUser || !fromDate || !toDate) return;
     setLoading(true);
     try {
-      const docSnap = await getDoc(
-        doc(db, "pipelineData", `${currentUser.uid}_sufficiency_${toYear}`),
+      const rangeMonths = getRangeMonths(fromDate, toDate);
+      // Fetch one doc per unique year in range
+      const years = [...new Set(rangeMonths.map((r) => r.year))];
+      const visibilityDocs = {};
+      const sufficiencyDocs = {};
+      
+      await Promise.all(
+        years.map(async (yr) => {
+          // Fetch visibility data for charts
+          const visibilitySnap = await getDoc(
+            doc(db, "pipelineData", `${currentUser.uid}_visibility_${yr}`),
+          );
+          if (visibilitySnap.exists()) visibilityDocs[yr] = visibilitySnap.data();
+          
+          // Fetch sufficiency data for charts
+          const sufficiencySnap = await getDoc(
+            doc(db, "pipelineData", `${currentUser.uid}_sufficiency_${yr}`),
+          );
+          if (sufficiencySnap.exists()) sufficiencyDocs[yr] = sufficiencySnap.data();
+        }),
       );
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        setPipelineData({
-          totalPipelineValue: data.totalPipelineValue || 0,
-          probability: data.probability || 0,
-          targetRevenue: data.targetRevenue || 0,
-          notes: data.notes || "",
-        });
-      } else {
-        setPipelineData({
-          totalPipelineValue: 0,
-          probability: 0,
-          targetRevenue: 0,
-          notes: "",
-        });
-      }
+      
+      // Build per-month arrays for exactly the range
+      const getActual = (field) =>
+        Array.isArray(field)
+          ? field
+          : Array.isArray(field?.actual)
+            ? field.actual
+            : [];
+      
+      const newLeads = [];
+      const salesVelocity = [];
+      const conversionRates = [];
+      const totalPipelineValue = [];
+      const probability = [];
+      const targetRevenue = [];
+      
+      rangeMonths.forEach(({ year, monthIdx }) => {
+        const vDoc = visibilityDocs[year];
+        const sDoc = sufficiencyDocs[year];
+        
+        newLeads.push(getActual(vDoc?.newLeads)[monthIdx] ?? 0);
+        salesVelocity.push(getActual(vDoc?.salesVelocity)[monthIdx] ?? 0);
+        conversionRates.push(getActual(vDoc?.conversionRates)[monthIdx] ?? 0);
+        totalPipelineValue.push(sDoc?.totalPipelineValue?.[monthIdx] ?? 0);
+        probability.push(sDoc?.probability?.[monthIdx] ?? 0);
+        targetRevenue.push(sDoc?.targetRevenue?.[monthIdx] ?? 0);
+      });
+      
+      setRangeData({
+        newLeads,
+        salesVelocity,
+        conversionRates,
+        totalPipelineValue,
+        probability,
+        targetRevenue,
+        labels: rangeMonths.map((r) => r.label),
+      });
+      
+      // Also set current values for KPIs (latest month)
+      const latestNewLeads = newLeads[newLeads.length - 1] || 0;
+      const latestSalesVelocity = salesVelocity[salesVelocity.length - 1] || 0;
+      const latestConversionRates = conversionRates[conversionRates.length - 1] || 0;
+      const latestTotal = totalPipelineValue[totalPipelineValue.length - 1] || 0;
+      const latestProbability = probability[probability.length - 1] || 0;
+      const latestTarget = targetRevenue[targetRevenue.length - 1] || 0;
+      
+      setPipelineData({
+        totalPipelineValue: latestTotal,
+        probability: latestProbability,
+        targetRevenue: latestTarget,
+        newLeads: latestNewLeads,
+        salesVelocity: latestSalesVelocity,
+        conversionRates: latestConversionRates,
+        notes: "",
+      });
     } catch (error) {
       console.error("Error loading pipeline sufficiency data:", error);
     } finally {
@@ -2199,13 +2075,11 @@ const PipelineSufficiency = ({
     }
   };
 
-  const openTrendModal = (itemName, currentValue, isPercentage = false) => {
-    // Repeat the per-year value for every month in range (data stored per-year not per-month)
-    const rangeMonths = getRangeMonths(fromDate, toDate);
+  const openTrendModal = (itemName, dataArray, isPercentage = false) => {
     setSelectedTrendItem({
       name: itemName,
-      data: rangeMonths.map(() => currentValue),
-      labels: rangeMonths.map((r) => r.label),
+      data: dataArray,
+      labels: rangeData.labels,
       isPercentage,
     });
     setShowTrendModal(true);
@@ -2224,14 +2098,36 @@ const PipelineSufficiency = ({
     goodDirection = "up",
   ) => {
     let actualValue = 0;
-    if (dataKey === "riskAdjustedValue")
-      actualValue =
-        (pipelineData.totalPipelineValue * pipelineData.probability) / 100;
-    else if (dataKey === "pipelineCoverage")
-      actualValue =
-        pipelineData.targetRevenue > 0
-          ? (pipelineData.totalPipelineValue / pipelineData.targetRevenue) * 100
-          : 0;
+    let trendDataArray = [];
+    
+    // Handle different KPI types
+    if (dataKey === "newLeads") {
+      actualValue = pipelineData.newLeads || 0;
+      trendDataArray = rangeData.newLeads;
+    } else if (dataKey === "salesVelocity") {
+      actualValue = pipelineData.salesVelocity || 0;
+      trendDataArray = rangeData.salesVelocity;
+    } else if (dataKey === "conversionRates") {
+      actualValue = pipelineData.conversionRates || 0;
+      trendDataArray = rangeData.conversionRates;
+    } else if (dataKey === "riskAdjustedValue") {
+      actualValue = (pipelineData.totalPipelineValue * pipelineData.probability) / 100;
+      // Calculate trend for risk adjusted value
+      trendDataArray = rangeData.totalPipelineValue.map((val, idx) => 
+        (val * (rangeData.probability[idx] || 0)) / 100
+      );
+    } else if (dataKey === "pipelineCoverage") {
+      actualValue = pipelineData.targetRevenue > 0
+        ? (pipelineData.totalPipelineValue / pipelineData.targetRevenue) * 100
+        : 0;
+      // Calculate trend for pipeline coverage
+      trendDataArray = rangeData.totalPipelineValue.map((val, idx) => 
+        rangeData.targetRevenue[idx] > 0 
+          ? (val / rangeData.targetRevenue[idx]) * 100 
+          : 0
+      );
+    }
+    
     return (
       <KPITripleCard
         key={dataKey}
@@ -2250,9 +2146,7 @@ const PipelineSufficiency = ({
             [`${dataKey}_analysis`]: !prev[`${dataKey}_analysis`],
           }))
         }
-        onTrend={() =>
-          openTrendModal(title, actualValue, unit === "percentage")
-        }
+        onTrend={() => openTrendModal(title, trendDataArray, unit === "percentage")}
         notes={kpiNotes[dataKey]}
       />
     );
@@ -2261,6 +2155,12 @@ const PipelineSufficiency = ({
   if (activeSection !== "pipeline-sufficiency") return null;
 
   const calculationTexts = {
+    newLeads:
+      "New Leads: Number of new leads generated in the period.\n\nCalculation: Count of new leads added to CRM.",
+    salesVelocity:
+      "Sales Velocity = (Number of Opportunities × Deal Value × Win Rate) ÷ Sales Cycle Length\n\nMeasures how quickly deals move through the pipeline.",
+    conversionRates:
+      "Conversion Rate = (Number of Converted Leads ÷ Total Leads) × 100%\n\nMeasures how effectively leads are converted to customers.",
     riskAdjustedValue:
       "Risk Adjusted Pipeline Value = Total Pipeline Value × Probability %\n\nAccounts for deal probability to show expected value.",
     pipelineCoverage:
@@ -2282,6 +2182,30 @@ const PipelineSufficiency = ({
         showViewMode={false}
       />
       <KpiGrid2>
+        {/* Moved from PipelineVisibility */}
+        {renderKPICard(
+          "New Leads",
+          "newLeads",
+          calculationTexts.newLeads,
+          "number",
+          "up",
+        )}
+        {renderKPICard(
+          "Sales Velocity",
+          "salesVelocity",
+          calculationTexts.salesVelocity,
+          "days",
+          "down",
+        )}
+        {renderKPICard(
+          "Conversion Rates",
+          "conversionRates",
+          calculationTexts.conversionRates,
+          "percentage",
+          "up",
+        )}
+        
+        {/* Only Risk Adjusted Value and Pipeline Coverage remain */}
         {renderKPICard(
           "Risk Adjusted Value",
           "riskAdjustedValue",
