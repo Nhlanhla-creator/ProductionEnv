@@ -603,6 +603,71 @@
   gap: 0.5rem;
 }
 
+.message-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 16px;
+  cursor: pointer;
+  border-bottom: 1px solid #e0e0e0;
+  transition: background-color 0.2s;
+}
+
+.message-item.select-mode {
+  cursor: pointer;
+}
+
+.message-checkbox {
+  flex-shrink: 0;
+  padding-top: 2px;
+}
+
+.message-checkbox input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+}
+
+.message-content-wrapper {
+  flex: 1;
+  min-width: 0;
+}
+
+.message-item:hover {
+  background-color: #f5f5f5;
+}
+
+.message-item.selected {
+  background-color: #e3f2fd;
+}
+
+.messages-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px;
+  border-bottom: 1px solid #e0e0e0;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.search-bar {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.header-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.select-mode-actions {
+  display: flex;
+  gap: 8px;
+}
+
 .meta-label {
   font-weight: 500;
   color: var(--brown-6);
@@ -622,6 +687,173 @@
   font-size: 15px;
   flex: 1;
   overflow-y: auto;
+}
+
+.message-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 16px;
+  margin-bottom: 0.75rem;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  background-color: var(--brown-1);
+  border: 1px solid var(--brown-2);
+  position: relative;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.message-item.select-mode {
+  cursor: pointer;
+}
+
+.message-checkbox {
+  flex-shrink: 0;
+  padding-top: 2px;
+}
+
+.message-checkbox input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  cursor: pointer;
+  accent-color: var(--brown-6);
+}
+
+.message-content-wrapper {
+  flex: 1;
+  min-width: 0;
+}
+
+.message-item:hover {
+  background-color: var(--brown-2);
+  border-color: var(--brown-3);
+  transform: translateX(3px);
+  box-shadow: 0 3px 10px rgba(156, 124, 84, 0.15);
+}
+
+.message-item.selected {
+  background-color: var(--brown-3);
+  border-color: var(--brown-5);
+  box-shadow: 0 3px 10px rgba(156, 124, 84, 0.2);
+}
+
+.message-item.unread {
+  background-color: #f7efe4;
+  border-left: 4px solid var(--brown-6);
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(156, 124, 84, 0.1);
+}
+
+.message-sender-line {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.message-sender {
+  font-weight: 600;
+  color: var(--brown-8);
+  font-size: 15px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 70%;
+}
+
+.message-subject-line {
+  font-weight: 500;
+  color: var(--brown-7);
+  font-size: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 4px;
+}
+
+.message-preview {
+  color: var(--brown-6);
+  font-size: 13px;
+  line-height: 1.4;
+  max-height: 2.8em;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.message-meta {
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.attachment-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--brown-5);
+  font-size: 12px;
+}
+
+.message-date {
+  font-size: 12px;
+  color: var(--brown-6);
+  white-space: nowrap;
+}
+
+/* Tab button icons */
+.tab-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+/* Selection mode buttons */
+.select-all-btn:hover,
+.cancel-select-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 10px rgba(125, 90, 54, 0.4);
+}
+
+.delete-selected-btn:hover,
+.permanent-delete-btn:hover,
+.restore-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+}
+
+/* Disabled button state */
+button:disabled {
+  cursor: not-allowed;
+  transform: none !important;
+}
+
+/* Message actions in trash */
+.message-actions .restore-btn,
+.message-actions .permanent-delete-btn {
+  padding: 0.6rem 1.2rem;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-weight: 500;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: white;
+}
+
+.message-actions .restore-btn:hover,
+.message-actions .permanent-delete-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
 }
 
 .meeting-details-box {
