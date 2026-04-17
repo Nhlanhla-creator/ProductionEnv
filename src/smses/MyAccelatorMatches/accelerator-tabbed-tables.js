@@ -1,8 +1,8 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Eye, X, Trophy, TrendingUp, Calendar, DollarSign, Package, Building, Award, Ticket, Copy, CheckCircle } from "lucide-react"
-import { collection, getDocs, query, where, doc, updateDoc, onSnapshot } from "firebase/firestore"
+import { Eye, X, Trophy, TrendingUp, Calendar, DollarSign, Package, Building, Award, Ticket, Copy, CheckCircle, Clock, Calendar as CalendarIcon, AlertCircle } from "lucide-react"
+import { collection, getDocs, query, where, doc, updateDoc, onSnapshot, orderBy } from "firebase/firestore"
 import { auth, db } from "../../firebaseConfig"
 import { AcceleratorTable } from "./accelator-table"
 
@@ -90,9 +90,12 @@ const VoucherView = ({ voucher, onClose }) => {
       case "legitimacy": return "Boost Your Legitimacy Score"
       case "capital": return "Boost Capital Appeal Score"
       case "governance": return "Boost Governance Score"
+      case "compliance": return "Boost Your Compliance"
       default: return "Premium Subscription"
     }
   }
+  const isExpired = voucher.expiresAt ? new Date(voucher.expiresAt) < new Date() : false
+  
   return (
     <div style={modalOverlayStyle} onClick={onClose}>
       <div style={modalContentStyle} onClick={(e) => e.stopPropagation()}>
@@ -103,17 +106,38 @@ const VoucherView = ({ voucher, onClose }) => {
           </h2>
           <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer" }}><X size={20} /></button>
         </div>
-        <div style={{ backgroundColor: "#e8f5e9", border: "2px solid #4caf50", borderRadius: "12px", padding: "24px", marginBottom: "24px", textAlign: "center" }}>
-          <CheckCircle size={48} style={{ color: "#4caf50", marginBottom: "16px" }} />
-          <h3 style={{ color: "#2e7d32", marginBottom: "8px" }}>Valid Voucher Available!</h3>
-          <p style={{ color: "#3e2723", marginBottom: "16px" }}>{getVoucherTypeName(voucher.type)} • {voucher.seats} seat{voucher.seats > 1 ? 's' : ''}</p>
+        <div style={{ 
+          backgroundColor: isExpired ? "#ffebee" : "#e8f5e9", 
+          border: `2px solid ${isExpired ? "#f44336" : "#4caf50"}`, 
+          borderRadius: "12px", 
+          padding: "24px", 
+          marginBottom: "24px", 
+          textAlign: "center" 
+        }}>
+          {isExpired ? (
+            <AlertCircle size={48} style={{ color: "#f44336", marginBottom: "16px" }} />
+          ) : (
+            <CheckCircle size={48} style={{ color: "#4caf50", marginBottom: "16px" }} />
+          )}
+          <h3 style={{ color: isExpired ? "#c62828" : "#2e7d32", marginBottom: "8px" }}>
+            {isExpired ? "Voucher Expired" : "Valid Voucher Available!"}
+          </h3>
+          <p style={{ color: "#3e2723", marginBottom: "16px" }}>
+            {getVoucherTypeName(voucher.type)} • {voucher.seats} seat{voucher.seats > 1 ? 's' : ''}
+          </p>
           <div style={{ background: "#fff", border: "2px dashed #a67c52", borderRadius: "8px", padding: "16px", marginBottom: "16px" }}>
             <div style={{ fontFamily: "'Courier New', monospace", fontSize: "1.2rem", fontWeight: "bold", color: "#3e2723", marginBottom: "8px" }}>{voucher.code}</div>
             <button onClick={() => handleCopyCode(voucher.code)} style={{ background: "none", border: "none", color: "#a67c52", cursor: "pointer", display: "flex", alignItems: "center", gap: "4px", margin: "0 auto" }}>
               <Copy size={16} />{copied ? "Copied!" : "Copy Code"}
             </button>
           </div>
-          <p style={{ fontSize: "0.85rem", color: "#666" }}>Expires: {new Date(voucher.expiresAt).toLocaleDateString()}</p>
+          <p style={{ fontSize: "0.85rem", color: isExpired ? "#c62828" : "#666" }}>
+            Received: {voucher.receivedAt ? new Date(voucher.receivedAt).toLocaleString() : new Date(voucher.createdAt).toLocaleString()}
+          </p>
+          <p style={{ fontSize: "0.85rem", color: isExpired ? "#c62828" : "#666", fontWeight: isExpired ? "bold" : "normal" }}>
+            Expires: {voucher.expiresAt ? new Date(voucher.expiresAt).toLocaleString() : "Never"}
+            {isExpired && " (EXPIRED)"}
+          </p>
         </div>
         <div style={{ backgroundColor: "#f0f7ff", border: "1px solid #a67c52", borderRadius: "8px", padding: "16px", marginBottom: "24px" }}>
           <p style={{ margin: 0, color: "#3e2723", fontSize: "0.9rem" }}><strong>📍 How to Redeem:</strong></p>
@@ -131,12 +155,12 @@ const VoucherView = ({ voucher, onClose }) => {
 
 const EmptyTableRow = () => (
   <tr style={{ borderBottom: "1px solid #E8D5C4" }}>
-    <td colSpan="11" style={{ ...tableCellStyle, textAlign: "center", padding: "2rem", color: "#999", fontStyle: "italic", borderRight: "none" }}>
+    <td colSpan="12" style={{ ...tableCellStyle, textAlign: "center", padding: "2rem", color: "#999", fontStyle: "italic", borderRight: "none" }}>
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "1rem" }}>
         <Trophy size={48} style={{ color: "#ddd" }} />
         <div>
-          <p style={{ margin: "0 0 0.5rem 0", fontSize: "1rem", color: "#666" }}>You have not applied for any accelerators, so there are no successful deals available.</p>
-          <p style={{ margin: 0, fontSize: "0.9rem", color: "#999" }}>You need to apply first to see your successful deals here.</p>
+          <p style={{ margin: "0 0 0.5rem 0", fontSize: "1rem", color: "#666" }}>No successful deals found.</p>
+          <p style={{ margin: 0, fontSize: "0.9rem", color: "#999" }}>When you have successful deals with catalysts, they will appear here.</p>
         </div>
       </div>
     </td>
@@ -149,6 +173,8 @@ const SuccessfulAcceleratorDealsTable = () => {
   const [selectedVoucher, setSelectedVoucher] = useState(null)
   const [showVoucherModal, setShowVoucherModal] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [allVouchers, setAllVouchers] = useState([])
+  const [error, setError] = useState(null)
 
   useEffect(() => {
     const fetchData = async () => {
@@ -162,115 +188,153 @@ const SuccessfulAcceleratorDealsTable = () => {
 
         console.log("🔍 Fetching deals for SME user:", user.uid)
 
-        // Query for deals where this SME is involved
+        // Query for successful deals
         const dealsQuery = query(
           collection(db, "smeCatalystApplications"),
           where("smeId", "==", user.uid),
-          where("status", "in", ["Support Approved", "Active Support", "Successful Deals", "Graduated Successfully"])
+          where("status", "in", ["Support Approved", "Active Support", "Active", "Successful Deals", "Graduated Successfully"])
         )
 
         const dealsSnapshot = await getDocs(dealsQuery)
         console.log("📊 Found deals count:", dealsSnapshot.size)
+        
+        // Log each deal for debugging
+        dealsSnapshot.docs.forEach((doc, index) => {
+          console.log(`Deal ${index + 1}:`, doc.id, doc.data())
+        })
 
-        // Set up real-time listener for vouchers
+        if (dealsSnapshot.empty) {
+          console.log("No deals found")
+          setDeals([])
+          setLoading(false)
+          return
+        }
+
+        // Query for vouchers
         const vouchersQuery = query(
           collection(db, "vouchers"),
           where("smeId", "==", user.uid),
-          where("status", "==", "active")
+          orderBy("createdAt", "desc")
         )
 
-        // Function to process deals with vouchers
-        const processDealsWithVouchers = async (vouchersList) => {
-          const completedDealsArray = []
-
-          for (const docSnap of dealsSnapshot.docs) {
-            const dealData = docSnap.data()
-            
-            // Get catalyst details
-            const catalystQuery = query(collection(db, "catalystProfiles"), where("__name__", "==", dealData.catalystId))
-            const catalystSnapshot = await getDocs(catalystQuery)
-            
-            let catalystDetails = {}
-            if (!catalystSnapshot.empty) {
-              catalystDetails = catalystSnapshot.docs[0].data()
-            }
-
-            const formData = catalystDetails.formData || {}
-            const overview = formData.entityOverview || {}
-            const matchPrefs = formData.generalMatchingPreference || {}
-            const programs = formData?.programmeDetails?.programs || []
-            const program = programs[dealData.programIndex || 0] || {}
-
-            // Check if there are any vouchers for this deal (by checking if any voucher exists for this SME)
-            const hasVoucher = vouchersList.length > 0
-            const voucher = hasVoucher ? vouchersList[0] : null
-
-            completedDealsArray.push({
-              id: docSnap.id,
-              acceleratorName: dealData.acceleratorName || overview.registeredName || "Unknown",
-              sectorFocus: matchPrefs.sectorFocus || dealData.sector || "-",
-              fundingType: program.supportType || matchPrefs.supportFocusSubtype || dealData.fundingType || "-",
-              completionDate: dealData.applicationDate || dealData.createdAt?.toDate?.() || new Date(),
-              ticketSize: program.budget || `${program.minimumSupport || "0"} - ${program.maximumSupport || "0"}` || dealData.fundingRequired || "-",
-              geographicFocus: matchPrefs.geographicFocus || overview.province || dealData.location || "-",
-              deadline: formData.applicationBrief?.applicationWindow || "Rolling",
-              fundingStage: matchPrefs.programStage || dealData.fundingStage || "-",
-              currentStatus: dealData.status || "Active Support",
-              nextMilestone: dealData.nextStage || "N/A",
-              servicesDelivered: program.servicesOffered || matchPrefs.supportFocus || "Standard accelerator services",
-              contractValue: dealData.fundingRequired || program.budget || "-",
-              performanceRating: dealData.matchPercentage ? `${Math.round(dealData.matchPercentage / 20)}/5` : "4.5/5",
-              programCohort: `Program ${dealData.programIndex + 1 || 1}`,
-              graduationStatus: dealData.pipelineStage === "Graduated Successfully" ? "Graduated" : "In Progress",
-              acceleratorType: formData.entityOverview?.entityType || "Accelerator",
-              equityTaken: program.equityRequirement || "N/A",
-              dealStructure: `${program.duration || "12"}-month program`,
-              dealDuration: program.duration || "12 months",
-              sector: matchPrefs.sectorFocus || dealData.sector || "-",
-              location: overview.province || dealData.location || "-",
-              dealAmount: dealData.fundingRequired || program.budget || "-",
-              dealType: program.supportType || dealData.fundingType || "-",
-              hasVoucher: hasVoucher,
-              voucher: voucher
-            })
-          }
-
-          setDeals(completedDealsArray)
-          console.log("✅ Processed deals with vouchers:", completedDealsArray.length)
-        }
-
-        // Initial fetch of vouchers
         const vouchersSnapshot = await getDocs(vouchersQuery)
         const initialVouchers = []
         vouchersSnapshot.docs.forEach(doc => {
-          const voucherData = doc.data()
-          if (voucherData.remainingSeats > 0) {
-            initialVouchers.push({ id: doc.id, ...voucherData })
-          }
+          const voucherData = { id: doc.id, ...doc.data(), receivedAt: doc.data().createdAt }
+          initialVouchers.push(voucherData)
         })
-        console.log("🎫 Found initial vouchers count:", initialVouchers.length)
-        
-        await processDealsWithVouchers(initialVouchers)
+        console.log("🎫 Found vouchers count:", initialVouchers.length)
+
+        // Process deals
+        const completedDealsArray = []
+
+        for (const docSnap of dealsSnapshot.docs) {
+          const dealData = docSnap.data()
+          console.log("Processing deal:", docSnap.id, dealData)
+          
+          // Get catalyst details
+          let catalystName = dealData.acceleratorName || "Unknown Catalyst"
+          let sector = dealData.sector || "-"
+          let fundingType = dealData.fundingType || "-"
+          let ticketSize = dealData.fundingRequired || "-"
+          let location = dealData.location || "-"
+          
+          // Try to get catalyst profile if catalystId exists
+          if (dealData.catalystId) {
+            try {
+              const catalystQuery = query(collection(db, "catalystProfiles"), where("__name__", "==", dealData.catalystId))
+              const catalystSnapshot = await getDocs(catalystQuery)
+              
+              if (!catalystSnapshot.empty) {
+                const catalystDetails = catalystSnapshot.docs[0].data()
+                const formData = catalystDetails.formData || {}
+                const overview = formData.entityOverview || {}
+                const matchPrefs = formData.generalMatchingPreference || {}
+                
+                catalystName = dealData.acceleratorName || overview.registeredName || catalystName
+                sector = matchPrefs.sectorFocus || sector
+                fundingType = matchPrefs.supportFocusSubtype || fundingType
+                location = matchPrefs.geographicFocus || overview.province || location
+              }
+            } catch (err) {
+              console.error("Error fetching catalyst:", err)
+            }
+          }
+
+          // Get vouchers for this deal
+          const dealVouchers = initialVouchers.filter(v => 
+            v.catalystId === dealData.catalystId || 
+            v.createdForSME === docSnap.id ||
+            v.cohortId === docSnap.id
+          )
+
+          let displayStatus = dealData.status || "Active Support"
+          if (displayStatus === "Active") displayStatus = "Active Support"
+
+          completedDealsArray.push({
+            id: docSnap.id,
+            acceleratorName: catalystName,
+            sectorFocus: sector,
+            fundingType: fundingType,
+            completionDate: dealData.applicationDate || dealData.createdAt?.toDate?.() || new Date(),
+            ticketSize: ticketSize,
+            geographicFocus: location,
+            deadline: "Rolling",
+            fundingStage: dealData.fundingStage || "-",
+            currentStatus: displayStatus,
+            nextMilestone: dealData.nextStage || "N/A",
+            servicesDelivered: dealData.servicesRequired || "Standard accelerator services",
+            contractValue: dealData.fundingRequired || "-",
+            performanceRating: "4.5/5",
+            programCohort: `Program ${(dealData.programIndex || 0) + 1}`,
+            graduationStatus: dealData.pipelineStage === "Graduated Successfully" ? "Graduated" : "In Progress",
+            acceleratorType: "Accelerator",
+            equityTaken: dealData.equityOffered || "N/A",
+            dealStructure: "12-month program",
+            dealDuration: "12 months",
+            sector: sector,
+            location: location,
+            dealAmount: dealData.fundingRequired || "-",
+            dealType: dealData.fundingType || "-",
+            hasVoucher: dealVouchers.length > 0,
+            vouchers: dealVouchers
+          })
+        }
+
+        console.log("✅ Processed deals:", completedDealsArray.length)
+        setDeals(completedDealsArray)
+        setAllVouchers(initialVouchers)
+        setLoading(false)
         
         // Set up real-time listener for new vouchers
         const unsubscribeVouchers = onSnapshot(vouchersQuery, async (snapshot) => {
           console.log("🔄 Vouchers updated, refreshing deals...")
           const updatedVouchers = []
           snapshot.docs.forEach(doc => {
-            const voucherData = doc.data()
-            if (voucherData.remainingSeats > 0) {
-              updatedVouchers.push({ id: doc.id, ...voucherData })
-            }
+            const voucherData = { id: doc.id, ...doc.data(), receivedAt: doc.data().createdAt }
+            updatedVouchers.push(voucherData)
           })
-          await processDealsWithVouchers(updatedVouchers)
-          setLoading(false)
+          
+          // Update deals with new vouchers
+          setDeals(prevDeals => prevDeals.map(deal => ({
+            ...deal,
+            hasVoucher: updatedVouchers.some(v => 
+              v.catalystId === deal.id.split('_')[1] || 
+              v.createdForSME === deal.id
+            ),
+            vouchers: updatedVouchers.filter(v => 
+              v.catalystId === deal.id.split('_')[1] || 
+              v.createdForSME === deal.id
+            )
+          })))
+          setAllVouchers(updatedVouchers)
         })
 
-        // Cleanup listener
         return () => unsubscribeVouchers()
         
       } catch (error) {
         console.error("Error fetching completed deals:", error)
+        setError(error.message)
         setLoading(false)
       }
     }
@@ -280,10 +344,15 @@ const SuccessfulAcceleratorDealsTable = () => {
 
   const getStatusColor = (status) => {
     switch (status) {
-      case "Active Support": return "#4caf50"
-      case "Support Approved": return "#2196f3"
-      case "Graduated Successfully": return "#ff9800"
-      default: return "#666"
+      case "Active Support":
+      case "Active":
+        return "#4caf50"
+      case "Support Approved": 
+        return "#2196f3"
+      case "Graduated Successfully": 
+        return "#ff9800"
+      default: 
+        return "#666"
     }
   }
 
@@ -296,6 +365,7 @@ const SuccessfulAcceleratorDealsTable = () => {
   }
 
   const formatDate = (dateInput) => {
+    if (!dateInput) return "Not specified"
     let date
     if (dateInput?.toDate) date = dateInput.toDate()
     else if (typeof dateInput === 'string') date = new Date(dateInput)
@@ -304,19 +374,71 @@ const SuccessfulAcceleratorDealsTable = () => {
     return date.toLocaleDateString("en-ZA", { year: "numeric", month: "short", day: "numeric" })
   }
 
-  const handleViewDetails = (deal) => setSelectedDeal(deal)
-const handleViewVoucher = (deal) => {
-  if (deal.hasVoucher && deal.voucher) {
-    setSelectedVoucher(deal.voucher);
-    setShowVoucherModal(true);
-  } else {
-    // Show message that no voucher is available
-    alert("📭 No voucher available yet. Your catalyst will send you a voucher when they're ready to support your growth!");
+  const formatDateTime = (dateInput) => {
+    if (!dateInput) return "Not specified"
+    let date
+    if (dateInput?.toDate) date = dateInput.toDate()
+    else if (typeof dateInput === 'string') date = new Date(dateInput)
+    else if (dateInput instanceof Date) date = dateInput
+    else date = new Date()
+    return date.toLocaleString("en-ZA", { 
+      year: "numeric", 
+      month: "short", 
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit"
+    })
   }
-}
+
+  const handleViewDetails = (deal) => setSelectedDeal(deal)
+  
+  const handleViewVoucher = (voucher) => {
+    setSelectedVoucher(voucher);
+    setShowVoucherModal(true);
+  }
+
+  const getVoucherTypeName = (type) => {
+    switch(type) {
+      case "legitimacy": return "Legitimacy Boost"
+      case "capital": return "Capital Appeal Boost"
+      case "governance": return "Governance Boost"
+      case "compliance": return "Compliance Boost"
+      default: return "Premium Subscription"
+    }
+  }
+
+  const isVoucherExpired = (expiresAt) => {
+    if (!expiresAt) return false
+    return new Date(expiresAt) < new Date()
+  }
 
   if (loading) {
-    return <div style={{ display: "flex", justifyContent: "center", alignItems: "center", padding: "2rem", color: "#a67c52" }}><p>Loading completed deals...</p></div>
+    return (
+      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", padding: "2rem", color: "#a67c52" }}>
+        <div style={{ textAlign: "center" }}>
+          <div style={{ 
+            width: "40px", 
+            height: "40px", 
+            border: "3px solid #E8D5C4", 
+            borderTop: "3px solid #a67c52", 
+            borderRadius: "50%", 
+            animation: "spin 1s linear infinite", 
+            margin: "0 auto 1rem auto" 
+          }}></div>
+          <p>Loading successful deals...</p>
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div style={{ padding: "2rem", textAlign: "center", color: "#f44336" }}>
+        <AlertCircle size={48} style={{ marginBottom: "1rem" }} />
+        <p>Error loading deals: {error}</p>
+        <button onClick={() => window.location.reload()} style={{ marginTop: "1rem", padding: "0.5rem 1rem", backgroundColor: "#a67c52", color: "white", border: "none", borderRadius: "4px", cursor: "pointer" }}>Retry</button>
+      </div>
+    )
   }
 
   return (
@@ -324,87 +446,139 @@ const handleViewVoucher = (deal) => {
       <div style={{ backgroundColor: "#f0f7ff", border: "1px solid #a67c52", borderRadius: "8px", padding: "16px 24px", marginBottom: "24px", display: "flex", alignItems: "flex-start", gap: "12px" }}>
         <Ticket size={24} style={{ color: "#a67c52", flexShrink: 0, marginTop: "2px" }} />
         <div>
-          <p style={{ margin: "0 0 8px 0", color: "#3e2723", fontSize: "0.95rem", fontWeight: "600" }}>🎟️ Check for Vouchers from Your Catalyst!</p>
-          <p style={{ margin: 0, color: "#5d4037", fontSize: "0.9rem", lineHeight: "1.5" }}>Your catalyst may send you vouchers to help you continue improving your scores. Look for the <Ticket size={14} style={{ display: "inline", margin: "0 2px" }} /> <strong>"View Voucher"</strong> button in the Actions column.</p>
-          <p style={{ margin: "8px 0 0 0", color: "#a67c52", fontSize: "0.85rem", fontStyle: "italic" }}>💡 Vouchers can be redeemed on the Subscription Page for premium access or score boosts!</p>
+          <p style={{ margin: "0 0 8px 0", color: "#3e2723", fontSize: "0.95rem", fontWeight: "600" }}>🎟️ Vouchers from Your Catalyst!</p>
+          <p style={{ margin: 0, color: "#5d4037", fontSize: "0.9rem", lineHeight: "1.5" }}>
+            You have {deals.length} successful deal{deals.length !== 1 ? 's' : ''} and {allVouchers.length} voucher{allVouchers.length !== 1 ? 's' : ''}.
+            Click the <strong>"View Vouchers"</strong> button to see all vouchers for each deal.
+          </p>
+          <p style={{ margin: "8px 0 0 0", color: "#a67c52", fontSize: "0.85rem", fontStyle: "italic" }}>
+            💡 Vouchers can be redeemed on the Subscription Page for premium access or score boosts!
+          </p>
         </div>
       </div>
 
-      <div style={{ overflowX: "auto", borderRadius: "8px", border: "1px solid #E8D5C4", boxShadow: "0 4px 24px rgba(139, 69, 19, 0.08)" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse", background: "white", fontSize: "0.8rem", backgroundColor: "#FEFCFA", tableLayout: "fixed", fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" }}>
-          <thead>
-            <tr>
-              <th style={tableHeaderStyle}>Catalyst Name</th>
-              <th style={tableHeaderStyle}>Sector Focus</th>
-              <th style={tableHeaderStyle}>Funding Type</th>
-              <th style={tableHeaderStyle}>Completion Date</th>
-              <th style={tableHeaderStyle}>Ticket Size</th>
-              <th style={tableHeaderStyle}>Geographic Focus</th>
-              <th style={tableHeaderStyle}>Deadline</th>
-              <th style={tableHeaderStyle}>Funding Stage</th>
-              <th style={tableHeaderStyle}>Program Status</th>
-              <th style={{ ...tableHeaderStyle, borderRight: "none" }}>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {deals.length === 0 ? (
-              <EmptyTableRow />
-            ) : (
-              deals.map((deal) => (
+      {deals.length === 0 ? (
+        <div style={{ textAlign: "center", padding: "3rem", backgroundColor: "#faf7f2", borderRadius: "12px" }}>
+          <Trophy size={64} style={{ color: "#ccc", marginBottom: "1rem" }} />
+          <h3 style={{ color: "#5d4037", marginBottom: "0.5rem" }}>No Successful Deals Yet</h3>
+          <p style={{ color: "#7d5a50" }}>When you have successful deals with catalysts, they will appear here.</p>
+        </div>
+      ) : (
+        <div style={{ overflowX: "auto", borderRadius: "8px", border: "1px solid #E8D5C4", boxShadow: "0 4px 24px rgba(139, 69, 19, 0.08)" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", background: "white", fontSize: "0.8rem", backgroundColor: "#FEFCFA", tableLayout: "fixed", fontFamily: "system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif" }}>
+            <thead>
+              <tr>
+                <th style={tableHeaderStyle}>Catalyst Name</th>
+                <th style={tableHeaderStyle}>Sector Focus</th>
+                <th style={tableHeaderStyle}>Funding Type</th>
+                <th style={tableHeaderStyle}>Completion Date</th>
+                <th style={tableHeaderStyle}>Ticket Size</th>
+                <th style={tableHeaderStyle}>Location</th>
+                <th style={tableHeaderStyle}>Status</th>
+                <th style={tableHeaderStyle}>Vouchers</th>
+                <th style={{ ...tableHeaderStyle, borderRight: "none" }}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {deals.map((deal) => (
                 <tr key={deal.id} style={{ borderBottom: "1px solid #E8D5C4", transition: "all 0.2s ease" }}
-                  onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "#f5f5f5"; e.currentTarget.style.transform = "translateY(-1px)"; e.currentTarget.style.boxShadow = "0 4px 12px rgba(0, 0, 0, 0.1)" }}
-                  onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "white"; e.currentTarget.style.transform = "translateY(0)"; e.currentTarget.style.boxShadow = "none" }}>
-                  <td style={tableCellStyle}><span style={{ color: "#a67c52", fontSize: "0.8rem" }}><TruncatedText text={deal.acceleratorName} maxLength={30} /></span></td>
+                  onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = "#f5f5f5" }}
+                  onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = "white" }}>
+                  <td style={tableCellStyle}><span style={{ color: "#a67c52", fontSize: "0.8rem", fontWeight: "bold" }}><TruncatedText text={deal.acceleratorName} maxLength={30} /></span></td>
                   <td style={tableCellStyle}><TruncatedText text={deal.sectorFocus} maxLength={20} /></td>
                   <td style={tableCellStyle}><span style={{ color: "#374151", fontSize: "0.8rem" }}>{deal.fundingType}</span></td>
                   <td style={tableCellStyle}><span style={{ fontSize: "0.8rem" }}>{formatDate(deal.completionDate)}</span></td>
                   <td style={tableCellStyle}><TruncatedText text={deal.ticketSize} maxLength={15} /></td>
                   <td style={tableCellStyle}><TruncatedText text={deal.geographicFocus} maxLength={15} /></td>
-                  <td style={tableCellStyle}><span style={{ fontSize: "0.8rem" }}>{deal.deadline}</span></td>
-                  <td style={tableCellStyle}><span style={{ fontSize: "0.8rem" }}>{deal.fundingStage}</span></td>
-                  <td style={tableCellStyle}><span style={{ backgroundColor: getStatusColor(deal.currentStatus) + "20", color: getStatusColor(deal.currentStatus), padding: "4px 8px", borderRadius: "12px", fontSize: "0.7rem", display: "inline-block" }}>{deal.currentStatus}</span></td>
-                
-
-<td style={{ ...tableCellStyle, borderRight: "none", textAlign: "center" }}>
-  <div style={{ display: "flex", gap: "6px", justifyContent: "center" }}>
-    <button onClick={() => handleViewDetails(deal)} 
-      style={{ backgroundColor: "#5d4037", color: "white", border: "none", borderRadius: "6px", padding: "6px", fontSize: "0.7rem", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }}>
-      <Eye size={12} />
-    </button>
-    <button onClick={() => handleViewVoucher(deal)} 
-      style={{ backgroundColor: deal.hasVoucher ? "#a67c52" : "#ccc", color: "white", border: "none", borderRadius: "6px", padding: "6px", fontSize: "0.7rem", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }} 
-      title={deal.hasVoucher ? "View Voucher" : "No Voucher Available"}>
-      <Ticket size={12} />
-    </button>
-  </div>
-</td>
+                  <td style={tableCellStyle}>
+                    <span style={{ 
+                      backgroundColor: getStatusColor(deal.currentStatus) + "20", 
+                      color: getStatusColor(deal.currentStatus), 
+                      padding: "4px 8px", 
+                      borderRadius: "12px", 
+                      fontSize: "0.7rem", 
+                      display: "inline-block" 
+                    }}>
+                      {deal.currentStatus}
+                    </span>
+                  </td>
+                  <td style={tableCellStyle}>
+                    {deal.hasVoucher ? (
+                      <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                        <span style={{ 
+                          backgroundColor: "#4caf50", 
+                          color: "white", 
+                          padding: "2px 6px", 
+                          borderRadius: "10px", 
+                          fontSize: "0.65rem",
+                          display: "inline-block",
+                          width: "fit-content"
+                        }}>
+                          {deal.vouchers.length} voucher{deal.vouchers.length !== 1 ? 's' : ''}
+                        </span>
+                        {deal.vouchers.slice(0, 1).map(v => (
+                          <div key={v.id} style={{ fontSize: "0.65rem", color: isVoucherExpired(v.expiresAt) ? "#f44336" : "#666" }}>
+                            {getVoucherTypeName(v.type)} • {formatDateTime(v.createdAt)}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <span style={{ color: "#999", fontSize: "0.7rem" }}>No vouchers</span>
+                    )}
+                  </td>
+                  <td style={{ ...tableCellStyle, borderRight: "none", textAlign: "center" }}>
+                    <div style={{ display: "flex", gap: "6px", justifyContent: "center", flexDirection: "column" }}>
+                      <button onClick={() => handleViewDetails(deal)} 
+                        style={{ backgroundColor: "#5d4037", color: "white", border: "none", borderRadius: "6px", padding: "6px", fontSize: "0.7rem", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "4px" }}>
+                        <Eye size={12} /> Details
+                      </button>
+                      {deal.hasVoucher && (
+                        <button onClick={() => {
+                          if (deal.vouchers.length === 1) {
+                            handleViewVoucher(deal.vouchers[0])
+                          } else {
+                            const voucherList = deal.vouchers.map((v, idx) => 
+                              `${idx + 1}. ${getVoucherTypeName(v.type)} - Received: ${formatDateTime(v.createdAt)}`
+                            ).join('\n')
+                            const selectedIndex = prompt(`Select a voucher to view:\n\n${voucherList}\n\nEnter number (1-${deal.vouchers.length}):`)
+                            if (selectedIndex && parseInt(selectedIndex) > 0 && parseInt(selectedIndex) <= deal.vouchers.length) {
+                              handleViewVoucher(deal.vouchers[parseInt(selectedIndex) - 1])
+                            }
+                          }
+                        }} 
+                        style={{ backgroundColor: "#a67c52", color: "white", border: "none", borderRadius: "6px", padding: "6px", fontSize: "0.7rem", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "4px" }}>
+                          <Ticket size={12} /> View {deal.vouchers.length > 1 ? `(${deal.vouchers.length})` : ''}
+                        </button>
+                      )}
+                    </div>
+                  </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-      </div>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {selectedDeal && (
         <div style={modalOverlayStyle} onClick={() => setSelectedDeal(null)}>
           <div style={{...modalContentStyle, maxWidth: "900px"}} onClick={(e) => e.stopPropagation()}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "32px", paddingBottom: "24px", borderBottom: "3px solid #8d6e63" }}>
-              <h2 style={{ fontSize: "24px", color: "#3e2723", margin: 0, display: "flex", alignItems: "center", gap: "12px" }}><Building size={28} style={{ color: "#4caf50" }} />Accelerator Deal: {selectedDeal.acceleratorName}</h2>
+              <h2 style={{ fontSize: "24px", color: "#3e2723", margin: 0, display: "flex", alignItems: "center", gap: "12px" }}><Building size={28} style={{ color: "#4caf50" }} />Deal Details: {selectedDeal.acceleratorName}</h2>
               <button onClick={() => setSelectedDeal(null)} style={{ background: "none", border: "none", fontSize: "20px", cursor: "pointer", color: "#666", padding: "8px" }}><X size={20} /></button>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "20px", marginBottom: "24px" }}>
               <div style={{ backgroundColor: "#f8f9fa", padding: "20px", borderRadius: "12px", border: "1px solid #e9ecef" }}>
-                <h3 style={{ color: "#3e2723", marginBottom: "16px", display: "flex", alignItems: "center", gap: "8px", fontSize: "16px" }}><DollarSign size={18} />Deal Financial Details</h3>
+                <h3 style={{ color: "#3e2723", marginBottom: "16px", display: "flex", alignItems: "center", gap: "8px", fontSize: "16px" }}><DollarSign size={18} />Financial Details</h3>
                 <div style={{ display: "grid", gap: "10px", fontSize: "14px" }}>
                   <div><strong>Funding Amount:</strong> {selectedDeal.dealAmount}</div>
-                  <div><strong>Total Value:</strong> {selectedDeal.contractValue}</div>
+                  <div><strong>Contract Value:</strong> {selectedDeal.contractValue}</div>
                   <div><strong>Deal Type:</strong> {selectedDeal.dealType}</div>
                   <div><strong>Equity Taken:</strong> {selectedDeal.equityTaken}</div>
-                  <div><strong>Performance Rating:</strong> <span style={{ color: getRatingColor(selectedDeal.performanceRating), marginLeft: "8px", fontWeight: "600" }}>{selectedDeal.performanceRating}</span></div>
+                  <div><strong>Performance Rating:</strong> <span style={{ color: getRatingColor(selectedDeal.performanceRating), fontWeight: "600" }}>{selectedDeal.performanceRating}</span></div>
                 </div>
               </div>
               <div style={{ backgroundColor: "#f8f9fa", padding: "20px", borderRadius: "12px", border: "1px solid #e9ecef" }}>
-                <h3 style={{ color: "#3e2723", marginBottom: "16px", display: "flex", alignItems: "center", gap: "8px", fontSize: "16px" }}><Calendar size={18} />Program Timeline</h3>
+                <h3 style={{ color: "#3e2723", marginBottom: "16px", display: "flex", alignItems: "center", gap: "8px", fontSize: "16px" }}><Calendar size={18} />Timeline</h3>
                 <div style={{ display: "grid", gap: "10px", fontSize: "14px" }}>
                   <div><strong>Start Date:</strong> {formatDate(selectedDeal.completionDate)}</div>
                   <div><strong>Program Duration:</strong> {selectedDeal.dealDuration}</div>
@@ -414,7 +588,7 @@ const handleViewVoucher = (deal) => {
                 </div>
               </div>
               <div style={{ backgroundColor: "#f8f9fa", padding: "20px", borderRadius: "12px", border: "1px solid #e9ecef" }}>
-                <h3 style={{ color: "#3e2723", marginBottom: "16px", display: "flex", alignItems: "center", gap: "8px", fontSize: "16px" }}><Award size={18} />Accelerator Information</h3>
+                <h3 style={{ color: "#3e2723", marginBottom: "16px", display: "flex", alignItems: "center", gap: "8px", fontSize: "16px" }}><Award size={18} />Information</h3>
                 <div style={{ display: "grid", gap: "10px", fontSize: "14px" }}>
                   <div><strong>Sector:</strong> {selectedDeal.sector}</div>
                   <div><strong>Accelerator Type:</strong> {selectedDeal.acceleratorType}</div>
@@ -424,24 +598,78 @@ const handleViewVoucher = (deal) => {
               </div>
             </div>
             <div style={{ backgroundColor: "#f8f9fa", padding: "20px", borderRadius: "12px", border: "1px solid #e9ecef", marginBottom: "20px" }}>
-              <h3 style={{ color: "#3e2723", marginBottom: "12px", display: "flex", alignItems: "center", gap: "8px", fontSize: "16px" }}><Package size={18} />Services & Support Delivered</h3>
+              <h3 style={{ color: "#3e2723", marginBottom: "12px", display: "flex", alignItems: "center", gap: "8px", fontSize: "16px" }}><Package size={18} />Services & Support</h3>
               <p style={{ fontSize: "14px", color: "#333", lineHeight: "1.5", margin: 0 }}>{selectedDeal.servicesDelivered}</p>
             </div>
-            {selectedDeal.hasVoucher && selectedDeal.voucher && (
+            
+            {/* Show ALL vouchers for this deal */}
+            {selectedDeal.hasVoucher && selectedDeal.vouchers && selectedDeal.vouchers.length > 0 && (
               <div style={{ backgroundColor: "#e8f5e9", padding: "20px", borderRadius: "12px", border: "2px solid #4caf50", marginBottom: "20px" }}>
-                <h3 style={{ color: "#2e7d32", marginBottom: "12px", display: "flex", alignItems: "center", gap: "8px", fontSize: "16px" }}><Ticket size={18} />Voucher Available from Catalyst!</h3>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <div>
-                    <p style={{ margin: "0 0 4px 0", color: "#3e2723" }}><strong>Type:</strong> {selectedDeal.voucher.type === "legitimacy" ? "Boost Your Legitimacy Score" : selectedDeal.voucher.type === "capital" ? "Boost Capital Appeal Score" : selectedDeal.voucher.type === "governance" ? "Boost Governance Score" : "Premium Subscription"}</p>
-                    <p style={{ margin: 0, color: "#3e2723" }}><strong>Seats:</strong> {selectedDeal.voucher.seats}</p>
-                  </div>
-                  <button onClick={() => { setSelectedVoucher(selectedDeal.voucher); setShowVoucherModal(true) }} 
-                    style={{ backgroundColor: "#a67c52", color: "white", border: "none", borderRadius: "8px", padding: "10px 20px", fontSize: "14px", fontWeight: "600", cursor: "pointer", display: "flex", alignItems: "center", gap: "6px" }}>
-                    <Ticket size={16} />View Voucher
-                  </button>
+                <h3 style={{ color: "#2e7d32", marginBottom: "16px", display: "flex", alignItems: "center", gap: "8px", fontSize: "16px" }}>
+                  <Ticket size={18} /> All Vouchers ({selectedDeal.vouchers.length})
+                </h3>
+                <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                  {selectedDeal.vouchers.map((voucher, idx) => {
+                    const expired = isVoucherExpired(voucher.expiresAt)
+                    return (
+                      <div key={voucher.id} style={{ 
+                        backgroundColor: expired ? "#ffebee" : "white", 
+                        padding: "12px", 
+                        borderRadius: "8px", 
+                        border: `1px solid ${expired ? "#f44336" : "#4caf50"}`,
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        flexWrap: "wrap",
+                        gap: "12px"
+                      }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap", marginBottom: "4px" }}>
+                            <strong style={{ color: "#3e2723" }}>#{idx + 1}</strong>
+                            <span style={{ 
+                              backgroundColor: expired ? "#f44336" : "#4caf50", 
+                              color: "white", 
+                              padding: "2px 8px", 
+                              borderRadius: "12px", 
+                              fontSize: "0.7rem" 
+                            }}>
+                              {expired ? "EXPIRED" : "ACTIVE"}
+                            </span>
+                            <span style={{ fontWeight: "600", color: "#a67c52" }}>{getVoucherTypeName(voucher.type)}</span>
+                          </div>
+                          <div style={{ fontSize: "0.75rem", color: "#666", display: "flex", gap: "16px", flexWrap: "wrap" }}>
+                            <span><Clock size={12} style={{ display: "inline", marginRight: "4px" }} /> Received: {formatDateTime(voucher.createdAt)}</span>
+                            <span><CalendarIcon size={12} style={{ display: "inline", marginRight: "4px" }} /> Expires: {voucher.expiresAt ? formatDateTime(voucher.expiresAt) : "Never"}</span>
+                          </div>
+                          <div style={{ fontFamily: "'Courier New', monospace", fontSize: "0.7rem", color: "#888", marginTop: "4px" }}>
+                            Code: {voucher.code}
+                          </div>
+                        </div>
+                        <button 
+                          onClick={() => { setSelectedVoucher(voucher); setShowVoucherModal(true) }} 
+                          style={{ 
+                            backgroundColor: expired ? "#ccc" : "#a67c52", 
+                            color: "white", 
+                            border: "none", 
+                            borderRadius: "6px", 
+                            padding: "6px 12px", 
+                            fontSize: "0.7rem", 
+                            fontWeight: "600", 
+                            cursor: expired ? "not-allowed" : "pointer",
+                            opacity: expired ? 0.6 : 1
+                          }}
+                          disabled={expired}
+                        >
+                          <Ticket size={12} style={{ display: "inline", marginRight: "4px" }} />
+                          View Voucher
+                        </button>
+                      </div>
+                    )
+                  })}
                 </div>
               </div>
             )}
+            
             <div style={{ display: "flex", justifyContent: "flex-end" }}>
               <button onClick={() => setSelectedDeal(null)} style={{ backgroundColor: "#5d4037", color: "white", border: "none", borderRadius: "8px", padding: "12px 24px", fontSize: "14px", cursor: "pointer" }}>Close</button>
             </div>
@@ -451,7 +679,11 @@ const handleViewVoucher = (deal) => {
 
       {showVoucherModal && selectedVoucher && <VoucherView voucher={selectedVoucher} onClose={() => setShowVoucherModal(false)} />}
 
-      <style>{`@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } } @keyframes slideUp { from { opacity: 0; transform: translateY(30px) scale(0.95); } to { opacity: 1; transform: translateY(0) scale(1); } }`}</style>
+      <style>{`
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(30px) scale(0.95); } to { opacity: 1; transform: translateY(0) scale(1); } }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+      `}</style>
     </>
   )
 }
@@ -468,7 +700,11 @@ const AcceleratorTabbedTables = ({ filters, onApplicationSubmitted }) => {
         if (!user) return
         const catalystSnapshot = await getDocs(collection(db, "catalystProfiles"))
         setMyMatchesCount(catalystSnapshot.size)
-        const dealsQuery = query(collection(db, "smeCatalystApplications"), where("smeId", "==", user.uid), where("status", "in", ["Support Approved", "Active Support", "Successful Deals", "Graduated Successfully"]))
+        const dealsQuery = query(
+          collection(db, "smeCatalystApplications"), 
+          where("smeId", "==", user.uid), 
+          where("status", "in", ["Support Approved", "Active Support", "Active", "Successful Deals", "Graduated Successfully"])
+        )
         const dealsSnapshot = await getDocs(dealsQuery)
         setSuccessfulDealsCount(dealsSnapshot.size)
       } catch (error) { console.error("Error fetching counts:", error) }
@@ -497,7 +733,6 @@ const AcceleratorTabbedTables = ({ filters, onApplicationSubmitted }) => {
         {activeTab === "my-matches" && <div><AcceleratorTable filters={filters} onApplicationSubmitted={onApplicationSubmitted} /></div>}
         {activeTab === "successful-deals" && <SuccessfulAcceleratorDealsTable />}
       </div>
-      <style>{`@keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } } @keyframes slideUp { from { opacity: 0; transform: translateY(30px) scale(0.95); } to { opacity: 1; transform: translateY(0) scale(1); } }`}</style>
     </div>
   )
 }

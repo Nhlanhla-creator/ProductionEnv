@@ -74,6 +74,7 @@ const saveSubscriptionToFirebase = async (subscriptionData) => {
         source: subscriptionData.source || "direct_payment",
         voucherId: subscriptionData.voucherId || null,
         voucherCode: subscriptionData.voucherCode || null,
+        voucherExpiresAt: subscriptionData.voucherExpiresAt || null,
         scoreState: subscriptionData.scoreState || null,
       }
     }, { merge: true })
@@ -185,6 +186,82 @@ const ReusableSubscription = ({
     if (!isSme || !isExistingUser) return false
     const planKey = getCurrentPlanKey()
     if (planKey === freePlanKey && history.length > 1) return true
+    return false
+  }
+
+  // ─── CHECK FOR EXPIRED VOUCHER AND REVERT TO BASIC ──────────────────────
+  const checkAndHandleExpiredVoucher = async () => {
+    if (!isSme || !currentSubscription) return false
+    
+    // Check if subscription came from a voucher
+    if (currentSubscription.source === "voucher" && currentSubscription.voucherExpiresAt) {
+      const expiryDate = new Date(currentSubscription.voucherExpiresAt)
+      const now = new Date()
+      
+      if (now > expiryDate) {
+        console.log("⚠️ Voucher has expired! Reverting to basic plan...")
+        
+        // Revert to free/basic plan
+        const freePlan = plans[freePlanKey]
+        const scoreState = getSmeScoreState(freePlanKey)
+        
+        try {
+          const userRef = doc(db, "users", user?.uid)
+          const expiryRecord = {
+            id: uuidv4(),
+            email: user?.email,
+            plan: freePlan.name,
+            cycle: "monthly",
+            amount: 0,
+            fullName: fullName || user?.displayName,
+            companyName,
+            createdAt: new Date().toISOString(),
+            status: "Success",
+            autoRenew: false,
+            userId: user?.uid,
+            userType,
+            action: "voucher_expired",
+            previousPlan: currentSubscription.plan,
+            previousVoucherCode: currentSubscription.voucherCode,
+            expiryDate: expiryDate.toISOString(),
+            scoreState
+          }
+          
+          await saveSubscriptionToFirebase(expiryRecord)
+          await updateCurrentPlan(freePlan.name, "monthly", { 
+            userType, 
+            scoreState,
+            source: "voucher_expired",
+            previousVoucherCode: currentSubscription.voucherCode
+          })
+          
+          setCurrentSubscription(expiryRecord)
+          setSelectedPlan(freePlanKey)
+          
+          // Show alert to user
+          setTimeout(() => {
+            alert(`⚠️ Your voucher has expired!\n\nYou have been reverted to the ${freePlan.name} plan.\n\nTo regain premium features, please purchase a subscription or contact your catalyst for a new voucher.`)
+          }, 500)
+          
+          return true
+        } catch (error) {
+          console.error("Error handling expired voucher:", error)
+        }
+      } else {
+        // Calculate time remaining
+        const daysRemaining = Math.ceil((expiryDate - now) / (1000 * 60 * 60 * 24))
+        const hoursRemaining = Math.ceil((expiryDate - now) / (1000 * 60 * 60))
+        const minutesRemaining = Math.ceil((expiryDate - now) / (1000 * 60))
+        
+        if (daysRemaining <= 3 && daysRemaining > 0) {
+          console.log(`⏰ Voucher expires in ${daysRemaining} days`)
+        } else if (hoursRemaining <= 24 && hoursRemaining > 0) {
+          console.log(`⏰ Voucher expires in ${hoursRemaining} hours`)
+        } else if (minutesRemaining <= 60 && minutesRemaining > 0) {
+          console.log(`⏰ Voucher expires in ${minutesRemaining} minutes`)
+        }
+      }
+    }
     return false
   }
 
@@ -347,6 +424,18 @@ const ReusableSubscription = ({
     voucherRedeemButton: { width: "100%", padding: "1rem", background: colors.successGreen, color: "white", border: "none", borderRadius: "8px", fontWeight: "700", fontSize: "1rem", cursor: "pointer", marginTop: "1rem", transition: "all 0.3s ease" },
     voucherInfoText: { fontSize: "0.9rem", color: colors.mediumBrown, marginTop: "1rem", padding: "1rem", background: `${colors.accentGold}10`, borderRadius: "8px", border: `1px solid ${colors.accentGold}30` },
     voucherInfoHighlight: { fontWeight: "700", color: colors.accentGold },
+    expiredVoucherBanner: {
+      display: "flex",
+      alignItems: "center",
+      gap: "0.75rem",
+      background: `${colors.errorRed}15`,
+      border: `2px solid ${colors.errorRed}`,
+      borderRadius: "12px",
+      padding: "1rem 1.25rem",
+      marginBottom: "1.5rem",
+      color: colors.errorRed,
+      fontSize: "0.9rem",
+    },
   }
 
   const isNewUser = () => {
@@ -401,12 +490,18 @@ const ReusableSubscription = ({
             source: userData.currentSubscription.source || "direct_payment",
             voucherId: userData.currentSubscription.voucherId || null,
             voucherCode: userData.currentSubscription.voucherCode || null,
+            voucherExpiresAt: userData.currentSubscription.voucherExpiresAt || null,
             scoreState: userData.currentSubscription.scoreState || null,
           }
           setCurrentSubscription(subscriptionFromUser)
           setIsExistingUser(true)
           const planKey = getCurrentPlanKey()
           setSelectedPlan(planKey)
+          
+          // Check if voucher expired (for SME users only)
+          if (isSme) {
+            await checkAndHandleExpiredVoucher()
+          }
         }
       }
 
@@ -448,7 +543,7 @@ const ReusableSubscription = ({
     }
   }
 
-  // ── Voucher functions ──────────────────────────────────────────────────
+  // ── Voucher functions with expiration handling ──────────────────────────────────
   const validateVoucher = async () => {
     if (!voucherCode.trim()) { setVoucherMessage("Please enter a voucher code"); setVoucherMessageType("error"); return }
     const auth = getAuth(); const user = auth.currentUser
@@ -461,7 +556,15 @@ const ReusableSubscription = ({
       if (querySnapshot.empty) { setVoucherMessage("Invalid voucher code"); setVoucherMessageType("error"); setValidatingVoucher(false); return }
       const voucherDoc = querySnapshot.docs[0]
       const voucherData = { id: voucherDoc.id, ...voucherDoc.data() }
-      if (voucherData.expiresAt && new Date(voucherData.expiresAt) < new Date()) { setVoucherMessage("This voucher has expired"); setVoucherMessageType("error"); setValidatingVoucher(false); return }
+      
+      // CHECK IF VOUCHER HAS EXPIRED
+      if (voucherData.expiresAt && new Date(voucherData.expiresAt) < new Date()) { 
+        setVoucherMessage(`❌ This voucher expired on ${new Date(voucherData.expiresAt).toLocaleString()}. Please request a new one.`); 
+        setVoucherMessageType("error"); 
+        setValidatingVoucher(false); 
+        return 
+      }
+      
       if (voucherData.status !== "active") { setVoucherMessage("This voucher is no longer active"); setVoucherMessageType("error"); setValidatingVoucher(false); return }
       if (voucherData.remainingSeats <= 0) { setVoucherMessage("All seats for this voucher have been redeemed"); setVoucherMessageType("error"); setValidatingVoucher(false); return }
       const alreadyRedeemed = voucherData.redeemedSeats?.some(seat => seat.userId === user.uid)
@@ -471,8 +574,27 @@ const ReusableSubscription = ({
       const planName = voucherData.planName || "Premium"
       const planExists = Object.values(plans).some(p => p.name === planName)
       if (!planExists) { setVoucherMessage(`Invalid plan: ${planName}`); setVoucherMessageType("error"); setValidatingVoucher(false); return }
-      setVoucherMessage(`✅ Voucher valid! ${voucherData.remainingSeats} seat(s) remaining.`); setVoucherMessageType("success")
-      setAppliedVoucher({ id: voucherDoc.id, code: voucherCode.toUpperCase(), planName: planName, remainingSeats: voucherData.remainingSeats })
+      
+      const expiryDate = new Date(voucherData.expiresAt)
+      const timeRemaining = expiryDate - new Date()
+      const daysRemaining = Math.ceil(timeRemaining / (1000 * 60 * 60 * 24))
+      const hoursRemaining = Math.ceil(timeRemaining / (1000 * 60 * 60))
+      const minutesRemaining = Math.ceil(timeRemaining / (1000 * 60))
+      
+      let timeMessage = ""
+      if (daysRemaining > 0) timeMessage = `${daysRemaining} day(s) remaining`
+      else if (hoursRemaining > 0) timeMessage = `${hoursRemaining} hour(s) remaining`
+      else if (minutesRemaining > 0) timeMessage = `${minutesRemaining} minute(s) remaining`
+      
+      setVoucherMessage(`✅ Voucher valid! ${voucherData.remainingSeats} seat(s) remaining. Expires in ${timeMessage}`); 
+      setVoucherMessageType("success")
+      setAppliedVoucher({ 
+        id: voucherDoc.id, 
+        code: voucherCode.toUpperCase(), 
+        planName: planName, 
+        remainingSeats: voucherData.remainingSeats,
+        expiresAt: voucherData.expiresAt
+      })
     } catch (error) {
       console.error('Voucher validation error:', error)
       setVoucherMessage("Error validating voucher. Please try again."); setVoucherMessageType("error")
@@ -489,6 +611,16 @@ const ReusableSubscription = ({
       const voucherDoc = await getDoc(voucherRef)
       if (!voucherDoc.exists()) { setVoucherMessage("Voucher not found"); setVoucherMessageType("error"); setAppliedVoucher(null); setValidatingVoucher(false); return }
       const voucherData = voucherDoc.data()
+      
+      // DOUBLE CHECK EXPIRATION BEFORE REDEEMING
+      if (voucherData.expiresAt && new Date(voucherData.expiresAt) < new Date()) { 
+        setVoucherMessage(`❌ This voucher expired on ${new Date(voucherData.expiresAt).toLocaleString()}. Cannot redeem.`); 
+        setVoucherMessageType("error"); 
+        setAppliedVoucher(null); 
+        setValidatingVoucher(false); 
+        return 
+      }
+      
       if (voucherData.remainingSeats <= 0) { setVoucherMessage("No seats remaining for this voucher"); setVoucherMessageType("error"); setAppliedVoucher(null); setValidatingVoucher(false); return }
 
       let scoreState = null
@@ -497,24 +629,91 @@ const ReusableSubscription = ({
         scoreState = planKey ? getSmeScoreState(planKey) : null
       }
 
-      const redemptionData = { voucherId: appliedVoucher.id, voucherCode: appliedVoucher.code, userId: user.uid, userEmail: user.email, userName: user.displayName || 'Valued Customer', planName: appliedVoucher.planName, redeemedAt: new Date().toISOString() }
+      const redemptionData = { 
+        voucherId: appliedVoucher.id, 
+        voucherCode: appliedVoucher.code, 
+        userId: user.uid, 
+        userEmail: user.email, 
+        userName: user.displayName || 'Valued Customer', 
+        planName: appliedVoucher.planName, 
+        redeemedAt: new Date().toISOString() 
+      }
       await addDoc(collection(db, "voucherRedemptions"), redemptionData)
-      const updatedRedeemedSeats = [...(voucherData.redeemedSeats || []), { userId: user.uid, userEmail: user.email, code: appliedVoucher.code, redeemedAt: new Date().toISOString() }]
-      await updateDoc(voucherRef, { remainingSeats: voucherData.remainingSeats - 1, redeemedSeats: updatedRedeemedSeats, updatedAt: new Date().toISOString() })
+      
+      const updatedRedeemedSeats = [...(voucherData.redeemedSeats || []), { 
+        userId: user.uid, 
+        userEmail: user.email, 
+        code: appliedVoucher.code, 
+        redeemedAt: new Date().toISOString() 
+      }]
+      await updateDoc(voucherRef, { 
+        remainingSeats: voucherData.remainingSeats - 1, 
+        redeemedSeats: updatedRedeemedSeats, 
+        updatedAt: new Date().toISOString() 
+      })
 
       const userRef = doc(db, "users", user.uid)
       const userDocSnap = await getDoc(userRef)
-      const subscriptionData = { currentSubscription: { plan: appliedVoucher.planName, status: "Success", amount: 0, cycle: "monthly", source: "voucher", voucherId: appliedVoucher.id, voucherCode: appliedVoucher.code, lastUpdated: new Date().toISOString(), isTrialPeriod: false, autoRenew: false, scoreState } }
-      if (userDocSnap.exists()) { await updateDoc(userRef, subscriptionData) } else { await setDoc(userRef, subscriptionData) }
+      const subscriptionData = { 
+        currentSubscription: { 
+          plan: appliedVoucher.planName, 
+          status: "Success", 
+          amount: 0, 
+          cycle: "monthly", 
+          source: "voucher", 
+          voucherId: appliedVoucher.id, 
+          voucherCode: appliedVoucher.code,
+          voucherExpiresAt: appliedVoucher.expiresAt, // STORE EXPIRATION DATE
+          lastUpdated: new Date().toISOString(), 
+          isTrialPeriod: false, 
+          autoRenew: false, 
+          scoreState 
+        } 
+      }
+      if (userDocSnap.exists()) { await updateDoc(userRef, subscriptionData) } 
+      else { await setDoc(userRef, subscriptionData) }
 
-      const subscriptionRecord = { id: uuidv4(), userId: user.uid, userEmail: user.email, userName: user.displayName || 'Valued Customer', plan: appliedVoucher.planName, cycle: "monthly", amount: 0, status: "Success", source: "voucher", voucherId: appliedVoucher.id, voucherCode: appliedVoucher.code, createdAt: new Date().toISOString(), autoRenew: false, scoreState }
+      const subscriptionRecord = { 
+        id: uuidv4(), 
+        userId: user.uid, 
+        userEmail: user.email, 
+        userName: user.displayName || 'Valued Customer', 
+        plan: appliedVoucher.planName, 
+        cycle: "monthly", 
+        amount: 0, 
+        status: "Success", 
+        source: "voucher", 
+        voucherId: appliedVoucher.id, 
+        voucherCode: appliedVoucher.code,
+        voucherExpiresAt: appliedVoucher.expiresAt,
+        createdAt: new Date().toISOString(), 
+        autoRenew: false, 
+        scoreState 
+      }
       await addDoc(collection(db, "subscriptions"), subscriptionRecord)
 
-      const newSubscription = { id: `user_${user.uid}`, plan: appliedVoucher.planName, status: "Success", amount: 0, cycle: "monthly", createdAt: new Date().toISOString(), userId: user.uid, autoRenew: false, source: "voucher", voucherId: appliedVoucher.id, voucherCode: appliedVoucher.code, scoreState }
+      const newSubscription = { 
+        id: `user_${user.uid}`, 
+        plan: appliedVoucher.planName, 
+        status: "Success", 
+        amount: 0, 
+        cycle: "monthly", 
+        createdAt: new Date().toISOString(), 
+        userId: user.uid, 
+        autoRenew: false, 
+        source: "voucher", 
+        voucherId: appliedVoucher.id, 
+        voucherCode: appliedVoucher.code,
+        voucherExpiresAt: appliedVoucher.expiresAt,
+        scoreState 
+      }
       setCurrentSubscription(newSubscription); setIsExistingUser(true)
-      setVoucherMessage(`✅ Success! You are now subscribed to ${appliedVoucher.planName} plan via voucher.`); setVoucherMessageType("success")
+      
+      const expiryDate = new Date(appliedVoucher.expiresAt)
+      setVoucherMessage(`✅ Success! You are now subscribed to ${appliedVoucher.planName} plan via voucher. This voucher expires on ${expiryDate.toLocaleString()}.`); 
+      setVoucherMessageType("success")
       setAppliedVoucher(null); setVoucherCode("")
-      setTimeout(() => { setShowVoucherInput(false); setVoucherMessage("") }, 3000)
+      setTimeout(() => { setShowVoucherInput(false); setVoucherMessage("") }, 5000)
       setTimeout(() => { loadUserSubscription(user.uid) }, 1000)
     } catch (error) {
       console.error('Voucher redemption error:', error)
@@ -614,7 +813,7 @@ const ReusableSubscription = ({
     )
   }
 
-  // ─── FIXED: Direct upgrade/downgrade handler ───────────────────────────
+  // ─── Direct upgrade/downgrade handler ───────────────────────────
   const handleUpgradeDowngrade = async (targetPlanKey) => {
     if (!user) {
       alert("Please log in to manage your subscription")
@@ -639,146 +838,146 @@ const ReusableSubscription = ({
     setShowPlanChangeConfirm(true)
   }
 
- const processSubscription = async (planKey, skipConfirm = false) => {
-  const plan = plans[planKey]
-  const planPrice = plan.price[billingCycle]
-  const scoreState = isSme ? getSmeScoreState(planKey) : null
+  const processSubscription = async (planKey, skipConfirm = false) => {
+    const plan = plans[planKey]
+    const planPrice = plan.price[billingCycle]
+    const scoreState = isSme ? getSmeScoreState(planKey) : null
 
-  // Get user details from Firebase Auth as fallback
-  const userEmail = user?.email
-  const userFullName = user?.displayName || user?.email?.split('@')[0] || "Valued Customer"
-  
-  // For existing users, use their auth data automatically
-  if (isExistingUser && currentSubscription) {
-    if (!userEmail) {
-      alert("Please ensure your account has a valid email address")
+    // Get user details from Firebase Auth as fallback
+    const userEmail = user?.email
+    const userFullName = user?.displayName || user?.email?.split('@')[0] || "Valued Customer"
+    
+    // For existing users, use their auth data automatically
+    if (isExistingUser && currentSubscription) {
+      if (!userEmail) {
+        alert("Please ensure your account has a valid email address")
+        return
+      }
+      // Set the state if not already set
+      if (!email) setEmail(userEmail)
+      if (!fullName) setFullName(userFullName)
+    } else {
+      // For new users, validate the form
+      const validationResult = validate(email || userEmail, fullName || userFullName)
+      if (!validationResult.isValid) {
+        setErrors(validationResult.errors)
+        alert("Please fill in your name and email before subscribing")
+        return
+      }
+    }
+
+    // For free plan
+    if (planPrice === 0) {
+      setPaymentProcessing(true)
+      try {
+        const newRecord = {
+          id: uuidv4(),
+          email: email || userEmail,
+          plan: plan.name,
+          cycle: billingCycle,
+          amount: 0,
+          fullName: fullName || userFullName,
+          companyName,
+          createdAt: new Date().toISOString(),
+          status: "Success",
+          autoRenew: true,
+          userId: user.uid,
+          userType,
+          action: isExistingUser ? (planOrder[planKey] > planOrder[getCurrentPlanKey()] ? "upgrade" : "downgrade") : "new_subscription",
+          scoreState
+        }
+        await saveSubscriptionToFirebase(newRecord)
+        await updateCurrentPlan(plan.name, billingCycle, { userType, scoreState })
+        setCurrentSubscription(newRecord)
+        setIsExistingUser(true)
+        alert(`${plan.name} plan activated successfully!`)
+        setUpgradeDowngradeAction(null)
+        setShowPlanChangeConfirm(false)
+        setTimeout(() => loadUserSubscription(user.uid), 1000)
+      } catch (error) {
+        console.error("Error activating plan:", error)
+        alert("Failed to activate plan. Please try again.")
+      } finally {
+        setPaymentProcessing(false)
+      }
       return
     }
-    // Set the state if not already set
-    if (!email) setEmail(userEmail)
-    if (!fullName) setFullName(userFullName)
-  } else {
-    // For new users, validate the form
-    const validationResult = validate(email || userEmail, fullName || userFullName)
-    if (!validationResult.isValid) {
-      setErrors(validationResult.errors)
-      alert("Please fill in your name and email before subscribing")
-      return
-    }
-  }
 
-  // For free plan
-  if (planPrice === 0) {
+    // For paid plan - continue with payment processing
     setPaymentProcessing(true)
     try {
-      const newRecord = {
-        id: uuidv4(),
-        email: email || userEmail,
-        plan: plan.name,
-        cycle: billingCycle,
-        amount: 0,
-        fullName: fullName || userFullName,
-        companyName,
-        createdAt: new Date().toISOString(),
-        status: "Success",
-        autoRenew: true,
+      const mockPaymentResult = await processMockPayment({
+        amount: planPrice,
+        currency: "ZAR",
         userId: user.uid,
-        userType,
-        action: isExistingUser ? (planOrder[planKey] > planOrder[getCurrentPlanKey()] ? "upgrade" : "downgrade") : "new_subscription",
-        scoreState
+        planName: plan.name,
+        billingCycle
+      })
+
+      if (mockPaymentResult.success) {
+        const isTrialEligible = isNewUser()
+        const trialStartDate = new Date()
+        const trialEndDate = new Date()
+        trialEndDate.setMonth(trialEndDate.getMonth() + 3)
+
+        const newRecord = {
+          id: uuidv4(),
+          email: email || userEmail,
+          plan: plan.name,
+          cycle: billingCycle,
+          amount: 0,
+          originalAmount: planPrice,
+          fullName: fullName || userFullName,
+          companyName,
+          createdAt: new Date().toISOString(),
+          status: "Success",
+          autoRenew: true,
+          transactionRef: mockPaymentResult.transactionId,
+          userId: user.uid,
+          userType,
+          subscriptionType: "recurring",
+          isTrialPeriod: isTrialEligible,
+          trialStartDate: isTrialEligible ? trialStartDate.toISOString() : null,
+          trialEndDate: isTrialEligible ? trialEndDate.toISOString() : null,
+          action: isExistingUser ? (planOrder[planKey] > planOrder[getCurrentPlanKey()] ? "upgrade" : "downgrade") : "new_subscription",
+          paymentCompleted: true,
+          paymentDate: new Date().toISOString(),
+          scoreState
+        }
+
+        await saveSubscriptionToFirebase(newRecord)
+        await updateCurrentPlan(plan.name, billingCycle, {
+          amount: newRecord.amount,
+          originalAmount: newRecord.originalAmount,
+          isTrialPeriod: newRecord.isTrialPeriod,
+          trialStartDate: newRecord.trialStartDate,
+          trialEndDate: newRecord.trialEndDate,
+          transactionRef: newRecord.transactionRef,
+          userType,
+          scoreState
+        })
+
+        setCurrentSubscription(newRecord)
+        setIsExistingUser(true)
+        
+        const successMessage = isTrialEligible
+          ? `🎉 Welcome to your ${plan.name} plan!\n\n✨ You're getting 3 MONTHS FREE!\n• Trial period: ${trialStartDate.toLocaleDateString()} - ${trialEndDate.toLocaleDateString()}\n• Regular billing starts: ${trialEndDate.toLocaleDateString()}\n• Monthly rate after trial: R${planPrice}\n\nEnjoy all premium features at no cost for the first 3 months!`
+          : `🎉 Subscription ${isExistingUser ? (planOrder[planKey] > planOrder[getCurrentPlanKey()] ? "upgraded" : "downgraded") : "activated"} successfully!\n\nYour ${plan.name} plan is now active.`
+
+        alert(successMessage)
+        setUpgradeDowngradeAction(null)
+        setShowPlanChangeConfirm(false)
+        setTimeout(() => loadUserSubscription(user.uid), 2000)
+      } else {
+        throw new Error(mockPaymentResult.error || "Payment failed")
       }
-      await saveSubscriptionToFirebase(newRecord)
-      await updateCurrentPlan(plan.name, billingCycle, { userType, scoreState })
-      setCurrentSubscription(newRecord)
-      setIsExistingUser(true)
-      alert(`${plan.name} plan activated successfully!`)
-      setUpgradeDowngradeAction(null)
-      setShowPlanChangeConfirm(false)
-      setTimeout(() => loadUserSubscription(user.uid), 1000)
     } catch (error) {
-      console.error("Error activating plan:", error)
-      alert("Failed to activate plan. Please try again.")
+      console.error("Payment processing error:", error)
+      alert(`Failed to process payment: ${error.message}. Please try again.`)
     } finally {
       setPaymentProcessing(false)
     }
-    return
   }
-
-  // For paid plan - continue with payment processing
-  setPaymentProcessing(true)
-  try {
-    const mockPaymentResult = await processMockPayment({
-      amount: planPrice,
-      currency: "ZAR",
-      userId: user.uid,
-      planName: plan.name,
-      billingCycle
-    })
-
-    if (mockPaymentResult.success) {
-      const isTrialEligible = isNewUser()
-      const trialStartDate = new Date()
-      const trialEndDate = new Date()
-      trialEndDate.setMonth(trialEndDate.getMonth() + 3)
-
-      const newRecord = {
-        id: uuidv4(),
-        email: email || userEmail,
-        plan: plan.name,
-        cycle: billingCycle,
-        amount: 0,
-        originalAmount: planPrice,
-        fullName: fullName || userFullName,
-        companyName,
-        createdAt: new Date().toISOString(),
-        status: "Success",
-        autoRenew: true,
-        transactionRef: mockPaymentResult.transactionId,
-        userId: user.uid,
-        userType,
-        subscriptionType: "recurring",
-        isTrialPeriod: isTrialEligible,
-        trialStartDate: isTrialEligible ? trialStartDate.toISOString() : null,
-        trialEndDate: isTrialEligible ? trialEndDate.toISOString() : null,
-        action: isExistingUser ? (planOrder[planKey] > planOrder[getCurrentPlanKey()] ? "upgrade" : "downgrade") : "new_subscription",
-        paymentCompleted: true,
-        paymentDate: new Date().toISOString(),
-        scoreState
-      }
-
-      await saveSubscriptionToFirebase(newRecord)
-      await updateCurrentPlan(plan.name, billingCycle, {
-        amount: newRecord.amount,
-        originalAmount: newRecord.originalAmount,
-        isTrialPeriod: newRecord.isTrialPeriod,
-        trialStartDate: newRecord.trialStartDate,
-        trialEndDate: newRecord.trialEndDate,
-        transactionRef: newRecord.transactionRef,
-        userType,
-        scoreState
-      })
-
-      setCurrentSubscription(newRecord)
-      setIsExistingUser(true)
-      
-      const successMessage = isTrialEligible
-        ? `🎉 Welcome to your ${plan.name} plan!\n\n✨ You're getting 3 MONTHS FREE!\n• Trial period: ${trialStartDate.toLocaleDateString()} - ${trialEndDate.toLocaleDateString()}\n• Regular billing starts: ${trialEndDate.toLocaleDateString()}\n• Monthly rate after trial: R${planPrice}\n\nEnjoy all premium features at no cost for the first 3 months!`
-        : `🎉 Subscription ${isExistingUser ? (planOrder[planKey] > planOrder[getCurrentPlanKey()] ? "upgraded" : "downgraded") : "activated"} successfully!\n\nYour ${plan.name} plan is now active.`
-
-      alert(successMessage)
-      setUpgradeDowngradeAction(null)
-      setShowPlanChangeConfirm(false)
-      setTimeout(() => loadUserSubscription(user.uid), 2000)
-    } else {
-      throw new Error(mockPaymentResult.error || "Payment failed")
-    }
-  } catch (error) {
-    console.error("Payment processing error:", error)
-    alert(`Failed to process payment: ${error.message}. Please try again.`)
-  } finally {
-    setPaymentProcessing(false)
-  }
-}
 
   const confirmPlanChange = async () => {
     setShowPlanChangeConfirm(false)
@@ -876,6 +1075,17 @@ const ReusableSubscription = ({
     loadUserData()
   }, [user])
 
+  // Check for voucher expiry periodically (every minute)
+  useEffect(() => {
+    if (!isSme || !currentSubscription) return
+    
+    const interval = setInterval(() => {
+      checkAndHandleExpiredVoucher()
+    }, 60000) // Check every minute
+    
+    return () => clearInterval(interval)
+  }, [currentSubscription, isSme])
+
   // ── Loading state ─────────────────────────────────────────────────────
   if (isLoading) {
     return (
@@ -889,6 +1099,10 @@ const ReusableSubscription = ({
       </div>
     )
   }
+
+  // Check if current subscription has expired voucher (for display)
+  const isVoucherExpired = isSme && currentSubscription?.source === "voucher" && 
+    currentSubscription?.voucherExpiresAt && new Date(currentSubscription.voucherExpiresAt) < new Date()
 
   // ═══════════════════════════════════════════════════════════════════════════
   // RENDER
@@ -909,6 +1123,20 @@ const ReusableSubscription = ({
           </small>
         </div>
 
+        {/* EXPIRED VOUCHER BANNER - Show if voucher expired and user is on basic */}
+        {isSme && isVoucherExpired && (
+          <div style={styles.expiredVoucherBanner}>
+            <AlertCircle size={22} style={{ flexShrink: 0 }} />
+            <div>
+              <strong>⚠️ Your voucher has expired!</strong>
+              <div style={{ fontWeight: 400, fontSize: "0.85rem", marginTop: "0.25rem" }}>
+                You have been reverted to the {plans[freePlanKey]?.name || "Basic"} plan. 
+                Please contact your catalyst for a new voucher or upgrade to regain premium features.
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* SME Score State Banner */}
         {isSme && showStaleWarning() && (
           <div style={styles.staleWarningBanner}>
@@ -922,45 +1150,50 @@ const ReusableSubscription = ({
           </div>
         )}
 
-        {/* Voucher Section */}
-        <div style={styles.voucherToggle} onClick={() => setShowVoucherInput(!showVoucherInput)}>
-          <div style={styles.voucherToggleLeft}>
-            <div style={styles.voucherIcon}><Ticket size={20} /></div>
-            <span style={styles.voucherToggleText}>Have a voucher code? Click here to redeem</span>
-          </div>
-          <span style={styles.voucherToggleArrow}>{showVoucherInput ? "▼" : "▶"}</span>
-        </div>
+        {/* Voucher Section - ONLY SHOW FOR SME USERS */}
+        {isSme && (
+          <>
+            <div style={styles.voucherToggle} onClick={() => setShowVoucherInput(!showVoucherInput)}>
+              <div style={styles.voucherToggleLeft}>
+                <div style={styles.voucherIcon}><Ticket size={20} /></div>
+                <span style={styles.voucherToggleText}>Have a voucher code? Click here to redeem</span>
+              </div>
+              <span style={styles.voucherToggleArrow}>{showVoucherInput ? "▼" : "▶"}</span>
+            </div>
 
-        {showVoucherInput && (
-          <div style={styles.voucherContent}>
-            <h3 style={styles.voucherTitle}><Award size={20} color={colors.accentGold} />Redeem Your Voucher Code</h3>
-            {!appliedVoucher ? (
-              <>
-                <div style={styles.voucherInputContainer}>
-                  <input type="text" style={styles.voucherInput} placeholder="Enter voucher code (e.g., ST061ABCDE)" value={voucherCode} onChange={(e) => setVoucherCode(e.target.value.toUpperCase())} disabled={validatingVoucher} />
-                  <button style={{ ...styles.voucherButton, ...(validatingVoucher || !voucherCode.trim() ? styles.voucherButtonDisabled : {}) }} onClick={validateVoucher} disabled={validatingVoucher || !voucherCode.trim()}>{validatingVoucher ? "Validating..." : "Apply"}</button>
-                </div>
-                {voucherMessage && (
-                  <div style={{ ...styles.voucherMessage, ...(voucherMessageType === "success" ? styles.voucherMessageSuccess : {}), ...(voucherMessageType === "error" ? styles.voucherMessageError : {}) }}>
-                    {voucherMessageType === "success" ? <CheckCircle size={16} style={{ marginRight: "0.5rem" }} /> : null}
-                    {voucherMessageType === "error" ? <AlertCircle size={16} style={{ marginRight: "0.5rem" }} /> : null}
-                    {voucherMessage}
+            {showVoucherInput && (
+              <div style={styles.voucherContent}>
+                <h3 style={styles.voucherTitle}><Award size={20} color={colors.accentGold} />Redeem Your Voucher Code</h3>
+                {!appliedVoucher ? (
+                  <>
+                    <div style={styles.voucherInputContainer}>
+                      <input type="text" style={styles.voucherInput} placeholder="Enter voucher code (e.g., ST061ABCDE)" value={voucherCode} onChange={(e) => setVoucherCode(e.target.value.toUpperCase())} disabled={validatingVoucher} />
+                      <button style={{ ...styles.voucherButton, ...(validatingVoucher || !voucherCode.trim() ? styles.voucherButtonDisabled : {}) }} onClick={validateVoucher} disabled={validatingVoucher || !voucherCode.trim()}>{validatingVoucher ? "Validating..." : "Apply"}</button>
+                    </div>
+                    {voucherMessage && (
+                      <div style={{ ...styles.voucherMessage, ...(voucherMessageType === "success" ? styles.voucherMessageSuccess : {}), ...(voucherMessageType === "error" ? styles.voucherMessageError : {}) }}>
+                        {voucherMessageType === "success" ? <CheckCircle size={16} style={{ marginRight: "0.5rem" }} /> : null}
+                        {voucherMessageType === "error" ? <AlertCircle size={16} style={{ marginRight: "0.5rem" }} /> : null}
+                        {voucherMessage}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div style={styles.voucherAppliedCard}>
+                    <div style={styles.voucherAppliedTitle}><CheckCircle size={20} />Valid Voucher Applied<span style={styles.voucherPlanBadge}>{appliedVoucher.planName}</span></div>
+                    <div style={{ marginBottom: "1.5rem" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.5rem" }}><span style={{ color: colors.mediumBrown }}>Voucher Code:</span><span style={{ fontFamily: "'Courier New', monospace", fontWeight: "600", color: colors.darkBrown }}>{appliedVoucher.code}</span></div>
+                      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.5rem" }}><span style={{ color: colors.mediumBrown }}>Remaining Seats:</span><span style={{ fontWeight: "600", color: colors.darkBrown }}>{appliedVoucher.remainingSeats}</span></div>
+                      <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: colors.mediumBrown }}>Expires:</span><span style={{ fontWeight: "600", color: colors.errorRed }}>{new Date(appliedVoucher.expiresAt).toLocaleString()}</span></div>
+                    </div>
+                    <button style={styles.voucherRedeemButton} onClick={redeemVoucher} disabled={validatingVoucher}>{validatingVoucher ? "Redeeming..." : "Redeem Voucher Now"}</button>
+                    <button style={{ ...styles.voucherButton, background: "transparent", color: colors.mediumBrown, border: `2px solid ${colors.lightTan}`, marginTop: "0.5rem" }} onClick={clearVoucher}>Cancel</button>
                   </div>
                 )}
-              </>
-            ) : (
-              <div style={styles.voucherAppliedCard}>
-                <div style={styles.voucherAppliedTitle}><CheckCircle size={20} />Valid Voucher Applied<span style={styles.voucherPlanBadge}>{appliedVoucher.planName}</span></div>
-                <div style={{ marginBottom: "1.5rem" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.5rem" }}><span style={{ color: colors.mediumBrown }}>Voucher Code:</span><span style={{ fontFamily: "'Courier New', monospace", fontWeight: "600", color: colors.darkBrown }}>{appliedVoucher.code}</span></div>
-                  <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: colors.mediumBrown }}>Remaining Seats:</span><span style={{ fontWeight: "600", color: colors.darkBrown }}>{appliedVoucher.remainingSeats}</span></div>
-                </div>
-                <button style={styles.voucherRedeemButton} onClick={redeemVoucher} disabled={validatingVoucher}>{validatingVoucher ? "Redeeming..." : "Redeem Voucher Now"}</button>
-                <button style={{ ...styles.voucherButton, background: "transparent", color: colors.mediumBrown, border: `2px solid ${colors.lightTan}`, marginTop: "0.5rem" }} onClick={clearVoucher}>Cancel</button>
+                <div style={styles.voucherInfoText}><span style={styles.voucherInfoHighlight}>📍 How to redeem:</span> Enter your voucher code above. Each code provides premium access for one user. After redemption, your account will be upgraded to the corresponding plan immediately. <strong>Note: Vouchers expire after their set date!</strong></div>
               </div>
             )}
-            <div style={styles.voucherInfoText}><span style={styles.voucherInfoHighlight}>📍 How to redeem:</span> Enter your voucher code above. Each code provides premium access for one user. After redemption, your account will be upgraded to the corresponding plan immediately.</div>
-          </div>
+          </>
         )}
 
         {/* Page title & current sub info */}
@@ -981,6 +1214,15 @@ const ReusableSubscription = ({
               <div style={baseStyles.subscriptionDetail}><span>Current Amount:</span><span style={{ fontWeight: 600, color: currentSubscription.isTrialPeriod ? colors.trialBrown : colors.darkText }}>{currentSubscription.amount === 0 && currentSubscription.isTrialPeriod ? "FREE (Trial)" : currentSubscription.amount === 0 ? currentSubscription.source === "voucher" ? "FREE (Voucher)" : "Free" : `R${getCurrentPlanAmount().toLocaleString()}`}</span></div>
               {currentSubscription.originalAmount && currentSubscription.originalAmount > 0 && <div style={baseStyles.subscriptionDetail}><span>Regular Price:</span><span style={{ fontWeight: 600 }}>R{currentSubscription.originalAmount}/{currentSubscription.cycle?.slice(0, -2) || "month"}</span></div>}
               {currentSubscription.isTrialPeriod && currentSubscription.trialEndDate && <div style={baseStyles.subscriptionDetail}><span>Trial Ends:</span><span style={{ fontWeight: 600, color: colors.trialBrown }}>{new Date(currentSubscription.trialEndDate).toLocaleDateString()}</span></div>}
+              {currentSubscription.source === "voucher" && currentSubscription.voucherExpiresAt && (
+                <div style={baseStyles.subscriptionDetail}>
+                  <span>Voucher Expires:</span>
+                  <span style={{ fontWeight: 600, color: new Date(currentSubscription.voucherExpiresAt) < new Date() ? colors.errorRed : colors.featureCheck }}>
+                    {new Date(currentSubscription.voucherExpiresAt).toLocaleString()}
+                    {new Date(currentSubscription.voucherExpiresAt) < new Date() && " (EXPIRED)"}
+                  </span>
+                </div>
+              )}
               <div style={baseStyles.subscriptionDetail}><span>Status:</span><span style={{ fontWeight: 600, color: currentSubscription.status === "Success" || currentSubscription.status === "active" ? colors.featureCheck : colors.featureCross }}>{currentSubscription.status === "Success" ? "Active" : currentSubscription.status}</span></div>
               {currentSubscription.autoRenew && <div style={baseStyles.subscriptionDetail}><span>Auto Renewal:</span><span style={{ fontWeight: 600, color: colors.featureCheck }}>Enabled</span></div>}
             </div>
@@ -1138,7 +1380,7 @@ const ReusableSubscription = ({
         )}
 
         {/* Downgrade Section */}
-        {isExistingUser && currentSubscription && getCurrentPlanKey() !== freePlanKey && (
+        {isExistingUser && currentSubscription && getCurrentPlanKey() !== freePlanKey && !isVoucherExpired && (
           <div style={baseStyles.downgradeSection}>
             <h3 style={{ color: colors.darkBrown, marginBottom: "1rem", fontSize: "1.25rem" }}>Need to change your plan?</h3>
             <p style={{ color: colors.mediumBrown, marginBottom: "1.5rem" }}>You can downgrade to a lower-tier plan anytime.</p>
@@ -1147,7 +1389,7 @@ const ReusableSubscription = ({
         )}
 
         {/* Subscription Management */}
-        {isExistingUser && currentSubscription && (
+        {isExistingUser && currentSubscription && !isVoucherExpired && (
           <div style={{ background: `linear-gradient(135deg, ${colors.cream} 0%, ${colors.lightTan} 100%)`, borderRadius: "16px", padding: "2rem", marginTop: "3rem", border: `1px solid ${colors.lightTan}` }}>
             <h3 style={{ color: colors.darkBrown, marginBottom: "1.5rem", fontSize: "1.5rem", fontWeight: 700, textAlign: "center" }}>Subscription Management</h3>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "1rem", marginTop: "1.5rem" }}>
