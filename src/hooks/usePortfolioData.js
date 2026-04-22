@@ -37,6 +37,7 @@ const normalizeStage = (stage) => {
   if (["due diligence"].includes(s)) return "approved";
   // if (["support approved"].includes(s)) return "supported";
   if (["active support", "active"].includes(s)) return "active";
+  if (["exit", "exited", "completed", "graduated"].includes(s)) return "exit";
   if (["decision", "funding approved"].includes(s)) return "funding";
   if (["term sheet"].includes(s)) return "termsheet";
   if (["deal closed"].includes(s)) return "closed";
@@ -49,7 +50,7 @@ const normalizeStage = (stage) => {
 // Only SMEs with these pipeline stages are included in portfolio charts
 // (PortfolioHealth, Performance, Outcomes).
 // CohortSelection continues to use the full enriched array.
-const PORTFOLIO_STAGES = new Set(["active"]);
+const PORTFOLIO_STAGES = new Set(["active", "exit", "closed"]);
 
 const headcountBucket = (n) => {
   const v = parseInt(n) || 0;
@@ -150,6 +151,7 @@ function computeMetrics(enriched) {
     "Support Approved",
     "Decision",
     "Active",
+    "Exit",
     "Term Sheet",
     "Deal Closed",
     "Decline",
@@ -161,6 +163,7 @@ function computeMetrics(enriched) {
     supported: "Support Approved",
     funding: "Decision",
     active: "Active",
+    exit: "Exit",
     termsheet: "Term Sheet",
     closed: "Deal Closed",
     rejected: "Decline",
@@ -317,6 +320,10 @@ function computeMetrics(enriched) {
   const active = enriched.filter(
     (a) => normalizeStage(a.pipelineStage) === "active",
   );
+  const exit = enriched.filter(
+    (a) => normalizeStage(a.pipelineStage) === "exit",
+  );
+
   const avgMonths = avg(
     active
       .filter((a) => a.applicationDate)
@@ -413,6 +420,7 @@ function computeMetrics(enriched) {
     exit: {
       graduates: closed.length,
       active: active.length,
+      exit: exit.length,
       avgMonths,
       graduationRate: n ? Math.round((closed.length / n) * 100) : 0,
     },

@@ -37,6 +37,7 @@ const STAGES = [
   { id: "funding",     name: "Decision",     description: "Awaiting final funding decision" },
   { id: "termsheet",   name: "Term Sheet",   description: "Term sheet issued" },
   { id: "active",      name: "Active",       description: "SMEs actively receiving support" },
+  { id: "exit",        name: "Exited",       description: "SMEs that have exited the programme" },
   { id: "rejected",    name: "Decline",      description: "Applications declined" },
 ];
 
@@ -63,6 +64,8 @@ export function SupportDealFlowPipeline({ onStageClick, smeOverrides = [] }) {
       termsheet:   (s) => ["term sheet","support approved"].includes(s),
       // new: "active"     | old: "active support", "support approved"
       active:      (s) => ["active", "active support", ].includes(s),
+      // new: "exit"       | old: "exited", "completed", "graduated"
+      exit:        (s) => ["exit", "exited", "completed", "graduated"].includes(s),
       // new: "decline"    | old: "support declined", "rejected", "withdrawn", "declined"
       rejected:    (s) => ["decline", "support declined", "rejected", "withdrawn", "declined"].includes(s),
     }

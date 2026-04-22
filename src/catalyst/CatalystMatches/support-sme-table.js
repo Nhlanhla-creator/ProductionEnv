@@ -36,6 +36,7 @@ const STATUS_TYPES = {
   Decision:           { bg: "bg-yellow-100", text: "text-yellow-700"  },
   "Term Sheet":       { bg: "bg-cyan-100", text: "text-cyan-700"    },
   Active:             { bg: "bg-green-100", text: "text-[#2d5016]"   },
+  Exit:               { bg: "bg-gray-100", text: "text-gray-700"    },
   Decline:            { bg: "bg-red-100", text: "text-red-700"     },
   // legacy labels
   "Support Approved": { bg: "bg-cyan-100", text: "text-cyan-700"    },
@@ -54,6 +55,7 @@ const PIPELINE_STAGES = {
   DECISION:           { label: "Decision",          next: "Term Sheet"       },
   "TERM SHEET":       { label: "Term Sheet",        next: "Active"           },
   ACTIVE:             { label: "Active",            next: "N/A"              },
+  EXIT:               { label: "Exit",              next: "N/A"              },
   DECLINE:            { label: "Decline",           next: "N/A"              },
   // legacy
   "SUPPORT APPROVED": { label: "Support Approved",  next: "Active"           },
@@ -186,6 +188,7 @@ const applicationStages = [
     { id: "decision", name: "Decision", color: "#f59e0b" },
     { id: "term_sheet", name: "Term Sheet", color: "#06b6d4" },
     { id: "active", name: "Active", color: "#10b981" },
+    { id: "exit", name: "Exit", color: "#6b7280" },
     { id: "decline", name: "Decline", color: "#ef4444" },
   ]
 
