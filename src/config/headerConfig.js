@@ -9,20 +9,24 @@ export const roleRoutes = {
   Catalyst: "/support-profile",
   Catalysts: "/support-profile",
   Accelerators: "/support-profile",
-  "Program Sponsor": "/sponsor-profile",
-  ProgramSponsor: "/sponsor-profile",
+  "Program Sponsor": "/program-sponsor-profile",
+  ProgramSponsor: "/program-sponsor-profile",
   Intern: "/intern-profile",
   Interns: "/intern-profile",
+  Associator: "/associator-profile",
+  ASSOCIATOR: "/associator-profile",
+  associator: "/associator-profile",
 }
 
 // Available role options for each profile type
 export const profileRoleOptions = {
-  investor: ["Investor", "SMSEs", "Advisors", "Catalysts", "Intern"],
-  intern: ["Investor", "SMSEs", "Advisors", "Catalysts", "Intern"],
-  advisor: ["Investor", "SMSEs", "Advisors", "Catalysts", "Intern"],
-  catalyst: ["Investor", "SMSEs", "Advisors", "Catalysts", "Intern"],
-  sme: ["Investor", "SMSEs", "Advisors", "Catalysts", "Intern"],
-  programSponsor: ["Investor", "SMSEs", "Advisors", "Catalysts", "Intern", "ProgramSponsor"]
+  investor: ["Investor", "SMSEs", "Advisors", "Catalysts", "Intern", "Associator"],
+  intern: ["Investor", "SMSEs", "Advisors", "Catalysts", "Intern", "Associator"],
+  advisor: ["Investor", "SMSEs", "Advisors", "Catalysts", "Intern", "Associator"],
+  catalyst: ["Investor", "SMSEs", "Advisors", "Catalysts", "Intern", "Associator"],
+  sme: ["Investor", "SMSEs", "Advisors", "Catalysts", "Intern", "Associator"],
+  programSponsor: ["Investor", "SMSEs", "Advisors", "Catalysts", "Intern", "ProgramSponsor", "Associator"],
+  associator: ["Investor", "SMSEs", "Advisors", "Catalysts", "Intern", "ProgramSponsor", "Associator"],
 }
 
 // Profile-specific configurations
@@ -66,7 +70,14 @@ export const headerProfiles = {
     collection: "programSponsorProfiles",
     nameField: "formData.contactDetails.primaryContactName",
     logoField: "formData.entityOverview.companyLogo",
-    portalName: "Program Sponsor", // Shows in profile dropdown
+    portalName: "Program Sponsor",
     fallbackName: "Program Sponsor",
-  }
+  },
+  associator: {
+    collection: "associatorProfiles",
+    nameField: "formData.contactDetails.primaryContactName",
+    logoField: "formData.entityOverview.companyLogo",
+    portalName: "Associator Portal",
+    fallbackName: "Associator",
+  },
 }
