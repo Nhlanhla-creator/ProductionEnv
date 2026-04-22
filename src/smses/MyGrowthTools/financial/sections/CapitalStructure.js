@@ -33,6 +33,11 @@ import {
 // Chart.js imports for Cap Table pie chart
 import { Pie } from "react-chartjs-2";
 import ChartDataLabels from "chartjs-plugin-datalabels";
+import { useSolvencyScore } from "../../../hooks/useSolvencyScore";
+import { calculateSolvencyScore, normalizeSolvencyScore } from "../data_utils/solvencyScoreUtils";
+ import { useLiquidityData } from "../../../hooks/useFinancialData";
+
+
 
 // ==================== HELPERS ====================
 
@@ -75,16 +80,16 @@ const DividendHistory = ({ currentUser, isInvestorView }) => {
       const docSnap = await getDoc(docRef)
       if (docSnap.exists()) {
         const data = docSnap.data()
-        // Handle legacy data - convert amount to amountPerShare if needed
         const dividendsData = data.dividends || []
         const updatedDividends = dividendsData.map(dividend => ({
           ...dividend,
           amountPerShare: dividend.amountPerShare !== undefined ? dividend.amountPerShare : (dividend.amount || 0),
-          totalIssued: dividend.totalIssued !== undefined ? dividend.totalIssued : 0
+          totalShares: dividend.totalShares !== undefined ? dividend.totalShares : 0,
+          totalIssued: dividend.totalIssued !== undefined ? dividend.totalIssued : (dividend.amountPerShare || 0) * (dividend.totalShares || 0),
+          notes: dividend.notes || ""
         }))
         setDividends(updatedDividends)
       } else {
-        // Initialize with empty data if no document exists
         await setDoc(docRef, {
           dividends: [],
           lastUpdated: new Date().toISOString(),
@@ -109,8 +114,19 @@ const DividendHistory = ({ currentUser, isInvestorView }) => {
       newDividends[index][field] = Number.parseInt(value) || 0
     } else if (field === "amountPerShare") {
       newDividends[index][field] = Number.parseFloat(value) || 0
-    } else if (field === "totalIssued") {
+      // Auto-calculate totalIssued when amountPerShare changes
+      const totalShares = newDividends[index].totalShares || 0
+      newDividends[index].totalIssued = (Number.parseFloat(value) || 0) * totalShares
+    } else if (field === "totalShares") {
       newDividends[index][field] = Number.parseFloat(value) || 0
+      // Auto-calculate totalIssued when totalShares changes
+      const amountPerShare = newDividends[index].amountPerShare || 0
+      newDividends[index].totalIssued = amountPerShare * (Number.parseFloat(value) || 0)
+    } else if (field === "totalIssued") {
+      // Allow manual override of totalIssued if needed
+      newDividends[index][field] = Number.parseFloat(value) || 0
+    } else if (field === "notes") {
+      newDividends[index][field] = value
     } else {
       newDividends[index][field] = value
     }
@@ -121,8 +137,10 @@ const DividendHistory = ({ currentUser, isInvestorView }) => {
     setDividends([...dividends, { 
       year: new Date().getFullYear(), 
       amountPerShare: 0, 
+      totalShares: 0,
       totalIssued: 0,
-      paymentDate: "" 
+      paymentDate: "",
+      notes: ""
     }])
   }
 
@@ -134,12 +152,14 @@ const DividendHistory = ({ currentUser, isInvestorView }) => {
   const handleDownload = (type) => {
     if (type === "csv") {
       const csvContent = [
-        ["Year", "Amount per Share", "Total Issued", "Payment Date"],
+        ["Year", "Amount per Share", "Total Shares", "Total Issued", "Payment Date", "Notes"],
         ...dividends.map((div) => [
           div.year, 
           (div.amountPerShare || 0).toFixed(2), 
+          (div.totalShares || 0).toFixed(0),
           (div.totalIssued || 0).toFixed(2), 
-          div.paymentDate
+          div.paymentDate,
+          `"${(div.notes || "").replace(/"/g, '""')}"`
         ]),
       ]
         .map((row) => row.join(","))
@@ -292,7 +312,7 @@ const DividendHistory = ({ currentUser, isInvestorView }) => {
               key={index}
               style={{
                 display: "grid",
-                gridTemplateColumns: "1fr 1fr 1fr 2fr auto",
+                gridTemplateColumns: "1fr 1fr 1fr 1fr 2fr 2fr auto",
                 gap: "10px",
                 alignItems: "center",
                 marginBottom: "10px",
@@ -328,6 +348,19 @@ const DividendHistory = ({ currentUser, isInvestorView }) => {
               />
               <input
                 type="number"
+                step="1"
+                value={dividend.totalShares || 0}
+                onChange={(e) => updateDividend(index, "totalShares", e.target.value)}
+                style={{
+                  padding: "6px",
+                  border: "1px solid #d4c4b0",
+                  borderRadius: "4px",
+                  fontSize: "0.8rem",
+                }}
+                placeholder="Total Shares"
+              />
+              <input
+                type="number"
                 step="0.01"
                 value={dividend.totalIssued || 0}
                 onChange={(e) => updateDividend(index, "totalIssued", e.target.value)}
@@ -336,8 +369,10 @@ const DividendHistory = ({ currentUser, isInvestorView }) => {
                   border: "1px solid #d4c4b0",
                   borderRadius: "4px",
                   fontSize: "0.8rem",
+                  backgroundColor: "#f0e6d9",
                 }}
-                placeholder="Total Issued"
+                placeholder="Total Issued (auto)"
+                readOnly
               />
               <input
                 type="date"
@@ -349,6 +384,18 @@ const DividendHistory = ({ currentUser, isInvestorView }) => {
                   borderRadius: "4px",
                   fontSize: "0.8rem",
                 }}
+              />
+              <input
+                type="text"
+                value={dividend.notes || ""}
+                onChange={(e) => updateDividend(index, "notes", e.target.value)}
+                style={{
+                  padding: "6px",
+                  border: "1px solid #d4c4b0",
+                  borderRadius: "4px",
+                  fontSize: "0.8rem",
+                }}
+                placeholder="Notes (optional)"
               />
               <button
                 onClick={() => removeDividend(index)}
@@ -417,6 +464,7 @@ const DividendHistory = ({ currentUser, isInvestorView }) => {
             backgroundColor: "#f0e6d9",
             padding: "15px",
             borderRadius: "6px",
+            overflowX: "auto",
           }}
         >
           <table
@@ -435,8 +483,10 @@ const DividendHistory = ({ currentUser, isInvestorView }) => {
               >
                 <th style={{ padding: "10px", textAlign: "left" }}>Year</th>
                 <th style={{ padding: "10px", textAlign: "right" }}>Amount per Share</th>
+                <th style={{ padding: "10px", textAlign: "right" }}>Total Shares</th>
                 <th style={{ padding: "10px", textAlign: "right" }}>Total Issued</th>
                 <th style={{ padding: "10px", textAlign: "left" }}>Payment Date</th>
+                <th style={{ padding: "10px", textAlign: "left" }}>Notes</th>
               </tr>
             </thead>
             <tbody>
@@ -451,8 +501,10 @@ const DividendHistory = ({ currentUser, isInvestorView }) => {
                   >
                     <td style={{ padding: "10px" }}>{div.year}</td>
                     <td style={{ padding: "10px", textAlign: "right" }}>R{(div.amountPerShare || 0).toFixed(2)}</td>
+                    <td style={{ padding: "10px", textAlign: "right" }}>{(div.totalShares || 0).toLocaleString()}</td>
                     <td style={{ padding: "10px", textAlign: "right" }}>R{(div.totalIssued || 0).toFixed(2)}</td>
                     <td style={{ padding: "10px" }}>{div.paymentDate}</td>
+                    <td style={{ padding: "10px", maxWidth: "200px", wordBreak: "break-word" }}>{div.notes || "-"}</td>
                   </tr>
                 ))}
             </tbody>
@@ -1409,6 +1461,27 @@ const CapitalStructure = ({ activeSection, user, isInvestorView }) => {
   const [trendLoading, setTrendLoading]           = useState(false);
   const [showCalculationModal, setShowCalculationModal] = useState(false);
   const [selectedCalculation, setSelectedCalculation]   = useState({ title: "", calculation: "" });
+const {
+  solvencyScore,
+  solvencyScoreBreakdown,
+  calculateAndSaveSolvencyScore,
+  loadLatestSolvencyScore,
+} = useSolvencyScore(user);
+
+// Inside component, fetch liquidity data
+const { firebaseChartData } = useLiquidityData(user);
+
+// Extract latest liquidity values
+const getLiquidityData = () => {
+  if (!firebaseChartData) return null;
+  
+  return {
+    cashflow: parseFloat(firebaseChartData.cashflow?.actual?.at(-1)) || 0,
+    burnRate: parseFloat(firebaseChartData.burnRate?.actual?.at(-1)) || 0,
+    monthsRunway: parseFloat(firebaseChartData.monthsRunway?.actual?.at(-1)) || 0,
+    currentRatio: parseFloat(firebaseChartData.currentRatio?.actual?.at(-1)) || 0,
+  };
+};
 
   // ── Notes ─────────────────────────────────────────────────────────────────
   const [kpiNotes, setKpiNotes]       = useState({});
@@ -1431,6 +1504,8 @@ const CapitalStructure = ({ activeSection, user, isInvestorView }) => {
     loadTrendData,
   } = useCapitalStructureData(user);
 
+   
+
   // ── Derived snapshot index — always the last month of the selected range ──
   const { year: snapshotYear, monthIndex: snapshotMonthIndex } = parseYM(toDate);
 
@@ -1445,69 +1520,129 @@ const CapitalStructure = ({ activeSection, user, isInvestorView }) => {
     }
   }, [user, toDate]);
 
+//   // ── SAVE SOLVENCY SCORE TO FIREBASE ───────────────────────
+// useEffect(() => {
+//   if (user && balanceSheetData && solvencyData && activeSubTab === "solvency") {
+//     const year = snapshotYear;
+//     const liquidityData = getLiquidityData();
+    
+//     // ✅ Pass liquidity data
+//    // In CapitalStructure.js - when calling calculateAndSaveSolvencyScore
+// calculateAndSaveSolvencyScore(
+//   balanceSheetData,
+//   {
+//     debtToEquity: debtToEquityVal,
+//     debtToAssets: debtToAssetsVal,
+//     equityRatio: equityRatioVal,
+//     interestCoverage: interestCoverageVal,
+//     nav: navVal,
+//   },
+//   liquidityData,
+//   snapshotYear
+// );
+//   }
+// }, [user, balanceSheetData, solvencyData, firebaseChartData, snapshotYear]);
   // ── Auto-calculate solvency / leverage / equity from balance sheet ─────────
-  useEffect(() => {
-    const mi = snapshotMonthIndex;
-    if (mi < 0 || mi >= 12) return;
 
-    const totalAssets_     = calcTotalAssets(mi);
-    const totalLiabilities_= calcTotalLiabilities(mi);
-    const totalEquity_     = calcTotalEquity(mi);
-    const ebit_            = totalAssets_      * 0.1;
-    const intExp_          = totalLiabilities_ * 0.05;
 
-    const ensure = (obj, key) => {
-      if (!Array.isArray(obj[key])) obj[key] = Array(12).fill("0");
-    };
+ useEffect(() => {
+  if (!user || !balanceSheetData || activeSubTab !== "solvency") return;
 
-    setSolvencyData((prev) => {
-      const s = { ...prev };
-      ["debtToEquity", "debtToAssets", "equityRatio", "interestCoverage", "nav"].forEach((k) => ensure(s, k));
-      s.debtToEquity[mi]      = (totalEquity_     !== 0 ? totalLiabilities_ / totalEquity_     : 0).toFixed(2);
-      s.debtToAssets[mi]      = (totalAssets_     !== 0 ? totalLiabilities_ / totalAssets_     : 0).toFixed(2);
-      s.equityRatio[mi]       = (totalAssets_     !== 0 ? (totalEquity_  / totalAssets_) * 100 : 0).toFixed(2);
-      s.interestCoverage[mi]  = (intExp_          !== 0 ? ebit_ / intExp_ : 0).toFixed(2);
-      s.nav[mi]               = ((totalAssets_ - totalLiabilities_) / 1_000_000).toFixed(2);
-      return s;
+  const mi = snapshotMonthIndex;
+  if (mi < 0 || mi >= 12) return;
+
+  const totalAssets_ = calcTotalAssets(mi);
+  const totalLiabilities_ = calcTotalLiabilities(mi);
+  const totalEquity_ = calcTotalEquity(mi);
+
+  if (totalAssets_ === 0 && totalLiabilities_ === 0 && totalEquity_ === 0) {
+    console.warn("⚠️ Skipping solvency save – balance sheet data is empty");
+    return;
+  }
+
+  // Calculate values (as numbers, not strings)
+  const debtToEquityVal = totalEquity_ !== 0 ? totalLiabilities_ / totalEquity_ : 0;
+  const debtToAssetsVal = totalAssets_ !== 0 ? totalLiabilities_ / totalAssets_ : 0;
+  const equityRatioVal = totalAssets_ !== 0 ? (totalEquity_ / totalAssets_) * 100 : 0;
+  const navVal = (totalAssets_ - totalLiabilities_) / 1_000_000;
+
+  const ebit_ = totalAssets_ * 0.1;
+  const intExp_ = totalLiabilities_ * 0.05;
+  const interestCoverageVal = intExp_ !== 0 ? ebit_ / intExp_ : 0;
+
+  // Update local state (arrays for UI)
+  setSolvencyData(prev => {
+    const s = { ...prev };
+    ["debtToEquity", "debtToAssets", "equityRatio", "interestCoverage", "nav"].forEach(k => {
+      if (!Array.isArray(s[k])) s[k] = Array(12).fill("0");
     });
+    s.debtToEquity[mi] = debtToEquityVal.toFixed(2);
+    s.debtToAssets[mi] = debtToAssetsVal.toFixed(2);
+    s.equityRatio[mi] = equityRatioVal.toFixed(2);
+    s.interestCoverage[mi] = interestCoverageVal.toFixed(2);
+    s.nav[mi] = navVal.toFixed(2);
+    return s;
+  });
 
-    setLeverageData((prev) => {
-      const l = { ...prev };
-      ["totalDebtRatio", "longTermDebtRatio", "equityMultiplier"].forEach((k) => ensure(l, k));
-      const ltDebt = calculateTotal(balanceSheetData.liabilities.nonCurrentLiabilities, mi);
-      l.totalDebtRatio[mi]    = (totalAssets_  !== 0 ? totalLiabilities_ / totalAssets_        : 0).toFixed(2);
-      l.longTermDebtRatio[mi] = (totalAssets_  !== 0 ? ltDebt             / totalAssets_        : 0).toFixed(2);
-      l.equityMultiplier[mi]  = (totalEquity_  !== 0 ? totalAssets_        / totalEquity_       : 0).toFixed(2);
-      return l;
-    });
+  // Get liquidity data
+  const liquidityData = {
+    cashflow: parseFloat(firebaseChartData?.cashflow?.actual?.at(-1)) || 0,
+    burnRate: parseFloat(firebaseChartData?.burnRate?.actual?.at(-1)) || 0,
+    monthsRunway: parseFloat(firebaseChartData?.monthsRunway?.actual?.at(-1)) || 0,
+    currentRatio: parseFloat(firebaseChartData?.currentRatio?.actual?.at(-1)) || 0,
+  };
 
-    setEquityData((prev) => {
-      const e = { ...prev };
-      ensure(e, "equityRatio");
-      e.equityRatio[mi] = (totalAssets_ !== 0 ? (totalEquity_ / totalAssets_) * 100 : 0).toFixed(2);
-      return e;
-    });
-  }, [balanceSheetData, toDate]);
+  // ✅ PASS AS SIMPLE OBJECT WITH NUMBERS, NOT ARRAYS
+  calculateAndSaveSolvencyScore(
+    balanceSheetData,
+    {
+      debtToEquity: debtToEquityVal,
+      debtToAssets: debtToAssetsVal,
+      equityRatio: equityRatioVal,
+      interestCoverage: interestCoverageVal,
+      nav: navVal,
+    },
+    liquidityData,
+    snapshotYear
+  );
+
+  console.log("✅ Solvency saved/updated:", {
+    nav: navVal,
+    equityRatio: equityRatioVal,
+    debtToEquity: debtToEquityVal,
+  });
+}, [user, balanceSheetData, firebaseChartData, snapshotMonthIndex, snapshotYear, activeSubTab]);
+
 
   // ── Balance sheet calculation helpers ─────────────────────────────────────
-  const calcTotalAssets = (mi) => {
-    const { bank, currentAssets, nonCurrentAssets, customCategories } = balanceSheetData.assets;
-    const sumObj = (obj) =>
-      Object.values(obj || {}).reduce((s, a) => s + (parseFloat(a?.[mi]) || 0), 0);
-    let custom = 0;
-    (customCategories || []).forEach((c) => {
-      if (c?.items)
-        Object.values(c.items).forEach((a) => { custom += parseFloat(a?.[mi]) || 0; });
-    });
-    return (
-      sumObj(bank) +
-      calculateTotal(currentAssets, mi) +
-      calcFixedAssets(mi) +
-      calcIntangibles(mi) +
-      calculateTotal(nonCurrentAssets, mi) +
-      custom
-    );
-  };
+const calcTotalAssets = (mi) => {
+  const assets = balanceSheetData.assets || {};
+  const bank = assets.bank || {};
+  const currentAssets = assets.currentAssets || {};
+  const nonCurrentAssets = assets.nonCurrentAssets || {};
+  const customCategories = assets.customCategories || [];
+
+  const sumObj = (obj) =>
+    Object.values(obj).reduce((s, a) => s + (parseFloat(a?.[mi]) || 0), 0);
+
+  let custom = 0;
+  customCategories.forEach((c) => {
+    if (c?.items) {
+      Object.values(c.items).forEach((arr) => {
+        custom += parseFloat(arr?.[mi]) || 0;
+      });
+    }
+  });
+
+  return (
+    sumObj(bank) +
+    calculateTotal(currentAssets, mi) +
+    calcFixedAssets(mi) +
+    calcIntangibles(mi) +
+    calculateTotal(nonCurrentAssets, mi) +
+    custom
+  );
+};
 
   const calcFixedAssets = (mi) => {
     const fa = balanceSheetData.assets?.fixedAssets;
@@ -2064,7 +2199,7 @@ const CapitalStructure = ({ activeSection, user, isInvestorView }) => {
           />
           <div className="grid grid-cols-2 gap-5">
             {renderKPICard("Net Asset Value", solvencyData.nav,       "nav",        false, "solvencyData.nav")}
-            {renderKPICard("Equity Ratio",    solvencyData.equityRatio, "equityRatio", true, "solvencyData.equityRatio")}
+            {renderKPICard("Equity Ratio",  solvencyData.equityRatio, "equityRatio", true, "solvencyData.equityRatio")}
           </div>
         </div>
       )}

@@ -4,8 +4,8 @@ import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from "r
 import "./App.css"
 import styles from "./AdminLayout.module.css"
 import HomeHeader from "./main_pages/SMEs/HomeHeader"
-import { useAuth } from "./context/useAuth" // Import the auth hook
-import ProtectedRoute from "./context/ProtectedRoute" // Import the ProtectedRoute component
+import { useAuth } from "./context/useAuth"
+import ProtectedRoute from "./context/ProtectedRoute"
 import EmailVerification from "./EmailVerification"
 
 // Admin Components
@@ -19,7 +19,6 @@ import AllAdvisors from "./admin/pages/AllAdvisors"
 import DocumentManagement from "./admin/pages/growth-tools-purchased"
 import AdminSettings from "./admin/pages/AdminSettings"
 import AcceptInvitation from "./smses/AcceptInvitation"
-
 import AllInterns from "./admin/pages/AllInterns"
 import AllSponsors from "./admin/pages/AllSponsors"
 import Subscriptions from "./admin/pages/Subscriptions"
@@ -32,20 +31,18 @@ import PaymentGateway from "./admin/pages/PaymentGatewaySettings"
 import EmailTemplates from "./admin/pages/EmailTemplates"
 import SystemConfig from "./admin/pages/SystemConfigurations"
 import BackupExport from "./admin/pages/BackupExportData"
-
-import Delivery from "./admin/pages/Delivery";
-import AdminGovernance from "./admin/pages/AdminGovernance";
-import Growth from "./admin/pages/Growth";
-import PartnersEcosystem from "./admin/pages/PartnersEcosystem";
-import ProductPlatform from "./admin/pages/ProductPlatform";
-import TechArchitecture from "./admin/pages/TechArchitecture";
-import QATesting from "./admin/pages/qatesting";
+import Delivery from "./admin/pages/Delivery"
+import AdminGovernance from "./admin/pages/AdminGovernance"
+import Growth from "./admin/pages/Growth"
+import PartnersEcosystem from "./admin/pages/PartnersEcosystem"
+import ProductPlatform from "./admin/pages/ProductPlatform"
+import TechArchitecture from "./admin/pages/TechArchitecture"
+import QATesting from "./admin/pages/qatesting"
 import OperationsInternal from "./admin/pages/OperationsInternal"
 import UsersMarketplace from "./admin/pages/UsersMarketplace"
 import PilotsCaseStudies from "./admin/pages/PilotsCaseStudies"
 import ReportingAnalytics from "./admin/pages/ReportingAnalytics"
 import Archive from "./admin/pages/Archive"
-
 import InvestorSettings from "./Investor/Settings/Setttings"
 import CatalystSettings from "./catalyst/CatalystSettings/supportSettings"
 
@@ -71,7 +68,6 @@ import Documents from "./Investor/Documents"
 import BetaSignupForm from "./BetaForm"
 
 // Intern Components
-// Intern Components - NEW
 import InternSidebar from "./Interns/sidebar/sidebar"
 import InternDashboard from "./Interns/InternDashboard/intern-dashboard"
 import InternHeader from "./Interns/Header/header"
@@ -82,7 +78,7 @@ import InternMatches from "./Interns/MyMatches/matches"
 import { InternDealflow } from "./Interns/MyMatches/intern-deal-flow-pipeline"
 import { InternTable } from "./Interns/MyMatches/intern-table"
 import Instructions from "./Interns/UniversalProfileIntern/Instructions"
-// Intern Universal Profile Components - NEW
+// Intern Universal Profile Components
 import InternUniversalProfile from "./Interns/UniversalProfileIntern/universalProfile"
 import InternPersonalOverview from "./Interns/UniversalProfileIntern/PersonalOverview​"
 import InternAcademicOverview from "./Interns/UniversalProfileIntern/AcademicOverview​"
@@ -91,17 +87,18 @@ import InternSkillsInterests from "./Interns/UniversalProfileIntern/Skills&Inter
 import InternProgramAffiliation from "./Interns/UniversalProfileIntern/ProgramAffiliation"
 import InternRequiredDocuments from "./Interns/UniversalProfileIntern/RequiredDocuments"
 import InternDeclarationConsent from "./Interns/UniversalProfileIntern/Declaration&Consent"
-// Intern Application Components - NEW
+// Intern Application Components
 import InternApplication from "./smses/InternApplication/internapplication"
 import InternJobOverview from "./smses/InternApplication/JobOverview"
 import InternInternshipRequest from "./smses/InternApplication/InternshipRequest"
 import InternMatchingAgreement from "./smses/InternApplication/MatchingAgreement"
-// Intern Matches Components - NEW
+// Intern Matches Components
 import InternMatchesPage from "./smses/MyInternMatch/match"
 import { InternDealflowPage } from "./smses/MyInternMatch/intern-deal-flow-pipeline"
 import { InternInsightsPage } from "./smses/MyInternMatch/intern-insights"
 import { InternTablePage } from "./smses/MyInternMatch/intern-table"
-// Program Sponsor Components - FIXED IMPORTS
+
+// Program Sponsor Components
 import ProgramSponsorSidebar from "./program_sponsor/sidebar/ProgramSponsorSidebar"
 import ProgramSponsorHeader from "./program_sponsor/header/ProgramSponsorHeader"
 import ProgramSponsorCalendar from "./program_sponsor/Calender/calendar"
@@ -109,17 +106,17 @@ import ProgramSponsorMessages from "./program_sponsor/messages/message"
 import ProgramSponsorSettings from "./program_sponsor/settings/settings"
 import ProgramSponsorMatchesPage from "./program_sponsor/Matches/program-sponsor-matches"
 import ProgramSponsorDocuments from "./program_sponsor/MyDocuments/program-sponsor-documents"
-// Import all three match components separately
 import { ProgramSponsorDealflow } from "./program_sponsor/Matches/program-sponsor-deal-flow-pipeline"
 import { ProgramSponsorInsights } from "./program_sponsor/ProgramInsights/programInsights"
 import { ProgramSponsorInternTable } from "./program_sponsor/Matches/program-sponsor-intern-table"
-// Program Sponsor Universal Profile Components - FIXED IMPORTS
+// Program Sponsor Universal Profile Components
 import ProgramSponsorUniversalProfile from "./program_sponsor/UniversalProfile/universalProfile"
 import ProgramSponsorInstructions from "./program_sponsor/UniversalProfile/Instructions"
 import ProgramSponsorContactDetails from "./program_sponsor/UniversalProfile/ContactDetails"
 import ProgramSponsorDeclarationConsent from "./program_sponsor/UniversalProfile/DeclarationConsent"
 import ProgramSponsorEntityOverview from "./program_sponsor/UniversalProfile/EntityOverview"
 import ProgramSponsorProgramDetails from "./program_sponsor/UniversalProfile/ProgramDetails"
+
 // Advisor Profile Components
 import AdvisorProfile from "./advisors/AdvisorProfile/advisor-profile"
 import ProfileTracker from "./advisors/AdvisorProfile/advisorTracker"
@@ -129,6 +126,31 @@ import SelectionCriteria from "./advisors/AdvisorProfile/SelectionCriteria"
 import ProfessionalCredentials from "./advisors/AdvisorProfile/ProfessionalCredentialss"
 import RequiredDocuments from "./advisors/AdvisorProfile/RequiredDocuments"
 import DeclarationConsent from "./advisors/AdvisorProfile/Consent"
+
+// ─── Associator Components ────────────────────────────────────────────────────
+import AssociateHeader from "./associator/AssociateHeader/header"
+import AssociateSidebar from "./associator/AssociateSidebar/sidebar"
+import AssociatorDashboard from "./associator/MyDashboard/dashboard"
+import AssociatorMatches from "./associator/MyMatches/matches"
+import AssociatorEcosystem from "./associator/MyMemberEcosystem/ecosystem"
+import AssociatorMessages from "./associator/MyMessages/messages"
+import AssociatorCalendar from "./associator/MyCalender/calender"
+import AssociatorDocuments from "./associator/MyDocuments/documents"
+import AssociatorBillings from "./associator/MyBillings/billings"
+import AssociatorPortfolio from "./associator/MyPortfolios/portfolio"
+import AssociatorInsights from "./associator/BigInsights/insights"
+// Associator Universal Profile Components
+import AssociatorUniversalProfile from "./associator/UniversalProfile/AssociatorUniversalProfile"
+import AssociatorInstructions from "./associator/UniversalProfile/Instructions"
+import AssociatorEntityOverview from "./associator/UniversalProfile/EntityOverview"
+import AssociatorContactDetails from "./associator/UniversalProfile/ContactDetails"
+import AssociatorDeclarationConsent from "./associator/UniversalProfile/DeclarationConsent"
+// Associator Ecosystem Pages
+import SMSEEcosystem from "./associator/MyMemberEcosystem/SMSEEcosystem"
+import InvestorEcosystem from "./associator/MyMemberEcosystem/InvestorEcosystem"
+import AdvisorEcosystem from "./associator/MyMemberEcosystem/AdvisorEcosystem"
+import CatalystEcosystem from "./associator/MyMemberEcosystem/CatalystEcosystem"
+// ─────────────────────────────────────────────────────────────────────────────
 
 // Public Pages
 import LandingPage from "./main_pages/LandingPage"
@@ -248,7 +270,6 @@ import CatalystInvestments from "./catalyst/MyInvestment/MyInvestments"
 // Application Components
 import FundingApplication from "./smses/FundingApplication/FundingApplication"
 import ProductApplication from "./smses/ProductApplication/ProductApplication"
-// Add this import near your other application imports
 import ProductApplicationManager from "./smses/ProductApplication/ProductApplicationManager"
 import AdvisoryApplication from "./smses/AdvisorApplication/AdvisorApplication"
 
@@ -346,7 +367,6 @@ const initialFormData = {
     requiredDocuments: {},
     declarationConsent: {},
   },
-  // Intern Profile Data
   internProfile: {
     personalOverview: {},
     academicOverview: {},
@@ -356,14 +376,12 @@ const initialFormData = {
     requiredDocuments: {},
     declarationConsent: {},
   },
-  // Program Sponsor Profile Data
   programSponsorProfile: {
     entityOverview: {},
     contactDetails: {},
     programDetails: {},
     declarationConsent: {},
   },
-  // Catalyst Profile Data
   catalystProfile: {
     instructions: {},
     entityOverview: {},
@@ -373,6 +391,12 @@ const initialFormData = {
     generalMatchingPreference: {},
     declarationConsent: {},
   },
+  associatorProfile: {
+    instructions: {},
+    entityOverview: {},
+    contactDetails: {},
+    declarationConsent: {},
+  },
 }
 
 function App() {
@@ -380,162 +404,103 @@ function App() {
   const [formData, setFormData] = useState(initialFormData)
   const [showSummary, setShowSummary] = useState(false)
   const companyName = "Acme Inc"
-  const { user, loading } = useAuth();
+  const { user, loading } = useAuth()
 
   if (loading) {
-    return (
-        <SkeletonLoader />
-    );
+    return <SkeletonLoader />
   }
 
   const updateFormData = (section, data) => {
-    setFormData((prev) => ({
-      ...prev,
-      [section]: {
-        ...prev[section],
-        ...data,
-      },
-    }))
+    setFormData((prev) => ({ ...prev, [section]: { ...prev[section], ...data } }))
   }
 
   const updateAdvisorData = (section, data) => {
-    setFormData((prev) => ({
-      ...prev,
-      advisorProfile: {
-        ...prev.advisorProfile,
-        [section]: data,
-      },
-    }))
+    setFormData((prev) => ({ ...prev, advisorProfile: { ...prev.advisorProfile, [section]: data } }))
   }
 
-  // Update Intern Data
   const updateInternData = (section, data) => {
-    setFormData((prev) => ({
-      ...prev,
-      internProfile: {
-        ...prev.internProfile,
-        [section]: data,
-      },
-    }))
+    setFormData((prev) => ({ ...prev, internProfile: { ...prev.internProfile, [section]: data } }))
   }
 
-  // Update Program Sponsor Data
   const updateProgramSponsorData = (section, data) => {
-    setFormData((prev) => ({
-      ...prev,
-      programSponsorProfile: {
-        ...prev.programSponsorProfile,
-        [section]: data,
-      },
-    }))
+    setFormData((prev) => ({ ...prev, programSponsorProfile: { ...prev.programSponsorProfile, [section]: data } }))
   }
 
-  // Update Catalyst Data
   const updateCatalystData = (section, data) => {
-    setFormData((prev) => ({
-      ...prev,
-      catalystProfile: {
-        ...prev.catalystProfile,
-        [section]: data,
-      },
-    }))
+    setFormData((prev) => ({ ...prev, catalystProfile: { ...prev.catalystProfile, [section]: data } }))
   }
 
-  const handleFormSubmit = () => {
-    setShowSummary(true)
+  const updateAssociatorData = (section, data) => {
+    setFormData((prev) => ({ ...prev, associatorProfile: { ...prev.associatorProfile, [section]: data } }))
   }
 
-  const withProtection = (Component, props = {}, layoutFn = renderSMERoute) => {
-    return (
-      <ProtectedRoute>
-        {layoutFn(Component, props)}
-      </ProtectedRoute>
-    );
-  };
+  const handleFormSubmit = () => setShowSummary(true)
 
-  const withAdminProtection = (Component, props = {}) => {
-    return (
-      <ProtectedRoute allowedRoles={['Admin', 'admin']}>
-        {renderAdminRoute(Component, props)}
-      </ProtectedRoute>
-    );
-  };
+  const withProtection = (Component, props = {}, layoutFn = renderSMERoute) => (
+    <ProtectedRoute>{layoutFn(Component, props)}</ProtectedRoute>
+  )
 
-  // Admin Protected Layout
+  const withAdminProtection = (Component, props = {}) => (
+    <ProtectedRoute allowedRoles={["Admin", "admin"]}>
+      {renderAdminRoute(Component, props)}
+    </ProtectedRoute>
+  )
+
+  // ─── Admin Layout ─────────────────────────────────────────────────────────────
   const AdminLayout = ({ children }) => {
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(true);
-
-  useEffect(() => {
-    const updateSidebarState = () => {
+    const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(true)
+    useEffect(() => {
+      const updateSidebarState = () => {
+        try {
+          if (typeof document !== "undefined" && document.body) {
+            setIsSidebarCollapsed(document.body.classList.contains("admin-sidebar-collapsed"))
+          } else {
+            setIsSidebarCollapsed(localStorage.getItem("sidebarOpen") === "false")
+          }
+        } catch (e) {
+          setIsSidebarCollapsed(false)
+        }
+      }
+      updateSidebarState()
+      let observer = null
       try {
-        if (typeof document !== "undefined" && document.body) {
-          setIsSidebarCollapsed(document.body.classList.contains("admin-sidebar-collapsed"));
-        } else {
-          setIsSidebarCollapsed(localStorage.getItem("sidebarOpen") === "false");
+        if (document && document.body && window.MutationObserver) {
+          observer = new MutationObserver(() => updateSidebarState())
+          observer.observe(document.body, { attributes: true, attributeFilter: ["class"] })
         }
       } catch (e) {
-        setIsSidebarCollapsed(false);
+        console.error("MutationObserver not supported:", e)
       }
-    };
-
-    // Initial check
-    updateSidebarState();
-
-    // MutationObserver to watch body class changes
-    let observer = null;
-    try {
-      if (document && document.body && window.MutationObserver) {
-        observer = new MutationObserver(() => updateSidebarState());
-        observer.observe(document.body, { 
-          attributes: true, 
-          attributeFilter: ["class"] 
-        });
+      window.addEventListener("sidebarToggle", updateSidebarState)
+      window.addEventListener("storage", updateSidebarState)
+      return () => {
+        if (observer) observer.disconnect()
+        window.removeEventListener("sidebarToggle", updateSidebarState)
+        window.removeEventListener("storage", updateSidebarState)
       }
-    } catch (e) {
-      console.error("MutationObserver not supported:", e);
-    }
-
-    // Listen to custom events and storage changes
-    window.addEventListener("sidebarToggle", updateSidebarState);
-    window.addEventListener("storage", updateSidebarState);
-
-    return () => {
-      if (observer) observer.disconnect();
-      window.removeEventListener("sidebarToggle", updateSidebarState);
-      window.removeEventListener("storage", updateSidebarState);
-    };
-  }, []);
-
-  return (
-    <div className="app-layout">
-      <AdminSidebar />
-      <div
-        className={`${styles.mainContent} ${isSidebarCollapsed ? styles.sidebarCollapsed : styles.sidebarExpanded}`}
-      >
-        <AdminHeader isSidebarCollapsed={isSidebarCollapsed} />
-        <div>{children}</div>
+    }, [])
+    return (
+      <div className="app-layout">
+        <AdminSidebar />
+        <div className={`${styles.mainContent} ${isSidebarCollapsed ? styles.sidebarCollapsed : styles.sidebarExpanded}`}>
+          <AdminHeader isSidebarCollapsed={isSidebarCollapsed} />
+          <div>{children}</div>
+        </div>
       </div>
-    </div>
-  );
-};
+    )
+  }
 
-
-  // SME Protected Layout
+  // ─── SME Layout ───────────────────────────────────────────────────────────────
   const SMELayout = ({ children }) => {
     const location = useLocation()
-    const [collapsed, setCollapsed] = useState(true);
-
+    const [collapsed, setCollapsed] = useState(true)
     useEffect(() => {
-      const check = () => setCollapsed(document.body.classList.contains("sidebar-collapsed"));
-      check();
-      const obs = new MutationObserver(check);
-      obs.observe(document.body, {
-        attributes: true,
-        attributeFilter: ["class"],
-      });
-      return () => obs.disconnect();
-    }, []);
-
+      const check = () => setCollapsed(document.body.classList.contains("sidebar-collapsed"))
+      check()
+      const obs = new MutationObserver(check)
+      obs.observe(document.body, { attributes: true, attributeFilter: ["class"] })
+      return () => obs.disconnect()
+    }, [])
     return (
       <div className="app-layout">
         <SMESidebar companyName={companyName} />
@@ -548,22 +513,17 @@ function App() {
     )
   }
 
-  // Investor Protected Layout
+  // ─── Investor Layout ──────────────────────────────────────────────────────────
   const InvestorLayout = ({ children }) => {
     const location = useLocation()
-    const [collapsed, setCollapsed] = useState(true);
-
+    const [collapsed, setCollapsed] = useState(true)
     useEffect(() => {
-      const check = () => setCollapsed(document.body.classList.contains("sidebar-collapsed"));
-      check();
-      const obs = new MutationObserver(check);
-      obs.observe(document.body, {
-        attributes: true,
-        attributeFilter: ["class"],
-      });
-      return () => obs.disconnect();
-    }, []);
-
+      const check = () => setCollapsed(document.body.classList.contains("sidebar-collapsed"))
+      check()
+      const obs = new MutationObserver(check)
+      obs.observe(document.body, { attributes: true, attributeFilter: ["class"] })
+      return () => obs.disconnect()
+    }, [])
     return (
       <div className="app-layout">
         <InvestorSidebar companyName={companyName} />
@@ -575,38 +535,29 @@ function App() {
     )
   }
 
-  // Support Program Protected Layout
+  // ─── Support Program Layout ───────────────────────────────────────────────────
   const SupportProgramLayout = ({ children }) => {
     const location = useLocation()
-    const [collapsed, setCollapsed] = useState(true);
-
+    const [collapsed, setCollapsed] = useState(true)
     useEffect(() => {
-      const check = () => setCollapsed(document.body.classList.contains("sidebar-collapsed"));
-      check();
-      const obs = new MutationObserver(check);
-      obs.observe(document.body, {
-        attributes: true,
-        attributeFilter: ["class"],
-      });
-      return () => obs.disconnect();
-    }, []);
-
+      const check = () => setCollapsed(document.body.classList.contains("sidebar-collapsed"))
+      check()
+      const obs = new MutationObserver(check)
+      obs.observe(document.body, { attributes: true, attributeFilter: ["class"] })
+      return () => obs.disconnect()
+    }, [])
     return (
       <div className="app-layout">
         <SupportProgramSidebar companyName={companyName} />
         <div className={`${styles.mainContent} ${collapsed ? styles.sidebarCollapsed : styles.sidebarExpanded}`}>
-          <SupportProgramHeader
-            companyName={companyName}
-            profileImage={profileImage}
-            setProfileImage={setProfileImage}
-          />
+          <SupportProgramHeader companyName={companyName} profileImage={profileImage} setProfileImage={setProfileImage} />
           <div>{children}</div>
         </div>
       </div>
     )
   }
 
-  // Advisor Protected Layout
+  // ─── Advisor Layout ───────────────────────────────────────────────────────────
   const AdvisorLayout = ({ children }) => {
     const location = useLocation()
     return (
@@ -620,7 +571,7 @@ function App() {
     )
   }
 
-  // Intern Protected Layout
+  // ─── Intern Layout ────────────────────────────────────────────────────────────
   const InternLayout = ({ children }) => {
     const location = useLocation()
     return (
@@ -634,67 +585,52 @@ function App() {
     )
   }
 
-  // Program Sponsor Protected Layout
+  // ─── Program Sponsor Layout ───────────────────────────────────────────────────
   const ProgramSponsorLayout = ({ children }) => {
     const location = useLocation()
     return (
       <div className="app-layout">
         <ProgramSponsorSidebar companyName={companyName} />
         <div className="main-content">
-          <ProgramSponsorHeader
-            companyName={companyName}
-            profileImage={profileImage}
-            setProfileImage={setProfileImage}
-          />
+          <ProgramSponsorHeader companyName={companyName} profileImage={profileImage} setProfileImage={setProfileImage} />
           <div>{children}</div>
         </div>
       </div>
     )
   }
 
-  // Render functions
-  const renderAdminRoute = (Component, props = {}) => (
-    <AdminLayout>
-      <Component {...props} />
-    </AdminLayout>
-  )
+  // ─── Associator Layout ────────────────────────────────────────────────────────
+  const AssociatorLayout = ({ children }) => {
+    const [collapsed, setCollapsed] = useState(true)
+    useEffect(() => {
+      const check = () => setCollapsed(document.body.classList.contains("sidebar-collapsed"))
+      check()
+      const obs = new MutationObserver(check)
+      obs.observe(document.body, { attributes: true, attributeFilter: ["class"] })
+      return () => obs.disconnect()
+    }, [])
+    return (
+      <div className="app-layout">
+        <AssociateSidebar companyName={companyName} />
+        <div className={`${styles.mainContent} ${collapsed ? styles.sidebarCollapsed : styles.sidebarExpanded}`}>
+          <AssociateHeader companyName={companyName} profileImage={profileImage} setProfileImage={setProfileImage} />
+          <div>{children}</div>
+        </div>
+      </div>
+    )
+  }
 
-  const renderSMERoute = (Component, props = {}) => (
-    <SMELayout>
-      <Component {...props} />
-    </SMELayout>
-  )
+  // ─── Render helpers ───────────────────────────────────────────────────────────
+  const renderAdminRoute = (Component, props = {}) => (<AdminLayout><Component {...props} /></AdminLayout>)
+  const renderSMERoute = (Component, props = {}) => (<SMELayout><Component {...props} /></SMELayout>)
+  const renderInvestorRoute = (Component, props = {}) => (<InvestorLayout><Component {...props} /></InvestorLayout>)
+  const renderSupportProgramRoute = (Component, props = {}) => (<SupportProgramLayout><Component {...props} /></SupportProgramLayout>)
+  const renderAdvisorRoute = (Component, props = {}) => (<AdvisorLayout><Component {...props} /></AdvisorLayout>)
+  const renderInternRoute = (Component, props = {}) => (<InternLayout><Component {...props} /></InternLayout>)
+  const renderProgramSponsorRoute = (Component, props = {}) => (<ProgramSponsorLayout><Component {...props} /></ProgramSponsorLayout>)
+  const renderAssociatorRoute = (Component, props = {}) => (<AssociatorLayout><Component {...props} /></AssociatorLayout>)
 
-  const renderInvestorRoute = (Component, props = {}) => (
-    <InvestorLayout>
-      <Component {...props} />
-    </InvestorLayout>
-  )
-
-  const renderSupportProgramRoute = (Component, props = {}) => (
-    <SupportProgramLayout>
-      <Component {...props} />
-    </SupportProgramLayout>
-  )
-
-  const renderAdvisorRoute = (Component, props = {}) => (
-    <AdvisorLayout>
-      <Component {...props} />
-    </AdvisorLayout>
-  )
-
-  const renderInternRoute = (Component, props = {}) => (
-    <InternLayout>
-      <Component {...props} />
-    </InternLayout>
-  )
-
-  const renderProgramSponsorRoute = (Component, props = {}) => (
-    <ProgramSponsorLayout>
-      <Component {...props} />
-    </ProgramSponsorLayout>
-  )
-
+  // ─── Profile section renderers ────────────────────────────────────────────────
   const renderSMEProfileSection = (Component, section) => (
     <SMELayout>
       <h1 className="text-3xl font-bold text-brown-800 mb-8">My Universal Profile</h1>
@@ -706,9 +642,7 @@ function App() {
             updateData={(data) => updateFormData(section, data)}
             onSubmit={section === "declarationConsent" ? handleFormSubmit : undefined}
           />
-        ) : (
-          <p>Loading data...</p>
-        )}
+        ) : (<p>Loading data...</p>)}
       </div>
     </SMELayout>
   )
@@ -720,9 +654,7 @@ function App() {
       <div className="bg-white rounded-lg shadow-md p-6 mt-6">
         {formData[section] ? (
           <Component data={formData[section]} updateData={(data) => updateFormData(section, data)} />
-        ) : (
-          <p>Loading data...</p>
-        )}
+        ) : (<p>Loading data...</p>)}
       </div>
     </InvestorLayout>
   )
@@ -736,9 +668,7 @@ function App() {
             data={formData.catalystProfile[section]}
             updateData={(data) => updateCatalystData(section, data)}
           />
-        ) : (
-          <p>Loading data...</p>
-        )}
+        ) : (<p>Loading data...</p>)}
       </div>
     </SupportProgramLayout>
   )
@@ -762,9 +692,7 @@ function App() {
       <div className="bg-white rounded-lg shadow-md p-6 mt-6">
         {formData.advisorProfile[section] !== undefined ? (
           <Component data={formData.advisorProfile[section]} updateData={(data) => updateAdvisorData(section, data)} />
-        ) : (
-          <p>Loading data...</p>
-        )}
+        ) : (<p>Loading data...</p>)}
       </div>
     </AdvisorLayout>
   )
@@ -790,9 +718,7 @@ function App() {
       <div className="bg-white rounded-lg shadow-md p-6 mt-6">
         {formData.internProfile[section] !== undefined ? (
           <Component data={formData.internProfile[section]} updateData={(data) => updateInternData(section, data)} />
-        ) : (
-          <p>Loading data...</p>
-        )}
+        ) : (<p>Loading data...</p>)}
       </div>
     </InternLayout>
   )
@@ -818,11 +744,34 @@ function App() {
             data={formData.programSponsorProfile[section]}
             updateData={(data) => updateProgramSponsorData(section, data)}
           />
-        ) : (
-          <p>Loading data...</p>
-        )}
+        ) : (<p>Loading data...</p>)}
       </div>
     </ProgramSponsorLayout>
+  )
+
+  const renderAssociatorProfileSection = (Component, section) => (
+    <AssociatorLayout>
+      <h1 className="text-3xl font-bold text-brown-800 mb-8">Associator Profile</h1>
+      <ProfileTracker
+        sections={[
+          { id: "instructions", title: "Instructions" },
+          { id: "entity-overview", title: "Entity Overview" },
+          { id: "contact-details", title: "Contact Details" },
+          { id: "declaration-consent", title: "Declaration & Consent" },
+        ]}
+        currentSection={section}
+        completedSections={new Set()}
+        onSectionChange={() => {}}
+      />
+      <div className="bg-white rounded-lg shadow-md p-6 mt-6">
+        {formData.associatorProfile[section] !== undefined ? (
+          <Component
+            data={formData.associatorProfile[section]}
+            updateData={(data) => updateAssociatorData(section, data)}
+          />
+        ) : (<p>Loading data...</p>)}
+      </div>
+    </AssociatorLayout>
   )
 
   return (
@@ -904,7 +853,7 @@ function App() {
         <Route path="/admin/notion/operations-internal" element={withAdminProtection(OperationsInternal)} />
         <Route path="/admin/notion/users-marketplace" element={withAdminProtection(UsersMarketplace)} />
         <Route path="/admin/notion/pilots-case-studies" element={withAdminProtection(PilotsCaseStudies)} />
-        <Route path="/admin/notion/reporting-analytics" element={withAdminProtection(ReportingAnalytics)}/>
+        <Route path="/admin/notion/reporting-analytics" element={withAdminProtection(ReportingAnalytics)} />
         <Route path="/admin/notion/archive" element={withAdminProtection(Archive)} />
 
         {/* Admin Dashboard Routes */}
@@ -920,7 +869,7 @@ function App() {
         <Route path="/admin/sponsors" element={withAdminProtection(AllSponsors)} />
         <Route path="/admin/qr-codes" element={withAdminProtection(QRCodes)} />
         <Route path="/admin/subscriptions" element={withAdminProtection(Subscriptions)} />
-        
+
         {/* Admin Settings Subcategory Routes */}
         <Route path="/admin/settings/admin-users" element={withAdminProtection(AdminUsers)} />
         <Route path="/admin/settings/approval-workflows" element={withAdminProtection(ApprovalWorkflows)} />
@@ -942,12 +891,12 @@ function App() {
         <Route path="/billing/subscriptions" element={withProtection(MySubscriptions, {}, renderSMERoute)} />
         <Route path="/billing/info" element={withProtection(BillingInformationSMSE, {}, renderSMERoute)} />
         <Route path="/billing/growth-tools-orders" element={withProtection(BillingHistorySMSE, {}, renderSMERoute)} />
-        
+
         {/* Growth Tools Sub-Routes */}
         <Route path="/growth/my-tools" element={withProtection(MyToolsPage, {}, renderSMERoute)} />
         <Route path="/growth/shop" element={withProtection(ShopToolsPage, {}, renderSMERoute)} />
 
-        {/* Growth Suite Routes - NEW */}
+        {/* Growth Suite Routes */}
         <Route path="/growth-suite-landing" element={withProtection(GrowthSuiteLanding, {}, renderSMERoute)} />
         <Route path="/overall-company-health" element={withProtection(OverallCompanyHealth, {}, renderSMERoute)} />
         <Route path="/Strategy" element={withProtection(Strategy, {}, renderSMERoute)} />
@@ -956,7 +905,7 @@ function App() {
         <Route path="/People" element={withProtection(People, {}, renderSMERoute)} />
         <Route path="/SocialImpact" element={withProtection(SocialImpact, {}, renderSMERoute)} />
         <Route path="/MarketingSales" element={withProtection(MarketingSales, {}, renderSMERoute)} />
-        
+
         {/* Investor Billing and Payments Routes */}
         <Route path="/investor/billing/subscriptions" element={withProtection(InvestorsSubscriptions, {}, renderInvestorRoute)} />
         <Route path="/investor/billing/info" element={withProtection(BillingInfoInvestors, {}, renderInvestorRoute)} />
@@ -995,12 +944,11 @@ function App() {
         <Route path="/program-sponsor-messages" element={withProtection(ProgramSponsorMessages, {}, renderProgramSponsorRoute)} />
         <Route path="/program-sponsor-calendar" element={withProtection(ProgramSponsorCalendar, {}, renderProgramSponsorRoute)} />
         <Route path="/program-sponsor-settings" element={withProtection(ProgramSponsorSettings, {}, renderProgramSponsorRoute)} />
-        
+
         {/* Program Sponsor Billing Routes */}
         <Route path="/program-sponsor/billing/info" element={withProtection(ProgramSponsorBillingInfo, {}, renderProgramSponsorRoute)} />
         <Route path="/program-sponsor/billing/subscriptions" element={withProtection(ProgramSponsorSubscription, {}, renderProgramSponsorRoute)} />
         <Route path="/program-sponsor/billing/history" element={withProtection(ProgramSponsorBillingHistory, {}, renderProgramSponsorRoute)} />
-        
 
         {/* Protected Support Program Dashboard Routes */}
         <Route path="/support-profile" element={withProtection(CatalystUniversalProfile, {}, renderSupportProgramRoute)} />
@@ -1024,7 +972,7 @@ function App() {
         <Route path="/advisor-messages" element={withProtection(AdvisorMessages, {}, renderAdvisorRoute)} />
         <Route path="/advisor-calendar" element={withProtection(Calendar, {}, renderAdvisorRoute)} />
         <Route path="/advisor-settings" element={withProtection(AdvisorSettings, {}, renderAdvisorRoute)} />
-        
+
         {/* Advisor Billing Routes */}
         <Route path="/advisor/billing/info" element={withProtection(BillingInformationSMSE, {}, renderAdvisorRoute)} />
         <Route path="/advisor/billing/subscriptions" element={withProtection(MySubscriptions, {}, renderAdvisorRoute)} />
@@ -1058,14 +1006,14 @@ function App() {
         {/* Application Routes */}
         <Route path="/applications/funding" element={withProtection(FundingApplication, {}, renderSMERoute)} />
         <Route path="/applications/funding/:section" element={withProtection(FundingApplication, {}, renderSMERoute)} />
-      <Route path="/applications/product" element={withProtection(ProductApplicationManager, {}, renderSMERoute)} />
-<Route path="/applications/products-services" element={withProtection(ProductApplicationManager, {}, renderSMERoute)} />
-<Route path="/applications/product/:section" element={withProtection(ProductApplicationManager, {}, renderSMERoute)} />
-<Route path="/applications/product-application" element={<Navigate to="/applications/product" replace />} />
+        <Route path="/applications/product" element={withProtection(ProductApplicationManager, {}, renderSMERoute)} />
+        <Route path="/applications/products-services" element={withProtection(ProductApplicationManager, {}, renderSMERoute)} />
+        <Route path="/applications/product/:section" element={withProtection(ProductApplicationManager, {}, renderSMERoute)} />
+        <Route path="/applications/product-application" element={<Navigate to="/applications/product" replace />} />
         <Route path="/applications/advisory" element={withProtection(AdvisoryApplication, {}, renderSMERoute)} />
         <Route path="/applications/advisors" element={withProtection(AdvisoryApplication, {}, renderSMERoute)} />
         <Route path="/applications/advisory/:section" element={withProtection(AdvisoryApplication, {}, renderSMERoute)} />
-        
+
         {/* Intern Application Routes */}
         <Route path="/applications/intern" element={withProtection(InternApplication, {}, renderSMERoute)} />
         <Route path="/applications/interns" element={withProtection(InternApplication, {}, renderSMERoute)} />
@@ -1114,7 +1062,7 @@ function App() {
         <Route path="/support-program-matches" element={withProtection(SupportProgramMatchesPage, {}, renderSMERoute)} />
         <Route path="/find-advisors" element={withProtection(SMSEAdvisorMatchesPage, {}, renderSMERoute)} />
         <Route path="/investor-matches" element={withProtection(MatchesPage, {}, renderInvestorRoute)} />
-        
+
         {/* Intern Matches Routes */}
         <Route path="/intern-matches-page" element={withProtection(InternMatchesPage, {}, renderSMERoute)} />
         <Route path="/intern-dealflow-page" element={withProtection(InternDealflowPage, {}, renderSMERoute)} />
@@ -1128,6 +1076,36 @@ function App() {
         <Route path="/intern-insights" element={withProtection(InternInsights, {}, renderInternRoute)} />
         <Route path="/program-sponsor-insights" element={withProtection(ProgramSponsorInsights, {}, renderProgramSponsorRoute)} />
         <Route path="/support-insights" element={withProtection(CatalystInsights, {}, renderSupportProgramRoute)} />
+
+        {/* ─── Associator Dashboard Routes ──────────────────────────────────────── */}
+        <Route path="/associator-dashboard" element={withProtection(AssociatorDashboard, {}, renderAssociatorRoute)} />
+        <Route path="/associator-profile" element={withProtection(AssociatorUniversalProfile, {}, renderAssociatorRoute)} />
+        <Route path="/associator-matches" element={withProtection(AssociatorMatches, {}, renderAssociatorRoute)} />
+        <Route path="/associator-ecosystem" element={withProtection(AssociatorEcosystem, {}, renderAssociatorRoute)} />
+        <Route path="/associator-messages" element={withProtection(AssociatorMessages, {}, renderAssociatorRoute)} />
+        <Route path="/associator-calendar" element={withProtection(AssociatorCalendar, {}, renderAssociatorRoute)} />
+        <Route path="/associator-documents" element={withProtection(AssociatorDocuments, {}, renderAssociatorRoute)} />
+        <Route path="/associator-billings" element={withProtection(AssociatorBillings, {}, renderAssociatorRoute)} />
+        <Route path="/associator-portfolio" element={withProtection(AssociatorPortfolio, {}, renderAssociatorRoute)} />
+        <Route path="/associator-insights" element={withProtection(AssociatorInsights, {}, renderAssociatorRoute)} />
+
+        {/* Associator Universal Profile Sub-Routes */}
+        <Route path="/associator-profile/instructions" element={renderAssociatorProfileSection(AssociatorInstructions, "instructions")} />
+        <Route path="/associator-profile/entity-overview" element={renderAssociatorProfileSection(AssociatorEntityOverview, "entityOverview")} />
+        <Route path="/associator-profile/contact-details" element={renderAssociatorProfileSection(AssociatorContactDetails, "contactDetails")} />
+        <Route path="/associator-profile/declaration-consent" element={renderAssociatorProfileSection(AssociatorDeclarationConsent, "declarationConsent")} />
+
+        {/* Associator Billing Routes */}
+        <Route path="/associator/billing/info" element={withProtection(BillingInformationSMSE, {}, renderAssociatorRoute)} />
+        <Route path="/associator/billing/subscriptions" element={withProtection(MySubscriptions, {}, renderAssociatorRoute)} />
+        <Route path="/associator/billing/history" element={withProtection(BillingHistorySMSE, {}, renderAssociatorRoute)} />
+
+        {/* Associator Ecosystem Routes */}
+        <Route path="/associator-ecosystem/smse" element={withProtection(SMSEEcosystem, {}, renderAssociatorRoute)} />
+        <Route path="/associator-ecosystem/investor" element={withProtection(InvestorEcosystem, {}, renderAssociatorRoute)} />
+        <Route path="/associator-ecosystem/advisor" element={withProtection(AdvisorEcosystem, {}, renderAssociatorRoute)} />
+        <Route path="/associator-ecosystem/catalyst" element={withProtection(CatalystEcosystem, {}, renderAssociatorRoute)} />
+        {/* ──────────────────────────────────────────────────────────────────────── */}
 
         {/* Redirects */}
         <Route path="/universal-profile" element={<Navigate to="/investor-profile" replace />} />
@@ -1144,10 +1122,11 @@ function App() {
         <Route path="/program-sponsor" element={<Navigate to="/program-sponsor-profile" replace />} />
         <Route path="/program-sponsor-profile-main" element={<Navigate to="/program-sponsor-profile/instructions" replace />} />
         <Route path="/applications/intern-application" element={<Navigate to="/applications/intern" replace />} />
+        <Route path="/associator" element={<Navigate to="/associator-dashboard" replace />} />
+        <Route path="/associator-universal-profile" element={<Navigate to="/associator-profile/instructions" replace />} />
       </Routes>
     </Router>
   )
 }
-
 
 export default App
