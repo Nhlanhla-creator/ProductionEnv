@@ -93,6 +93,12 @@ const ROLE_CARDS = [
     icon: <Award size={20} />,
     hoverInfo: "Offer jobs to interns, support entrepreneurial programs",
   },
+  {
+    id: "Associator",
+    title: "Associator",
+    icon: <HeartHandshake size={20} />,
+    hoverInfo: "Network, collaborate, and build meaningful partnerships",
+  },
 ];
 
 // Comprehensive error message mapping with safe fallbacks
@@ -263,6 +269,7 @@ export default function LoginRegister() {
       Catalyst: <Building2 size={16} />,
       Interns: <GraduationCap size={16} />,
       ProgramSponsor: <Award size={16} />,
+      Associator: <HeartHandshake size={16} />,
       Admin: <TrendingUp size={16} />
     };
     return iconMap[roleValue] || <Smile size={16} />;
@@ -285,6 +292,9 @@ export default function LoginRegister() {
       INTERN: "/intern-profile",
       ProgramSponsor: "/program-sponsor-profile",
       PROGRAM_SPONSOR: "/program-sponsor-profile",
+     Associator: "/associator-profile",
+ASSOCIATOR: "/associator-profile",
+associator: "/associator-profile",  // ← add this
       Admin: "/admin/dashboard",
       admin: "/admin/dashboard",
       ADMIN: "/admin/dashboard",
@@ -797,6 +807,8 @@ By using this platform, you confirm that you:
       Catalyst: "Catalyst Dashboard",
       Interns: "Intern Dashboard",
       ProgramSponsor: "Program Sponsor Dashboard",
+      Associator: "Associator Dashboard",
+      associator: "Associator Dashboard",
       Admin: "Admin Dashboard",
       admin: "Admin Dashboard",
       ADMIN: "Admin Dashboard",
@@ -817,6 +829,7 @@ By using this platform, you confirm that you:
       Catalyst: "Support startups and drive innovation",
       Interns: "Access internship opportunities and career development",
       ProgramSponsor: "Manage intern programs and track placements",
+      Associator: "Network, collaborate, and build meaningful partnerships",
       Admin: "Manage platform users, settings, and analytics",
       admin: "Manage platform users, settings, and analytics",
     };
@@ -1426,4 +1439,3 @@ By using this platform, you confirm that you:
     </div>
   );
 }
-
