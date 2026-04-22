@@ -25,6 +25,9 @@ import {
   Globe,
   PenTool,
   Heart,
+  Network,
+  Briefcase,
+  TrendingUp,
 } from "lucide-react";
 
 export const advisorMenuItems = [
@@ -167,6 +170,7 @@ export const catalystMenuItems = [
     route: "/support-settings",
   },
 ];
+
 export const internMenuItems = [
   {
     id: "home",
@@ -314,49 +318,48 @@ export const investorMenuItems = [
   },
 ];
 
-// Add this to your existing config file
 export const programSponsorMenuItems = [
-  { 
-    id: "home", 
-    label: "Home", 
-    icon: <Home size={18} />, 
-    route: "/HomePageProgram" 
+  {
+    id: "home",
+    label: "Home",
+    icon: <Home size={18} />,
+    route: "/HomePageProgram",
   },
-  { 
-    id: "profile", 
-    label: "My Profile", 
-    icon: <User size={18} />, 
-    route: "/program-sponsor-profile" 
+  {
+    id: "profile",
+    label: "My Profile",
+    icon: <User size={18} />,
+    route: "/program-sponsor-profile",
   },
-  { 
-    id: "insights", 
-    label: "BIG Insights", 
-    icon: <Lightbulb size={18} />, 
-    route: "/program-sponsor-insights" 
+  {
+    id: "insights",
+    label: "BIG Insights",
+    icon: <Lightbulb size={18} />,
+    route: "/program-sponsor-insights",
   },
-  { 
-    id: "matches", 
-    label: "My Matches", 
-    icon: <HeartHandshake size={18} />, 
-    route: "/program-sponsor-matches" 
+  {
+    id: "matches",
+    label: "My Matches",
+    icon: <HeartHandshake size={18} />,
+    route: "/program-sponsor-matches",
   },
-  { 
-    id: "documents", 
-    label: "My Documents", 
-    icon: <FileText size={18} />, 
-    route: "/program-sponsor-documents" 
+  {
+    id: "documents",
+    label: "My Documents",
+    icon: <FileText size={18} />,
+    route: "/program-sponsor-documents",
   },
-  { 
-    id: "messages", 
-    label: "My Messages", 
-    icon: <MessageSquare size={18} />, 
-    route: "/program-sponsor-messages" 
+  {
+    id: "messages",
+    label: "My Messages",
+    icon: <MessageSquare size={18} />,
+    route: "/program-sponsor-messages",
   },
-  { 
-    id: "calendar", 
-    label: "My Calendar", 
-    icon: <Calendar size={18} />, 
-    route: "/program-sponsor-calendar" 
+  {
+    id: "calendar",
+    label: "My Calendar",
+    icon: <Calendar size={18} />,
+    route: "/program-sponsor-calendar",
   },
   {
     id: "billing",
@@ -385,13 +388,137 @@ export const programSponsorMenuItems = [
       },
     ],
   },
-  { 
-    id: "settings", 
-    label: "Settings", 
-    icon: <Settings size={18} />, 
-    route: "/program-sponsor-settings" 
+  {
+    id: "settings",
+    label: "Settings",
+    icon: <Settings size={18} />,
+    route: "/program-sponsor-settings",
   },
 ];
+
+// ─── Associator Menu Items ────────────────────────────────────────────────────
+export const associatorMenuItems = [
+  
+  {
+    id: "profile",
+    label: "My Profile",
+    icon: <User size={18} />,
+    route: "/associator-profile",
+  },
+  {
+    id: "dashboard",
+    label: "My Dashboard",
+    icon: <BarChart size={18} />,
+    route: "/associator-dashboard",
+  },
+  {
+    id: "matches",
+    label: "My Matches",
+    icon: <HeartHandshake size={18} />,
+    route: "/associator-matches",
+  },
+  {
+    id: "ecosystem",
+    label: "Member Ecosystem",
+    icon: <Network size={18} />,
+    route: "/associator-ecosystem",
+    hasSubmenu: true,
+    subItems: [
+      {
+        id: "smse-ecosystem",
+        label: "SMSEs",
+        icon: <Briefcase size={16} />,
+        route: "/associator-ecosystem/smse",
+        description: "Small and Medium Enterprises"
+      },
+      {
+        id: "catalyst-ecosystem",
+        label: "Catalysts",
+        icon: <TrendingUp size={16} />,
+        route: "/associator-ecosystem/catalyst",
+        description: "Accelerators & Incubators"
+      },
+      {
+        id: "investor-ecosystem",
+        label: "Investors",
+        icon: <CircleDollarSign size={16} />,
+        route: "/associator-ecosystem/investor",
+        description: "Funders & Investment Partners"
+      },
+      {
+        id: "advisor-ecosystem",
+        label: "Advisors",
+        icon: <UserCheck size={16} />,
+        route: "/associator-ecosystem/advisor",
+        description: "Mentors & Industry Experts"
+      },
+    ],
+  },
+  {
+    id: "portfolio",
+    label: "My Portfolio",
+    icon: <Briefcase size={18} />,
+    route: "/associator-portfolio",
+  },
+  {
+    id: "insights",
+    label: "BIG Insights",
+    icon: <Lightbulb size={18} />,
+    route: "/associator-insights",
+  },
+  {
+    id: "documents",
+    label: "My Documents",
+    icon: <FileText size={18} />,
+    route: "/associator-documents",
+  },
+  {
+    id: "messages",
+    label: "My Messages",
+    icon: <MessageSquare size={18} />,
+    route: "/associator-messages",
+  },
+  {
+    id: "calendar",
+    label: "My Calendar",
+    icon: <Calendar size={18} />,
+    route: "/associator-calendar",
+  },
+  {
+    id: "billing",
+    label: "Billing & Payments",
+    icon: <CreditCard size={18} />,
+    route: "/associator/billing",
+    hasSubmenu: true,
+    subItems: [
+      {
+        id: "billing-info",
+        label: "Billing Information",
+        icon: <DollarSign size={16} />,
+        route: "/associator/billing/info",
+      },
+      {
+        id: "subscriptions",
+        label: "Subscriptions",
+        icon: <Repeat size={16} />,
+        route: "/associator/billing/subscriptions",
+      },
+      {
+        id: "transactions",
+        label: "Billing History",
+        icon: <Package size={16} />,
+        route: "/associator/billing/history",
+      },
+    ],
+  },
+  {
+    id: "settings",
+    label: "Settings",
+    icon: <Settings size={18} />,
+    route: "/associator-settings",
+  },
+];
+// ─────────────────────────────────────────────────────────────────────────────
 
 export const smeMenuItems = [
   { id: "home", label: "Home", icon: <Home size={18} />, route: "/HomePage" },
@@ -437,7 +564,7 @@ export const smeMenuItems = [
         label: "Interns",
         icon: <GraduationCap size={16} />,
         route: "/applications/interns",
-      }
+      },
     ],
   },
   {

@@ -1,17 +1,17 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { CheckCircle, ChevronRight } from 'lucide-react'
+import { CheckCircle, ChevronRight, AlertCircle } from 'lucide-react'
 import "./application-tracker.css"
 import { doc, getDoc } from "firebase/firestore"
-import { db } from "../../firebaseConfig" // Adjust the path if needed
+import { db } from "../../firebaseConfig"
 
 export function ApplicationTracker({ styles, userId }) {
   const [trackerSteps, setTrackerSteps] = useState([
-    { label: "Funding &\nSupport", description: "", applied: false, showDetails: false },
-    { label: "Products &\nServices", description: "", applied: false, showDetails: false },
-    { label: "Advisory/Board\nMember", description: "", applied: false, showDetails: false },
-    { label: "Intern", description: "", applied: false, showDetails: false },
+    { label: "Funding &\nSupport", description: "", applied: false, showDetails: false, applicationType: "funding" },
+    { label: "Products &\nServices", description: "", applied: false, showDetails: false, applicationType: "products" },
+    { label: "Advisory/Board\nMember", description: "", applied: false, showDetails: false, applicationType: "advisory" },
+    { label: "Intern", description: "", applied: false, showDetails: false, applicationType: "intern" },
   ])
 
   const expectedActions = {
@@ -30,110 +30,147 @@ export function ApplicationTracker({ styles, userId }) {
     setTrackerSteps(newSteps)
   }
 
-useEffect(() => {
-  const fetchApplicationStatus = async () => {
-    if (!userId) return;
+  useEffect(() => {
+    const fetchApplicationStatus = async () => {
+      if (!userId) return;
 
-    try {
-      const universalRef = doc(db, "universalProfiles", userId);
-      const universalSnap = await getDoc(universalRef);
-
-      let fundingApplied = false;
-      if (universalSnap.exists()) {
-        const data = universalSnap.data();
-        const completedSections = data.completedSections || {};
-
-        // ✅ Match EXACTLY the section IDs from FundingApplication.js sectionsWithGuarantees
-        const requiredFundingSections = [
-          "applicationOverview",
-          "useOfFunds",
-          "enterpriseReadiness",
-          "guarantees",
-          "growthPotential",
-          "socialImpact",
-          "documentUpload",
-          "declarationCommitment",
-        ];
-
-        const sectionsComplete = requiredFundingSections.every(
-          (section) => completedSections[section] === true
-        );
-
-        // ✅ Also check the direct submission flag as a fallback
-        fundingApplied = sectionsComplete || data.applicationSubmitted === true;
-
-        console.log("📋 completedSections:", completedSections);
-        console.log("❌ Missing sections:", requiredFundingSections.filter(s => !completedSections[s]));
-        console.log("✅ fundingApplied:", fundingApplied);
-      }
-
-        /** -------------------
-         * ADVISORY/BOARD MEMBER
-         * ------------------- */
-        const advisoryRef = doc(db, "advisoryApplications", userId);
-        const advisorySnap = await getDoc(advisoryRef);
-
+      try {
+        let fundingApplied = false;
+        let productsApplied = false;
         let advisoryApplied = false;
-        if (advisorySnap.exists()) {
-          const data = advisorySnap.data();
-          const completedSections = data.completedSections || {};
-
-          const requiredAdvisorySections = [
-            "advisoryNeedsAssessment",
-            "documentUploads",
-            "smeProfileSnapshot",
-            "urgencyTimeline"
-          ];
-
-          advisoryApplied = requiredAdvisorySections.every(
-            (section) => completedSections[section] === true
-          );
-        }
+        let internApplied = false;
 
         /** -------------------
-         * INTERN
+         * FUNDING & SUPPORT
          * ------------------- */
-        const internRef = doc(db, "internApplications", userId);
-        const internSnap = await getDoc(internRef);
+        try {
+          const universalRef = doc(db, "universalProfiles", userId);
+          const universalSnap = await getDoc(universalRef);
 
-        let internApplied = false;
-        if (internSnap.exists()) {
-          const data = internSnap.data();
-          const completedSections = data.completedSections || {};
+          if (universalSnap.exists()) {
+            const data = universalSnap.data();
+            const completedSections = data.completedSections || {};
 
-          const requiredInternSections = [
-            "instructions",
-            "internshipRequest",
-            "jobOverview",
-            "matchingAgreement"
-          ];
+            // ✅ Match EXACTLY the section IDs from FundingApplication.js sectionsWithGuarantees
+            const requiredFundingSections = [
+              "applicationOverview",
+              "useOfFunds",
+              "enterpriseReadiness",
+              "guarantees",
+              "growthPotential",
+              "socialImpact",
+              "documentUpload",
+              "declarationCommitment",
+            ];
 
-          internApplied = requiredInternSections.every(
-            (section) => completedSections[section] === true
-          );
+            const sectionsComplete = requiredFundingSections.every(
+              (section) => completedSections[section] === true
+            );
+
+            // ✅ Also check the direct submission flag as a fallback
+            fundingApplied = sectionsComplete || data.applicationSubmitted === true;
+
+            console.log("📋 Funding - completedSections:", completedSections);
+            console.log("❌ Funding - Missing sections:", requiredFundingSections.filter(s => !completedSections[s]));
+            console.log("✅ Funding - Applied:", fundingApplied);
+          }
+        } catch (err) {
+          console.error("Error fetching funding application:", err);
         }
 
         /** -------------------
          * PRODUCTS & SERVICES
          * ------------------- */
-        const productsRef = doc(db, "productApplications", userId);
-        const productsSnap = await getDoc(productsRef);
+        try {
+          const productsRef = doc(db, "productApplications", userId);
+          const productsSnap = await getDoc(productsRef);
 
-        let productsApplied = false;
-        if (productsSnap.exists()) {
-          const data = productsSnap.data();
-          const completedSections = data.completedSections || {};
+          if (productsSnap.exists()) {
+            const data = productsSnap.data();
+            const completedSections = data.completedSections || {};
+            const status = data.status || "draft";
 
-          const requiredProductSections = [
-            "contactSubmission",
-            "matchingPreferences",
-            "productsServices",
-            "requestOverview"
-          ];
+            // ✅ Match the section IDs from ProductApplication
+            const requiredProductSections = [
+              "matchingPreferences",
+              "requestOverview",
+              "productsServices"
+            ];
 
-          productsApplied = requiredProductSections.every(
-            (section) => completedSections[section] === true
-          );
+            const sectionsComplete = requiredProductSections.every(
+              (section) => completedSections[section] === true
+            );
+
+            // ✅ Check if application is submitted
+            productsApplied = status === "submitted" || sectionsComplete;
+
+            console.log("📋 Products - completedSections:", completedSections);
+            console.log("📋 Products - status:", status);
+            console.log("❌ Products - Missing sections:", requiredProductSections.filter(s => !completedSections[s]));
+            console.log("✅ Products - Applied:", productsApplied);
+          }
+        } catch (err) {
+          console.error("Error fetching products application:", err);
+        }
+
+        /** -------------------
+         * ADVISORY/BOARD MEMBER
+         * ------------------- */
+        try {
+          const advisoryRef = doc(db, "advisoryApplications", userId);
+          const advisorySnap = await getDoc(advisoryRef);
+
+          if (advisorySnap.exists()) {
+            const data = advisorySnap.data();
+            const completedSections = data.completedSections || {};
+
+            const requiredAdvisorySections = [
+              "advisoryNeedsAssessment",
+              "documentUploads",
+              "smeProfileSnapshot",
+              "urgencyTimeline"
+            ];
+
+            advisoryApplied = requiredAdvisorySections.every(
+              (section) => completedSections[section] === true
+            );
+
+            console.log("📋 Advisory - completedSections:", completedSections);
+            console.log("❌ Advisory - Missing sections:", requiredAdvisorySections.filter(s => !completedSections[s]));
+            console.log("✅ Advisory - Applied:", advisoryApplied);
+          }
+        } catch (err) {
+          console.error("Error fetching advisory application:", err);
+        }
+
+        /** -------------------
+         * INTERN
+         * ------------------- */
+        try {
+          const internRef = doc(db, "internApplications", userId);
+          const internSnap = await getDoc(internRef);
+
+          if (internSnap.exists()) {
+            const data = internSnap.data();
+            const completedSections = data.completedSections || {};
+
+            const requiredInternSections = [
+              "instructions",
+              "internshipRequest",
+              "jobOverview",
+              "matchingAgreement"
+            ];
+
+            internApplied = requiredInternSections.every(
+              (section) => completedSections[section] === true
+            );
+
+            console.log("📋 Intern - completedSections:", completedSections);
+            console.log("❌ Intern - Missing sections:", requiredInternSections.filter(s => !completedSections[s]));
+            console.log("✅ Intern - Applied:", internApplied);
+          }
+        } catch (err) {
+          console.error("Error fetching intern application:", err);
         }
 
         /** -------------------
@@ -156,8 +193,10 @@ useEffect(() => {
         });
 
         setTrackerSteps(updatedSteps);
+        console.log("🎯 Final tracker steps:", updatedSteps);
+
       } catch (err) {
-        console.error("Application status fetch failed:", err);
+        console.error("❌ Application status fetch failed:", err);
       }
     };
 
@@ -179,19 +218,45 @@ useEffect(() => {
               className={`tracker-step flex items-center cursor-pointer transition-all duration-200 hover:bg-[#F5F2F0] p-2 rounded-lg ${step.applied ? "applied" : "not-applied"
                 }`}
               onClick={() => toggleStepDetails(index)}
+              style={{
+                opacity: step.applied ? 1 : 0.7,
+              }}
             >
-              <div className="step-marker mr-3">
+              {/* Status Indicator */}
+              <div className="step-marker mr-3 relative">
                 <div
-                  className="application-dot h-4 w-4 rounded-full border-2 border-white shadow-sm"
+                  className="application-dot h-4 w-4 rounded-full border-2 border-white shadow-sm flex items-center justify-center"
                   style={{
                     backgroundColor: step.applied ? "#4CAF50" : "#F44336",
                     boxShadow: step.applied
                       ? "0 2px 4px rgba(76, 175, 80, 0.3)"
-                      : "0 2px 4px rgba(244, 67, 54, 0.3)"
+                      : "0 2px 4px rgba(244, 67, 54, 0.3)",
                   }}
-                ></div>
+                >
+                  {step.applied && (
+                    <CheckCircle 
+                      size={12} 
+                      style={{ 
+                        color: "white", 
+                        position: "absolute",
+                        strokeWidth: 3
+                      }} 
+                    />
+                  )}
+                  {!step.applied && (
+                    <AlertCircle 
+                      size={10} 
+                      style={{ 
+                        color: "white", 
+                        position: "absolute",
+                        strokeWidth: 3
+                      }} 
+                    />
+                  )}
+                </div>
               </div>
 
+              {/* Step Info */}
               <div className="step-info flex-1">
                 <span className="step-label text-sm font-medium text-[#5D4037] block">
                   {step.label.split("\n").map((line, i) => (
@@ -207,11 +272,12 @@ useEffect(() => {
                     className={`text-xs font-medium ${step.applied ? "text-[#4CAF50]" : "text-[#F44336]"
                       }`}
                   >
-                    {step.applied ? "Applied" : "Not Applied"}
+                    {step.applied ? "✓ Applied" : "○ Not Applied"}
                   </span>
                 </div>
               </div>
 
+              {/* Arrow Separator */}
               {index < trackerSteps.length - 1 && (
                 <ChevronRight
                   size={16}
@@ -229,7 +295,7 @@ useEffect(() => {
         </div>
 
         {/* Legend */}
-
+        
       </div>
     </div>
   )
