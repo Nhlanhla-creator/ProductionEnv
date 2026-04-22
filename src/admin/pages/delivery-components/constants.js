@@ -14,22 +14,21 @@ export const CATEGORIES = [
 
 export const ASSIGNEES = [
   'Lindelani',
-  'Nhlanhla Msomi',
+  'Nhlanhla',
   'Makha',
-  'Lerato Nama',
+  'Lerato',
   'Thando',
-  'Edward Molefe',
+  'Molefi',
   'Lethabo',
+  'Tracey',
   'Sbonelo'
 ];
 
-export const STATUSES = ['Not started', 'In progress', 'Done', 'Blocked'];
+export const STATUSES = ['Not done', 'Done'];
 
 export const STATUS_COLORS = {
-  'Not started': '#ef4444',
-  'In progress': '#f59e0b',
-  'Done': '#10b981',
-  'Blocked': '#6b7280'
+  'Not done': '#ef4444',
+  'Done': '#10b981'
 };
 
 export const CATEGORY_COLORS = {
@@ -88,7 +87,7 @@ export const DEFAULT_SPRINT_COLUMNS = [
   },
   { 
     id: "startDate", 
-    label: "From when", 
+    label: "Revised date", 
     type: "date", 
     editable: true 
   },

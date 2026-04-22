@@ -18,6 +18,7 @@ const GraduateCount = () => {
   const total = portfolioMetrics?.totalSMEs || 0;
   const grad  = ex.graduates   || 0;
   const active = ex.active     || 0;
+  const exit = ex.exit         || 0;
   const rate  = ex.graduationRate || 0;
 
   return (
@@ -26,7 +27,7 @@ const GraduateCount = () => {
         <div style={{ fontSize: "72px", fontWeight: "800", color: B.darkest, lineHeight: 1 }}>{grad}</div>
         <div style={{ fontSize: "15px", color: B.medium, fontWeight: 600 }}>{`Deal${grad === 1 ? "" : "s"} Closed To Date`}</div>
         <div style={{ display: "flex", gap: "20px", marginTop: "14px" }}>
-          {[["Active", active, B.dark], ["Total Portfolio", total, B.medium], ["Target", Math.max(total, 10), B.warm]].map(([l, v, col]) => (
+          {[["Active", active, B.dark], ["Total Portfolio", total, B.medium], ["Exit", exit, B.warm]].map(([l, v, col]) => (
             <div key={l} style={{ textAlign: "center" }}>
               <div style={{ fontSize: "10px", color: B.light, marginBottom: "3px" }}>{l}</div>
               <div style={{ fontSize: "18px", fontWeight: "700", color: col }}>{v}</div>
