@@ -30,16 +30,28 @@ import {
   sendEmailVerification,
   sendPasswordResetEmail,
 } from "../firebaseConfig";
-import { doc, setDoc, getDoc, updateDoc, increment, serverTimestamp } from "firebase/firestore"; // Added updateDoc
+import { doc, setDoc, getDoc, updateDoc, increment, serverTimestamp } from "firebase/firestore";
 import { db } from "../firebaseConfig";
 import { onAuthStateChanged, deleteUser } from "firebase/auth";
-import { normalizeRoleName } from "../utils/profileHelpers"; // Added this import
+import { normalizeRoleName } from "../utils/profileHelpers";
 import NDASignupPopup from "../NDAsign";
 import TermsConditionsCheckbox from "./Ts&cs";
 import FormInput from "./FormInput";
 import RoleCard from "./RoleCard";
 import AdvisorCriteriaModal from "./AdvisorCriteriaModal";
 import TwoFactorVerification from '../Twofactorverification';
+import { httpsCallable } from 'firebase/functions';
+import { functions } from '../firebaseConfig';
+
+// Password validation rules
+const PASSWORD_REQUIREMENTS = {
+  minLength: 8, // Increased from 6
+  maxLength: 100,
+  requireUppercase: true,
+  requireLowercase: true,
+  requireNumbers: true,
+  requireSpecialChars: true,
+};
 
 // Role cards configuration
 const ROLE_CARDS = [
@@ -83,27 +95,45 @@ const ROLE_CARDS = [
   },
 ];
 
-// Error message mapping
+// Comprehensive error message mapping with safe fallbacks
 const ERROR_MESSAGES = {
-  "auth/invalid-credential": "❌ Invalid email or password. Please try again.",
-  "auth/wrong-password": "❌ Invalid email or password. Please try again.",
-  "auth/user-not-found": "❌ Invalid email or password. Please try again.",
+  // Auth errors
+  "auth/invalid-credential": "Invalid email or password. Please try again.",
+  "auth/wrong-password": "Invalid email or password. Please try again.",
+  "auth/user-not-found": "Invalid email or password. Please try again.",
   "auth/email-already-in-use":
-    "📧 This email is already registered. Try logging in or resetting your password.",
-  "auth/weak-password": "🔒 Password should be at least 6 characters.",
-  "auth/invalid-email": "📧 Please enter a valid email address.",
+    "This email is already registered. Try logging in or resetting your password.",
+  "auth/weak-password": "Password does not meet security requirements. See password criteria below.",
+  "auth/invalid-email": "Please enter a valid email address.",
   "auth/user-disabled":
-    "🚫 This account has been disabled. Please contact support.",
-  "auth/too-many-requests": "⏳ Too many attempts. Please try again later.",
+    "This account has been disabled. Please contact support.",
+  "auth/too-many-requests": "Too many login attempts. Please try again in a few minutes.",
   "auth/network-request-failed":
-    "📡 Network error. Please check your connection.",
+    "Network connection error. Please check your internet and try again.",
   "auth/operation-not-allowed":
-    "⚙️ This operation is not allowed. Please contact support.",
+    "This operation is not available. Please contact support.",
   "auth/requires-recent-login":
-    "🔐 Please log in again to complete this action.",
-  "permission-denied": "🚫 You don't have permission to perform this action.",
-  "not-found": "🔍 Requested data not found.",
-  unavailable: "🔄 Service temporarily unavailable. Please try again.",
+    "Please log in again to complete this action.",
+  "auth/account-exists-with-different-credential":
+    "An account already exists with this email. Try logging in or resetting your password.",
+  "auth/invalid-api-key":
+    "Service configuration error. Please contact support.",
+  "auth/app-not-authorized":
+    "Application not authorized. Please contact support.",
+  
+  // Firestore errors
+  "permission-denied": "You do not have permission to perform this action.",
+  "not-found": "The requested information could not be found.",
+  "unavailable": "Service is temporarily unavailable. Please try again in a moment.",
+  "unauthenticated": "You must be logged in to perform this action.",
+  "invalid-argument": "Invalid data provided. Please check your input.",
+  "already-exists": "This resource already exists.",
+  "resource-exhausted": "Service limit exceeded. Please try again later.",
+  
+  // Network and system errors
+  "NETWORK_ERROR": "Unable to reach the server. Please check your connection.",
+  "TIMEOUT_ERROR": "Request timed out. Please try again.",
+  "UNKNOWN_ERROR": "An unexpected error occurred. Please try again or contact support.",
 };
 
 export default function LoginRegister() {
@@ -143,19 +173,82 @@ export default function LoginRegister() {
   const [resumingRegistration, setResumingRegistration] = useState(false);
   const [hoveredCard, setHoveredCard] = useState(null);
   const [termsAcceptanceTimestamp, setTermsAcceptanceTimestamp] = useState(null);
-const [show2FAVerification, setShow2FAVerification] = useState(false);
-const [tempUser, setTempUser] = useState(null);
-const [twoFactorSecret, setTwoFactorSecret] = useState('');
+  const [show2FAVerification, setShow2FAVerification] = useState(false);
+  const [tempUser, setTempUser] = useState(null);
+  const [twoFactorSecret, setTwoFactorSecret] = useState('');
+
+  // ============== PASSWORD VALIDATION FUNCTIONS ==============
+  
+  /**
+   * Validates password against all requirements
+   * Returns object with validation status and detailed error messages
+   */
+  const validatePassword = (pwd) => {
+    const errors = [];
+
+    if (pwd.length < PASSWORD_REQUIREMENTS.minLength) {
+      errors.push(`At least ${PASSWORD_REQUIREMENTS.minLength} characters`);
+    }
+
+    if (pwd.length > PASSWORD_REQUIREMENTS.maxLength) {
+      errors.push(`Maximum ${PASSWORD_REQUIREMENTS.maxLength} characters`);
+    }
+
+    if (PASSWORD_REQUIREMENTS.requireUppercase && !/[A-Z]/.test(pwd)) {
+      errors.push("One uppercase letter (A-Z)");
+    }
+
+    if (PASSWORD_REQUIREMENTS.requireLowercase && !/[a-z]/.test(pwd)) {
+      errors.push("One lowercase letter (a-z)");
+    }
+
+    if (PASSWORD_REQUIREMENTS.requireNumbers && !/\d/.test(pwd)) {
+      errors.push("One number (0-9)");
+    }
+
+    if (PASSWORD_REQUIREMENTS.requireSpecialChars && !/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(pwd)) {
+      errors.push("One special character (!@#$%^&*()_+-=[]{}...etc)");
+    }
+
+    return {
+      isValid: errors.length === 0,
+      errors: errors,
+    };
+  };
 
   // Utility functions
   const validateEmail = (email) => /\S+@\S+\.\S+/.test(email);
 
+  /**
+   * Gets safe error message - never exposes sensitive backend info
+   */
   const getCustomErrorMessage = (error) => {
-    if (!error?.code)
-      return "🔧 An unexpected error occurred. Please try again.";
-    return (
-      ERROR_MESSAGES[error.code] || "❌ Something went wrong. Please try again."
-    );
+    if (!error) {
+      return ERROR_MESSAGES["UNKNOWN_ERROR"];
+    }
+
+    const errorCode = error?.code || error?.message;
+    
+    // Direct lookup in error map
+    if (ERROR_MESSAGES[errorCode]) {
+      return ERROR_MESSAGES[errorCode];
+    }
+
+    // Check if error message contains known patterns
+    const errorString = (error?.message || "").toLowerCase();
+    
+    if (errorString.includes("network") || errorString.includes("offline")) {
+      return ERROR_MESSAGES["NETWORK_ERROR"];
+    }
+    if (errorString.includes("timeout")) {
+      return ERROR_MESSAGES["TIMEOUT_ERROR"];
+    }
+    if (errorString.includes("permission")) {
+      return ERROR_MESSAGES["permission-denied"];
+    }
+
+    // Generic safe fallback
+    return ERROR_MESSAGES["UNKNOWN_ERROR"];
   };
 
   const getRoleIcon = (roleValue) => {
@@ -192,7 +285,6 @@ const [twoFactorSecret, setTwoFactorSecret] = useState('');
       INTERN: "/intern-profile",
       ProgramSponsor: "/program-sponsor-profile",
       PROGRAM_SPONSOR: "/program-sponsor-profile",
-      // admin
       Admin: "/admin/dashboard",
       admin: "/admin/dashboard",
       ADMIN: "/admin/dashboard",
@@ -235,7 +327,7 @@ const [twoFactorSecret, setTwoFactorSecret] = useState('');
 
     try {
       await sendPasswordResetEmail(auth, resetEmail);
-      setResetMessage("✅ Reset link sent! Check your inbox.");
+      setResetMessage("Reset link sent! Check your inbox for further instructions.");
       setResetEmail("");
     } catch (error) {
       console.error("Reset error:", error);
@@ -243,20 +335,45 @@ const [twoFactorSecret, setTwoFactorSecret] = useState('');
     }
   };
 
-  // 1. Fix handleRegister - Don't show NDA immediately, wait for email verification
+  // ============== UPDATED REGISTRATION WITH STRONG PASSWORDS ==============
+  
   const handleRegister = async () => {
     setIsLoading(true);
     const newErrors = {};
 
-    if (!validateEmail(email)) newErrors.email = "Enter your email";
-    if (username.trim() === "") newErrors.username = "Enter your username";
-    if (password.length < 6)
-      newErrors.password = "Password should be (at least 6 characters)";
-    if (password !== confirmPassword)
-      newErrors.confirmPassword = "Passwords do not match!";
-    if (roles.length === 0) newErrors.role = "Please select at least one role.";
-    if (!agreeToTerms)
+    // Email validation
+    if (!validateEmail(email)) {
+      newErrors.email = "Enter a valid email address";
+    }
+
+    // Username validation
+    if (username.trim() === "") {
+      newErrors.username = "Enter your username";
+    } else if (username.trim().length < 3) {
+      newErrors.username = "Username must be at least 3 characters";
+    }
+
+    // Password validation - STRONG REQUIREMENTS
+    const passwordValidation = validatePassword(password);
+    if (!passwordValidation.isValid) {
+      // Use formatted error message instead of generic one
+      newErrors.password = formatPasswordErrors(passwordValidation.errors);
+    }
+
+    // Confirm password validation
+    if (password !== confirmPassword) {
+      newErrors.confirmPassword = "Passwords do not match";
+    }
+
+    // Role validation
+    if (roles.length === 0) {
+      newErrors.role = "Please select at least one role";
+    }
+
+    // Terms validation
+    if (!agreeToTerms) {
       newErrors.terms = "Please agree to the Terms & Conditions";
+    }
 
     if (Object.keys(newErrors).length > 0) {
       setErrors(newErrors);
@@ -276,6 +393,21 @@ const [twoFactorSecret, setTwoFactorSecret] = useState('');
       const user = userCredential.user;
 
       await sendEmailVerification(user);
+      // ✅ ADD THIS: Call the welcome email function
+    try {
+      const sendWelcomeEmailFunction = httpsCallable(functions, 'sendWelcomeEmail');
+      await sendWelcomeEmailFunction({
+        email: email,
+        username: username,
+        roles: roles
+      });
+      console.log('Welcome email sent successfully');
+    } catch (emailError) {
+      console.error('Failed to send welcome email:', emailError);
+      // Don't block registration if email fails
+    }
+    
+    setCodeSent(true);
       setCodeSent(true);
     } catch (error) {
       console.error("Registration error:", error);
@@ -284,168 +416,159 @@ const [twoFactorSecret, setTwoFactorSecret] = useState('');
       setIsLoading(false);
     }
   };
-const handleLogin = async () => {
-  setIsLoading(true);
-  setErrors({});
-  setAuthError("");
 
-  if (!validateEmail(email)) {
-    setErrors({ email: "Enter your email!" });
-    setIsLoading(false);
-    return;
-  }
-  if (!password) {
-    setErrors({ password: "Enter your password!" });
-    setIsLoading(false);
-    return;
-  }
+  const handleLogin = async () => {
+    setIsLoading(true);
+    setErrors({});
+    setAuthError("");
 
-  try {
-    const userCredential = await signInWithEmailAndPassword(
-      auth,
-      email,
-      password
-    );
-    const user = userCredential.user;
-
-    await new Promise(resolve => setTimeout(resolve, 100));
-    await user.reload();
-    const refreshedUser = auth.currentUser;
-    
-    // Check email verification
-    if (!user) {
-      setAuthError("Please verify your email before logging in. Check your inbox for the verification link.");
-      await auth.signOut();
+    if (!validateEmail(email)) {
+      setErrors({ email: "Enter a valid email address" });
+      setIsLoading(false);
+      return;
+    }
+    if (!password) {
+      setErrors({ password: "Enter your password" });
       setIsLoading(false);
       return;
     }
 
-    // Get user document
-    const userDocRef = doc(db, "users", user.uid);
-    const userDocSnap = await getDoc(userDocRef);
-
-    if (!userDocSnap.exists()) {
-      setAuthError("Registration incomplete. Please complete your registration.");
-      setResumingRegistration(true);
-      setIsRegistering(true);
-      setCodeSent(true);
-
-      setRegistrationData({
-        email: user.email,
-        username: "",
-        uid: user.uid,
-        termsAccepted: false,
-        termsAcceptedDate: null,
-        roleArray: [],
-        role: "",
-      });
-
-      setIsLoading(false);
-      return;
-    }
-
-    const userData = userDocSnap.data();
-
-    // ✅ CHECK FOR 2FA - If enabled, show verification modal
-    if (userData?.twoFactorEnabled && userData?.twoFactorSecret) {
-      setTempUser(user);
-      setTwoFactorSecret(userData.twoFactorSecret);
-      setShow2FAVerification(true);
-      setIsLoading(false);
-      return; // Don't proceed until 2FA is verified
-    }
-
-    // Continue with normal login flow (role selection, etc.)
-    proceedWithLogin(user, userData);
-
-  } catch (error) {
-    console.error("Login error:", error);
-    setAuthError(getCustomErrorMessage(error));
-  } finally {
-    setIsLoading(false);
-  }
-};
-
-
-// Handler for successful 2FA verification
-const handle2FAVerified = async (verified) => {
-  if (verified && tempUser) {
-    setShow2FAVerification(false);
-    
-    // Get user data again to continue login
-    const userDocRef = doc(db, "users", tempUser.uid);
-    const userDocSnap = await getDoc(userDocRef);
-    const userData = userDocSnap.data();
-    
-    // Continue with normal login flow
-    proceedWithLogin(tempUser, userData);
-  }
-};
-
-// Extract the role selection logic into a separate function
-const proceedWithLogin = async (user, userData) => {
-  let activeRoles = [];
-  let deletedRoles = [];
-
-  if (userData.roles && typeof userData.roles === "object") {
-    Object.keys(userData.roles).forEach((r) => {
-      const roleObj = userData.roles[r];
-      if (roleObj.deletedStatus === true) {
-        deletedRoles.push({
-          name: r,
-          deletedStatus: true,
-          deletedAt: roleObj.deletedAt,
-        });
-      } else {
-        activeRoles.push({ name: r });
-      }
-    });
-  }
-
-  if (Array.isArray(userData.roleArray)) {
-    userData.roleArray.forEach((r) => {
-      if (!activeRoles.find((ar) => ar.name === r)) {
-        activeRoles.push({ name: r });
-      }
-    });
-  }
-
-  if (typeof userData.role === "string") {
-    userData.role.split(",").forEach((r) => {
-      const roleName = r.trim();
-      if (!activeRoles.find((ar) => ar.name === roleName)) {
-        activeRoles.push({ name: roleName });
-      }
-    });
-  }
-
-  const allRoles = [...activeRoles, ...deletedRoles];
-  setRoleSelectionModal({ show: true, roles: allRoles });
-
-  if (activeRoles.length === 1) {
     try {
-      const singleRole = activeRoles[0].name || activeRoles[0];
-      const normalized = normalizeRoleName(singleRole);
-      if (auth.currentUser) {
-        const userDocRef = doc(db, "users", auth.currentUser.uid);
-        await updateDoc(userDocRef, { currentRole: normalized });
+      const userCredential = await signInWithEmailAndPassword(
+        auth,
+        email,
+        password
+      );
+      const user = userCredential.user;
+
+      await new Promise(resolve => setTimeout(resolve, 100));
+      await user.reload();
+      const refreshedUser = auth.currentUser;
+      
+      if (!user) {
+        setAuthError("Please verify your email before logging in. Check your inbox for the verification link.");
+        await auth.signOut();
+        setIsLoading(false);
+        return;
       }
-      localStorage.setItem("selectedRole", normalized);
-    } catch (err) {
-      console.error("Error persisting single role:", err);
+
+      const userDocRef = doc(db, "users", user.uid);
+      const userDocSnap = await getDoc(userDocRef);
+
+      if (!userDocSnap.exists()) {
+        setAuthError("Registration incomplete. Please complete your registration.");
+        setResumingRegistration(true);
+        setIsRegistering(true);
+        setCodeSent(true);
+
+        setRegistrationData({
+          email: user.email,
+          username: "",
+          uid: user.uid,
+          termsAccepted: false,
+          termsAcceptedDate: null,
+          roleArray: [],
+          role: "",
+        });
+
+        setIsLoading(false);
+        return;
+      }
+
+      const userData = userDocSnap.data();
+
+      if (userData?.twoFactorEnabled && userData?.twoFactorSecret) {
+        setTempUser(user);
+        setTwoFactorSecret(userData.twoFactorSecret);
+        setShow2FAVerification(true);
+        setIsLoading(false);
+        return;
+      }
+
+      proceedWithLogin(user, userData);
+
+    } catch (error) {
+      console.error("Login error:", error);
+      setAuthError(getCustomErrorMessage(error));
+    } finally {
+      setIsLoading(false);
     }
-    
-    setRoleSelectionModal({ show: false, roles: [] });
-    navigateToRoleDashboard(activeRoles[0].name);
-  }
+  };
 
-  if (activeRoles.length === 0 && deletedRoles.length > 0) {
-    navigate("/RetrieveAccount", {
-      state: { roleToRetrieve: deletedRoles[0].name },
-    });
-  }
-};
+  const handle2FAVerified = async (verified) => {
+    if (verified && tempUser) {
+      setShow2FAVerification(false);
+      
+      const userDocRef = doc(db, "users", tempUser.uid);
+      const userDocSnap = await getDoc(userDocRef);
+      const userData = userDocSnap.data();
+      
+      proceedWithLogin(tempUser, userData);
+    }
+  };
 
+  const proceedWithLogin = async (user, userData) => {
+    let activeRoles = [];
+    let deletedRoles = [];
+
+    if (userData.roles && typeof userData.roles === "object") {
+      Object.keys(userData.roles).forEach((r) => {
+        const roleObj = userData.roles[r];
+        if (roleObj.deletedStatus === true) {
+          deletedRoles.push({
+            name: r,
+            deletedStatus: true,
+            deletedAt: roleObj.deletedAt,
+          });
+        } else {
+          activeRoles.push({ name: r });
+        }
+      });
+    }
+
+    if (Array.isArray(userData.roleArray)) {
+      userData.roleArray.forEach((r) => {
+        if (!activeRoles.find((ar) => ar.name === r)) {
+          activeRoles.push({ name: r });
+        }
+      });
+    }
+
+    if (typeof userData.role === "string") {
+      userData.role.split(",").forEach((r) => {
+        const roleName = r.trim();
+        if (!activeRoles.find((ar) => ar.name === roleName)) {
+          activeRoles.push({ name: roleName });
+        }
+      });
+    }
+
+    const allRoles = [...activeRoles, ...deletedRoles];
+    setRoleSelectionModal({ show: true, roles: allRoles });
+
+    if (activeRoles.length === 1) {
+      try {
+        const singleRole = activeRoles[0].name || activeRoles[0];
+        const normalized = normalizeRoleName(singleRole);
+        if (auth.currentUser) {
+          const userDocRef = doc(db, "users", auth.currentUser.uid);
+          await updateDoc(userDocRef, { currentRole: normalized });
+        }
+        localStorage.setItem("selectedRole", normalized);
+      } catch (err) {
+        console.error("Error persisting single role:", err);
+      }
+      
+      setRoleSelectionModal({ show: false, roles: [] });
+      navigateToRoleDashboard(activeRoles[0].name);
+    }
+
+    if (activeRoles.length === 0 && deletedRoles.length > 0) {
+      navigate("/RetrieveAccount", {
+        state: { roleToRetrieve: deletedRoles[0].name },
+      });
+    }
+  };
 
   const handleVerify = async () => {
     setCheckingVerification(true);
@@ -458,7 +581,6 @@ const proceedWithLogin = async (user, userData) => {
       if (user) {
         setIsEmailVerified(true);
         
-        // Full T&Cs and NDA text content
         const termsAndNDAContent = `
 BIG MARKETPLACE – PLATFORM TERMS & CONDITIONS AND MUTUAL NDA
 
@@ -584,82 +706,77 @@ By using this platform, you confirm that you:
 - Agree to be bound by them
 - Agree to maintain confidentiality of all information shared on the platform
 - Acknowledge the fee structures and responsibilities applicable to your stakeholder category
-      `.trim();
-      
-      // Save user data with T&Cs acceptance
-      const finalRoleString = roles.join(",");
-      const acceptanceTimestamp = termsAcceptanceTimestamp || new Date().toISOString();
-      
-      // Set currentRole if user has only one role
-      const userData = {
-        email: email,
-        username: username,
-        role: finalRoleString,
-        roleArray: roles,
-        termsAccepted: true,
-        termsAcceptedDate: acceptanceTimestamp,
-        termsVersion: "2.0",
-        termsContent: "BIG Marketplace Platform Terms & Conditions and Mutual NDA",
-        ndaAccepted: true,
-        ndaAcceptedDate: acceptanceTimestamp,
-        createdAt: new Date(),
-        registrationCompleted: true,
-      };
-
-      // If user has only one role, set it as currentRole
-      if (roles.length === 1) {
-        userData.currentRole = normalizeRoleName(roles[0]);
-        localStorage.setItem("selectedRole", userData.currentRole);
-      }
-
-      await setDoc(doc(db, "users", user.uid), userData);
-
-      // Save complete T&Cs acceptance document with full text
-      await setDoc(doc(db, "termsAcceptance", user.uid), {
-        userInfo: {
+        `.trim();
+        
+        const finalRoleString = roles.join(",");
+        const acceptanceTimestamp = termsAcceptanceTimestamp || new Date().toISOString();
+        
+        const userData = {
           email: email,
           username: username,
           role: finalRoleString,
           roleArray: roles,
-        },
-        termsAccepted: true,
-        ndaAccepted: true,
-        acceptanceDate: acceptanceTimestamp,
-        termsVersion: "2.0",
-        fullTermsContent: termsAndNDAContent, // ADDED: Full T&Cs text
-        ipAddress: null, // Can be added if needed
-        userAgent: navigator.userAgent,
-        timestamp: new Date().toISOString(),
-      });
+          termsAccepted: true,
+          termsAcceptedDate: acceptanceTimestamp,
+          termsVersion: "2.0",
+          termsContent: "BIG Marketplace Platform Terms & Conditions and Mutual NDA",
+          ndaAccepted: true,
+          ndaAcceptedDate: acceptanceTimestamp,
+          createdAt: new Date(),
+          registrationCompleted: true,
+        };
 
-      // Navigate to dashboard
-      if (roles.length > 1) {
-        setRoleSelectionModal({ show: true, roles: roles });
+        if (roles.length === 1) {
+          userData.currentRole = normalizeRoleName(roles[0]);
+          localStorage.setItem("selectedRole", userData.currentRole);
+        }
+
+        await setDoc(doc(db, "users", user.uid), userData);
+
+        await setDoc(doc(db, "termsAcceptance", user.uid), {
+          userInfo: {
+            email: email,
+            username: username,
+            role: finalRoleString,
+            roleArray: roles,
+          },
+          termsAccepted: true,
+          ndaAccepted: true,
+          acceptanceDate: acceptanceTimestamp,
+          termsVersion: "2.0",
+          fullTermsContent: termsAndNDAContent,
+          ipAddress: null,
+          userAgent: navigator.userAgent,
+          timestamp: new Date().toISOString(),
+        });
+
+        if (roles.length > 1) {
+          setRoleSelectionModal({ show: true, roles: roles });
+        } else {
+          navigateToRoleDashboard(roles[0]);
+        }
       } else {
-        navigateToRoleDashboard(roles[0]);
+        setErrors({
+          verificationCode:
+            "Please verify your email first. Check your inbox and click the verification link.",
+        });
       }
-    } else {
+    } catch (error) {
+      console.error("Verification check error:", error);
       setErrors({
         verificationCode:
-          "Please verify your email first. Check your inbox and click the verification link.",
+          "Error checking verification status. Please try again.",
       });
+    } finally {
+      setCheckingVerification(false);
     }
-  } catch (error) {
-    console.error("Verification check error:", error);
-    setErrors({
-      verificationCode:
-        "Error checking verification status. Please try again.",
-    });
-  } finally {
-    setCheckingVerification(false);
-  }
-};
+  };
 
   const resendVerificationEmail = async () => {
     try {
       if (auth.currentUser) {
         await sendEmailVerification(auth.currentUser);
-        setAuthError("Verification email sent! Please check your inbox.");
+        setAuthError("Verification email sent! Check your inbox.");
       }
     } catch (error) {
       console.error("Error resending verification:", error);
@@ -680,7 +797,6 @@ By using this platform, you confirm that you:
       Catalyst: "Catalyst Dashboard",
       Interns: "Intern Dashboard",
       ProgramSponsor: "Program Sponsor Dashboard",
-      //admin
       Admin: "Admin Dashboard",
       admin: "Admin Dashboard",
       ADMIN: "Admin Dashboard",
@@ -701,7 +817,6 @@ By using this platform, you confirm that you:
       Catalyst: "Support startups and drive innovation",
       Interns: "Access internship opportunities and career development",
       ProgramSponsor: "Manage intern programs and track placements",
-      //admin
       Admin: "Manage platform users, settings, and analytics",
       admin: "Manage platform users, settings, and analytics",
     };
@@ -761,7 +876,6 @@ By using this platform, you confirm that you:
         return;
       }
 
-      // Save user data with agreement info
       const userData = {
         email: registrationData?.email || email,
         username: finalUsername,
@@ -777,7 +891,6 @@ By using this platform, you confirm that you:
         registrationCompleted: true,
       };
 
-      // If user has only one role, set it as currentRole
       if (finalRoles.length === 1) {
         userData.currentRole = normalizeRoleName(finalRoles[0]);
         localStorage.setItem("selectedRole", userData.currentRole);
@@ -788,7 +901,6 @@ By using this platform, you confirm that you:
       setNdaComplete(true);
       setShowNDA(false);
 
-      // Navigate to dashboard
       if (finalRoles.length > 1) {
         setRoleSelectionModal({ show: true, roles: finalRoles });
       } else {
@@ -806,45 +918,41 @@ By using this platform, you confirm that you:
 
   // Effects
   useEffect(() => {
-  const updateOnLogin = async () => {
-    const user = auth.currentUser;
-    if (!user) return;
-    
-    const today = new Date().toDateString(); // "Tue Jan 28 2025"
-    const userRef = doc(db, 'users', user.uid);
-    
-    try {
-      // Get current Firestore document
-      const userSnap = await getDoc(userRef);
+    const updateOnLogin = async () => {
+      const user = auth.currentUser;
+      if (!user) return;
       
-      if (!userSnap.exists()) {
-        // First time - create document
-        await setDoc(userRef, {
-          lastActiveAt: serverTimestamp(),
-          lastActiveDate: today,
-          loginCount: 1,
-          createdAt: serverTimestamp()
-        });
-      } else {
-        const userData = userSnap.data();
+      const today = new Date().toDateString();
+      const userRef = doc(db, 'users', user.uid);
+      
+      try {
+        const userSnap = await getDoc(userRef);
         
-        // Check if we already updated today using our own field
-        if (userData.lastActiveDate !== today) {
-          await updateDoc(userRef, {
+        if (!userSnap.exists()) {
+          await setDoc(userRef, {
             lastActiveAt: serverTimestamp(),
             lastActiveDate: today,
-            loginCount: increment(1)
+            loginCount: 1,
+            createdAt: serverTimestamp()
           });
+        } else {
+          const userData = userSnap.data();
+          
+          if (userData.lastActiveDate !== today) {
+            await updateDoc(userRef, {
+              lastActiveAt: serverTimestamp(),
+              lastActiveDate: today,
+              loginCount: increment(1)
+            });
+          }
         }
-        // If same date, do nothing (save the write)
+      } catch (error) {
+        console.error('Failed to update activity:', error);
       }
-    } catch (error) {
-      console.error('Failed to update activity:', error);
-    }
-  };
-  
-  updateOnLogin();
-}, [auth.currentUser]);
+    };
+    
+    updateOnLogin();
+  }, [auth.currentUser]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -1035,6 +1143,22 @@ By using this platform, you confirm that you:
         </div>
       </div>
     );
+  };
+
+  // ============== PASSWORD ERROR FORMATTING ==============
+  
+  /**
+   * Formats password errors into readable error message
+   * Shows specific requirements not met
+   */
+  const formatPasswordErrors = (errors) => {
+    if (errors.length === 0) return "";
+    if (errors.length === 1) return `Password must include: ${errors[0]}`;
+    if (errors.length === 2) return `Password must include: ${errors[0]} and ${errors[1]}`;
+    
+    const allButLast = errors.slice(0, -1).join(", ");
+    const last = errors[errors.length - 1];
+    return `Password must include: ${allButLast}, and ${last}`;
   };
 
   const renderVerificationStep = () => (
@@ -1286,19 +1410,20 @@ By using this platform, you confirm that you:
         />
       )}
 
-{show2FAVerification && (
-  <TwoFactorVerification
-    isOpen={show2FAVerification}
-    onVerify={handle2FAVerified}
-    onClose={() => {
-      setShow2FAVerification(false);
-      auth.signOut();
-    }}
-    secret={twoFactorSecret}
-  />
-)}
+      {show2FAVerification && (
+        <TwoFactorVerification
+          isOpen={show2FAVerification}
+          onVerify={handle2FAVerified}
+          onClose={() => {
+            setShow2FAVerification(false);
+            auth.signOut();
+          }}
+          secret={twoFactorSecret}
+        />
+      )}
       {renderForgotPasswordModal()}
       {renderRoleSelectionModal()}
     </div>
   );
 }
+
