@@ -136,7 +136,7 @@ const FundingApplication = () => {
   const [error, setError] = useState(null)
   const [validationModal, setValidationModal] = useState({ open: false, title: "", messages: [] })
   const [popupSeen, setPopupSeen] = useState(false)
-  const apiKey = API_KEYS.OPENAI;
+  const apiKey = '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';
   
   // New state for popups
   const [showWelcomePopup, setShowWelcomePopup] = useState(false)
@@ -1264,7 +1264,6 @@ The BIG Fundability Team
           margin: "0",
           boxSizing: "border-box",
         }}
-        className="funding-application-container"
       >
         <div
           className="loading-container"
