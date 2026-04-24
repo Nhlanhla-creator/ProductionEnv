@@ -1,17 +1,15 @@
 import React from "react";
 import { Bar } from "react-chartjs-2";
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Tooltip, Legend } from "chart.js";
-import { usePortfolio } from "../../context/PortfolioContext";
+
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend);
 
 const B = { darkest: "#3b2409", dark: "#5e3f26", medium: "#7d5a36", warm: "#9c7c54", light: "#b8a082", pale: "#d4c4b0", offwhite: "#f0e8de" };
 const C = ["#3b2409", "#5e3f26", "#7d5a36", "#9c7c54", "#b8a082", "#c2a882"];
 
-// ── Layout constants ──────────────────────────────────────────────────────────
-const CARD_HEIGHT  = "400px";
+const CARD_HEIGHT = "400px";
 const CHART_HEIGHT = "260px";
 
-// ── Chart options ─────────────────────────────────────────────────────────────
 const hBarIntegralOpts = {
   responsive: true, maintainAspectRatio: false, animation: false,
   indexAxis: "y",
@@ -26,7 +24,6 @@ const hBarIntegralOpts = {
   },
 };
 
-// ── Shared primitives ─────────────────────────────────────────────────────────
 const Card = ({ title, footer, children }) => (
   <div style={{
     background: "#fff", borderRadius: "10px", padding: "20px",
@@ -46,77 +43,67 @@ const Card = ({ title, footer, children }) => (
   </div>
 );
 
-// ── Total Jobs KPI ────────────────────────────────────────────────────────────
+const Pill = ({ label, active, onClick }) => (
+  <button onClick={onClick} style={{ padding: "5px 14px", borderRadius: "20px", cursor: "pointer", fontSize: "11px", border: `1.5px solid ${active ? B.medium : B.pale}`, fontWeight: active ? 700 : 500, background: active ? B.medium : "#fff", color: active ? "#fff" : B.medium }}>
+    {label}
+  </button>
+);
+
+// Placeholder data
+const placeholderJobs = {
+  total: 385,
+  direct: 245,
+  indirect: 140,
+  perSME: [
+    { name: "TechSolve", jobs: 45, sector: "Fintech" },
+    { name: "GreenEnergy", jobs: 32, sector: "Clean Energy" },
+    { name: "HealthPlus", jobs: 28, sector: "Healthtech" },
+    { name: "EduTech", jobs: 24, sector: "Edtech" },
+    { name: "LogiSync", jobs: 18, sector: "Logistics" },
+    { name: "AgriGrow", jobs: 15, sector: "Agritech" },
+  ],
+  perSector: [
+    { sector: "Fintech", jobs: 78 },
+    { sector: "Clean Energy", jobs: 65 },
+    { sector: "Healthtech", jobs: 52 },
+    { sector: "Edtech", jobs: 48 },
+    { sector: "Logistics", jobs: 42 },
+    { sector: "Agritech", jobs: 38 },
+  ]
+};
+
 const TotalJobsCreated = () => {
-  const { portfolioMetrics } = usePortfolio();
-  const j        = portfolioMetrics?.jobs || {};
-  const total    = j.total    || 0;
-  const direct   = j.direct   || 0;
-  const indirect = j.indirect || 0;
+  const total = placeholderJobs.total;
+  const direct = placeholderJobs.direct;
+  const indirect = placeholderJobs.indirect;
 
   return (
-    <Card title="Total Number of Jobs Created / Projected" subLabel="KPI — from SME growth potential data (portfolio SMEs only)">
+    <Card title="Total Number of Jobs Created / Projected">
       <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "10px" }}>
-        {total > 0 ? (
-          <>
-            <div style={{ fontSize: "64px", fontWeight: "800", color: B.darkest, lineHeight: 1 }}>{total}</div>
-            <div style={{ display: "flex", gap: "20px", marginTop: "14px" }}>
-              {[["Direct", direct, B.dark], ["Indirect", indirect, B.medium]].map(([l, v, col]) => (
-                <div key={l} style={{ textAlign: "center" }}>
-                  <div style={{ fontSize: "10px", color: B.light, marginBottom: "3px" }}>{l}</div>
-                  <div style={{ fontSize: "18px", fontWeight: "700", color: col }}>{v}</div>
-                </div>
-              ))}
+        <div style={{ fontSize: "64px", fontWeight: "800", color: B.darkest, lineHeight: 1 }}>{total}</div>
+        <div style={{ display: "flex", gap: "20px", marginTop: "14px" }}>
+          {[["Direct", direct, B.dark], ["Indirect", indirect, B.medium]].map(([l, v, col]) => (
+            <div key={l} style={{ textAlign: "center" }}>
+              <div style={{ fontSize: "10px", color: B.light, marginBottom: "3px" }}>{l}</div>
+              <div style={{ fontSize: "18px", fontWeight: "700", color: col }}>{v}</div>
             </div>
-          </>
-        ) : (
-          <div style={{ color: B.light, fontSize: "12px", fontStyle: "italic", textAlign: "center" }}>
-            Job creation data not yet available in profiles.<br />Sourced from Growth Potential section.
-          </div>
-        )}
+          ))}
+        </div>
       </div>
     </Card>
   );
 };
 
-// ── Pill toggle ───────────────────────────────────────────────────────────────
-const Pill = ({ label, active, onClick }) => (
-  <button
-    onClick={onClick}
-    style={{
-      padding: "5px 14px", borderRadius: "20px", cursor: "pointer", fontSize: "11px",
-      border: `1.5px solid ${active ? B.medium : B.pale}`,
-      fontWeight: active ? 700 : 500,
-      background: active ? B.medium : "#fff",
-      color: active ? "#fff" : B.medium,
-    }}
-  >
-    {label}
-  </button>
-);
-
-// ── Jobs per SME / Sector (merged toggleable card) ─────────────────────────────
 const JobsBreakdown = () => {
-  const { portfolioMetrics } = usePortfolio();
   const [view, setView] = React.useState("sme");
 
-  // Per-SME: only SMEs that have any jobs
-  const perSME = [...(portfolioMetrics?.jobs?.perSME || [])]
-    .filter(s => s.jobs > 0)
-    .sort((a, b) => b.jobs - a.jobs);
+  const perSME = [...placeholderJobs.perSME].sort((a, b) => b.jobs - a.jobs);
+  const perSector = [...placeholderJobs.perSector].sort((a, b) => b.jobs - a.jobs);
 
-  // Per-sector: only sectors present among the SMEs that have jobs
-  const activeSectors = new Set(perSME.map(s => s.sector));
-  const perSector = [...(portfolioMetrics?.jobs?.perSector || [])]
-    .filter(s => s.jobs > 0 && activeSectors.has(s.sector))
-    .sort((a, b) => b.jobs - a.jobs);
+  const totalSMEs = 45;
+  const avgJobs = perSME.length > 0 ? (perSME.reduce((a, b) => a + b.jobs, 0) / totalSMEs).toFixed(1) : 0;
 
-  const totalSMEs = portfolioMetrics?.totalSMEs || 1;
-  const avgJobs   = perSME.length > 0
-    ? (perSME.reduce((a, b) => a + b.jobs, 0) / totalSMEs).toFixed(1)
-    : 0;
-
-  const smeInnerH    = Math.max(parseInt(CHART_HEIGHT), perSME.length * 36);
+  const smeInnerH = Math.max(parseInt(CHART_HEIGHT), perSME.length * 36);
   const sectorInnerH = Math.max(parseInt(CHART_HEIGHT), perSector.length * 36);
 
   const footer = view === "sme" ? (
@@ -139,9 +126,8 @@ const JobsBreakdown = () => {
 
   return (
     <Card title="Jobs Created" footer={!isEmpty ? footer : undefined}>
-      {/* Toggle pills */}
       <div style={{ display: "flex", gap: "6px", marginBottom: "10px", flexShrink: 0 }}>
-        <Pill label="Per SME"    active={view === "sme"}    onClick={() => setView("sme")} />
+        <Pill label="Per SME" active={view === "sme"} onClick={() => setView("sme")} />
         <Pill label="Per Sector" active={view === "sector"} onClick={() => setView("sector")} />
       </div>
 
@@ -172,20 +158,7 @@ const JobsBreakdown = () => {
   );
 };
 
-// ── Page ──────────────────────────────────────────────────────────────────────
 const Outcomes = () => {
-  const { loading, portfolioMetrics } = usePortfolio();
-
-  if (loading) return <div style={{ padding: "2rem", textAlign: "center", color: B.warm }}>Loading outcomes data…</div>;
-
-  if (!portfolioMetrics || portfolioMetrics.totalSMEs === 0) {
-    return (
-      <div style={{ padding: "2rem", textAlign: "center", color: B.warm, fontStyle: "italic" }}>
-        No SMEs with "Active" status yet.
-      </div>
-    );
-  }
-
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(380px, 1fr))", gap: "20px" }}>
       <TotalJobsCreated />
