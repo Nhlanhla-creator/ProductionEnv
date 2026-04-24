@@ -1,5 +1,4 @@
 import React, { useState } from "react";
-import { usePortfolio } from "../../context/PortfolioContext";
 
 const B = { darkest: "#3b2409", dark: "#5e3f26", medium: "#7d5a36", warm: "#9c7c54", light: "#b8a082", pale: "#d4c4b0", offwhite: "#f0e8de" };
 
@@ -19,7 +18,7 @@ const Pill = ({ label, active, onClick }) => (
 );
 
 const MEDALS = ["🥇", "🥈", "🥉"];
-const WARN   = ["⚠️", "🔸", "🔹"];
+const WARN = ["⚠️", "🔸", "🔹"];
 
 const RankedTable = ({ rows, isTop, metricLabel, unit = "", fmt }) => {
   if (!rows || rows.length === 0) {
@@ -57,12 +56,49 @@ const InsightBox = ({ text }) => (
   </div>
 );
 
-// ── TOP 3 ─────────────────────────────────────────────────────────────────────
+// Placeholder data
+const placeholderData = {
+  topBig: [
+    { name: "TechSolve", sector: "Fintech", stage: "Growth", bigScore: 94, fundability: 88 },
+    { name: "GreenEnergy", sector: "Clean Energy", stage: "Expansion", bigScore: 89, fundability: 85 },
+    { name: "HealthPlus", sector: "Healthtech", stage: "Growth", bigScore: 86, fundability: 82 }
+  ],
+  topMatch: [
+    { name: "TechSolve", sector: "Fintech", stage: "Growth", matchPct: 96 },
+    { name: "FinWise", sector: "Fintech", stage: "Seed", matchPct: 92 },
+    { name: "EduTech", sector: "Edtech", stage: "Growth", matchPct: 88 }
+  ],
+  bottomBig: [
+    { name: "AgriGrow", sector: "Agritech", stage: "Startup", bigScore: 34 },
+    { name: "RetailX", sector: "Retail", stage: "Seed", bigScore: 38 },
+    { name: "LogiSync", sector: "Logistics", stage: "Startup", bigScore: 42 }
+  ],
+  bottomMatch: [
+    { name: "RetailX", sector: "Retail", stage: "Seed", matchPct: 28 },
+    { name: "AgriGrow", sector: "Agritech", stage: "Startup", matchPct: 32 },
+    { name: "LogiSync", sector: "Logistics", stage: "Startup", matchPct: 38 }
+  ],
+  lowCompliance: [
+    { name: "RetailX", sector: "Retail", stage: "Seed", compliance: 45 },
+    { name: "AgriGrow", sector: "Agritech", stage: "Startup", compliance: 52 },
+    { name: "QuickServe", sector: "Services", stage: "Startup", compliance: 58 }
+  ],
+  lowFundability: [
+    { name: "AgriGrow", sector: "Agritech", stage: "Startup", fundability: 28 },
+    { name: "RetailX", sector: "Retail", stage: "Seed", fundability: 32 },
+    { name: "LogiSync", sector: "Logistics", stage: "Startup", fundability: 38 }
+  ],
+  revenuePerSME: [
+    { name: "TechSolve", revenue: 18500000, sector: "Fintech", profitability: "Profitable" },
+    { name: "GreenEnergy", revenue: 12200000, sector: "Clean Energy", profitability: "Profitable" },
+    { name: "HealthPlus", revenue: 8900000, sector: "Healthtech", profitability: "Breakeven" }
+  ]
+};
+
 const HighestBIGScore = () => {
-  const { portfolioMetrics } = usePortfolio();
-  const rows = portfolioMetrics?.performers?.topBig || [];
+  const rows = placeholderData.topBig;
   return (
-    <Card title="Highest BIG Score" subLabel="Top 3 — ranked by BIG score">
+    <Card title="Highest BIG Score">
       <RankedTable isTop rows={rows} metricLabel="BIG Score" unit="%" fmt={r => r.bigScore} />
       {rows.length > 0 && <InsightBox text={`Top BIG scorer is ${rows[0]?.name} at ${rows[0]?.bigScore}%. Highest-scoring SMEs are strongest candidates for Deal Close.`} />}
     </Card>
@@ -70,10 +106,9 @@ const HighestBIGScore = () => {
 };
 
 const HighestMatchScore = () => {
-  const { portfolioMetrics } = usePortfolio();
-  const rows = portfolioMetrics?.performers?.topMatch || [];
+  const rows = placeholderData.topMatch;
   return (
-    <Card title="Highest Match %" subLabel="Top 3 — ranked by programme match percentage">
+    <Card title="Highest Match %">
       <RankedTable isTop rows={rows} metricLabel="Match %" unit="%" fmt={r => r.matchPct} />
       {rows.length > 0 && <InsightBox text={`${rows[0]?.name} is the strongest programme fit at ${rows[0]?.matchPct}% match. Prioritise these SMEs for accelerated support.`} />}
     </Card>
@@ -81,10 +116,9 @@ const HighestMatchScore = () => {
 };
 
 const HighestFundability = () => {
-  const { portfolioMetrics } = usePortfolio();
-  const rows = (portfolioMetrics?.performers?.topBig || []).filter(r => r.fundability > 0);
+  const rows = placeholderData.topBig.filter(r => r.fundability > 0);
   return (
-    <Card title="Highest Fundability Score" subLabel="Top 3 — ranked by fundability sub-score">
+    <Card title="Highest Fundability Score">
       <RankedTable isTop rows={rows} metricLabel="Fundability" unit="%" fmt={r => r.fundability} />
       {rows.length > 0 && <InsightBox text="High fundability SMEs have the strongest case for external capital. Consider facilitating investor introductions." />}
     </Card>
@@ -92,23 +126,20 @@ const HighestFundability = () => {
 };
 
 const HighestRevenue = () => {
-  const { portfolioMetrics } = usePortfolio();
-  const perSME = (portfolioMetrics?.revenue?.perSME || []).filter(s => s.revenue > 0).sort((a, b) => b.revenue - a.revenue).slice(0, 3);
+  const perSME = placeholderData.revenuePerSME;
   const rows = perSME.map(s => ({ name: s.name, sector: s.sector, stage: s.profitability }));
   return (
-    <Card title="Highest Revenue SMEs" subLabel="Top 3 — ranked by annual revenue">
+    <Card title="Highest Revenue SMEs">
       <RankedTable isTop rows={rows} metricLabel="Annual Revenue" unit="" fmt={(_, i) => perSME[i] ? "R" + (perSME[i].revenue / 1000000).toFixed(1) + "M" : "–"} />
       {rows.length > 0 && <InsightBox text="Revenue leaders in the portfolio are likely the most investable. Use their traction as case studies for other SMEs." />}
     </Card>
   );
 };
 
-// ── BOTTOM 3 ──────────────────────────────────────────────────────────────────
 const LowestBIGScore = () => {
-  const { portfolioMetrics } = usePortfolio();
-  const rows = portfolioMetrics?.performers?.bottomBig || [];
+  const rows = placeholderData.bottomBig;
   return (
-    <Card title="Lowest BIG Score" subLabel="Bottom 3 — require immediate support">
+    <Card title="Lowest BIG Score">
       <RankedTable isTop={false} rows={rows} metricLabel="BIG Score" unit="%" fmt={r => r.bigScore} />
       {rows.length > 0 && <InsightBox text="SMEs with the lowest BIG scores need targeted capability-building before the next assessment cycle." />}
     </Card>
@@ -116,10 +147,9 @@ const LowestBIGScore = () => {
 };
 
 const LowestMatchScore = () => {
-  const { portfolioMetrics } = usePortfolio();
-  const rows = portfolioMetrics?.performers?.bottomMatch || [];
+  const rows = placeholderData.bottomMatch;
   return (
-    <Card title="Lowest Match %" subLabel="Bottom 3 — weakest programme fit">
+    <Card title="Lowest Match %">
       <RankedTable isTop={false} rows={rows} metricLabel="Match %" unit="%" fmt={r => r.matchPct} />
       {rows.length > 0 && <InsightBox text="Low-match SMEs may need re-evaluation of programme fit. Consider tailored support tracks or alternative referrals." />}
     </Card>
@@ -127,10 +157,9 @@ const LowestMatchScore = () => {
 };
 
 const LowestComplianceScore = () => {
-  const { portfolioMetrics } = usePortfolio();
-  const rows = (portfolioMetrics?.performers?.lowCompliance || []).filter(r => r.compliance > 0);
+  const rows = placeholderData.lowCompliance;
   return (
-    <Card title="Lowest Compliance Score" subLabel="Bottom 3 — compliance risk flagged">
+    <Card title="Lowest Compliance Score">
       <RankedTable isTop={false} rows={rows} metricLabel="Compliance" unit="%" fmt={r => r.compliance} />
       {rows.length > 0 && <InsightBox text="Non-compliant SMEs pose reputational risk. A compliance clinic covering tax, CIPC and labour law is recommended." />}
     </Card>
@@ -138,10 +167,9 @@ const LowestComplianceScore = () => {
 };
 
 const LowestFundability = () => {
-  const { portfolioMetrics } = usePortfolio();
-  const rows = (portfolioMetrics?.performers?.lowFundability || []).filter(r => r.fundability > 0);
+  const rows = placeholderData.lowFundability;
   return (
-    <Card title="Lowest Fundability Score" subLabel="Bottom 3 — least investment-ready">
+    <Card title="Lowest Fundability Score">
       <RankedTable isTop={false} rows={rows} metricLabel="Fundability" unit="%" fmt={r => r.fundability} />
       {rows.length > 0 && <InsightBox text="These SMEs need urgent financial structuring support before being introduced to investors or funders." />}
     </Card>
@@ -149,15 +177,12 @@ const LowestFundability = () => {
 };
 
 const SUBS = [
-  { id: "top-3",    label: "Top 3" },
+  { id: "top-3", label: "Top 3" },
   { id: "bottom-3", label: "Bottom 3" },
 ];
 
 const TopBottom = () => {
   const [sub, setSub] = useState("top-3");
-  const { loading } = usePortfolio();
-
-  if (loading) return <div style={{ padding: "2rem", textAlign: "center", color: B.warm }}>Loading performer data…</div>;
 
   return (
     <div style={{ width: "100%" }}>

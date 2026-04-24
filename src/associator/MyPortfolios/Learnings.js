@@ -1,7 +1,7 @@
-import React, { useState } from "react";
+import React from "react";
 import { Bar } from "react-chartjs-2";
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Tooltip, Legend } from "chart.js";
-import { usePortfolio } from "../../context/PortfolioContext";
+
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend);
 
 const B = { darkest: "#3b2409", dark: "#5e3f26", medium: "#7d5a36", warm: "#9c7c54", light: "#b8a082", pale: "#d4c4b0", offwhite: "#f0e8de" };
@@ -16,12 +16,6 @@ const Card = ({ title, children }) => (
   </div>
 );
 
-const Pill = ({ label, active, onClick }) => (
-  <button onClick={onClick} style={{ padding: "5px 14px", borderRadius: "20px", cursor: "pointer", fontSize: "11px", border: `1.5px solid ${active ? B.medium : B.pale}`, fontWeight: active ? 700 : 500, background: active ? B.medium : "#fff", color: active ? "#fff" : B.medium }}>
-    {label}
-  </button>
-);
-
 const hBarOpts = () => ({
   responsive: true, maintainAspectRatio: false, animation: false, indexAxis: "y",
   plugins: { legend: { display: false }, datalabels: { color: B.offwhite, font: { size: 14 } } },
@@ -31,14 +25,14 @@ const hBarOpts = () => ({
   },
 });
 
-const HBarFromObj = ({ title, subLabel, data, emptyMsg, summaryFn }) => {
+const HBarFromObj = ({ title, data, emptyMsg, summaryFn }) => {
   const sorted = Object.entries(data).sort((a, b) => b[1] - a[1]).slice(0, 8);
   const labels = sorted.map(([k]) => k);
   const values = sorted.map(([, v]) => v);
   const topEntry = sorted[0];
 
   return (
-    <Card title={title} subLabel={subLabel}>
+    <Card title={title}>
       {values.length > 0 ? (
         <>
           <div style={{ flex: 1, minHeight: "280px" }}>
@@ -59,19 +53,23 @@ const HBarFromObj = ({ title, subLabel, data, emptyMsg, summaryFn }) => {
   );
 };
 
+// Placeholder data
+const placeholderLearnings = {
+  support: { "Strategic Guidance": 28, "Financial Advisory": 22, "Networks/Access": 18, "Legal Support": 12, "Marketing Support": 10, "Operations": 8 },
+  services: { "Business Planning": 25, "Financial Modelling": 20, "Legal Compliance": 15, "Marketing Strategy": 12, "Tech Support": 8 },
+  barriers: { "Access to Capital": 32, "Market Access": 25, "Skills Gap": 18, "Regulatory Hurdles": 12, "Infrastructure": 8 }
+};
+
 const MostRequestedSupportArea = () => {
-  const { portfolioMetrics } = usePortfolio();
-  // Combine supportRequired and servicesRequired from applications
   const combined = {};
-  const support  = portfolioMetrics?.learnings?.support   || {};
-  const services = portfolioMetrics?.learnings?.services  || {};
+  const support = placeholderLearnings.support;
+  const services = placeholderLearnings.services;
   Object.entries(support).forEach(([k, v]) => { combined[k] = (combined[k] || 0) + v; });
   Object.entries(services).forEach(([k, v]) => { combined[k] = (combined[k] || 0) + v; });
 
   return (
     <HBarFromObj
       title="Most Requested Support / Services"
-      subLabel="Horizontal Bar — from application support & services fields"
       data={combined}
       emptyMsg="No support preference data in applications yet"
       summaryFn={([k, v]) => <><strong>Top need:</strong> {k} — {v} application{v !== 1 ? "s" : ""}</>}
@@ -80,13 +78,11 @@ const MostRequestedSupportArea = () => {
 };
 
 const CapabilityGapDistribution = () => {
-  const { portfolioMetrics } = usePortfolio();
-  const barriers = portfolioMetrics?.learnings?.barriers || {};
+  const barriers = placeholderLearnings.barriers;
 
   return (
     <HBarFromObj
       title="Capability Gap Distribution"
-      subLabel="Horizontal Bar — barriers reported in SME Enterprise Readiness profiles"
       data={barriers}
       emptyMsg="No barrier / capability gap data in profiles yet"
       summaryFn={([k, v]) => <><strong>Biggest gap:</strong> {k} — {v} SME{v !== 1 ? "s" : ""} affected</>}
@@ -94,26 +90,10 @@ const CapabilityGapDistribution = () => {
   );
 };
 
-const SUBS = [
-  { id: "support",      label: "Support Most Needed" },
-  { id: "capabilities", label: "Capabilities Most Missing" },
-];
-
 const Learnings = () => {
-  const [sub, setSub] = useState("support");
-  const { loading } = usePortfolio();
-
-  if (loading) return <div style={{ padding: "2rem", textAlign: "center", color: B.warm }}>Loading learnings data…</div>;
-
   return (
     <div style={{ width: "100%" }}>
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fill, minmax(420px, 1fr))",
-          gap: "20px",
-        }}
-      >
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(420px, 1fr))", gap: "20px" }}>
         <MostRequestedSupportArea />
         <CapabilityGapDistribution />
       </div>

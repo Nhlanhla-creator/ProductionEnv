@@ -269,7 +269,7 @@ export default function LoginRegister() {
       Catalyst: <Building2 size={16} />,
       Interns: <GraduationCap size={16} />,
       ProgramSponsor: <Award size={16} />,
-      Associator: <HeartHandshake size={16} />,
+      Association: <HeartHandshake size={16} />,
       Admin: <TrendingUp size={16} />
     };
     return iconMap[roleValue] || <Smile size={16} />;
@@ -293,8 +293,8 @@ export default function LoginRegister() {
       ProgramSponsor: "/program-sponsor-profile",
       PROGRAM_SPONSOR: "/program-sponsor-profile",
      Associator: "/associator-profile",
-ASSOCIATOR: "/associator-profile",
-associator: "/associator-profile",  // ← add this
+ASSOCIATION: "/associator-profile",
+Association: "/associator-profile",  // ← add this
       Admin: "/admin/dashboard",
       admin: "/admin/dashboard",
       ADMIN: "/admin/dashboard",
@@ -807,8 +807,8 @@ By using this platform, you confirm that you:
       Catalyst: "Catalyst Dashboard",
       Interns: "Intern Dashboard",
       ProgramSponsor: "Program Sponsor Dashboard",
-      Associator: "Associator Dashboard",
-      associator: "Associator Dashboard",
+      Association: "Association Dashboard",
+     association: "Association Dashboard",
       Admin: "Admin Dashboard",
       admin: "Admin Dashboard",
       ADMIN: "Admin Dashboard",
