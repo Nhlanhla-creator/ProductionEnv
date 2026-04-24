@@ -398,7 +398,6 @@ export const programSponsorMenuItems = [
 
 // ─── Associator Menu Items ────────────────────────────────────────────────────
 export const associatorMenuItems = [
-  
   {
     id: "profile",
     label: "My Profile",
@@ -407,16 +406,62 @@ export const associatorMenuItems = [
   },
   {
     id: "dashboard",
-    label: "My Dashboard",
+    label: "Admin Dashboard",
     icon: <BarChart size={18} />,
     route: "/associator-dashboard",
+    hasSubmenu: true,
+    defaultOpen: true,
+    subItems: [
+      {
+        id: "dashboard-summary",
+        label: "Summary",
+        icon: <PieChart size={16} />,
+        route: "/associator-dashboard",
+        description: "Overview of all admin metrics",
+      },
+      {
+        id: "dashboard-subscriptions",
+        label: "Subscriptions",
+        icon: <Repeat size={16} />,
+        route: "/associator-dashboard/subscriptions",
+        description: "Manage member subscriptions",
+      },
+      {
+        id: "dashboard-governance",
+        label: "Admin Governance",
+        icon: <Building size={16} />,
+        route: "/associator-dashboard/governance",
+        description: "Governance settings and controls",
+      },
+      {
+        id: "dashboard-marketplace",
+        label: "Users Marketplace",
+        icon: <Users size={16} />,
+        route: "/associator-dashboard/marketplace",
+        description: "User and marketplace management",
+      },
+      {
+        id: "dashboard-pilot",
+        label: "Pilot & Case Studies",
+        icon: <Target size={16} />,
+        route: "/associator-dashboard/pilot",
+        description: "Pilot programs and case studies",
+      },
+      {
+        id: "dashboard-surveys",
+        label: "Surveys",
+        icon: <FileText size={16} />,
+        route: "/associator-dashboard/surveys",
+        description: "Member surveys and feedback",
+      },
+    ],
   },
-  {
-    id: "matches",
-    label: "My Matches",
-    icon: <HeartHandshake size={18} />,
-    route: "/associator-matches",
-  },
+  // {
+  //   id: "matches",
+  //   label: "My Matches",
+  //   icon: <HeartHandshake size={18} />,
+  //   route: "/associator-matches",
+  // },
   {
     id: "ecosystem",
     label: "Member Ecosystem",
@@ -429,28 +474,28 @@ export const associatorMenuItems = [
         label: "SMSEs",
         icon: <Briefcase size={16} />,
         route: "/associator-ecosystem/smse",
-        description: "Small and Medium Enterprises"
+        description: "Small and Medium Enterprises",
       },
       {
         id: "catalyst-ecosystem",
         label: "Catalysts",
         icon: <TrendingUp size={16} />,
         route: "/associator-ecosystem/catalyst",
-        description: "Accelerators & Incubators"
+        description: "Accelerators & Incubators",
       },
       {
         id: "investor-ecosystem",
         label: "Investors",
         icon: <CircleDollarSign size={16} />,
         route: "/associator-ecosystem/investor",
-        description: "Funders & Investment Partners"
+        description: "Funders & Investment Partners",
       },
       {
         id: "advisor-ecosystem",
         label: "Advisors",
         icon: <UserCheck size={16} />,
         route: "/associator-ecosystem/advisor",
-        description: "Mentors & Industry Experts"
+        description: "Mentors & Industry Experts",
       },
     ],
   },
@@ -460,12 +505,12 @@ export const associatorMenuItems = [
     icon: <Briefcase size={18} />,
     route: "/associator-portfolio",
   },
-  {
-    id: "insights",
-    label: "BIG Insights",
-    icon: <Lightbulb size={18} />,
-    route: "/associator-insights",
-  },
+  // {
+  //   id: "insights",
+  //   label: "BIG Insights",
+  //   icon: <Lightbulb size={18} />,
+  //   route: "/associator-insights",
+  // },
   {
     id: "documents",
     label: "My Documents",

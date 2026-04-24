@@ -14,7 +14,7 @@ function AssociatorSidebar() {
     <Sidebar
       menuItems={associatorMenuItems}
       userName={userName}
-      portalTitle="Associator Portal"
+      portalTitle="Association Dashboard"
       storageKey="associatorSidebarCollapsed"
     />
   );

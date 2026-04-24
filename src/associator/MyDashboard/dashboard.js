@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { 
   Users, 
   Handshake, 
@@ -12,850 +12,729 @@ import {
   UserPlus,
   Activity,
   ArrowUp,
-  ArrowDown
+  DollarSign,
+  CheckCircle,
+  Cpu,
+  BarChart3,
+  Zap,
+  AlertCircle,
+  Target
 } from 'lucide-react';
-import { 
-  collection, 
-  query, 
-  where, 
-  getDocs, 
-  getCountFromServer, 
-  Timestamp,
-  orderBy,
-  limit
-} from "firebase/firestore";
-import { db } from "../../firebaseConfig";
+import {
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  CartesianGrid,
+  XAxis,
+  YAxis,
+  Tooltip,
+  BarChart,
+  Bar,
+  PieChart,
+  Pie,
+  Cell,
+  AreaChart,
+  Area,
+} from "recharts";
 
-const AssociatorDashboard = () => {
-  const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState({
-    smses: 0,
-    investors: 0,
-    advisors: 0,
-    catalysts: 0,
-    activeCollaborations: 0,
-    partnershipOpportunities: 0,
-    upcomingEvents: 0,
-    networkGrowth: 0
-  });
-  
-  const [recentActivities, setRecentActivities] = useState([]);
-  const [recommendedConnections, setRecommendedConnections] = useState([]);
-  const [platformActivity, setPlatformActivity] = useState({
-    monthlyMatches: 0,
-    monthlyApplications: 0,
-    growthRate: 0
-  });
+// ---------- MOCK DATA (No Backend) ----------
 
-  // Fetch counts from different user collections
-  const fetchUserCounts = async () => {
-    try {
-      // SMSEs from universalProfiles
-      const smseColl = collection(db, "universalProfiles");
-      const smseSnapshot = await getCountFromServer(smseColl);
-      
-      // Investors from MyuniversalProfiles
-      const investorColl = collection(db, "MyuniversalProfiles");
-      const investorSnapshot = await getCountFromServer(investorColl);
-      
-      // Advisors from advisorProfiles
-      const advisorColl = collection(db, "advisorProfiles");
-      const advisorSnapshot = await getCountFromServer(advisorColl);
-      
-      // Catalysts from catalystProfiles
-      const catalystColl = collection(db, "catalystProfiles");
-      const catalystSnapshot = await getCountFromServer(catalystColl);
-      
-      // Calculate total active users for network growth
-      const totalUsers = smseSnapshot.data().count + 
-                        investorSnapshot.data().count + 
-                        advisorSnapshot.data().count + 
-                        catalystSnapshot.data().count;
-      
-      // Get new users in last 30 days for growth rate
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-      
-      const newUsersQuery = query(
-        collection(db, "users"),
-        where("createdAt", ">=", thirtyDaysAgo)
-      );
-      const newUsersSnapshot = await getCountFromServer(newUsersQuery);
-      const newUsersCount = newUsersSnapshot.data().count;
-      
-      const growthRate = totalUsers > 0 ? (newUsersCount / totalUsers) * 100 : 0;
-      
-      setStats(prev => ({
-        ...prev,
-        smses: smseSnapshot.data().count,
-        investors: investorSnapshot.data().count,
-        advisors: advisorSnapshot.data().count,
-        catalysts: catalystSnapshot.data().count,
-        networkGrowth: Math.round(growthRate)
-      }));
-      
-    } catch (error) {
-      console.error("Error fetching user counts:", error);
-      // Fallback to mock data if Firebase fails
-      setStats(prev => ({
-        ...prev,
-        smses: 1247,
-        investors: 342,
-        advisors: 89,
-        catalysts: 156,
-        networkGrowth: 23
-      }));
-    }
-  };
-  
-  // Fetch recent activities (matches, connections, messages)
-  const fetchRecentActivities = async () => {
-    try {
-      const activities = [];
-      
-      // Get recent matches from matches collection
-      const matchesQuery = query(
-        collection(db, "matches"),
-        orderBy("createdAt", "desc"),
-        limit(5)
-      );
-      
-      const matchesSnapshot = await getDocs(matchesQuery);
-      matchesSnapshot.forEach(doc => {
-        const data = doc.data();
-        activities.push({
-          id: `match-${doc.id}`,
-          type: 'match',
-          message: `${data.smeName || 'A business'} matched with ${data.investorName || 'an investor'}`,
-          time: data.createdAt?.toDate() || new Date(),
-          timestamp: data.createdAt
-        });
-      });
-      
-      // Get recent messages
-      const messagesQuery = query(
-        collection(db, "messages"),
-        orderBy("timestamp", "desc"),
-        limit(5)
-      );
-      
-      const messagesSnapshot = await getDocs(messagesQuery);
-      messagesSnapshot.forEach(doc => {
-        const data = doc.data();
-        activities.push({
-          id: `msg-${doc.id}`,
-          type: 'message',
-          message: `New message from ${data.senderName || 'a member'}`,
-          time: data.timestamp?.toDate() || new Date(),
-          timestamp: data.timestamp
-        });
-      });
-      
-      // Sort by timestamp and take most recent 4
-      const sortedActivities = activities
-        .sort((a, b) => b.timestamp - a.timestamp)
-        .slice(0, 4)
-        .map(activity => ({
-          ...activity,
-          time: formatTimeAgo(activity.time)
-        }));
-      
-      setRecentActivities(sortedActivities);
-      
-    } catch (error) {
-      console.error("Error fetching activities:", error);
-      // Fallback mock data
-      setRecentActivities([
-        { id: 1, type: 'connection', message: 'You connected with TechStars Africa', time: '2 hours ago' },
-        { id: 2, type: 'message', message: 'New message from GrowthHub Partners', time: '5 hours ago' },
-        { id: 3, type: 'match', message: 'New match: Innovation Fund', time: '1 day ago' },
-        { id: 4, type: 'event', message: 'Webinar: Ecosystem Building', time: '2 days ago' },
-      ]);
-    }
-  };
-  
-  // Fetch platform activity metrics
-  const fetchPlatformActivity = async () => {
-    try {
-      const currentDate = new Date();
-      const startOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth(), 1);
-      const endOfMonth = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 0);
-      
-      // Get matches this month
-      const matchesQuery = query(
-        collection(db, "matches"),
-        where("createdAt", ">=", startOfMonth),
-        where("createdAt", "<=", endOfMonth)
-      );
-      const matchesSnapshot = await getCountFromServer(matchesQuery);
-      
-      // Get applications this month (from various application collections)
-      let applicationsCount = 0;
-      
-      // Funding applications
-      const fundingAppsQuery = query(
-        collection(db, "fundingApplications"),
-        where("createdAt", ">=", startOfMonth),
-        where("createdAt", "<=", endOfMonth)
-      );
-      const fundingApps = await getCountFromServer(fundingAppsQuery);
-      applicationsCount += fundingApps.data().count;
-      
-      // Product applications
-      const productAppsQuery = query(
-        collection(db, "productApplications"),
-        where("createdAt", ">=", startOfMonth),
-        where("createdAt", "<=", endOfMonth)
-      );
-      const productApps = await getCountFromServer(productAppsQuery);
-      applicationsCount += productApps.data().count;
-      
-      // Intern applications
-      const internAppsQuery = query(
-        collection(db, "internApplications"),
-        where("createdAt", ">=", startOfMonth),
-        where("createdAt", "<=", endOfMonth)
-      );
-      const internApps = await getCountFromServer(internAppsQuery);
-      applicationsCount += internApps.data().count;
-      
-      setPlatformActivity({
-        monthlyMatches: matchesSnapshot.data().count,
-        monthlyApplications: applicationsCount,
-        growthRate: 15.8 // Calculate from previous month if needed
-      });
-      
-    } catch (error) {
-      console.error("Error fetching platform activity:", error);
-      setPlatformActivity({
-        monthlyMatches: 85,
-        monthlyApplications: 490,
-        growthRate: 15.8
-      });
-    }
-  };
-  
-  // Fetch recommended connections based on activity
-  const fetchRecommendedConnections = async () => {
-    try {
-      // Get recently active users from different roles
-      const thirtyDaysAgo = new Date();
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-      
-      const activeUsersQuery = query(
-        collection(db, "users"),
-        where("lastActiveAt", ">=", thirtyDaysAgo),
-        orderBy("lastActiveAt", "desc"),
-        limit(6)
-      );
-      
-      const usersSnapshot = await getDocs(activeUsersQuery);
-      const recommendations = [];
-      
-      for (const doc of usersSnapshot.docs) {
-        const userData = doc.data();
-        const role = userData.currentRole || userData.role || 'Member';
-        
-        // Determine icon based on role
-        let icon = '👤';
-        let roleType = '';
-        if (role === 'SMSE' || role === 'SMSEs') {
-          icon = '🏢';
-          roleType = 'Business';
-        } else if (role === 'Investor') {
-          icon = '💼';
-          roleType = 'Investment Firm';
-        } else if (role === 'Advisor') {
-          icon = '🎓';
-          roleType = 'Business Advisor';
-        } else if (role === 'Catalyst' || role === 'Accelerators') {
-          icon = '🚀';
-          roleType = 'Growth Partner';
-        }
-        
-        recommendations.push({
-          id: doc.id,
-          name: userData.username || userData.email?.split('@')[0] || 'Member',
-          role: role,
-          roleType: roleType,
-          avatar: icon,
-          email: userData.email
-        });
-      }
-      
-      // Take top 3 recommendations
-      setRecommendedConnections(recommendations.slice(0, 3));
-      
-      if (recommendations.length === 0) {
-        // Fallback mock data
-        setRecommendedConnections([
-          { id: 1, name: 'Innovation Hub SA', role: 'Catalyst', roleType: 'Technology Incubator', avatar: '🏢' },
-          { id: 2, name: 'Venture Capital Group', role: 'Investor', roleType: 'Investment Firm', avatar: '💼' },
-          { id: 3, name: 'Entrepreneurship Academy', role: 'Advisor', roleType: 'Education Partner', avatar: '🎓' },
-        ]);
-      }
-      
-    } catch (error) {
-      console.error("Error fetching recommendations:", error);
-      setRecommendedConnections([
-        { id: 1, name: 'Innovation Hub SA', role: 'Catalyst', roleType: 'Technology Incubator', avatar: '🏢' },
-        { id: 2, name: 'Venture Capital Group', role: 'Investor', roleType: 'Investment Firm', avatar: '💼' },
-        { id: 3, name: 'Entrepreneurship Academy', role: 'Advisor', roleType: 'Education Partner', avatar: '🎓' },
-      ]);
-    }
-  };
-  
-  // Helper function to format time ago
-  const formatTimeAgo = (date) => {
-    if (!date) return 'Recently';
-    const seconds = Math.floor((new Date() - date) / 1000);
-    
-    let interval = seconds / 31536000;
-    if (interval > 1) return Math.floor(interval) + ' years ago';
-    
-    interval = seconds / 2592000;
-    if (interval > 1) return Math.floor(interval) + ' months ago';
-    
-    interval = seconds / 86400;
-    if (interval > 1) return Math.floor(interval) + ' days ago';
-    
-    interval = seconds / 3600;
-    if (interval > 1) return Math.floor(interval) + ' hours ago';
-    
-    interval = seconds / 60;
-    if (interval > 1) return Math.floor(interval) + ' minutes ago';
-    
-    return Math.floor(seconds) + ' seconds ago';
-  };
-  
-  // Initial data load
-  useEffect(() => {
-    const loadData = async () => {
-      setLoading(true);
-      await Promise.all([
-        fetchUserCounts(),
-        fetchRecentActivities(),
-        fetchPlatformActivity(),
-        fetchRecommendedConnections()
-      ]);
-      setLoading(false);
-    };
-    
-    loadData();
-  }, []);
-  
-  // Stat cards configuration with real data
-  const statCards = [
-    { 
-      title: 'SMSEs', 
-      value: stats.smses.toLocaleString(), 
-      icon: <Briefcase size={24} />, 
-      change: '+12%',
-      color: '#a67c52'
-    },
-    { 
-      title: 'Investors', 
-      value: stats.investors.toLocaleString(), 
-      icon: <TrendingUp size={24} />, 
-      change: '+8%',
-      color: '#7d5a50'
-    },
-    { 
-      title: 'Advisors', 
-      value: stats.advisors.toLocaleString(), 
-      icon: <UserCheck size={24} />, 
-      change: '+15%',
-      color: '#c8b6a6'
-    },
-    { 
-      title: 'Catalysts', 
-      value: stats.catalysts.toLocaleString(), 
-      icon: <Activity size={24} />, 
-      change: '+5%',
-      color: '#e6d7c3'
-    },
-    { 
-      title: 'Monthly Matches', 
-      value: platformActivity.monthlyMatches.toLocaleString(), 
-      icon: <Handshake size={24} />, 
-      change: `+${platformActivity.growthRate}%`,
-      color: '#4a90e2'
-    },
-    { 
-      title: 'Applications', 
-      value: platformActivity.monthlyApplications.toLocaleString(), 
-      icon: <UserPlus size={24} />, 
-      change: '+18%',
-      color: '#50c878'
-    }
+// 1. User Composition (SMEs, Catalysts, Advisors, Investors)
+const userComposition = [
+  { name: "SMEs", value: 1430, color: "#a67c52" },
+  { name: "Investors", value: 330, color: "#7d5a50" },
+  { name: "Catalysts", value: 80, color: "#e6d7c3" },
+  { name: "Advisors", value: 20, color: "#8a7968" },
+];
+
+// 2. User Growth Trend (Monthly)
+const userGrowth = [
+  { month: "Jan", total: 180, mau: 120 },
+  { month: "Feb", total: 220, mau: 160 },
+  { month: "Mar", total: 280, mau: 210 },
+  { month: "Apr", total: 340, mau: 260 },
+  { month: "May", total: 390, mau: 310 },
+  { month: "Jun", total: 450, mau: 370 },
+];
+
+// 3. Platform Activity
+const platformActivity = [
+  { month: "Jan", applications: 310, matches: 45, messages: 2800 },
+  { month: "Feb", applications: 350, matches: 55, messages: 3200 },
+  { month: "Mar", applications: 380, matches: 62, messages: 3800 },
+  { month: "Apr", applications: 420, matches: 70, messages: 4200 },
+  { month: "May", applications: 455, matches: 78, messages: 4500 },
+  { month: "Jun", applications: 490, matches: 85, messages: 4800 },
+];
+
+// 4. Recent Activities (Mock)
+const recentActivities = [
+  { id: 1, type: 'connection', message: 'You connected with TechStars Africa', time: '2 hours ago' },
+  { id: 2, type: 'message', message: 'New message from GrowthHub Partners', time: '5 hours ago' },
+  { id: 3, type: 'match', message: 'New match: Innovation Fund', time: '1 day ago' },
+  { id: 4, type: 'event', message: 'Webinar: Ecosystem Building', time: '2 days ago' },
+];
+
+// 5. Recommended Connections
+const recommendedConnections = [
+  { id: 1, name: 'Innovation Hub SA', role: 'Catalyst', roleType: 'Technology Incubator', avatar: '🏢' },
+  { id: 2, name: 'Venture Capital Group', role: 'Investor', roleType: 'Investment Firm', avatar: '💼' },
+  { id: 3, name: 'Entrepreneurship Academy', role: 'Advisor', roleType: 'Education Partner', avatar: '🎓' },
+];
+
+// ---------- Helper Functions ----------
+const formatCurrency = (value) =>
+  new Intl.NumberFormat("en-ZA", { style: "currency", currency: "ZAR", minimumFractionDigits: 0 }).format(value);
+
+// ---------- Active Users Modal ----------
+function ActiveUsersModal({ onClose }) {
+  const mockActiveUsers = [
+    { id: 1, name: "John SME", email: "john@sme.com", role: "SME", lastActive: "2024-03-15" },
+    { id: 2, name: "Sarah Investor", email: "sarah@investor.com", role: "Investor", lastActive: "2024-03-14" },
+    { id: 3, name: "Mike Catalyst", email: "mike@catalyst.org", role: "Catalyst", lastActive: "2024-03-14" },
+    { id: 4, name: "Emma Advisor", email: "emma@advisor.com", role: "Advisor", lastActive: "2024-03-13" },
   ];
-  
-  if (loading) {
-    return (
-      <div className="associator-dashboard">
-        <div className="dashboard-header">
-          <h1>Associator Dashboard</h1>
-          <p>Loading ecosystem data...</p>
-        </div>
-        <div className="loading-spinner">
-          <div className="spinner"></div>
-        </div>
-      </div>
-    );
-  }
-  
+
+  const modalStyles = {
+    overlay: {
+      position: 'fixed',
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: 'rgba(0, 0, 0, 0.5)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      zIndex: 1000,
+    },
+    content: {
+      backgroundColor: 'white',
+      borderRadius: '12px',
+      padding: '24px',
+      maxWidth: '800px',
+      width: '90%',
+      maxHeight: '80vh',
+      overflow: 'auto',
+    },
+    header: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: '20px',
+      paddingBottom: '12px',
+      borderBottom: '1px solid #f0e6d9',
+    },
+    closeButton: {
+      background: 'none',
+      border: 'none',
+      fontSize: '24px',
+      cursor: 'pointer',
+      color: '#7d5a50',
+    },
+    stats: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      marginBottom: '20px',
+      padding: '12px',
+      backgroundColor: '#faf7f2',
+      borderRadius: '8px',
+    },
+    table: {
+      width: '100%',
+      borderCollapse: 'collapse',
+    },
+    th: {
+      textAlign: 'left',
+      padding: '12px',
+      backgroundColor: '#f5ede4',
+      color: '#4a352f',
+      fontWeight: '600',
+    },
+    td: {
+      padding: '12px',
+      borderBottom: '1px solid #f0e6d9',
+      color: '#4a352f',
+    },
+  };
+
   return (
-    <div className="associator-dashboard">
-      <div className="dashboard-header">
-        <div>
-          <h1>Associator Dashboard</h1>
-          <p>Welcome to your ecosystem hub. Network, collaborate, and build meaningful partnerships.</p>
+    <div style={modalStyles.overlay} onClick={onClose}>
+      <div style={modalStyles.content} onClick={(e) => e.stopPropagation()}>
+        <div style={modalStyles.header}>
+          <h2 style={{ margin: 0, color: '#4a352f' }}>Active Users (Last 14 Days)</h2>
+          <button style={modalStyles.closeButton} onClick={onClose}>×</button>
         </div>
-        <div className="network-growth">
-          <span className="growth-badge">
-            <ArrowUp size={14} />
-            Network +{stats.networkGrowth}%
-          </span>
+        <div style={modalStyles.stats}>
+          <span>Total: {mockActiveUsers.length} users</span>
+          <span>Updated: {new Date().toLocaleDateString()}</span>
         </div>
-      </div>
-      
-      {/* Stats Grid - 6 cards */}
-      <div className="stats-grid">
-        {statCards.map((stat, index) => (
-          <div key={index} className="stat-card" style={{ borderTopColor: stat.color }}>
-            <div className="stat-icon" style={{ backgroundColor: `${stat.color}20`, color: stat.color }}>
-              {stat.icon}
-            </div>
-            <div className="stat-info">
-              <h3>{stat.value}</h3>
-              <p>{stat.title}</p>
-              <span className="stat-change positive">
-                {stat.change}
-              </span>
-            </div>
-          </div>
-        ))}
-      </div>
-      
-      <div className="dashboard-grid">
-        {/* Recent Activities Section */}
-        <div className="recent-activities">
-          <div className="section-header">
-            <h2>Recent Activities</h2>
-            <Activity size={18} />
-          </div>
-          <div className="activities-list">
-            {recentActivities.map((activity) => (
-              <div key={activity.id} className="activity-item">
-                <div className={`activity-icon ${activity.type}`}>
-                  {activity.type === 'connection' && <Network size={16} />}
-                  {activity.type === 'message' && <MessageSquare size={16} />}
-                  {activity.type === 'match' && <Handshake size={16} />}
-                  {activity.type === 'event' && <Calendar size={16} />}
-                </div>
-                <div className="activity-details">
-                  <p>{activity.message}</p>
-                  <span>{activity.time}</span>
-                </div>
-              </div>
+        <table style={modalStyles.table}>
+          <thead>
+            <tr>
+              <th style={modalStyles.th}>Name</th>
+              <th style={modalStyles.th}>Email</th>
+              <th style={modalStyles.th}>Role</th>
+              <th style={modalStyles.th}>Last Active</th>
+            </tr>
+          </thead>
+          <tbody>
+            {mockActiveUsers.map((user) => (
+              <tr key={user.id}>
+                <td style={modalStyles.td}>{user.name}</td>
+                <td style={modalStyles.td}>{user.email}</td>
+                <td style={modalStyles.td}>{user.role}</td>
+                <td style={modalStyles.td}>{user.lastActive}</td>
+              </tr>
             ))}
-          </div>
-          <button className="view-all-btn">View All Activities →</button>
-        </div>
-        
-        {/* Recommended Connections Section */}
-        <div className="recommendations">
-          <div className="section-header">
-            <h2>Recommended Connections</h2>
-            <Users size={18} />
-          </div>
-          <div className="recommendations-list">
-            {recommendedConnections.map((connection) => (
-              <div key={connection.id} className="recommendation-card">
-                <div className="rec-avatar">{connection.avatar}</div>
-                <div className="rec-info">
-                  <h4>{connection.name}</h4>
-                  <p>{connection.roleType || connection.role}</p>
-                  <button className="connect-btn">Connect</button>
-                </div>
-              </div>
-            ))}
-          </div>
-          <button className="view-all-btn">Discover More →</button>
-        </div>
+          </tbody>
+        </table>
       </div>
-      
-      {/* Ecosystem Summary Section */}
-      <div className="ecosystem-summary">
-        <div className="section-header">
-          <h2>Ecosystem Snapshot</h2>
-          <TrendingUp size={18} />
-        </div>
-        <div className="summary-stats">
-          <div className="summary-item">
-            <span className="summary-label">Total Active Users</span>
-            <span className="summary-value">
-              {(stats.smses + stats.investors + stats.advisors + stats.catalysts).toLocaleString()}
-            </span>
-          </div>
-          <div className="summary-item">
-            <span className="summary-label">This Month</span>
-            <span className="summary-value">{platformActivity.monthlyMatches} Matches</span>
-          </div>
-          <div className="summary-item">
-            <span className="summary-label">Applications</span>
-            <span className="summary-value">{platformActivity.monthlyApplications}</span>
-          </div>
-          <div className="summary-item">
-            <span className="summary-label">Success Rate</span>
-            <span className="summary-value positive">+{platformActivity.growthRate}%</span>
-          </div>
-        </div>
-      </div>
-      
-      <style jsx>{`
-        .associator-dashboard {
-          padding: 24px;
-          background: #f5f7fa;
-          min-height: 100vh;
-        }
-        
-        .dashboard-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 24px;
-        }
-        
-        .dashboard-header h1 {
-          font-size: 24px;
-          font-weight: 600;
-          color: #4a352f;
-          margin: 0 0 8px 0;
-        }
-        
-        .dashboard-header p {
-          color: #7d5a50;
-          margin: 0;
-        }
-        
-        .growth-badge {
-          display: inline-flex;
-          align-items: center;
-          gap: 6px;
-          background: #e8f5e8;
-          color: #2e7d32;
-          padding: 6px 12px;
-          border-radius: 20px;
-          font-size: 13px;
-          font-weight: 500;
-        }
-        
-        .stats-grid {
-          display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-          gap: 20px;
-          margin-bottom: 32px;
-        }
-        
-        .stat-card {
-          background: white;
-          border-radius: 12px;
-          padding: 20px;
-          display: flex;
-          align-items: center;
-          gap: 16px;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-          border-top: 3px solid;
-          transition: transform 0.2s, box-shadow 0.2s;
-        }
-        
-        .stat-card:hover {
-          transform: translateY(-2px);
-          box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-        }
-        
-        .stat-icon {
-          width: 48px;
-          height: 48px;
-          border-radius: 12px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-        
-        .stat-info h3 {
-          font-size: 24px;
-          font-weight: 700;
-          margin: 0 0 4px 0;
-          color: #4a352f;
-        }
-        
-        .stat-info p {
-          font-size: 14px;
-          color: #7d5a50;
-          margin: 0 0 4px 0;
-        }
-        
-        .stat-change.positive {
-          font-size: 12px;
-          color: #2e7d32;
-          background: #e8f5e8;
-          padding: 2px 8px;
-          border-radius: 12px;
-        }
-        
-        .dashboard-grid {
-          display: grid;
-          grid-template-columns: 1fr 1fr;
-          gap: 24px;
-          margin-bottom: 32px;
-        }
-        
-        .recent-activities, .recommendations {
-          background: white;
-          border-radius: 12px;
-          padding: 20px;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-        }
-        
-        .section-header {
-          display: flex;
-          justify-content: space-between;
-          align-items: center;
-          margin-bottom: 20px;
-          padding-bottom: 12px;
-          border-bottom: 1px solid #f0e6d9;
-        }
-        
-        .section-header h2 {
-          font-size: 18px;
-          font-weight: 600;
-          color: #4a352f;
-          margin: 0;
-        }
-        
-        .activities-list {
-          display: flex;
-          flex-direction: column;
-          gap: 16px;
-        }
-        
-        .activity-item {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          padding: 12px;
-          background: #faf7f2;
-          border-radius: 8px;
-          transition: background 0.2s;
-        }
-        
-        .activity-item:hover {
-          background: #f5ede4;
-        }
-        
-        .activity-icon {
-          width: 32px;
-          height: 32px;
-          border-radius: 8px;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-        }
-        
-        .activity-icon.connection { background: #e3f2fd; color: #1976d2; }
-        .activity-icon.message { background: #f3e5f5; color: #7b1fa2; }
-        .activity-icon.match { background: #e8f5e8; color: #2e7d32; }
-        .activity-icon.event { background: #fff3e0; color: #ed6c02; }
-        
-        .activity-details {
-          flex: 1;
-        }
-        
-        .activity-details p {
-          margin: 0 0 4px 0;
-          font-size: 14px;
-          color: #4a352f;
-        }
-        
-        .activity-details span {
-          font-size: 12px;
-          color: #7d5a50;
-        }
-        
-        .recommendations-list {
-          display: flex;
-          flex-direction: column;
-          gap: 16px;
-        }
-        
-        .recommendation-card {
-          display: flex;
-          align-items: center;
-          gap: 12px;
-          padding: 12px;
-          background: #faf7f2;
-          border-radius: 8px;
-          transition: all 0.2s;
-        }
-        
-        .recommendation-card:hover {
-          background: #f5ede4;
-          transform: translateX(4px);
-        }
-        
-        .rec-avatar {
-          width: 48px;
-          height: 48px;
-          background: linear-gradient(135deg, #a67c52, #7d5a50);
-          border-radius: 50%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: 24px;
-        }
-        
-        .rec-info {
-          flex: 1;
-        }
-        
-        .rec-info h4 {
-          margin: 0 0 4px 0;
-          font-size: 15px;
-          font-weight: 600;
-          color: #4a352f;
-        }
-        
-        .rec-info p {
-          margin: 0 0 8px 0;
-          font-size: 12px;
-          color: #7d5a50;
-        }
-        
-        .connect-btn {
-          background: #a67c52;
-          color: white;
-          border: none;
-          padding: 6px 16px;
-          border-radius: 6px;
-          font-size: 12px;
-          cursor: pointer;
-          transition: background 0.2s;
-        }
-        
-        .connect-btn:hover {
-          background: #7d5a50;
-        }
-        
-        .view-all-btn {
-          background: none;
-          border: none;
-          color: #a67c52;
-          font-size: 13px;
-          cursor: pointer;
-          margin-top: 16px;
-          padding: 8px;
-          width: 100%;
-          text-align: center;
-          transition: all 0.2s;
-        }
-        
-        .view-all-btn:hover {
-          color: #7d5a50;
-          text-decoration: underline;
-        }
-        
-        .ecosystem-summary {
-          background: white;
-          border-radius: 12px;
-          padding: 20px;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-        }
-        
-        .summary-stats {
-          display: grid;
-          grid-template-columns: repeat(4, 1fr);
-          gap: 20px;
-        }
-        
-        .summary-item {
-          text-align: center;
-          padding: 16px;
-          background: #faf7f2;
-          border-radius: 8px;
-        }
-        
-        .summary-label {
-          display: block;
-          font-size: 13px;
-          color: #7d5a50;
-          margin-bottom: 8px;
-        }
-        
-        .summary-value {
-          display: block;
-          font-size: 20px;
-          font-weight: 600;
-          color: #4a352f;
-        }
-        
-        .summary-value.positive {
-          color: #2e7d32;
-        }
-        
-        .loading-spinner {
-          display: flex;
-          justify-content: center;
-          align-items: center;
-          min-height: 300px;
-        }
-        
-        .spinner {
-          width: 40px;
-          height: 40px;
-          border: 3px solid #f0e6d9;
-          border-top-color: #a67c52;
-          border-radius: 50%;
-          animation: spin 1s linear infinite;
-        }
-        
-        @keyframes spin {
-          to { transform: rotate(360deg); }
-        }
-        
-        @media (max-width: 1024px) {
-          .dashboard-grid {
-            grid-template-columns: 1fr;
-          }
-          
-          .summary-stats {
-            grid-template-columns: repeat(2, 1fr);
-          }
-        }
-        
-        @media (max-width: 768px) {
-          .associator-dashboard {
-            padding: 16px;
-          }
-          
-          .dashboard-header {
-            flex-direction: column;
-            align-items: flex-start;
-            gap: 12px;
-          }
-          
-          .stats-grid {
-            grid-template-columns: 1fr;
-          }
-          
-          .summary-stats {
-            grid-template-columns: 1fr;
-          }
-        }
-      `}</style>
     </div>
   );
-};
+}
 
-export default AssociatorDashboard;
+// ---------- Metric Card Component ----------
+function MetricCard({ title, value, subtitle, icon, trend, size = "medium" }) {
+  const isPositive = trend > 0;
+  
+  const cardStyles = {
+    container: {
+      backgroundColor: 'white',
+      borderRadius: '12px',
+      padding: size === 'large' ? '24px' : '20px',
+      boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+      borderTop: `3px solid ${trend ? (isPositive ? '#2ecc71' : '#e74c3c') : '#a67c52'}`,
+      transition: 'transform 0.2s, box-shadow 0.2s',
+      cursor: 'pointer',
+    },
+    header: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '8px',
+      marginBottom: '12px',
+    },
+    icon: {
+      width: '32px',
+      height: '32px',
+      borderRadius: '8px',
+      backgroundColor: '#faf7f2',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      color: '#a67c52',
+    },
+    title: {
+      fontSize: '14px',
+      color: '#7d5a50',
+      fontWeight: '500',
+      flex: 1,
+    },
+    trend: {
+      fontSize: '12px',
+      fontWeight: '600',
+      padding: '2px 8px',
+      borderRadius: '12px',
+      backgroundColor: isPositive ? '#e8f5e8' : '#fdeaea',
+      color: isPositive ? '#2e7d32' : '#c62828',
+    },
+    value: {
+      fontSize: size === 'large' ? '32px' : '28px',
+      fontWeight: '700',
+      color: '#4a352f',
+      marginBottom: '8px',
+    },
+    subtitle: {
+      fontSize: '13px',
+      color: '#7d5a50',
+    },
+  };
+
+  return (
+    <div style={cardStyles.container}>
+      <div style={cardStyles.header}>
+        <div style={cardStyles.icon}>{icon}</div>
+        <span style={cardStyles.title}>{title}</span>
+        {trend !== undefined && (
+          <div style={cardStyles.trend}>
+            {isPositive ? "↗" : "↘"} {Math.abs(trend)}%
+          </div>
+        )}
+      </div>
+      <div style={cardStyles.value}>{value}</div>
+      {subtitle && <div style={cardStyles.subtitle}>{subtitle}</div>}
+    </div>
+  );
+}
+
+// ---------- Main Associator Dashboard Component ----------
+export default function AssociatorDashboard() {
+  const [showActiveUsersModal, setShowActiveUsersModal] = useState(false);
+
+  // Derived metrics from mock data
+  const totalUsers = userComposition.reduce((sum, type) => sum + type.value, 0);
+  const currentMau = 370;
+  const mauTrend = 12.5;
+  const latestMatches = platformActivity[platformActivity.length - 1].matches;
+  const avgUptime = 99.4;
+  const networkGrowth = 23;
+
+  const handleActiveUsersClick = () => {
+    setShowActiveUsersModal(true);
+  };
+
+  const styles = {
+    dashboard: {
+      padding: '24px',
+      background: '#f5f7fa',
+      minHeight: '100vh',
+    },
+    header: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: '24px',
+    },
+    headerContent: {
+      flex: 1,
+    },
+    title: {
+      fontSize: '24px',
+      fontWeight: '600',
+      color: '#4a352f',
+      margin: '0 0 8px 0',
+    },
+    subtitle: {
+      color: '#7d5a50',
+      margin: 0,
+    },
+    growthBadge: {
+      display: 'inline-flex',
+      alignItems: 'center',
+      gap: '6px',
+      background: '#e8f5e8',
+      color: '#2e7d32',
+      padding: '6px 12px',
+      borderRadius: '20px',
+      fontSize: '13px',
+      fontWeight: '500',
+    },
+    primaryKPIs: {
+      display: 'grid',
+      gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
+      gap: '20px',
+      marginBottom: '24px',
+    },
+    secondaryKPIs: {
+      display: 'grid',
+      gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+      gap: '16px',
+      marginBottom: '32px',
+    },
+    chartsGrid: {
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '24px',
+    },
+    chartRow: {
+      display: 'grid',
+      gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))',
+      gap: '24px',
+    },
+    chartCard: {
+      backgroundColor: 'white',
+      borderRadius: '12px',
+      padding: '20px',
+      boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+    },
+    chartCardFull: {
+      backgroundColor: 'white',
+      borderRadius: '12px',
+      padding: '20px',
+      boxShadow: '0 2px 8px rgba(0,0,0,0.06)',
+      gridColumn: '1 / -1',
+    },
+    chartHeader: {
+      display: 'flex',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: '20px',
+      paddingBottom: '12px',
+      borderBottom: '1px solid #f0e6d9',
+    },
+    chartTitle: {
+      fontSize: '16px',
+      fontWeight: '600',
+      color: '#4a352f',
+      margin: 0,
+    },
+    activitiesList: {
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '12px',
+    },
+    activityItem: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '12px',
+      padding: '12px',
+      background: '#faf7f2',
+      borderRadius: '8px',
+      transition: 'background 0.2s',
+    },
+    activityIcon: {
+      width: '32px',
+      height: '32px',
+      borderRadius: '8px',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    activityDetails: {
+      flex: 1,
+    },
+    activityMessage: {
+      margin: '0 0 4px 0',
+      fontSize: '14px',
+      color: '#4a352f',
+    },
+    activityTime: {
+      fontSize: '12px',
+      color: '#7d5a50',
+    },
+    viewAllBtn: {
+      background: 'none',
+      border: 'none',
+      color: '#a67c52',
+      fontSize: '13px',
+      cursor: 'pointer',
+      marginTop: '16px',
+      padding: '8px',
+      width: '100%',
+      textAlign: 'center',
+      transition: 'all 0.2s',
+    },
+    recommendationsList: {
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '12px',
+    },
+    recommendationCard: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: '12px',
+      padding: '12px',
+      background: '#faf7f2',
+      borderRadius: '8px',
+      transition: 'all 0.2s',
+    },
+    recAvatar: {
+      width: '48px',
+      height: '48px',
+      background: 'linear-gradient(135deg, #a67c52, #7d5a50)',
+      borderRadius: '50%',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      fontSize: '24px',
+    },
+    recInfo: {
+      flex: 1,
+    },
+    recName: {
+      margin: '0 0 4px 0',
+      fontSize: '15px',
+      fontWeight: '600',
+      color: '#4a352f',
+    },
+    recRole: {
+      margin: '0 0 8px 0',
+      fontSize: '12px',
+      color: '#7d5a50',
+    },
+    connectBtn: {
+      background: '#a67c52',
+      color: 'white',
+      border: 'none',
+      padding: '6px 16px',
+      borderRadius: '6px',
+      fontSize: '12px',
+      cursor: 'pointer',
+      transition: 'background 0.2s',
+    },
+    summaryStats: {
+      display: 'grid',
+      gridTemplateColumns: 'repeat(4, 1fr)',
+      gap: '20px',
+    },
+    summaryItem: {
+      textAlign: 'center',
+      padding: '16px',
+      background: '#faf7f2',
+      borderRadius: '8px',
+    },
+    summaryLabel: {
+      display: 'block',
+      fontSize: '13px',
+      color: '#7d5a50',
+      marginBottom: '8px',
+    },
+    summaryValue: {
+      display: 'block',
+      fontSize: '20px',
+      fontWeight: '600',
+      color: '#4a352f',
+    },
+    positive: {
+      color: '#2e7d32',
+    },
+  };
+
+  // Activity icon colors
+  const getActivityIconStyle = (type) => {
+    const baseStyle = { ...styles.activityIcon };
+    switch(type) {
+      case 'connection':
+        return { ...baseStyle, background: '#e3f2fd', color: '#1976d2' };
+      case 'message':
+        return { ...baseStyle, background: '#f3e5f5', color: '#7b1fa2' };
+      case 'match':
+        return { ...baseStyle, background: '#e8f5e8', color: '#2e7d32' };
+      case 'event':
+        return { ...baseStyle, background: '#fff3e0', color: '#ed6c02' };
+      default:
+        return { ...baseStyle, background: '#faf7f2', color: '#a67c52' };
+    }
+  };
+
+  return (
+    <div style={styles.dashboard}>
+      {/* Header */}
+      <div style={styles.header}>
+        <div style={styles.headerContent}>
+          <h1 style={styles.title}>Associator Dashboard</h1>
+          <p style={styles.subtitle}>Your ecosystem hub. Network, collaborate, and build meaningful partnerships.</p>
+        </div>
+        <div style={styles.growthBadge}>
+          <ArrowUp size={14} />
+          Network +{networkGrowth}%
+        </div>
+      </div>
+
+      {/* Primary KPIs */}
+      <div style={styles.primaryKPIs}>
+        <MetricCard
+          title="Total SMEs"
+          value={userComposition.find(u => u.name === "SMEs").value.toLocaleString()}
+          subtitle="Active businesses"
+          icon={<Briefcase size={18} />}
+          trend={8.5}
+          size="large"
+        />
+
+        <div onClick={handleActiveUsersClick} style={{ cursor: 'pointer' }}>
+          <MetricCard
+            title="Active Users"
+            value={currentMau.toLocaleString()}
+            subtitle={`${Math.round((currentMau / totalUsers) * 100)}% of total`}
+            icon={<Users size={18} />}
+            trend={mauTrend}
+            size="large"
+          />
+        </div>
+
+        <MetricCard
+          title="Successful Matches"
+          value={latestMatches}
+          subtitle="SME ↔ Investor connections"
+          icon={<CheckCircle size={18} />}
+          trend={15.8}
+        />
+
+        <MetricCard
+          title="Platform Uptime"
+          value={`${avgUptime}%`}
+          subtitle="30-day reliability"
+          icon={<Activity size={18} />}
+        />
+      </div>
+
+      {/* Secondary KPIs - Focus on all 4 user types */}
+      <div style={styles.secondaryKPIs}>
+        <MetricCard
+          title="Total Investors"
+          value={userComposition.find(u => u.name === "Investors").value.toLocaleString()}
+          subtitle="Funding partners"
+          icon={<TrendingUp size={16} />}
+          trend={5.2}
+        />
+        <MetricCard
+          title="Total Catalysts"
+          value={userComposition.find(u => u.name === "Catalysts").value.toLocaleString()}
+          subtitle="Ecosystem enablers"
+          icon={<Network size={16} />}
+          trend={12.0}
+        />
+        <MetricCard
+          title="Total Advisors"
+          value={userComposition.find(u => u.name === "Advisors").value.toLocaleString()}
+          subtitle="Mentors & experts"
+          icon={<UserCheck size={16} />}
+          trend={3.8}
+        />
+        <MetricCard
+          title="Monthly Applications"
+          value={platformActivity[platformActivity.length - 1].applications.toLocaleString()}
+          subtitle="New submissions"
+          icon={<UserPlus size={16} />}
+          trend={18.2}
+        />
+      </div>
+
+      <div style={styles.chartsGrid}>
+        {/* Chart 1: User Growth (Left) + User Composition (Right) */}
+        <div style={styles.chartRow}>
+          <div style={styles.chartCard}>
+            <div style={styles.chartHeader}>
+              <h3 style={styles.chartTitle}>User Growth Trend</h3>
+              <Users size={16} />
+            </div>
+            <ResponsiveContainer width="100%" height={240}>
+              <AreaChart data={userGrowth}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <XAxis dataKey="month" />
+                <YAxis />
+                <Tooltip />
+                <Area type="monotone" dataKey="total" stroke="#a67c52" fill="#a67c52" fillOpacity={0.2} name="Total Users" />
+                <Area type="monotone" dataKey="mau" stroke="#7d5a50" fill="#7d5a50" fillOpacity={0.2} name="Active Users" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </div>
+
+          <div style={styles.chartCard}>
+            <div style={styles.chartHeader}>
+              <h3 style={styles.chartTitle}>User Composition</h3>
+              <BarChart3 size={16} />
+            </div>
+            <ResponsiveContainer width="100%" height={240}>
+              <PieChart>
+                <Pie
+                  data={userComposition}
+                  dataKey="value"
+                  nameKey="name"
+                  outerRadius={80}
+                  innerRadius={40}
+                  paddingAngle={2}
+                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                >
+                  {userComposition.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip formatter={(value) => [`${value} users`, 'Count']} />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Chart 2: Platform Activity (Full Width) */}
+        <div style={styles.chartRow}>
+          <div style={styles.chartCardFull}>
+            <div style={styles.chartHeader}>
+              <h3 style={styles.chartTitle}>Platform Activity</h3>
+              <Activity size={16} />
+            </div>
+            <ResponsiveContainer width="100%" height={240}>
+              <BarChart data={platformActivity}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                <XAxis dataKey="month" />
+                <YAxis />
+                <Tooltip />
+                <Bar dataKey="applications" fill="#a67c52" name="Applications" radius={[2, 2, 0, 0]} />
+                <Bar dataKey="matches" fill="#7d5a50" name="Matches" radius={[2, 2, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* Chart 3: Recent Activities & Recommended Connections */}
+        <div style={styles.chartRow}>
+          <div style={styles.chartCard}>
+            <div style={styles.chartHeader}>
+              <h3 style={styles.chartTitle}>Recent Activities</h3>
+              <Activity size={16} />
+            </div>
+            <div style={styles.activitiesList}>
+              {recentActivities.map((activity) => (
+                <div key={activity.id} style={styles.activityItem}>
+                  <div style={getActivityIconStyle(activity.type)}>
+                    {activity.type === 'connection' && <Network size={14} />}
+                    {activity.type === 'message' && <MessageSquare size={14} />}
+                    {activity.type === 'match' && <Handshake size={14} />}
+                    {activity.type === 'event' && <Calendar size={14} />}
+                  </div>
+                  <div style={styles.activityDetails}>
+                    <p style={styles.activityMessage}>{activity.message}</p>
+                    <span style={styles.activityTime}>{activity.time}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <button style={styles.viewAllBtn}>View All Activities →</button>
+          </div>
+
+          <div style={styles.chartCard}>
+            <div style={styles.chartHeader}>
+              <h3 style={styles.chartTitle}>Recommended Connections</h3>
+              <Users size={16} />
+            </div>
+            <div style={styles.recommendationsList}>
+              {recommendedConnections.map((connection) => (
+                <div key={connection.id} style={styles.recommendationCard}>
+                  <div style={styles.recAvatar}>{connection.avatar}</div>
+                  <div style={styles.recInfo}>
+                    <h4 style={styles.recName}>{connection.name}</h4>
+                    <p style={styles.recRole}>{connection.roleType || connection.role}</p>
+                    <button style={styles.connectBtn}>Connect</button>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <button style={styles.viewAllBtn}>Discover More →</button>
+          </div>
+        </div>
+
+        {/* Chart 4: Ecosystem Snapshot */}
+        <div style={styles.chartRow}>
+          <div style={styles.chartCardFull}>
+            <div style={styles.chartHeader}>
+              <h3 style={styles.chartTitle}>Ecosystem Snapshot</h3>
+              <TrendingUp size={16} />
+            </div>
+            <div style={styles.summaryStats}>
+              <div style={styles.summaryItem}>
+                <span style={styles.summaryLabel}>Total Active Users</span>
+                <span style={styles.summaryValue}>{totalUsers.toLocaleString()}</span>
+              </div>
+              <div style={styles.summaryItem}>
+                <span style={styles.summaryLabel}>This Month Matches</span>
+                <span style={styles.summaryValue}>{latestMatches}</span>
+              </div>
+              <div style={styles.summaryItem}>
+                <span style={styles.summaryLabel}>Applications</span>
+                <span style={styles.summaryValue}>{platformActivity[platformActivity.length - 1].applications}</span>
+              </div>
+              <div style={styles.summaryItem}>
+                <span style={styles.summaryLabel}>Success Rate</span>
+                <span style={{ ...styles.summaryValue, ...styles.positive }}>+{mauTrend}%</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Active Users Modal */}
+      {showActiveUsersModal && <ActiveUsersModal onClose={() => setShowActiveUsersModal(false)} />}
+    </div>
+  );
+}
