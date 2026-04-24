@@ -1,16 +1,15 @@
 import React, { useState } from "react";
 import { Bar, Pie } from "react-chartjs-2";
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend } from "chart.js";
-import { usePortfolio } from "../../context/PortfolioContext";
+
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend);
 
 const B = { darkest: "#3b2409", dark: "#5e3f26", medium: "#7d5a36", warm: "#9c7c54", light: "#b8a082", pale: "#d4c4b0", offwhite: "#f0e8de" };
 const C = ["#3b2409", "#5e3f26", "#7d5a36", "#9c7c54", "#b8a082", "#c2a882", "#d4c4b0", "#a08060", "#6b4c2a", "#8a6340"];
 
-// ── Chart options ─────────────────────────────────────────────────────────────
+const CARD_HEIGHT = "400px";
+const CHART_HEIGHT = "260px";
 
-// Horizontal bar — value (x) axis can take an optional formatter; integral mode
-// suppresses decimal ticks (for count data).
 const hBarOpts = (valCb, integralOnly) => ({
   responsive: true, maintainAspectRatio: false, animation: false,
   indexAxis: "y",
@@ -22,16 +21,13 @@ const hBarOpts = (valCb, integralOnly) => ({
       ticks: {
         color: B.dark, font: { size: 10 },
         ...(valCb ? { callback: valCb } : {}),
-        ...(integralOnly && !valCb
-          ? { callback: v => Number.isInteger(v) ? v : "", precision: 0, stepSize: 1 }
-          : {}),
+        ...(integralOnly && !valCb ? { callback: v => Number.isInteger(v) ? v : "", precision: 0, stepSize: 1 } : {}),
       },
     },
     y: { grid: { display: false }, ticks: { color: B.dark, font: { size: 11 } } },
   },
 });
 
-// Vertical bar — used for the SMEsByRevenue "Per SME" sub-view
 const vBarOpts = (yCb) => ({
   responsive: true, maintainAspectRatio: false, animation: false,
   indexAxis: "x",
@@ -47,13 +43,6 @@ const pieOpts = {
   plugins: { legend: { position: "bottom", labels: { color: B.dark, font: { size: 11 }, boxWidth: 12 } }, datalabels: { color: B.offwhite, font: { size: 20 } } },
 };
 
-// ── Layout constants ──────────────────────────────────────────────────────────
-// All cards share the same fixed height; all chart areas share the same height
-// so nothing looks bigger or smaller than its neighbours.
-const CARD_HEIGHT   = "400px";
-const CHART_HEIGHT  = "260px"; // chart area inside the card
-
-// ── Shared primitives ─────────────────────────────────────────────────────────
 const Card = ({ title, footer, children }) => (
   <div style={{
     background: "#fff", borderRadius: "10px", padding: "20px",
@@ -65,11 +54,7 @@ const Card = ({ title, footer, children }) => (
       <h3 style={{ fontSize: "14px", fontWeight: "700", color: B.dark, margin: 0 }}>{title}</h3>
     </div>
     <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column", justifyContent: "center" }}>{children}</div>
-    {footer && (
-      <div style={{ marginTop: "8px", padding: "7px 10px", background: B.offwhite, borderRadius: "6px", flexShrink: 0 }}>
-        {footer}
-      </div>
-    )}
+    {footer && <div style={{ marginTop: "8px", padding: "7px 10px", background: B.offwhite, borderRadius: "6px", flexShrink: 0 }}>{footer}</div>}
   </div>
 );
 
@@ -85,13 +70,31 @@ const EmptyState = () => (
   </div>
 );
 
-// ── Smart chart component ─────────────────────────────────────────────────────
-// Renders as Pie if ≤5 slices, otherwise as a horizontal bar (sorted desc).
-// Props:
-//   data         – { label: value } plain object
-//   datasetLabel – legend label for hbar mode
-//   valCb        – optional x-axis tick formatter (hbar mode only)
-//   integralOnly – suppress decimal ticks (hbar mode, default true)
+// Placeholder data
+const placeholderMetrics = {
+  totalSMEs: 45,
+  headcount: { "1-5": 12, "6-20": 18, "21-50": 10, "51-200": 4, "200+": 1 },
+  lifecycle: { "Startup": 15, "Growth": 22, "Expansion": 6, "Mature": 2 },
+  geography: { "Gauteng": 20, "Western Cape": 12, "KZN": 6, "Eastern Cape": 4, "Other": 3 },
+  sector: { "Fintech": 10, "Healthtech": 8, "Agritech": 7, "Edtech": 6, "Logistics": 5, "Clean Energy": 4, "Other": 5 },
+  gender: { "Male": 58, "Female": 38, "Prefer not to say": 4 },
+  disability: { "No disability": 92, "Disability": 5, "Prefer not to say": 3 },
+  youth: { "Youth (<35)": 45, "Non-youth": 55 },
+  hdi: { "HDI >50%": 62, "HDI <50%": 38 },
+  revenue: { 
+    buckets: { "<R1M": 8, "R1-5M": 15, "R5-10M": 12, "R10-20M": 6, "R20M+": 4 },
+    perSME: [
+      { name: "TechSolve", revenue: 18500000 },
+      { name: "GreenEnergy", revenue: 12200000 },
+      { name: "HealthPlus", revenue: 8900000 },
+    ]
+  },
+  fundingType: { "Equity": 25, "Grant": 12, "Debt": 8, "Skills Training": 5 },
+  funding: { bySector: { "Fintech": 45000000, "Healthtech": 32000000, "Agritech": 28000000 }, avg: 2800000, total: 126000000 },
+  supportFocus: { "Strategic Guidance": 28, "Networks/Access": 22, "Financial Advisory": 18, "Legal Support": 12, "Marketing": 10 },
+  servicesFocus: { "Business Planning": 25, "Financial Modelling": 20, "Legal Compliance": 15, "Marketing Strategy": 12, "Tech Support": 8 }
+};
+
 const SmartChart = ({ data, datasetLabel = "# SMEs", valCb, integralOnly = true }) => {
   const sorted = Object.entries(data).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
   const labels = sorted.map(([k]) => k);
@@ -100,7 +103,6 @@ const SmartChart = ({ data, datasetLabel = "# SMEs", valCb, integralOnly = true 
   if (values.length === 0) return <EmptyState />;
 
   if (labels.length > 5) {
-    // Horizontal bar — height scales with row count but is capped at CHART_HEIGHT
     const minH = Math.max(parseInt(CHART_HEIGHT), labels.length * 36);
     return (
       <div style={{ flex: 1, height: `${minH}px`, overflowY: "auto" }}>
@@ -114,7 +116,6 @@ const SmartChart = ({ data, datasetLabel = "# SMEs", valCb, integralOnly = true 
     );
   }
 
-  // Pie — fixed height wrapper so all pies are the same size
   return (
     <div style={{ height: CHART_HEIGHT }}>
       <Pie options={pieOpts} data={{ labels, datasets: [{ data: values, backgroundColor: C.slice(0, labels.length), borderWidth: 2, borderColor: "#fff" }] }} />
@@ -122,21 +123,19 @@ const SmartChart = ({ data, datasetLabel = "# SMEs", valCb, integralOnly = true 
   );
 };
 
-// Convenience wrapper: Card + SmartChart
-const SmartCard = ({ title, subLabel, data, datasetLabel, valCb, integralOnly }) => (
-  <Card title={title} subLabel={subLabel}>
+const SmartCard = ({ title, data, datasetLabel, valCb, integralOnly }) => (
+  <Card title={title}>
     <SmartChart data={data} datasetLabel={datasetLabel} valCb={valCb} integralOnly={integralOnly} />
   </Card>
 );
 
-// Always-horizontal bar card (for Support Focus section where hbar is explicit)
-const HBarCard = ({ title, subLabel, data, valCb, integralOnly = true, datasetLabel = "# SMEs", footer }) => {
+const HBarCard = ({ title, data, valCb, integralOnly = true, datasetLabel = "# SMEs", footer }) => {
   const sorted = Object.entries(data).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
   const labels = sorted.map(([k]) => k);
   const values = sorted.map(([, v]) => v);
   const innerH = Math.max(parseInt(CHART_HEIGHT), labels.length * 36);
   return (
-    <Card title={title} subLabel={subLabel} footer={footer}>
+    <Card title={title} footer={footer}>
       {values.length > 0 ? (
         <div style={{ flex: 1, overflowY: labels.length > 7 ? "auto" : "visible" }}>
           <div style={{ height: `${innerH}px` }}>
@@ -148,27 +147,8 @@ const HBarCard = ({ title, subLabel, data, valCb, integralOnly = true, datasetLa
   );
 };
 
-// ── Funding instrument normaliser ─────────────────────────────────────────────
-const normalizeFundingKey = k => {
-  const s = k.toLowerCase().trim();
-  if (s === "equity")                                     return "equity";
-  if (s === "grant" || s === "grants")                    return "grant";
-  if (s === "debt")                                       return "debt";
-  if (s === "skills training" || s === "skills_training") return "skills_training";
-  return s.replace(/\s+/g, "_");
-};
-
-const normalizeFundingData = raw =>
-  Object.entries(raw).reduce((acc, [k, v]) => {
-    const key = normalizeFundingKey(k);
-    acc[key] = (acc[key] || 0) + v;
-    return acc;
-  }, {});
-
-// ── Composition ──────────────────────────────────────────────────────────────
 const TotalSMEsCount = () => {
-  const { portfolioMetrics } = usePortfolio();
-  const ACTUAL = portfolioMetrics?.totalSMEs || 0;
+  const ACTUAL = placeholderMetrics.totalSMEs;
   const TARGET = 50;
   const R = 54, CIRC = 2 * Math.PI * R;
   const offset = CIRC - (CIRC * Math.min(ACTUAL, TARGET)) / TARGET;
@@ -188,21 +168,19 @@ const TotalSMEsCount = () => {
   );
 };
 
-// Revenue: Distribution pie (≤5 → pie, >5 → hbar) + Per-SME vertical bar
 const SMEsByRevenue = () => {
-  const { portfolioMetrics } = usePortfolio();
   const [view, setView] = useState("pie");
-  const buckets = portfolioMetrics?.revenue?.buckets || {};
-  const perSME  = [...(portfolioMetrics?.revenue?.perSME || [])].sort((a, b) => b.revenue - a.revenue);
-  const labels  = Object.keys(buckets).filter(k => buckets[k] > 0);
-  const values  = labels.map(k => buckets[k]);
+  const buckets = placeholderMetrics.revenue.buckets;
+  const perSME = placeholderMetrics.revenue.perSME;
+  const labels = Object.keys(buckets).filter(k => buckets[k] > 0);
+  const values = labels.map(k => buckets[k]);
   const hasData = values.length > 0;
 
   return (
-    <Card title="SMEs by Revenue" subLabel={view === "pie" ? "Distribution by revenue band" : "Revenue per SME (R)"}>
+    <Card title="SMEs by Revenue">
       <div style={{ display: "flex", gap: "6px", marginBottom: "10px", flexShrink: 0 }}>
         <Pill label="Distribution" active={view === "pie"} onClick={() => setView("pie")} />
-        <Pill label="Per SME"      active={view === "bar"} onClick={() => setView("bar")} />
+        <Pill label="Per SME" active={view === "bar"} onClick={() => setView("bar")} />
       </div>
       {hasData ? (
         <div style={{ height: CHART_HEIGHT }}>
@@ -218,14 +196,11 @@ const SMEsByRevenue = () => {
   );
 };
 
-// ── Support Focus ─────────────────────────────────────────────────────────────
 const FundingAllocationBySector = () => {
-  const { portfolioMetrics } = usePortfolio();
-  const bySector = portfolioMetrics?.funding?.bySector || {};
+  const bySector = placeholderMetrics.funding.bySector;
   return (
     <HBarCard
       title="Funding Required by Sector (R)"
-      subLabel="Horizontal bar — total funding requested per sector"
       data={bySector}
       valCb={v => "R" + (v / 1_000_000).toFixed(1) + "M"}
       datasetLabel="Funding Required (R)"
@@ -234,13 +209,10 @@ const FundingAllocationBySector = () => {
 };
 
 const AverageFundingPerSME = () => {
-  const { portfolioMetrics } = usePortfolio();
-  const avg   = portfolioMetrics?.funding?.avg   || 0;
-  const total = portfolioMetrics?.funding?.total || 0;
-  const n     = portfolioMetrics?.totalSMEs      || 0;
-  const perSME = [...(portfolioMetrics?.revenue?.perSME || [])]
-    .filter(s => s.fundingRequired > 0)
-    .sort((a, b) => b.fundingRequired - a.fundingRequired);
+  const avg = placeholderMetrics.funding.avg;
+  const total = placeholderMetrics.funding.total;
+  const n = placeholderMetrics.totalSMEs;
+  const perSME = placeholderMetrics.revenue.perSME.map(s => ({ ...s, fundingRequired: s.revenue * 0.3 }));
 
   const footer = (
     <div style={{ display: "flex", justifyContent: "space-between" }}>
@@ -258,7 +230,6 @@ const AverageFundingPerSME = () => {
   return (
     <HBarCard
       title="Funding Required per SME"
-      subLabel="Horizontal bar — individual SME funding needs"
       data={data}
       valCb={v => "R" + (v / 1_000_000).toFixed(1) + "M"}
       datasetLabel="Funding Required (R)"
@@ -267,26 +238,16 @@ const AverageFundingPerSME = () => {
   );
 };
 
-// ── Tab navigation ────────────────────────────────────────────────────────────
+const normalizeFundingData = (raw) => raw;
+
 const SUBS = [
-  { id: "composition",  label: "Portfolio Composition" },
+  { id: "composition", label: "Portfolio Composition" },
   { id: "demographics", label: "Beneficiary Demographics" },
-  { id: "support",      label: "Support Focus" },
+  { id: "support", label: "Support Focus" },
 ];
 
 const PortfolioHealth = () => {
   const [sub, setSub] = useState("composition");
-  const { portfolioMetrics, loading } = usePortfolio();
-
-  if (loading) return <div style={{ padding: "2rem", textAlign: "center", color: B.warm }}>Loading portfolio data…</div>;
-
-  if (!portfolioMetrics || portfolioMetrics.totalSMEs === 0) {
-    return (
-      <div style={{ padding: "2rem", textAlign: "center", color: B.warm, fontStyle: "italic" }}>
-        No SMEs with "Active" status yet.
-      </div>
-    );
-  }
 
   return (
     <div style={{ width: "100%" }}>
@@ -297,70 +258,34 @@ const PortfolioHealth = () => {
       {sub === "composition" && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(380px, 1fr))", gap: "20px" }}>
           <TotalSMEsCount />
-
-          {/* Headcount: descriptive labels already set in usePortfolioData (e.g. "6–20 employees") */}
-          <SmartCard
-            title="SMEs by Headcount"
-            subLabel="Employee count bands — smart chart (pie ≤5 slices, hbar if more)"
-            data={portfolioMetrics?.headcount || {}}
-          />
-
-          <SmartCard
-            title="SMEs by Business Lifecycle Stage"
-            subLabel="Operational stage — smart chart (pie ≤5, hbar if more)"
-            data={portfolioMetrics?.lifecycle || {}}
-          />
-
-          {/* Geography: likely >5 provinces → auto hbar */}
-          <SmartCard
-            title="SMEs by Geography"
-            subLabel="Province / location — smart chart (pie ≤5, hbar if more)"
-            data={portfolioMetrics?.geography || {}}
-          />
-
-          {/* Sector: likely >5 → auto hbar */}
-          <SmartCard
-            title="SMEs by Sector"
-            subLabel="Economic sector — smart chart (pie ≤5, hbar if more)"
-            data={portfolioMetrics?.sector || {}}
-          />
+          <SmartCard title="SMEs by Headcount" data={placeholderMetrics.headcount} />
+          <SmartCard title="SMEs by Business Lifecycle Stage" data={placeholderMetrics.lifecycle} />
+          <SmartCard title="SMEs by Geography" data={placeholderMetrics.geography} />
+          <SmartCard title="SMEs by Sector" data={placeholderMetrics.sector} />
         </div>
       )}
 
       {sub === "demographics" && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(380px, 1fr))", gap: "20px" }}>
-          <SmartCard title="SMEs by Gender"            subLabel="Shareholder gender breakdown"          data={portfolioMetrics?.gender     || {}} />
-          <SmartCard title="SMEs by Disability Status" subLabel="Disability disclosed by shareholders"  data={portfolioMetrics?.disability || {}} />
-          <SmartCard title="SMEs by Youth Status"      subLabel="Youth shareholders"                   data={portfolioMetrics?.youth      || {}} />
-          <SmartCard title="SMEs by HDI Ownership"     subLabel="Black ownership > 50%"                data={portfolioMetrics?.hdi        || {}} />
+          <SmartCard title="SMEs by Gender" data={placeholderMetrics.gender} />
+          <SmartCard title="SMEs by Disability Status" data={placeholderMetrics.disability} />
+          <SmartCard title="SMEs by Youth Status" data={placeholderMetrics.youth} />
+          <SmartCard title="SMEs by HDI Ownership" data={placeholderMetrics.hdi} />
           <SMEsByRevenue />
         </div>
       )}
 
       {sub === "support" && (
         <>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(380px, 1fr))", gap: "20px" }}>
-          {/* Normalise funding instrument keys → 4 canonical values */}
-          <HBarCard
-            title="SMEs by Funding Instrument"
-            subLabel="Instrument type from profile (equity / grant / debt / skills_training)"
-            data={normalizeFundingData(portfolioMetrics?.fundingType || {})}
-          />
-          <FundingAllocationBySector />
-          <AverageFundingPerSME />
-        </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(380px, 1fr))", gap: "20px", marginTop: "20px" }}>
-          <HBarCard
-            title="SMEs by Support Focus"
-            subLabel="Support type requested"
-            data={portfolioMetrics?.supportFocus  || {}}
-          />
-          <HBarCard
-            title="SMEs by Services Requested"
-            subLabel="Services type requested"
-            data={portfolioMetrics?.servicesFocus || {}}
-          />
-        </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(380px, 1fr))", gap: "20px" }}>
+            <HBarCard title="SMEs by Funding Instrument" data={normalizeFundingData(placeholderMetrics.fundingType)} />
+            <FundingAllocationBySector />
+            <AverageFundingPerSME />
+          </div>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(380px, 1fr))", gap: "20px", marginTop: "20px" }}>
+            <HBarCard title="SMEs by Support Focus" data={placeholderMetrics.supportFocus} />
+            <HBarCard title="SMEs by Services Requested" data={placeholderMetrics.servicesFocus} />
+          </div>
         </>
       )}
     </div>
