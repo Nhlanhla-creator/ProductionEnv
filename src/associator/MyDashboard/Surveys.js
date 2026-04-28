@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { FileExplorer } from './shared/FileExplorer';
-import { FileUploader } from './shared/FileUploader';
-import { SURVEYS_STRUCTURE } from './structure/surveysStructure';
+import React, { useState, useEffect, useCallback } from 'react';
+import { FileExplorer } from '../../shared/FileExplorer';
+import { FileUploader } from '../../shared/FileUploader';
+import { SURVEYS_STRUCTURE } from '../../structure/surveysStructure';
 import { AlertCircle, Send, BarChart3, Users, Calendar } from 'lucide-react';
 
 const Surveys = () => {
@@ -12,11 +12,9 @@ const Surveys = () => {
   const [contentStatus, setContentStatus] = useState({});
   const [isUploading, setIsUploading] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [activeView, setActiveView] = useState('manage'); // 'manage' or 'send'
+  const [activeView, setActiveView] = useState('manage');
   const [selectedSurvey, setSelectedSurvey] = useState(null);
-  const [surveyResponses, setSurveyResponses] = useState({});
 
-  // Survey templates data
   const surveyTemplates = [
     { id: 1, name: "Member Satisfaction Survey", questions: 10, sentTo: 245, responseRate: 68, lastSent: "2024-12-01" },
     { id: 2, name: "Program Feedback Survey", questions: 8, sentTo: 189, responseRate: 72, lastSent: "2024-11-15" },
@@ -24,14 +22,6 @@ const Surveys = () => {
     { id: 4, name: "Event Feedback Survey", questions: 6, sentTo: 156, responseRate: 82, lastSent: "2024-12-10" },
     { id: 5, name: "Partner Satisfaction Survey", questions: 12, sentTo: 78, responseRate: 65, lastSent: "2024-11-20" },
   ];
-
-  const surveyResponsesData = {
-    1: [
-      { question: "How satisfied are you with the association?", rating: 4.2, responses: { 1: 5, 2: 12, 3: 45, 4: 89, 5: 94 } },
-      { question: "Would you recommend us to others?", yes: 78, no: 22 },
-      { question: "How valuable are our programs?", rating: 4.0, responses: { 1: 8, 2: 15, 3: 52, 4: 78, 5: 92 } },
-    ],
-  };
 
   useEffect(() => {
     setIsLoading(true);
@@ -60,7 +50,7 @@ const Surveys = () => {
     }, 1000);
   }, [selectedPath]);
 
-  const handleDeleteFile = useCallback(async (fileIndex) => {
+  const handleDeleteFile = useCallback(async () => {
     if (!selectedPath) return;
     setTimeout(() => alert(`Survey deleted successfully from Association Surveys!`), 500);
   }, [selectedPath]);
@@ -123,10 +113,8 @@ const Surveys = () => {
           </div>
         </div>
 
-        {/* Main Content Area */}
         <div style={{ display: 'grid', gridTemplateColumns: selectedPath && activeView === 'manage' ? '350px 1fr' : '1fr', gap: 20, minHeight: 'calc(100vh - 160px)' }}>
           
-          {/* File Explorer - only show in manage view */}
           {activeView === 'manage' && (
             <FileExplorer
               structure={SURVEYS_STRUCTURE}
@@ -138,13 +126,12 @@ const Surveys = () => {
             />
           )}
 
-          {/* Survey Templates View */}
           {activeView === 'templates' && (
             <div style={{ background: 'white', borderRadius: 12, border: '1px solid var(--medium-brown)', padding: 24 }}>
               <h3 style={{ color: 'var(--text-brown)', marginBottom: 20 }}>Survey Templates</h3>
               <div style={{ display: 'grid', gap: 16 }}>
                 {surveyTemplates.map(survey => (
-                  <div key={survey.id} style={{ padding: 16, border: '1px solid var(--pale-brown)', borderRadius: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div key={survey.id} className="survey-card" style={{ padding: 16, border: '1px solid var(--pale-brown)', borderRadius: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center', transition: 'all 0.2s ease' }}>
                     <div>
                       <h4 style={{ margin: '0 0 8px 0', color: 'var(--text-brown)' }}>{survey.name}</h4>
                       <div style={{ display: 'flex', gap: 20, fontSize: 12, color: '#666' }}>
@@ -163,7 +150,6 @@ const Surveys = () => {
             </div>
           )}
 
-          {/* Send Survey View */}
           {activeView === 'send' && selectedSurvey && (
             <div style={{ background: 'white', borderRadius: 12, border: '1px solid var(--medium-brown)', padding: 24 }}>
               <button onClick={() => setActiveView('templates')} style={{ background: 'none', border: 'none', color: 'var(--primary-brown)', cursor: 'pointer', marginBottom: 20 }}>← Back to Templates</button>
@@ -185,7 +171,6 @@ const Surveys = () => {
             </div>
           )}
 
-          {/* View Responses View */}
           {activeView === 'responses' && selectedSurvey && (
             <div style={{ background: 'white', borderRadius: 12, border: '1px solid var(--medium-brown)', padding: 24 }}>
               <button onClick={() => setActiveView('templates')} style={{ background: 'none', border: 'none', color: 'var(--primary-brown)', cursor: 'pointer', marginBottom: 20 }}>← Back to Templates</button>
@@ -199,7 +184,7 @@ const Surveys = () => {
                 <h4>Sample Response Data</h4>
                 <div style={{ marginTop: 16 }}>
                   <p><strong>Overall Satisfaction Rating:</strong> 4.2 / 5.0</p>
-                  <div style={{ background: 'var(--light-brown)', height: 8, borderRadius: 4, marginTop: 8 }}>
+                  <div style={{ background: 'var(--light-brown)', height: 8, borderRadius: 4, marginTop: 8, overflow: 'hidden' }}>
                     <div style={{ width: '84%', background: 'var(--primary-brown)', height: 8, borderRadius: 4 }}></div>
                   </div>
                   <p style={{ marginTop: 16 }}><strong>Would Recommend:</strong> 78% Yes, 22% No</p>
@@ -212,7 +197,6 @@ const Surveys = () => {
             </div>
           )}
 
-          {/* File Uploader - for manage view */}
           {activeView === 'manage' && selectedPath && selectedItem && (
             <FileUploader
               path={selectedPath}
@@ -225,7 +209,6 @@ const Surveys = () => {
             />
           )}
 
-          {/* Empty State for Manage View */}
           {activeView === 'manage' && !selectedPath && (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'white', borderRadius: 8, border: '1px solid var(--medium-brown)' }}>
               <div style={{ textAlign: 'center', padding: 40 }}>

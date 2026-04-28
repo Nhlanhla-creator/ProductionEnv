@@ -6,16 +6,20 @@
   border-radius: 12px;
   box-shadow: 0 4px 20px rgba(90, 57, 33, 0.1);
   font-family: 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  max-height: 85vh;
+  overflow-y: auto;
 }
 
 .heading {
   color: #5a3921;
   text-align: center;
   margin-bottom: 1.5rem;
+  margin-top: 0;
   font-weight: 600;
   font-size: 1.8rem;
   position: relative;
   padding-bottom: 0.5rem;
+  flex-shrink: 0;
 }
 
 .heading:after {

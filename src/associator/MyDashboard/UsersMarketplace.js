@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { FileExplorer } from './shared/FileExplorer';
-import { FileUploader } from './shared/FileUploader';
-import { USERS_STRUCTURE } from './structure/usersMpStructure';
+import { FileExplorer } from '../../shared/FileExplorer';
+import { FileUploader } from '../../shared/FileUploader';
+import { USERS_STRUCTURE } from '../../structure/usersMpStructure';
 import { AlertCircle } from 'lucide-react';
 
 const UsersMarketplace = () => {
