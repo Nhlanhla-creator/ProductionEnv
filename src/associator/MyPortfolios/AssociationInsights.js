@@ -92,9 +92,9 @@ var CsCard = function(props) {
   return (
     <div style={{
       background: "#fff", borderRadius: "10px", padding: "20px",
-      height: CS_CARD_H,
       boxShadow: "0 2px 10px rgba(59,36,9,0.07)", border: "1px solid " + BP.pale,
       display: "flex", flexDirection: "column",
+      height: CS_CARD_H,
     }}>
       <div style={{ paddingBottom: "10px", borderBottom: "1px solid " + BP.offwhite, marginBottom: "8px" }}>
         <h3 style={{ fontSize: "14px", fontWeight: "700", color: BP.dark, margin: 0 }}>{title}</h3>
@@ -413,7 +413,11 @@ var placeholderPortfolioMetrics = {
 
 var CohortSelectionTabContent = function() {
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(380px, 1fr))", gap: "20px" }}>
+    <div style={{ 
+      display: "grid", 
+      gridTemplateColumns: "repeat(3, 1fr)", 
+      gap: "20px"
+    }}>
       <CsAverageMatchStrength metrics={placeholderUniversalMetrics} portfolioMetrics={placeholderPortfolioMetrics} />
       <CsAverageBIGScore metrics={placeholderUniversalMetrics} portfolioMetrics={placeholderPortfolioMetrics} />
       <CsFundingReadinessRate metrics={placeholderUniversalMetrics} />
@@ -719,7 +723,8 @@ var AssociationInsights = function() {
         })}
       </div>
 
-      <div className="flex gap-2 flex-wrap mb-5">
+      {/* Tabs in a single row - no wrapping */}
+      <div className="flex flex-nowrap gap-2 mb-5 overflow-x-auto pb-2">
         {tabs.map(function(tab) {
           var Icon = tab.icon;
           var active = activeTab === tab.id;
@@ -728,11 +733,12 @@ var AssociationInsights = function() {
               key={tab.id}
               onClick={function() { setActiveTab(tab.id); }}
               className={
-                "flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium border transition-all duration-200 cursor-pointer " +
+                "flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium border transition-all duration-200 cursor-pointer whitespace-nowrap " +
                 (active
                   ? "bg-mediumBrown text-white border-mediumBrown shadow-md"
                   : "bg-white text-textBrown border-lightTan hover:border-mediumBrown hover:text-mediumBrown")
               }
+              style={{ flex: "0 0 auto" }}
             >
               <Icon size={13} />
               <span>{tab.label}</span>
@@ -741,14 +747,11 @@ var AssociationInsights = function() {
         })}
       </div>
 
-      <div className={activeTab === "cohort-selection" ? "" : "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5"}>
-
-        {activeTab === "cohort-selection" && (
-          <CohortSelectionTabContent />
-        )}
+      <div>
+        {activeTab === "cohort-selection" && <CohortSelectionTabContent />}
 
         {activeTab === "program-types" && (
-          <div style={{ display: "contents" }}>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
             <div className="bg-white rounded-2xl border border-lightTan p-4 shadow-sm" style={{ height: 280 }}>
               <canvas ref={chartRefs.supportTypeBreakdown} />
             </div>
@@ -775,7 +778,7 @@ var AssociationInsights = function() {
         )}
 
         {activeTab === "sector-focus" && (
-          <div style={{ display: "contents" }}>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
             <div className="bg-white rounded-2xl border border-lightTan p-4 shadow-sm" style={{ height: 280 }}>
               <canvas ref={chartRefs.programsBySector} />
             </div>
@@ -789,7 +792,7 @@ var AssociationInsights = function() {
         )}
 
         {activeTab === "outcomes-effectiveness" && (
-          <div style={{ display: "contents" }}>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
             <div className="bg-white rounded-2xl border border-lightTan p-4 shadow-sm" style={{ height: 280 }}>
               <canvas ref={chartRefs.bigScoreComparison} />
             </div>
@@ -803,7 +806,7 @@ var AssociationInsights = function() {
         )}
 
         {activeTab === "engagement-patterns" && (
-          <div style={{ display: "contents" }}>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
             <div className="bg-white rounded-2xl border border-lightTan p-4 shadow-sm" style={{ height: 280 }}>
               <canvas ref={chartRefs.applicationVolumeOverTime} />
             </div>
@@ -815,7 +818,6 @@ var AssociationInsights = function() {
             </div>
           </div>
         )}
-
       </div>
     </div>
   );

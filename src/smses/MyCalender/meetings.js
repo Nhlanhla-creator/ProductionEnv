@@ -648,7 +648,7 @@ const EventCounterpart = styled.div`
 `;
 
 // Main Component
-const Meetings = ({ stats, setStats }) => {
+const Meetings = ({ stats, setStats, matchesList  }) => {
   const [activeTab, setActiveTab] = useState('upcoming');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showCalendar, setShowCalendar] = useState(false);
@@ -1243,6 +1243,7 @@ const Meetings = ({ stats, setStats }) => {
           <CreateEventForm
             onSubmit={handleCreateEvent}
             onCancel={() => setShowCreateModal(false)}
+            previousRecipients={matchesList}  // <-- ADD THIS LINE
           />
         </Modal>
       )}
