@@ -2,7 +2,8 @@
 import { useState, useRef, useEffect } from "react"
 import { Eye, ChevronDown, Search, X, Trophy, TrendingUp, Calendar, DollarSign, FileText, Users, MapPin, GraduationCap, Briefcase, RefreshCw, BarChart3, Package, Star, MessageSquare, Send, Truck, Award } from "lucide-react"
 // REMOVED: import ProductServiceApplication from "../../smses/ProductApplication/ProductApplication"
-import { SupplierTable } from "./supplier-table"
+// REMOVED: import { SupplierTable } from "./supplier-table"
+import GroupedSupplierMatches from "./GroupedSupplierMatches"
 
 import { db, auth } from "../../firebaseConfig"
 import { collection, query, where, onSnapshot, doc, getDoc, updateDoc, arrayUnion, serverTimestamp, addDoc, getDocs } from "firebase/firestore"
@@ -795,14 +796,27 @@ const SupplierTabbedTables = ({
     setActiveTab(tab)
   }
 
+  // NOTE: This handler is intentionally NOT wrapped in useCallback because
+  // its identity is irrelevant now that the GroupedSupplierMatches propagator
+  // effect holds `onSuppliersUpdate` in a ref. The updater form below makes
+  // each setState a no-op when the incoming data is reference-equal to the
+  // previous state, which is the crucial guard against the render loop that
+  // previously froze route transitions on /supplier-matches.
   const handleSuppliersUpdate = (allSuppliersData, filteredSuppliersData) => {
-    setAllSuppliers(allSuppliersData)
-    setFilteredSuppliers(filteredSuppliersData)
+    setAllSuppliers((prev) => (prev === allSuppliersData ? prev : allSuppliersData))
+    setFilteredSuppliers((prev) =>
+      prev === filteredSuppliersData ? prev : filteredSuppliersData,
+    )
 
     const accepted = allSuppliersData.filter(
       (supplier) => supplier.status === "Accepted" || supplier.currentStage === "Accepted",
     )
-    setAcceptedSuppliers(accepted)
+    setAcceptedSuppliers((prev) => {
+      if (prev.length === accepted.length && prev.every((s, i) => s === accepted[i])) {
+        return prev
+      }
+      return accepted
+    })
 
     // Pass data back to parent component
     if (onSuppliersUpdate) {
@@ -955,11 +969,11 @@ const SupplierTabbedTables = ({
       >
         {activeTab === "my-matches" && (
           <div>
-            <SupplierTable
-              onSupplierContacted={onSupplierContacted}
+            {/* Grouped view: one compact matches table per application,
+                separated by an AppID divider, driven by the useMatches hook. */}
+            <GroupedSupplierMatches
               onSuppliersUpdate={handleSuppliersUpdate}
-              onSupplierAccepted={handleSupplierAccepted}
-              onNewRequest={handleNewRequest}
+              onSupplierContacted={onSupplierContacted}
             />
           </div>
         )}

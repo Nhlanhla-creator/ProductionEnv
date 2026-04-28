@@ -199,7 +199,7 @@ function getDeliveryModeMatches(appModes, supplyModes) {
   return matches
 }
 
-const getFirstCategory = (productsServices) => {
+export const getFirstCategory = (productsServices) => {
   if (!productsServices) return "Not specified"
 
   // Check productCategories first
@@ -234,7 +234,7 @@ function convertToDays(value, unit) {
 }
 
 // Enhanced match calculation functions
-function calculateCategoryMatch(application, supplier) {
+export function calculateCategoryMatch(application, supplier) {
   const appCategories = (
     application.productsServices?.categories ||
     application.requestOverview?.categories ||
@@ -411,7 +411,7 @@ function calculateRatingMatch(supplier, ratingsData) {
   return supplierRatingData.average / 5
 }
 
-function extractSupplierDescriptiveText(supplier) {
+export function extractSupplierDescriptiveText(supplier) {
   let text = "";
 
   // Product descriptions
@@ -444,7 +444,7 @@ function extractSupplierDescriptiveText(supplier) {
   return text.toLowerCase().trim();
 }
 
-function calculateEnhancedMatchScore(application, supplier, ratingsData = null) {
+export function calculateEnhancedMatchScore(application, supplier, ratingsData = null) {
   if (!application || !supplier) {
     return { totalScore: 0, breakdown: {} }
   }
@@ -556,6 +556,202 @@ function calculateEnhancedMatchScore(application, supplier, ratingsData = null) 
     totalScore: Math.round(totalScore),
     breakdown,
   }
+}
+
+// ── Preference-only score (secondary) ──────────────────────────────────
+// SECONDARY matching score: evaluates applicant-specified preferences
+// against the supplier profile. Excludes category alignment (handled
+// by the AI primary score). Returns 0-100 with per-criterion breakdown.
+
+const PREFERENCE_WEIGHTS = {
+  BBBEE_LEVEL:       { weight: 0.15, label: "BBBEE Level Compliance" },
+  LOCATION:          { weight: 0.15, label: "Geographic Location Match" },
+  DELIVERY_MODE:     { weight: 0.15, label: "Delivery Mode Compatibility" },
+  BUDGET_RANGE:      { weight: 0.20, label: "Budget Fit" },
+  OWNERSHIP_PREFS:   { weight: 0.10, label: "Ownership Preferences Match" },
+  RATING:            { weight: 0.10, label: "Supplier Rating" },
+  EXPERIENCE:        { weight: 0.10, label: "Sector Experience" },
+  URGENCY_LEAD_TIME: { weight: 0.05, label: "Urgency & Lead Time" },
+}
+
+export function calculatePreferenceScore(application, supplier, ratingsData = null) {
+  if (!application || !supplier) return { totalScore: 0, breakdown: {} }
+
+  let totalScore = 0
+  const breakdown = {}
+
+  // BBBEE Match (15%)
+  const bbbeeScore = calculateBBBEEEMatch(application, supplier)
+  const bbbeeCont = bbbeeScore * PREFERENCE_WEIGHTS.BBBEE_LEVEL.weight * 100
+  totalScore += bbbeeCont
+  breakdown.bbbee = {
+    score: Math.round(bbbeeScore * 100),
+    weight: PREFERENCE_WEIGHTS.BBBEE_LEVEL.weight,
+    contribution: Math.round(bbbeeCont),
+    label: PREFERENCE_WEIGHTS.BBBEE_LEVEL.label,
+    appValue: application.matchingPreferences?.bbeeLevel || "None specified",
+    supplierValue: supplier.legalCompliance?.bbbeeLevel || "N/A",
+  }
+
+  // Location Match (15%)
+  const locationScore = calculateLocationMatch(application, supplier)
+  const locationCont = locationScore * PREFERENCE_WEIGHTS.LOCATION.weight * 100
+  totalScore += locationCont
+  breakdown.location = {
+    score: Math.round(locationScore * 100),
+    weight: PREFERENCE_WEIGHTS.LOCATION.weight,
+    contribution: Math.round(locationCont),
+    label: PREFERENCE_WEIGHTS.LOCATION.label,
+    appValue: application.matchingPreferences?.location || application.requestOverview?.location || "Any",
+    supplierValue: supplier.entityOverview?.location || "Not specified",
+  }
+
+  // Delivery Mode (15%)
+  const deliveryScore = calculateDeliveryMatch(application, supplier)
+  const deliveryCont = deliveryScore * PREFERENCE_WEIGHTS.DELIVERY_MODE.weight * 100
+  totalScore += deliveryCont
+  breakdown.delivery = {
+    score: Math.round(deliveryScore * 100),
+    weight: PREFERENCE_WEIGHTS.DELIVERY_MODE.weight,
+    contribution: Math.round(deliveryCont),
+    label: PREFERENCE_WEIGHTS.DELIVERY_MODE.label,
+    appValue: (application.matchingPreferences?.deliveryModes || application.requestOverview?.deliveryModes || []).join(", ") || "Any",
+    supplierValue: (supplier.productsServices?.deliveryModes || []).join(", ") || "Not specified",
+  }
+
+  // Budget Range (20%)
+  const budgetScore = calculateBudgetMatch(application, supplier)
+  const budgetCont = budgetScore * PREFERENCE_WEIGHTS.BUDGET_RANGE.weight * 100
+  totalScore += budgetCont
+  const minB = application.matchingPreferences?.minBudget || application.requestOverview?.minBudget || "0"
+  const maxB = application.matchingPreferences?.maxBudget || application.requestOverview?.maxBudget || "0"
+  breakdown.budget = {
+    score: Math.round(budgetScore * 100),
+    weight: PREFERENCE_WEIGHTS.BUDGET_RANGE.weight,
+    contribution: Math.round(budgetCont),
+    label: PREFERENCE_WEIGHTS.BUDGET_RANGE.label,
+    appValue: `R${minB} – R${maxB}`,
+    supplierValue: supplier.financialOverview?.annualRevenue || "Not disclosed",
+  }
+
+  // Ownership Prefs (10%)
+  const ownershipScore = calculateOwnershipMatch(application, supplier)
+  const ownershipCont = ownershipScore * PREFERENCE_WEIGHTS.OWNERSHIP_PREFS.weight * 100
+  totalScore += ownershipCont
+  breakdown.ownership = {
+    score: Math.round(ownershipScore * 100),
+    weight: PREFERENCE_WEIGHTS.OWNERSHIP_PREFS.weight,
+    contribution: Math.round(ownershipCont),
+    label: PREFERENCE_WEIGHTS.OWNERSHIP_PREFS.label,
+    appValue: (application.matchingPreferences?.ownershipPrefs || []).join(", ") || "None specified",
+    supplierValue: "Evaluated from shareholder data",
+  }
+
+  // Rating (10%)
+  const ratingScore = calculateRatingMatch(supplier, ratingsData)
+  const ratingCont = ratingScore * PREFERENCE_WEIGHTS.RATING.weight * 100
+  totalScore += ratingCont
+  const ratingInfo = ratingsData?.[supplier.id] || { average: 0, count: 0 }
+  breakdown.rating = {
+    score: Math.round(ratingScore * 100),
+    weight: PREFERENCE_WEIGHTS.RATING.weight,
+    contribution: Math.round(ratingCont),
+    label: PREFERENCE_WEIGHTS.RATING.label,
+    appValue: "Platform rating",
+    supplierValue: ratingInfo.count > 0 ? `${ratingInfo.average.toFixed(1)}/5 (${ratingInfo.count} reviews)` : "No reviews yet",
+  }
+
+  // Experience (10%) — stub
+  const experienceScore = 0.5
+  const experienceCont = experienceScore * PREFERENCE_WEIGHTS.EXPERIENCE.weight * 100
+  totalScore += experienceCont
+  breakdown.experience = {
+    score: Math.round(experienceScore * 100),
+    weight: PREFERENCE_WEIGHTS.EXPERIENCE.weight,
+    contribution: Math.round(experienceCont),
+    label: PREFERENCE_WEIGHTS.EXPERIENCE.label,
+    appValue: "Any",
+    supplierValue: "Not evaluated yet",
+  }
+
+  // Urgency / Lead Time (5%) — stub
+  const urgencyScorePref = 0.5
+  const urgencyContPref = urgencyScorePref * PREFERENCE_WEIGHTS.URGENCY_LEAD_TIME.weight * 100
+  totalScore += urgencyContPref
+  breakdown.urgency = {
+    score: Math.round(urgencyScorePref * 100),
+    weight: PREFERENCE_WEIGHTS.URGENCY_LEAD_TIME.weight,
+    contribution: Math.round(urgencyContPref),
+    label: PREFERENCE_WEIGHTS.URGENCY_LEAD_TIME.label,
+    appValue: "Any",
+    supplierValue: "Not evaluated yet",
+  }
+
+  return { totalScore: Math.round(totalScore), breakdown }
+}
+
+// ── Reusable AI analysis runner ────────────────────────────────────────
+// Calls the Cloud Function, saves results to Firestore, and returns
+// the processed matches map. Can be called from any component.
+
+export async function runAiAnalysisForApplication(application, suppliers, { onProgress } = {}) {
+  if (!application || !suppliers?.length) {
+    throw new Error("Application and suppliers are required")
+  }
+
+  const applicationId = application.id
+  if (!applicationId) throw new Error("Application must have an id")
+
+  const customerPurpose =
+    application.requestOverview?.purpose ||
+    application.purpose ||
+    "General business procurement needs"
+
+  const suppliersForAnalysis = suppliers.map((s) => ({
+    id: s.id,
+    entityOverview: s.entityOverview || {},
+    productsServices: s.productsServices || {},
+  }))
+
+  const functions = getFunctions()
+  const analyzeSupplierMatches = httpsCallable(functions, "analyzeSupplierMatches")
+
+  if (onProgress) onProgress({ current: 0, total: suppliersForAnalysis.length })
+
+  const result = await analyzeSupplierMatches({
+    suppliers: suppliersForAnalysis,
+    customerPurpose,
+    applicationId,
+    analyzeAll: true,
+    maxSuppliers: suppliersForAnalysis.length,
+  })
+
+  const { matches } = result.data
+
+  const processedMatches = {}
+  matches.forEach((match) => {
+    const normalizedScore = Math.round((match.score / 5) * 100)
+    processedMatches[match.supplierId] = {
+      score: normalizedScore,
+      reasoning: match.reasoning || "No reasoning provided",
+      capabilities: match.matchedCapabilities || [],
+      analyzedAt: new Date().toISOString(),
+    }
+  })
+
+  if (onProgress) onProgress({ current: Object.keys(processedMatches).length, total: suppliersForAnalysis.length })
+
+  // Persist to Firestore
+  const matchDocRef = doc(db, "aiSecondaryMatches", applicationId)
+  await setDoc(matchDocRef, {
+    suppliers: processedMatches,
+    requestPurpose: customerPurpose,
+    analyzedAt: serverTimestamp(),
+    suppliersAnalyzed: Object.keys(processedMatches).length,
+    applicationId,
+  })
+
+  return processedMatches
 }
 
 // Helper function to calculate string similarity

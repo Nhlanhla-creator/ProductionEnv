@@ -1,9 +1,11 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { Fragment, useState, useEffect } from "react"
 import { collection, query, where, getDocs, orderBy, deleteDoc, doc } from "firebase/firestore"
 import { db, auth } from "../../firebaseConfig"
-import { Eye, FileText, Package, Calendar, Plus, RefreshCw, Trash2, CheckCircle, Clock, AlertCircle, Zap } from "lucide-react"
+import { Eye, FileText, Package, Calendar, Plus, RefreshCw, Trash2, CheckCircle, Clock, AlertCircle, Zap, Hash, ChevronDown, ChevronUp } from "lucide-react"
+import useMatches, { deriveAppId } from "../hooks/useMatches"
+import SupplierMatchesTable from "../MySupplierMatches/SupplierMatchesTable"
 
 const ApplicationsList = ({ onViewSummary, onEditApplication, onCreateNew, embedded = false }) => {
   const [applications, setApplications] = useState([])
@@ -11,6 +13,12 @@ const ApplicationsList = ({ onViewSummary, onEditApplication, onCreateNew, embed
   const [error, setError] = useState(null)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(null)
   const [deleting, setDeleting] = useState(false)
+  const [expandedAppId, setExpandedAppId] = useState(null)
+
+  // Hook computes per-application supplier matches using the shared
+  // category-based scoring logic. It fetches suppliers + ratings once and
+  // re-uses them for every row, so expanding a row is instant after load.
+  const { matchesByAppId, loading: matchesLoading } = useMatches()
 
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged((user) => {
@@ -64,7 +72,7 @@ const ApplicationsList = ({ onViewSummary, onEditApplication, onCreateNew, embed
     let name = "Product Request"
     if (purpose?.trim()) name = purpose.trim().split(/\s+/).slice(0, 5).join(" ")
     else if (primaryCategory !== "Uncategorized") name = `${primaryCategory} Request`
-    return { id:docId, name, primaryCategory, purposePreview: purpose.length > 55 ? purpose.slice(0,55)+"…" : purpose, budgetDisplay, lastUpdatedFormatted, lastUpdatedTimestamp, isComplete, status: data.status || (isComplete ? "complete" : "draft") }
+    return { id:docId, appId: deriveAppId(docId), name, primaryCategory, purposePreview: purpose.length > 55 ? purpose.slice(0,55)+"…" : purpose, budgetDisplay, lastUpdatedFormatted, lastUpdatedTimestamp, isComplete, status: data.status || (isComplete ? "complete" : "draft") }
   }
 
   const handleDelete = async (appId) => {
@@ -114,21 +122,28 @@ const ApplicationsList = ({ onViewSummary, onEditApplication, onCreateNew, embed
         }
 
         /* min-width prevents columns from crushing when sidebar is open */
-        .al-tbl { width:100%; min-width:780px; border-collapse:collapse; table-layout:fixed; }
+        .al-tbl { width:100%; min-width:860px; border-collapse:collapse; table-layout:fixed; }
 
-        /* 5 columns now (no Edit) */
-        .al-tbl col.c1 { width:30%; }   /* Application  */
-        .al-tbl col.c2 { width:14%; }   /* Category     */
-        .al-tbl col.c3 { width:14%; }   /* Budget       */
-        .al-tbl col.c4 { width:13%; }   /* Last updated */
-        .al-tbl col.c5 { width:11%; }   /* Status       */
-        .al-tbl col.c6 { width:18%; }   /* Actions      */
+        /* Expansion row container */
+        .al-expand-row > td { padding:0 !important; background:rgba(250,247,242,0.6); border-bottom:1px solid rgba(200,182,166,0.2); }
+        .al-expand-wrap { padding:14px 18px 20px; animation:al-fadein 0.25s ease-out; }
+        .al-expand-title { display:flex; align-items:center; gap:8px; margin-bottom:10px; font-size:12px; font-weight:700; color:#4a352f; text-transform:uppercase; letter-spacing:0.5px; }
+
+        .al-appid { display:inline-flex; align-items:center; gap:5px; padding:3px 9px; background:linear-gradient(135deg,#5d4037,#4a332a); color:#FAF7F2; border-radius:999px; font-size:10.5px; font-weight:700; letter-spacing:0.5px; white-space:nowrap; font-family:'SF Mono','Monaco','Consolas',monospace; }
+
+        /* 7 columns: AppID + Application + Category + Budget + Updated + Status + Actions */
+        .al-tbl col.c0 { width:9%;  }   /* AppID        */
+        .al-tbl col.c1 { width:24%; }   /* Application  */
+        .al-tbl col.c2 { width:13%; }   /* Category     */
+        .al-tbl col.c3 { width:13%; }   /* Budget       */
+        .al-tbl col.c4 { width:12%; }   /* Last updated */
+        .al-tbl col.c5 { width:10%; }   /* Status       */
+        .al-tbl col.c6 { width:19%; }   /* Actions      */
 
         .al-tbl th {
           padding:13px 15px; text-align:left;
           font-size:11px; font-weight:700; color:#4a352f;
           text-transform:uppercase; letter-spacing:0.55px; white-space:nowrap;
-          background:linear-gradient(135deg,#e6d7c3,#c8b6a6);
           border-bottom:2px solid rgba(166,124,82,0.2);
         }
         .al-tbl th.r { text-align:center; }
@@ -187,11 +202,13 @@ const ApplicationsList = ({ onViewSummary, onEditApplication, onCreateNew, embed
           <div className="al-wrap">
             <table className="al-tbl">
               <colgroup>
-                <col className="c1"/><col className="c2"/><col className="c3"/>
-                <col className="c4"/><col className="c5"/><col className="c6"/>
+                <col className="c0"/><col className="c1"/><col className="c2"/>
+                <col className="c3"/><col className="c4"/><col className="c5"/>
+                <col className="c6"/>
               </colgroup>
               <thead>
                 <tr>
+                  <th>AppID</th>
                   <th>Application</th>
                   <th>Category</th>
                   <th>Budget</th>
@@ -203,64 +220,106 @@ const ApplicationsList = ({ onViewSummary, onEditApplication, onCreateNew, embed
               <tbody>
                 {applications.map((app) => {
                   const { label, color, bg, Icon } = getStatusBadge(app)
+                  const isExpanded = expandedAppId === app.id
+                  const matches = matchesByAppId[app.appId] || []
                   return (
-                    <tr key={app.id}>
+                    <Fragment key={app.id}>
+                      <tr>
+                        {/* AppID */}
+                        <td>
+                          <span className="al-appid" title={`Full application id: ${app.id}`}>
+                            <Hash size={10} /> {app.appId}
+                          </span>
+                        </td>
 
-                      {/* Application */}
-                      <td>
-                        <div style={{ display:"flex", alignItems:"center", gap:9, minWidth:0 }}>
-                          <div style={{ width:32, height:32, flexShrink:0, background:"rgba(166,124,82,0.1)", borderRadius:8, display:"flex", alignItems:"center", justifyContent:"center" }}>
-                            <Package size={15} color="#a67c52" />
+                        {/* Application */}
+                        <td>
+                          <div style={{ display:"flex", alignItems:"center", gap:9, minWidth:0 }}>
+                            <div style={{ width:32, height:32, flexShrink:0, background:"rgba(166,124,82,0.1)", borderRadius:8, display:"flex", alignItems:"center", justifyContent:"center" }}>
+                              <Package size={15} color="#a67c52" />
+                            </div>
+                            <div style={{ minWidth:0, flex:1 }}>
+                              <span className="ell" style={{ fontWeight:600, color:"#4a352f", fontSize:13, marginBottom:2 }} title={app.name}>{app.name}</span>
+                              <span className="ell" style={{ fontSize:11, color:"#6b7280" }} title={app.purposePreview}>{app.purposePreview}</span>
+                            </div>
                           </div>
-                          <div style={{ minWidth:0, flex:1 }}>
-                            <span className="ell" style={{ fontWeight:600, color:"#4a352f", fontSize:13, marginBottom:2 }} title={app.name}>{app.name}</span>
-                            <span className="ell" style={{ fontSize:11, color:"#6b7280" }} title={app.purposePreview}>{app.purposePreview}</span>
+                        </td>
+
+                        {/* Category */}
+                        <td>
+                          <span className="ell" style={{ display:"inline-block", maxWidth:"100%", padding:"3px 9px", background:"rgba(166,124,82,0.1)", borderRadius:20, fontSize:11, fontWeight:500, color:"#7d5a50" }} title={app.primaryCategory}>
+                            {app.primaryCategory}
+                          </span>
+                        </td>
+
+                        {/* Budget */}
+                        <td>
+                          <span className="ell" style={{ fontWeight:600, color:"#4a352f", fontSize:12 }} title={app.budgetDisplay}>{app.budgetDisplay}</span>
+                        </td>
+
+                        {/* Last Updated */}
+                        <td>
+                          <div style={{ display:"flex", alignItems:"center", gap:5, color:"#6b7280", fontSize:11, whiteSpace:"nowrap" }}>
+                            <Calendar size={12} style={{ flexShrink:0 }} /> {app.lastUpdatedFormatted}
                           </div>
-                        </div>
-                      </td>
+                        </td>
 
-                      {/* Category */}
-                      <td>
-                        <span className="ell" style={{ display:"inline-block", maxWidth:"100%", padding:"3px 9px", background:"rgba(166,124,82,0.1)", borderRadius:20, fontSize:11, fontWeight:500, color:"#7d5a50" }} title={app.primaryCategory}>
-                          {app.primaryCategory}
-                        </span>
-                      </td>
+                        {/* Status */}
+                        <td>
+                          <span style={{ display:"inline-flex", alignItems:"center", gap:4, padding:"3px 9px", background:bg, color, borderRadius:20, fontSize:11, fontWeight:600, whiteSpace:"nowrap" }}>
+                            <Icon size={10} /> {label}
+                          </span>
+                        </td>
 
-                      {/* Budget */}
-                      <td>
-                        <span className="ell" style={{ fontWeight:600, color:"#4a352f", fontSize:12 }} title={app.budgetDisplay}>{app.budgetDisplay}</span>
-                      </td>
+                        {/* Actions */}
+                        <td>
+                          <div className="al-acts">
+                            <button className="al-btn ab-view" onClick={() => onViewSummary(app.id, app)}>
+                              <Eye size={12} /> View
+                            </button>
+                            <button
+                              className="al-btn ab-matches"
+                              onClick={() => setExpandedAppId((prev) => (prev === app.id ? null : app.id))}
+                              aria-expanded={isExpanded}
+                              title={isExpanded ? "Hide matches" : "Show matches for this application"}
+                            >
+                              <Zap size={12} /> Matches{matches.length > 0 && !isExpanded ? ` (${matches.length})` : ""}
+                              {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                            </button>
+                            <button className="al-btn ab-del" onClick={() => setShowDeleteConfirm(app.id)} title="Delete">
+                              <Trash2 size={12} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
 
-                      {/* Last Updated */}
-                      <td>
-                        <div style={{ display:"flex", alignItems:"center", gap:5, color:"#6b7280", fontSize:11, whiteSpace:"nowrap" }}>
-                          <Calendar size={12} style={{ flexShrink:0 }} /> {app.lastUpdatedFormatted}
-                        </div>
-                      </td>
-
-                      {/* Status */}
-                      <td>
-                        <span style={{ display:"inline-flex", alignItems:"center", gap:4, padding:"3px 9px", background:bg, color, borderRadius:20, fontSize:11, fontWeight:600, whiteSpace:"nowrap" }}>
-                          <Icon size={10} /> {label}
-                        </span>
-                      </td>
-
-                      {/* Actions — View, Matches, Delete only (no Edit) */}
-                      <td>
-                        <div className="al-acts">
-                          <button className="al-btn ab-view" onClick={() => onViewSummary(app.id, app)}>
-                            <Eye size={12} /> View
-                          </button>
-                          <button className="al-btn ab-matches" onClick={() => (window.location.href = "/supplier-matches")}>
-                            <Zap size={12} /> Matches
-                          </button>
-                          <button className="al-btn ab-del" onClick={() => setShowDeleteConfirm(app.id)} title="Delete">
-                            <Trash2 size={12} />
-                          </button>
-                        </div>
-                      </td>
-
-                    </tr>
+                      {isExpanded && (
+                        <tr className="al-expand-row">
+                          <td colSpan={7}>
+                            <div className="al-expand-wrap">
+                              <div className="al-expand-title">
+                                <Zap size={13} color="#a67c52" />
+                                <span>Supplier Matches for</span>
+                                <span className="al-appid"><Hash size={10} /> {app.appId}</span>
+                                <span style={{ fontWeight:500, color:"#7d5a50", textTransform:"none", letterSpacing:0 }}>
+                                  &mdash; {matches.length} {matches.length === 1 ? "supplier" : "suppliers"} relevant to this request
+                                </span>
+                              </div>
+                              <SupplierMatchesTable
+                                suppliers={matches}
+                                loading={matchesLoading}
+                                dense
+                                emptyMessage={
+                                  matchesLoading
+                                    ? "Loading matches\u2026"
+                                    : "No supplier matches yet for this application. Try broadening the categories or keywords."
+                                }
+                              />
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
                   )
                 })}
               </tbody>
