@@ -7,6 +7,7 @@ import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'fi
 
 const PARTNERS_COLLECTION  = 'partners_content';
 const PARTNERS_DATA_COLLECTION = 'partners_data';
+const STRUCTURE_COLLECTION = 'partners_structure';
 
 const getCurrentUser = () => {
   const user = auth.currentUser;
@@ -174,6 +175,37 @@ export const deleteContent = async (path) => {
     return { success: true };
   } catch (error) {
     console.error('❌ Error deleting content:', error);
+    throw error;
+  }
+};
+
+// ── User-custom structure (folders/file entries created on the frontend) ────────
+
+export const loadUserStructure = async () => {
+  try {
+    const user = getCurrentUser();
+    const docRef = doc(db, STRUCTURE_COLLECTION, user.uid);
+    const docSnap = await getDoc(docRef);
+    if (!docSnap.exists()) return {};
+    return docSnap.data().structure || {};
+  } catch (error) {
+    console.error('❌ Error loading user structure:', error);
+    return {};
+  }
+};
+
+export const saveUserStructure = async (structure) => {
+  try {
+    const user = getCurrentUser();
+    const docRef = doc(db, STRUCTURE_COLLECTION, user.uid);
+    await setDoc(docRef, {
+      userId: user.uid,
+      structure: structure || {},
+      updatedAt: serverTimestamp()
+    }, { merge: true });
+    return { success: true };
+  } catch (error) {
+    console.error('❌ Error saving user structure:', error);
     throw error;
   }
 };

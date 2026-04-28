@@ -167,6 +167,7 @@ export const FileUploader = ({
             size={48} 
             color={dragActive ? 'var(--primary-brown)' : 'var(--accent-brown)'} 
             style={{ marginBottom: 16 }}
+            className='mx-auto'
           />
           <p style={{ 
             margin: 0, 

@@ -2,11 +2,17 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { FileUploader } from './shared/FileUploader';
 import { ADMIN_STRUCTURE } from './structure/adminGovStructure';
 import { FileExplorer } from './shared/FileExplorer';
+import { CreateItemDialog } from './shared/CreateItemDialog';
+import { useCustomStructure } from './shared/useCustomStructure';
+import { findItemAtPath } from './structure/growthStructure';
 import {
   uploadFile,
   deleteFile,
   loadContent,
-  loadAllContent
+  loadAllContent,
+  loadUserStructure,
+  saveUserStructure,
+  deleteContent
 } from './services/governance';
 import { useAuth } from '../../smses/hooks/useAuth';
 import {
@@ -22,6 +28,34 @@ const AdminGovernance = () => {
   const [contentStatus, setContentStatus] = useState({});
   const [isUploading, setIsUploading] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Custom structure (folders/file entries created on the frontend)
+  const {
+    mergedStructure,
+    createDialog,
+    existingNamesAtParent,
+    openCreateDialog,
+    closeCreateDialog,
+    createItem,
+    deleteItem,
+  } = useCustomStructure({
+    user,
+    staticStructure: ADMIN_STRUCTURE,
+    loadUserStructure,
+    saveUserStructure,
+    deleteContent,
+  });
+
+  // Keep selectedItem in sync with the merged structure
+  useEffect(() => {
+    if (!selectedPath) { setSelectedItem(null); return; }
+    const item = findItemAtPath(mergedStructure, selectedPath);
+    if (!item || item.type === 'folder') {
+      setSelectedPath(null); setSelectedItem(null); setCurrentContent(null);
+      return;
+    }
+    setSelectedItem(item);
+  }, [mergedStructure, selectedPath]);
 
   // No longer needed: iconComponents
 
@@ -105,6 +139,33 @@ const AdminGovernance = () => {
     setCurrentContent(null);
   }, []);
 
+  const handleAddItem = openCreateDialog;
+
+  const handleCreateItem = useCallback(async (input) => {
+    const result = await createItem(input);
+    if (result?.parentPath?.length > 0) {
+      const k = result.parentPath.join(' > ');
+      setExpandedFolders(prev => ({ ...prev, [k]: true }));
+    }
+  }, [createItem]);
+
+  const handleDeleteItem = useCallback(async (path, item) => {
+    const result = await deleteItem(path, item);
+    if (!result?.handled) return;
+    setContentStatus(prev => {
+      const n = { ...prev };
+      for (const fp of result.deletedFilePaths) delete n[fp.join(' > ')];
+      return n;
+    });
+    if (selectedPath) {
+      const selKey = selectedPath.join(' > ');
+      const baseKey = result.basePath.join(' > ');
+      if (selKey === baseKey || selKey.startsWith(baseKey + ' > ')) {
+        setSelectedPath(null); setSelectedItem(null); setCurrentContent(null);
+      }
+    }
+  }, [deleteItem, selectedPath]);
+
   if (authLoading || isLoading) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
@@ -127,8 +188,6 @@ const AdminGovernance = () => {
       </div>
     );
   }
-
-  // Remove renderSidebarItems, use FileExplorer instead
 
   return (
     <>
@@ -167,11 +226,13 @@ const AdminGovernance = () => {
         }}>
           {/* File Explorer */}
           <FileExplorer
-            structure={ADMIN_STRUCTURE}
+            structure={mergedStructure}
             expandedFolders={expandedFolders}
             selectedPath={selectedPath}
             onToggleFolder={handleToggleFolder}
             onSelectItem={handleSelectItem}
+            onAddItem={handleAddItem}
+            onDeleteItem={handleDeleteItem}
             contentStatus={contentStatus}
           />
 
@@ -209,6 +270,14 @@ const AdminGovernance = () => {
           )}
         </div>
       </div>
+
+      <CreateItemDialog
+        open={createDialog.open}
+        parentPath={createDialog.parentPath}
+        existingNames={existingNamesAtParent}
+        onClose={closeCreateDialog}
+        onCreate={handleCreateItem}
+      />
     </>
   );
 };

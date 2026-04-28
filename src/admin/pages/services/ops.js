@@ -3,6 +3,7 @@ import { collection, doc, setDoc, getDoc, getDocs, query, where, deleteDoc, serv
 import { ref as storageRef, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 
 const COLLECTION = 'ops_content';
+const STRUCTURE_COLLECTION = 'ops_structure';
 
 const getCurrentUser = () => {
   const user = auth.currentUser;
@@ -154,6 +155,37 @@ export const deleteContent = async (path) => {
     return { success: true };
   } catch (error) {
     console.error('❌ Error deleting content:', error);
+    throw error;
+  }
+};
+
+// ── User-custom structure (folders/file entries created on the frontend) ────────
+
+export const loadUserStructure = async () => {
+  try {
+    const user = getCurrentUser();
+    const docRef = doc(db, STRUCTURE_COLLECTION, user.uid);
+    const docSnap = await getDoc(docRef);
+    if (!docSnap.exists()) return {};
+    return docSnap.data().structure || {};
+  } catch (error) {
+    console.error('❌ Error loading user structure:', error);
+    return {};
+  }
+};
+
+export const saveUserStructure = async (structure) => {
+  try {
+    const user = getCurrentUser();
+    const docRef = doc(db, STRUCTURE_COLLECTION, user.uid);
+    await setDoc(docRef, {
+      userId: user.uid,
+      structure: structure || {},
+      updatedAt: serverTimestamp()
+    }, { merge: true });
+    return { success: true };
+  } catch (error) {
+    console.error('❌ Error saving user structure:', error);
     throw error;
   }
 };
