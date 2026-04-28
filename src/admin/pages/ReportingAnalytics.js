@@ -1,8 +1,19 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { FileExplorer } from './shared/FileExplorer';
 import { FileUploader } from './shared/FileUploader';
+import { CreateItemDialog } from './shared/CreateItemDialog';
+import { useCustomStructure } from './shared/useCustomStructure';
+import { findItemAtPath } from './structure/growthStructure';
 import { REPORTS_STRUCTURE } from './structure/reportsStructure';
-import { uploadFile, deleteFile, loadContent, loadAllContent } from './services/reports';
+import {
+  uploadFile,
+  deleteFile,
+  loadContent,
+  loadAllContent,
+  loadUserStructure,
+  saveUserStructure,
+  deleteContent
+} from './services/reports';
 import { useAuth } from '../../smses/hooks/useAuth';
 import { AlertCircle } from 'lucide-react';
 
@@ -15,6 +26,34 @@ const ReportingAnalytics = () => {
   const [contentStatus, setContentStatus] = useState({});
   const [isUploading, setIsUploading] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Custom structure (folders/file entries created on the frontend)
+  const {
+    mergedStructure,
+    createDialog,
+    existingNamesAtParent,
+    openCreateDialog,
+    closeCreateDialog,
+    createItem,
+    deleteItem,
+  } = useCustomStructure({
+    user,
+    staticStructure: REPORTS_STRUCTURE,
+    loadUserStructure,
+    saveUserStructure,
+    deleteContent,
+  });
+
+  // Keep selectedItem in sync with the merged structure
+  useEffect(() => {
+    if (!selectedPath) { setSelectedItem(null); return; }
+    const item = findItemAtPath(mergedStructure, selectedPath);
+    if (!item || item.type === 'folder') {
+      setSelectedPath(null); setSelectedItem(null); setCurrentContent(null);
+      return;
+    }
+    setSelectedItem(item);
+  }, [mergedStructure, selectedPath]);
 
   useEffect(() => {
     if (!user) { setIsLoading(false); return; }
@@ -104,6 +143,33 @@ const ReportingAnalytics = () => {
 
   const handleCloseEditor = useCallback(() => { setSelectedPath(null); setSelectedItem(null); setCurrentContent(null); }, []);
 
+  const handleAddItem = openCreateDialog;
+
+  const handleCreateItem = useCallback(async (input) => {
+    const result = await createItem(input);
+    if (result?.parentPath?.length > 0) {
+      const k = result.parentPath.join(' > ');
+      setExpandedFolders(prev => ({ ...prev, [k]: true }));
+    }
+  }, [createItem]);
+
+  const handleDeleteItem = useCallback(async (path, item) => {
+    const result = await deleteItem(path, item);
+    if (!result?.handled) return;
+    setContentStatus(prev => {
+      const n = { ...prev };
+      for (const fp of result.deletedFilePaths) delete n[fp.join(' > ')];
+      return n;
+    });
+    if (selectedPath) {
+      const selKey = selectedPath.join(' > ');
+      const baseKey = result.basePath.join(' > ');
+      if (selKey === baseKey || selKey.startsWith(baseKey + ' > ')) {
+        setSelectedPath(null); setSelectedItem(null); setCurrentContent(null);
+      }
+    }
+  }, [deleteItem, selectedPath]);
+
   if (authLoading || isLoading) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh',}}>
@@ -140,7 +206,7 @@ const ReportingAnalytics = () => {
           <p style={{ fontSize: 14, color: '#666', margin: '4px 0 0 0' }}>Platform metrics, ESG impact, investor reports, and board presentations</p>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: selectedPath ? '350px 1fr' : '1fr', gap: 20, height: 'calc(100vh - 160px)' }}>
-          <FileExplorer structure={REPORTS_STRUCTURE} expandedFolders={expandedFolders} selectedPath={selectedPath} onToggleFolder={handleToggleFolder} onSelectItem={handleSelectItem} contentStatus={contentStatus} />
+          <FileExplorer structure={mergedStructure} expandedFolders={expandedFolders} selectedPath={selectedPath} onToggleFolder={handleToggleFolder} onSelectItem={handleSelectItem} onAddItem={handleAddItem} onDeleteItem={handleDeleteItem} contentStatus={contentStatus} />
           {selectedPath && selectedItem && <FileUploader path={selectedPath} itemConfig={selectedItem} content={currentContent} onUpload={handleUploadFile} onDelete={handleDeleteFile} onClose={handleCloseEditor} isUploading={isUploading} />}
           {!selectedPath && (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'white', borderRadius: 8, border: '1px solid var(--medium-brown)' }}>
@@ -153,6 +219,14 @@ const ReportingAnalytics = () => {
           )}
         </div>
       </div>
+
+      <CreateItemDialog
+        open={createDialog.open}
+        parentPath={createDialog.parentPath}
+        existingNames={existingNamesAtParent}
+        onClose={closeCreateDialog}
+        onCreate={handleCreateItem}
+      />
     </>
   );
 };

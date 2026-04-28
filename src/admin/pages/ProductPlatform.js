@@ -1,6 +1,9 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { FileExplorer } from './shared/FileExplorer';
 import { FileUploader } from './shared/FileUploader';
+import { CreateItemDialog } from './shared/CreateItemDialog';
+import { useCustomStructure } from './shared/useCustomStructure';
+import { findItemAtPath } from './structure/growthStructure';
 import { DocGovernanceChecklist } from './structure/DocGovChecklist';
 import { QAMasterTable } from './structure/qaMasterTable';
 import { PRODUCT_STRUCTURE } from './structure/productPlatformStructure';
@@ -10,19 +13,24 @@ import {
   uploadFile as uploadProductFile,
   deleteFile as deleteProductFile,
   loadContent as loadProductContent,
-  loadAllContent as loadAllProductContent
+  loadAllContent as loadAllProductContent,
+  deleteContent as deleteProductContent,
+  loadUserStructure,
+  saveUserStructure
 } from './services/product';
 import {
   uploadFile as uploadTechFile,
   deleteFile as deleteTechFile,
   loadContent as loadTechContent,
-  loadAllContent as loadAllTechContent
+  loadAllContent as loadAllTechContent,
+  deleteContent as deleteTechContent
 } from './services/tech';
 import {
   uploadFile as uploadQAFile,
   deleteFile as deleteQAFile,
   loadContent as loadQAContent,
-  loadAllContent as loadAllQAContent
+  loadAllContent as loadAllQAContent,
+  deleteContent as deleteQAContent
 } from './services/qa';
 import { loadDocChecklist, saveDocChecklist } from './services/docGovChecklist';
 import { loadQATable, saveQATable } from './services/qaMasterTable';
@@ -66,6 +74,69 @@ const ProductPlatform = () => {
   const debouncedChecklistRef = useRef(null);
   const debouncedQARef        = useRef(null);
   const selectedPathRef       = useRef(null);
+
+  // Full static structure (Product + Tech overlay + QA overlay). User-custom
+  // additions are merged into this by the hook below.
+  const fullStaticStructure = useMemo(() => ({
+    ...PRODUCT_STRUCTURE,
+    '2_Technical Architecture': {
+      type: 'folder',
+      icon: 'server',
+      items: TECH_STRUCTURE,
+    },
+    '3_QA & Testing': {
+      type: 'folder',
+      icon: 'check-circle',
+      items: {
+        'QA Master Table': { type: 'qa-table', icon: 'table' },
+        ...QA_STRUCTURE,
+      },
+    },
+  }), []);
+
+  // Route deleteContent to the right service based on the path prefix
+  // (matches the routing already used by upload/delete file handlers below).
+  const routedDeleteContent = useCallback(async (path) => {
+    const key = path.join(' > ');
+    if (key.startsWith(TECH_PREFIX + ' > ')) {
+      return deleteTechContent(path.slice(1));
+    }
+    if (key.startsWith(QA_PREFIX + ' > ') && key !== QA_TABLE_PATH_KEY) {
+      return deleteQAContent(path.slice(1));
+    }
+    return deleteProductContent(path);
+  }, []);
+
+  // Custom structure (folders/file entries created on the frontend)
+  const {
+    mergedStructure,
+    createDialog,
+    existingNamesAtParent,
+    openCreateDialog,
+    closeCreateDialog,
+    createItem,
+    deleteItem,
+  } = useCustomStructure({
+    user,
+    staticStructure: fullStaticStructure,
+    loadUserStructure,
+    saveUserStructure,
+    deleteContent: routedDeleteContent,
+  });
+
+  // Keep selectedItem in sync with the merged structure so newly created
+  // entries stay valid and stale selections are cleared.
+  useEffect(() => {
+    if (!selectedPath) { setSelectedItem(null); return; }
+    const item = findItemAtPath(mergedStructure, selectedPath);
+    if (!item || item.type === 'folder') {
+      selectedPathRef.current = null;
+      setSelectedPath(null); setSelectedItem(null);
+      setProductContent(null); setTechContent(null); setQaFileContent(null);
+      return;
+    }
+    setSelectedItem(item);
+  }, [mergedStructure, selectedPath]);
 
   // ── Derived flags ─────────────────────────────────────────────────────────
   const pathKey             = selectedPath?.join(' > ') ?? '';
@@ -302,27 +373,35 @@ const ProductPlatform = () => {
     });
   }, []);
 
-  // ── Merged structure for FileExplorer ─────────────────────────────────────
-  // Replace the placeholder folders with real structures
-  const mergedStructure = {
-    ...PRODUCT_STRUCTURE,
-    '2_Technical Architecture': {
-      type: 'folder',
-      icon: 'server',
-      items: TECH_STRUCTURE,
-    },
-    '3_QA & Testing': {
-      type: 'folder',
-      icon: 'check-circle',
-      items: {
-        'QA Master Table': {
-          type: 'qa-table',
-          icon: 'table',
-        },
-        ...QA_STRUCTURE,
-      },
-    },
-  };
+  // ── Custom structure handlers ───────────────────────────────────
+  const handleAddItem = openCreateDialog;
+
+  const handleCreateItem = useCallback(async (input) => {
+    const result = await createItem(input);
+    if (result?.parentPath?.length > 0) {
+      const k = result.parentPath.join(' > ');
+      setExpandedFolders(prev => ({ ...prev, [k]: true }));
+    }
+  }, [createItem]);
+
+  const handleDeleteItem = useCallback(async (path, item) => {
+    const result = await deleteItem(path, item);
+    if (!result?.handled) return;
+    setContentStatus(prev => {
+      const n = { ...prev };
+      for (const fp of result.deletedFilePaths) delete n[fp.join(' > ')];
+      return n;
+    });
+    if (selectedPath) {
+      const selKey = selectedPath.join(' > ');
+      const baseKey = result.basePath.join(' > ');
+      if (selKey === baseKey || selKey.startsWith(baseKey + ' > ')) {
+        selectedPathRef.current = null;
+        setSelectedPath(null); setSelectedItem(null);
+        setProductContent(null); setTechContent(null); setQaFileContent(null);
+      }
+    }
+  }, [deleteItem, selectedPath]);
 
   // ── Loading / auth guards ─────────────────────────────────────────────────
   if (authLoading || isLoading) {
@@ -409,6 +488,8 @@ const ProductPlatform = () => {
                 selectedPath={selectedPath}
                 onToggleFolder={handleToggleFolder}
                 onSelectItem={handleSelectItem}
+                onAddItem={handleAddItem}
+                onDeleteItem={handleDeleteItem}
                 contentStatus={contentStatus}
               />
 
@@ -461,6 +542,14 @@ const ProductPlatform = () => {
           </div>
         )}
       </div>
+
+      <CreateItemDialog
+        open={createDialog.open}
+        parentPath={createDialog.parentPath}
+        existingNames={existingNamesAtParent}
+        onClose={closeCreateDialog}
+        onCreate={handleCreateItem}
+      />
     </>
   );
 };

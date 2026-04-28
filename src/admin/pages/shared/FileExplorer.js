@@ -1,4 +1,4 @@
-import React, { memo } from 'react';
+import React, { memo, useState } from 'react';
 import {
   ChevronRight,
   ChevronDown,
@@ -7,7 +7,10 @@ import {
   FileText,
   File,
   ClipboardList,
-  Table
+  Table,
+  Plus,
+  Trash2,
+  FolderPlus
 } from 'lucide-react';
 
 const FileExplorerItem = memo(({
@@ -19,8 +22,11 @@ const FileExplorerItem = memo(({
   selectedPath,
   onToggleFolder,
   onSelectItem,
+  onAddItem,
+  onDeleteItem,
   contentStatus
 }) => {
+  const [hovered, setHovered] = useState(false);
   const currentPath = [...path, name];
   const pathKey     = currentPath.join(' > ');
   const isExpanded  = expandedFolders[pathKey];
@@ -29,6 +35,8 @@ const FileExplorerItem = memo(({
   const isChecklist  = item.type === 'checklist';
   const isQATable    = item.type === 'qa-table';
   const hasContent  = contentStatus[pathKey];
+  const isCustom    = !!item._custom;
+  const showActions = hovered || isSelected;
 
   const handleClick = () => {
     if (isFolder) {
@@ -47,7 +55,7 @@ const FileExplorerItem = memo(({
         onClick={handleClick}
         style={{
           paddingLeft: `${level * 20 + 12}px`,
-          paddingRight: 12,
+          paddingRight: 8,
           paddingTop: 8,
           paddingBottom: 8,
           display: 'flex',
@@ -59,8 +67,8 @@ const FileExplorerItem = memo(({
           transition: 'all 0.15s',
           userSelect: 'none'
         }}
-        onMouseEnter={e => { if (!isSelected) e.currentTarget.style.background = 'var(--pale-brown)'; }}
-        onMouseLeave={e => { if (!isSelected) e.currentTarget.style.background = 'transparent'; }}
+        onMouseEnter={e => { setHovered(true); if (!isSelected) e.currentTarget.style.background = 'var(--pale-brown)'; }}
+        onMouseLeave={e => { setHovered(false); if (!isSelected) e.currentTarget.style.background = 'transparent'; }}
       >
         {/* Expand / chevron */}
         {isFolder ? (
@@ -87,13 +95,64 @@ const FileExplorerItem = memo(({
         )}
 
         {/* Name */}
-        <span style={{ flex: 1, fontSize: 14, fontWeight: isFolder ? 500 : 400 }}>
+        <span style={{
+          flex: 1,
+          fontSize: 14,
+          fontWeight: isFolder ? 500 : 400,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap'
+        }}>
           {displayName}
         </span>
 
+        {/* Add child (folders only) */}
+        {isFolder && onAddItem && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onAddItem(currentPath); }}
+            title="Add folder or file inside"
+            style={{
+              opacity: 0.55,
+              transition: 'opacity 0.15s',
+              padding: 4,
+              background: 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+              color: isSelected ? 'white' : 'var(--text-brown)',
+              display: 'flex',
+              alignItems: 'center',
+              borderRadius: 4
+            }}
+          >
+            <Plus size={14} />
+          </button>
+        )}
+
+        {/* Delete (custom items only) */}
+        {isCustom && onDeleteItem && (
+          <button
+            onClick={(e) => { e.stopPropagation(); onDeleteItem(currentPath, item); }}
+            title="Delete"
+            style={{
+              opacity: 1,
+              transition: 'opacity 0.15s',
+              padding: 4,
+              background: 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+              color: isSelected ? 'white' : '#c53030',
+              display: 'flex',
+              alignItems: 'center',
+              borderRadius: 4
+            }}
+          >
+            <Trash2 size={14} />
+          </button>
+        )}
+
         {/* Dot indicator for file content */}
         {!isFolder && !isChecklist && !isQATable && hasContent && (
-          <div style={{ width: 6, height: 6, borderRadius: '50%', background: isSelected ? 'white' : 'var(--primary-brown)' }} />
+          <div style={{ width: 6, height: 6, borderRadius: '50%', background: isSelected ? 'white' : 'var(--primary-brown)', marginLeft: 4 }} />
         )}
       </div>
 
@@ -126,6 +185,8 @@ const FileExplorerItem = memo(({
                   selectedPath={selectedPath}
                   onToggleFolder={onToggleFolder}
                   onSelectItem={onSelectItem}
+                  onAddItem={onAddItem}
+                  onDeleteItem={onDeleteItem}
                   contentStatus={contentStatus}
                 />
               )
@@ -142,6 +203,8 @@ export const FileExplorer = memo(({
   selectedPath,
   onToggleFolder,
   onSelectItem,
+  onAddItem,
+  onDeleteItem,
   contentStatus = {}
 }) => {
   return (
@@ -156,9 +219,35 @@ export const FileExplorer = memo(({
         padding: '12px 16px',
         background: 'var(--pale-brown)',
         borderBottom: '1px solid var(--medium-brown)',
-        fontWeight: 600, fontSize: 14, color: 'var(--text-brown)'
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 8
       }}>
-        Working Repository
+        <span style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-brown)' }}>
+          Working Repository
+        </span>
+        {onAddItem && (
+          <button
+            onClick={() => onAddItem([])}
+            title="Add a top-level folder or file"
+            style={{
+              padding: '6px 10px',
+              background: 'var(--primary-brown)',
+              color: 'white',
+              border: 'none',
+              borderRadius: 6,
+              cursor: 'pointer',
+              fontSize: 12,
+              fontWeight: 500,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 4
+            }}
+          >
+            <FolderPlus size={14} /> New
+          </button>
+        )}
       </div>
 
       <div style={{ padding: '8px 0' }}>
@@ -173,6 +262,8 @@ export const FileExplorer = memo(({
             selectedPath={selectedPath}
             onToggleFolder={onToggleFolder}
             onSelectItem={onSelectItem}
+            onAddItem={onAddItem}
+            onDeleteItem={onDeleteItem}
             contentStatus={contentStatus}
           />
         ))}

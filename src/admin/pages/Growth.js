@@ -1,12 +1,20 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { FileExplorer } from './shared/FileExplorer';
 import { FileUploader } from './shared/FileUploader';
-import { GROWTH_STRUCTURE } from './structure/growthStructure';
+import { CreateItemDialog } from './shared/CreateItemDialog';
+import { useCustomStructure } from './shared/useCustomStructure';
+import {
+  GROWTH_STRUCTURE,
+  findItemAtPath,
+} from './structure/growthStructure';
 import {
   uploadFile,
   deleteFile,
   loadContent,
-  loadAllContent
+  loadAllContent,
+  loadUserStructure,
+  saveUserStructure,
+  deleteContent
 } from './services/growth';
 import { useAuth } from '../../smses/hooks/useAuth';
 import { AlertCircle } from 'lucide-react';
@@ -21,6 +29,22 @@ const Growth = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  // Custom structure (folders/file entries created on the frontend)
+  const {
+    mergedStructure,
+    createDialog,
+    existingNamesAtParent,
+    openCreateDialog,
+    closeCreateDialog,
+    createItem,
+    deleteItem,
+  } = useCustomStructure({
+    user,
+    staticStructure: GROWTH_STRUCTURE,
+    loadUserStructure,
+    saveUserStructure,
+    deleteContent,
+  });
 
   // Load all content on mount
   useEffect(() => {
@@ -33,8 +57,6 @@ const Growth = () => {
       try {
         setIsLoading(true);
         const allContent = await loadAllContent();
-        
-        // Create status map
         const status = {};
         Object.keys(allContent).forEach(pathKey => {
           status[pathKey] = true;
@@ -49,6 +71,23 @@ const Growth = () => {
 
     loadAllData();
   }, [user]);
+
+  // Keep selectedItem in sync with the merged structure (so newly added
+  // entries stay valid and stale selections are cleared).
+  useEffect(() => {
+    if (!selectedPath) {
+      setSelectedItem(null);
+      return;
+    }
+    const item = findItemAtPath(mergedStructure, selectedPath);
+    if (!item || item.type === 'folder') {
+      setSelectedPath(null);
+      setSelectedItem(null);
+      setCurrentContent(null);
+      return;
+    }
+    setSelectedItem(item);
+  }, [mergedStructure, selectedPath]);
 
   // Load content when item is selected
   useEffect(() => {
@@ -170,6 +209,41 @@ const Growth = () => {
     setCurrentContent(null);
   }, []);
 
+  const handleAddItem = openCreateDialog;
+
+  // Wrap createItem so we can expand the parent folder after creation
+  const handleCreateItem = useCallback(async (input) => {
+    const result = await createItem(input);
+    if (result?.parentPath?.length > 0) {
+      const k = result.parentPath.join(' > ');
+      setExpandedFolders(prev => ({ ...prev, [k]: true }));
+    }
+  }, [createItem]);
+
+  // Wrap deleteItem to clear selection / contentStatus for any path inside
+  // the deleted subtree.
+  const handleDeleteItem = useCallback(async (path, item) => {
+    const result = await deleteItem(path, item);
+    if (!result?.handled) return;
+
+    setContentStatus(prev => {
+      const n = { ...prev };
+      for (const fp of result.deletedFilePaths) delete n[fp.join(' > ')];
+      return n;
+    });
+
+    if (selectedPath) {
+      const selKey = selectedPath.join(' > ');
+      const baseKey = result.basePath.join(' > ');
+      const inside = selKey === baseKey || selKey.startsWith(baseKey + ' > ');
+      if (inside) {
+        setSelectedPath(null);
+        setSelectedItem(null);
+        setCurrentContent(null);
+      }
+    }
+  }, [deleteItem, selectedPath]);
+
   // Loading state
   if (authLoading || isLoading) {
     return (
@@ -177,7 +251,8 @@ const Growth = () => {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        minHeight: '100vh',      }}>
+        minHeight: '100vh',
+      }}>
         <div style={{ textAlign: 'center' }}>
           <div style={{
             width: 40,
@@ -203,7 +278,8 @@ const Growth = () => {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        minHeight: '100vh',      }}>
+        minHeight: '100vh',
+      }}>
         <div style={{
           textAlign: 'center',
           padding: 40,
@@ -272,11 +348,13 @@ const Growth = () => {
         }}>
           {/* File Explorer */}
           <FileExplorer
-            structure={GROWTH_STRUCTURE}
+            structure={mergedStructure}
             expandedFolders={expandedFolders}
             selectedPath={selectedPath}
             onToggleFolder={handleToggleFolder}
             onSelectItem={handleSelectItem}
+            onAddItem={handleAddItem}
+            onDeleteItem={handleDeleteItem}
             contentStatus={contentStatus}
           />
 
@@ -314,6 +392,14 @@ const Growth = () => {
           )}
         </div>
       </div>
+
+      <CreateItemDialog
+        open={createDialog.open}
+        parentPath={createDialog.parentPath}
+        existingNames={existingNamesAtParent}
+        onClose={closeCreateDialog}
+        onCreate={handleCreateItem}
+      />
     </>
   );
 };

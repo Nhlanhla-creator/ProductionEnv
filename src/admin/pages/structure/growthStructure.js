@@ -220,6 +220,14 @@ export const GROWTH_STRUCTURE = {
         }
       }
     }
+  },
+
+  "Business Development": {
+    type: "folder",
+    icon: "briefcase",
+    items: {
+      
+    }
   }
 };
 
@@ -249,4 +257,123 @@ export const navigateToPath = (structure, path) => {
 export const getItemType = (structure, path) => {
   const item = navigateToPath(structure, path);
   return item?.type || null;
+};
+
+// ---------------------------------------------------------------------------
+// User-custom structure support
+// ---------------------------------------------------------------------------
+
+// Default max file size used for any user-created file entry (10MB).
+export const DEFAULT_FILE_MAX_SIZE = 10485760;
+
+// File-type presets shown in the "Create file" dialog. The "accept" string
+// matches the existing static-entry format so FileUploader treats them the
+// same way (extension filter + multi-extension accept).
+export const FILE_TYPE_PRESETS = {
+  document:     { label: 'Document (PDF, Word)',      accept: '.pdf,.docx,.doc' },
+  pdf:          { label: 'PDF only',                  accept: '.pdf' },
+  spreadsheet:  { label: 'Spreadsheet (Excel, CSV)',  accept: '.xlsx,.xls,.csv' },
+  presentation: { label: 'Presentation (PPT, Keynote)', accept: '.pptx,.ppt,.key' },
+  image:        { label: 'Image (PNG, JPG, SVG)',     accept: '.png,.jpg,.jpeg,.gif,.svg,.webp' },
+  video:        { label: 'Video (MP4, MOV)',          accept: '.mp4,.mov,.avi,.webm' },
+  audio:        { label: 'Audio (MP3, WAV)',          accept: '.mp3,.wav,.m4a,.ogg' },
+  archive:      { label: 'Archive (ZIP, RAR)',        accept: '.zip,.rar,.7z' },
+  any:          { label: 'Any file type',             accept: '' }
+};
+
+// Merge a static (code) structure with a user's custom structure. User-created
+// items are tagged with `_custom: true` at runtime so the UI can show
+// delete affordances for them. If a custom name collides with a static name
+// at the same level, the static entry wins (collisions are also blocked at
+// creation time in the dialog).
+export const mergeStructures = (staticStruct, customStruct) => {
+  const merged = {};
+  for (const [name, item] of Object.entries(staticStruct || {})) {
+    if (item.type === 'folder') {
+      const customChild = customStruct?.[name];
+      const customItems = customChild?.items || {};
+      merged[name] = {
+        ...item,
+        items: mergeStructures(item.items || {}, customItems)
+      };
+    } else {
+      merged[name] = { ...item };
+    }
+  }
+  for (const [name, item] of Object.entries(customStruct || {})) {
+    if (!merged[name]) {
+      merged[name] = markCustomRecursively(item);
+    }
+  }
+  return merged;
+};
+
+const markCustomRecursively = (item) => {
+  if (item?.type === 'folder') {
+    const items = {};
+    for (const [n, i] of Object.entries(item.items || {})) {
+      items[n] = markCustomRecursively(i);
+    }
+    return { ...item, _custom: true, items };
+  }
+  return { ...item, _custom: true };
+};
+
+// Insert a new item at parentPath > name in the saved (custom) tree.
+// Passthrough containers are auto-created when parentPath crosses through
+// folders that exist in the static tree but not yet in the custom tree.
+export const addItemToStructure = (structure, parentPath, name, item) => {
+  const next = structure ? JSON.parse(JSON.stringify(structure)) : {};
+  let current = next;
+  for (const segment of parentPath) {
+    if (!current[segment]) {
+      current[segment] = { type: 'folder', items: {} };
+    } else if (!current[segment].items) {
+      current[segment].items = {};
+    }
+    current = current[segment].items;
+  }
+  current[name] = item;
+  return next;
+};
+
+// Remove the item at the given path from the saved (custom) tree.
+export const removeItemFromStructure = (structure, path) => {
+  if (!structure || !path || path.length === 0) return structure;
+  const next = JSON.parse(JSON.stringify(structure));
+  let current = next;
+  for (let i = 0; i < path.length - 1; i++) {
+    const segment = path[i];
+    if (!current[segment] || !current[segment].items) return next;
+    current = current[segment].items;
+  }
+  delete current[path[path.length - 1]];
+  return next;
+};
+
+// Look up the item at a given path in any structure (static, custom, or merged).
+export const findItemAtPath = (structure, path) => {
+  if (!structure || !path || path.length === 0) return null;
+  let current = structure;
+  for (let i = 0; i < path.length - 1; i++) {
+    const segment = path[i];
+    if (!current[segment] || !current[segment].items) return null;
+    current = current[segment].items;
+  }
+  return current[path[path.length - 1]] || null;
+};
+
+// Walk a subtree and return the absolute path of every file-type leaf,
+// rooted at basePath.
+export const collectFilePaths = (item, basePath = []) => {
+  const paths = [];
+  if (!item) return paths;
+  if (item.type === 'file') {
+    paths.push([...basePath]);
+  } else if (item.type === 'folder' && item.items) {
+    for (const [name, child] of Object.entries(item.items)) {
+      paths.push(...collectFilePaths(child, [...basePath, name]));
+    }
+  }
+  return paths;
 };
