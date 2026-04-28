@@ -34,7 +34,7 @@ import {
 } from "lucide-react";
 import "./MessagesComponent.css";
 
-const MessagesComponent = ({ config = {} }) => {
+const MessagesComponent = ({ config = {}, recipientsList = [] }) => {
   const {
     supportAttachments,
     showSearchIcon,
@@ -79,21 +79,28 @@ const MessagesComponent = ({ config = {} }) => {
   const fileInputRef = useRef(null);
   const storage = getStorage();
 
-  // Debounce search
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedSearch(searchQuery);
-      // Reset visible count when search changes
-      setVisibleCount(20);
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [searchQuery]);
+ 
+  // Use recipientsList when hasRecipientDropdown is true
+ useEffect(() => {
+    if (hasRecipientDropdown && recipientsList.length > 0) {
+      setRecipients(recipientsList);
+    }
+  }, [hasRecipientDropdown, recipientsList]);
 
-  // Load recipients (Advisors only)
+  // Load recipients from loader (Advisors only - legacy)
   useEffect(() => {
     if (!hasRecipientDropdown || !recipientsLoader) return;
     recipientsLoader().then(setRecipients);
   }, [hasRecipientDropdown, recipientsLoader]);
+
+  // Debounce search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(searchQuery);
+      setVisibleCount(20);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   const getContainerStyles = () => {
     return {
@@ -118,7 +125,6 @@ const MessagesComponent = ({ config = {} }) => {
     });
   };
 
-  // Helper to check if a message is in trash (deleted within 30 days)
   const isInTrash = useCallback((msg) => {
     if (!msg.deleted) return false;
     if (!msg.deletedAt) return true;
@@ -128,7 +134,7 @@ const MessagesComponent = ({ config = {} }) => {
     return deletedDate > thirtyDaysAgo;
   }, []);
 
-  // SINGLE COMBINED FETCH - Fixes the Firestore assertion error
+  // SINGLE COMBINED FETCH
   useEffect(() => {
     const auth = getAuth();
     const user = auth.currentUser;
@@ -136,10 +142,7 @@ const MessagesComponent = ({ config = {} }) => {
 
     let isMounted = true;
 
-    // Query for messages TO the user
     const toQuery = query(collection(db, "messages"), where("to", "==", user.uid));
-    
-    // Query for messages FROM the user
     const fromQuery = query(collection(db, "messages"), where("from", "==", user.uid));
 
     const unsubscribeTo = onSnapshot(toQuery, (snapshot) => {
@@ -181,13 +184,11 @@ const MessagesComponent = ({ config = {} }) => {
     };
   }, []);
 
-  // Update trash count whenever messages change
   useEffect(() => {
     const count = messages.filter(msg => isInTrash(msg)).length;
     setTrashCount(count);
   }, [messages, isInTrash]);
 
-  // Filtered messages
   const filteredMessages = useMemo(() => {
     return messages
       .filter((msg) => {
@@ -204,27 +205,22 @@ const MessagesComponent = ({ config = {} }) => {
       .sort((a, b) => new Date(b.date) - new Date(a.date));
   }, [messages, activeTab, debouncedSearch, isInTrash]);
 
-  // Visible messages for pagination
   const visibleMessages = useMemo(() => {
     return filteredMessages.slice(0, visibleCount);
   }, [filteredMessages, visibleCount]);
 
-  // Check if there are more messages to load
   const hasMoreMessages = visibleCount < filteredMessages.length;
 
-  // Load more messages
   const loadMoreMessages = useCallback(() => {
     if (isLoadingMore || !hasMoreMessages) return;
     
     setIsLoadingMore(true);
-    // Simulate loading delay for better UX
     setTimeout(() => {
       setVisibleCount(prev => Math.min(prev + 20, filteredMessages.length));
       setIsLoadingMore(false);
     }, 500);
   }, [isLoadingMore, hasMoreMessages, filteredMessages.length]);
 
-  // Infinite scroll listener
   useEffect(() => {
     const messagesList = messagesListRef.current;
     if (!messagesList) return;
@@ -240,12 +236,10 @@ const MessagesComponent = ({ config = {} }) => {
     return () => messagesList.removeEventListener('scroll', handleScroll);
   }, [hasMoreMessages, isLoadingMore, loadMoreMessages]);
 
-  // Reset visible count when tab or search changes
   useEffect(() => {
     setVisibleCount(20);
   }, [activeTab, debouncedSearch]);
 
-  // Update selectAll when selection changes
   useEffect(() => {
     if (visibleMessages.length > 0 && selectedMessages.size === visibleMessages.length) {
       setSelectAll(true);
@@ -271,7 +265,6 @@ const MessagesComponent = ({ config = {} }) => {
     setSelectedMessage(msg);
     if (!msg.read && !msg.deleted) {
       await updateDoc(doc(db, "messages", msg.id), { read: true });
-      // Update local state immediately
       setMessages((prev) =>
         prev.map((m) => (m.id === msg.id ? { ...m, read: true } : m))
       );
@@ -314,7 +307,6 @@ const MessagesComponent = ({ config = {} }) => {
     }
   };
 
-  // Soft delete selected messages (move to trash)
   const handleDeleteSelected = async () => {
     if (selectedMessages.size === 0) {
       alert("No messages selected");
@@ -335,7 +327,6 @@ const MessagesComponent = ({ config = {} }) => {
       }
       await batch.commit();
 
-      // Update local state immediately
       setMessages(prev => prev.map(msg => 
         selectedMessages.has(msg.id) ? { ...msg, deleted: true, deletedAt: now } : msg
       ));
@@ -355,90 +346,82 @@ const MessagesComponent = ({ config = {} }) => {
     }
   };
 
- // Update the handlePermanentDeleteSelected function
-const handlePermanentDeleteSelected = async () => {
-  if (selectedMessages.size === 0) {
-    alert("No messages selected");
-    return;
-  }
-
-  const confirmDelete = window.confirm(
-    `⚠️ Permanently delete ${selectedMessages.size} selected message(s)? This action cannot be undone.`
-  );
-  if (!confirmDelete) return;
-
-  try {
-    const batch = writeBatch(db);
-    for (const messageId of selectedMessages) {
-      const messageRef = doc(db, "messages", messageId);
-      batch.delete(messageRef);
+  const handlePermanentDeleteSelected = async () => {
+    if (selectedMessages.size === 0) {
+      alert("No messages selected");
+      return;
     }
-    await batch.commit();
 
-    setMessages(prev => prev.filter(msg => !selectedMessages.has(msg.id)));
-    setSelectedMessages(new Set());
-    setSelectMode(false);
-    setSelectAll(false);
-    
-    if (selectedMessage && selectedMessages.has(selectedMessage.id)) {
-      setSelectedMessage(null);
+    const confirmDelete = window.confirm(
+      `⚠️ Permanently delete ${selectedMessages.size} selected message(s)? This action cannot be undone.`
+    );
+    if (!confirmDelete) return;
+
+    try {
+      const batch = writeBatch(db);
+      for (const messageId of selectedMessages) {
+        const messageRef = doc(db, "messages", messageId);
+        batch.delete(messageRef);
+      }
+      await batch.commit();
+
+      setMessages(prev => prev.filter(msg => !selectedMessages.has(msg.id)));
+      setSelectedMessages(new Set());
+      setSelectMode(false);
+      setSelectAll(false);
+      
+      if (selectedMessage && selectedMessages.has(selectedMessage.id)) {
+        setSelectedMessage(null);
+      }
+      
+      alert(`${selectedMessages.size} message(s) permanently deleted`);
+    } catch (error) {
+      console.error("Error permanently deleting messages:", error);
+      alert("Failed to delete messages. Please try again.");
     }
-    
-    alert(`${selectedMessages.size} message(s) permanently deleted`);
-  } catch (error) {
-    console.error("Error permanently deleting messages:", error);
-    alert("Failed to delete messages. Please try again.");
-  }
-};
+  };
 
-
-  // Update the handleRestoreSelected function
-const handleRestoreSelected = async () => {
-  if (selectedMessages.size === 0) {
-    alert("No messages selected");
-    return;
-  }
-
-  const confirmRestore = window.confirm(
-    `Restore ${selectedMessages.size} selected message(s) to inbox?`
-  );
-  if (!confirmRestore) return;
-
-  try {
-    const batch = writeBatch(db);
-    for (const messageId of selectedMessages) {
-      const messageRef = doc(db, "messages", messageId);
-      batch.update(messageRef, { deleted: false, deletedAt: null });
+  const handleRestoreSelected = async () => {
+    if (selectedMessages.size === 0) {
+      alert("No messages selected");
+      return;
     }
-    await batch.commit();
 
-    setMessages(prev => prev.map(msg => 
-      selectedMessages.has(msg.id) ? { ...msg, deleted: false, deletedAt: null } : msg
-    ));
-    
-    setSelectedMessages(new Set());
-    setSelectMode(false);
-    setSelectAll(false);
-    
-    alert(`${selectedMessages.size} message(s) restored to inbox`);
-  } catch (error) {
-    console.error("Error restoring messages:", error);
-    alert("Failed to restore messages. Please try again.");
-  }
-};
+    const confirmRestore = window.confirm(
+      `Restore ${selectedMessages.size} selected message(s) to inbox?`
+    );
+    if (!confirmRestore) return;
 
-  // Single message delete (soft delete)
+    try {
+      const batch = writeBatch(db);
+      for (const messageId of selectedMessages) {
+        const messageRef = doc(db, "messages", messageId);
+        batch.update(messageRef, { deleted: false, deletedAt: null });
+      }
+      await batch.commit();
+
+      setMessages(prev => prev.map(msg => 
+        selectedMessages.has(msg.id) ? { ...msg, deleted: false, deletedAt: null } : msg
+      ));
+      
+      setSelectedMessages(new Set());
+      setSelectMode(false);
+      setSelectAll(false);
+      
+      alert(`${selectedMessages.size} message(s) restored to inbox`);
+    } catch (error) {
+      console.error("Error restoring messages:", error);
+      alert("Failed to restore messages. Please try again.");
+    }
+  };
+
   const handleDelete = async (id) => {
     const confirmDelete = window.confirm("Move this message to trash? It will be automatically deleted after 30 days.");
     if (!confirmDelete) return;
 
     try {
       const now = new Date().toISOString();
-      await updateDoc(doc(db, "messages", id), { 
-        deleted: true, 
-        deletedAt: now 
-      });
-      // Update local state immediately
+      await updateDoc(doc(db, "messages", id), { deleted: true, deletedAt: now });
       setMessages(prev => prev.map(msg => 
         msg.id === id ? { ...msg, deleted: true, deletedAt: now } : msg
       ));
@@ -449,40 +432,37 @@ const handleRestoreSelected = async () => {
     }
   };
 
-  // Single message permanent delete from trash
-  // Replace the handlePermanentDelete function with confirmation
-const handlePermanentDelete = async (id) => {
-  const confirmDelete = window.confirm("⚠️ Permanently delete this message? This action cannot be undone.");
-  if (!confirmDelete) return;
+  const handlePermanentDelete = async (id) => {
+    const confirmDelete = window.confirm("⚠️ Permanently delete this message? This action cannot be undone.");
+    if (!confirmDelete) return;
 
-  try {
-    await deleteDoc(doc(db, "messages", id));
-    setMessages(prev => prev.filter(msg => msg.id !== id));
-    if (selectedMessage?.id === id) setSelectedMessage(null);
-  } catch (error) {
-    console.error("Error permanently deleting message:", error);
-    alert("Failed to delete message. Please try again.");
-  }
-};
-
-  // Replace the handleRestore function with confirmation
-const handleRestore = async (id) => {
-  const confirmRestore = window.confirm("Restore this message to inbox?");
-  if (!confirmRestore) return;
-
-  try {
-    await updateDoc(doc(db, "messages", id), { deleted: false, deletedAt: null });
-    setMessages(prev => prev.map(msg => 
-      msg.id === id ? { ...msg, deleted: false, deletedAt: null } : msg
-    ));
-    if (selectedMessage?.id === id) {
-      setSelectedMessage(null);
+    try {
+      await deleteDoc(doc(db, "messages", id));
+      setMessages(prev => prev.filter(msg => msg.id !== id));
+      if (selectedMessage?.id === id) setSelectedMessage(null);
+    } catch (error) {
+      console.error("Error permanently deleting message:", error);
+      alert("Failed to delete message. Please try again.");
     }
-  } catch (error) {
-    console.error("Error restoring message:", error);
-    alert("Failed to restore message. Please try again.");
-  }
-};
+  };
+
+  const handleRestore = async (id) => {
+    const confirmRestore = window.confirm("Restore this message to inbox?");
+    if (!confirmRestore) return;
+
+    try {
+      await updateDoc(doc(db, "messages", id), { deleted: false, deletedAt: null });
+      setMessages(prev => prev.map(msg => 
+        msg.id === id ? { ...msg, deleted: false, deletedAt: null } : msg
+      ));
+      if (selectedMessage?.id === id) {
+        setSelectedMessage(null);
+      }
+    } catch (error) {
+      console.error("Error restoring message:", error);
+      alert("Failed to restore message. Please try again.");
+    }
+  };
 
   const exitSelectMode = () => {
     setSelectMode(false);
@@ -633,7 +613,6 @@ const handleRestore = async (id) => {
     }));
   };
 
-  // Keep all your existing termsheet functions (they remain unchanged)
   const [uploadingDocument, setUploadingDocument] = useState(false);
 
   const handleSignedDocumentUpload = async (event, messageId) => {
@@ -885,30 +864,6 @@ const handleRestore = async (id) => {
       ...prev,
       attachments: prev.attachments.filter((_, i) => i !== index),
     }));
-  };
-
-  const handleRecipientSearch = (e) => {
-    const value = e.target.value;
-    setNewMessage({ ...newMessage, toName: value });
-    if (value.length > 0) {
-      setFilteredRecipients(
-        recipients.filter((r) =>
-          r.name.toLowerCase().includes(value.toLowerCase())
-        )
-      );
-      setShowRecipientDropdown(true);
-    } else {
-      setShowRecipientDropdown(false);
-    }
-  };
-
-  const selectRecipient = (recipient) => {
-    setNewMessage({
-      ...newMessage,
-      to: recipient.id,
-      toName: recipient.name,
-    });
-    setShowRecipientDropdown(false);
   };
 
   const renderSearchInput = () => {
@@ -1307,40 +1262,65 @@ const handleRestore = async (id) => {
                   </button>
                 </div>
                 <div className="compose-form">
-                  <div className="form-group">
-                    <label>To:</label>
-                    {hasRecipientDropdown ? (
-                      <div className="recipient-input-wrapper">
-                        <input
-                          type="text"
-                          value={newMessage.toName}
-                          onChange={handleRecipientSearch}
-                          placeholder="Search recipient..."
-                        />
-                        {showRecipientDropdown &&
-                          filteredRecipients.length > 0 && (
-                            <div className="recipient-dropdown">
-                              {filteredRecipients.map((recipient) => (
-                                <div
-                                  key={recipient.id}
-                                  className="recipient-item"
-                                  onClick={() => selectRecipient(recipient)}
-                                >
-                                  {recipient.name}
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                      </div>
-                    ) : (
-                      <input
-                        type="text"
-                        value={newMessage.toName}
-                        disabled
-                        placeholder="Recipient Name"
-                      />
-                    )}
-                  </div>
+                 <div className="form-group">
+            <label>To:</label>
+            {hasRecipientDropdown ? (
+              <div className="recipient-select-wrapper" style={{ position: 'relative' }}>
+                <select
+                  value={newMessage.to}
+                  onChange={(e) => {
+                    const selectedId = e.target.value;
+                    const selectedRecipient = recipients.find(r => r.id === selectedId);
+                    setNewMessage({
+                      ...newMessage,
+                      to: selectedId,
+                      toName: selectedRecipient?.name || ''
+                    });
+                  }}
+                  className="recipient-select-dropdown"
+                  style={{
+                    width: '100%',
+                    padding: '0.75rem',
+                    paddingRight: '2rem',
+                    borderRadius: '8px',
+                    border: '1px solid #D7CCC8',
+                    backgroundColor: '#FEFCFA',
+                    fontSize: '0.95rem',
+                    color: '#3E2723',
+                    cursor: 'pointer',
+                    outline: 'none',
+                    appearance: 'none',
+                    WebkitAppearance: 'none',
+                  }}
+                >
+                  <option value="">Select a recipient...</option>
+                  {recipients.map((recipient) => (
+                    <option key={recipient.id} value={recipient.id}>
+                      {recipient.name}
+                    </option>
+                  ))}
+                </select>
+                <div className="select-arrow" style={{
+                  position: 'absolute',
+                  right: '12px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  pointerEvents: 'none',
+                  color: '#5a3921'
+                }}>
+                  ▼
+                </div>
+              </div>
+            ) : (
+              <input
+                type="text"
+                value={newMessage.toName}
+                disabled
+                placeholder="Recipient Name"
+              />
+            )}
+          </div>
+
                   <div className="form-group">
                     <label>Subject:</label>
                     <input
@@ -1472,12 +1452,14 @@ const handleRestore = async (id) => {
                 </div>
 
                 <div className="message-body">
+                  {/* Message content - same as before */}
                   {selectedMessage.content?.split("\n\nMeeting Details:")[0] && (
                     <p style={{ whiteSpace: "pre-wrap", marginBottom: "1rem" }}>
                       {selectedMessage.content.split("\n\nMeeting Details:")[0]}
                     </p>
                   )}
 
+                  {/* Meeting details section */}
                   {selectedMessage.content?.includes("Meeting Details:") &&
                     (() => {
                       const parts = selectedMessage.content.split(
@@ -1522,6 +1504,7 @@ const handleRestore = async (id) => {
                       );
                     })()}
 
+                  {/* Terms sheet section */}
                   {(selectedMessage.subject?.includes("Termsheet Shared") || 
                     selectedMessage.subject?.includes("Support Approved") ||
                     selectedMessage.subject?.includes("Support Agreement")) && 
@@ -1696,7 +1679,7 @@ const handleRestore = async (id) => {
                           <strong>Feedback:</strong> {selectedMessage.termsheetResponse.feedback}
                         </p>
                       )}
-                      <p>Responded: {new Date(selectedMessage.termsheetResponse.respondedAt).toLocaleString()}</p>
+                      <p className="response-date">Responded: {new Date(selectedMessage.termsheetResponse.respondedAt).toLocaleString()}</p>
                       {selectedMessage.termsheetResponse.signedDocumentUrl && (
                         <p className="signed-document-info">
                           <FileText size={16} />

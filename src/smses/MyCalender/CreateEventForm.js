@@ -85,40 +85,55 @@ const CreateEventForm = ({ onSubmit, onCancel, previousRecipients = [] }) => {
           />
         </div>
 
-        <div className="collapsible">
-          <div className="collapsible-header" onClick={() => setShowRecipient(!showRecipient)}>
-            <span>To</span>
-            <span>{showRecipient ? '▲' : '▼'}</span>
-          </div>
-          {showRecipient && (
-            <div className="form-group recipient-group">
-              <div className="recipient-select-container">
-                <input
-                  type="text"
-                  value={eventData.toName}
-                  onChange={handleRecipientInput}
-                  onFocus={() => setShowRecipientDropdown(true)}
-                  placeholder="Search or select recipient"
-                  className="recipient-input"
-                />
-                {showRecipientDropdown && filteredRecipients.length > 0 && (
-                  <div className="recipient-dropdown">
-                    {filteredRecipients.map((recipient, index) => (
-                      <div
-                        key={index}
-                        className="recipient-option"
-                        onClick={() => selectRecipient(recipient)}
-                      >
-                        {recipient.name}
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <div className="tip">💡 Select who this meeting is for</div>
-            </div>
-          )}
-        </div>
+<div className="form-group">
+  <label>To</label>
+  <div className="recipient-select" style={{ position: 'relative', width: '100%' }}>
+    <select
+      value={eventData.to}
+      onChange={(e) => {
+        const selectedId = e.target.value;
+        const selectedRecipient = previousRecipients.find(r => r.id === selectedId);
+        setEventData({
+          ...eventData,
+          to: selectedId,
+          toName: selectedRecipient?.name || ''
+        });
+      }}
+      style={{
+        width: '100%',
+        padding: '0.75rem',
+        paddingRight: '2rem',
+        borderRadius: '8px',
+        border: '1px solid #D7CCC8',
+        backgroundColor: '#FEFCFA',
+        fontSize: '0.95rem',
+        color: '#3E2723',
+        cursor: 'pointer',
+        outline: 'none',
+        appearance: 'none',
+        WebkitAppearance: 'none',
+      }}
+    >
+      <option value="">Select a recipient...</option>
+      {previousRecipients.map((recipient) => (
+        <option key={recipient.id} value={recipient.id}>
+          {recipient.name}
+        </option>
+      ))}
+    </select>
+    <div style={{
+      position: 'absolute',
+      right: '12px',
+      top: '50%',
+      transform: 'translateY(-50%)',
+      pointerEvents: 'none',
+      color: '#5a3921'
+    }}>
+      ▼
+    </div>
+  </div>
+  <div className="tip">💡 Select who this meeting is for</div>
+</div>
 
         <div className="form-row">
           <div className="form-group">

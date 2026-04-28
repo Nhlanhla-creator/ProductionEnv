@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { FileExplorer } from './shared/FileExplorer';
-import { FileUploader } from './shared/FileUploader';
-import { PILOTS_STRUCTURE } from './structure/pilotsStructure';
+import { FileExplorer } from '../../shared/FileExplorer';
+import { FileUploader } from '../../shared/FileUploader';
+import { PILOTS_STRUCTURE } from '../../structure/pilotsStructure';
 import { AlertCircle } from 'lucide-react';
 
 const PilotsCaseStudies = () => {
