@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { FileExplorer } from './shared/FileExplorer';
-import { FileUploader } from './shared/FileUploader';
-import { ADMIN_GOV_STRUCTURE } from './structure/adminGovStructure';
+import { FileExplorer } from '../../shared/FileExplorer';
+import { FileUploader } from '../../shared/FileUploader';
+import { ADMIN_GOV_STRUCTURE } from '../../structure/adminGovStructure';
 import { AlertCircle } from 'lucide-react';
 
 // Placeholder data for frontend only

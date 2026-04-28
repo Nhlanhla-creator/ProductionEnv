@@ -150,6 +150,12 @@ import SMSEEcosystem from "./associator/MyMemberEcosystem/SMSEEcosystem"
 import InvestorEcosystem from "./associator/MyMemberEcosystem/InvestorEcosystem"
 import AdvisorEcosystem from "./associator/MyMemberEcosystem/AdvisorEcosystem"
 import CatalystEcosystem from "./associator/MyMemberEcosystem/CatalystEcosystem"
+// Associator Admin Dashboard Sub-pages (New)
+import AssociationSubscriptions from "./associator/MyDashboard/Subscriptions"
+import AssociationAdminGovernance from "./associator/MyDashboard/AdminGovernance"
+import AssociationUsersMarketplace from "./associator/MyDashboard/UsersMarketplace"
+import AssociationPilotsCaseStudies from "./associator/MyDashboard/PilotsCaseStudies"
+import AssociationSurveys from "./associator/MyDashboard/Surveys"
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Public Pages
@@ -1105,6 +1111,13 @@ function App() {
         <Route path="/associator-ecosystem/investor" element={withProtection(InvestorEcosystem, {}, renderAssociatorRoute)} />
         <Route path="/associator-ecosystem/advisor" element={withProtection(AdvisorEcosystem, {}, renderAssociatorRoute)} />
         <Route path="/associator-ecosystem/catalyst" element={withProtection(CatalystEcosystem, {}, renderAssociatorRoute)} />
+
+        {/* ─── Associator Admin Dashboard Routes (New) ───────────────────────────── */}
+        <Route path="/associator-dashboard/subscriptions" element={withProtection(AssociationSubscriptions, {}, renderAssociatorRoute)} />
+        <Route path="/associator-dashboard/governance" element={withProtection(AssociationAdminGovernance, {}, renderAssociatorRoute)} />
+        <Route path="/associator-dashboard/marketplace" element={withProtection(AssociationUsersMarketplace, {}, renderAssociatorRoute)} />
+        <Route path="/associator-dashboard/pilot" element={withProtection(AssociationPilotsCaseStudies, {}, renderAssociatorRoute)} />
+        <Route path="/associator-dashboard/surveys" element={withProtection(AssociationSurveys, {}, renderAssociatorRoute)} />
         {/* ──────────────────────────────────────────────────────────────────────── */}
 
         {/* Redirects */}
