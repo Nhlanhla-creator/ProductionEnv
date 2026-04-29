@@ -270,6 +270,34 @@ const Delivery = () => {
     });
   }, [sprintsData, user]);
 
+  const handleUpdateColumnOptions = useCallback(async (sprintId, columnId, newOptions) => {
+    setSprintsData(prev => {
+      const sprint = prev[sprintId];
+      if (!sprint) return prev;
+
+      const updatedColumns = sprint.columns.map(col =>
+        col.id === columnId ? { ...col, options: newOptions } : col
+      );
+
+      const updatedSprint = {
+        ...sprint,
+        columns: updatedColumns,
+        updatedAt: new Date().toISOString()
+      };
+
+      if (user) {
+        syncSprintToFirebase(updatedSprint, 1000).catch(err => {
+          console.error('Failed to sync column options update:', err);
+        });
+      }
+
+      return {
+        ...prev,
+        [sprintId]: updatedSprint
+      };
+    });
+  }, [user]);
+
   const handleDeleteSprint = useCallback(async (sprintId) => {
     try {
       // Delete from Firebase first
@@ -506,6 +534,7 @@ const Delivery = () => {
                 handleAddSprint={handleAddSprint}
                 handleDeleteSprint={handleDeleteSprint}
                 handleUpdateSprint={handleUpdateSprint}
+                handleUpdateColumnOptions={handleUpdateColumnOptions}
               />
             )}
           </div>

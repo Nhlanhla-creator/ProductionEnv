@@ -420,7 +420,7 @@ const SupplierMatchesTable = ({
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: "1rem" }}>
                   <Brain size={18} style={{ color: "#5D2A0A" }} />
                   <h4 style={{ margin: 0, fontSize: "1rem", fontWeight: 700, color: "#5D2A0A" }}>
-                    Primary Score — AI Product/Service Analysis
+                    Primary Matching — AI Product/Service Analysis
                     <span style={{ fontWeight: 400, fontSize: "0.85rem", color: "#8D6E63" }}> (60% weight)</span>
                   </h4>
                 </div>
@@ -461,7 +461,7 @@ const SupplierMatchesTable = ({
                   </div>
                 ) : (
                   <div style={{ background: "#f9f5f0", border: "1px dashed #E8D5C4", borderRadius: 8, padding: "1.25rem", textAlign: "center", color: "#8D6E63" }}>
-                    <Brain size={24} style={{ opacity: 0.3, marginBottom: 6 }} />
+                    <Brain size={24} style={{ opacity: 0.3, marginBottom: 6 }} className="mx-auto" />
                     <p style={{ margin: 0, fontSize: "0.85rem" }}>AI analysis has not been run for this application yet.</p>
                     <p style={{ margin: "4px 0 0", fontSize: "0.75rem", color: "#bbb" }}>Run AI Analysis on the Supplier Matches page to generate primary scores.</p>
                   </div>
@@ -473,7 +473,7 @@ const SupplierMatchesTable = ({
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: "1rem" }}>
                   <Settings2 size={18} style={{ color: "#5D2A0A" }} />
                   <h4 style={{ margin: 0, fontSize: "1rem", fontWeight: 700, color: "#5D2A0A" }}>
-                    Secondary Score — Applicant Preferences
+                    Secondary Matching — Applicant Preferences
                     <span style={{ fontWeight: 400, fontSize: "0.85rem", color: "#8D6E63" }}> (40% weight)</span>
                   </h4>
                   <span style={{ marginLeft: "auto", fontSize: "1.25rem", fontWeight: "bold", color: scoreColor(breakdownSupplier.secondaryScore || 0) }}>

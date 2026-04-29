@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useMemo, memo } from 'react';
 import { Plus, Trash2, Edit2, X as XIcon } from 'lucide-react';
 import { TableRow } from './TableRow';
-import { AddColumnModal, AddTaskModal, DeleteSprintModal, DeleteColumnModal, DeleteTaskModal } from './Modals';
+import { AddColumnModal, AddTaskModal, DeleteSprintModal, DeleteColumnModal, DeleteTaskModal, AddColumnOptionModal } from './Modals';
 import { styles } from './styles';
 
 export const SprintTable = memo(({ 
@@ -11,15 +11,18 @@ export const SprintTable = memo(({
   onDeleteTask,
   onAddColumn,
   onDeleteSprint,
-  onDeleteColumn
+  onDeleteColumn,
+  onUpdateColumnOptions
 }) => {
   const [editingCell, setEditingCell] = useState(null);
   const [showAddColumnModal, setShowAddColumnModal] = useState(false);
   const [showAddTaskModal, setShowAddTaskModal] = useState(false);
   const [showDeleteSprintModal, setShowDeleteSprintModal] = useState(false);
+  const [showAddColumnOptionModal, setShowAddColumnOptionModal] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [columnToDelete, setColumnToDelete] = useState(null);
   const [taskToDelete, setTaskToDelete] = useState(null);
+  const [selectedColumnForOptions, setSelectedColumnForOptions] = useState(null);
 
   // Filter state - QA style
   const [filterCategory, setFilterCategory] = useState('All');
@@ -276,22 +279,43 @@ export const SprintTable = memo(({
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <span>{column.label}</span>
                     {isEditMode && column.editable !== false && (
-                      <button
-                        onClick={() => setColumnToDelete(column)}
-                        style={{
-                          background: 'transparent',
-                          border: 'none',
-                          color: '#ef4444',
-                          cursor: 'pointer',
-                          padding: '4px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          marginLeft: '8px'
-                        }}
-                        title={`Delete ${column.label} column`}
-                      >
-                        <Trash2 size={14} />
-                      </button>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                        {column.type === 'multi-select' && (
+                          <button
+                            onClick={() => {
+                              setSelectedColumnForOptions(column.id);
+                              setShowAddColumnOptionModal(true);
+                            }}
+                            style={{
+                              background: 'transparent',
+                              border: 'none',
+                              color: '#3b82f6',
+                              cursor: 'pointer',
+                              padding: '4px',
+                              display: 'flex',
+                              alignItems: 'center'
+                            }}
+                            title={`Add option to ${column.label}`}
+                          >
+                            <Plus size={14} />
+                          </button>
+                        )}
+                        <button
+                          onClick={() => setColumnToDelete(column)}
+                          style={{
+                            background: 'transparent',
+                            border: 'none',
+                            color: '#ef4444',
+                            cursor: 'pointer',
+                            padding: '4px',
+                            display: 'flex',
+                            alignItems: 'center'
+                          }}
+                          title={`Delete ${column.label} column`}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
                     )}
                   </div>
                 </th>
@@ -376,6 +400,17 @@ export const SprintTable = memo(({
         onDelete={handleDeleteTask}
         task={taskToDelete}
         sprint={sprint}
+      />
+
+      <AddColumnOptionModal
+        isOpen={showAddColumnOptionModal}
+        onClose={() => {
+          setShowAddColumnOptionModal(false);
+          setSelectedColumnForOptions(null);
+        }}
+        onUpdateColumnOptions={(columnId, newOptions) => onUpdateColumnOptions(sprint.id, columnId, newOptions)}
+        sprint={sprint}
+        preselectedColumnId={selectedColumnForOptions}
       />
     </div>
   );
