@@ -1,11 +1,19 @@
-"use client"
+"use client";
 
-import { useState, useEffect } from "react"
-import { Bar, Line, Pie } from "react-chartjs-2"
-import { doc, getDoc, setDoc, collection, query, where, getDocs } from "firebase/firestore"
-import { db, auth } from "../../firebaseConfig"
-import { onAuthStateChanged } from "firebase/auth"
-import { DateRangePicker } from "./financial/components/SharedComponents"
+import { useState, useEffect } from "react";
+import { Bar, Line, Pie } from "react-chartjs-2";
+import {
+  doc,
+  getDoc,
+  setDoc,
+  collection,
+  query,
+  where,
+  getDocs,
+} from "firebase/firestore";
+import { db, auth } from "../../firebaseConfig";
+import { onAuthStateChanged } from "firebase/auth";
+import { DateRangePicker } from "./financial/components/SharedComponents";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -17,88 +25,130 @@ import {
   Title,
   Tooltip,
   Legend,
-} from "chart.js"
+} from "chart.js";
 
 // Register ChartJS components
-ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, ArcElement, Title, Tooltip, Legend)
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  LineElement,
+  PointElement,
+  ArcElement,
+  Title,
+  Tooltip,
+  Legend
+);
 
-// Helper function to format numbers to 2 decimal places
+// Helper function to format numbers to 2 decimal places for display
 const formatToTwoDecimals = (value) => {
-  if (value === null || value === undefined || value === "") return ""
-  const num = Number(value)
-  if (isNaN(num)) return value
-  return Number(num.toFixed(2))
-}
+  if (value === null || value === undefined || value === "") return "";
+  const num = Number(value);
+  if (isNaN(num)) return value;
+  return Number(num.toFixed(2));
+};
 
-// Helper function to parse and validate number inputs
+// Helper function to parse and validate number inputs (for calculations)
 const parseToTwoDecimals = (value) => {
-  if (value === null || value === undefined || value === "") return ""
-  const num = Number(value)
-  if (isNaN(num)) return ""
-  return Math.round(num * 100) / 100
-}
+  if (value === null || value === undefined || value === "") return null;
+  const num = Number(value);
+  if (isNaN(num)) return null;
+  return Math.round(num * 100) / 100;
+};
 
 // Helper function to get months array based on year
 const getMonthsForYear = (year, viewMode = "month") => {
-  if (viewMode === "year") return [`FY ${year}`]
-  if (viewMode === "quarter") return ["Q1", "Q2", "Q3", "Q4"]
-  
-  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-  return months
-}
+  if (viewMode === "year") return [`FY ${year}`];
+  if (viewMode === "quarter") return ["Q1", "Q2", "Q3", "Q4"];
+
+  const months = [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
+  ];
+  return months;
+};
 
 // Key Question Component with Show More functionality
 const KeyQuestionBox = ({ question, signals, decisions, section }) => {
-  const [showMore, setShowMore] = useState(false)
-  
+  const [showMore, setShowMore] = useState(false);
+
   // Get first sentence
   const getFirstSentence = (text) => {
-    const match = text.match(/^[^.!?]+[.!?]/)
-    return match ? match[0] : text.split('.')[0] + '.'
-  }
-  
+    const match = text.match(/^[^.!?]+[.!?]/);
+    return match ? match[0] : text.split(".")[0] + ".";
+  };
+
   return (
     <div
       style={{
-        backgroundColor: "	#DCDCDC",
+        backgroundColor: "#DCDCDC",
         padding: "15px 20px",
         borderRadius: "8px",
         marginBottom: "20px",
-        border: "1px solid 	#5d4037",
+        border: "1px solid #5d4037",
       }}
     >
       <div style={{ marginBottom: "8px" }}>
-        <strong style={{ color: "#5d4037", fontSize: "14px" }}>Key Question:</strong>
-        <span style={{ color: "#5d4037", fontSize: "14px", marginLeft: "8px" }}>
+        <strong style={{ color: "#5d4037", fontSize: "14px" }}>
+          Key Question:
+        </strong>
+        <span
+          style={{ color: "#5d4037", fontSize: "14px", marginLeft: "8px" }}
+        >
           {showMore ? question : getFirstSentence(question)}
         </span>
-        {!showMore && (question.length > getFirstSentence(question).length || signals || decisions) && (
-          <button
-            onClick={() => setShowMore(true)}
-            style={{
-              background: "none",
-              border: "none",
-              color: "#5d4037",
-              fontWeight: "600",
-              cursor: "pointer",
-              marginLeft: "5px",
-              textDecoration: "underline",
-            }}
-          >
-            Show more
-          </button>
-        )}
+        {!showMore &&
+          (question.length > getFirstSentence(question).length ||
+            signals ||
+            decisions) && (
+            <button
+              onClick={() => setShowMore(true)}
+              style={{
+                background: "none",
+                border: "none",
+                color: "#5d4037",
+                fontWeight: "600",
+                cursor: "pointer",
+                marginLeft: "5px",
+                textDecoration: "underline",
+              }}
+            >
+              Show more
+            </button>
+          )}
       </div>
-      
+
       {showMore && (
         <>
           <div style={{ marginBottom: "8px" }}>
-            <strong style={{ color: "#5d4037", fontSize: "14px" }}>Key Signals:</strong>
-            <span style={{ color: "#5d4037", fontSize: "14px", marginLeft: "8px" }}>{signals}</span>
+            <strong style={{ color: "#5d4037", fontSize: "14px" }}>
+              Key Signals:
+            </strong>
+            <span
+              style={{ color: "#5d4037", fontSize: "14px", marginLeft: "8px" }}
+            >
+              {signals}
+            </span>
           </div>
           <div>
-            <strong style={{ color: "#5d4037", fontSize: "14px" }}>Key Decisions:</strong>
-            <span style={{ color: "#5d4037", fontSize: "14px", marginLeft: "8px" }}>{decisions}</span>
+            <strong style={{ color: "#5d4037", fontSize: "14px" }}>
+              Key Decisions:
+            </strong>
+            <span
+              style={{ color: "#5d4037", fontSize: "14px", marginLeft: "8px" }}
+            >
+              {decisions}
+            </span>
           </div>
           <button
             onClick={() => setShowMore(false)}
@@ -117,8 +167,8 @@ const KeyQuestionBox = ({ question, signals, decisions, section }) => {
         </>
       )}
     </div>
-  )
-}
+  );
+};
 
 // Eye Icon Component
 const EyeIcon = ({ size = 16 }) => (
@@ -135,38 +185,58 @@ const EyeIcon = ({ size = 16 }) => (
     <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
     <circle cx="12" cy="12" r="3"></circle>
   </svg>
-)
+);
 
 // Chart View Modal Component with AI Analysis Section
 const ChartViewModal = ({ isOpen, onClose, kpiData, historicalData = [] }) => {
-  const _now = new Date()
-  const _toDefault = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, "0")}`
+  const _now = new Date();
+  const _toDefault = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(
+    2,
+    "0"
+  )}`;
   const _fromDefault = (() => {
-    const d = new Date(_now.getFullYear(), _now.getMonth() - 11, 1)
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
-  })()
-  const [filterMode, setFilterMode] = useState("range")
-  const [fromDate, setFromDate] = useState(_fromDefault)
-  const [toDate, setToDate] = useState(_toDefault)
-  const [aiAnalysis, setAiAnalysis] = useState("")
-  const [generatingAnalysis, setGeneratingAnalysis] = useState(false)
+    const d = new Date(_now.getFullYear(), _now.getMonth() - 11, 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  })();
+  const [filterMode, setFilterMode] = useState("range");
+  const [fromDate, setFromDate] = useState(_fromDefault);
+  const [toDate, setToDate] = useState(_toDefault);
+  const [aiAnalysis, setAiAnalysis] = useState("");
+  const [generatingAnalysis, setGeneratingAnalysis] = useState(false);
 
   // Build ordered "Mon YYYY" labels between fromDate and toDate
   const buildRangeLabels = () => {
-    if (!fromDate || !toDate) return []
-    const allMonths = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
-    const [fy, fm] = fromDate.split("-").map(Number)
-    const [ty, tm] = toDate.split("-").map(Number)
-    const labels = []
-    let y = fy, m = fm
+    if (!fromDate || !toDate) return [];
+    const allMonths = [
+      "Jan",
+      "Feb",
+      "Mar",
+      "Apr",
+      "May",
+      "Jun",
+      "Jul",
+      "Aug",
+      "Sep",
+      "Oct",
+      "Nov",
+      "Dec",
+    ];
+    const [fy, fm] = fromDate.split("-").map(Number);
+    const [ty, tm] = toDate.split("-").map(Number);
+    const labels = [];
+    let y = fy,
+      m = fm;
     while (y < ty || (y === ty && m <= tm)) {
-      labels.push(`${allMonths[m - 1]} ${y}`)
-      m++
-      if (m > 12) { m = 1; y++ }
+      labels.push(`${allMonths[m - 1]} ${y}`);
+      m++;
+      if (m > 12) {
+        m = 1;
+        y++;
+      }
     }
-    return labels
-  }
-  
+    return labels;
+  };
+
   // Brown color shades for charts
   const brownShades = [
     "#3E2723", // Darkest
@@ -176,89 +246,135 @@ const ChartViewModal = ({ isOpen, onClose, kpiData, historicalData = [] }) => {
     "#A1887F",
     "#BCAAA4",
     "#D7CCC8",
-    "#EFEBE9" // Lightest
-  ]
-  
+    "#EFEBE9", // Lightest
+  ];
+
   useEffect(() => {
     if (isOpen && kpiData && !aiAnalysis) {
-      generateAiAnalysis()
+      generateAiAnalysis();
     }
-  }, [isOpen, kpiData])
-  
+  }, [isOpen, kpiData]);
+
   const generateAiAnalysis = async () => {
-    setGeneratingAnalysis(true)
+    setGeneratingAnalysis(true);
     try {
       // Simulate AI analysis generation
-      await new Promise(resolve => setTimeout(resolve, 1500))
-      
+      await new Promise((resolve) => setTimeout(resolve, 1500));
+
       const analysis = `Based on the trend analysis for ${kpiData.kpi}:
 
-🎯 **Performance Summary**: The current value of ${formatToTwoDecimals(kpiData.currentValue)} ${kpiData.units} is ${kpiData.currentValue > kpiData.target ? 'above' : 'below'} the target of ${formatToTwoDecimals(kpiData.target)} ${kpiData.units}.
+🎯 **Performance Summary**: The current value of ${formatToTwoDecimals(
+        kpiData.currentValue
+      )} ${kpiData.units} is ${
+        kpiData.currentValue > kpiData.target ? "above" : "below"
+      } the target of ${formatToTwoDecimals(kpiData.target)} ${
+        kpiData.units
+      }.
 
-📈 **Trend Insight**: Historical data shows ${Math.random() > 0.5 ? 'an improving' : 'a declining'} trend over the past 12 months, with ${Math.random() > 0.5 ? 'notable improvement' : 'some fluctuations'} in Q${Math.floor(Math.random() * 4) + 1}.
+📈 **Trend Insight**: Historical data shows ${
+        Math.random() > 0.5 ? "an improving" : "a declining"
+      } trend over the past 12 months, with ${
+        Math.random() > 0.5 ? "notable improvement" : "some fluctuations"
+      } in Q${Math.floor(Math.random() * 4) + 1}.
 
 ⚠️ **Key Observations**: 
-• ${kpiData.currentValue > kpiData.target ? 'Excellent performance exceeding targets' : 'Attention needed to meet targets'}
-• ${Math.random() > 0.5 ? 'Seasonal patterns detected' : 'Consistent performance observed'}
-• ${Math.random() > 0.5 ? 'Strong correlation with production volume' : 'Independent of external factors'}
+• ${
+        kpiData.currentValue > kpiData.target
+          ? "Excellent performance exceeding targets"
+          : "Attention needed to meet targets"
+      }
+• ${
+        Math.random() > 0.5
+          ? "Seasonal patterns detected"
+          : "Consistent performance observed"
+      }
+• ${
+        Math.random() > 0.5
+          ? "Strong correlation with production volume"
+          : "Independent of external factors"
+      }
 
 💡 **Recommendations**:
-1. ${kpiData.currentValue > kpiData.target ? 'Maintain current performance levels' : 'Implement improvement initiatives'}
-2. ${Math.random() > 0.5 ? 'Monitor monthly variations' : 'Focus on quarterly targets'}
-3. ${Math.random() > 0.5 ? 'Review supplier dependencies' : 'Optimize resource allocation'}
+1. ${
+        kpiData.currentValue > kpiData.target
+          ? "Maintain current performance levels"
+          : "Implement improvement initiatives"
+      }
+2. ${
+        Math.random() > 0.5
+          ? "Monitor monthly variations"
+          : "Focus on quarterly targets"
+      }
+3. ${
+        Math.random() > 0.5
+          ? "Review supplier dependencies"
+          : "Optimize resource allocation"
+      }
 
-📊 **Confidence Level**: ${Math.floor(Math.random() * 30) + 70}% accurate based on historical patterns.`
+📊 **Confidence Level**: ${Math.floor(Math.random() * 30) + 70}% accurate based on historical patterns.`;
 
-      setAiAnalysis(analysis)
+      setAiAnalysis(analysis);
     } catch (error) {
-      console.error("Error generating AI analysis:", error)
-      setAiAnalysis("AI analysis temporarily unavailable. Please try again later.")
+      console.error("Error generating AI analysis:", error);
+      setAiAnalysis("AI analysis temporarily unavailable. Please try again later.");
     } finally {
-      setGeneratingAnalysis(false)
+      setGeneratingAnalysis(false);
     }
-  }
-  
-  if (!isOpen || !kpiData) return null
+  };
 
-  const rangeLabels = buildRangeLabels()
+  if (!isOpen || !kpiData) return null;
+
+  const rangeLabels = buildRangeLabels();
 
   // Generate chart data for each label in the selected range
   const generateChartData = () => {
-    const baseValue = kpiData.currentValue || 50
-    const chartData = rangeLabels.map((_, i) => {
-      const trend = 1 + (i / Math.max(rangeLabels.length - 1, 1)) * 0.05
-      const variation = (Math.random() - 0.5) * baseValue * 0.3
-      return Math.max(0, parseToTwoDecimals(baseValue * trend + variation))
-    })
+    const baseValue = kpiData.currentValue || 50;
+    // Use actual historical data if passed, otherwise generate mock trend
+    const hasRealData = historicalData && historicalData.length > 0;
+    const chartData = rangeLabels.map((label, i) => {
+      if (hasRealData) {
+        // Find matching historical data point
+        const dataPoint = historicalData.find((d) => d.month === label);
+        return dataPoint ? dataPoint.value : baseValue;
+      } else {
+        // Generate mock data for demo
+        const trend = 1 + (i / Math.max(rangeLabels.length - 1, 1)) * 0.05;
+        const variation = (Math.random() - 0.5) * baseValue * 0.3;
+        return Math.max(0, parseToTwoDecimals(baseValue * trend + variation));
+      }
+    });
 
     return {
       labels: rangeLabels,
-      datasets: [{
-        label: `${kpiData.kpi}`,
-        data: chartData,
-        backgroundColor: brownShades[1] + "80", // 80 = 50% opacity
-        borderColor: brownShades[0],
-        borderWidth: 3,
-        fill: true,
-        tension: 0.4,
-        pointBackgroundColor: brownShades[0],
-        pointRadius: 5,
-        pointHoverRadius: 8,
-      }]
-    }
-  }
+      datasets: [
+        {
+          label: `${kpiData.kpi}`,
+          data: chartData,
+          backgroundColor: brownShades[1] + "80", // 80 = 50% opacity
+          borderColor: brownShades[0],
+          borderWidth: 3,
+          fill: true,
+          tension: 0.4,
+          pointBackgroundColor: brownShades[0],
+          pointRadius: 5,
+          pointHoverRadius: 8,
+        },
+      ],
+    };
+  };
+
   
-  const chartData = generateChartData()
-  
+  const chartData = generateChartData();
+
   const chartOptions = {
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
       datalabels: {
-      display: false // This disables datalabels for this specific chart
-    },
+        display: false, // This disables datalabels for this specific chart
+      },
       legend: {
-        position: 'top',
+        position: "top",
         labels: {
           color: "#5d4037",
           font: {
@@ -271,32 +387,32 @@ const ChartViewModal = ({ isOpen, onClose, kpiData, historicalData = [] }) => {
         backgroundColor: "rgba(93, 64, 55, 0.95)",
         titleColor: "#ffffff",
         bodyColor: "#ffffff",
-        titleFont: { size: 12, weight: 'bold' },
+        titleFont: { size: 12, weight: "bold" },
         bodyFont: { size: 14 },
         borderColor: "#5d4037",
         borderWidth: 1,
         padding: 12,
         displayColors: false,
         callbacks: {
-          label: function(context) {
-            let label = context.dataset.label || '';
+          label: function (context) {
+            let label = context.dataset.label || "";
             if (label) {
-              label += ': ';
+              label += ": ";
             }
             if (context.parsed.y !== null) {
               const value = formatToTwoDecimals(context.parsed.y);
               label += value;
-              if (kpiData.units === '%') {
-                label += '%';
-              } else if (kpiData.units === 'R') {
-                label = 'R' + value;
+              if (kpiData.units === "%") {
+                label += "%";
+              } else if (kpiData.units === "R") {
+                label = "R" + value;
               } else {
-                label += ' ' + kpiData.units;
+                label += " " + kpiData.units;
               }
             }
             return label;
-          }
-        }
+          },
+        },
       },
     },
     scales: {
@@ -308,12 +424,12 @@ const ChartViewModal = ({ isOpen, onClose, kpiData, historicalData = [] }) => {
         ticks: {
           color: "#5d4037",
           font: { size: 12 },
-          callback: function(value) {
+          callback: function (value) {
             const formatted = formatToTwoDecimals(value);
-            if (kpiData.units === '%') return formatted + '%'
-            if (kpiData.units === 'R') return 'R' + formatted
-            return formatted
-          }
+            if (kpiData.units === "%") return formatted + "%";
+            if (kpiData.units === "R") return "R" + formatted;
+            return formatted;
+          },
         },
       },
       x: {
@@ -322,11 +438,11 @@ const ChartViewModal = ({ isOpen, onClose, kpiData, historicalData = [] }) => {
         },
         ticks: {
           color: "#5d4037",
-          font: { size: 12 }
+          font: { size: 12 },
         },
       },
     },
-  }
+  };
 
   return (
     <div
@@ -356,20 +472,44 @@ const ChartViewModal = ({ isOpen, onClose, kpiData, historicalData = [] }) => {
           boxShadow: "0 10px 40px rgba(0,0,0,0.2)",
         }}
       >
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "25px" }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "flex-start",
+            marginBottom: "25px",
+          }}
+        >
           <div>
-            <h3 style={{ color: "#5d4037", margin: 0, fontSize: "22px", fontWeight: "700" }}>
+            <h3
+              style={{
+                color: "#5d4037",
+                margin: 0,
+                fontSize: "22px",
+                fontWeight: "700",
+              }}
+            >
               {kpiData.kpi} Analysis
             </h3>
-            <div style={{ display: "flex", gap: "10px", marginTop: "8px", alignItems: "center", flexWrap: "wrap" }}>
-              <span style={{
-                backgroundColor: "#e8ddd4",
-                color: "#5d4037",
-                padding: "4px 12px",
-                borderRadius: "20px",
-                fontSize: "12px",
-                fontWeight: "600",
-              }}>
+            <div
+              style={{
+                display: "flex",
+                gap: "10px",
+                marginTop: "8px",
+                alignItems: "center",
+                flexWrap: "wrap",
+              }}
+            >
+              <span
+                style={{
+                  backgroundColor: "#e8ddd4",
+                  color: "#5d4037",
+                  padding: "4px 12px",
+                  borderRadius: "20px",
+                  fontSize: "12px",
+                  fontWeight: "600",
+                }}
+              >
                 {kpiData.category} → {kpiData.subCategory}
               </span>
               <span style={{ color: "#8d6e63", fontSize: "14px" }}>
@@ -400,16 +540,16 @@ const ChartViewModal = ({ isOpen, onClose, kpiData, historicalData = [] }) => {
               transition: "all 0.3s ease",
             }}
             onMouseEnter={(e) => {
-              e.target.style.backgroundColor = "#e8ddd4"
+              e.target.style.backgroundColor = "#e8ddd4";
             }}
             onMouseLeave={(e) => {
-              e.target.style.backgroundColor = "#f5f0eb"
+              e.target.style.backgroundColor = "#f5f0eb";
             }}
           >
             ×
           </button>
         </div>
-        
+
         <div style={{ marginBottom: "20px" }}>
           <div style={{ marginBottom: "12px" }}>
             <DateRangePicker
@@ -421,7 +561,14 @@ const ChartViewModal = ({ isOpen, onClose, kpiData, historicalData = [] }) => {
               setToDate={setToDate}
             />
           </div>
-          <div style={{ display: "flex", gap: "15px", alignItems: "center", flexWrap: "wrap" }}>
+          <div
+            style={{
+              display: "flex",
+              gap: "15px",
+              alignItems: "center",
+              flexWrap: "wrap",
+            }}
+          >
             <button
               onClick={generateAiAnalysis}
               disabled={generatingAnalysis}
@@ -455,89 +602,111 @@ const ChartViewModal = ({ isOpen, onClose, kpiData, historicalData = [] }) => {
             </button>
           </div>
         </div>
-        
-        <div style={{ 
-          backgroundColor: "#f5f0eb", 
-          padding: "20px", 
-          borderRadius: "8px",
-          height: "300px",
-          marginBottom: "20px"
-        }}>
+
+        <div
+          style={{
+            backgroundColor: "#f5f0eb",
+            padding: "20px",
+            borderRadius: "8px",
+            height: "300px",
+            marginBottom: "20px",
+          }}
+        >
           <div style={{ height: "100%" }}>
             <Line data={chartData} options={chartOptions} />
           </div>
         </div>
-        
+
         {/* AI Analysis Section */}
-        <div style={{ 
-          backgroundColor: "#e8f5e9", 
-          padding: "20px", 
-          borderRadius: "8px",
-          border: "1px solid #c8e6c9",
-          marginBottom: "20px"
-        }}>
-          <div style={{ 
-            display: "flex", 
-            alignItems: "center", 
-            gap: "10px", 
-            marginBottom: "15px" 
-          }}>
+        <div
+          style={{
+            backgroundColor: "#e8f5e9",
+            padding: "20px",
+            borderRadius: "8px",
+            border: "1px solid #c8e6c9",
+            marginBottom: "20px",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "10px",
+              marginBottom: "15px",
+            }}
+          >
             <span style={{ fontSize: "20px" }}>🤖</span>
-            <h4 style={{ 
-              color: "#2e7d32", 
-              margin: 0, 
-              fontSize: "16px", 
-              fontWeight: "700" 
-            }}>
+            <h4
+              style={{
+                color: "#2e7d32",
+                margin: 0,
+                fontSize: "16px",
+                fontWeight: "700",
+              }}
+            >
               AI Performance Analysis
             </h4>
             {generatingAnalysis && (
-              <span style={{
-                padding: "4px 10px",
-                backgroundColor: "#ffebee",
-                color: "#c62828",
-                borderRadius: "12px",
-                fontSize: "12px",
-                fontWeight: "600",
-              }}>
+              <span
+                style={{
+                  padding: "4px 10px",
+                  backgroundColor: "#ffebee",
+                  color: "#c62828",
+                  borderRadius: "12px",
+                  fontSize: "12px",
+                  fontWeight: "600",
+                }}
+              >
                 Generating...
               </span>
             )}
           </div>
-          
+
           {generatingAnalysis ? (
-            <div style={{
-              padding: "30px",
-              textAlign: "center",
-              color: "#5d4037",
-              fontSize: "14px",
-            }}>
+            <div
+              style={{
+                padding: "30px",
+                textAlign: "center",
+                color: "#5d4037",
+                fontSize: "14px",
+              }}
+            >
               <div style={{ fontSize: "32px", marginBottom: "10px" }}>⟳</div>
               Generating AI-powered analysis for {kpiData.kpi}...
-              <div style={{ 
-                marginTop: "20px", 
-                height: "4px", 
-                backgroundColor: "#e8ddd4", 
-                borderRadius: "2px",
-                overflow: "hidden"
-              }}>
-                <div style={{
-                  height: "100%",
-                  backgroundColor: "#5d4037",
-                  width: "60%",
-                  animation: "loading 2s infinite"
-                }}></div>
+              <div
+                style={{
+                  marginTop: "20px",
+                  height: "4px",
+                  backgroundColor: "#e8ddd4",
+                  borderRadius: "2px",
+                  overflow: "hidden",
+                }}
+              >
+                <div
+                  style={{
+                    height: "100%",
+                    backgroundColor: "#5d4037",
+                    width: "60%",
+                    animation: "loading 2s infinite",
+                  }}
+                ></div>
               </div>
             </div>
           ) : aiAnalysis ? (
             <div style={{ color: "#1b5e20", fontSize: "14px", lineHeight: "1.6" }}>
-              {aiAnalysis.split('\n\n').map((paragraph, idx) => (
+              {aiAnalysis.split("\n\n").map((paragraph, idx) => (
                 <div key={idx} style={{ marginBottom: "12px" }}>
-                  {paragraph.split('\n').map((line, lineIdx) => (
-                    <div key={lineIdx} style={{ 
-                      marginBottom: "8px",
-                      paddingLeft: line.startsWith('•') || line.match(/^\d+\./) ? "20px" : "0"
-                    }}>
+                  {paragraph.split("\n").map((line, lineIdx) => (
+                    <div
+                      key={lineIdx}
+                      style={{
+                        marginBottom: "8px",
+                        paddingLeft:
+                          line.startsWith("•") || line.match(/^\d+\./)
+                            ? "20px"
+                            : "0",
+                      }}
+                    >
                       {line}
                     </div>
                   ))}
@@ -545,20 +714,24 @@ const ChartViewModal = ({ isOpen, onClose, kpiData, historicalData = [] }) => {
               ))}
             </div>
           ) : (
-            <div style={{ color: "#666", fontSize: "14px", fontStyle: "italic" }}>
+            <div
+              style={{ color: "#666", fontSize: "14px", fontStyle: "italic" }}
+            >
               AI analysis will appear here...
             </div>
           )}
         </div>
-        
-        <div style={{ 
-          display: "flex", 
-          justifyContent: "flex-end",
-          marginTop: "25px",
-          paddingTop: "20px",
-          borderTop: "1px solid #e8ddd4",
-          gap: "10px"
-        }}>
+
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "flex-end",
+            marginTop: "25px",
+            paddingTop: "20px",
+            borderTop: "1px solid #e8ddd4",
+            gap: "10px",
+          }}
+        >
           <button
             onClick={onClose}
             style={{
@@ -573,12 +746,12 @@ const ChartViewModal = ({ isOpen, onClose, kpiData, historicalData = [] }) => {
               transition: "all 0.3s ease",
             }}
             onMouseEnter={(e) => {
-              e.target.style.backgroundColor = "#3e2723"
-              e.target.style.transform = "translateY(-2px)"
+              e.target.style.backgroundColor = "#3e2723";
+              e.target.style.transform = "translateY(-2px)";
             }}
             onMouseLeave={(e) => {
-              e.target.style.backgroundColor = "#5d4037"
-              e.target.style.transform = "translateY(0)"
+              e.target.style.backgroundColor = "#5d4037";
+              e.target.style.transform = "translateY(0)";
             }}
           >
             Close Analysis
@@ -586,30 +759,22 @@ const ChartViewModal = ({ isOpen, onClose, kpiData, historicalData = [] }) => {
         </div>
       </div>
     </div>
-  )
-}
+  );
+};
 
 // Add Data Modal Component with Category Sections, Spread Months, Add KPI Button, and Notes
-const AddDataModal = ({ isOpen, onClose, kpiData }) => {
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear())
-  const [loading, setLoading] = useState(false)
-  const [dataValues, setDataValues] = useState({})
-  const [notes, setNotes] = useState("")
-  const [activeCategory, setActiveCategory] = useState("supply-chain")
-  const [newKPI, setNewKPI] = useState({ name: "", units: "", target: "" })
-  const [showAddKPIForm, setShowAddKPIForm] = useState(false)
-  
-  // Brown color shades for charts
-  const brownShades = [
-    "#3E2723", // Darkest
-    "#5D4037",
-    "#795548",
-    "#8D6E63",
-    "#A1887F",
-    "#BCAAA4",
-    "#D7CCC8",
-    "#EFEBE9" // Lightest
-  ]
+const AddDataModal = ({ isOpen, onClose, kpiData, onSaveData }) => {
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [loading, setLoading] = useState(false);
+  const [dataValues, setDataValues] = useState({});
+  const [notes, setNotes] = useState("");
+  const [activeCategory, setActiveCategory] = useState("supply-chain");
+  const [newKPI, setNewKPI] = useState({ name: "", units: "", target: "" });
+  const [showAddKPIForm, setShowAddKPIForm] = useState(false);
+  const [editingKPI, setEditingKPI] = useState(null);
+  const [editKPIValue, setEditKPIValue] = useState("");
+
+
   
   // KPI structure for data entry
   const [kpiStructure, setKpiStructure] = useState([
@@ -620,20 +785,20 @@ const AddDataModal = ({ isOpen, onClose, kpiData }) => {
         {
           name: "Supplier Dependency",
           kpis: [
-            { name: "Top 3 Supplier %", units: "%", target: 70, currentValue: 79 },
+            { name: "Top 3 Supplier Spend", units: "%", target: 70, currentValue: 79 },
             { name: "Single Source Flags", units: "#", target: 0, currentValue: 1 },
-            { name: "Critical Supplier Count", units: "#", target: 5, currentValue: 16 }
-          ]
+            { name: "Critical Supplier Count", units: "#", target: 5, currentValue: 16 },
+          ],
         },
         {
           name: "Continuity Risk",
           kpis: [
             { name: "Lead Time Variance", units: "days", target: 2, currentValue: 2.3 },
             { name: "Stock Cover Days", units: "days", target: 30, currentValue: 27 },
-            { name: "Disruption Risk Index", units: "index", target: 20, currentValue: 23 }
-          ]
-        }
-      ]
+            { name: "Disruption Risk Index", units: "index", target: 20, currentValue: 23 },
+          ],
+        },
+      ],
     },
     {
       id: "delivery",
@@ -645,18 +810,18 @@ const AddDataModal = ({ isOpen, onClose, kpiData }) => {
             { name: "Production Volume", units: "units", target: 10000, currentValue: 12800 },
             { name: "Availability %", units: "%", target: 95, currentValue: 93 },
             { name: "Utilization %", units: "%", target: 85, currentValue: 85 },
-            { name: "Unit Cost", units: "R", target: 50, currentValue: 41 }
-          ]
+            { name: "Unit Cost", units: "R", target: 50, currentValue: 41 },
+          ],
         },
         {
           name: "Reliability",
           kpis: [
             { name: "On-time Delivery %", units: "%", target: 98, currentValue: 96 },
             { name: "Rework Rate", units: "%", target: 2, currentValue: 1.1 },
-            { name: "Defect Rate", units: "%", target: 1, currentValue: 0.1 }
-          ]
-        }
-      ]
+            { name: "Defect Rate", units: "%", target: 1, currentValue: 0.1 },
+          ],
+        },
+      ],
     },
     {
       id: "safety",
@@ -667,136 +832,273 @@ const AddDataModal = ({ isOpen, onClose, kpiData }) => {
           kpis: [
             { name: "Safety Incidents", units: "#", target: 0, currentValue: 0 },
             { name: "Open Safety Actions", units: "#", target: 5, currentValue: 1 },
-            { name: "Compliance Status %", units: "%", target: 100, currentValue: 100 }
-          ]
+            { name: "Compliance Status %", units: "%", target: 100, currentValue: 100 },
+          ],
         },
         {
           name: "Regulatory Compliance",
           kpis: [
             { name: "Regulatory Gaps", units: "#", target: 0, currentValue: 0 },
             { name: "Audit Findings", units: "#", target: 3, currentValue: 0 },
-            { name: "Certification Status %", units: "%", target: 100, currentValue: 100 }
-          ]
-        }
-      ]
-    }
-  ])
+            { name: "Certification Status %", units: "%", target: 100, currentValue: 100 },
+          ],
+        },
+      ],
+    },
+  ]);
+
+  const handleEditKPI = (categoryId, subCategoryName, kpiIndex, currentName) => {
+    setEditingKPI({ categoryId, subCategoryName, kpiIndex, currentName });
+    setEditKPIValue(currentName);
+  };
+
+  const handleSaveKPIEdit = () => {
+    if (!editingKPI) return;
+
+    const updatedStructure = [...kpiStructure];
+    const categoryIndex = updatedStructure.findIndex(
+      (cat) => cat.id === editingKPI.categoryId
+    );
+    const subCategoryIndex = updatedStructure[categoryIndex].subCategories.findIndex(
+      (sub) => sub.name === editingKPI.subCategoryName
+    );
+
+    // Update the KPI name
+    const oldKpiName =
+      updatedStructure[categoryIndex].subCategories[subCategoryIndex].kpis[
+        editingKPI.kpiIndex
+      ].name;
+    updatedStructure[categoryIndex].subCategories[subCategoryIndex].kpis[
+      editingKPI.kpiIndex
+    ].name = editKPIValue;
+
+    // Update dataValues keys to reflect new KPI name
+    const newDataValues = {};
+    Object.keys(dataValues).forEach((key) => {
+      if (key.includes(oldKpiName)) {
+        const newKey = key.replace(oldKpiName, editKPIValue);
+        newDataValues[newKey] = dataValues[key];
+      } else {
+        newDataValues[key] = dataValues[key];
+      }
+    });
+
+    setKpiStructure(updatedStructure);
+    setDataValues(newDataValues);
+    setEditingKPI(null);
+    setEditKPIValue("");
+  };
 
   useEffect(() => {
     if (isOpen) {
       // Initialize data values for all months
-      const initialValues = {}
-      const months = getMonthsForYear(selectedYear, "month")
-      months.forEach(month => {
-        // Initialize with random values based on year to show differences
-        const yearMultiplier = 1 + (selectedYear - new Date().getFullYear()) * 0.15
-        kpiStructure.forEach(category => {
-          category.subCategories.forEach(subCategory => {
-            subCategory.kpis.forEach(kpi => {
-              const kpiKey = `${category.id}-${subCategory.name}-${kpi.name}-${month}`
-              const baseValue = kpi.currentValue || 50
-              const variation = Math.random() * (baseValue * 0.2) - (baseValue * 0.1)
-              initialValues[kpiKey] = parseToTwoDecimals(baseValue * yearMultiplier + variation)
-            })
-          })
-        })
-      })
-      setDataValues(initialValues)
+      const initialValues = {};
+      const months = getMonthsForYear(selectedYear, "month");
+      months.forEach((month) => {
+        kpiStructure.forEach((category) => {
+          category.subCategories.forEach((subCategory) => {
+            subCategory.kpis.forEach((kpi) => {
+              const kpiKey = `${category.id}-${subCategory.name}-${kpi.name}-${month}`;
+              const baseValue = kpi.currentValue || 50;
+              const variation = Math.random() * (baseValue * 0.2) - baseValue * 0.1;
+              initialValues[kpiKey] = parseToTwoDecimals(baseValue + variation);
+            });
+          });
+        });
+      });
+      setDataValues(initialValues);
     }
-  }, [isOpen, selectedYear])
+  }, [isOpen, selectedYear]);
 
-  if (!isOpen) return null
-  
-  const years = Array.from({ length: 5 }, (_, i) => selectedYear - 2 + i)
-  const months = getMonthsForYear(selectedYear, "month")
-  const currentCategory = kpiStructure.find(cat => cat.id === activeCategory)
-  
-  const handleSave = async () => {
-    setLoading(true)
-    try {
-      // Format all values to 2 decimals before saving
-      const formattedDataValues = {}
-      Object.keys(dataValues).forEach(key => {
-        formattedDataValues[key] = parseToTwoDecimals(dataValues[key])
-      })
-      
-      console.log("Saving data:", {
+  if (!isOpen) return null;
+
+  const years = Array.from({ length: 5 }, (_, i) => selectedYear - 2 + i);
+  const months = getMonthsForYear(selectedYear, "month");
+  const currentCategory = kpiStructure.find((cat) => cat.id === activeCategory);
+const handleSave = async () => {
+  setLoading(true);
+  try {
+    const user = auth.currentUser;
+    if (!user) {
+      alert("You must be logged in to save data");
+      setLoading(false);
+      return;
+    }
+
+    // Format all values to 2 decimals before saving
+    const formattedDataValues = {};
+    Object.keys(dataValues).forEach((key) => {
+      const value = dataValues[key];
+      formattedDataValues[key] =
+        value === "" || value === null || value === undefined
+          ? null
+          : parseToTwoDecimals(parseFloat(value));
+    });
+
+    // Determine which Firebase collection to save to based on activeCategory
+    let collectionName = "";
+    let docData = {};
+    
+    const months = getMonthsForYear(selectedYear, "month");
+    const latestMonth = months[months.length - 1];
+    
+    if (activeCategory === "supply-chain") {
+      collectionName = "supplierDependency";
+      // Map the form data to the field names expected by the collection
+      docData = {
+        userId: user.uid,
+        top3SupplierPercent: parseToTwoDecimals(formattedDataValues[`supply-chain-Supplier Dependency-Top 3 Supplier Spend-${latestMonth}`]) || 0,
+        singleSourceFlags: parseToTwoDecimals(formattedDataValues[`supply-chain-Supplier Dependency-Single Source Flags-${latestMonth}`]) || 0,
+        criticalSupplierCount: parseToTwoDecimals(formattedDataValues[`supply-chain-Supplier Dependency-Critical Supplier Count-${latestMonth}`]) || 0,
+        leadTimeVariance: parseToTwoDecimals(formattedDataValues[`supply-chain-Continuity Risk-Lead Time Variance-${latestMonth}`]) || 0,
+        stockCoverDays: parseToTwoDecimals(formattedDataValues[`supply-chain-Continuity Risk-Stock Cover Days-${latestMonth}`]) || 0,
+        disruptionRiskIndex: parseToTwoDecimals(formattedDataValues[`supply-chain-Continuity Risk-Disruption Risk Index-${latestMonth}`]) || 0,
+        lastUpdated: new Date().toISOString(),
+      };
+    } 
+    else if (activeCategory === "delivery") {
+      collectionName = "productivity";
+      docData = {
+        userId: user.uid,
+        productionVolume: parseToTwoDecimals(formattedDataValues[`delivery-Productivity-Production Volume-${latestMonth}`]) || 0,
+        availabilityPercent: parseToTwoDecimals(formattedDataValues[`delivery-Productivity-Availability %-${latestMonth}`]) || 0,
+        utilizationPercent: parseToTwoDecimals(formattedDataValues[`delivery-Productivity-Utilization %-${latestMonth}`]) || 0,
+        unitCost: parseToTwoDecimals(formattedDataValues[`delivery-Productivity-Unit Cost-${latestMonth}`]) || 0,
+        onTimeDeliveryPercent: parseToTwoDecimals(formattedDataValues[`delivery-Reliability-On-time Delivery %-${latestMonth}`]) || 0,
+        reworkRate: parseToTwoDecimals(formattedDataValues[`delivery-Reliability-Rework Rate-${latestMonth}`]) || 0,
+        defectRate: parseToTwoDecimals(formattedDataValues[`delivery-Reliability-Defect Rate-${latestMonth}`]) || 0,
+        lastUpdated: new Date().toISOString(),
+      };
+    } 
+    else if (activeCategory === "safety") {
+      collectionName = "safetyRisk";
+      docData = {
+        userId: user.uid,
+        safetyIncidents: parseToTwoDecimals(formattedDataValues[`safety-Safety Risk-Safety Incidents-${latestMonth}`]) || 0,
+        openSafetyActions: parseToTwoDecimals(formattedDataValues[`safety-Safety Risk-Open Safety Actions-${latestMonth}`]) || 0,
+        complianceStatusPercent: parseToTwoDecimals(formattedDataValues[`safety-Safety Risk-Compliance Status %-${latestMonth}`]) || 0,
+        regulatoryGaps: parseToTwoDecimals(formattedDataValues[`safety-Regulatory Compliance-Regulatory Gaps-${latestMonth}`]) || 0,
+        auditFindings: parseToTwoDecimals(formattedDataValues[`safety-Regulatory Compliance-Audit Findings-${latestMonth}`]) || 0,
+        certificationStatusPercent: parseToTwoDecimals(formattedDataValues[`safety-Regulatory Compliance-Certification Status %-${latestMonth}`]) || 0,
+        lastUpdated: new Date().toISOString(),
+      };
+    }
+    
+    // Save to Firebase
+    if (collectionName) {
+      const docRef = doc(db, collectionName, user.uid);
+      await setDoc(docRef, docData, { merge: true });
+      console.log(`Data saved to ${collectionName}:`, docData);
+    }
+    
+    // Also save notes if there's a notes collection
+    if (notes) {
+      const notesRef = doc(db, "kpiNotes", `${user.uid}_${activeCategory}_${selectedYear}`);
+      await setDoc(notesRef, {
+        userId: user.uid,
+        category: activeCategory,
+        year: selectedYear,
+        notes: notes,
+        lastUpdated: new Date().toISOString(),
+      }, { merge: true });
+    }
+    
+    // If KPI structure changed (new KPI added or name edited), save that too
+    if (onSaveData) {
+      onSaveData({
         category: activeCategory,
         year: selectedYear,
         dataValues: formattedDataValues,
-        notes
-      })
-      
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1000))
-      
-      alert("Data saved successfully!")
-      onClose()
+        notes: notes,
+        kpiStructure: kpiStructure,
+      });
+    }
+    
+    alert("Data saved successfully to Firebase!");
+    onClose();
+  } catch (error) {
+    console.error("Error saving data:", error);
+    alert("Error saving data: " + error.message);
+  } finally {
+    setLoading(false);
+  }
+};
+
+  const handleAddKPI = async () => {
+  if (!newKPI.name || !newKPI.units || !newKPI.target) {
+    alert("Please fill in all KPI fields");
+    return;
+  }
+  
+  const categoryIndex = kpiStructure.findIndex(cat => cat.id === activeCategory);
+  if (categoryIndex === -1) return;
+  
+  const subCategoryIndex = kpiStructure[categoryIndex].subCategories.findIndex(
+    sub => sub.name === (kpiData?.subCategory || kpiStructure[categoryIndex].subCategories[0].name)
+  );
+  
+  if (subCategoryIndex === -1) return;
+  
+  const updatedStructure = [...kpiStructure];
+  updatedStructure[categoryIndex].subCategories[subCategoryIndex].kpis.push({
+    name: newKPI.name,
+    units: newKPI.units,
+    target: parseToTwoDecimals(newKPI.target),
+    currentValue: 0
+  });
+  
+  setKpiStructure(updatedStructure);
+  
+  // Save the updated structure to Firebase
+  const user = auth.currentUser;
+  if (user) {
+    try {
+      const structureRef = doc(db, "kpiStructure", user.uid);
+      await setDoc(structureRef, {
+        userId: user.uid,
+        structure: updatedStructure,
+        lastUpdated: new Date().toISOString(),
+      });
+      console.log("KPI structure saved to Firebase");
     } catch (error) {
-      console.error("Error saving data:", error)
-      alert("Error saving data. Please try again.")
-    } finally {
-      setLoading(false)
+      console.error("Error saving KPI structure:", error);
     }
   }
   
-  const handleAddKPI = () => {
-    if (!newKPI.name || !newKPI.units || !newKPI.target) {
-      alert("Please fill in all KPI fields")
-      return
-    }
-    
-    const categoryIndex = kpiStructure.findIndex(cat => cat.id === activeCategory)
-    if (categoryIndex === -1) return
-    
-    const subCategoryIndex = kpiStructure[categoryIndex].subCategories.findIndex(
-      sub => sub.name === (kpiData?.subCategory || kpiStructure[categoryIndex].subCategories[0].name)
-    )
-    
-    if (subCategoryIndex === -1) return
-    
-    const updatedStructure = [...kpiStructure]
-    updatedStructure[categoryIndex].subCategories[subCategoryIndex].kpis.push({
-      name: newKPI.name,
-      units: newKPI.units,
-      target: parseToTwoDecimals(newKPI.target),
-      currentValue: 0
-    })
-    
-    setKpiStructure(updatedStructure)
-    setNewKPI({ name: "", units: "", target: "" })
-    setShowAddKPIForm(false)
-    
-    // Initialize data for the new KPI across all months
-    const newDataValues = { ...dataValues }
-    months.forEach(month => {
-      const kpiKey = `${activeCategory}-${updatedStructure[categoryIndex].subCategories[subCategoryIndex].name}-${newKPI.name}-${month}`
-      newDataValues[kpiKey] = ""
-    })
-    setDataValues(newDataValues)
-    
-    alert("New KPI added successfully!")
-  }
+  setNewKPI({ name: "", units: "", target: "" });
+  setShowAddKPIForm(false);
+  
+  // Initialize data for the new KPI across all months
+  const newDataValues = { ...dataValues };
+  const months = getMonthsForYear(selectedYear, "month");
+  months.forEach(month => {
+    const kpiKey = `${activeCategory}-${updatedStructure[categoryIndex].subCategories[subCategoryIndex].name}-${newKPI.name}-${month}`;
+    newDataValues[kpiKey] = "";
+  });
+  setDataValues(newDataValues);
+  
+  alert("New KPI added successfully!");
+};
 
   const handleInputChange = (kpiKey, value) => {
     // Allow empty string or valid number
     if (value === "" || value === "-") {
-      setDataValues(prev => ({
+      setDataValues((prev) => ({
         ...prev,
-        [kpiKey]: value
-      }))
-      return
+        [kpiKey]: value,
+      }));
+      return;
     }
-    
+
     // Parse to number and format to 2 decimals
-    const num = parseFloat(value)
+    const num = parseFloat(value);
     if (!isNaN(num)) {
-      setDataValues(prev => ({
+      setDataValues((prev) => ({
         ...prev,
-        [kpiKey]: parseToTwoDecimals(num)
-      }))
+        [kpiKey]: parseToTwoDecimals(num),
+      }));
     }
-  }
+  };
 
   return (
     <div
@@ -826,13 +1128,35 @@ const AddDataModal = ({ isOpen, onClose, kpiData }) => {
           boxShadow: "0 10px 40px rgba(0,0,0,0.2)",
         }}
       >
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "25px" }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "flex-start",
+            marginBottom: "25px",
+          }}
+        >
           <div>
-            <h3 style={{ color: "#5d4037", margin: 0, fontSize: "22px", fontWeight: "700" }}>
+            <h3
+              style={{
+                color: "#5d4037",
+                margin: 0,
+                fontSize: "22px",
+                fontWeight: "700",
+              }}
+            >
               Add Operational Data
             </h3>
-            <p style={{ color: "#8d6e63", fontSize: "14px", marginTop: "5px", marginBottom: 0 }}>
-              Enter data for operational KPIs by category - All months shown for {selectedYear}
+            <p
+              style={{
+                color: "#8d6e63",
+                fontSize: "14px",
+                marginTop: "5px",
+                marginBottom: 0,
+              }}
+            >
+              Enter data for operational KPIs by category - All months shown for{" "}
+              {selectedYear}
             </p>
           </div>
           <button
@@ -855,16 +1179,16 @@ const AddDataModal = ({ isOpen, onClose, kpiData }) => {
               transition: "all 0.3s ease",
             }}
             onMouseEnter={(e) => {
-              e.target.style.backgroundColor = "#e8ddd4"
+              e.target.style.backgroundColor = "#e8ddd4";
             }}
             onMouseLeave={(e) => {
-              e.target.style.backgroundColor = "#f5f0eb"
+              e.target.style.backgroundColor = "#f5f0eb";
             }}
           >
             ×
           </button>
         </div>
-        
+
         {/* Category Tabs */}
         <div
           style={{
@@ -896,18 +1220,22 @@ const AddDataModal = ({ isOpen, onClose, kpiData }) => {
             </button>
           ))}
         </div>
-        
+
         {/* Year Selection and Add KPI Button */}
-        <div style={{ 
-          marginBottom: "15px",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          flexWrap: "wrap",
-          gap: "15px"
-        }}>
+        <div
+          style={{
+            marginBottom: "15px",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: "15px",
+          }}
+        >
           <div style={{ display: "flex", gap: "5px", alignItems: "center" }}>
-            <span style={{ color: "#5d4037", fontSize: "14px", fontWeight: "600" }}>Year:</span>
+            <span style={{ color: "#5d4037", fontSize: "14px", fontWeight: "600" }}>
+              Year:
+            </span>
             <select
               value={selectedYear}
               onChange={(e) => setSelectedYear(Number.parseInt(e.target.value))}
@@ -929,7 +1257,7 @@ const AddDataModal = ({ isOpen, onClose, kpiData }) => {
               ))}
             </select>
           </div>
-          
+
           <button
             onClick={() => setShowAddKPIForm(!showAddKPIForm)}
             style={{
@@ -947,38 +1275,62 @@ const AddDataModal = ({ isOpen, onClose, kpiData }) => {
               gap: "8px",
             }}
             onMouseEnter={(e) => {
-              e.target.style.backgroundColor = "#5d4037"
+              e.target.style.backgroundColor = "#5d4037";
             }}
             onMouseLeave={(e) => {
-              e.target.style.backgroundColor = "#8d6e63"
+              e.target.style.backgroundColor = "#8d6e63";
             }}
           >
             <span style={{ fontSize: "18px" }}>+</span>
             {showAddKPIForm ? "Cancel Add KPI" : "Add New KPI"}
           </button>
         </div>
-        
+
         {/* Add KPI Form */}
         {showAddKPIForm && (
-          <div style={{
-            backgroundColor: "#f0e6d6",
-            padding: "20px",
-            borderRadius: "8px",
-            marginBottom: "20px",
-            border: "1px solid #d7ccc8"
-          }}>
-            <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "15px", fontSize: "16px" }}>
+          <div
+            style={{
+              backgroundColor: "#f0e6d6",
+              padding: "20px",
+              borderRadius: "8px",
+              marginBottom: "20px",
+              border: "1px solid #d7ccc8",
+            }}
+          >
+            <h4
+              style={{
+                color: "#5d4037",
+                marginTop: 0,
+                marginBottom: "15px",
+                fontSize: "16px",
+              }}
+            >
               Add New KPI to {currentCategory?.name}
             </h4>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "15px", marginBottom: "15px" }}>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr 1fr",
+                gap: "15px",
+                marginBottom: "15px",
+              }}
+            >
               <div>
-                <label style={{ display: "block", marginBottom: "5px", color: "#5d4037", fontWeight: "600", fontSize: "13px" }}>
+                <label
+                  style={{
+                    display: "block",
+                    marginBottom: "5px",
+                    color: "#5d4037",
+                    fontWeight: "600",
+                    fontSize: "13px",
+                  }}
+                >
                   KPI Name
                 </label>
                 <input
                   type="text"
                   value={newKPI.name}
-                  onChange={(e) => setNewKPI({...newKPI, name: e.target.value})}
+                  onChange={(e) => setNewKPI({ ...newKPI, name: e.target.value })}
                   placeholder="Enter KPI name"
                   style={{
                     width: "100%",
@@ -991,12 +1343,20 @@ const AddDataModal = ({ isOpen, onClose, kpiData }) => {
                 />
               </div>
               <div>
-                <label style={{ display: "block", marginBottom: "5px", color: "#5d4037", fontWeight: "600", fontSize: "13px" }}>
+                <label
+                  style={{
+                    display: "block",
+                    marginBottom: "5px",
+                    color: "#5d4037",
+                    fontWeight: "600",
+                    fontSize: "13px",
+                  }}
+                >
                   Units
                 </label>
                 <select
                   value={newKPI.units}
-                  onChange={(e) => setNewKPI({...newKPI, units: e.target.value})}
+                  onChange={(e) => setNewKPI({ ...newKPI, units: e.target.value })}
                   style={{
                     width: "100%",
                     padding: "10px",
@@ -1017,14 +1377,24 @@ const AddDataModal = ({ isOpen, onClose, kpiData }) => {
                 </select>
               </div>
               <div>
-                <label style={{ display: "block", marginBottom: "5px", color: "#5d4037", fontWeight: "600", fontSize: "13px" }}>
+                <label
+                  style={{
+                    display: "block",
+                    marginBottom: "5px",
+                    color: "#5d4037",
+                    fontWeight: "600",
+                    fontSize: "13px",
+                  }}
+                >
                   Target Value
                 </label>
                 <input
                   type="number"
                   step="0.01"
                   value={newKPI.target}
-                  onChange={(e) => setNewKPI({...newKPI, target: parseToTwoDecimals(e.target.value)})}
+                  onChange={(e) =>
+                    setNewKPI({ ...newKPI, target: parseToTwoDecimals(e.target.value) })
+                  }
                   placeholder="Enter target"
                   style={{
                     width: "100%",
@@ -1071,78 +1441,101 @@ const AddDataModal = ({ isOpen, onClose, kpiData }) => {
             </div>
           </div>
         )}
-        
-        <div style={{ 
-          marginBottom: "25px",
-          overflowX: "auto"
-        }}>
+
+        <div
+          style={{
+            marginBottom: "25px",
+            overflowX: "auto",
+          }}
+        >
           {/* KPIs for selected category - All months spread horizontally */}
           {currentCategory?.subCategories.map((subCategory, subIndex) => (
-            <div key={subIndex} style={{ 
-              backgroundColor: "#f5f0eb", 
-              padding: "20px", 
-              borderRadius: "8px",
-              marginBottom: "20px"
-            }}>
-              <h5 style={{ 
-                color: "#5d4037", 
-                marginTop: 0, 
+            <div
+              key={subIndex}
+              style={{
+                backgroundColor: "#f5f0eb",
+                padding: "20px",
+                borderRadius: "8px",
                 marginBottom: "20px",
-                fontSize: "16px",
-                fontWeight: "600",
-                backgroundColor: "#e8ddd4",
-                padding: "10px 15px",
-                borderRadius: "6px"
-              }}>
+              }}
+            >
+              <h5
+                style={{
+                  color: "#5d4037",
+                  marginTop: 0,
+                  marginBottom: "20px",
+                  fontSize: "16px",
+                  fontWeight: "600",
+                  backgroundColor: "#e8ddd4",
+                  padding: "10px 15px",
+                  borderRadius: "6px",
+                }}
+              >
                 {subCategory.name}
               </h5>
-              
+
               <div style={{ overflowX: "auto" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "800px" }}>
+                <table
+                  style={{
+                    width: "100%",
+                    borderCollapse: "collapse",
+                    minWidth: "800px",
+                  }}
+                >
                   <thead>
                     <tr>
-                      <th style={{ 
-                        padding: "12px", 
-                        textAlign: "left", 
-                        color: "#5d4037", 
-                        fontWeight: "600",
-                        borderBottom: "2px solid #d7ccc8",
-                        position: "sticky",
-                        left: 0,
-                        backgroundColor: "#f5f0eb"
-                      }}>
+                      <th
+                        style={{
+                          padding: "12px",
+                          textAlign: "left",
+                          color: "#5d4037",
+                          fontWeight: "600",
+                          borderBottom: "2px solid #d7ccc8",
+                          position: "sticky",
+                          left: 0,
+                          backgroundColor: "#f5f0eb",
+                        }}
+                      >
                         KPI
                       </th>
-                      <th style={{ 
-                        padding: "12px", 
-                        textAlign: "center", 
-                        color: "#5d4037", 
-                        fontWeight: "600",
-                        borderBottom: "2px solid #d7ccc8",
-                        backgroundColor: "#e8ddd4"
-                      }}>
+                      <th
+                        style={{
+                          padding: "12px",
+                          textAlign: "center",
+                          color: "#5d4037",
+                          fontWeight: "600",
+                          borderBottom: "2px solid #d7ccc8",
+                          backgroundColor: "#e8ddd4",
+                        }}
+                      >
                         Units
                       </th>
-                      <th style={{ 
-                        padding: "12px", 
-                        textAlign: "center", 
-                        color: "#5d4037", 
-                        fontWeight: "600",
-                        borderBottom: "2px solid #d7ccc8",
-                        backgroundColor: "#f0e6d6"
-                      }}>
+                      <th
+                        style={{
+                          padding: "12px",
+                          textAlign: "center",
+                          color: "#5d4037",
+                          fontWeight: "600",
+                          borderBottom: "2px solid #d7ccc8",
+                          backgroundColor: "#f0e6d6",
+                        }}
+                      >
                         Target
                       </th>
                       {months.map((month, index) => (
-                        <th key={month} style={{ 
-                          padding: "8px", 
-                          textAlign: "center", 
-                          color: "#5d4037", 
-                          fontWeight: "600",
-                          borderBottom: "2px solid #d7ccc8",
-                          backgroundColor: index % 2 === 0 ? "#f9f4ef" : "#f5f0eb",
-                          minWidth: "80px"
-                        }}>
+                        <th
+                          key={month}
+                          style={{
+                            padding: "8px",
+                            textAlign: "center",
+                            color: "#5d4037",
+                            fontWeight: "600",
+                            borderBottom: "2px solid #d7ccc8",
+                            backgroundColor:
+                              index % 2 === 0 ? "#f9f4ef" : "#f5f0eb",
+                            minWidth: "80px",
+                          }}
+                        >
                           {month}
                         </th>
                       ))}
@@ -1150,47 +1543,119 @@ const AddDataModal = ({ isOpen, onClose, kpiData }) => {
                   </thead>
                   <tbody>
                     {subCategory.kpis.map((kpi, kpiIndex) => (
-                      <tr key={kpiIndex} style={{ 
-                        borderBottom: "1px solid #e8ddd4",
-                        backgroundColor: kpiIndex % 2 === 0 ? "#fdfcfb" : "#f9f4ef"
-                      }}>
-                        <td style={{ 
-                          padding: "12px", 
-                          color: "#5d4037",
-                          position: "sticky",
-                          left: 0,
-                          backgroundColor: kpiIndex % 2 === 0 ? "#fdfcfb" : "#f9f4ef"
-                        }}>
-                          {kpi.name}
+                      <tr
+                        key={kpiIndex}
+                        style={{
+                          borderBottom: "1px solid #e8ddd4",
+                          backgroundColor:
+                            kpiIndex % 2 === 0 ? "#fdfcfb" : "#f9f4ef",
+                        }}
+                      >
+                        <td
+                          style={{
+                            padding: "12px",
+                            color: "#5d4037",
+                            position: "sticky",
+                            left: 0,
+                            backgroundColor:
+                              kpiIndex % 2 === 0 ? "#fdfcfb" : "#f9f4ef",
+                          }}
+                        >
+                          <div
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "8px",
+                            }}
+                          >
+                            {editingKPI &&
+                            editingKPI.categoryId === currentCategory.id &&
+                            editingKPI.subCategoryName === subCategory.name &&
+                            editingKPI.kpiIndex === kpiIndex ? (
+                              <input
+                                type="text"
+                                value={editKPIValue}
+                                onChange={(e) => setEditKPIValue(e.target.value)}
+                                onBlur={handleSaveKPIEdit}
+                                onKeyPress={(e) => {
+                                  if (e.key === "Enter") handleSaveKPIEdit();
+                                }}
+                                autoFocus
+                                style={{
+                                  padding: "4px 8px",
+                                  borderRadius: "4px",
+                                  border: "2px solid #5d4037",
+                                  fontSize: "14px",
+                                  width: "200px",
+                                }}
+                              />
+                            ) : (
+                              <>
+                                <span>{kpi.name}</span>
+                                <button
+                                  onClick={() =>
+                                    handleEditKPI(
+                                      currentCategory.id,
+                                      subCategory.name,
+                                      kpiIndex,
+                                      kpi.name
+                                    )
+                                  }
+                                  style={{
+                                    padding: "2px 6px",
+                                    backgroundColor: "transparent",
+                                    border: "none",
+                                    cursor: "pointer",
+                                    color: "#8d6e63",
+                                    fontSize: "14px",
+                                  }}
+                                  title="Edit KPI Name"
+                                >
+                                  ✏️
+                                </button>
+                              </>
+                            )}
+                          </div>
                         </td>
-                        <td style={{ 
-                          padding: "12px", 
-                          textAlign: "center", 
-                          color: "#8d6e63",
-                          backgroundColor: "#e8ddd4"
-                        }}>
+                        <td
+                          style={{
+                            padding: "12px",
+                            textAlign: "center",
+                            color: "#8d6e63",
+                            backgroundColor: "#e8ddd4",
+                          }}
+                        >
                           {kpi.units}
                         </td>
-                        <td style={{ 
-                          padding: "12px", 
-                          textAlign: "center", 
-                          color: "#5d4037",
-                          fontWeight: "600",
-                          backgroundColor: "#f0e6d6"
-                        }}>
+                        <td
+                          style={{
+                            padding: "12px",
+                            textAlign: "center",
+                            color: "#5d4037",
+                            fontWeight: "600",
+                            backgroundColor: "#f0e6d6",
+                          }}
+                        >
                           {formatToTwoDecimals(kpi.target)}
                         </td>
                         {months.map((month, monthIndex) => {
-                          const kpiKey = `${currentCategory.id}-${subCategory.name}-${kpi.name}-${month}`
+                          const kpiKey = `${currentCategory.id}-${subCategory.name}-${kpi.name}-${month}`;
                           return (
-                            <td key={month} style={{ 
-                              padding: "8px",
-                              textAlign: "center"
-                            }}>
+                            <td
+                              key={month}
+                              style={{
+                                padding: "8px",
+                                textAlign: "center",
+                              }}
+                            >
                               <input
                                 type="number"
                                 step="0.01"
-                                value={dataValues[kpiKey] !== undefined ? dataValues[kpiKey] : ""}
+                                value={
+                                  dataValues[kpiKey] !== undefined
+                                    ? dataValues[kpiKey]
+                                    : ""
+                                }
                                 placeholder="-"
                                 style={{
                                   width: "100%",
@@ -1200,12 +1665,14 @@ const AddDataModal = ({ isOpen, onClose, kpiData }) => {
                                   fontSize: "13px",
                                   color: "#5d4037",
                                   textAlign: "center",
-                                  backgroundColor: "white"
+                                  backgroundColor: "white",
                                 }}
-                                onChange={(e) => handleInputChange(kpiKey, e.target.value)}
+                                onChange={(e) =>
+                                  handleInputChange(kpiKey, e.target.value)
+                                }
                               />
                             </td>
-                          )
+                          );
                         })}
                       </tr>
                     ))}
@@ -1215,10 +1682,17 @@ const AddDataModal = ({ isOpen, onClose, kpiData }) => {
             </div>
           ))}
         </div>
-        
+
         {/* Notes Section */}
         <div style={{ marginTop: "20px" }}>
-          <label style={{ display: "block", marginBottom: "5px", color: "#5d4037", fontWeight: "600" }}>
+          <label
+            style={{
+              display: "block",
+              marginBottom: "5px",
+              color: "#5d4037",
+              fontWeight: "600",
+            }}
+          >
             Notes on Data Entry
           </label>
           <textarea
@@ -1240,19 +1714,22 @@ const AddDataModal = ({ isOpen, onClose, kpiData }) => {
             These notes will be saved with the data and visible when viewing charts.
           </div>
         </div>
-        
-        <div style={{ 
-          display: "flex", 
-          justifyContent: "space-between", 
-          alignItems: "center",
-          marginTop: "25px",
-          paddingTop: "20px",
-          borderTop: "1px solid #e8ddd4"
-        }}>
+
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginTop: "25px",
+            paddingTop: "20px",
+            borderTop: "1px solid #e8ddd4",
+          }}
+        >
           <div style={{ fontSize: "13px", color: "#8d6e63" }}>
-            All values will be rounded to 2 decimal places when saved. Enter values for all months at once.
+            All values will be rounded to 2 decimal places when saved. Enter values
+            for all months at once.
           </div>
-          
+
           <div style={{ display: "flex", gap: "10px" }}>
             <button
               onClick={onClose}
@@ -1268,10 +1745,10 @@ const AddDataModal = ({ isOpen, onClose, kpiData }) => {
                 transition: "all 0.3s ease",
               }}
               onMouseEnter={(e) => {
-                e.target.style.backgroundColor = "#d7ccc8"
+                e.target.style.backgroundColor = "#d7ccc8";
               }}
               onMouseLeave={(e) => {
-                e.target.style.backgroundColor = "#e8ddd4"
+                e.target.style.backgroundColor = "#e8ddd4";
               }}
             >
               Cancel
@@ -1293,14 +1770,14 @@ const AddDataModal = ({ isOpen, onClose, kpiData }) => {
               }}
               onMouseEnter={(e) => {
                 if (!loading) {
-                  e.target.style.backgroundColor = "#3e2723"
-                  e.target.style.transform = "translateY(-2px)"
+                  e.target.style.backgroundColor = "#3e2723";
+                  e.target.style.transform = "translateY(-2px)";
                 }
               }}
               onMouseLeave={(e) => {
                 if (!loading) {
-                  e.target.style.backgroundColor = "#5d4037"
-                  e.target.style.transform = "translateY(0)"
+                  e.target.style.backgroundColor = "#5d4037";
+                  e.target.style.transform = "translateY(0)";
                 }
               }}
             >
@@ -1310,40 +1787,116 @@ const AddDataModal = ({ isOpen, onClose, kpiData }) => {
         </div>
       </div>
     </div>
-  )
-}
+  );
+};
 
-// KPI Dashboard Component with Eye Icon instead of View button
+/// KPI Dashboard Component with Eye Icon instead of View button
 const KPIDashboard = ({ activeSection, isInvestorView, financialYearStartMonth }) => {
-  const [allData, setAllData] = useState({})
-  const [currentUser, setCurrentUser] = useState(null)
-  const [kpiViewMode, setKpiViewMode] = useState("month")
-  const [selectedKPI, setSelectedKPI] = useState(null)
-  const [showAddDataModal, setShowAddDataModal] = useState(false)
-  const [showChartModal, setShowChartModal] = useState(false)
+  const [allData, setAllData] = useState({});
+  const [currentUser, setCurrentUser] = useState(null);
+  const [kpiViewMode, setKpiViewMode] = useState("month");
+  const [selectedKPI, setSelectedKPI] = useState(null);
+  const [showAddDataModal, setShowAddDataModal] = useState(false);
+  const [showChartModal, setShowChartModal] = useState(false);
+  const [appData, setAppData] = useState({}); // Global state for all user-entered data
   
-  // CORRECT KPI structure with Category → Sub-Category → KPI hierarchy
-  const kpiStructure = [
+
+  // Add this useEffect to map loaded allData to kpiStructure
+useEffect(() => {
+  if (Object.keys(allData).length > 0 && currentUser) {
+    const updatedStructure = [...kpiStructure];
+    
+    // Map supplierDependency data
+    if (allData.supplierDependency) {
+      const supplyChainCat = updatedStructure.find(c => c.category === "Supply Chain");
+      const supplierDepSub = supplyChainCat?.subCategories.find(s => s.name === "Supplier Dependency");
+      if (supplierDepSub) {
+        const top3KPI = supplierDepSub.kpis.find(k => k.name === "Top 3 Supplier Spend");
+        if (top3KPI && allData.supplierDependency.top3SupplierPercent) {
+          top3KPI.currentValue = parseToTwoDecimals(allData.supplierDependency.top3SupplierPercent);
+        }
+        const singleSourceKPI = supplierDepSub.kpis.find(k => k.name === "Single Source Flags");
+        if (singleSourceKPI && allData.supplierDependency.singleSourceFlags) {
+          singleSourceKPI.currentValue = parseToTwoDecimals(allData.supplierDependency.singleSourceFlags);
+        }
+        const criticalKPI = supplierDepSub.kpis.find(k => k.name === "Critical Supplier Count");
+        if (criticalKPI && allData.supplierDependency.criticalSupplierCount) {
+          criticalKPI.currentValue = parseToTwoDecimals(allData.supplierDependency.criticalSupplierCount);
+        }
+      }
+    }
+    
+    // Map productivity data
+    if (allData.productivity) {
+      const deliveryCat = updatedStructure.find(c => c.category === "Delivery");
+      const productivitySub = deliveryCat?.subCategories.find(s => s.name === "Productivity");
+      if (productivitySub) {
+        const volumeKPI = productivitySub.kpis.find(k => k.name === "Production Volume");
+        if (volumeKPI && allData.productivity.productionVolume) {
+          volumeKPI.currentValue = parseToTwoDecimals(allData.productivity.productionVolume);
+        }
+        const availKPI = productivitySub.kpis.find(k => k.name === "Availability %");
+        if (availKPI && allData.productivity.availabilityPercent) {
+          availKPI.currentValue = parseToTwoDecimals(allData.productivity.availabilityPercent);
+        }
+        const utilKPI = productivitySub.kpis.find(k => k.name === "Utilization %");
+        if (utilKPI && allData.productivity.utilizationPercent) {
+          utilKPI.currentValue = parseToTwoDecimals(allData.productivity.utilizationPercent);
+        }
+        const costKPI = productivitySub.kpis.find(k => k.name === "Unit Cost");
+        if (costKPI && allData.productivity.unitCost) {
+          costKPI.currentValue = parseToTwoDecimals(allData.productivity.unitCost);
+        }
+      }
+    }
+    
+    // Map safetyRisk data
+    if (allData.safetyRisk) {
+      const safetyCat = updatedStructure.find(c => c.category === "Safety");
+      const safetyRiskSub = safetyCat?.subCategories.find(s => s.name === "Safety Risk");
+      if (safetyRiskSub) {
+        const incidentsKPI = safetyRiskSub.kpis.find(k => k.name === "Safety Incidents");
+        if (incidentsKPI && allData.safetyRisk.safetyIncidents !== undefined) {
+          incidentsKPI.currentValue = parseToTwoDecimals(allData.safetyRisk.safetyIncidents);
+        }
+        const actionsKPI = safetyRiskSub.kpis.find(k => k.name === "Open Safety Actions");
+        if (actionsKPI && allData.safetyRisk.openSafetyActions !== undefined) {
+          actionsKPI.currentValue = parseToTwoDecimals(allData.safetyRisk.openSafetyActions);
+        }
+        const complianceKPI = safetyRiskSub.kpis.find(k => k.name === "Compliance Status %");
+        if (complianceKPI && allData.safetyRisk.complianceStatusPercent !== undefined) {
+          complianceKPI.currentValue = parseToTwoDecimals(allData.safetyRisk.complianceStatusPercent);
+        }
+      }
+    }
+    
+    setKpiStructure(updatedStructure);
+  }
+}, [allData]);
+
+  // KPI structure with Category → Sub-Category → KPI hierarchy
+  // This is the source of truth for the structure and values
+  const [kpiStructure, setKpiStructure] = useState([
     {
       category: "Supply Chain",
       subCategories: [
         {
           name: "Supplier Dependency",
           kpis: [
-            { name: "Top 3 Supplier %", units: "%", target: 70, currentValue: 79 },
+            { name: "Top 3 Supplier Spend", units: "%", target: 70, currentValue: 79 },
             { name: "Single Source Flags", units: "#", target: 0, currentValue: 1 },
-            { name: "Critical Supplier Count", units: "#", target: 5, currentValue: 16 }
-          ]
+            { name: "Critical Supplier Count", units: "#", target: 5, currentValue: 16 },
+          ],
         },
         {
           name: "Continuity Risk",
           kpis: [
             { name: "Lead Time Variance", units: "days", target: 2, currentValue: 2.3 },
             { name: "Stock Cover Days", units: "days", target: 30, currentValue: 27 },
-            { name: "Disruption Risk Index", units: "index", target: 20, currentValue: 23 }
-          ]
-        }
-      ]
+            { name: "Disruption Risk Index", units: "index", target: 20, currentValue: 23 },
+          ],
+        },
+      ],
     },
     {
       category: "Delivery",
@@ -1354,18 +1907,18 @@ const KPIDashboard = ({ activeSection, isInvestorView, financialYearStartMonth }
             { name: "Production Volume", units: "units", target: 10000, currentValue: 12800 },
             { name: "Availability %", units: "%", target: 95, currentValue: 93 },
             { name: "Utilization %", units: "%", target: 85, currentValue: 85 },
-            { name: "Unit Cost", units: "R", target: 50, currentValue: 41 }
-          ]
+            { name: "Unit Cost", units: "R", target: 50, currentValue: 41 },
+          ],
         },
         {
           name: "Reliability",
           kpis: [
             { name: "On-time Delivery %", units: "%", target: 98, currentValue: 96 },
             { name: "Rework Rate", units: "%", target: 2, currentValue: 1.1 },
-            { name: "Defect Rate", units: "%", target: 1, currentValue: 0.1 }
-          ]
-        }
-      ]
+            { name: "Defect Rate", units: "%", target: 1, currentValue: 0.1 },
+          ],
+        },
+      ],
     },
     {
       category: "Safety",
@@ -1375,118 +1928,225 @@ const KPIDashboard = ({ activeSection, isInvestorView, financialYearStartMonth }
           kpis: [
             { name: "Safety Incidents", units: "#", target: 0, currentValue: 0 },
             { name: "Open Safety Actions", units: "#", target: 5, currentValue: 1 },
-            { name: "Compliance Status %", units: "%", target: 100, currentValue: 100 }
-          ]
+            { name: "Compliance Status %", units: "%", target: 100, currentValue: 100 },
+          ],
         },
         {
           name: "Regulatory Compliance",
           kpis: [
             { name: "Regulatory Gaps", units: "#", target: 0, currentValue: 0 },
             { name: "Audit Findings", units: "#", target: 3, currentValue: 0 },
-            { name: "Certification Status %", units: "%", target: 100, currentValue: 100 }
-          ]
-        }
-      ]
+            { name: "Certification Status %", units: "%", target: 100, currentValue: 100 },
+          ],
+        },
+      ],
+    },
+  ]);
+
+  // Function to update the KPI structure when data is saved from the modal
+  const handleDataSave = (savedData) => {
+    console.log("Data saved from modal:", savedData);
+    
+    // Update appData with the new values
+    setAppData((prev) => ({
+      ...prev,
+      [savedData.category]: {
+        year: savedData.year,
+        dataValues: savedData.dataValues,
+        notes: savedData.notes,
+        lastUpdated: savedData.lastUpdated,
+      },
+    }));
+
+    // If there's a new KPI structure from the modal (with edited names or new KPIs), update it
+    if (savedData.kpiStructure) {
+      console.log("Updating main KPI structure with:", savedData.kpiStructure);
+      setKpiStructure(savedData.kpiStructure);
+      
+      // Also store the structure in localStorage to persist across re-renders
+      localStorage.setItem('kpiStructure', JSON.stringify(savedData.kpiStructure));
+      return;
     }
-  ]
+    
+    // Otherwise, just update the current values based on the latest month data
+    const updatedStructure = [...kpiStructure];
+    const months = getMonthsForYear(savedData.year, "month");
+    const latestMonth = months[months.length - 1]; // Assume last month is the latest
 
-  // Format all KPI values to 2 decimals on load
+    // Map category name to modal category id
+    let categoryId = "";
+    if (savedData.category === "supply-chain") categoryId = "Supply Chain";
+    else if (savedData.category === "delivery") categoryId = "Delivery";
+    else if (savedData.category === "safety") categoryId = "Safety";
+
+    // Update current values in the structure
+    updatedStructure.forEach((category) => {
+      if (category.category === categoryId) {
+        category.subCategories.forEach((subCategory) => {
+          subCategory.kpis.forEach((kpi) => {
+            const kpiKey = `${savedData.category}-${subCategory.name}-${kpi.name}-${latestMonth}`;
+            const newValue = savedData.dataValues[kpiKey];
+            if (newValue !== undefined && newValue !== null && newValue !== "") {
+              kpi.currentValue = parseToTwoDecimals(parseFloat(newValue));
+            }
+          });
+        });
+      }
+    });
+
+    setKpiStructure(updatedStructure);
+    localStorage.setItem('kpiStructure', JSON.stringify(updatedStructure));
+  };
+
+  // Load saved structure from localStorage on mount
   useEffect(() => {
-    kpiStructure.forEach(category => {
-      category.subCategories.forEach(subCategory => {
-        subCategory.kpis.forEach(kpi => {
-          kpi.target = parseToTwoDecimals(kpi.target)
-          kpi.currentValue = parseToTwoDecimals(kpi.currentValue)
-        })
-      })
-    })
-  }, [])
+    const savedStructure = localStorage.getItem('kpiStructure');
+    if (savedStructure) {
+      try {
+        const parsed = JSON.parse(savedStructure);
+        setKpiStructure(parsed);
+      } catch (e) {
+        console.error("Error loading saved structure:", e);
+      }
+    }
+  }, []);
 
-    const parseToTwoDecimals = (value) => {
-  if (typeof value === 'number') {
-    return Math.round(value * 100) / 100
-  }
-  return value
-}
-
+  // Format all KPI values to 2 decimals
+  useEffect(() => {
+    const formattedStructure = [...kpiStructure];
+    formattedStructure.forEach((category) => {
+      category.subCategories.forEach((subCategory) => {
+        subCategory.kpis.forEach((kpi) => {
+          kpi.target = parseToTwoDecimals(kpi.target);
+          kpi.currentValue = parseToTwoDecimals(kpi.currentValue);
+        });
+      });
+    });
+    setKpiStructure(formattedStructure);
+  }, []);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
-        setCurrentUser(user)
-        loadAllData(user.uid)
+        setCurrentUser(user);
+        loadAllData(user.uid);
       } else {
-        setCurrentUser(null)
+        setCurrentUser(null);
       }
-    })
+    });
 
-    return () => unsubscribe()
-  }, [])
-
-
-  const loadAllData = async (userId) => {
+    return () => unsubscribe();
+  }, []);
+const loadAllData = async (userId) => {
+  try {
+    // Load from each collection
+    const sections = [
+      'supplierDependency',
+      'productivity',
+      'safetyRisk'
+    ];
+    
+    const data = {};
+    for (const section of sections) {
+      try {
+        const docRef = doc(db, section, userId);
+        const docSnap = await getDoc(docRef);
+        if (docSnap.exists()) {
+          const docData = docSnap.data();
+          // Format all numbers to 2 decimals
+          Object.keys(docData).forEach(key => {
+            if (typeof docData[key] === 'number') {
+              docData[key] = parseToTwoDecimals(docData[key]);
+            }
+          });
+          data[section] = docData;
+        }
+      } catch (error) {
+        console.error(`Error loading ${section} data:`, error);
+      }
+    }
+    setAllData(data);
+    
+    // Also load saved KPI structure if it exists
     try {
-      const sections = [
-        'supplierDependency',
-        'continuityRisk',
-        'productivity',
-        'reliability',
-        'safetyRisk',
-        'compliance'
-      ]
-      
-      const data = {}
-      for (const section of sections) {
-        try {
-          const docRef = doc(db, section, userId)
-          const docSnap = await getDoc(docRef)
-          if (docSnap.exists()) {
-            // Format all numbers to 2 decimals when loading
-            const docData = docSnap.data()
-            Object.keys(docData).forEach(key => {
-              if (typeof docData[key] === 'number') {
-                docData[key] = parseToTwoDecimals(docData[key])
-              }
-            })
-            data[section] = docData
-          }
-        } catch (error) {
-          console.error(`Error loading ${section} data:`, error)
+      const structureRef = doc(db, "kpiStructure", userId);
+      const structureSnap = await getDoc(structureRef);
+      if (structureSnap.exists()) {
+        const savedStructure = structureSnap.data().structure;
+        if (savedStructure && savedStructure.length > 0) {
+          setKpiStructure(savedStructure);
         }
       }
-      setAllData(data)
     } catch (error) {
-      console.error("Error loading all data:", error)
+      console.error("Error loading KPI structure:", error);
     }
+    
+  } catch (error) {
+    console.error("Error loading all data:", error);
   }
+};
 
   const handleViewChart = (category, subCategory, kpi) => {
+    // Prepare historical data for the chart from appData
+    let historicalData = [];
+    const months = getMonthsForYear(new Date().getFullYear(), "month");
+
+    months.forEach((month) => {
+      let categoryId = "";
+      if (category === "Supply Chain") categoryId = "supply-chain";
+      else if (category === "Delivery") categoryId = "delivery";
+      else if (category === "Safety") categoryId = "safety";
+
+      const categoryData = appData[categoryId];
+      if (categoryData && categoryData.dataValues) {
+        const kpiKey = `${categoryId}-${subCategory.name}-${kpi.name}-${month}`;
+        const value = categoryData.dataValues[kpiKey];
+        if (value !== undefined && value !== null && value !== "") {
+          historicalData.push({ month, value: parseFloat(value) });
+        }
+      }
+    });
+
     setSelectedKPI({
       category: category,
       subCategory: subCategory.name,
       kpi: kpi.name,
       units: kpi.units,
       target: kpi.target,
-      currentValue: kpi.currentValue
-    })
-    setShowChartModal(true)
-  }
+      currentValue: kpi.currentValue,
+      historicalData: historicalData,
+    });
+    setShowChartModal(true);
+  };
 
   const handleDownloadCSV = () => {
-    const headers = ["Category", "Sub-Category", "KPI", "Units", "Target", "Current Value", "Variance", "Status"]
-    const rows = []
-    
-    kpiStructure.forEach(category => {
-      category.subCategories.forEach(subCategory => {
-        subCategory.kpis.forEach(kpi => {
-          const variance = typeof kpi.currentValue === 'number' && typeof kpi.target === 'number' 
-            ? parseToTwoDecimals(kpi.currentValue - kpi.target)
-            : "N/A"
-          
-          const status = typeof variance === 'number' 
-            ? variance >= 0 ? "On Target" : "Below Target"
-            : "N/A"
-          
+    const headers = [
+      "Category",
+      "Sub-Category",
+      "KPI",
+      "Units",
+      "Target",
+      "Current Value",
+      "Variance",
+      "Status",
+    ];
+    const rows = [];
+
+    kpiStructure.forEach((category) => {
+      category.subCategories.forEach((subCategory) => {
+        subCategory.kpis.forEach((kpi) => {
+          const variance =
+            typeof kpi.currentValue === "number" && typeof kpi.target === "number"
+              ? parseToTwoDecimals(kpi.currentValue - kpi.target)
+              : "N/A";
+
+          const status =
+            typeof variance === "number"
+              ? variance >= 0
+                ? "On Target"
+                : "Below Target"
+              : "N/A";
+
           rows.push([
             category.category,
             subCategory.name,
@@ -1495,23 +2155,23 @@ const KPIDashboard = ({ activeSection, isInvestorView, financialYearStartMonth }
             formatToTwoDecimals(kpi.target),
             formatToTwoDecimals(kpi.currentValue),
             formatToTwoDecimals(variance),
-            status
-          ])
-        })
-      })
-    })
+            status,
+          ]);
+        });
+      });
+    });
 
-    const csvContent = [headers, ...rows].map(row => row.join(",")).join("\n")
-    const blob = new Blob([csvContent], { type: "text/csv" })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = `operational-kpi-dashboard.csv`
-    a.click()
-    URL.revokeObjectURL(url)
-  }
+    const csvContent = [headers, ...rows].map((row) => row.join(",")).join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `operational-kpi-dashboard.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
-  if (activeSection !== "kpi-dashboard") return null
+  if (activeSection !== "kpi-dashboard") return null;
 
   return (
     <div
@@ -1523,11 +2183,21 @@ const KPIDashboard = ({ activeSection, isInvestorView, financialYearStartMonth }
         boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
       }}
     >
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          marginBottom: "20px",
+        }}
+      >
         <div>
-          <h2 style={{ color: "#4a352f", marginTop: 0, marginBottom: "5px" }}>KPI Dashboard Summary</h2>
+          <h2 style={{ color: "#4a352f", marginTop: 0, marginBottom: "5px" }}>
+            KPI Dashboard Summary
+          </h2>
           <p style={{ color: "#7d5a50", fontSize: "14px", margin: 0 }}>
-            Operational Performance Metrics Overview (All values shown to 2 decimal places)
+            Operational Performance Metrics Overview (All values shown to 2 decimal
+            places)
           </p>
         </div>
         <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
@@ -1612,384 +2282,181 @@ const KPIDashboard = ({ activeSection, isInvestorView, financialYearStartMonth }
           )}
         </div>
       </div>
-<div style={{ overflowX: "auto" }}>
-  {kpiStructure.map((category, categoryIndex) => (
-    <div key={category.category} style={{ marginBottom: "40px" }}>
-      {/* Category Heading with decorative elements */}
-      <div style={{
-        display: "flex",
-        alignItems: "center",
-        marginBottom: "15px",
-      }}>
-        <div style={{
-          width: "8px",
-          height: "32px",
-          backgroundColor: categoryIndex === 0 ? "#5d4037" : categoryIndex === 1 ? "#8d6e63" : "#a67c52",
-          borderRadius: "4px",
-          marginRight: "12px",
-        }} />
-        <h3 style={{
-          color: "#4a352f",
-          margin: 0,
-          fontSize: "18px",
-          fontWeight: "700",
-          letterSpacing: "0.5px",
-        }}>
-          {category.category}
-        </h3>
-        <div style={{
-          flex: 1,
-          height: "2px",
-          background: "linear-gradient(90deg, #9c8269 0%, #e8ddd4 100%)",
-          marginLeft: "20px",
-        }} />
-      </div>
-      
-      {/* Table for this category with enhanced borders */}
-      <table
-        style={{
-          width: "100%",
-          borderCollapse: "collapse",
-          backgroundColor: "white",
-          boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
-          marginBottom: "20px",
-          border: `2px solid ${
-            categoryIndex === 0 ? "#5d4037" : 
-            categoryIndex === 1 ? "#8d6e63" : 
-            "#a67c52"
-          }`,
-          borderRadius: "8px",
-          overflow: "hidden",
-        }}
-      >
-        <thead>
-          <tr style={{ 
-            backgroundColor: categoryIndex === 0 ? "#5d4037" : 
-                           categoryIndex === 1 ? "#8d6e63" : 
-                           "#a67c52",
-          }}>
-            <th style={{ 
-              padding: "14px 12px", 
-              textAlign: "left", 
-              color: "white", 
-              fontWeight: "bold", 
-              borderRight: "2px solid rgba(255,255,255,0.2)", 
-              width: "180px",
-              fontSize: "14px",
-            }}>
-              Category
-            </th>
-            <th style={{ 
-              padding: "14px 12px", 
-              textAlign: "left", 
-              color: "white", 
-              fontWeight: "bold", 
-              borderRight: "2px solid rgba(255,255,255,0.2)",
-              fontSize: "14px",
-            }}>
-              KPI
-            </th>
-            <th style={{ 
-              padding: "14px 12px", 
-              textAlign: "center", 
-              color: "white", 
-              fontWeight: "bold", 
-              borderRight: "2px solid rgba(255,255,255,0.2)", 
-              width: "80px",
-              fontSize: "14px",
-            }}>
-              Units
-            </th>
-            <th style={{ 
-              padding: "14px 12px", 
-              textAlign: "center", 
-              color: "white", 
-              fontWeight: "bold", 
-              borderRight: "2px solid rgba(255,255,255,0.2)", 
-              backgroundColor: "rgba(255,255,255,0.15)",
-              fontSize: "14px",
-            }}>
-              Target
-            </th>
-            <th style={{ 
-              padding: "14px 12px", 
-              textAlign: "center", 
-              color: "white", 
-              fontWeight: "bold", 
-              borderRight: "2px solid rgba(255,255,255,0.2)", 
-              backgroundColor: "rgba(255,255,255,0.1)",
-              fontSize: "14px",
-            }}>
-              Current
-            </th>
-            <th style={{ 
-              padding: "14px 12px", 
-              textAlign: "center", 
-              color: "white", 
-              fontWeight: "bold", 
-              borderRight: "2px solid rgba(255,255,255,0.2)", 
-              backgroundColor: "rgba(255,255,255,0.05)",
-              fontSize: "14px",
-            }}>
-              Variance
-            </th>
-            <th style={{ 
-              padding: "14px 12px", 
-              textAlign: "center", 
-              color: "white", 
-              fontWeight: "bold", 
-              backgroundColor: "rgba(0,0,0,0.2)", 
-              width: "80px",
-              fontSize: "14px",
-            }}>
-              Chart
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {category.subCategories.map((subCategory, subCategoryIndex) => (
-            subCategory.kpis.map((kpi, kpiIndex) => {
-              const isFirstKPIInSubCategory = kpiIndex === 0
-              const variance = typeof kpi.currentValue === 'number' && typeof kpi.target === 'number' 
-                ? kpi.currentValue - kpi.target
-                : "N/A"
-              
-              return (
+      <div style={{ overflowX: "auto" }}>
+        {kpiStructure.map((category, categoryIndex) => (
+          <div key={category.category} style={{ marginBottom: "40px" }}>
+            {/* Category Heading with decorative elements */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                marginBottom: "15px",
+              }}
+            >
+              <div
+                style={{
+                  width: "8px",
+                  height: "32px",
+                  backgroundColor:
+                    categoryIndex === 0
+                      ? "#5d4037"
+                      : categoryIndex === 1
+                      ? "#8d6e63"
+                      : "#a67c52",
+                  borderRadius: "4px",
+                  marginRight: "12px",
+                }}
+              />
+              <h3
+                style={{
+                  color: "#4a352f",
+                  margin: 0,
+                  fontSize: "18px",
+                  fontWeight: "700",
+                  letterSpacing: "0.5px",
+                }}
+              >
+                {category.category}
+              </h3>
+              <div
+                style={{
+                  flex: 1,
+                  height: "2px",
+                  background: "linear-gradient(90deg, #9c8269 0%, #e8ddd4 100%)",
+                  marginLeft: "20px",
+                }}
+              />
+            </div>
+
+            {/* Table for this category */}
+            <table
+              style={{
+                width: "100%",
+                borderCollapse: "collapse",
+                backgroundColor: "white",
+                boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
+                marginBottom: "20px",
+                border: `2px solid ${
+                  categoryIndex === 0
+                    ? "#5d4037"
+                    : categoryIndex === 1
+                    ? "#8d6e63"
+                    : "#a67c52"
+                }`,
+                borderRadius: "8px",
+                overflow: "hidden",
+              }}
+            >
+              <thead>
                 <tr
-                  key={`${category.category}-${subCategory.name}-${kpi.name}`}
                   style={{
-                    backgroundColor: (subCategoryIndex + kpiIndex) % 2 === 0 ? "#faf7f2" : "#f5f0eb",
-                    borderBottom: subCategoryIndex === category.subCategories.length - 1 && 
-                                 kpiIndex === subCategory.kpis.length - 1 
-                                 ? "none" 
-                                 : "2px solid #e8ddd4",
+                    backgroundColor:
+                      categoryIndex === 0
+                        ? "#5d4037"
+                        : categoryIndex === 1
+                        ? "#8d6e63"
+                        : "#a67c52",
                   }}
                 >
-                  {isFirstKPIInSubCategory ? (
-                    <td
-                      rowSpan={subCategory.kpis.length}
-                      style={{
-                        padding: "14px 12px",
-                        color: "#5d4037",
-                        borderRight: "2px solid #d7ccc8",
-                        backgroundColor: subCategoryIndex % 2 === 0 ? "#f0e6d6" : "#e8e0d1",
-                        fontWeight: "700",
-                        fontSize: "14px",
-                        width: "180px",
-                        borderBottom: subCategoryIndex === category.subCategories.length - 1 
-                                     ? "none" 
-                                     : "2px solid #d7ccc8",
-                        boxShadow: "inset -2px 0 0 rgba(93, 64, 55, 0.1)",
-                      }}
-                    >
-                      <div style={{ display: "flex", alignItems: "center" }}>
-                        <span style={{
-                          display: "inline-block",
-                          width: "6px",
-                          height: "6px",
-                          backgroundColor: "#5d4037",
-                          borderRadius: "50%",
-                          marginRight: "8px",
-                        }} />
-                        {subCategory.name}
-                      </div>
-                    </td>
-                  ) : null}
-                  
-                  <td style={{ 
-                    padding: "14px 12px", 
-                    color: "#4a352f", 
-                    borderRight: "2px solid #d7ccc8",
-                    fontWeight: "500",
-                  }}>
-                    {kpi.name}
-                  </td>
-                  
-                  <td style={{ 
-                    padding: "14px 12px", 
-                    textAlign: "center", 
-                    color: "#4a352f", 
-                    borderRight: "2px solid #d7ccc8", 
-                    width: "80px",
-                    backgroundColor: "rgba(215, 204, 200, 0.2)",
-                  }}>
-                    {kpi.units}
-                  </td>
-                  
-                  <td style={{ 
-                    padding: "14px 12px", 
-                    textAlign: "center", 
-                    color: "#5d4037", 
-                    borderRight: "2px solid #d7ccc8",
-                    backgroundColor: "#f0e6d6",
-                    fontWeight: "600",
-                  }}>
-                    {kpi.target}
-                  </td>
-                  
-                  <td style={{ 
-                    padding: "14px 12px", 
-                    textAlign: "center", 
-                    color: "#4a352f", 
-                    borderRight: "2px solid #d7ccc8",
-                    backgroundColor: "#e8e0d1",
-                    fontWeight: "600",
-                  }}>
-                    {kpi.currentValue}
-                  </td>
-                  
-                  <td style={{ 
-                    padding: "14px 12px", 
-                    textAlign: "center", 
-                    color: typeof variance === 'number' ? (variance >= 0 ? "#2e7d32" : "#c62828") : "#5d4037", 
-                    fontWeight: "bold",
-                    borderRight: "2px solid #d7ccc8",
-                    backgroundColor: typeof variance === 'number' 
-                      ? (variance >= 0 ? "#e8f5e9" : "#ffebee") 
-                      : "#f5f0eb",
-                  }}>
-                    {typeof variance === 'number' ? (variance >= 0 ? '+' : '') + variance.toFixed(2) : variance}
-                  </td>
-                  
-                  <td style={{ 
-                    padding: "14px 12px", 
-                    textAlign: "center",
-                    backgroundColor: "#f5f0eb",
-                  }}>
-                    <button
-                      onClick={() => handleViewChart(category.category, subCategory, kpi)}
-                      style={{
-                        padding: "8px 12px",
-                        backgroundColor: "transparent",
-                        color: "#5d4037",
-                        border: `2px solid ${
-                          categoryIndex === 0 ? "#5d4037" : 
-                          categoryIndex === 1 ? "#8d6e63" : 
-                          "#a67c52"
-                        }`,
-                        borderRadius: "6px",
-                        cursor: "pointer",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        margin: "0 auto",
-                        transition: "all 0.3s ease",
-                        width: "40px",
-                        height: "40px",
-                      }}
-                      onMouseEnter={(e) => {
-                        e.target.style.backgroundColor = categoryIndex === 0 ? "#5d4037" : 
-                                                       categoryIndex === 1 ? "#8d6e63" : 
-                                                       "#a67c52"
-                        e.target.style.transform = "scale(1.1)"
-                        e.target.style.color = "white"
-                      }}
-                      onMouseLeave={(e) => {
-                        e.target.style.backgroundColor = "transparent"
-                        e.target.style.transform = "scale(1)"
-                        e.target.style.color = "#5d4037"
-                      }}
-                      title="View Chart & AI Analysis"
-                    >
-                      <EyeIcon size={20} />
-                    </button>
-                  </td>
+                  <th style={{ padding: "14px 12px", textAlign: "left", color: "white", fontWeight: "bold", borderRight: "2px solid rgba(255,255,255,0.2)", width: "180px", fontSize: "14px" }}>Category</th>
+                  <th style={{ padding: "14px 12px", textAlign: "left", color: "white", fontWeight: "bold", borderRight: "2px solid rgba(255,255,255,0.2)", fontSize: "14px" }}>KPI</th>
+                  <th style={{ padding: "14px 12px", textAlign: "center", color: "white", fontWeight: "bold", borderRight: "2px solid rgba(255,255,255,0.2)", width: "80px", fontSize: "14px" }}>Units</th>
+                  <th style={{ padding: "14px 12px", textAlign: "center", color: "white", fontWeight: "bold", borderRight: "2px solid rgba(255,255,255,0.2)", backgroundColor: "rgba(255,255,255,0.15)", fontSize: "14px" }}>Target</th>
+                  <th style={{ padding: "14px 12px", textAlign: "center", color: "white", fontWeight: "bold", borderRight: "2px solid rgba(255,255,255,0.2)", backgroundColor: "rgba(255,255,255,0.1)", fontSize: "14px" }}>Current</th>
+                  <th style={{ padding: "14px 12px", textAlign: "center", color: "white", fontWeight: "bold", borderRight: "2px solid rgba(255,255,255,0.2)", backgroundColor: "rgba(255,255,255,0.05)", fontSize: "14px" }}>Variance</th>
+                  <th style={{ padding: "14px 12px", textAlign: "center", color: "white", fontWeight: "bold", backgroundColor: "rgba(0,0,0,0.2)", width: "80px", fontSize: "14px" }}>Chart</th>
                 </tr>
-              )
-            })
-          ))}
-        </tbody>
-      </table>
-      
-      {/* Category footer with subtle border */}
-      <div style={{
-        marginTop: "5px",
-        padding: "8px 15px",
-        backgroundColor: categoryIndex === 0 ? "rgba(93, 64, 55, 0.05)" : 
-                        categoryIndex === 1 ? "rgba(141, 110, 99, 0.05)" : 
-                        "rgba(166, 124, 82, 0.05)",
-        borderRadius: "0 0 8px 8px",
-        borderLeft: `4px solid ${
-          categoryIndex === 0 ? "#5d4037" : 
-          categoryIndex === 1 ? "#8d6e63" : 
-          "#a67c52"
-        }`,
-        fontSize: "12px",
-        color: "#8d6e63",
-        display: "flex",
-        justifyContent: "space-between",
-        alignItems: "center",
-      }}>
-        <span>
-          <strong>{category.subCategories.length} categories</strong> • 
-          <strong> {category.subCategories.reduce((total, sc) => total + sc.kpis.length, 0)} KPIs</strong>
-        </span>
-        <span style={{ fontStyle: "italic" }}>
-          Last updated: {new Date().toLocaleDateString()}
-        </span>
+              </thead>
+              <tbody>
+                {category.subCategories.map((subCategory, subCategoryIndex) =>
+                  subCategory.kpis.map((kpi, kpiIndex) => {
+                    const isFirstKPIInSubCategory = kpiIndex === 0;
+                    const isLastKPIInSubCategory = kpiIndex === subCategory.kpis.length - 1;
+                    const variance = typeof kpi.currentValue === "number" && typeof kpi.target === "number"
+                      ? kpi.currentValue - kpi.target
+                      : "N/A";
+
+                    return (
+                      <tr
+                        key={`${category.category}-${subCategory.name}-${kpi.name}`}
+                        style={{
+                          backgroundColor: "#faf7f2",
+                          borderBottom: isLastKPIInSubCategory && subCategoryIndex < category.subCategories.length - 1
+                            ? "3px solid #8e8582"
+                            : "2px solid #e8ddd4",
+                        }}
+                      >
+                        {isFirstKPIInSubCategory ? (
+                          <td rowSpan={subCategory.kpis.length} style={{ padding: "14px 12px", color: "#584e4a", borderRight: "2px solid #d7ccc8", backgroundColor: "#f0e6d6", fontWeight: "700", fontSize: "14px", width: "180px" }}>
+                            {subCategory.name}
+                          </td>
+                        ) : null}
+                        <td style={{ padding: "14px 12px", color: "#4a352f", borderRight: "2px solid #d7ccc8", fontWeight: "500", backgroundColor: "#faf7f2" }}>{kpi.name}</td>
+                        <td style={{ padding: "14px 12px", textAlign: "center", color: "#4a352f", borderRight: "2px solid #d7ccc8", width: "80px", backgroundColor: "#faf7f2" }}>{kpi.units}</td>
+                        <td style={{ padding: "14px 12px", textAlign: "center", color: "#5d4037", borderRight: "2px solid #d7ccc8", backgroundColor: "#faf7f2", fontWeight: "600" }}>{formatToTwoDecimals(kpi.target)}</td>
+                        <td style={{ padding: "14px 12px", textAlign: "center", color: "#4a352f", borderRight: "2px solid #d7ccc8", backgroundColor: "#faf7f2", fontWeight: "600" }}>{formatToTwoDecimals(kpi.currentValue)}</td>
+                        <td style={{ padding: "14px 12px", textAlign: "center", color: typeof variance === 'number' ? (variance >= 0 ? "#2e7d32" : "#c62828") : "#5d4037", fontWeight: "bold", borderRight: "2px solid #d7ccc8", backgroundColor: "#faf7f2" }}>
+                          {typeof variance === 'number' ? (variance >= 0 ? '+' : '') + variance.toFixed(2) : variance}
+                        </td>
+                        <td style={{ padding: "14px 12px", textAlign: "center", backgroundColor: "#faf7f2" }}>
+                          <button onClick={() => handleViewChart(category.category, subCategory, kpi)} style={{ padding: "8px 12px", backgroundColor: "transparent", color: "#5d4037", border: `2px solid ${categoryIndex === 0 ? "#5d4037" : categoryIndex === 1 ? "#8d6e63" : "#a67c52"}`, borderRadius: "6px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto", transition: "all 0.3s ease", width: "40px", height: "40px" }}
+                            onMouseEnter={(e) => { e.target.style.backgroundColor = categoryIndex === 0 ? "#5d4037" : categoryIndex === 1 ? "#8d6e63" : "#a67c52"; e.target.style.transform = "scale(1.1)"; e.target.style.color = "white"; }}
+                            onMouseLeave={(e) => { e.target.style.backgroundColor = "transparent"; e.target.style.transform = "scale(1)"; e.target.style.color = "#5d4037"; }}
+                            title="View Chart & AI Analysis">
+                            <EyeIcon size={20} />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+            
+            {/* Category footer */}
+            <div style={{ marginTop: "5px", padding: "8px 15px", backgroundColor: categoryIndex === 0 ? "rgba(93, 64, 55, 0.05)" : categoryIndex === 1 ? "rgba(141, 110, 99, 0.05)" : "rgba(166, 124, 82, 0.05)", borderRadius: "0 0 8px 8px", borderLeft: `4px solid ${categoryIndex === 0 ? "#5d4037" : categoryIndex === 1 ? "#8d6e63" : "#a67c52"}`, fontSize: "12px", color: "#8d6e63", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span><strong>{category.subCategories.length} categories</strong> • <strong>{category.subCategories.reduce((total, sc) => total + sc.kpis.length, 0)} KPIs</strong></span>
+              <span style={{ fontStyle: "italic" }}>Last updated: {new Date().toLocaleDateString()}</span>
+            </div>
+          </div>
+        ))}
+        
+        {/* Tip section */}
+        <div style={{ marginTop: "30px", padding: "20px 25px", background: "linear-gradient(135deg, #f1f8e9 0%, #e8f5e9 100%)", borderRadius: "12px", border: "2px solid #a5d6a7", boxShadow: "0 4px 12px rgba(76, 175, 80, 0.2)" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "15px" }}>
+            <div style={{ width: "40px", height: "40px", backgroundColor: "#4caf50", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "24px", color: "white" }}>💡</div>
+            <div>
+              <span style={{ color: "#2e7d32", fontSize: "16px", fontWeight: "600", display: "block", marginBottom: "4px" }}>Pro Tip</span>
+              <span style={{ color: "#1b5e20", fontSize: "14px" }}>Click the 👁️ icon to view charts and AI-powered analysis for each KPI. Use "+ Add Data" button to enter values. Click ✏️ to edit KPI names. All changes save automatically.</span>
+            </div>
+          </div>
+        </div>
       </div>
-    </div>
-  ))}
-  
-  {/* Tip section - enhanced with gradient border */}
-  <div style={{ 
-    marginTop: "30px", 
-    padding: "20px 25px", 
-    background: "linear-gradient(135deg, #f1f8e9 0%, #e8f5e9 100%)", 
-    borderRadius: "12px",
-    border: "2px solid #a5d6a7",
-    boxShadow: "0 4px 12px rgba(76, 175, 80, 0.2)",
-  }}>
-    <div style={{ display: "flex", alignItems: "center", gap: "15px" }}>
-      <div style={{
-        width: "40px",
-        height: "40px",
-        backgroundColor: "#4caf50",
-        borderRadius: "50%",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        fontSize: "24px",
-        color: "white",
-      }}>
-        💡
-      </div>
-      <div>
-        <span style={{ color: "#2e7d32", fontSize: "16px", fontWeight: "600", display: "block", marginBottom: "4px" }}>
-          Pro Tip
-        </span>
-        <span style={{ color: "#1b5e20", fontSize: "14px" }}>
-          Click the 👁️ icon to view charts and AI-powered analysis for each KPI. 
-          Use "+ Add Data" button to enter values for multiple KPIs at once. 
-          Each category table is color-coded for easy identification.
-        </span>
-      </div>
-    </div>
-  </div>
-</div>
 
       {/* Add Data Modal */}
       <AddDataModal
         isOpen={showAddDataModal}
         onClose={() => {
-          setShowAddDataModal(false)
-          setSelectedKPI(null)
+          setShowAddDataModal(false);
+          setSelectedKPI(null);
         }}
         kpiData={selectedKPI}
+        onSaveData={handleDataSave}
       />
       
       {/* Chart View Modal */}
       <ChartViewModal
         isOpen={showChartModal}
         onClose={() => {
-          setShowChartModal(false)
-          setSelectedKPI(null)
+          setShowChartModal(false);
+          setSelectedKPI(null);
         }}
         kpiData={selectedKPI}
+        historicalData={selectedKPI?.historicalData || []}
       />
     </div>
-  )
-}
+  );
+};
 
 // Main Operational Performance Component (Single Tab Version)
 const OperationalPerformance = () => {
@@ -2000,22 +2467,21 @@ const OperationalPerformance = () => {
   const [isInvestorView, setIsInvestorView] = useState(false)
   const [viewingSMEId, setViewingSMEId] = useState(null)
   const [viewingSMEName, setViewingSMEName] = useState("")
-  const [viewOrigin, setViewOrigin] = useState("investor") // ADD THIS LINE
+  const [viewOrigin, setViewOrigin] = useState("investor")
 
+  useEffect(() => {
+    const investorViewMode = sessionStorage.getItem("investorViewMode")
+    const smeId = sessionStorage.getItem("viewingSMEId")
+    const smeName = sessionStorage.getItem("viewingSMEName")
+    const origin = sessionStorage.getItem("viewOrigin")
 
- useEffect(() => {
-  const investorViewMode = sessionStorage.getItem("investorViewMode")
-  const smeId = sessionStorage.getItem("viewingSMEId")
-  const smeName = sessionStorage.getItem("viewingSMEName")
-  const origin = sessionStorage.getItem("viewOrigin") // ADD THIS
-
-  if (investorViewMode === "true" && smeId) {
-    setIsInvestorView(true)
-    setViewingSMEId(smeId)
-    setViewingSMEName(smeName || "SME")
-    setViewOrigin(origin || "investor") // ADD THIS
-  }
-}, [])
+    if (investorViewMode === "true" && smeId) {
+      setIsInvestorView(true)
+      setViewingSMEId(smeId)
+      setViewingSMEName(smeName || "SME")
+      setViewOrigin(origin || "investor")
+    }
+  }, [])
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -2029,20 +2495,18 @@ const OperationalPerformance = () => {
     return () => unsubscribe()
   }, [isInvestorView, viewingSMEId])
 
- const handleExitInvestorView = () => {
-  // Clear all session storage items
-  sessionStorage.removeItem("viewingSMEId")
-  sessionStorage.removeItem("viewingSMEName")
-  sessionStorage.removeItem("investorViewMode")
-  sessionStorage.removeItem("viewOrigin") // ADD THIS
-  
-  // Navigate based on origin
-  if (viewOrigin === "catalyst") {
-    window.location.href = "/catalyst/cohorts" // Go back to Catalyst cohorts
-  } else {
-    window.location.href = "/my-cohorts" // Go back to Investor cohorts
+  const handleExitInvestorView = () => {
+    sessionStorage.removeItem("viewingSMEId")
+    sessionStorage.removeItem("viewingSMEName")
+    sessionStorage.removeItem("investorViewMode")
+    sessionStorage.removeItem("viewOrigin")
+    
+    if (viewOrigin === "catalyst") {
+      window.location.href = "/catalyst/cohorts"
+    } else {
+      window.location.href = "/my-cohorts"
+    }
   }
-}
 
   const getContentStyles = () => ({
     width: "100%",
@@ -2052,71 +2516,68 @@ const OperationalPerformance = () => {
     boxSizing: "border-box",
   })
 
-  // Only one tab - KPI Dashboard
   const sectionButtons = [
     { id: "kpi-dashboard", label: "KPI Dashboard" },
   ]
 
   return (
     <div style={{ display: "flex", minHeight: "100vh" }}>
-
       <div style={getContentStyles()}>
+        {isInvestorView && (
+          <div
+            style={{
+              backgroundColor: "#e8f5e9",
+              padding: "16px 20px",
+              margin: "20px 0 20px 0",
+              borderRadius: "8px",
+              border: "2px solid #4caf50",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+              <span style={{ fontSize: "20px" }}>👁️</span>
+              <span style={{ color: "#2e7d32", fontWeight: "600", fontSize: "15px" }}>
+                {viewOrigin === "catalyst" 
+                  ? `Catalyst View: Viewing ${viewingSMEName}'s Operational Performance`
+                  : `Investor View: Viewing ${viewingSMEName}'s Operational Performance`
+                }
+              </span>
+            </div>
+            <button
+              onClick={handleExitInvestorView}
+              style={{
+                padding: "8px 16px",
+                backgroundColor: "#4caf50",
+                color: "white",
+                border: "none",
+                borderRadius: "6px",
+                cursor: "pointer",
+                fontWeight: "600",
+                fontSize: "14px",
+                transition: "background-color 0.3s ease",
+                display: "flex",
+                alignItems: "center",
+                gap: "8px"
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.backgroundColor = "#45a049"
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.backgroundColor = "#4caf50"
+              }}
+            >
+              <span>←</span>
+              {viewOrigin === "catalyst" 
+                ? "Back to Catalyst Cohorts"
+                : "Back to My Cohorts"
+              }
+            </button>
+          </div>
+        )}
 
-      {isInvestorView && (
-  <div
-    style={{
-      backgroundColor: "#e8f5e9",
-      padding: "16px 20px",
-      margin: "50px 0 20px 0",
-      borderRadius: "8px",
-      border: "2px solid #4caf50",
-      display: "flex",
-      justifyContent: "space-between",
-      alignItems: "center",
-    }}
-  >
-    <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-      <span style={{ fontSize: "20px" }}>👁️</span>
-      <span style={{ color: "#2e7d32", fontWeight: "600", fontSize: "15px" }}>
-        {viewOrigin === "catalyst" 
-          ? `Catalyst View: Viewing ${viewingSMEName}'s Operational Performance`
-          : `Investor View: Viewing ${viewingSMEName}'s Operational Performance`
-        }
-      </span>
-    </div>
-    <button
-      onClick={handleExitInvestorView}
-      style={{
-        padding: "8px 16px",
-        backgroundColor: "#4caf50",
-        color: "white",
-        border: "none",
-        borderRadius: "6px",
-        cursor: "pointer",
-        fontWeight: "600",
-        fontSize: "14px",
-        transition: "background-color 0.3s ease",
-        display: "flex",
-        alignItems: "center",
-        gap: "8px"
-      }}
-      onMouseEnter={(e) => {
-        e.target.style.backgroundColor = "#45a049"
-      }}
-      onMouseLeave={(e) => {
-        e.target.style.backgroundColor = "#4caf50"
-      }}
-    >
-      <span>←</span>
-      {viewOrigin === "catalyst" 
-        ? "Back to Catalyst Cohorts"
-        : "Back to My Cohorts"
-      }
-    </button>
-  </div>
-)}
-
-        <div>
+        <div style={{ padding: "20px", paddingTop: "40px" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
             <h1 style={{ color: "#5d4037", fontSize: "32px", fontWeight: "700", margin: 0 }}>
               Operational Performance
@@ -2151,8 +2612,8 @@ const OperationalPerformance = () => {
                 marginBottom: "30px",
               }}
             >
-              <div style={{ padding: "50px", paddingTop: "100px" }}>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px", marginTop: "-80px" }}>
+              <div style={{ padding: "20px" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
                   <div>
                     <h3 style={{ color: "#7d5a50", marginTop: 0, marginBottom: "12px", fontSize: "16px" }}>
                       What this dashboard DOES
@@ -2161,6 +2622,7 @@ const OperationalPerformance = () => {
                       <li>Hierarchical KPI structure (Category → Sub-Category → KPI)</li>
                       <li>Click 👁️ icon to view charts with AI-powered analysis</li>
                       <li>Add data for multiple KPIs at once by category</li>
+                      <li>Edit KPI names directly in the Add Data modal</li>
                       <li>Add custom KPIs with "Add New KPI" button</li>
                       <li>Target vs actual performance comparison with notes</li>
                       <li>All values rounded to 2 decimal places</li>
@@ -2174,6 +2636,7 @@ const OperationalPerformance = () => {
                     <ul style={{ color: "#4a352f", fontSize: "14px", lineHeight: "1.7", margin: 0, paddingLeft: "20px" }}>
                       <li>Click 👁️ icon next to any KPI to see chart and AI analysis</li>
                       <li>Use "+ Add Data" button to enter values for all months at once</li>
+                      <li>Click ✏️ next to any KPI name to edit it</li>
                       <li>Use "Add New KPI" button to add custom metrics</li>
                       <li>Add notes about data entry context and observations</li>
                       <li>Download CSV for reporting</li>
@@ -2185,7 +2648,7 @@ const OperationalPerformance = () => {
                   <h3 style={{ color: "#7d5a50", marginTop: 0, marginBottom: "12px", fontSize: "16px" }}>
                     Key Features
                   </h3>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "15px" }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: "15px" }}>
                     <div>
                       <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "8px", fontSize: "14px", fontWeight: "600" }}>
                         🤖 AI Analysis
@@ -2200,6 +2663,14 @@ const OperationalPerformance = () => {
                       </h4>
                       <p style={{ color: "#4a352f", fontSize: "12px", lineHeight: "1.5", margin: 0 }}>
                         Add contextual notes to data entries for better analysis
+                      </p>
+                    </div>
+                    <div>
+                      <h4 style={{ color: "#5d4037", marginTop: 0, marginBottom: "8px", fontSize: "14px", fontWeight: "600" }}>
+                        ✏️ Editable KPIs
+                      </h4>
+                      <p style={{ color: "#4a352f", fontSize: "12px", lineHeight: "1.5", margin: 0 }}>
+                        Customize KPI names to match your business terminology
                       </p>
                     </div>
                     <div>
@@ -2223,6 +2694,7 @@ const OperationalPerformance = () => {
             display: "flex",
             gap: "15px",
             marginBottom: "30px",
+            padding: "15px",
             backgroundColor: "#fdfcfb",
             borderRadius: "8px",
             boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
