@@ -162,9 +162,11 @@ function MyCohorts() {
         return
       }
 
+      // FIXED: Include "Exit" status alongside Active and Active Support
       const successfulStatuses = [
         "Active Support",
-        "Active"
+        "Active",
+        "Exit"
       ]
 
       const q = query(
@@ -174,7 +176,7 @@ function MyCohorts() {
       )
 
       const querySnapshot = await getDocs(q)
-      console.log("Found successful support deals:", querySnapshot.docs.length)
+      console.log("Found successful support deals (including Exit):", querySnapshot.docs.length)
 
       const cohortsData = await Promise.all(
         querySnapshot.docs.map(async (docSnap) => {
@@ -458,6 +460,8 @@ function MyCohorts() {
         return "#4caf50"
       case "Active":
         return "#4caf50"
+      case "Exit":
+        return "#9e9e9e"
       default:
         return "#666"
     }
@@ -573,11 +577,11 @@ function MyCohorts() {
           <div className="bg-white p-5 rounded-xl shadow-md border-2 border-[#e6d7c3]">
             <div className="flex items-center gap-3 mb-2">
               <h3 className="text-sm font-semibold text-[#7d5a50] m-0">
-                Portfolio Companies
+                Exited Deals
               </h3>
             </div>
-            <p className="text-3xl font-bold text-blue-500 m-0">
-              {cohorts.length}
+            <p className="text-3xl font-bold text-gray-500 m-0">
+              {cohorts.filter(c => c.currentStatus === "Exit" || c.currentStatus === "Exit Support").length}
             </p>
           </div>
         </div>
@@ -586,7 +590,7 @@ function MyCohorts() {
           <div className="bg-white rounded-2xl shadow-md overflow-hidden w-full border border-[#e6d7c3]">
             <div className="p-5 border-b-2 border-[#e6d7c3] bg-[#f5f0e1] flex justify-between items-center">
               <h2 className="text-xl font-semibold text-[#4a352f] m-0">
-                Active Support Companies
+                Active Support & Exited Companies
               </h2>
               <span className="text-xs text-[#7d5a50] bg-[#a67c52]/15 px-3 py-1.5 rounded-md font-semibold">
                 {cohorts.length} {cohorts.length === 1 ? 'company' : 'companies'}
@@ -676,7 +680,7 @@ function MyCohorts() {
                             backgroundColor: getStatusColor(cohort.currentStatus) + "20",
                             color: getStatusColor(cohort.currentStatus)
                           }}>
-                          {cohort.currentStatus}
+                          {cohort.currentStatus === "Exit" ? "Exited" : cohort.currentStatus}
                         </span>
                         </td>
 
@@ -815,13 +819,13 @@ function MyCohorts() {
         ) : (
           <div className="text-center p-[60px_20px] bg-white rounded-2xl shadow-md border border-[#e6d7c3] w-full">
             <h3 className="text-2xl font-semibold text-[#4a352f] mb-3">
-              No Active Support Deals Yet
+              No Active Support or Exited Deals Yet
             </h3>
             <p className="text-[#7d5a50] text-base max-w-[500px] mx-auto">
-              Your active support deals will appear here once you approve support for SMEs and they reach the "Active" stage.
+              Your active support deals and exited investments will appear here once you approve support for SMEs and they reach the "Active" or "Exit" stage.
               <br />
               <span className="text-xs text-[#a67c52]">
-                Statuses that appear: "Active Support" or "Active"
+                Statuses that appear: "Active Support", "Active", or "Exit"
               </span>
             </p>
           </div>
@@ -885,7 +889,7 @@ function MyCohorts() {
                         color: getStatusColor(selectedCohort.currentStatus),
                       }}
                     >
-                      {selectedCohort.currentStatus}
+                      {selectedCohort.currentStatus === "Exit" ? "Exited" : selectedCohort.currentStatus}
                     </span>
                   </div>
                 </div>
