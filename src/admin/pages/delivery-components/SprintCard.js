@@ -13,7 +13,8 @@ export const SprintCard = memo(({
   onAddColumn,
   onDeleteColumn,
   onDeleteSprint,
-  onUpdateSprint
+  onUpdateSprint,
+  onUpdateColumnOptions
 }) => {
   const [isEditingSubtitle, setIsEditingSubtitle] = React.useState(false);
   const [subtitle, setSubtitle] = React.useState(sprint.subtitle);
@@ -76,6 +77,7 @@ export const SprintCard = memo(({
             onAddColumn={onAddColumn}
             onDeleteColumn={onDeleteColumn}
             onDeleteSprint={onDeleteSprint}
+            onUpdateColumnOptions={onUpdateColumnOptions}
           />
         </div>
       )}

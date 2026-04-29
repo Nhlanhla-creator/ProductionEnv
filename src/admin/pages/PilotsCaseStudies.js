@@ -250,12 +250,10 @@ const PilotsCaseStudies = () => {
           <FileExplorer structure={mergedStructure} expandedFolders={expandedFolders} selectedPath={selectedPath} onToggleFolder={handleToggleFolder} onSelectItem={handleSelectItem} onAddItem={handleAddItem} onDeleteItem={handleDeleteItem} contentStatus={contentStatus} />
           {selectedPath && selectedItem && <FileUploader path={selectedPath} itemConfig={selectedItem} content={currentContent} onUpload={handleUploadFile} onDelete={handleDeleteFile} onClose={handleCloseEditor} isUploading={isUploading} />}
           {!selectedPath && (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'white', borderRadius: 8, border: '1px solid var(--medium-brown)' }}>
-              <div style={{ textAlign: 'center', padding: 40 }}>
-                <AlertCircle size={48} color="var(--accent-brown)" style={{ marginBottom: 16 }} />
-                <h3 style={{ color: 'var(--text-brown)', marginBottom: 8 }}>No Section Selected</h3>
-                <p style={{ color: '#666', margin: 0 }}>Select a pilot section from the explorer to begin</p>
-              </div>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'white', borderRadius: 8, border: '1px solid var(--medium-brown)' }}>
+              <AlertCircle size={48} color="var(--accent-brown)" style={{ marginBottom: 16 }} />
+              <h3 style={{ color: 'var(--text-brown)', marginBottom: 8 }}>No Section Selected</h3>
+              <p style={{ color: '#666', margin: 0 }}>Select a pilot section from the explorer to begin</p>
             </div>
           )}
         </div>

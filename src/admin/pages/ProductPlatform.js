@@ -509,7 +509,7 @@ const ProductPlatform = () => {
               {/* Empty state */}
               {!selectedPath && (
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'white', borderRadius: 8, border: '1px solid #e6d7c3' }}>
-                  <div style={{ textAlign: 'center', padding: 40 }}>
+                  <div style={{ textAlign: 'center', padding: 40, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                     <AlertCircle size={48} color="#c8b6a6" style={{ marginBottom: 16 }} />
                     <h3 style={{ color: '#4a352f', marginBottom: 8 }}>No Section Selected</h3>
                     <p style={{ color: '#666', margin: 0 }}>Select a section from the explorer to begin</p>

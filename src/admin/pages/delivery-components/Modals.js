@@ -516,6 +516,127 @@ export const DeleteTaskModal = ({ isOpen, onClose, onDelete, task, sprint }) => 
 };
 
 // ============================================================================
+// ADD COLUMN OPTION MODAL
+// ============================================================================
+export const AddColumnOptionModal = ({ isOpen, onClose, onUpdateColumnOptions, sprint, preselectedColumnId }) => {
+  const [selectedColumnId, setSelectedColumnId] = useState(preselectedColumnId || '');
+  const [newOption, setNewOption] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Update selectedColumnId when preselectedColumnId changes
+  React.useEffect(() => {
+    if (preselectedColumnId) {
+      setSelectedColumnId(preselectedColumnId);
+    }
+  }, [preselectedColumnId]);
+
+  const handleClose = () => {
+    setSelectedColumnId('');
+    setNewOption('');
+    onClose();
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!selectedColumnId || !newOption.trim()) return;
+
+    setIsLoading(true);
+
+    try {
+      const column = sprint.columns.find(col => col.id === selectedColumnId);
+      if (!column) throw new Error('Column not found');
+
+      const currentOptions = column.options || [];
+      if (currentOptions.includes(newOption.trim())) {
+        alert('Option already exists in this column');
+        setIsLoading(false);
+        return;
+      }
+
+      await onUpdateColumnOptions(selectedColumnId, [...currentOptions, newOption.trim()]);
+      handleClose();
+    } catch (error) {
+      console.error('Failed to add column option:', error);
+      alert('Failed to add option. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Filter for multi-select columns only
+  const multiSelectColumns = sprint?.columns?.filter(col => col.type === 'multi-select') || [];
+
+  if (!isOpen) return null;
+
+  return (
+    <div style={styles.modalOverlay}>
+      <div style={styles.modal}>
+        <div style={styles.modalHeader}>
+          <h2>Add Option to Multi-Select Column</h2>
+          <button onClick={handleClose} style={styles.closeButton}>
+            <X size={20} />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} style={styles.modalForm}>
+          <div style={{...styles.formGroup, padding: 16}}>
+            <label style={styles.formLabel}>Select Column</label>
+            <select
+              value={selectedColumnId}
+              onChange={(e) => setSelectedColumnId(e.target.value)}
+              style={styles.formSelect}
+              required
+            >
+              <option value="">-- Select a column --</option>
+              {multiSelectColumns.map(column => (
+                <option key={column.id} value={column.id}>{column.label}</option>
+              ))}
+            </select>
+          </div>
+
+          {selectedColumnId && (
+            <div style={{...styles.formGroup, padding: 16}}>
+              <label style={styles.formLabel}>New Option</label>
+              <input
+                type="text"
+                value={newOption}
+                onChange={(e) => setNewOption(e.target.value)}
+                placeholder="Enter new option value"
+                style={styles.formInput}
+                required
+              />
+              {selectedColumnId && (
+                <div style={{ marginTop: 8, fontSize: 12, color: '#6b7280' }}>
+                  Current options: {multiSelectColumns.find(c => c.id === selectedColumnId)?.options?.join(', ') || 'None'}
+                </div>
+              )}
+            </div>
+          )}
+
+          <div style={{...styles.modalActions, padding: 16}}>
+            <button
+              type="button"
+              onClick={handleClose}
+              style={styles.cancelButton}
+              disabled={isLoading}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              style={styles.saveButton}
+              disabled={isLoading || !selectedColumnId || !newOption.trim()}
+            >
+              {isLoading ? 'Adding...' : 'Add Option'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
+// ============================================================================
 // ADD TASK MODAL - FIXED VERSION
 // ============================================================================
 export const AddTaskModal = ({ isOpen, onClose, onAdd, sprint }) => {

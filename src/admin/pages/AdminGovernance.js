@@ -260,7 +260,7 @@ const AdminGovernance = () => {
               border: '1px solid var(--medium-brown)'
             }}>
               <div style={{ textAlign: 'center', padding: 40 }}>
-                <AlertCircle size={48} color="var(--accent-brown)" style={{ marginBottom: 16 }} />
+                <AlertCircle size={48} color="var(--accent-brown)" style={{ marginBottom: 16 }} className='mx-auto' />
                 <h3 style={{ color: 'var(--text-brown)', marginBottom: 8 }}>No Item Selected</h3>
                 <p style={{ color: '#666', margin: 0 }}>
                   Select a file or folder from the explorer to begin

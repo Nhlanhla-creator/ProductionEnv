@@ -210,7 +210,7 @@ const ReportingAnalytics = () => {
           {selectedPath && selectedItem && <FileUploader path={selectedPath} itemConfig={selectedItem} content={currentContent} onUpload={handleUploadFile} onDelete={handleDeleteFile} onClose={handleCloseEditor} isUploading={isUploading} />}
           {!selectedPath && (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'white', borderRadius: 8, border: '1px solid var(--medium-brown)' }}>
-              <div style={{ textAlign: 'center', padding: 40 }}>
+              <div style={{ textAlign: 'center', padding: 40, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                 <AlertCircle size={48} color="var(--accent-brown)" style={{ marginBottom: 16 }} />
                 <h3 style={{ color: 'var(--text-brown)', marginBottom: 8 }}>No Report Type Selected</h3>
                 <p style={{ color: '#666', margin: 0 }}>Select a report category from the explorer to begin</p>

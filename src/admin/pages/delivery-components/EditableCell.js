@@ -9,7 +9,7 @@ export const EditableCell = memo(({
   columnOptions,
   isEditing, 
   onSave, 
-  onCancel 
+  onCancel
 }) => {
   const [editValue, setEditValue] = useState(value);
 
@@ -91,16 +91,17 @@ export const EditableCell = memo(({
       if (columnId === 'assignee') {
         return ["Nhlanhla Msomi", "Lerato Nama", "Makha", "Lindelani", "Thando", "Sbonelo", "Lethabo"];
       } else if (columnId === 'category') {
-        return ["Frontend", "Backend", "QA", "Security", "Traction", "Funding", "Design", "DevOps"];
+        return ["Frontend", "Backend", "QA", "Security", "Traction", "Funding", "Design", "DevOps", "UX", "UI", "Fullstack"];
       }
       return [];
     };
-    const options = columnOptions || getFallbackOptions();
+    const effectiveOptions = columnOptions || getFallbackOptions();
+    const allOptions = [...new Set([...effectiveOptions, ...selectedItems])];
 
     return (
       <div style={styles.editControls} className="edit-controls-wrapper" onClick={(e) => e.stopPropagation()}>
         <div style={styles.multiSelectEdit}>
-          {options.map(option => (
+          {allOptions.map(option => (
             <label key={option} style={styles.checkboxLabel}>
               <input
                 type="checkbox"

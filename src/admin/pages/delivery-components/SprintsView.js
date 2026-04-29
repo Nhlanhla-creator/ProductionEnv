@@ -14,7 +14,8 @@ export const SprintsView = ({
   handleDeleteColumn,
   handleAddSprint,
   handleDeleteSprint,
-  handleUpdateSprint
+  handleUpdateSprint,
+  handleUpdateColumnOptions
 }) => {
   const sortedSprints = useMemo(() => {
     return Object.values(sprintsData).sort((a, b) => a.id - b.id);
@@ -45,6 +46,9 @@ export const SprintsView = ({
           onDeleteColumn={(sprintId, columnId) => handleDeleteColumn(sprintId, columnId)}
           onDeleteSprint={handleDeleteSprint}
           onUpdateSprint={handleUpdateSprint}
+          onUpdateColumnOptions={(columnId, newOptions) =>
+            handleUpdateColumnOptions(sprint.id, columnId, newOptions)
+          }
         />
       ))}
     </div>
