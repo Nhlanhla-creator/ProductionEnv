@@ -77,7 +77,7 @@ function AssociateHeader({ companyName, profileImage, setProfileImage, isSidebar
         
         return () => unsubscribeMessages();
       } else {
-        setUserName("Associator");
+        setUserName("Association");
       }
     });
     
@@ -98,15 +98,15 @@ function AssociateHeader({ companyName, profileImage, setProfileImage, isSidebar
           data.formData?.contactDetails?.primaryContactName ||
           data.formData?.entityOverview?.registeredName ||
           auth.currentUser.email?.split("@")[0] ||
-          "Associator"
+          "Association"
         );
       } else {
         console.log("User document not found!");
-        setUserName("Associator");
+        setUserName("Association");
       }
     } catch (error) {
       console.error("Error getting username:", error);
-      setUserName("Associator");
+      setUserName("Association");
     }
   };
 
@@ -446,7 +446,7 @@ function AssociateHeader({ companyName, profileImage, setProfileImage, isSidebar
                   <div>
                     <h3 className={styles["profile-name-large"]}>{userName}</h3>
                     <p className={styles["profile-email-large"]}>{userEmail}</p>
-                    <p className={styles["profile-role"]}>Associator</p>
+                    <p className={styles["profile-role"]}>Association</p>
                   </div>
                 </div>
               </div>

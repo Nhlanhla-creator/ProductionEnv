@@ -1,0 +1,378 @@
+
+
+.availability-schedule {
+  max-width: 800px;
+  margin: 0 auto;
+  padding: 20px;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  color: #5a3921;
+}
+
+.availability-schedule h2 {
+  color: #5a3921;
+  margin-bottom: 10px;
+}
+
+.availability-schedule h3 {
+  color: #7b5d3f;
+  margin: 25px 0 15px;
+  border-bottom: 1px solid #d4b483;
+  padding-bottom: 5px;
+}
+
+.availability-schedule p {
+  color: #8b6d4f;
+  margin-bottom: 20px;
+}
+
+.timezone-selector {
+  margin: 20px 0;
+}
+
+.timezone-selector label {
+  display: block;
+  margin-bottom: 5px;
+  color: #7b5d3f;
+  font-weight: 500;
+}
+
+.timezone-selector select {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #d4b483;
+  border-radius: 4px;
+  background-color: #fff9f0;
+  color: #5a3921;
+  font-size: 14px;
+}
+
+.select-dates-btn {
+  background-color: #a67c52;
+  color: white;
+  border: none;
+  padding: 10px 15px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background-color 0.2s;
+  margin-bottom: 20px;
+}
+
+.select-dates-btn:hover {
+  background-color: #8c6842;
+}
+
+.availability-list {
+  margin-top: 20px;
+}
+
+.availability-item {
+  background-color: #f5e9dc;
+  border: 1px solid #d4b483;
+  border-radius: 6px;
+  padding: 15px;
+  margin-bottom: 15px;
+}
+
+.availability-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.availability-date {
+  font-weight: 600;
+  color: #5a3921;
+}
+
+.availability-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.edit-btn, .remove-btn {
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.edit-btn {
+  background-color: #d4b483;
+  color: #5a3921;
+  border: 1px solid #c19a63;
+}
+
+.edit-btn:hover {
+  background-color: #c19a63;
+  color: white;
+}
+
+.remove-btn {
+  background-color: #e8c8a5;
+  color: #8c6842;
+  border: 1px solid #d4b483;
+}
+
+.remove-btn:hover {
+  background-color: #d4b483;
+  color: #5a3921;
+}
+
+.time-slots {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.time-slot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.time-slot input[type="time"] {
+  padding: 6px 8px;
+  border: 1px solid #d4b483;
+  border-radius: 4px;
+  background-color: #fff9f0;
+  color: #5a3921;
+}
+
+.remove-slot-btn, .add-slot-btn {
+  padding: 4px 8px;
+  font-size: 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.remove-slot-btn {
+  background-color: #e8c8a5;
+  color: #8c6842;
+  border: 1px solid #d4b483;
+}
+
+.remove-slot-btn:hover {
+  background-color: #d4b483;
+  color: #5a3921;
+}
+
+.add-slot-btn {
+  background-color: #a67c52;
+  color: white;
+  border: 1px solid #8c6842;
+  margin-left: 10px;
+}
+
+.add-slot-btn:hover {
+  background-color: #8c6842;
+}
+
+.save-button-container {
+  margin-top: 30px;
+  text-align: center;
+}
+
+.save-btn {
+  background-color: #8c6842;
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 4px;
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.save-btn:hover {
+  background-color: #6e4f32;
+}
+
+.save-btn:disabled {
+  background-color: #d4b483;
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+
+.availability-card {
+  background-color: #f5e9dc;
+  border: 1px solid #d4b483;
+  border-radius: 8px;
+  padding: 15px;
+  margin-bottom: 20px;
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.card-header h3 {
+  margin: 0;
+  color: #5a3921;
+}
+
+.edit-button {
+  background-color: #a67c52;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.availability-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.availability-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px;
+  background-color: #fff9f0;
+  border-radius: 4px;
+}
+
+.date {
+  font-weight: 500;
+  color: #5a3921;
+}
+
+.time {
+  color: #7b5d3f;
+}
+
+.more-dates {
+  text-align: center;
+  color: #8c6842;
+  font-size: 14px;
+  margin-top: 5px;
+}
+
+.no-availability {
+  color: #8b6d4f;
+  text-align: center;
+  font-style: italic;
+}
+
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.calendar-modal {
+  background-color: #f5e9dc;
+  padding: 25px;
+  border-radius: 8px;
+  width: 90%;
+  max-width: 500px;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.calendar-modal h2 {
+  color: #5a3921;
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.time-selection-modal {
+  margin-bottom: 20px;
+}
+
+.time-selection-modal label {
+  display: block;
+  margin-bottom: 8px;
+  color: #7b5d3f;
+  font-weight: 500;
+}
+
+.time-inputs {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.modal-actions button {
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.modal-actions button:first-child {
+  background-color: #f5e9dc;
+  border: 1px solid #d4b483;
+  color: #5a3921;
+}
+
+.modal-actions .apply-btn {
+  background-color: #8c6842;
+  color: white;
+  border: none;
+}
+
+.modal-actions .apply-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+
+.brown-calendar .rdp {
+  margin: 0 auto;
+}
+
+.brown-calendar .rdp-day_selected {
+  background-color: #8c6842;
+  color: white;
+}
+
+.brown-calendar .rdp-day_selected:hover {
+  background-color: #6e4f32;
+}
+
+.brown-calendar .rdp-button:hover:not([disabled]):not(.rdp-day_selected) {
+  background-color: #d4b483;
+}
+
+.brown-calendar .rdp-caption_label {
+  font-weight: 600;
+  color: #5a3921;
+}
+
+.brown-calendar .rdp-nav_button {
+  background-color: #d4b483;
+  color: #5a3921;
+}
+
+.brown-calendar .rdp-head_cell {
+  color: #7b5d3f;
+  font-weight: 500;
+}
