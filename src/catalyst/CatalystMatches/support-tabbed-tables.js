@@ -15,6 +15,8 @@ const SuccessfulSupportDealsTable = ({ successfulDeals }) => {
       case "Active Support":
       case "Active":
         return "#4caf50"
+      case "Exit":
+        return "#9e9e9e"
       case "Completed Successfully": 
         return "#2196f3"
       case "Under Review": 
@@ -126,7 +128,7 @@ const SuccessfulSupportDealsTable = ({ successfulDeals }) => {
             {successfulDeals.length === 0 ? (
               <tr>
                 <td colSpan="10" style={{ padding: "2rem", textAlign: "center", color: "#666", fontStyle: "italic" }}>
-                  No successful deals yet. When your matches reach "Support Approved" or "Active Support" status, they will appear here.
+                  No successful deals yet. When your matches reach "Active", "Active Support", or "Exit" status, they will appear here.
                 </td>
               </tr>
             ) : (
@@ -232,15 +234,16 @@ const SupportTabbedTables = ({ filters, stageFilter, loading, onStageOverride })
   // Track whether we've seen data at least once so we don't fire notifications on initial load
   const isFirstLoad = useRef(true)
 
-  // FIXED: Extract successful deals - include "active" status
+  // FIXED: Extract successful deals - include "active", "active support", AND "exit" status
   const extractSuccessfulDeals = (smes) =>
     smes
       .filter((sme) => {
         const status = (sme.currentStatus || sme.pipelineStage || "").toLowerCase()
-        // Check for both "active" and "active support" since the catalyst sets "Active"
+        // Check for "active", "active support", "support approved", OR "exit"
         return status === "active" || 
                status === "active support" || 
-               status === "support approved"
+               status === "support approved" ||
+               status === "exit"
       })
       .map((sme) => ({
         id: sme.id,
