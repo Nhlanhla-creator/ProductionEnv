@@ -139,6 +139,7 @@ import AssociatorDocuments from "./associator/MyDocuments/documents"
 import AssociatorBillings from "./associator/MyBillings/billings"
 import AssociatorPortfolio from "./associator/MyPortfolios/portfolio"
 import AssociatorInsights from "./associator/BigInsights/insights"
+import AssociateSettings from "associator/Settings/settings"
 // Associator Universal Profile Components
 import AssociatorUniversalProfile from "./associator/UniversalProfile/AssociatorUniversalProfile"
 import AssociatorInstructions from "./associator/UniversalProfile/Instructions"
@@ -1094,6 +1095,7 @@ function App() {
         <Route path="/associator-billings" element={withProtection(AssociatorBillings, {}, renderAssociatorRoute)} />
         <Route path="/associator-portfolio" element={withProtection(AssociatorPortfolio, {}, renderAssociatorRoute)} />
         <Route path="/associator-insights" element={withProtection(AssociatorInsights, {}, renderAssociatorRoute)} />
+        <Route path = "/associator-settings" element = {withProtection(AssociateSettings, {}, renderAssociatorRoute)} />
 
         {/* Associator Universal Profile Sub-Routes */}
         <Route path="/associator-profile/instructions" element={renderAssociatorProfileSection(AssociatorInstructions, "instructions")} />

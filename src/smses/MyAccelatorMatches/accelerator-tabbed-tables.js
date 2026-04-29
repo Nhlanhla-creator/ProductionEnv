@@ -188,15 +188,15 @@ const SuccessfulAcceleratorDealsTable = () => {
 
         console.log("🔍 Fetching deals for SME user:", user.uid)
 
-        // Query for successful deals
+        // FIXED: Include "Exit" status in successful deals
         const dealsQuery = query(
           collection(db, "smeCatalystApplications"),
           where("smeId", "==", user.uid),
-          where("status", "in", ["Support Approved", "Active Support", "Active", "Successful Deals", "Graduated Successfully"])
+          where("status", "in", ["Support Approved", "Active Support", "Active", "Exit", "Successful Deals", "Graduated Successfully"])
         )
 
         const dealsSnapshot = await getDocs(dealsQuery)
-        console.log("📊 Found deals count:", dealsSnapshot.size)
+        console.log("📊 Found deals count (including Exit):", dealsSnapshot.size)
         
         // Log each deal for debugging
         dealsSnapshot.docs.forEach((doc, index) => {
@@ -347,6 +347,8 @@ const SuccessfulAcceleratorDealsTable = () => {
       case "Active Support":
       case "Active":
         return "#4caf50"
+      case "Exit":
+        return "#9e9e9e"
       case "Support Approved": 
         return "#2196f3"
       case "Graduated Successfully": 
@@ -499,7 +501,7 @@ const SuccessfulAcceleratorDealsTable = () => {
                       fontSize: "0.7rem", 
                       display: "inline-block" 
                     }}>
-                      {deal.currentStatus}
+                      {deal.currentStatus === "Exit" ? "Exited" : deal.currentStatus}
                     </span>
                   </td>
                   <td style={tableCellStyle}>
@@ -584,7 +586,7 @@ const SuccessfulAcceleratorDealsTable = () => {
                   <div><strong>Program Duration:</strong> {selectedDeal.dealDuration}</div>
                   <div><strong>Next Milestone:</strong> {selectedDeal.nextMilestone}</div>
                   <div><strong>Graduation Status:</strong> {selectedDeal.graduationStatus}</div>
-                  <div><strong>Current Status:</strong> <span style={{ backgroundColor: getStatusColor(selectedDeal.currentStatus) + "20", color: getStatusColor(selectedDeal.currentStatus), padding: "4px 8px", borderRadius: "8px", fontSize: "12px", marginLeft: "8px" }}>{selectedDeal.currentStatus}</span></div>
+                  <div><strong>Current Status:</strong> <span style={{ backgroundColor: getStatusColor(selectedDeal.currentStatus) + "20", color: getStatusColor(selectedDeal.currentStatus), padding: "4px 8px", borderRadius: "8px", fontSize: "12px", marginLeft: "8px" }}>{selectedDeal.currentStatus === "Exit" ? "Exited" : selectedDeal.currentStatus}</span></div>
                 </div>
               </div>
               <div style={{ backgroundColor: "#f8f9fa", padding: "20px", borderRadius: "12px", border: "1px solid #e9ecef" }}>
@@ -700,10 +702,11 @@ const AcceleratorTabbedTables = ({ filters, onApplicationSubmitted }) => {
         if (!user) return
         const catalystSnapshot = await getDocs(collection(db, "catalystProfiles"))
         setMyMatchesCount(catalystSnapshot.size)
+        // FIXED: Include "Exit" status in successful deals count
         const dealsQuery = query(
           collection(db, "smeCatalystApplications"), 
           where("smeId", "==", user.uid), 
-          where("status", "in", ["Support Approved", "Active Support", "Active", "Successful Deals", "Graduated Successfully"])
+          where("status", "in", ["Support Approved", "Active Support", "Active", "Exit", "Successful Deals", "Graduated Successfully"])
         )
         const dealsSnapshot = await getDocs(dealsQuery)
         setSuccessfulDealsCount(dealsSnapshot.size)
