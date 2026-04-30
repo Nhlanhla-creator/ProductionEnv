@@ -426,20 +426,8 @@ export const associatorMenuItems = [
         route: "/associator-dashboard/subscriptions",
         description: "Manage member subscriptions",
       },
-      {
-        id: "dashboard-governance",
-        label: "Admin Governance",
-        icon: <Building size={16} />,
-        route: "/associator-dashboard/governance",
-        description: "Governance settings and controls",
-      },
-      {
-        id: "dashboard-marketplace",
-        label: "Users Marketplace",
-        icon: <Users size={16} />,
-        route: "/associator-dashboard/marketplace",
-        description: "User and marketplace management",
-      },
+    
+    
       {
         id: "dashboard-pilot",
         label: "Pilot & Case Studies",
@@ -471,7 +459,7 @@ export const associatorMenuItems = [
     subItems: [
       {
         id: "smse-ecosystem",
-        label: "SMSEs",
+        label: "Service Firms",
         icon: <Briefcase size={16} />,
         route: "/associator-ecosystem/smse",
         description: "Small and Medium Enterprises",
@@ -501,7 +489,7 @@ export const associatorMenuItems = [
   },
   {
     id: "portfolio",
-    label: "My Portfolio",
+    label: "Market Insights",
     icon: <Briefcase size={18} />,
     route: "/associator-portfolio",
   },
@@ -513,19 +501,19 @@ export const associatorMenuItems = [
   // },
   {
     id: "documents",
-    label: "My Documents",
+    label: "Governance Templates",
     icon: <FileText size={18} />,
     route: "/associator-documents",
   },
   {
     id: "messages",
-    label: "My Messages",
+    label: "Messages",
     icon: <MessageSquare size={18} />,
     route: "/associator-messages",
   },
   {
     id: "calendar",
-    label: "My Calendar",
+    label: "Calendar",
     icon: <Calendar size={18} />,
     route: "/associator-calendar",
   },
