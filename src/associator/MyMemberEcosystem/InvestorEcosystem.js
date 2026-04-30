@@ -11,8 +11,8 @@ import {
   Mail,
   Phone,
   MapPin,
-  TrendingUp,
   Users,
+  TrendingUp,
   Building2,
   Globe,
   Target,
@@ -202,7 +202,7 @@ const InvestorDetailsModal = ({ investor, isOpen, onClose }) => {
   const formatLabel = (value) => {
     if (!value) return "Not provided";
     if (typeof value === "boolean") return value ? "Yes" : "No";
-    return value.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+    return value;
   };
 
   // Tabs configuration
@@ -929,9 +929,9 @@ function InvestorEcosystem() {
           <button onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))} disabled={currentPage === totalPages} style={{ ...styles.paginationBtn, opacity: currentPage === totalPages ? 0.5 : 1 }}>Next <ChevronRight size={16} /></button>
         </div>
       )}
-&& (
+
+      {showViewModal && selectedInvestor && (
         <InvestorDetailsModal 
-      {showViewModal && selectedInvestor 
           investor={selectedInvestor} 
           isOpen={showViewModal} 
           onClose={() => setShowViewModal(false)} 
