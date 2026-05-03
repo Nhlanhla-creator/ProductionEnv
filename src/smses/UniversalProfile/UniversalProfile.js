@@ -172,6 +172,10 @@ export default function UniversalProfile() {
       operatingCountries: [], operatingProvinces: [],
       companyLogo: "", companyLetterhead: "",
       orgStructure: "", orgStructureFileName: "", orgStructureUpdatedAt: "",
+      // ── NEW: Industry Associations ──────────────────────────────────────
+      memberOfAssociation: "",        // "yes" | "no" | ""
+      industryAssociations: [],       // string[]
+      industryAssociationsOther: "",  // free-text when "Other" is selected
     },
 
     ownershipManagement: {

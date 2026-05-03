@@ -152,6 +152,32 @@ const southAfricanProvinces = [
   { value: "Western Cape", label: "Western Cape" },
 ]
 
+// ── NEW: Industry Associations ─────────────────────────────────────────────
+const industryAssociations = [
+  { value: "SA Township Traders Association", label: "SA Township Traders Association" },
+  { value: "Minerals Council South Africa", label: "Minerals Council South Africa" },
+  { value: "Junior Mining Council (JEMD-linked)", label: "Junior Mining Council (JEMD-linked)" },
+  { value: "Mandela Mining Precinct", label: "Mandela Mining Precinct" },
+  { value: "African Chamber of Commerce and Industry", label: "African Chamber of Commerce and Industry" },
+  { value: "Black Business Council", label: "Black Business Council" },
+  { value: "South African Renewable Energy Council (SAREC)", label: "South African Renewable Energy Council (SAREC)" },
+  { value: "SAPICS: Supply Chain Institute of Southern Africa", label: "SAPICS: Supply Chain Institute of Southern Africa" },
+  { value: "Manufacturing Circle", label: "Manufacturing Circle" },
+  { value: "Southern African Renewable Energy Council (SAWEA / SA-PVIA)", label: "Southern African Renewable Energy Council (SAWEA / SA-PVIA)" },
+  { value: "South African Institute of Black Property Practitioners", label: "South African Institute of Black Property Practitioners" },
+  { value: "ASASA / ASISA-linked industry groups", label: "ASASA / ASISA-linked industry groups" },
+  { value: "South African Venture Capital and Private Equity Association (SAVCA)", label: "South African Venture Capital and Private Equity Association (SAVCA)" },
+  { value: "ABSA Black Business Awards / ABSIP / BEE-linked networks", label: "ABSA Black Business Awards / ABSIP / BEE-linked networks" },
+  { value: "SA SME Fund", label: "SA SME Fund" },
+  { value: "Endeva (SA / global ESO-backed networks)", label: "Endeva (SA / global ESO-backed networks)" },
+  { value: "SA Industrial Development Corporation (IDC)", label: "SA Industrial Development Corporation (IDC)" },
+  { value: "SA Department of Trade, Industry and Competition (DTIC)", label: "SA Department of Trade, Industry and Competition (DTIC)" },
+  { value: "SA Department of Mineral Resources and Energy (DMRE)", label: "SA Department of Mineral Resources and Energy (DMRE)" },
+  { value: "SA Department of Employment and Labour (BEE-linked units)", label: "SA Department of Employment and Labour (BEE-linked units)" },
+  { value: "SA National Business Initiative (NBI)", label: "SA National Business Initiative (NBI)" },
+  { value: "Other", label: "Other" },
+]
+
 // Simple FormField component
 function FormField({ label, required, tooltip, children }) {
   return (
@@ -648,6 +674,9 @@ export default function EntityOverview({ data = {}, updateData }) {
   const selectedCountries = Array.isArray(formData.operatingCountries) ? formData.operatingCountries : []
   const showProvinces = selectedCountries.includes("South Africa")
 
+  // Whether the user indicated they belong to an association
+  const memberOfAssociation = formData.memberOfAssociation
+
   return (
     <div style={{ padding: '20px', maxWidth: '1200px', margin: '0 auto' }}>
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
@@ -874,6 +903,77 @@ export default function EntityOverview({ data = {}, updateData }) {
                 onChange={(value) => handleMultiSelectChange("operatingProvinces", value)}
                 placeholder="Select provinces..."
               />
+            </FormField>
+          )}
+
+          {/* ── INDUSTRY ASSOCIATIONS ── */}
+          <SectionHeading title="Industry Associations" />
+
+          <FormField label="Are you a member of any industry association?">
+            <div style={{ display: 'flex', gap: '16px', marginBottom: memberOfAssociation === "yes" ? '1rem' : 0 }}>
+              {["yes", "no"].map((opt) => (
+                <label
+                  key={opt}
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    padding: '8px 20px',
+                    borderRadius: '6px',
+                    border: `2px solid ${memberOfAssociation === opt ? '#8B4513' : '#ccc'}`,
+                    backgroundColor: memberOfAssociation === opt ? '#fdf6ee' : 'white',
+                    cursor: 'pointer',
+                    fontWeight: memberOfAssociation === opt ? '600' : '400',
+                    color: memberOfAssociation === opt ? '#6B3410' : '#555',
+                    fontSize: '14px',
+                    transition: 'all 0.2s ease',
+                    userSelect: 'none',
+                  }}
+                >
+                  <input
+                    type="radio"
+                    name="memberOfAssociation"
+                    value={opt}
+                    checked={memberOfAssociation === opt}
+                    onChange={handleChange}
+                    style={{ display: 'none' }}
+                  />
+                  <span style={{
+                    width: '16px', height: '16px', borderRadius: '50%', flexShrink: 0,
+                    border: `2px solid ${memberOfAssociation === opt ? '#8B4513' : '#ccc'}`,
+                    backgroundColor: memberOfAssociation === opt ? '#8B4513' : 'transparent',
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    {memberOfAssociation === opt && (
+                      <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: 'white' }} />
+                    )}
+                  </span>
+                  {opt === "yes" ? "Yes" : "No"}
+                </label>
+              ))}
+            </div>
+          </FormField>
+
+          {memberOfAssociation === "yes" && (
+            <FormField label="Select your association(s)">
+              <MultiSelectDropdown
+                options={industryAssociations}
+                selected={Array.isArray(formData.industryAssociations) ? formData.industryAssociations : []}
+                onChange={(value) => handleMultiSelectChange("industryAssociations", value)}
+                placeholder="Select associations..."
+              />
+              {Array.isArray(formData.industryAssociations) && formData.industryAssociations.includes("Other") && (
+                <div style={{ marginTop: '10px' }}>
+                  <input
+                    type="text"
+                    name="industryAssociationsOther"
+                    value={formData.industryAssociationsOther || ""}
+                    onChange={handleChange}
+                    placeholder="Please specify your association..."
+                    style={{ ...inputStyle, marginTop: '4px' }}
+                  />
+                </div>
+              )}
             </FormField>
           )}
 
