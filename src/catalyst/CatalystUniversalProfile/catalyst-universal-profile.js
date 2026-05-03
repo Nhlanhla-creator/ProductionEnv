@@ -43,7 +43,23 @@ export default function CatalystUniversalProfile() {
   })
 
   const [formData, setFormData] = useState({
-    entityOverview: {},
+    entityOverview: {
+      registeredName: "",
+      tradingName: "",
+      legalEntityType: "",
+      registrationNumber: "",
+      industrySector: "",
+      companySize: "",
+      yearEstablished: "",
+      website: "",
+      briefDescription: "",
+      referralSource: "",
+      referralSourceOther: "",
+      // ── Industry Associations ──────────────────────────────────────────
+      memberOfAssociation: "",        // "yes" | "no" | ""
+      industryAssociations: [],       // string[]
+      industryAssociationsOther: "",  // free-text when "Other" is selected
+    },
     contactDetails: {
       sameAsPhysical: false,
     },
@@ -128,7 +144,15 @@ export default function CatalystUniversalProfile() {
               if (data.formData.programmeDetails && !data.formData.programBriefMatchingPreference) {
                 Object.assign(merged, data.formData.programmeDetails)
               }
-              setFormData({ ...data.formData, programBriefMatchingPreference: merged })
+              setFormData((prev) => ({
+                ...prev,
+                ...data.formData,
+                entityOverview: {
+                  ...prev.entityOverview,
+                  ...data.formData.entityOverview,
+                },
+                programBriefMatchingPreference: merged,
+              }))
             }
             if (data?.completedSections) {
               // Migrate legacy completed section keys
