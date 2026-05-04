@@ -86,6 +86,24 @@ const Pill = ({ label, active, onClick }) => (
   </button>
 );
 
+const SubTab = ({ label, active, onClick }) => (
+  <button
+    onClick={onClick}
+    style={{
+      padding: "6px 16px",
+      borderRadius: "20px",
+      cursor: "pointer",
+      fontSize: "12px",
+      border: `1.5px solid ${active ? B.brownMedium : B.lightGrey}`,
+      fontWeight: active ? 700 : 500,
+      background: active ? B.brownMedium : "#fff",
+      color: active ? "#fff" : B.darkGrey,
+    }}
+  >
+    {label}
+  </button>
+);
+
 const doughnutOpts = {
   responsive: true,
   maintainAspectRatio: false,
@@ -276,10 +294,8 @@ const ScoreRangeView = ({ min, pipelineAvg, max, cohortAvg, target, suffix = "%"
   );
 };
 
-// Sub-components
-
-// 1. InclusionImpact - Beneficiary Demographics & Support Offered
-const InclusionImpactSection = () => {
+// 1. Demographics - Beneficiary Demographics
+const DemographicsSection = () => {
   const { marketPulse } = usePortfolio();
   const [beneficiaryType, setBeneficiaryType] = useState("female");
 
@@ -289,30 +305,9 @@ const InclusionImpactSection = () => {
     hdi: { zarPct: 52, countPct: 55, trend: [45, 48, 52, 55] },
     disabled: { zarPct: 4, countPct: 6, trend: [2, 3, 3, 4] },
   };
-  const supportOffered = marketPulse?.marketStructure?.inclusionImpact?.supportOffered || {
-    "Strategic Guidance": 45,
-    "Networks/Access": 38,
-    "Financial Advisory": 32,
-    "Legal Support": 25,
-    "Marketing Support": 28,
-    Operations: 20,
-  };
-  const topRequests = marketPulse?.marketStructure?.inclusionImpact?.topRequests || [
-    "Strategic Guidance",
-    "Networks/Access",
-    "Financial Advisory",
-  ];
-  const bottomRequests = marketPulse?.marketStructure?.inclusionImpact?.bottomRequests || [
-    "Legal Support",
-    "Operations",
-    "Marketing Support",
-  ];
 
   const beneficiaryLabels = { female: "Female", youth: "Youth", hdi: "HDI", disabled: "Disabled" };
   const current = beneficiaries[beneficiaryType];
-
-  const sortedSupport = Object.entries(supportOffered).sort((a, b) => b[1] - a[1]);
-  const topSupport = sortedSupport.slice(0, 3);
 
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(380px, 1fr))", gap: "20px" }}>
@@ -334,7 +329,7 @@ const InclusionImpactSection = () => {
               <div style={{ fontSize: "28px", fontWeight: 700, color: B.black }}>{current.countPct}%</div>
             </div>
           </div>
-          <div style={{ height: "160px" }}>
+          <div style={{ height: "200px" }}>
             <Line
               options={lineOpts()}
               data={{
@@ -354,54 +349,15 @@ const InclusionImpactSection = () => {
           </div>
         </div>
       </Card>
-
-      <Card
-        title="Additional Support / Advice Offered"
-        footer={
-          <div style={{ fontSize: "11px", color: B.warmGrey }}>
-            Top requested: {topSupport.map((s) => s[0]).join(", ")}
-          </div>
-        }
-      >
-        <div style={{ display: "flex", flexDirection: "column", gap: "16px", height: "100%" }}>
-          <div style={{ height: "200px" }}>
-            <Bar
-              options={hBarOpts()}
-              data={{
-                labels: Object.keys(supportOffered),
-                datasets: [
-                  {
-                    label: "% of SMEs",
-                    data: Object.values(supportOffered),
-                    backgroundColor: MIXED_COLORS[2],
-                  },
-                ],
-              }}
-            />
-          </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", fontSize: "10px" }}>
-            <div style={{ background: B.cream, padding: "8px", borderRadius: "6px", color: B.darkGrey }}>
-              <strong>Top 3 Most Requested:</strong>
-              <br />
-              {topRequests.map((r, i) => `${i + 1}. ${r}`).join("\n")}
-            </div>
-            <div style={{ background: B.cream, padding: "8px", borderRadius: "6px", color: B.darkGrey }}>
-              <strong>Bottom 3 Most Requested:</strong>
-              <br />
-              {bottomRequests.map((r, i) => `${i + 1}. ${r}`).join("\n")}
-            </div>
-          </div>
-        </div>
-      </Card>
     </div>
   );
 };
 
-// 2. Outcomes - Jobs Created
+// 2. Outcomes - Jobs Created & Additional Support/Advice Offered
 const OutcomesSection = () => {
-  const [view, setView] = useState("sme");
+  const [jobsView, setJobsView] = useState("total");
+  const [supportView, setSupportView] = useState("bySME");
 
-  // Placeholder data - would come from context in real implementation
   const placeholderJobs = {
     total: 385,
     direct: 245,
@@ -424,84 +380,103 @@ const OutcomesSection = () => {
     ],
   };
 
+  const supportOffered = {
+    "Strategic Guidance": 45,
+    "Networks/Access": 38,
+    "Financial Advisory": 32,
+    "Legal Support": 25,
+    "Marketing Support": 28,
+    Operations: 20,
+  };
+
   const perSME = [...placeholderJobs.perSME].sort((a, b) => b.jobs - a.jobs);
   const perSector = [...placeholderJobs.perSector].sort((a, b) => b.jobs - a.jobs);
   const totalSMEs = 45;
   const avgJobs = perSME.length > 0 ? (perSME.reduce((a, b) => a + b.jobs, 0) / totalSMEs).toFixed(1) : 0;
 
-  const footer =
-    view === "sme"
-      ? {
-          left: `Portfolio Avg: ${avgJobs} jobs/SME`,
-          right: "Target: 15",
-        }
-      : {
-          left: `Total: ${perSector.reduce((a, b) => a + b.jobs, 0)} jobs`,
-          right: `${perSector.length} active sectors`,
-        };
+  const supportData = Object.entries(supportOffered).sort((a, b) => b[1] - a[1]);
+  const innerH = Math.max(280, supportData.length * 36);
+  const jobsInnerH = Math.max(280, (jobsView === "sme" ? perSME.length : perSector.length) * 36);
 
-  const isEmpty = view === "sme" ? perSME.length === 0 : perSector.length === 0;
-  const innerH = Math.max(280, (view === "sme" ? perSME.length : perSector.length) * 36);
+  const jobsFooter = jobsView === "sme" 
+    ? { left: `Portfolio Avg: ${avgJobs} jobs/SME`, right: "Target: 15" }
+    : { left: `Total: ${perSector.reduce((a, b) => a + b.jobs, 0)} jobs`, right: `${perSector.length} active sectors` };
 
   return (
     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(380px, 1fr))", gap: "20px" }}>
       <Card title="Total Number of Jobs Created / Projected">
-        <div
-          style={{
-            flex: 1,
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: "10px",
-          }}
-        >
-          <div style={{ fontSize: "64px", fontWeight: "800", color: B.black, lineHeight: 1 }}>
-            {placeholderJobs.total}
-          </div>
-          <div style={{ display: "flex", gap: "20px", marginTop: "14px" }}>
-            {[
-              ["Direct", placeholderJobs.direct, MIXED_COLORS[0]],
-              ["Indirect", placeholderJobs.indirect, MIXED_COLORS[2]],
-            ].map(([l, v, col]) => (
-              <div key={l} style={{ textAlign: "center" }}>
-                <div style={{ fontSize: "10px", color: B.warmGrey, marginBottom: "3px" }}>{l}</div>
-                <div style={{ fontSize: "18px", fontWeight: "700", color: col }}>{v}</div>
-              </div>
-            ))}
-          </div>
+        <div style={{ display: "flex", gap: "6px", marginBottom: "10px", flexShrink: 0 }}>
+          <Pill label="Total Jobs" active={jobsView === "total"} onClick={() => setJobsView("total")} />
+          <Pill label="Per SME" active={jobsView === "sme"} onClick={() => setJobsView("sme")} />
+          <Pill label="Per Sector" active={jobsView === "sector"} onClick={() => setJobsView("sector")} />
         </div>
+        
+        {jobsView === "total" && (
+          <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "10px" }}>
+            <div style={{ fontSize: "64px", fontWeight: "800", color: B.black, lineHeight: 1 }}>
+              {placeholderJobs.total}
+            </div>
+            <div style={{ display: "flex", gap: "20px", marginTop: "14px" }}>
+              {[
+                ["Direct", placeholderJobs.direct, MIXED_COLORS[0]],
+                ["Indirect", placeholderJobs.indirect, MIXED_COLORS[2]],
+              ].map(([l, v, col]) => (
+                <div key={l} style={{ textAlign: "center" }}>
+                  <div style={{ fontSize: "10px", color: B.warmGrey, marginBottom: "3px" }}>{l}</div>
+                  <div style={{ fontSize: "18px", fontWeight: "700", color: col }}>{v}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        
+        {jobsView !== "total" && (
+          <div style={{ flex: 1 }}>
+            <div style={{ flex: 1, overflowY: (jobsView === "sme" ? perSME.length : perSector.length) > 7 ? "auto" : "visible" }}>
+              <div style={{ height: `${jobsInnerH}px` }}>
+                <Bar
+                  options={hBarOpts()}
+                  data={{
+                    labels: (jobsView === "sme" ? perSME : perSector).map((item) => 
+                      jobsView === "sme" ? item.name : item.sector
+                    ),
+                    datasets: [
+                      {
+                        label: "Jobs",
+                        data: (jobsView === "sme" ? perSME : perSector).map((item) => item.jobs),
+                        backgroundColor: MIXED_COLORS.slice(0, (jobsView === "sme" ? perSME.length : perSector.length)),
+                      },
+                    ],
+                  }}
+                />
+              </div>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", marginTop: "10px" }}>
+              <span style={{ fontSize: "12px", color: B.black, fontWeight: 600 }}>{jobsFooter.left}</span>
+              <span style={{ fontSize: "12px", color: B.warmGrey }}>{jobsFooter.right}</span>
+            </div>
+          </div>
+        )}
       </Card>
 
-      <Card
-        title="Jobs Created"
-        footer={
-          !isEmpty ? (
-            <div style={{ display: "flex", justifyContent: "space-between" }}>
-              <span style={{ fontSize: "12px", color: B.black, fontWeight: 600 }}>{footer.left}</span>
-              <span style={{ fontSize: "12px", color: B.warmGrey }}>{footer.right}</span>
-            </div>
-          ) : undefined
-        }
-      >
+      <Card title="Additional Support / Advice Offered">
         <div style={{ display: "flex", gap: "6px", marginBottom: "10px", flexShrink: 0 }}>
-          <Pill label="Per SME" active={view === "sme"} onClick={() => setView("sme")} />
-          <Pill label="Per Sector" active={view === "sector"} onClick={() => setView("sector")} />
+          <Pill label="By SME" active={supportView === "bySME"} onClick={() => setSupportView("bySME")} />
+          <Pill label="Distribution" active={supportView === "distribution"} onClick={() => setSupportView("distribution")} />
         </div>
-        {isEmpty ? (
-          <EmptyState />
-        ) : view === "sme" ? (
-          <div style={{ flex: 1, overflowY: perSME.length > 7 ? "auto" : "visible" }}>
+        
+        {supportView === "bySME" ? (
+          <div style={{ flex: 1, overflowY: supportData.length > 7 ? "auto" : "visible" }}>
             <div style={{ height: `${innerH}px` }}>
               <Bar
                 options={hBarOpts()}
                 data={{
-                  labels: perSME.map((s) => s.name),
+                  labels: supportData.map(([k]) => k),
                   datasets: [
                     {
-                      label: "Jobs",
-                      data: perSME.map((s) => s.jobs),
-                      backgroundColor: MIXED_COLORS.slice(0, perSME.length),
+                      label: "% of SMEs",
+                      data: supportData.map(([, v]) => v),
+                      backgroundColor: MIXED_COLORS.slice(0, supportData.length),
                     },
                   ],
                 }}
@@ -509,54 +484,68 @@ const OutcomesSection = () => {
             </div>
           </div>
         ) : (
-          <div style={{ flex: 1, overflowY: perSector.length > 7 ? "auto" : "visible" }}>
-            <div style={{ height: `${innerH}px` }}>
-              <Bar
-                options={hBarOpts()}
-                data={{
-                  labels: perSector.map((s) => s.sector),
-                  datasets: [
-                    {
-                      label: "Jobs (direct + indirect)",
-                      data: perSector.map((s) => s.jobs),
-                      backgroundColor: MIXED_COLORS.slice(0, perSector.length),
-                    },
-                  ],
-                }}
-              />
-            </div>
+          <div style={{ height: "280px" }}>
+            <Doughnut
+              options={doughnutOpts}
+              data={{
+                labels: supportData.map(([k]) => k),
+                datasets: [{ data: supportData.map(([, v]) => v), backgroundColor: MIXED_COLORS }],
+              }}
+            />
           </div>
         )}
+        
+        <div style={{ marginTop: "12px", fontSize: "11px", color: B.warmGrey, display: "flex", justifyContent: "space-between" }}>
+          <span>Most requested: {supportData[0]?.[0]}</span>
+          <span>Least requested: {supportData[supportData.length - 1]?.[0]}</span>
+        </div>
       </Card>
     </div>
   );
 };
 
-// 3. CohortSelection - Match Strength, BIG Score, Readiness, Vetting, Pipeline
+// 3. CohortSelection - Updated with 3 cards per row
 const CohortSelectionSection = () => {
-  const [matchView, setMatchView] = useState("range");
-  const [bigView, setBigView] = useState("range");
-  const [pipelineView, setPipelineView] = useState("stage");
+  const [cohortView, setCohortView] = useState("pipeline");
+  const [historyView, setHistoryView] = useState("applications");
 
   // Placeholder data
   const placeholderData = {
+    applied: 245,
+    fitFunding: 128,
+    approvals: 42,
+    avgBIGScore: 62,
+    fundingReadinessRate: 58,
+    applicationHistory: [180, 210, 235, 245],
+    fitFundingHistory: [85, 102, 118, 128],
+    approvalsHistory: [28, 35, 40, 42],
+    avgBIGScoreHistory: [48, 54, 59, 62],
+    fundingReadinessHistory: [42, 48, 54, 58],
     match: {
       min: 45,
       avg: 68,
       max: 92,
       cohortAvg: 68,
-      dist: { "0-20": 2, "21-40": 5, "41-60": 12, "61-80": 18, "81-100": 8 },
     },
     bigScore: {
       min: 38,
       avg: 62,
       max: 88,
       cohortAvg: 62,
-      dist: { "0-20": 3, "21-40": 7, "41-60": 14, "61-80": 15, "81-100": 6 },
     },
-    fundingReadinessRate: 58,
-    totalSMEs: 45,
-    vetting: { avg: 8.5, target: 10 },
+    avgFundingRequired: {
+      "Pre-seed": 0.5,
+      Seed: 1.5,
+      "Series A": 5,
+      "Series B": 12,
+    },
+    approvalRate: {
+      "Pre-seed": 65,
+      Seed: 58,
+      "Series A": 45,
+      "Series B": 38,
+    },
+    vetting: { avg: 8.5, target: 10, history: [7.2, 7.8, 8.2, 8.5] },
     stageDist: {
       Application: 45,
       Vetting: 28,
@@ -566,171 +555,187 @@ const CohortSelectionSection = () => {
     },
   };
 
-  const matchDist = placeholderData.match.dist;
-  const bigDist = placeholderData.bigScore.dist;
   const stageDist = placeholderData.stageDist;
-
   const stageEntries = Object.entries(stageDist).filter(([, v]) => v > 0);
   const sortedStage = [...stageEntries].sort((a, b) => b[1] - a[1]);
   const hbarLabels = sortedStage.map(([k]) => k);
   const hbarValues = sortedStage.map(([, v]) => v);
   const innerH = Math.max(280, hbarLabels.length * 36);
 
-  const R = 54;
-  const CIRC = 2 * Math.PI * R;
-  const offset = CIRC - (CIRC * Math.min(placeholderData.vetting.avg, 60)) / 60;
-  const variance = placeholderData.vetting.avg - placeholderData.vetting.target;
+  const fundingData = Object.entries(placeholderData.avgFundingRequired);
+  const approvalData = Object.entries(placeholderData.approvalRate);
+
+  const getHistoryData = () => {
+    switch(historyView) {
+      case "applications":
+        return { labels: ["2022", "2023", "2024", "2025"], data: placeholderData.applicationHistory, color: MIXED_COLORS[0], label: "Applications" };
+      case "fitFunding":
+        return { labels: ["2022", "2023", "2024", "2025"], data: placeholderData.fitFundingHistory, color: MIXED_COLORS[2], label: "Fit for Funding" };
+      case "approvals":
+        return { labels: ["2022", "2023", "2024", "2025"], data: placeholderData.approvalsHistory, color: MIXED_COLORS[4], label: "Approvals" };
+      default:
+        return { labels: ["2022", "2023", "2024", "2025"], data: placeholderData.applicationHistory, color: MIXED_COLORS[0], label: "Applications" };
+    }
+  };
+
+  const historyData = getHistoryData();
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(380px, 1fr))", gap: "20px" }}>
-      <Card title="Average Match Strength (%)">
-        <div style={{ display: "flex", gap: "6px", marginBottom: "10px", flexShrink: 0 }}>
-          <Pill label="Range" active={matchView === "range"} onClick={() => setMatchView("range")} />
-          <Pill label="Histogram" active={matchView === "histogram"} onClick={() => setMatchView("histogram")} />
-        </div>
-        {matchView === "range" ? (
-          <ScoreRangeView
-            min={placeholderData.match.min}
-            pipelineAvg={placeholderData.match.avg}
-            max={placeholderData.match.max}
-            cohortAvg={placeholderData.match.cohortAvg}
-            target={75}
-          />
-        ) : (
-          <div style={{ height: "280px" }}>
-            <Bar
-              options={vBarOpts((v) => v, "Average Match Strength (%)")}
-              data={{
-                labels: Object.keys(matchDist),
-                datasets: [{ label: "SMEs", data: Object.values(matchDist), backgroundColor: MIXED_COLORS[0] }],
-              }}
-            />
-          </div>
-        )}
-      </Card>
-
-      <Card title="Average BIG Score (%)">
-        <div style={{ display: "flex", gap: "6px", marginBottom: "10px", flexShrink: 0 }}>
-          <Pill label="Range" active={bigView === "range"} onClick={() => setBigView("range")} />
-          <Pill label="Histogram" active={bigView === "histogram"} onClick={() => setBigView("histogram")} />
-        </div>
-        {bigView === "range" ? (
-          <ScoreRangeView
-            min={placeholderData.bigScore.min}
-            pipelineAvg={placeholderData.bigScore.avg}
-            max={placeholderData.bigScore.max}
-            cohortAvg={placeholderData.bigScore.cohortAvg}
-            target={70}
-          />
-        ) : (
-          <div style={{ height: "280px" }}>
-            <Bar
-              options={vBarOpts((v) => v, "Average BIG Score (%)")}
-              data={{
-                labels: Object.keys(bigDist),
-                datasets: [{ label: "SMEs", data: Object.values(bigDist), backgroundColor: MIXED_COLORS[2] }],
-              }}
-            />
-          </div>
-        )}
-      </Card>
-
-      <Card title="Funding Readiness Rate (%)">
-        <div
-          style={{
-            flex: 1,
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: "12px",
-          }}
-        >
-          <div style={{ fontSize: "64px", fontWeight: "800", color: B.black, lineHeight: 1 }}>
-            {placeholderData.fundingReadinessRate}
-            <span style={{ fontSize: "32px" }}>%</span>
-          </div>
-          <div style={{ fontSize: "14px", color: B.mediumGrey, fontWeight: 600 }}>
-            {Math.round((placeholderData.fundingReadinessRate / 100) * placeholderData.totalSMEs)} of{" "}
-            {placeholderData.totalSMEs} SMEs funding-ready
-          </div>
-          <div style={{ width: "100%", marginTop: "4px" }}>
-            <div
-              style={{
-                width: "100%",
-                background: B.lightGrey,
-                borderRadius: "6px",
-                height: "12px",
-                overflow: "hidden",
-              }}
-            >
-              <div
-                style={{
-                  width: `${placeholderData.fundingReadinessRate}%`,
-                  background: MIXED_COLORS[2],
-                  height: "100%",
-                  borderRadius: "6px",
-                }}
-              />
-            </div>
-            <div style={{ display: "flex", justifyContent: "space-between", width: "100%", padding: "4px" }}>
-              <span style={{ fontSize: "14px", color: B.warmGrey }}>Current: {placeholderData.fundingReadinessRate}%</span>
-              <span style={{ fontSize: "14px", color: B.warmGrey }}>Target: 70%</span>
-            </div>
+    <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+      {/* First row - Combined metrics card with toggle between Pipeline and Scores */}
+      <div>
+        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "16px" }}>
+          <div style={{ display: "flex", gap: "8px" }}>
+            <Pill label="Pipeline Metrics" active={cohortView === "pipeline"} onClick={() => setCohortView("pipeline")} />
+            <Pill label="Match & Scores" active={cohortView === "scores"} onClick={() => setCohortView("scores")} />
           </div>
         </div>
-      </Card>
 
-      <Card title="Average Vetting Time (Days)">
-        <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
-          <svg width="260" height="260" viewBox="0 0 160 160">
-            <circle cx="80" cy="80" r={R} stroke={B.lightGrey} strokeWidth="11" fill="none" />
-            <circle
-              cx="80"
-              cy="80"
-              r={R}
-              stroke={placeholderData.vetting.avg <= placeholderData.vetting.target ? MIXED_COLORS[2] : MIXED_COLORS[0]}
-              strokeWidth="11"
-              fill="none"
-              strokeLinecap="round"
-              strokeDasharray={CIRC}
-              strokeDashoffset={offset}
-              transform="rotate(-90 80 80)"
-            />
-            <text x="80" y="74" textAnchor="middle" fill={B.black} fontSize="30" fontWeight="800">
-              {placeholderData.vetting.avg.toFixed(0)}
-            </text>
-            <text x="80" y="93" textAnchor="middle" fill={B.warmGrey} fontSize="13">
-              days
-            </text>
-          </svg>
-          <div style={{ display: "flex", gap: "24px" }}>
-            {[
-              ["Actual", Math.round(placeholderData.vetting.avg) + "d", MIXED_COLORS[0]],
-              ["Target", placeholderData.vetting.target + "d", MIXED_COLORS[2]],
-              [
-                "Variance",
-                (variance > 0 ? "+" : "") + Math.round(variance) + "d",
-                variance > 0 ? "#c62828" : MIXED_COLORS[2],
-              ],
-            ].map(([l, v, col]) => (
-              <div key={l} style={{ textAlign: "center" }}>
-                <div style={{ fontSize: "14px", color: B.warmGrey, marginBottom: "3px" }}>{l}</div>
-                <div style={{ fontSize: "16px", fontWeight: "700", color: col }}>{v}</div>
+        {cohortView === "pipeline" ? (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(380px, 1fr))", gap: "20px" }}>
+            <Card title="Pipeline Overview">
+              <div style={{ display: "flex", gap: "16px", marginBottom: "20px", justifyContent: "space-around" }}>
+                {[
+                  { label: "How Many Applied", value: placeholderData.applied, color: MIXED_COLORS[0] },
+                  { label: "How Many Fit Funding", value: placeholderData.fitFunding, color: MIXED_COLORS[2] },
+                  { label: "Approvals", value: placeholderData.approvals, color: MIXED_COLORS[4] },
+                ].map((item) => (
+                  <div key={item.label} style={{ textAlign: "center", flex: 1 }}>
+                    <div style={{ fontSize: "32px", fontWeight: "800", color: item.color }}>{item.value}</div>
+                    <div style={{ fontSize: "10px", color: B.warmGrey }}>{item.label}</div>
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
-        </div>
-      </Card>
+              <div style={{ marginTop: "10px" }}>
+                <div style={{ display: "flex", gap: "6px", marginBottom: "10px", justifyContent: "center" }}>
+                  <Pill label="Applications" active={historyView === "applications"} onClick={() => setHistoryView("applications")} />
+                  <Pill label="Fit for Funding" active={historyView === "fitFunding"} onClick={() => setHistoryView("fitFunding")} />
+                  <Pill label="Approvals" active={historyView === "approvals"} onClick={() => setHistoryView("approvals")} />
+                </div>
+                <div style={{ height: "200px" }}>
+                  <Bar
+                    options={vBarOpts((v) => v, "Year")}
+                    data={{
+                      labels: historyData.labels,
+                      datasets: [{ label: historyData.label, data: historyData.data, backgroundColor: historyData.color }],
+                    }}
+                  />
+                </div>
+              </div>
+            </Card>
+            
+            <Card title="Average BIG Score & Funding Readiness">
+              <div style={{ display: "flex", flexDirection: "column", gap: "20px", height: "100%" }}>
+                <div>
+                  <div style={{ fontSize: "11px", color: B.warmGrey, marginBottom: "5px" }}>Average BIG Score (%)</div>
+                  <div style={{ fontSize: "36px", fontWeight: "800", color: MIXED_COLORS[0] }}>{placeholderData.avgBIGScore}%</div>
+                  <div style={{ height: "80px", marginTop: "10px" }}>
+                    <Bar
+                      options={vBarOpts((v) => `${v}%`, "Year")}
+                      data={{
+                        labels: ["2022", "2023", "2024", "2025"],
+                        datasets: [{ label: "BIG Score", data: placeholderData.avgBIGScoreHistory, backgroundColor: MIXED_COLORS[0] }],
+                      }}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <div style={{ fontSize: "11px", color: B.warmGrey, marginBottom: "5px" }}>Funding Readiness Rate (%)</div>
+                  <div style={{ fontSize: "36px", fontWeight: "800", color: MIXED_COLORS[2] }}>{placeholderData.fundingReadinessRate}%</div>
+                  <div style={{ height: "80px", marginTop: "10px" }}>
+                    <Bar
+                      options={vBarOpts((v) => `${v}%`, "Year")}
+                      data={{
+                        labels: ["2022", "2023", "2024", "2025"],
+                        datasets: [{ label: "Funding Readiness", data: placeholderData.fundingReadinessHistory, backgroundColor: MIXED_COLORS[2] }],
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+            </Card>
 
-      <Card title="SME Pipeline Progress">
-        <div style={{ display: "flex", gap: "6px", marginBottom: "10px", flexShrink: 0 }}>
-          <Pill label="Stage Dist." active={pipelineView === "stage"} onClick={() => setPipelineView("stage")} />
-          <Pill label="Funnel" active={pipelineView === "funnel"} onClick={() => setPipelineView("funnel")} />
-        </div>
-        {stageEntries.length === 0 ? (
-          <EmptyState />
-        ) : pipelineView === "stage" ? (
+            <Card title="Average Vetting Time (Days)">
+              <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
+                <div style={{ fontSize: "64px", fontWeight: "800", color: B.black }}>
+                  {placeholderData.vetting.avg}
+                  <span style={{ fontSize: "24px" }}> days</span>
+                </div>
+                <div style={{ display: "flex", gap: "24px", marginTop: "10px" }}>
+                  {[
+                    ["Target", placeholderData.vetting.target + "d", MIXED_COLORS[2]],
+                    ["Variance", (placeholderData.vetting.avg - placeholderData.vetting.target > 0 ? "+" : "") + Math.round(placeholderData.vetting.avg - placeholderData.vetting.target) + "d", 
+                      placeholderData.vetting.avg > placeholderData.vetting.target ? "#c62828" : MIXED_COLORS[2]],
+                  ].map(([l, v, col]) => (
+                    <div key={l} style={{ textAlign: "center" }}>
+                      <div style={{ fontSize: "12px", color: B.warmGrey, marginBottom: "3px" }}>{l}</div>
+                      <div style={{ fontSize: "18px", fontWeight: "700", color: col }}>{v}</div>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ height: "120px", width: "100%", marginTop: "15px" }}>
+                  <Bar
+                    options={vBarOpts((v) => `${v}d`, "Year")}
+                    data={{
+                      labels: ["2022", "2023", "2024", "2025"],
+                      datasets: [{ label: "Vetting Time", data: placeholderData.vetting.history, backgroundColor: MIXED_COLORS[4] }],
+                    }}
+                  />
+                </div>
+              </div>
+            </Card>
+          </div>
+        ) : (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(380px, 1fr))", gap: "20px" }}>
+            <Card title="Average Match Strength (%)">
+              <ScoreRangeView
+                min={placeholderData.match.min}
+                pipelineAvg={placeholderData.match.avg}
+                max={placeholderData.match.max}
+                cohortAvg={placeholderData.match.cohortAvg}
+                target={75}
+              />
+            </Card>
+            <Card title="Average BIG Score (%)">
+              <ScoreRangeView
+                min={placeholderData.bigScore.min}
+                pipelineAvg={placeholderData.bigScore.avg}
+                max={placeholderData.bigScore.max}
+                cohortAvg={placeholderData.bigScore.cohortAvg}
+                target={70}
+              />
+            </Card>
+          </div>
+        )}
+      </div>
+
+      {/* Second row - Avg Funding Required, Approval Rate, SME Pipeline Progress (3 cards) */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(380px, 1fr))", gap: "20px" }}>
+        <Card title="Avg. Funding Required by Program Type (ZAR M)">
+          <div style={{ height: "320px" }}>
+            <Bar
+              options={vBarOpts((v) => `R${v}M`, "Program Type")}
+              data={{
+                labels: fundingData.map(([k]) => k),
+                datasets: [{ label: "Avg Funding Required", data: fundingData.map(([, v]) => v), backgroundColor: MIXED_COLORS[0] }],
+              }}
+            />
+          </div>
+        </Card>
+
+        <Card title="Approval Rate by Program Type (%)">
+          <div style={{ height: "320px" }}>
+            <Bar
+              options={vBarOpts((v) => `${v}%`, "Program Type")}
+              data={{
+                labels: approvalData.map(([k]) => k),
+                datasets: [{ label: "Approval Rate", data: approvalData.map(([, v]) => v), backgroundColor: MIXED_COLORS[2] }],
+              }}
+            />
+          </div>
+        </Card>
+
+        <Card title="SME Pipeline Progress">
           <div style={{ flex: 1, overflowY: hbarLabels.length > 7 ? "auto" : "visible" }}>
             <div style={{ height: `${innerH}px` }}>
               <Bar
@@ -742,48 +747,21 @@ const CohortSelectionSection = () => {
               />
             </div>
           </div>
-        ) : (
-          <div style={{ height: "280px" }}>
-            <Doughnut
-              options={doughnutOpts}
-              data={{
-                labels: stageEntries.map(([k]) => k),
-                datasets: [
-                  {
-                    data: stageEntries.map(([, v]) => v),
-                    backgroundColor: MIXED_COLORS.slice(0, stageEntries.length),
-                    borderWidth: 2,
-                    borderColor: "#fff",
-                  },
-                ],
-              }}
-            />
+          <div style={{ display: "flex", justifyContent: "center", gap: "5px", marginTop: "10px", flexWrap: "wrap", flexShrink: 0 }}>
+            {stageEntries.map(([s, v], i) => (
+              <span key={s} style={{ fontSize: "10px", color: B.darkGrey, padding: "3px 7px", borderRadius: "10px" }}>
+                {s}: <strong>{v}</strong>
+              </span>
+            ))}
           </div>
-        )}
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "center",
-            gap: "5px",
-            marginTop: "10px",
-            flexWrap: "wrap",
-            flexShrink: 0,
-          }}
-        >
-          {stageEntries.map(([s, v], i) => (
-            <span key={s} style={{ fontSize: "10px", color: B.darkGrey, padding: "3px 7px", borderRadius: "10px" }}>
-              {s}: <strong>{v}</strong>
-            </span>
-          ))}
-        </div>
-      </Card>
+        </Card>
+      </div>
     </div>
   );
 };
 
 // 4. Learnings - Support Areas & Capability Gaps
 const LearningsSection = () => {
-  // Placeholder data
   const placeholderLearnings = {
     support: {
       "Strategic Guidance": 28,
@@ -809,7 +787,6 @@ const LearningsSection = () => {
     },
   };
 
-  // Combine support and services
   const combined = {};
   Object.entries(placeholderLearnings.support).forEach(([k, v]) => {
     combined[k] = (combined[k] || 0) + v;
@@ -887,7 +864,7 @@ const LearningsSection = () => {
 
 // Main InclusionImpact Component
 const InclusionImpact = () => {
-  const [activeTab, setActiveTab] = useState("beneficiaries");
+  const [activeTab, setActiveTab] = useState("demographics");
 
   return (
     <div>
@@ -900,37 +877,18 @@ const InclusionImpact = () => {
           paddingBottom: "12px",
         }}
       >
-        <SubTab label="Beneficiaries & Support" active={activeTab === "beneficiaries"} onClick={() => setActiveTab("beneficiaries")} />
-        <SubTab label="Jobs & Outcomes" active={activeTab === "outcomes"} onClick={() => setActiveTab("outcomes")} />
+        <SubTab label="Demographics" active={activeTab === "demographics"} onClick={() => setActiveTab("demographics")} />
+        <SubTab label="Outcomes" active={activeTab === "outcomes"} onClick={() => setActiveTab("outcomes")} />
         <SubTab label="Cohort Selection" active={activeTab === "cohort"} onClick={() => setActiveTab("cohort")} />
         <SubTab label="Learnings" active={activeTab === "learnings"} onClick={() => setActiveTab("learnings")} />
       </div>
 
-      {activeTab === "beneficiaries" && <InclusionImpactSection />}
+      {activeTab === "demographics" && <DemographicsSection />}
       {activeTab === "outcomes" && <OutcomesSection />}
       {activeTab === "cohort" && <CohortSelectionSection />}
       {activeTab === "learnings" && <LearningsSection />}
     </div>
   );
 };
-
-// Reusable SubTab component
-const SubTab = ({ label, active, onClick }) => (
-  <button
-    onClick={onClick}
-    style={{
-      padding: "6px 16px",
-      borderRadius: "20px",
-      cursor: "pointer",
-      fontSize: "12px",
-      border: `1.5px solid ${active ? B.brownMedium : B.lightGrey}`,
-      fontWeight: active ? 700 : 500,
-      background: active ? B.brownMedium : "#fff",
-      color: active ? "#fff" : B.darkGrey,
-    }}
-  >
-    {label}
-  </button>
-);
 
 export default InclusionImpact;
