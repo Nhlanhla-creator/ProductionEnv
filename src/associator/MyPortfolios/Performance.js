@@ -223,46 +223,288 @@ const placeholderMetrics = {
   bigScore: { avg: 62, min: 38, max: 88 },
 };
 
-const placeholderRankings = {
-  topBig: [
-    { name: "TechSolve", sector: "Fintech", stage: "Growth", bigScore: 94, fundability: 88 },
-    { name: "GreenEnergy", sector: "Clean Energy", stage: "Expansion", bigScore: 89, fundability: 85 },
-    { name: "HealthPlus", sector: "Healthtech", stage: "Growth", bigScore: 86, fundability: 82 },
+// NEW: Funder-focused placeholder data
+const placeholderFundersData = {
+  topFunders: [
+    { name: "ABSA Bank", sector: "Banking", totalInvestment: 42500000, dealsCount: 12, avgTicket: 3541666 },
+    { name: "FNB", sector: "Banking", totalInvestment: 38500000, dealsCount: 10, avgTicket: 3850000 },
+    { name: "Nedbank", sector: "Banking", totalInvestment: 31200000, dealsCount: 8, avgTicket: 3900000 },
+    { name: "Development Bank of SA", sector: "Development Finance", totalInvestment: 28400000, dealsCount: 7, avgTicket: 4057142 },
+    { name: "Knife Capital", sector: "Venture Capital", totalInvestment: 18900000, dealsCount: 5, avgTicket: 3780000 },
+    { name: "Edge Growth", sector: "Impact Investor", totalInvestment: 15600000, dealsCount: 6, avgTicket: 2600000 },
   ],
-  topMatch: [
-    { name: "TechSolve", sector: "Fintech", stage: "Growth", matchPct: 96 },
-    { name: "FinWise", sector: "Fintech", stage: "Seed", matchPct: 92 },
-    { name: "EduTech", sector: "Edtech", stage: "Growth", matchPct: 88 },
-  ],
-  bottomBig: [
-    { name: "AgriGrow", sector: "Agritech", stage: "Startup", bigScore: 34 },
-    { name: "RetailX", sector: "Retail", stage: "Seed", bigScore: 38 },
-    { name: "LogiSync", sector: "Logistics", stage: "Startup", bigScore: 42 },
-  ],
-  bottomMatch: [
-    { name: "RetailX", sector: "Retail", stage: "Seed", matchPct: 28 },
-    { name: "AgriGrow", sector: "Agritech", stage: "Startup", matchPct: 32 },
-    { name: "LogiSync", sector: "Logistics", stage: "Startup", matchPct: 38 },
-  ],
-  lowCompliance: [
-    { name: "RetailX", sector: "Retail", stage: "Seed", compliance: 45 },
-    { name: "AgriGrow", sector: "Agritech", stage: "Startup", compliance: 52 },
-    { name: "QuickServe", sector: "Services", stage: "Startup", compliance: 58 },
-  ],
-  lowFundability: [
-    { name: "AgriGrow", sector: "Agritech", stage: "Startup", fundability: 28 },
-    { name: "RetailX", sector: "Retail", stage: "Seed", fundability: 32 },
-    { name: "LogiSync", sector: "Logistics", stage: "Startup", fundability: 38 },
-  ],
-  revenuePerSME: [
-    { name: "TechSolve", revenue: 18500000, sector: "Fintech", profitability: "Profitable" },
-    { name: "GreenEnergy", revenue: 12200000, sector: "Clean Energy", profitability: "Profitable" },
-    { name: "HealthPlus", revenue: 8900000, sector: "Healthtech", profitability: "Breakeven" },
+  topFundersBySector: {
+    "Banking": [
+      { name: "ABSA Bank", totalInvestment: 42500000, dealsCount: 12 },
+      { name: "FNB", totalInvestment: 38500000, dealsCount: 10 },
+      { name: "Nedbank", totalInvestment: 31200000, dealsCount: 8 },
+      { name: "Standard Bank", totalInvestment: 28400000, dealsCount: 7 },
+      { name: "Capitec", totalInvestment: 12500000, dealsCount: 4 },
+    ],
+    "Venture Capital": [
+      { name: "Knife Capital", totalInvestment: 18900000, dealsCount: 5 },
+      { name: "CRE Venture Capital", totalInvestment: 14200000, dealsCount: 4 },
+      { name: "HAVAÍC", totalInvestment: 12300000, dealsCount: 4 },
+      { name: "4Di Capital", totalInvestment: 9800000, dealsCount: 3 },
+      { name: "Savant", totalInvestment: 7600000, dealsCount: 3 },
+    ],
+    "Development Finance": [
+      { name: "Development Bank of SA", totalInvestment: 28400000, dealsCount: 7 },
+      { name: "IDC", totalInvestment: 26700000, dealsCount: 6 },
+      { name: "National Empowerment Fund", totalInvestment: 18900000, dealsCount: 5 },
+      { name: "Sefa", totalInvestment: 14500000, dealsCount: 8 },
+      { name: "Jobs Fund", totalInvestment: 11200000, dealsCount: 4 },
+    ],
+    "Impact Investor": [
+      { name: "Edge Growth", totalInvestment: 15600000, dealsCount: 6 },
+      { name: "Yellowwoods", totalInvestment: 13400000, dealsCount: 4 },
+      { name: "Rising Tide", totalInvestment: 8900000, dealsCount: 3 },
+      { name: "AHL Venture Partners", totalInvestment: 7200000, dealsCount: 2 },
+    ],
+  },
+  bottomFunders: [
+    { name: "Small & Medium Enterprise Fund", sector: "SME Fund", totalInvestment: 1200000, dealsCount: 3, avgTicket: 400000 },
+    { name: "Township Entrepreneurs Fund", sector: "Impact", totalInvestment: 980000, dealsCount: 4, avgTicket: 245000 },
+    { name: "Women in Business Fund", sector: "Gender Lens", totalInvestment: 750000, dealsCount: 2, avgTicket: 375000 },
+    { name: "Rural Development Fund", sector: "Development", totalInvestment: 520000, dealsCount: 2, avgTicket: 260000 },
+    { name: "Youth Enterprise Fund", sector: "Youth Focus", totalInvestment: 380000, dealsCount: 3, avgTicket: 126666 },
   ],
 };
 
-// Performance Sub-components
+// Funder Ranking Components
 
+const TopFundersByInvestment = () => {
+  const rows = placeholderFundersData.topFunders;
+  return (
+    <Card title="💰 Top Funders by Investment">
+      <RankedTable 
+        isTop 
+        rows={rows} 
+        metricLabel="Total Investment" 
+        unit="" 
+        fmt={(r) => "R" + (r.totalInvestment / 1_000_000).toFixed(1) + "M"} 
+      />
+      {rows.length > 0 && (
+        <InsightBox
+          text={`${rows[0]?.name} leads with R${(rows[0]?.totalInvestment / 1_000_000).toFixed(1)}M deployed across ${rows[0]?.dealsCount} deals. Top 3 funders represent ${((rows.slice(0,3).reduce((sum, f) => sum + f.totalInvestment, 0) / rows.reduce((sum, f) => sum + f.totalInvestment, 0)) * 100).toFixed(0)}% of total investment volume.`}
+        />
+      )}
+    </Card>
+  );
+};
+
+const TopFundersBySector = () => {
+  const [selectedSector, setSelectedSector] = useState("Banking");
+  const sectors = Object.keys(placeholderFundersData.topFundersBySector);
+  const currentSectorData = placeholderFundersData.topFundersBySector[selectedSector] || [];
+  
+  const rows = currentSectorData.map(f => ({
+    name: f.name,
+    sector: selectedSector,
+    stage: `${f.dealsCount} deals`,
+    value: f.totalInvestment
+  }));
+
+  return (
+    <Card title="🏆 Top Funders by Sector">
+      <div style={{ marginBottom: "16px", display: "flex", gap: "8px", flexWrap: "wrap" }}>
+        {sectors.map(sector => (
+          <Pill 
+            key={sector}
+            label={sector} 
+            active={selectedSector === sector} 
+            onClick={() => setSelectedSector(sector)} 
+          />
+        ))}
+      </div>
+      <RankedTable 
+        isTop 
+        rows={rows} 
+        metricLabel="Investment" 
+        unit="" 
+        fmt={(r) => "R" + (r.value / 1_000_000).toFixed(1) + "M"} 
+      />
+      {rows.length > 0 && (
+        <InsightBox
+          text={`In ${selectedSector}, ${rows[0]?.name} leads with R${(rows[0]?.value / 1_000_000).toFixed(1)}M. Consider deepening relationships with top performers in each sector.`}
+        />
+      )}
+    </Card>
+  );
+};
+
+const TopFundersByDealCount = () => {
+  const rows = [...placeholderFundersData.topFunders]
+    .sort((a, b) => b.dealsCount - a.dealsCount)
+    .slice(0, 5);
+  
+  const enhancedRows = rows.map(f => ({
+    name: f.name,
+    sector: f.sector,
+    stage: `R${(f.avgTicket / 1_000_000).toFixed(1)}M avg`,
+    value: f.dealsCount
+  }));
+
+  return (
+    <Card title="📊 Most Active Funders (By Deal Count)">
+      <RankedTable 
+        isTop 
+        rows={enhancedRows} 
+        metricLabel="# Deals" 
+        unit="" 
+        fmt={(r) => r.value} 
+      />
+      {rows.length > 0 && (
+        <InsightBox
+          text={`${rows[0]?.name} has completed ${rows[0]?.dealsCount} deals with average ticket of R${(rows[0]?.avgTicket / 1_000_000).toFixed(1)}M. These funders are most engaged with the SME ecosystem.`}
+        />
+      )}
+    </Card>
+  );
+};
+
+const TopFundersByAvgTicket = () => {
+  const rows = [...placeholderFundersData.topFunders]
+    .sort((a, b) => b.avgTicket - a.avgTicket)
+    .slice(0, 5);
+  
+  const enhancedRows = rows.map(f => ({
+    name: f.name,
+    sector: f.sector,
+    stage: `${f.dealsCount} deals total`,
+    value: f.avgTicket
+  }));
+
+  return (
+    <Card title="💎 Highest Average Investment per Deal">
+      <RankedTable 
+        isTop 
+        rows={enhancedRows} 
+        metricLabel="Avg Ticket" 
+        unit="" 
+        fmt={(r) => "R" + (r.value / 1_000_000).toFixed(2) + "M"} 
+      />
+      {rows.length > 0 && (
+        <InsightBox
+          text={`${rows[0]?.name} provides the largest average deal size at R${(rows[0]?.avgTicket / 1_000_000).toFixed(2)}M. Ideal partners for scaling mature SMEs.`}
+        />
+      )}
+    </Card>
+  );
+};
+
+const BottomFundersByInvestment = () => {
+  const rows = placeholderFundersData.bottomFunders;
+  return (
+    <Card title="📉 Bottom Funders by Investment">
+      <RankedTable 
+        isTop={false} 
+        rows={rows} 
+        metricLabel="Total Investment" 
+        unit="" 
+        fmt={(r) => "R" + (r.totalInvestment / 1_000_000).toFixed(2) + "M"} 
+      />
+      {rows.length > 0 && (
+        <InsightBox
+          text={`Bottom-tier funders have deployed < R2M each. These funds may need capacity building or could be better suited for smaller, earlier-stage SMEs.`}
+        />
+      )}
+    </Card>
+  );
+};
+
+const BottomFundersByDealVolume = () => {
+  const rows = [...placeholderFundersData.bottomFunders]
+    .sort((a, b) => a.dealsCount - b.dealsCount)
+    .slice(0, 5);
+  
+  const enhancedRows = rows.map(f => ({
+    name: f.name,
+    sector: f.sector,
+    stage: `R${(f.totalInvestment / 1_000_000).toFixed(1)}M total`,
+    value: f.dealsCount
+  }));
+
+  return (
+    <Card title="📉 Least Active Funders">
+      <RankedTable 
+        isTop={false} 
+        rows={enhancedRows} 
+        metricLabel="# Deals" 
+        unit="" 
+        fmt={(r) => r.value} 
+      />
+      {rows.length > 0 && (
+        <InsightBox
+          text={`These funders have completed the fewest deals. Consider engagement strategies to increase their participation in the SME funding ecosystem.`}
+        />
+      )}
+    </Card>
+  );
+};
+
+const BottomFundersByAvgTicket = () => {
+  const rows = [...placeholderFundersData.bottomFunders]
+    .sort((a, b) => a.avgTicket - b.avgTicket)
+    .slice(0, 5);
+  
+  const enhancedRows = rows.map(f => ({
+    name: f.name,
+    sector: f.sector,
+    stage: `${f.dealsCount} deals`,
+    value: f.avgTicket
+  }));
+
+  return (
+    <Card title="📉 Lowest Average Investment">
+      <RankedTable 
+        isTop={false} 
+        rows={enhancedRows} 
+        metricLabel="Avg Ticket" 
+        unit="" 
+        fmt={(r) => "R" + (r.value / 1_000_000).toFixed(2) + "M"} 
+      />
+      {rows.length > 0 && (
+        <InsightBox
+          text={`Low average ticket sizes (< R500K) suggest these funders focus on micro-enterprises. Useful for early-stage pipeline but may not suit scaling SMEs.`}
+        />
+      )}
+    </Card>
+  );
+};
+
+// Updated TopBottomSection focused on Funders
+const TopBottomSection = () => {
+  const [sub, setSub] = useState("top-3");
+
+  return (
+    <div>
+      <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "20px" }}>
+        <Pill label="🏆 Top Funders" active={sub === "top-3"} onClick={() => setSub("top-3")} />
+        <Pill label="⚠️ Bottom Funders" active={sub === "bottom-3"} onClick={() => setSub("bottom-3")} />
+      </div>
+
+      {sub === "top-3" && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(380px, 1fr))", gap: "20px" }}>
+          <TopFundersByInvestment />
+          <TopFundersBySector />
+          <TopFundersByDealCount />
+          <TopFundersByAvgTicket />
+        </div>
+      )}
+
+      {sub === "bottom-3" && (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(380px, 1fr))", gap: "20px" }}>
+          <BottomFundersByInvestment />
+          <BottomFundersByDealVolume />
+          <BottomFundersByAvgTicket />
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Performance Sub-components (unchanged from original)
 const RevenuePerSME = () => {
   const perSME = [...placeholderMetrics.revenue.perSME].sort((a, b) => b.revenue - a.revenue);
   const innerH = Math.max(280, perSME.length * 36);
@@ -415,146 +657,6 @@ const PerformanceSection = () => {
       <RevenuePerSME />
       <ProfitabilityStatus />
       <ClientsPerSME />
-    </div>
-  );
-};
-
-// Top/Bottom Sub-components
-
-const HighestBIGScore = () => {
-  const rows = placeholderRankings.topBig;
-  return (
-    <Card title="Highest BIG Score">
-      <RankedTable isTop rows={rows} metricLabel="BIG Score" unit="%" fmt={(r) => r.bigScore} />
-      {rows.length > 0 && (
-        <InsightBox
-          text={`Top BIG scorer is ${rows[0]?.name} at ${rows[0]?.bigScore}%. Highest-scoring SMEs are strongest candidates for Deal Close.`}
-        />
-      )}
-    </Card>
-  );
-};
-
-const HighestMatchScore = () => {
-  const rows = placeholderRankings.topMatch;
-  return (
-    <Card title="Highest Match %">
-      <RankedTable isTop rows={rows} metricLabel="Match %" unit="%" fmt={(r) => r.matchPct} />
-      {rows.length > 0 && (
-        <InsightBox
-          text={`${rows[0]?.name} is the strongest programme fit at ${rows[0]?.matchPct}% match. Prioritise these SMEs for accelerated support.`}
-        />
-      )}
-    </Card>
-  );
-};
-
-const HighestFundability = () => {
-  const rows = placeholderRankings.topBig.filter((r) => r.fundability > 0);
-  return (
-    <Card title="Highest Fundability Score">
-      <RankedTable isTop rows={rows} metricLabel="Fundability" unit="%" fmt={(r) => r.fundability} />
-      {rows.length > 0 && (
-        <InsightBox text="High fundability SMEs have the strongest case for external capital. Consider facilitating investor introductions." />
-      )}
-    </Card>
-  );
-};
-
-const HighestRevenue = () => {
-  const perSME = placeholderRankings.revenuePerSME;
-  const rows = perSME.map((s, idx) => ({ name: s.name, sector: s.sector, stage: s.profitability, value: idx }));
-  return (
-    <Card title="Highest Revenue SMEs">
-      <RankedTable
-        isTop
-        rows={rows}
-        metricLabel="Annual Revenue"
-        unit=""
-        fmt={(_, i) => (perSME[i] ? "R" + (perSME[i].revenue / 1000000).toFixed(1) + "M" : "–")}
-      />
-      {rows.length > 0 && (
-        <InsightBox text="Revenue leaders in the portfolio are likely the most investable. Use their traction as case studies for other SMEs." />
-      )}
-    </Card>
-  );
-};
-
-const LowestBIGScore = () => {
-  const rows = placeholderRankings.bottomBig;
-  return (
-    <Card title="Lowest BIG Score">
-      <RankedTable isTop={false} rows={rows} metricLabel="BIG Score" unit="%" fmt={(r) => r.bigScore} />
-      {rows.length > 0 && (
-        <InsightBox text="SMEs with the lowest BIG scores need targeted capability-building before the next assessment cycle." />
-      )}
-    </Card>
-  );
-};
-
-const LowestMatchScore = () => {
-  const rows = placeholderRankings.bottomMatch;
-  return (
-    <Card title="Lowest Match %">
-      <RankedTable isTop={false} rows={rows} metricLabel="Match %" unit="%" fmt={(r) => r.matchPct} />
-      {rows.length > 0 && (
-        <InsightBox text="Low-match SMEs may need re-evaluation of programme fit. Consider tailored support tracks or alternative referrals." />
-      )}
-    </Card>
-  );
-};
-
-const LowestComplianceScore = () => {
-  const rows = placeholderRankings.lowCompliance;
-  return (
-    <Card title="Lowest Compliance Score">
-      <RankedTable isTop={false} rows={rows} metricLabel="Compliance" unit="%" fmt={(r) => r.compliance} />
-      {rows.length > 0 && (
-        <InsightBox text="Non-compliant SMEs pose reputational risk. A compliance clinic covering tax, CIPC and labour law is recommended." />
-      )}
-    </Card>
-  );
-};
-
-const LowestFundability = () => {
-  const rows = placeholderRankings.lowFundability;
-  return (
-    <Card title="Lowest Fundability Score">
-      <RankedTable isTop={false} rows={rows} metricLabel="Fundability" unit="%" fmt={(r) => r.fundability} />
-      {rows.length > 0 && (
-        <InsightBox text="These SMEs need urgent financial structuring support before being introduced to investors or funders." />
-      )}
-    </Card>
-  );
-};
-
-const TopBottomSection = () => {
-  const [sub, setSub] = useState("top-3");
-
-  return (
-    <div>
-      <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "20px" }}>
-        <Pill label="Top 3" active={sub === "top-3"} onClick={() => setSub("top-3")} />
-        <Pill label="Bottom 3" active={sub === "bottom-3"} onClick={() => setSub("bottom-3")} />
-      </div>
-
-      {sub === "top-3" && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(380px, 1fr))", gap: "20px" }}>
-          <HighestBIGScore />
-          <HighestMatchScore />
-          <HighestFundability />
-          <HighestRevenue />
-        </div>
-      )}
-
-      {sub === "bottom-3" && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(380px, 1fr))", gap: "20px" }}>
-          <LowestBIGScore />
-          <LowestMatchScore />
-          <LowestComplianceScore />
-          <LowestFundability />
-        </div>
-      )}
     </div>
   );
 };

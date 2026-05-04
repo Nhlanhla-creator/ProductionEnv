@@ -128,51 +128,6 @@ const doughnutOpts = {
   },
 };
 
-const stackedBarOpts = (xTitle) => ({
-  responsive: true,
-  maintainAspectRatio: false,
-  animation: false,
-  plugins: {
-    legend: {
-      position: "bottom",
-      labels: { color: B.darkGrey, font: { size: 8 }, boxWidth: 8 },
-    },
-  },
-  scales: {
-    x: {
-      stacked: true,
-      title: { display: true, text: xTitle, color: B.darkGrey, font: { size: 9 } },
-      ticks: { color: B.darkGrey, font: { size: 8 } },
-    },
-    y: {
-      stacked: true,
-      beginAtZero: true,
-      grid: { color: B.lightGrey },
-      ticks: { color: B.darkGrey, callback: (v) => v.toLocaleString() },
-    },
-  },
-});
-
-const vBarOpts = (yCb) => ({
-  responsive: true,
-  maintainAspectRatio: false,
-  animation: false,
-  plugins: { legend: { display: false } },
-  scales: {
-    x: {
-      title: { display: true, text: "Range", color: B.darkGrey },
-      grid: { display: false },
-      ticks: { color: B.darkGrey, font: { size: 8 } },
-    },
-    y: {
-      title: { display: true, text: "Number of Deals", color: B.darkGrey },
-      beginAtZero: true,
-      grid: { color: B.lightGrey },
-      ticks: { color: B.darkGrey, callback: yCb || ((v) => v) },
-    },
-  },
-});
-
 const hBarOpts = () => ({
   responsive: true,
   maintainAspectRatio: false,
@@ -195,77 +150,22 @@ const hBarOpts = () => ({
 // Capital Deployment Component
 const CapitalDeployment = () => {
   const { marketPulse } = usePortfolio();
-  const capital = marketPulse?.capitalFlow?.capitalDeployment?.totalCapital || {
-    current: 410,
-    yoyGrowth: 6.5,
-    history: [280, 310, 385, 410],
-  };
-  const deals = marketPulse?.capitalFlow?.capitalDeployment?.numberOfDeals || {
-    current: 62,
-    yoyGrowth: 10.7,
-    history: [42, 48, 56, 62],
-  };
-
-  return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(380px, 1fr))", gap: "20px" }}>
-      <Card title="Total Capital Deployed (ZAR)">
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", gap: "12px" }}>
-          <div style={{ fontSize: "44px", fontWeight: "800", color: B.black }}>R {capital.current}M</div>
-          <div style={{ fontSize: "12px", color: B.mediumGrey }}>
-            YoY Growth <TrendIcon growth={capital.yoyGrowth} />
-          </div>
-          <div style={{ width: "100%", height: "220px" }}>
-            <Bar
-              options={vBarOpts((v) => `R${v}M`)}
-              data={{
-                labels: ["2022", "2023", "2024", "2025"],
-                datasets: [{ label: "Capital Deployed", data: capital.history, backgroundColor: MIXED_COLORS[0] }],
-              }}
-            />
-          </div>
-        </div>
-      </Card>
-
-      <Card title="Number of Deals">
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", gap: "12px" }}>
-          <div style={{ fontSize: "44px", fontWeight: "800", color: B.black }}>{deals.current}</div>
-          <div style={{ fontSize: "12px", color: B.mediumGrey }}>
-            YoY Growth <TrendIcon growth={deals.yoyGrowth} />
-          </div>
-          <div style={{ width: "100%", height: "220px" }}>
-            <Bar
-              options={vBarOpts()}
-              data={{
-                labels: ["2022", "2023", "2024", "2025"],
-                datasets: [{ label: "Number of Deals", data: deals.history, backgroundColor: MIXED_COLORS[2] }],
-              }}
-            />
-          </div>
-        </div>
-      </Card>
-    </div>
-  );
-};
-
-// Fundraising Component
-const Fundraising = () => {
-  const { marketPulse } = usePortfolio();
   const avgFundSize = marketPulse?.capitalFlow?.fundraising?.avgFundSize || { current: 45, yoyGrowth: 12.5 };
-  const fundStatus = marketPulse?.capitalFlow?.fundraising?.fundStatus || {
-    open: { count: 18, value: 420 },
-    closed: { count: 32, value: 580 },
-  };
+  
   const fundsVsDeployed = marketPulse?.capitalFlow?.fundraising?.fundsVsDeployed || {
     years: ["2022", "2023", "2024", "2025"],
     raised: [240, 280, 320, 360],
+    requested: [300, 350, 400, 450],
     deployed: [280, 310, 385, 410],
   };
+  
   const sources = marketPulse?.capitalFlow?.fundraising?.sources || {
     "Entities/Individuals": 35,
     Corporates: 28,
     DFIs: 22,
     "Fund of Funds": 15,
   };
+  
   const purposes = marketPulse?.capitalFlow?.fundraising?.purposes || {
     "Own ring-fenced": 40,
     "Own balance sheet": 25,
@@ -273,85 +173,88 @@ const Fundraising = () => {
   };
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(380px, 1fr))", gap: "20px" }}>
-      <Card title="Average Fund Size (ZAR M)">
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%" }}>
-          <div style={{ fontSize: "44px", fontWeight: "800", color: B.black }}>R {avgFundSize.current}M</div>
-          <div style={{ fontSize: "12px", color: B.mediumGrey, marginTop: "8px" }}>
-            YoY Growth <TrendIcon growth={avgFundSize.yoyGrowth} />
+    <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+      {/* First row: Average Fund Size + Funds Raised vs Requested vs Deployed (stretched) */}
+      <div style={{ display: "grid", gridTemplateColumns: "minmax(300px, 1fr) minmax(500px, 2fr)", gap: "20px" }}>
+        <Card title="Average Fund Size (ZAR M)">
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%" }}>
+            <div style={{ fontSize: "44px", fontWeight: "800", color: B.black }}>R {avgFundSize.current}M</div>
+            <div style={{ fontSize: "12px", color: B.mediumGrey, marginTop: "8px" }}>
+              YoY Growth <TrendIcon growth={avgFundSize.yoyGrowth} />
+            </div>
           </div>
-        </div>
-      </Card>
+        </Card>
 
-      <Card title="Fund Status">
-        <div style={{ display: "flex", flexDirection: "column", gap: "16px", height: "100%" }}>
-          <div style={{ display: "flex", justifyContent: "space-around", textAlign: "center" }}>
-            <div>
-              <div style={{ fontSize: "28px", fontWeight: 700, color: B.black }}>{fundStatus.open.count}</div>
-              <div style={{ fontSize: "11px", color: B.warmGrey }}>Open Funds</div>
-              <div style={{ fontSize: "13px", fontWeight: 600 }}>R {fundStatus.open.value}M</div>
-            </div>
-            <div>
-              <div style={{ fontSize: "28px", fontWeight: 700, color: B.black }}>{fundStatus.closed.count}</div>
-              <div style={{ fontSize: "11px", color: B.warmGrey }}>Closed Funds</div>
-              <div style={{ fontSize: "13px", fontWeight: 600 }}>R {fundStatus.closed.value}M</div>
-            </div>
-          </div>
-          <div style={{ height: "200px" }}>
-            <Doughnut
-              options={doughnutOpts}
+        <Card title="Funds Raised vs Funds Requested vs Capital Deployed">
+          <div style={{ height: "350px" }}>
+            <Bar
+              options={{
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: false,
+                plugins: {
+                  legend: {
+                    position: "bottom",
+                    labels: { color: B.darkGrey, font: { size: 10 }, boxWidth: 10 },
+                  },
+                },
+                scales: {
+                  x: { 
+                    title: { display: true, text: "Year", color: B.darkGrey, font: { size: 11 } },
+                    ticks: { font: { size: 10 } }
+                  },
+                  y: { 
+                    beginAtZero: true, 
+                    grid: { color: B.lightGrey }, 
+                    ticks: { callback: (v) => `R${v}M`, font: { size: 10 } },
+                    title: { display: true, text: "Amount (ZAR M)", color: B.darkGrey, font: { size: 11 } }
+                  },
+                },
+              }}
               data={{
-                labels: ["Open (ZAR M)", "Closed (ZAR M)"],
-                datasets: [{ data: [fundStatus.open.value, fundStatus.closed.value], backgroundColor: [MIXED_COLORS[2], MIXED_COLORS[5]] }],
+                labels: fundsVsDeployed.years,
+                datasets: [
+                  { label: "Funds Raised", data: fundsVsDeployed.raised, backgroundColor: MIXED_COLORS[2] },
+                  { label: "Funds Requested", data: fundsVsDeployed.requested, backgroundColor: MIXED_COLORS[4] },
+                  { label: "Capital Deployed", data: fundsVsDeployed.deployed, backgroundColor: MIXED_COLORS[6] },
+                ],
               }}
             />
           </div>
-        </div>
-      </Card>
+        </Card>
+      </div>
 
-      <Card title="Funds Raised vs Capital Deployed">
-        <div style={{ height: "300px" }}>
-          <Bar
-            options={stackedBarOpts("Year")}
-            data={{
-              labels: fundsVsDeployed.years,
-              datasets: [
-                { label: "Funds Raised", data: fundsVsDeployed.raised, backgroundColor: MIXED_COLORS[2] },
-                { label: "Capital Deployed", data: fundsVsDeployed.deployed, backgroundColor: MIXED_COLORS[4] },
-              ],
-            }}
-          />
-        </div>
-      </Card>
+      {/* Second row: Sources of Funds Raised and Purpose of Funds Raised side by side */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(380px, 1fr))", gap: "20px" }}>
+        <Card title="Sources of Funds Raised">
+          <div style={{ height: "300px" }}>
+            <Doughnut
+              options={doughnutOpts}
+              data={{
+                labels: Object.keys(sources),
+                datasets: [{ data: Object.values(sources), backgroundColor: MIXED_COLORS }],
+              }}
+            />
+          </div>
+        </Card>
 
-      <Card title="Sources of Funds Raised">
-        <div style={{ height: "300px" }}>
-          <Doughnut
-            options={doughnutOpts}
-            data={{
-              labels: Object.keys(sources),
-              datasets: [{ data: Object.values(sources), backgroundColor: MIXED_COLORS }],
-            }}
-          />
-        </div>
-      </Card>
-
-      <Card title="Purpose of Funds Raised">
-        <div style={{ height: "300px" }}>
-          <Doughnut
-            options={doughnutOpts}
-            data={{
-              labels: Object.keys(purposes),
-              datasets: [{ data: Object.values(purposes), backgroundColor: MIXED_COLORS.slice(3) }],
-            }}
-          />
-        </div>
-      </Card>
+        <Card title="Purpose of Funds Raised">
+          <div style={{ height: "300px" }}>
+            <Doughnut
+              options={doughnutOpts}
+              data={{
+                labels: Object.keys(purposes),
+                datasets: [{ data: Object.values(purposes), backgroundColor: MIXED_COLORS.slice(3) }],
+              }}
+            />
+          </div>
+        </Card>
+      </div>
     </div>
   );
 };
 
-// Market Structure Component
+// Market Structure Component (removed Funder Demographics tab)
 const MarketStructure = () => {
   const { marketPulse } = usePortfolio();
   const [viewType, setViewType] = useState("zar");
@@ -448,11 +351,6 @@ const MarketStructure = () => {
     level4: 20,
     nonCompliant: 26,
   };
-  const demographics = marketPulse?.marketStructure?.whoProvidesCapital?.demographics || {
-    femaleCEOs: 22,
-    femaleFounders: { "<10%": 40, "10-35%": 35, "35-50%": 15, ">50%": 10 },
-    hdiFounders: 48,
-  };
   const fundManagerLoc = marketPulse?.marketStructure?.whoProvidesCapital?.fundManager?.managerLocation || {
     Johannesburg: 45,
     CapeTown: 28,
@@ -497,7 +395,6 @@ const MarketStructure = () => {
       >
         <SubTab label="Where Capital Goes" active={activeSubTab === "where-capital"} onClick={() => setActiveSubTab("where-capital")} />
         <SubTab label="Who Provides Capital" active={activeSubTab === "who-provides"} onClick={() => setActiveSubTab("who-provides")} />
-        <SubTab label="Funder Demographics" active={activeSubTab === "funder-demo"} onClick={() => setActiveSubTab("funder-demo")} />
         <SubTab label="Co-investor Analysis" active={activeSubTab === "co-investor"} onClick={() => setActiveSubTab("co-investor")} />
       </div>
 
@@ -522,7 +419,30 @@ const MarketStructure = () => {
                 </div>
                 <div style={{ height: "140px" }}>
                   <Bar
-                    options={stackedBarOpts("Year")}
+                    options={{
+                      responsive: true,
+                      maintainAspectRatio: false,
+                      animation: false,
+                      plugins: {
+                        legend: {
+                          position: "bottom",
+                          labels: { color: B.darkGrey, font: { size: 8 }, boxWidth: 8 },
+                        },
+                      },
+                      scales: {
+                        x: {
+                          stacked: true,
+                          title: { display: true, text: "Year", color: B.darkGrey, font: { size: 9 } },
+                          ticks: { color: B.darkGrey, font: { size: 8 } },
+                        },
+                        y: {
+                          stacked: true,
+                          beginAtZero: true,
+                          grid: { color: B.lightGrey },
+                          ticks: { color: B.darkGrey, callback: (v) => v.toLocaleString() },
+                        },
+                      },
+                    }}
                     data={{
                       labels: sectorTrends.years,
                       datasets: [
@@ -619,52 +539,6 @@ const MarketStructure = () => {
               </div>
             </Card>
           </div>
-        </div>
-      )}
-
-      {activeSubTab === "funder-demo" && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(380px, 1fr))", gap: "20px" }}>
-          <Card title="Female CEOs">
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", gap: "20px" }}>
-              <div style={{ position: "relative", width: "180px", height: "180px" }}>
-                <Doughnut
-                  options={doughnutOpts}
-                  data={{
-                    labels: ["Female CEOs", "Male CEOs"],
-                    datasets: [{ data: [demographics.femaleCEOs, 100 - demographics.femaleCEOs], backgroundColor: [MIXED_COLORS[2], MIXED_COLORS[5]] }],
-                  }}
-                />
-              </div>
-              <div style={{ fontSize: "28px", fontWeight: 800, color: B.black }}>{demographics.femaleCEOs}%</div>
-            </div>
-          </Card>
-
-          <Card title="Female Founders Distribution">
-            <div style={{ height: "280px" }}>
-              <Bar
-                options={hBarOpts()}
-                data={{
-                  labels: Object.keys(demographics.femaleFounders),
-                  datasets: [{ label: "% of Funds", data: Object.values(demographics.femaleFounders), backgroundColor: MIXED_COLORS[2] }],
-                }}
-              />
-            </div>
-          </Card>
-
-          <Card title="HDI Founders / CEOs">
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", gap: "20px" }}>
-              <div style={{ position: "relative", width: "180px", height: "180px" }}>
-                <Doughnut
-                  options={doughnutOpts}
-                  data={{
-                    labels: ["HDI", "Non-HDI"],
-                    datasets: [{ data: [demographics.hdiFounders, 100 - demographics.hdiFounders], backgroundColor: [MIXED_COLORS[0], MIXED_COLORS[4]] }],
-                  }}
-                />
-              </div>
-              <div style={{ fontSize: "28px", fontWeight: 800, color: B.black }}>{demographics.hdiFounders}%</div>
-            </div>
-          </Card>
         </div>
       )}
 
@@ -811,7 +685,25 @@ const DealStructure = () => {
           <Card title="Deal Size Distribution">
             <div style={{ height: "320px" }}>
               <Bar
-                options={vBarOpts((v) => `R${v}M`)}
+                options={{
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  animation: false,
+                  plugins: { legend: { display: false } },
+                  scales: {
+                    x: {
+                      title: { display: true, text: "Range", color: B.darkGrey },
+                      grid: { display: false },
+                      ticks: { color: B.darkGrey, font: { size: 8 } },
+                    },
+                    y: {
+                      title: { display: true, text: "Number of Deals", color: B.darkGrey },
+                      beginAtZero: true,
+                      grid: { color: B.lightGrey },
+                      ticks: { color: B.darkGrey, callback: (v) => `R${v}M` },
+                    },
+                  },
+                }}
                 data={{
                   labels: Object.keys(dealSizeDist),
                   datasets: [{ label: "Number of Deals", data: Object.values(dealSizeDist), backgroundColor: MIXED_COLORS[0] }],
@@ -827,7 +719,25 @@ const DealStructure = () => {
           <Card title="Equity Size Distribution">
             <div style={{ height: "320px" }}>
               <Bar
-                options={vBarOpts((v) => `R${v}M`)}
+                options={{
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  animation: false,
+                  plugins: { legend: { display: false } },
+                  scales: {
+                    x: {
+                      title: { display: true, text: "Range", color: B.darkGrey },
+                      grid: { display: false },
+                      ticks: { color: B.darkGrey, font: { size: 8 } },
+                    },
+                    y: {
+                      title: { display: true, text: "Number of Deals", color: B.darkGrey },
+                      beginAtZero: true,
+                      grid: { color: B.lightGrey },
+                      ticks: { color: B.darkGrey, callback: (v) => `R${v}M` },
+                    },
+                  },
+                }}
                 data={{
                   labels: Object.keys(equitySizeDist),
                   datasets: [{ label: "Number of Deals", data: Object.values(equitySizeDist), backgroundColor: MIXED_COLORS[1] }],
@@ -839,7 +749,25 @@ const DealStructure = () => {
           <Card title="Equity Percentage Distribution">
             <div style={{ height: "320px" }}>
               <Bar
-                options={vBarOpts((v) => v)}
+                options={{
+                  responsive: true,
+                  maintainAspectRatio: false,
+                  animation: false,
+                  plugins: { legend: { display: false } },
+                  scales: {
+                    x: {
+                      title: { display: true, text: "Range", color: B.darkGrey },
+                      grid: { display: false },
+                      ticks: { color: B.darkGrey, font: { size: 8 } },
+                    },
+                    y: {
+                      title: { display: true, text: "Number of Deals", color: B.darkGrey },
+                      beginAtZero: true,
+                      grid: { color: B.lightGrey },
+                      ticks: { color: B.darkGrey },
+                    },
+                  },
+                }}
                 data={{
                   labels: Object.keys(equityPctDist),
                   datasets: [{ label: "Number of Deals", data: Object.values(equityPctDist), backgroundColor: MIXED_COLORS[3] }],
@@ -855,7 +783,7 @@ const DealStructure = () => {
 
 // Main CapitalFlow Component
 const CapitalFlow = () => {
-  const [activeMainTab, setActiveMainTab] = useState("deployment");
+  const [activeMainTab, setActiveMainTab] = useState("market-structure");
 
   return (
     <div>
@@ -868,16 +796,14 @@ const CapitalFlow = () => {
           paddingBottom: "12px",
         }}
       >
-        <SubTab label="Capital Deployment" active={activeMainTab === "deployment"} onClick={() => setActiveMainTab("deployment")} />
-        <SubTab label="Fundraising" active={activeMainTab === "fundraising"} onClick={() => setActiveMainTab("fundraising")} />
         <SubTab label="Market Structure" active={activeMainTab === "market-structure"} onClick={() => setActiveMainTab("market-structure")} />
         <SubTab label="Deal Structure" active={activeMainTab === "deal-structure"} onClick={() => setActiveMainTab("deal-structure")} />
+        <SubTab label="Capital Deployment" active={activeMainTab === "deployment"} onClick={() => setActiveMainTab("deployment")} />
       </div>
 
-      {activeMainTab === "deployment" && <CapitalDeployment />}
-      {activeMainTab === "fundraising" && <Fundraising />}
       {activeMainTab === "market-structure" && <MarketStructure />}
       {activeMainTab === "deal-structure" && <DealStructure />}
+      {activeMainTab === "deployment" && <CapitalDeployment />}
     </div>
   );
 };
