@@ -453,9 +453,89 @@ const SupplierMatchesTable = ({
                         </div>
                       </div>
                     )}
-                    {breakdownSupplier.categoryMatches?.length > 0 && (
-                      <div style={{ fontSize: "0.8rem", color: "#5D4037", marginTop: "0.5rem" }}>
-                        <strong>Category Matches:</strong> {breakdownSupplier.categoryMatches.join(", ")}
+
+                    {/* ── Per-category breakdown ── */}
+                    {breakdownSupplier.primaryBreakdown.breakdown && (
+                      <div style={{ marginTop: "1rem", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                        {/* Product Categories */}
+                        {breakdownSupplier.primaryBreakdown.breakdown.productCategories?.length > 0 && (
+                          <div>
+                            <div style={{ fontSize: "0.75rem", fontWeight: 600, color: "#5D2A0A", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                              Product Categories
+                            </div>
+                            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                              {breakdownSupplier.primaryBreakdown.breakdown.productCategories.map((cat, i) => (
+                                <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, background: "#FEFCFA", border: "1px solid #E8D5C4", borderRadius: 6, padding: "0.5rem 0.75rem" }}>
+                                  <span style={{ fontSize: "0.8rem", fontWeight: 500, color: "#5D4037", flex: 1 }}>{cat.category}</span>
+                                  <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 140 }}>
+                                    <div style={{ background: "#E8D5C4", borderRadius: 3, height: 6, flex: 1, overflow: "hidden" }}>
+                                      <div style={{ height: "100%", background: scoreColor(cat.score), width: `${cat.score}%`, transition: "width 0.3s" }} />
+                                    </div>
+                                    <span style={{ fontSize: "0.75rem", fontWeight: 700, color: scoreColor(cat.score), minWidth: 30, textAlign: "right" }}>{Math.round(cat.score)}%</span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Service Categories */}
+                        {breakdownSupplier.primaryBreakdown.breakdown.serviceCategories?.length > 0 && (
+                          <div>
+                            <div style={{ fontSize: "0.75rem", fontWeight: 600, color: "#5D2A0A", marginBottom: 4, textTransform: "uppercase", letterSpacing: "0.5px" }}>
+                              Service Categories
+                            </div>
+                            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                              {breakdownSupplier.primaryBreakdown.breakdown.serviceCategories.map((cat, i) => (
+                                <div key={i} style={{ display: "flex", alignItems: "center", gap: 10, background: "#FEFCFA", border: "1px solid #E8D5C4", borderRadius: 6, padding: "0.5rem 0.75rem" }}>
+                                  <span style={{ fontSize: "0.8rem", fontWeight: 500, color: "#5D4037", flex: 1 }}>{cat.category}</span>
+                                  <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 140 }}>
+                                    <div style={{ background: "#E8D5C4", borderRadius: 3, height: 6, flex: 1, overflow: "hidden" }}>
+                                      <div style={{ height: "100%", background: scoreColor(cat.score), width: `${cat.score}%`, transition: "width 0.3s" }} />
+                                    </div>
+                                    <span style={{ fontSize: "0.75rem", fontWeight: 700, color: scoreColor(cat.score), minWidth: 30, textAlign: "right" }}>{Math.round(cat.score)}%</span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Target Market & Semantic Alignment */}
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+                          {breakdownSupplier.primaryBreakdown.breakdown.targetMarketFit && (
+                            <div style={{ background: "#FEFCFA", border: "1px solid #E8D5C4", borderRadius: 6, padding: "0.75rem" }}>
+                              <div style={{ fontSize: "0.75rem", fontWeight: 600, color: "#5D2A0A", marginBottom: 4 }}>Target Market Fit</div>
+                              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                <div style={{ background: "#E8D5C4", borderRadius: 3, height: 6, flex: 1, overflow: "hidden" }}>
+                                  <div style={{ height: "100%", background: scoreColor(breakdownSupplier.primaryBreakdown.breakdown.targetMarketFit.score), width: `${breakdownSupplier.primaryBreakdown.breakdown.targetMarketFit.score}%` }} />
+                                </div>
+                                <span style={{ fontSize: "0.8rem", fontWeight: 700, color: scoreColor(breakdownSupplier.primaryBreakdown.breakdown.targetMarketFit.score) }}>
+                                  {Math.round(breakdownSupplier.primaryBreakdown.breakdown.targetMarketFit.score)}%
+                                </span>
+                              </div>
+                              {breakdownSupplier.primaryBreakdown.breakdown.targetMarketFit.reasoning && (
+                                <div style={{ fontSize: "0.7rem", color: "#8D6E63", marginTop: 4 }}>{breakdownSupplier.primaryBreakdown.breakdown.targetMarketFit.reasoning}</div>
+                              )}
+                            </div>
+                          )}
+                          {breakdownSupplier.primaryBreakdown.breakdown.semanticAlignment && (
+                            <div style={{ background: "#FEFCFA", border: "1px solid #E8D5C4", borderRadius: 6, padding: "0.75rem" }}>
+                              <div style={{ fontSize: "0.75rem", fontWeight: 600, color: "#5D2A0A", marginBottom: 4 }}>Semantic Alignment</div>
+                              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                                <div style={{ background: "#E8D5C4", borderRadius: 3, height: 6, flex: 1, overflow: "hidden" }}>
+                                  <div style={{ height: "100%", background: scoreColor(breakdownSupplier.primaryBreakdown.breakdown.semanticAlignment.score), width: `${breakdownSupplier.primaryBreakdown.breakdown.semanticAlignment.score}%` }} />
+                                </div>
+                                <span style={{ fontSize: "0.8rem", fontWeight: 700, color: scoreColor(breakdownSupplier.primaryBreakdown.breakdown.semanticAlignment.score) }}>
+                                  {Math.round(breakdownSupplier.primaryBreakdown.breakdown.semanticAlignment.score)}%
+                                </span>
+                              </div>
+                              {breakdownSupplier.primaryBreakdown.breakdown.semanticAlignment.reasoning && (
+                                <div style={{ fontSize: "0.7rem", color: "#8D6E63", marginTop: 4 }}>{breakdownSupplier.primaryBreakdown.breakdown.semanticAlignment.reasoning}</div>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     )}
                   </div>

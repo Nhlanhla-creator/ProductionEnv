@@ -410,7 +410,7 @@ export const DeleteTaskModal = ({ isOpen, onClose, onDelete, task, sprint }) => 
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
+
     if (confirmText.toUpperCase() !== task.id) {
       setError('Type "' + task.id + '" to confirm.');
       return;
@@ -703,9 +703,6 @@ export const AddTaskModal = ({ isOpen, onClose, onAdd, sprint }) => {
         ...taskData,
         id: taskId
       };
-
-      // Debug log to verify data
-      console.log('Adding new task:', newTask);
 
       await onAdd(newTask);
       handleClose(); // This will clear the form
