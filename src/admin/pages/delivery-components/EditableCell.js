@@ -1,6 +1,7 @@
 import React, { useState, useCallback, memo } from 'react';
 import { Save, X } from 'lucide-react';
 import { styles } from './styles';
+import { STATUS_COLORS } from './constants';
 
 export const EditableCell = memo(({ 
   value, 
@@ -20,10 +21,10 @@ export const EditableCell = memo(({
   if (!isEditing) {
     if (columnType === 'select') {
       return (
-        <span 
+        <span
           style={{
             ...styles.statusBadge,
-            background: value === 'Done' ? '#10b981' : value === 'In Progress' ? '#f59e0b' : value === 'Blocked' ? '#ef4444' : '#6b7280'
+            background: STATUS_COLORS[value] || '#6b7280'
           }}
         >
           {value || 'Not started'}
@@ -58,7 +59,7 @@ export const EditableCell = memo(({
     // Use column options or fallback options
     const getFallbackOptions = () => {
       if (columnId === 'status') {
-        return ["Not started", "In Progress", "Done", "Blocked"];
+        return ["Not done", "Done"];
       }
       return [];
     };

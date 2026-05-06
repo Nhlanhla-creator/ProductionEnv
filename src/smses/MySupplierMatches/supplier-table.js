@@ -707,6 +707,19 @@ export async function runAiAnalysisForApplication(application, suppliers, { onPr
     application.purpose ||
     "General business procurement needs"
 
+  // Extract explicit categories from the application for detailed breakdown
+  const productCategories =
+    application.requestOverview?.productCategories ||
+    application.productsServices?.productCategories ||
+    application.requestOverview?.categories ||
+    application.productsServices?.categories ||
+    []
+
+  const serviceCategories =
+    application.requestOverview?.serviceCategories ||
+    application.productsServices?.serviceCategories ||
+    []
+
   const suppliersForAnalysis = suppliers.map((s) => ({
     id: s.id,
     entityOverview: s.entityOverview || {},
@@ -722,11 +735,13 @@ export async function runAiAnalysisForApplication(application, suppliers, { onPr
     suppliers: suppliersForAnalysis,
     customerPurpose,
     applicationId,
+    productCategories,
+    serviceCategories,
     analyzeAll: true,
     maxSuppliers: suppliersForAnalysis.length,
   })
 
-  const { matches } = result.data
+  const { matches, missingSupplierIds = [] } = result.data
 
   const processedMatches = {}
   matches.forEach((match) => {
@@ -735,7 +750,21 @@ export async function runAiAnalysisForApplication(application, suppliers, { onPr
       score: normalizedScore,
       reasoning: match.reasoning || "No reasoning provided",
       capabilities: match.matchedCapabilities || [],
+      breakdown: match.breakdown || null,
       analyzedAt: new Date().toISOString(),
+    }
+  })
+
+  // Mark missing suppliers with a 0 score so they don't stay pending
+  missingSupplierIds.forEach((id) => {
+    if (!processedMatches[id]) {
+      processedMatches[id] = {
+        score: 0,
+        reasoning: "AI analysis did not return a result for this supplier.",
+        capabilities: [],
+        breakdown: null,
+        analyzedAt: new Date().toISOString(),
+      }
     }
   })
 

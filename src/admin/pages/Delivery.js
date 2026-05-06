@@ -153,6 +153,7 @@ const Delivery = () => {
   const handleDeleteTask = useCallback(async (sprintId, taskId) => {
     setSprintsData(prev => {
       const sprint = prev[sprintId];
+      if (!sprint) return prev;
       const updatedSprint = {
         ...sprint,
         tasks: sprint.tasks.filter(task => task.id !== taskId),

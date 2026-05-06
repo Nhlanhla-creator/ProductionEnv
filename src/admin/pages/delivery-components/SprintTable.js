@@ -50,9 +50,9 @@ export const SprintTable = memo(({
   }, [sprint.id, onDeleteColumn]);
 
   const handleDeleteTask = useCallback(async (taskId) => {
-    await onDeleteTask(sprint.id, taskId);
+    await onDeleteTask(taskId);
     setTaskToDelete(null);
-  }, [sprint.id, onDeleteTask]);
+  }, [onDeleteTask]);
 
   // Extract unique values from tasks for filters
   const uniqueCategories = useMemo(() => {

@@ -205,7 +205,12 @@ const computeMatchesForApplication = (application, suppliers, ratings, aiCache) 
         matchPercentage: overallScore,
         primaryScore,
         primaryBreakdown: aiData
-          ? { score: primaryScore, reasoning: aiData.reasoning || "", capabilities: aiData.capabilities || [] }
+          ? {
+              score: primaryScore,
+              reasoning: aiData.reasoning || "",
+              capabilities: aiData.capabilities || [],
+              breakdown: aiData.breakdown || null,
+            }
           : null,
         secondaryScore: preference.totalScore,
         secondaryBreakdown: preference.breakdown,
