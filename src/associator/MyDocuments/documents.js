@@ -1,39 +1,30 @@
 "use client";
 
 import { useState } from "react";
-import { FileText, ExternalLink, Upload } from "lucide-react";
+import { FileText, ExternalLink, Upload, FolderOpen, File } from "lucide-react";
 
-const VC_DOCUMENT_PATHS = {
-  "Standard NDA": "formData.documentUpload.vcStandardNda",
-  "Term Sheet Template": "formData.documentUpload.vcTermSheet",
-  "Investment Mandate": "formData.documentUpload.vcInvestmentMandate",
-  "Fund Overview / Brochure": "formData.documentUpload.vcFundBrochure",
-  "LP Agreement": "formData.documentUpload.vcLpAgreement",
-  "Due Diligence Checklist": "formData.documentUpload.vcDueDiligence",
-};
-
-const PE_DOCUMENT_PATHS = {
-  "Standard NDA": "formData.documentUpload.peStandardNda",
-  "Investment Committee Memo": "formData.documentUpload.peIcMemo",
-  "Share Purchase Agreement": "formData.documentUpload.peSharePurchase",
-  "Fund Strategy Document": "formData.documentUpload.peFundStrategy",
-  "Management Agreement": "formData.documentUpload.peManagementAgreement",
-  "Portfolio Reporting Template": "formData.documentUpload.pePortfolioReporting",
-};
-
-const TABS = [
-  { id: "vc", label: "VC Documents" },
-  { id: "pe", label: "Private Equity Documents" },
+// Placeholder categories based on the admin governance structure
+const ALL_CATEGORIES = [
+  { id: "association-governance-board", label: "Association Governance (Board) Templates", path: ["Association Governance", "Board"], files: [{ name: "Board Charter" }, { name: "Terms of Reference" }, { name: "Conflict of Interest Policy" }] },
+  { id: "association-governance-general", label: "Association Governance (General) Templates", path: ["Association Governance", "General"], files: [{ name: "Constitution" }, { name: "Membership Agreement" }, { name: "Code of Conduct" }] },
+  { id: "beneficiary-impact-reporting", label: "Beneficiary & Impact Reporting Templates", path: ["Beneficiary & Impact Reporting"], files: [{ name: "Impact Report Template" }, { name: "Beneficiary Survey" }, { name: "KPI Dashboard" }] },
+  { id: "fundraising-ir-investor-relations", label: "Fundraising & IR (Investor Relations) Templates", path: ["Fundraising & IR", "Investor Relations"], files: [{ name: "Investor Update" }, { name: "LP Report" }, { name: "Capital Call Notice" }] },
+  { id: "fundraising-ir-policy", label: "Fundraising & IR (Policy) Templates", path: ["Fundraising & IR", "Policy"], files: [{ name: "Fundraising Policy" }, { name: "Investment Policy" }, { name: "Ethics Policy" }] },
+  { id: "secretariat-operations", label: "Secretariat & Operations Templates", path: ["Secretariat & Operations"], files: [{ name: "Meeting Minutes" }, { name: "Resolution Template" }, { name: "Operational Calendar" }] },
+  { id: "risk-compliance", label: "Risk and Compliance Templates", path: ["Risk and Compliance"], files: [{ name: "Risk Register" }, { name: "Compliance Checklist" }, { name: "AML Policy" }] },
+  { id: "strategic-management", label: "Strategic Management Templates", path: ["Strategic Management"], files: [{ name: "Strategic Plan" }, { name: "Annual Work Plan" }, { name: "Budget Template" }] },
 ];
 
+const TABS = ALL_CATEGORIES;
+
 const AssociatorDocuments = () => {
-  const [activeTab, setActiveTab] = useState("vc");
+  const [activeTab, setActiveTab] = useState(TABS[0]?.id || "");
   const [filter, setFilter] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
-  const [uploadedDocs, setUploadedDocs] = useState({ vc: {}, pe: {} });
+  const [uploadedDocs, setUploadedDocs] = useState({});
 
-  const currentPaths = activeTab === "vc" ? VC_DOCUMENT_PATHS : PE_DOCUMENT_PATHS;
-  const DOCUMENTS = Object.keys(currentPaths);
+  const currentCategory = ALL_CATEGORIES.find(cat => cat.id === activeTab);
+  const DOCUMENTS = currentCategory?.files?.map(f => f.name) || [];
 
   const isUploaded = (docLabel) => {
     return !!(uploadedDocs[activeTab] && uploadedDocs[activeTab][docLabel] && uploadedDocs[activeTab][docLabel].uploaded);
@@ -48,11 +39,13 @@ const AssociatorDocuments = () => {
 
   const handleFileUpload = (docLabel, file) => {
     if (!file) return;
-    setUploadedDocs(function(prev) {
-      var tabDocs = Object.assign({}, prev[activeTab]);
-      tabDocs[docLabel] = { name: file.name, uploaded: true };
-      return Object.assign({}, prev, { [activeTab]: tabDocs });
-    });
+    setUploadedDocs(prev => ({
+      ...prev,
+      [activeTab]: {
+        ...(prev[activeTab] || {}),
+        [docLabel]: { name: file.name, uploaded: true }
+      }
+    }));
   };
 
   const filteredDocuments = DOCUMENTS.filter(function(d) {
@@ -122,7 +115,18 @@ const AssociatorDocuments = () => {
 
   return (
     <div>
-      <style>{"\n        html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }\n        body { touch-action: manipulation; overflow-x: hidden; }\n        @media (max-width: 1024px) {\n          .doc-controls { flex-direction: column !important; gap: 16px !important; align-items: stretch !important; }\n          .doc-search { width: 100% !important; }\n        }\n        @media (max-width: 768px) {\n          .doc-table-wrap { overflow-x: auto; }\n          .doc-table { min-width: 700px; }\n        }\n      "}</style>
+      <style>{`
+        html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+        body { touch-action: manipulation; overflow-x: hidden; }
+        @media (max-width: 1024px) {
+          .doc-controls { flex-direction: column !important; gap: 16px !important; align-items: stretch !important; }
+          .doc-search { width: 100% !important; }
+        }
+        @media (max-width: 768px) {
+          .doc-table-wrap { overflow-x: auto; }
+          .doc-table { min-width: 700px; }
+        }
+      `}</style>
 
       <div
         style={{
@@ -148,10 +152,10 @@ const AssociatorDocuments = () => {
             }}
           >
             <h1 style={{ fontSize: "2rem", fontWeight: "700", color: "#5d4037", marginBottom: "6px", margin: "0 0 6px 0" }}>
-              Association Documents
+              Governance Templates
             </h1>
             <p style={{ fontSize: "1.125rem", color: "#6d4c41", margin: 0 }}>
-              Track and manage your submitted documents in one place
+              Track and manage all governance and compliance document templates
             </p>
           </div>
 
@@ -167,6 +171,8 @@ const AssociatorDocuments = () => {
               boxShadow: "0 2px 8px rgba(59,36,9,0.06)",
               marginBottom: "24px",
               boxSizing: "border-box",
+              flexWrap: "wrap",
+              gap: "4px",
             }}
           >
             {TABS.map(function(tab) {
@@ -180,7 +186,7 @@ const AssociatorDocuments = () => {
                     setSearchTerm("");
                   }}
                   style={{
-                    flex: 1,
+                    flex: "1 1 auto",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
@@ -189,7 +195,7 @@ const AssociatorDocuments = () => {
                     borderRadius: "8px",
                     border: "none",
                     cursor: "pointer",
-                    fontSize: "14px",
+                    fontSize: "13px",
                     fontWeight: active ? "700" : "500",
                     backgroundColor: active ? "#8d6e63" : "transparent",
                     color: active ? "white" : "#8d6e63",
@@ -197,7 +203,7 @@ const AssociatorDocuments = () => {
                     transition: "all 0.15s ease",
                   }}
                 >
-                  <FileText size={16} />
+                  <FolderOpen size={14} />
                   {tab.label}
                 </button>
               );
@@ -207,7 +213,7 @@ const AssociatorDocuments = () => {
           {/* Stats */}
           <div style={{ display: "flex", gap: "16px", marginBottom: "24px", flexWrap: "wrap" }}>
             {[
-              { label: "Total Documents", value: DOCUMENTS.length, color: "#5d4037" },
+              { label: "Total Templates", value: DOCUMENTS.length, color: "#5d4037" },
               { label: "Uploaded", value: submittedCount, color: "#2e7d32" },
               { label: "Pending", value: pendingCount, color: "#c62828" },
             ].map(function(stat) {
@@ -246,6 +252,8 @@ const AssociatorDocuments = () => {
               border: "1px solid #d7ccc8",
               width: "100%",
               boxSizing: "border-box",
+              flexWrap: "wrap",
+              gap: "16px",
             }}
           >
             <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
@@ -276,7 +284,7 @@ const AssociatorDocuments = () => {
             <input
               className="doc-search"
               type="text"
-              placeholder="Search documents..."
+              placeholder="Search templates..."
               value={searchTerm}
               onChange={function(e) { setSearchTerm(e.target.value); }}
               style={{
@@ -294,6 +302,26 @@ const AssociatorDocuments = () => {
             />
           </div>
 
+          {/* Category Info */}
+          {currentCategory && (
+            <div
+              style={{
+                marginBottom: "20px",
+                padding: "12px 16px",
+                backgroundColor: "#efebe9",
+                borderRadius: "8px",
+                borderLeft: `4px solid #8d6e63`,
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+                <FolderOpen size={18} color="#5d4037" />
+                <span style={{ fontSize: "13px", color: "#5d4037", fontWeight: "500" }}>
+                  Path: {currentCategory.path.join(" > ")}
+                </span>
+              </div>
+            </div>
+          )}
+
           {/* Table */}
           {filteredDocuments.length === 0 ? (
             <div
@@ -306,7 +334,11 @@ const AssociatorDocuments = () => {
                 color: "#6d4c41",
               }}
             >
-              No documents found
+              <File size={48} style={{ marginBottom: "16px", opacity: 0.5 }} />
+              <div>No templates found in this category</div>
+              <div style={{ fontSize: "12px", marginTop: "8px", color: "#8d6e63" }}>
+                {currentCategory?.files?.length === 0 ? "This category has no template requirements." : "Try changing your search or filter criteria."}
+              </div>
             </div>
           ) : (
             <div
@@ -326,7 +358,7 @@ const AssociatorDocuments = () => {
               >
                 <thead>
                   <tr style={{ backgroundColor: "#8d6e63", color: "white", height: "50px" }}>
-                    {["Document Name", "Uploaded Document", "Status", "Actions"].map(function(h) {
+                    {["Template Name", "Uploaded Document", "Status", "Actions"].map(function(h) {
                       return (
                         <th
                           key={h}
@@ -360,7 +392,10 @@ const AssociatorDocuments = () => {
                         onMouseLeave={function(e) { e.currentTarget.style.backgroundColor = index % 2 === 0 ? "white" : "#faf8f6"; }}
                       >
                         <td style={{ padding: "16px 20px", fontSize: "14px", color: "#5d4037", fontWeight: "600", verticalAlign: "middle" }}>
-                          {docLabel}
+                          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                            <FileText size={14} color="#8d6e63" />
+                            {docLabel}
+                          </div>
                         </td>
                         <td style={{ padding: "16px 20px", verticalAlign: "middle" }}>
                           {renderDocumentLink(docLabel)}
@@ -383,6 +418,7 @@ const AssociatorDocuments = () => {
                               cursor: "pointer",
                               textTransform: "uppercase",
                               letterSpacing: "0.5px",
+                              transition: "background-color 0.2s",
                             }}
                             onMouseEnter={function(e) { e.currentTarget.style.backgroundColor = "#8d6e63"; }}
                             onMouseLeave={function(e) { e.currentTarget.style.backgroundColor = "#a67c52"; }}
@@ -392,7 +428,11 @@ const AssociatorDocuments = () => {
                             <input
                               type="file"
                               style={{ display: "none" }}
-                              onChange={function(e) { handleFileUpload(docLabel, e.target.files[0]); }}
+                              onChange={function(e) { 
+                                if (e.target.files && e.target.files[0]) {
+                                  handleFileUpload(docLabel, e.target.files[0]);
+                                }
+                              }}
                             />
                           </label>
                         </td>
@@ -404,6 +444,24 @@ const AssociatorDocuments = () => {
             </div>
           )}
 
+          {/* Upload Summary Footer */}
+          {submittedCount > 0 && (
+            <div
+              style={{
+                marginTop: "24px",
+                padding: "16px 20px",
+                backgroundColor: "#e8f5e8",
+                borderRadius: "8px",
+                border: "1px solid #c8e6c9",
+                fontSize: "12px",
+                color: "#2e7d32",
+                textAlign: "center",
+              }}
+            >
+              ✅ {submittedCount} of {DOCUMENTS.length} templates uploaded for {currentCategory?.label}
+              {submittedCount === DOCUMENTS.length && DOCUMENTS.length > 0 && " - Complete! All templates have been uploaded."}
+            </div>
+          )}
         </div>
       </div>
     </div>
