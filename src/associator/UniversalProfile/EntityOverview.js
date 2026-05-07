@@ -73,6 +73,32 @@ const referralSources = [
   { value: "other", label: "Other" },
 ]
 
+// ── Industry Associations (single-select) ─────────────────────────────────
+const industryAssociations = [
+  { value: "SA Township Traders Association", label: "SA Township Traders Association" },
+  { value: "Minerals Council South Africa", label: "Minerals Council South Africa" },
+  { value: "Junior Mining Council (JEMD-linked)", label: "Junior Mining Council (JEMD-linked)" },
+  { value: "Mandela Mining Precinct", label: "Mandela Mining Precinct" },
+  { value: "African Chamber of Commerce and Industry", label: "African Chamber of Commerce and Industry" },
+  { value: "Black Business Council", label: "Black Business Council" },
+  { value: "South African Renewable Energy Council (SAREC)", label: "South African Renewable Energy Council (SAREC)" },
+  { value: "SAPICS: Supply Chain Institute of Southern Africa", label: "SAPICS: Supply Chain Institute of Southern Africa" },
+  { value: "Manufacturing Circle", label: "Manufacturing Circle" },
+  { value: "Southern African Renewable Energy Council (SAWEA / SA-PVIA)", label: "Southern African Renewable Energy Council (SAWEA / SA-PVIA)" },
+  { value: "South African Institute of Black Property Practitioners", label: "South African Institute of Black Property Practitioners" },
+  { value: "ASASA / ASISA-linked industry groups", label: "ASASA / ASISA-linked industry groups" },
+  { value: "South African Venture Capital and Private Equity Association (SAVCA)", label: "South African Venture Capital and Private Equity Association (SAVCA)" },
+  { value: "ABSA Black Business Awards / ABSIP / BEE-linked networks", label: "ABSA Black Business Awards / ABSIP / BEE-linked networks" },
+  { value: "SA SME Fund", label: "SA SME Fund" },
+  { value: "Endeva (SA / global ESO-backed networks)", label: "Endeva (SA / global ESO-backed networks)" },
+  { value: "SA Industrial Development Corporation (IDC)", label: "SA Industrial Development Corporation (IDC)" },
+  { value: "SA Department of Trade, Industry and Competition (DTIC)", label: "SA Department of Trade, Industry and Competition (DTIC)" },
+  { value: "SA Department of Mineral Resources and Energy (DMRE)", label: "SA Department of Mineral Resources and Energy (DMRE)" },
+  { value: "SA Department of Employment and Labour (BEE-linked units)", label: "SA Department of Employment and Labour (BEE-linked units)" },
+  { value: "SA National Business Initiative (NBI)", label: "SA National Business Initiative (NBI)" },
+  { value: "Other", label: "Other" },
+]
+
 export default function AssociatorEntityOverview({ data = {}, updateData }) {
   const handleChange = (e) => {
     const { name, value } = e.target
@@ -83,6 +109,7 @@ export default function AssociatorEntityOverview({ data = {}, updateData }) {
     <div className={styles.productApplicationContainer}>
       <h2 className={styles.productApplicationHeading}>Entity Overview</h2>
       <div className={styles.formContent}>
+
         <div className={styles.gridContainer}>
           <FormField label="Registered Name" required>
             <input
@@ -116,9 +143,7 @@ export default function AssociatorEntityOverview({ data = {}, updateData }) {
             >
               <option value="">Select Legal Entity Type</option>
               {legalEntityTypes.map((type) => (
-                <option key={type.value} value={type.value}>
-                  {type.label}
-                </option>
+                <option key={type.value} value={type.value}>{type.label}</option>
               ))}
             </select>
           </FormField>
@@ -145,9 +170,7 @@ export default function AssociatorEntityOverview({ data = {}, updateData }) {
             >
               <option value="">Select Industry Sector</option>
               {industrySectors.map((sector) => (
-                <option key={sector.value} value={sector.value}>
-                  {sector.label}
-                </option>
+                <option key={sector.value} value={sector.value}>{sector.label}</option>
               ))}
             </select>
           </FormField>
@@ -161,9 +184,7 @@ export default function AssociatorEntityOverview({ data = {}, updateData }) {
             >
               <option value="">Select Company Size</option>
               {companySizes.map((size) => (
-                <option key={size.value} value={size.value}>
-                  {size.label}
-                </option>
+                <option key={size.value} value={size.value}>{size.label}</option>
               ))}
             </select>
           </FormField>
@@ -217,9 +238,7 @@ export default function AssociatorEntityOverview({ data = {}, updateData }) {
             >
               <option value="">Select how you heard about us</option>
               {referralSources.map((source) => (
-                <option key={source.value} value={source.value}>
-                  {source.label}
-                </option>
+                <option key={source.value} value={source.value}>{source.label}</option>
               ))}
             </select>
             {data.referralSource === "other" && (
@@ -237,6 +256,47 @@ export default function AssociatorEntityOverview({ data = {}, updateData }) {
             )}
           </FormField>
         </div>
+
+        {/* ── INDUSTRY ASSOCIATIONS (single-select) ── */}
+        <div style={{
+          borderTop: "2px solid #C19A6B",
+          marginTop: "1.75rem",
+          paddingTop: "1.25rem",
+          marginBottom: "1rem",
+        }}>
+          <h3 style={{ fontSize: "15px", fontWeight: "700", color: "#6B3410", margin: "0 0 1.25rem 0", letterSpacing: "0.3px" }}>
+            Industry Associations
+          </h3>
+        </div>
+
+        <div className={styles.gridContainer}>
+          <FormField label="Which industry association are you part of?">
+            <select
+              name="industryAssociation"
+              value={data.industryAssociation || ""}
+              onChange={handleChange}
+              className={styles.formSelect}
+            >
+              <option value="">Select an association...</option>
+              {industryAssociations.map((assoc) => (
+                <option key={assoc.value} value={assoc.value}>{assoc.label}</option>
+              ))}
+            </select>
+            {data.industryAssociation === "Other" && (
+              <div style={{ marginTop: "8px" }}>
+                <input
+                  type="text"
+                  name="industryAssociationOther"
+                  value={data.industryAssociationOther || ""}
+                  onChange={handleChange}
+                  className={styles.formInput}
+                  placeholder="Please specify your association..."
+                />
+              </div>
+            )}
+          </FormField>
+        </div>
+
       </div>
     </div>
   )

@@ -89,6 +89,7 @@ const LiquiditySurvival = ({ activeSection, user, isInvestorView }) => {
 
       const RATIO_KEYS   = new Set(["currentRatio", "quickRatio", "cashRatio"]);
       const MONTH_KEYS   = new Set(["cashCover", "monthsRunway"]);
+      const BURN_RATE_KEY = "burnRate";
 
       let trendFormatValue, yAxisLabel, yTickFmt;
       if (isPercentage) {
@@ -103,6 +104,11 @@ const LiquiditySurvival = ({ activeSection, user, isInvestorView }) => {
         trendFormatValue = (v) => `${parseFloat(v).toFixed(1)} months`;
         yAxisLabel       = "Months";
         yTickFmt         = (v) => parseFloat(v).toFixed(1);
+      } else if (dataKey === BURN_RATE_KEY) {
+        // Burn Rate is cash outflow per month
+        trendFormatValue = (v) => `R${Math.abs(parseFloat(v)).toFixed(2)}m`;
+        yAxisLabel       = "Monthly Burn Rate (R millions)";
+        yTickFmt         = (v) => Math.abs(v).toFixed(2);
       } else {
         // Currency values stored in millions
         const allVals    = [...(actual || []), ...(budget || [])].filter((v) => v !== null && !isNaN(v));
@@ -139,13 +145,37 @@ const LiquiditySurvival = ({ activeSection, user, isInvestorView }) => {
     setShowCalcModal(true);
   };
 
+  // Helper function to calculate Burn Rate from cash balance data
+  const calculateBurnRate = (cashBalanceData) => {
+    if (!cashBalanceData || !cashBalanceData.actual || cashBalanceData.actual.length < 2) {
+      return 0;
+    }
+    
+    const cashBalances = cashBalanceData.actual.filter(v => v !== null && !isNaN(v));
+    if (cashBalances.length < 2) return 0;
+    
+    // Get beginning cash (first non-null value) and ending cash (last non-null value)
+    const beginningCash = cashBalances[0];
+    const endingCash = cashBalances[cashBalances.length - 1];
+    const monthsCount = cashBalances.length - 1; // Number of months between first and last
+    
+    if (monthsCount === 0) return 0;
+    
+    // Burn Rate = (Beginning Cash - Ending Cash) ÷ Months
+    // Positive burn rate means cash is decreasing (outflow)
+    const burnRate = (beginningCash - endingCash) / monthsCount;
+    
+    // Return positive value for display (burn rate is typically shown as positive number)
+    return Math.abs(burnRate);
+  };
+
   const KPI_TYPE = {
     currentRatio:   { unitLabel: "×",      fmt: (v) => parseFloat(v).toFixed(2) },
     quickRatio:     { unitLabel: "×",      fmt: (v) => parseFloat(v).toFixed(2) },
     cashRatio:      { unitLabel: "×",      fmt: (v) => parseFloat(v).toFixed(2) },
     cashCover:      { unitLabel: "months", fmt: (v) => parseFloat(v).toFixed(1) },
     monthsRunway:   { unitLabel: "months", fmt: (v) => parseFloat(v).toFixed(1) },
-    burnRate:       { unitLabel: null, fmt: null },
+    burnRate:       { unitLabel: "m/month", fmt: null, isCalculated: true },
     cashflow:       { unitLabel: null, fmt: null },
     cashBalance:    { unitLabel: null, fmt: null },
     workingCapital: { unitLabel: null, fmt: null },
@@ -153,9 +183,19 @@ const LiquiditySurvival = ({ activeSection, user, isInvestorView }) => {
 
   const renderKPI = (title, dataKey, isPercentage = false) => {
     const type    = KPI_TYPE[dataKey] || {};
-    const data    = firebaseChartData[dataKey] || { actual: [] };
-    const current = data.actual?.at(-1) ?? 0;
-    const calc    = CALCULATION_TEXTS.liquidity?.[dataKey] || "";
+    let data    = firebaseChartData[dataKey] || { actual: [] };
+    let current = data.actual?.at(-1) ?? 0;
+    
+    // Special calculation for Burn Rate
+    if (dataKey === "burnRate" && type.isCalculated) {
+      const cashBalanceData = firebaseChartData.cashBalance || { actual: [] };
+      current = calculateBurnRate(cashBalanceData);
+      // Create a computed data object for display
+      data = { ...data, actual: [current] };
+    }
+    
+    const calc    = CALCULATION_TEXTS.liquidity?.[dataKey] || 
+      (dataKey === "burnRate" ? "Burn Rate = (Beginning Cash - Ending Cash) ÷ Months\n\nMeasures average monthly cash outflow. A lower burn rate means the company is spending cash more slowly and has a longer runway." : "");
 
     const isCurrency    = !type.unitLabel && !isPercentage;
     const unitLabel     = type.unitLabel ?? (isPercentage ? "%" : getSmartUnit(current));
