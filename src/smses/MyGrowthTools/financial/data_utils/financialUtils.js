@@ -437,23 +437,25 @@ export const computeLiquidityChartData = (firebaseData) => {
     firebaseData[key]?.map((v) => parseFloat(v) || 0) ?? Array(12).fill(0);
   const burnRate = parse("burnRate"),
     cashBal = parse("cashBalance");
-  const toM = (a) => a.map((v) => v / 1_000_000);
+  
+  // REMOVE the toM function - data is already in millions
+  // const toM = (a) => a.map((v) => v / 1_000_000);
+  
   return {
     currentRatio: { actual: parse("currentRatio") },
     quickRatio: { actual: parse("quickRatio") },
     cashRatio: { actual: parse("cashRatio") },
-    burnRate: { actual: toM(burnRate) },
+    burnRate: { actual: burnRate }, // Use directly, no division
     cashCover: { actual: parse("cashCover") },
-    cashflow: { actual: toM(parse("cashflow")) },
-    loanRepayments: { actual: toM(parse("loanRepayments")) },
-    cashBalance: { actual: toM(cashBal) },
-    workingCapital: { actual: toM(parse("workingCapital")) },
+    cashflow: { actual: parse("cashflow") }, // Use directly, no division
+    loanRepayments: { actual: parse("loanRepayments") }, // Use directly, no division
+    cashBalance: { actual: cashBal }, // Use directly, no division
+    workingCapital: { actual: parse("workingCapital") }, // Use directly, no division
     monthsRunway: {
       actual: burnRate.map((b, i) => (b !== 0 ? cashBal[i] / b : 0)),
     },
   };
 };
-
 // ==================== CAPITAL STRUCTURE PROCESSOR ====================
 
 const _sumBSSections = (group = {}, sections) =>

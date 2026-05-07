@@ -1,5 +1,44 @@
 /* Accelerator Pipeline Styles - Matches Other Pipelines */
 
+.stageTooltip {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 8px;
+  z-index: 50;
+  pointer-events: none;
+}
+
+.tooltipContent {
+  background-color: #3e2723;
+  color: white;
+  font-size: 11px;
+  border-radius: 8px;
+  padding: 8px 12px;
+  width: 140px;
+  text-align: center;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  white-space: normal;
+  word-wrap: break-word;
+}
+
+/* Optional: Add arrow to tooltip */
+.stageTooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 5px;
+  border-style: solid;
+  border-color: #3e2723 transparent transparent transparent;
+}
+
+.pipelineStage {
+  position: relative;
+}
+
 :root {
   --brown-50: #efebe9;
   --brown-100: #d7ccc8;

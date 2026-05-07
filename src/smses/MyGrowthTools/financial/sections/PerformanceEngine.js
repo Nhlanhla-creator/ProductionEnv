@@ -15,6 +15,7 @@ import {
 import UniversalAddDataModal from "../components/UniversalAddDataModal";
 import { usePerformanceEngineData } from "../../../hooks/useFinancialData";
 import { CALCULATION_TEXTS } from "../data_utils/financialConstants";
+import PerformanceAnalysisModal from "../../../hooks/PerformanceAnalysisModal";
 import {
   aggregateDataForView,
   makeFormatValue,
@@ -51,6 +52,8 @@ const PerformanceEngine = ({
   const [showCalcModal, setShowCalcModal]   = useState(false);
   const [selectedCalc, setSelectedCalc]     = useState({ title: "", calculation: "" });
   const [currencyUnit] = useState("zar_million");
+const [showAnalysisModal, setShowAnalysisModal] = useState(false);
+const [selectedMetricForAnalysis, setSelectedMetricForAnalysis] = useState(null);
 
   // Date range — default to last 12 months
   const [fromDate, setFromDate] = useState(_defaultFrom);
@@ -66,6 +69,19 @@ const PerformanceEngine = ({
     loadPnLData,
     loadCustomKPIs,
   } = usePerformanceEngineData(user);
+
+  const getCurrentPerformanceMetrics = () => {
+  return {
+    sales: firebaseChartData.sales?.actual?.at(-1) ?? 0,
+    cogs: firebaseChartData.cogs?.actual?.at(-1) ?? 0,
+    opex: firebaseChartData.opex?.actual?.at(-1) ?? 0,
+    grossProfit: firebaseChartData.grossProfit?.actual?.at(-1) ?? 0,
+    grossProfitMargin: firebaseChartData.gpMargin?.actual?.at(-1) ?? 0,
+    netProfit: firebaseChartData.netProfit?.actual?.at(-1) ?? 0,
+    netProfitMargin: firebaseChartData.npMargin?.actual?.at(-1) ?? 0,
+    ebitda: firebaseChartData.ebitda?.actual?.at(-1) ?? 0,
+  };
+};
 
   const formatValue = makeFormatValue(currencyUnit);
 
@@ -138,40 +154,46 @@ const PerformanceEngine = ({
     setShowCalcModal(true);
   };
 
-  const renderKPI = (title, dataKey, isPercentage = false) => {
-    const data      = firebaseChartData[dataKey] || { actual: [], budget: [] };
-    const chartArr  = aggregateDataForView(data.actual,        viewMode, isPercentage);
-    const budgetArr = aggregateDataForView(data.budget || [],  viewMode, isPercentage);
-    const current   = chartArr.at(-1)  ?? 0;
-    const budget    = budgetArr.at(-1) ?? 0;
-    const calc      = CALCULATION_TEXTS.performance[dataKey] || "";
+const renderKPI = (title, dataKey, isPercentage = false) => {
+  const data      = firebaseChartData[dataKey] || { actual: [], budget: [] };
+  const chartArr  = aggregateDataForView(data.actual,        viewMode, isPercentage);
+  const budgetArr = aggregateDataForView(data.budget || [],  viewMode, isPercentage);
+  const current   = chartArr.at(-1)  ?? 0;
+  const budget    = budgetArr.at(-1) ?? 0;
+  const calc      = CALCULATION_TEXTS.performance[dataKey] || "";
 
-    const unitLabel        = isPercentage ? "%" : getSmartUnit(current);
-    const formatCircleValue = isPercentage
-      ? (v) => parseFloat(v).toFixed(2)
-      : (v) => formatSmartNumber(v);
+  const unitLabel        = isPercentage ? "%" : getSmartUnit(current);
+  const formatCircleValue = isPercentage
+    ? (v) => parseFloat(v).toFixed(2)
+    : (v) => formatSmartNumber(v);
 
-    return (
-      <KPICard
-        key={dataKey}
-        title={title}
-        actualValue={current}
-        budgetValue={budget}
-        unit={currencyUnit}
-        isPercentage={isPercentage}
-        unitLabel={unitLabel}
-        formatCircleValue={formatCircleValue}
-        onEyeClick={() => openCalc(title, calc)}
-        onAddNotes={(notes) => setChartNotes((p) => ({ ...p, [dataKey]: notes }))}
-        onAnalysis={() =>
-          setExpandedNotes((p) => ({ ...p, [`${dataKey}_analysis`]: !p[`${dataKey}_analysis`] }))
-        }
-        onTrend={() => openTrend(title, dataKey, isPercentage)}
-        notes={chartNotes[dataKey]}
-        formatValue={formatValue}
-      />
-    );
-  };
+  return (
+    <KPICard
+      key={dataKey}
+      title={title}
+      actualValue={current}
+      budgetValue={budget}
+      unit={currencyUnit}
+      isPercentage={isPercentage}
+      unitLabel={unitLabel}
+      formatCircleValue={formatCircleValue}
+      onEyeClick={() => openCalc(title, calc)}
+      onAddNotes={(notes) => setChartNotes((p) => ({ ...p, [dataKey]: notes }))}
+      onAnalysis={() => {
+        // Open performance-specific analysis modal
+        setSelectedMetricForAnalysis({
+          title: title,
+          key: dataKey,
+          value: current,
+        });
+        setShowAnalysisModal(true);
+      }}
+      onTrend={() => openTrend(title, dataKey, isPercentage)}
+      notes={chartNotes[dataKey]}
+      formatValue={formatValue}
+    />
+  );
+};
 
   if (activeSection !== "performance-engine") return null;
 
@@ -263,6 +285,20 @@ const PerformanceEngine = ({
           loading={trendLoading}
         />
       )}
+      {showAnalysisModal && selectedMetricForAnalysis && (
+  <PerformanceAnalysisModal
+    isOpen={showAnalysisModal}
+    onClose={() => {
+      setShowAnalysisModal(false);
+      setSelectedMetricForAnalysis(null);
+    }}
+    metricTitle={selectedMetricForAnalysis.title}
+    metricKey={selectedMetricForAnalysis.key}
+    metricValue={selectedMetricForAnalysis.value}
+    performanceData={getCurrentPerformanceMetrics()}
+    currentUser={user}
+  />
+)}
     </div>
   );
 };

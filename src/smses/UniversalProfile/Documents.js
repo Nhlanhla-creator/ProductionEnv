@@ -16,8 +16,9 @@ import {
 import { useDocumentSync } from "../../components/useDocumentSync";
 
 const ai = new GoogleGenAI({ 
-  apiKey: "AIzaSyDwdY9ZbfwjRftP4WAlKfLIQ9jR-vWYYxk"
+  apiKey: ""
 });
+
 
 const documentValidationRules = {
   "Company Registration Certificate": {
