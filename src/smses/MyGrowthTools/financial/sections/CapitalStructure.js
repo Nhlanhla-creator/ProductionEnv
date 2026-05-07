@@ -36,7 +36,10 @@ import ChartDataLabels from "chartjs-plugin-datalabels";
 import { useSolvencyScore } from "../../../hooks/useSolvencyScore";
 import { calculateSolvencyScore, normalizeSolvencyScore } from "../data_utils/solvencyScoreUtils";
  import { useLiquidityData } from "../../../hooks/useFinancialData";
-
+import { useSolvencyAnalysis } from "../../../hooks/Usesolvencyanalysis"
+// import SolvencyAnalysisIntegrated from "../../../hooks/SolvencyAnalysisIntegrated";
+import AnalysisModal from "../../../hooks/AnalysisModal";
+ 
 
 
 // ==================== HELPERS ====================
@@ -1443,10 +1446,16 @@ const BSTable = ({ title, rows, totalLabel, totalValue, openTrend, totalTrendFn 
 );
 
 // ==================== CAPITAL STRUCTURE COMPONENT ====================
+// ==================== CAPITAL STRUCTURE COMPONENT (FIXED) ====================
+
 const CapitalStructure = ({ activeSection, user, isInvestorView }) => {
   // ── Sub-tab & modal state ──────────────────────────────────────────────────
   const [activeSubTab, setActiveSubTab]   = useState("balance-sheet");
   const [showModal, setShowModal]         = useState(false);
+  
+  // ── Analysis Modal State ───────────────────────────────────────────────────
+  const [showAnalysisModal, setShowAnalysisModal] = useState(false);
+  const [selectedMetricForAnalysis, setSelectedMetricForAnalysis] = useState(null);
 
   // ── Date range filter — drives everything ─────────────────────────────────
   const [filterMode, setFilterMode]   = useState("range");
@@ -1461,33 +1470,40 @@ const CapitalStructure = ({ activeSection, user, isInvestorView }) => {
   const [trendLoading, setTrendLoading]           = useState(false);
   const [showCalculationModal, setShowCalculationModal] = useState(false);
   const [selectedCalculation, setSelectedCalculation]   = useState({ title: "", calculation: "" });
-const {
-  solvencyScore,
-  solvencyScoreBreakdown,
-  calculateAndSaveSolvencyScore,
-  loadLatestSolvencyScore,
-} = useSolvencyScore(user);
-
-// Inside component, fetch liquidity data
-const { firebaseChartData } = useLiquidityData(user);
-
-// Extract latest liquidity values
-const getLiquidityData = () => {
-  if (!firebaseChartData) return null;
   
-  return {
-    cashflow: parseFloat(firebaseChartData.cashflow?.actual?.at(-1)) || 0,
-    burnRate: parseFloat(firebaseChartData.burnRate?.actual?.at(-1)) || 0,
-    monthsRunway: parseFloat(firebaseChartData.monthsRunway?.actual?.at(-1)) || 0,
-    currentRatio: parseFloat(firebaseChartData.currentRatio?.actual?.at(-1)) || 0,
+  const {
+    solvencyScore,
+    solvencyScoreBreakdown,
+    calculateAndSaveSolvencyScore,
+    loadLatestSolvencyScore,
+  } = useSolvencyScore(user);
+  const { generateAnalysis } = useSolvencyAnalysis();
+
+  // Inside component, fetch liquidity data
+  const { firebaseChartData } = useLiquidityData(user);
+
+  // Extract latest liquidity values
+  const getLiquidityData = () => {
+    if (!firebaseChartData) return null;
+    
+    return {
+      cashflow: parseFloat(firebaseChartData.cashflow?.actual?.at(-1)) || 0,
+      burnRate: parseFloat(firebaseChartData.burnRate?.actual?.at(-1)) || 0,
+      monthsRunway: parseFloat(firebaseChartData.monthsRunway?.actual?.at(-1)) || 0,
+      currentRatio: parseFloat(firebaseChartData.currentRatio?.actual?.at(-1)) || 0,
+    };
   };
-};
 
   // ── Notes ─────────────────────────────────────────────────────────────────
   const [kpiNotes, setKpiNotes]       = useState({});
   const [expandedNotes, setExpandedNotes] = useState({});
 
   const [currencyUnit] = useState("zar_million");
+
+  // ── Get the current tab for calculations ─────────────────────────────────
+  const getCurrentTab = () => {
+    return SUB_TABS.find((t) => t.id === activeSubTab);
+  };
 
   // ── Hook ──────────────────────────────────────────────────────────────────
   const {
@@ -1504,8 +1520,6 @@ const getLiquidityData = () => {
     loadTrendData,
   } = useCapitalStructureData(user);
 
-   
-
   // ── Derived snapshot index — always the last month of the selected range ──
   const { year: snapshotYear, monthIndex: snapshotMonthIndex } = parseYM(toDate);
 
@@ -1520,129 +1534,104 @@ const getLiquidityData = () => {
     }
   }, [user, toDate]);
 
-//   // ── SAVE SOLVENCY SCORE TO FIREBASE ───────────────────────
-// useEffect(() => {
-//   if (user && balanceSheetData && solvencyData && activeSubTab === "solvency") {
-//     const year = snapshotYear;
-//     const liquidityData = getLiquidityData();
-    
-//     // ✅ Pass liquidity data
-//    // In CapitalStructure.js - when calling calculateAndSaveSolvencyScore
-// calculateAndSaveSolvencyScore(
-//   balanceSheetData,
-//   {
-//     debtToEquity: debtToEquityVal,
-//     debtToAssets: debtToAssetsVal,
-//     equityRatio: equityRatioVal,
-//     interestCoverage: interestCoverageVal,
-//     nav: navVal,
-//   },
-//   liquidityData,
-//   snapshotYear
-// );
-//   }
-// }, [user, balanceSheetData, solvencyData, firebaseChartData, snapshotYear]);
   // ── Auto-calculate solvency / leverage / equity from balance sheet ─────────
+  useEffect(() => {
+    if (!user || !balanceSheetData || activeSubTab !== "solvency") return;
 
+    const mi = snapshotMonthIndex;
+    if (mi < 0 || mi >= 12) return;
 
- useEffect(() => {
-  if (!user || !balanceSheetData || activeSubTab !== "solvency") return;
+    const totalAssets_ = calcTotalAssets(mi);
+    const totalLiabilities_ = calcTotalLiabilities(mi);
+    const totalEquity_ = calcTotalEquity(mi);
 
-  const mi = snapshotMonthIndex;
-  if (mi < 0 || mi >= 12) return;
+    if (totalAssets_ === 0 && totalLiabilities_ === 0 && totalEquity_ === 0) {
+      console.warn("⚠️ Skipping solvency save – balance sheet data is empty");
+      return;
+    }
 
-  const totalAssets_ = calcTotalAssets(mi);
-  const totalLiabilities_ = calcTotalLiabilities(mi);
-  const totalEquity_ = calcTotalEquity(mi);
+    // Calculate values (as numbers, not strings)
+    const debtToEquityVal = totalEquity_ !== 0 ? totalLiabilities_ / totalEquity_ : 0;
+    const debtToAssetsVal = totalAssets_ !== 0 ? totalLiabilities_ / totalAssets_ : 0;
+    const equityRatioVal = totalAssets_ !== 0 ? (totalEquity_ / totalAssets_) * 100 : 0;
+    const navVal = (totalAssets_ - totalLiabilities_) / 1_000_000;
 
-  if (totalAssets_ === 0 && totalLiabilities_ === 0 && totalEquity_ === 0) {
-    console.warn("⚠️ Skipping solvency save – balance sheet data is empty");
-    return;
-  }
+    const ebit_ = totalAssets_ * 0.1;
+    const intExp_ = totalLiabilities_ * 0.05;
+    const interestCoverageVal = intExp_ !== 0 ? ebit_ / intExp_ : 0;
 
-  // Calculate values (as numbers, not strings)
-  const debtToEquityVal = totalEquity_ !== 0 ? totalLiabilities_ / totalEquity_ : 0;
-  const debtToAssetsVal = totalAssets_ !== 0 ? totalLiabilities_ / totalAssets_ : 0;
-  const equityRatioVal = totalAssets_ !== 0 ? (totalEquity_ / totalAssets_) * 100 : 0;
-  const navVal = (totalAssets_ - totalLiabilities_) / 1_000_000;
-
-  const ebit_ = totalAssets_ * 0.1;
-  const intExp_ = totalLiabilities_ * 0.05;
-  const interestCoverageVal = intExp_ !== 0 ? ebit_ / intExp_ : 0;
-
-  // Update local state (arrays for UI)
-  setSolvencyData(prev => {
-    const s = { ...prev };
-    ["debtToEquity", "debtToAssets", "equityRatio", "interestCoverage", "nav"].forEach(k => {
-      if (!Array.isArray(s[k])) s[k] = Array(12).fill("0");
+    // Update local state (arrays for UI)
+    setSolvencyData(prev => {
+      const s = { ...prev };
+      ["debtToEquity", "debtToAssets", "equityRatio", "interestCoverage", "nav"].forEach(k => {
+        if (!Array.isArray(s[k])) s[k] = Array(12).fill("0");
+      });
+      s.debtToEquity[mi] = debtToEquityVal.toFixed(2);
+      s.debtToAssets[mi] = debtToAssetsVal.toFixed(2);
+      s.equityRatio[mi] = equityRatioVal.toFixed(2);
+      s.interestCoverage[mi] = interestCoverageVal.toFixed(2);
+      s.nav[mi] = navVal.toFixed(2);
+      return s;
     });
-    s.debtToEquity[mi] = debtToEquityVal.toFixed(2);
-    s.debtToAssets[mi] = debtToAssetsVal.toFixed(2);
-    s.equityRatio[mi] = equityRatioVal.toFixed(2);
-    s.interestCoverage[mi] = interestCoverageVal.toFixed(2);
-    s.nav[mi] = navVal.toFixed(2);
-    return s;
-  });
 
-  // Get liquidity data
-  const liquidityData = {
-    cashflow: parseFloat(firebaseChartData?.cashflow?.actual?.at(-1)) || 0,
-    burnRate: parseFloat(firebaseChartData?.burnRate?.actual?.at(-1)) || 0,
-    monthsRunway: parseFloat(firebaseChartData?.monthsRunway?.actual?.at(-1)) || 0,
-    currentRatio: parseFloat(firebaseChartData?.currentRatio?.actual?.at(-1)) || 0,
-  };
+    // Get liquidity data
+    const liquidityData = {
+      cashflow: parseFloat(firebaseChartData?.cashflow?.actual?.at(-1)) || 0,
+      burnRate: parseFloat(firebaseChartData?.burnRate?.actual?.at(-1)) || 0,
+      monthsRunway: parseFloat(firebaseChartData?.monthsRunway?.actual?.at(-1)) || 0,
+      currentRatio: parseFloat(firebaseChartData?.currentRatio?.actual?.at(-1)) || 0,
+    };
 
-  // ✅ PASS AS SIMPLE OBJECT WITH NUMBERS, NOT ARRAYS
-  calculateAndSaveSolvencyScore(
-    balanceSheetData,
-    {
-      debtToEquity: debtToEquityVal,
-      debtToAssets: debtToAssetsVal,
-      equityRatio: equityRatioVal,
-      interestCoverage: interestCoverageVal,
+    // ✅ PASS AS SIMPLE OBJECT WITH NUMBERS, NOT ARRAYS
+    calculateAndSaveSolvencyScore(
+      balanceSheetData,
+      {
+        debtToEquity: debtToEquityVal,
+        debtToAssets: debtToAssetsVal,
+        equityRatio: equityRatioVal,
+        interestCoverage: interestCoverageVal,
+        nav: navVal,
+      },
+      liquidityData,
+      snapshotYear
+    );
+
+    console.log("✅ Solvency saved/updated:", {
       nav: navVal,
-    },
-    liquidityData,
-    snapshotYear
-  );
-
-  console.log("✅ Solvency saved/updated:", {
-    nav: navVal,
-    equityRatio: equityRatioVal,
-    debtToEquity: debtToEquityVal,
-  });
-}, [user, balanceSheetData, firebaseChartData, snapshotMonthIndex, snapshotYear, activeSubTab]);
-
+      equityRatio: equityRatioVal,
+      debtToEquity: debtToEquityVal,
+    });
+  }, [user, balanceSheetData, firebaseChartData, snapshotMonthIndex, snapshotYear, activeSubTab]);
 
   // ── Balance sheet calculation helpers ─────────────────────────────────────
-const calcTotalAssets = (mi) => {
-  const assets = balanceSheetData.assets || {};
-  const bank = assets.bank || {};
-  const currentAssets = assets.currentAssets || {};
-  const nonCurrentAssets = assets.nonCurrentAssets || {};
-  const customCategories = assets.customCategories || [];
+  const calcTotalAssets = (mi) => {
+    const assets = balanceSheetData.assets || {};
+    const bank = assets.bank || {};
+    const currentAssets = assets.currentAssets || {};
+    const nonCurrentAssets = assets.nonCurrentAssets || {};
+    const customCategories = assets.customCategories || [];
 
-  const sumObj = (obj) =>
-    Object.values(obj).reduce((s, a) => s + (parseFloat(a?.[mi]) || 0), 0);
+    const sumObj = (obj) =>
+      Object.values(obj).reduce((s, a) => s + (parseFloat(a?.[mi]) || 0), 0);
 
-  let custom = 0;
-  customCategories.forEach((c) => {
-    if (c?.items) {
-      Object.values(c.items).forEach((arr) => {
-        custom += parseFloat(arr?.[mi]) || 0;
-      });
-    }
-  });
+    let custom = 0;
+    customCategories.forEach((c) => {
+      if (c?.items) {
+        Object.values(c.items).forEach((arr) => {
+          custom += parseFloat(arr?.[mi]) || 0;
+        });
+      }
+    });
 
-  return (
-    sumObj(bank) +
-    calculateTotal(currentAssets, mi) +
-    calcFixedAssets(mi) +
-    calcIntangibles(mi) +
-    calculateTotal(nonCurrentAssets, mi) +
-    custom
-  );
-};
+    return (
+      sumObj(bank) +
+      calculateTotal(currentAssets, mi) +
+      calcFixedAssets(mi) +
+      calcIntangibles(mi) +
+      calculateTotal(nonCurrentAssets, mi) +
+      custom
+    );
+  };
 
   const calcFixedAssets = (mi) => {
     const fa = balanceSheetData.assets?.fixedAssets;
@@ -1855,7 +1844,7 @@ const calcTotalAssets = (mi) => {
     bookValuePerShare:   { unitLabel: null, fmt: (v) => formatSmartNumber(v),     isPercentage: false },
   };
 
-  // KPI card renderer — reads from snapshot month index
+  // ── KPI card renderer — reads from snapshot month index ─────────────────
   const renderKPICard = (title, data, kpiKey, _isPercentage = false, fieldPath = null) => {
     const meta         = KPI_META[kpiKey] || {};
     const isPercentage = meta.isPercentage ?? _isPercentage;
@@ -1864,6 +1853,9 @@ const calcTotalAssets = (mi) => {
       ? meta.unitLabel ?? getSmartUnit(rawValue)
       : (isPercentage ? "%" : getSmartUnit(rawValue));
     const fmtCircle    = meta.fmt ?? ((v) => parseFloat(v).toFixed(2));
+
+    // Get current tab for calculation text
+    const currentTab = getCurrentTab();
 
     return (
       <KPICard
@@ -1875,12 +1867,18 @@ const calcTotalAssets = (mi) => {
         isPercentage={isPercentage}
         unitLabel={unitLabel}
         formatCircleValue={fmtCircle}
-        onEyeClick={() => {
-          const tab = SUB_TABS.find((t) => t.id === activeSubTab);
-          openCalc(title, tab?.calculation || "");
+        onEyeClick={() => openCalc(title, currentTab?.calculation || "")}
+        onAnalysis={() => {
+          // ✅ FIXED: Open section-specific analysis modal
+          setSelectedMetricForAnalysis({
+            title: title,
+            key: kpiKey,
+            value: rawValue,
+          });
+          setShowAnalysisModal(true);
         }}
         onAddNotes={(notes) => setKpiNotes((p) => ({ ...p, [kpiKey]: notes }))}
-        onAnalysis={() =>
+        onAnalysisClick={() =>
           setExpandedNotes((p) => ({ ...p, [`${kpiKey}_analysis`]: !p[`${kpiKey}_analysis`] }))
         }
         onTrend={() => openTrend(title, fieldPath || kpiKey, isPercentage)}
@@ -2197,10 +2195,26 @@ const calcTotalAssets = (mi) => {
             signals="Net asset value, equity ratio"
             decisions="Manage debt levels, improve asset base, consider equity financing"
           />
-          <div className="grid grid-cols-2 gap-5">
-            {renderKPICard("Net Asset Value", solvencyData.nav,       "nav",        false, "solvencyData.nav")}
-            {renderKPICard("Equity Ratio",  solvencyData.equityRatio, "equityRatio", true, "solvencyData.equityRatio")}
+          
+          {/* KPI Cards Grid */}
+          <div className="grid grid-cols-2 gap-5 mb-7">
+            {renderKPICard("Net Asset Value", solvencyData.nav, "nav", false, "solvencyData.nav")}
+            {renderKPICard("Equity Ratio", solvencyData.equityRatio, "equityRatio", true, "solvencyData.equityRatio")}
           </div>
+
+          {/* AI ANALYSIS SECTION - INTEGRATED INTO KPI AREA */}
+          {/* <SolvencyAnalysisIntegrated
+            scoreData={solvencyScoreBreakdown}
+            company={{
+              name: "Your Company",
+              stage: "Growth",
+              revenue: "TBD",
+            }}
+            activeSubTab={activeSubTab}
+            isVisible={activeSubTab === "solvency"}
+            loading={false}
+            error={null}
+          /> */}
         </div>
       )}
 
@@ -2273,8 +2287,30 @@ const calcTotalAssets = (mi) => {
           loading={trendLoading}
         />
       )}
+
+    
+
+{showAnalysisModal && selectedMetricForAnalysis && (
+  <AnalysisModal
+    isOpen={showAnalysisModal}
+    onClose={() => {
+      setShowAnalysisModal(false);
+      setSelectedMetricForAnalysis(null);
+    }}
+    kpiTitle={selectedMetricForAnalysis.title}
+    kpiKey={selectedMetricForAnalysis.key}
+    kpiValue={selectedMetricForAnalysis.value}
+    scoreData={solvencyScoreBreakdown}
+    company={{
+      name: "Your Business",
+      stage: "Growth Stage",
+    }}
+    currentUser={user}  // ← ADD THIS LINE
+  />
+)}
     </div>
   );
 };
 
 export default CapitalStructure;
+

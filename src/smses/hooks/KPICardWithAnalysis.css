@@ -1,0 +1,448 @@
+/* components/KPICardWithAnalysis.css */
+/* Styling for KPI cards with integrated AI analysis underneath */
+
+.kpi-card-with-analysis {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin-bottom: 20px;
+}
+
+/* ─────────────────────────────────────────────────────────── */
+/* KPI Card (Original) */
+/* ─────────────────────────────────────────────────────────── */
+
+.kpi-card {
+  background: #fdfcfb;
+  border: 1px solid #e8ddd4;
+  border-radius: 12px 12px 0 0;
+  padding: 20px;
+  transition: all 0.3s ease;
+}
+
+.kpi-card:hover {
+  border-color: #d4c4b0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.kpi-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.kpi-title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #5d4037;
+}
+
+.kpi-info-btn {
+  width: 28px;
+  height: 28px;
+  border: 1px solid #e8ddd4;
+  border-radius: 50%;
+  background: transparent;
+  color: #72542b;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.9rem;
+  transition: all 0.2s ease;
+}
+
+.kpi-info-btn:hover {
+  border-color: #d4c4b0;
+  background: #f5f0eb;
+}
+
+.kpi-circles {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.kpi-circle {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.circle-value {
+  width: 80px;
+  height: 80px;
+  border: 3px solid #e8ddd4;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: #5d4037;
+  background: white;
+}
+
+.kpi-circle.actual .circle-value {
+  border-color: #a67c52;
+  color: #5d4037;
+}
+
+.kpi-circle.budget .circle-value {
+  border-color: #b0b0b0;
+  color: #72542b;
+}
+
+.kpi-circle.variance .circle-value {
+  border-color: #10b981;
+  color: #10b981;
+}
+
+.circle-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #72542b;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.kpi-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-start;
+}
+
+.action-btn {
+  padding: 6px 12px;
+  border: 1px solid #e8ddd4;
+  border-radius: 6px;
+  background: #f5f0eb;
+  color: #5d4037;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.action-btn:hover:not(:disabled) {
+  background: #e8ddd4;
+  border-color: #d4c4b0;
+}
+
+.action-btn.active {
+  background: #a67c52;
+  color: #fdfcfb;
+  border-color: #a67c52;
+}
+
+.action-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.notes-btn:hover:not(:disabled) {
+  background: #f0e6d9;
+}
+
+.analysis-btn:hover:not(:disabled) {
+  background: #e8ddd4;
+}
+
+.trend-btn:hover:not(:disabled) {
+  background: #e8ddd4;
+}
+
+/* ─────────────────────────────────────────────────────────── */
+/* Analysis Section */
+/* ─────────────────────────────────────────────────────────── */
+
+.kpi-analysis-section {
+  background: linear-gradient(135deg, rgba(166, 124, 82, 0.04) 0%, rgba(212, 196, 176, 0.04) 100%);
+  border: 1px solid #e8ddd4;
+  border-top: none;
+  border-radius: 0 0 12px 12px;
+  padding: 16px 20px;
+  animation: slideDown 0.3s ease-out;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    max-height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+  to {
+    opacity: 1;
+    max-height: 500px;
+    padding-top: 16px;
+    padding-bottom: 16px;
+  }
+}
+
+.kpi-analysis-section.loading {
+  min-height: 100px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ─────────────────────────────────────────────────────────── */
+/* Analysis Loading State */
+/* ─────────────────────────────────────────────────────────── */
+
+.analysis-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding: 20px;
+  text-align: center;
+}
+
+.loader {
+  width: 24px;
+  height: 24px;
+  border: 3px solid rgba(166, 124, 82, 0.2);
+  border-top-color: #a67c52;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.analysis-loading p {
+  margin: 0;
+  color: #72542b;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+/* ─────────────────────────────────────────────────────────── */
+/* Analysis Error State */
+/* ─────────────────────────────────────────────────────────── */
+
+.analysis-error {
+  background: rgba(239, 68, 68, 0.05);
+  border: 1px solid rgba(239, 68, 68, 0.2);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin-bottom: 12px;
+}
+
+.analysis-error p {
+  margin: 0 0 10px 0;
+  color: #dc2626;
+  font-size: 0.85rem;
+}
+
+.retry-btn {
+  background: #dc2626;
+  color: white;
+  border: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.retry-btn:hover {
+  background: #b91c1c;
+}
+
+/* ─────────────────────────────────────────────────────────── */
+/* Analysis Content */
+/* ─────────────────────────────────────────────────────────── */
+
+.analysis-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.analysis-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.ai-badge {
+  display: inline-block;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.analysis-text {
+  margin: 0;
+  color: #5d4037;
+  font-size: 0.9rem;
+  line-height: 1.6;
+  font-weight: 500;
+}
+
+/* ─────────────────────────────────────────────────────────── */
+/* Analysis Context Box */
+/* ─────────────────────────────────────────────────────────── */
+
+.analysis-context {
+  background: white;
+  border-left: 4px solid #a67c52;
+  border-radius: 4px;
+  padding: 12px;
+  margin: 8px 0;
+}
+
+.analysis-context h5 {
+  margin: 0 0 6px 0;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #5d4037;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.analysis-context p {
+  margin: 0;
+  color: #5d4037;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  opacity: 0.85;
+}
+
+/* ─────────────────────────────────────────────────────────── */
+/* Analysis Actions */
+/* ─────────────────────────────────────────────────────────── */
+
+.analysis-actions {
+  margin-top: 8px;
+}
+
+.action-label {
+  margin: 0 0 6px 0;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #5d4037;
+}
+
+.action-list {
+  margin: 0;
+  padding-left: 20px;
+  list-style: none;
+}
+
+.action-list li {
+  margin: 4px 0;
+  color: #5d4037;
+  font-size: 0.85rem;
+  line-height: 1.4;
+  position: relative;
+  padding-left: 16px;
+}
+
+.action-list li:before {
+  content: "✓";
+  position: absolute;
+  left: 0;
+  color: #10b981;
+  font-weight: 700;
+}
+
+/* ─────────────────────────────────────────────────────────── */
+/* Analysis Empty State */
+/* ─────────────────────────────────────────────────────────── */
+
+.analysis-empty {
+  text-align: center;
+  padding: 12px;
+  color: #72542b;
+  font-size: 0.9rem;
+  opacity: 0.6;
+}
+
+/* ─────────────────────────────────────────────────────────── */
+/* Responsive Design */
+/* ─────────────────────────────────────────────────────────── */
+
+@media (max-width: 768px) {
+  .kpi-circles {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 8px;
+  }
+
+  .circle-value {
+    width: 60px;
+    height: 60px;
+    font-size: 1.1rem;
+  }
+
+  .circle-label {
+    font-size: 0.7rem;
+  }
+
+  .kpi-actions {
+    flex-wrap: wrap;
+  }
+
+  .action-btn {
+    flex: 1;
+    min-width: 70px;
+  }
+
+  .analysis-content {
+    gap: 10px;
+  }
+
+  .kpi-analysis-section {
+    padding: 12px 16px;
+  }
+}
+
+@media (max-width: 480px) {
+  .kpi-card {
+    padding: 16px;
+  }
+
+  .circle-value {
+    width: 50px;
+    height: 50px;
+    font-size: 0.95rem;
+  }
+
+  .action-btn {
+    padding: 5px 10px;
+    font-size: 0.7rem;
+  }
+
+  .analysis-text {
+    font-size: 0.85rem;
+  }
+
+  .analysis-context {
+    padding: 10px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kpi-card,
+  .kpi-analysis-section {
+    animation: none;
+    transition: none;
+  }
+}
