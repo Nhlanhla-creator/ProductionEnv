@@ -29,8 +29,523 @@ import * as XLSX from 'xlsx';
 import { db, auth } from '../../firebaseConfig';
 import { collection, getDocs, getDoc, doc } from 'firebase/firestore';
 
-// ---------- INVESTOR DETAILS MODAL (same as yours, kept for brevity) ----------
-// ... (keep your existing InvestorDetailsModal component here)
+// ---------- INVESTOR DETAILS MODAL ----------
+const InvestorDetailsModal = ({ investor, isOpen, onClose }) => {
+  const [activeTab, setActiveTab] = useState("overview");
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!isOpen || !investor || !mounted) return null;
+
+  const formatLabel = (value) => {
+    if (!value) return "Not provided";
+    if (typeof value === "boolean") return value ? "Yes" : "No";
+    return value;
+  };
+
+  const tabs = [
+    { id: "overview", label: "Overview", icon: Building2 },
+    { id: "investment", label: "Investment Profile", icon: Target },
+    { id: "team", label: "Team & Contacts", icon: Users },
+    { id: "documents", label: "Documents", icon: FileText },
+  ];
+
+  const renderDocumentLink = (url, label) => {
+    if (!url) return null;
+    return (
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "8px",
+          padding: "10px 16px",
+          background: "linear-gradient(135deg, #a67c52, #7d5a50)",
+          color: "#faf7f2",
+          borderRadius: "8px",
+          fontSize: "14px",
+          fontWeight: "500",
+          cursor: "pointer",
+          maxWidth: "fit-content",
+        }}
+        onClick={() => window.open(url, "_blank", "noopener,noreferrer")}
+      >
+        <FileText size={16} />
+        <span>{label}</span>
+        <ExternalLink size={14} />
+      </div>
+    );
+  };
+
+  const renderLinkedInLink = (url) => {
+    if (!url) return null;
+    return (
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "6px",
+          padding: "6px 12px",
+          background: "linear-gradient(135deg, #0077b5, #005582)",
+          color: "#ffffff",
+          borderRadius: "6px",
+          fontSize: "12px",
+          fontWeight: "500",
+          cursor: "pointer",
+          maxWidth: "fit-content",
+        }}
+        onClick={() => window.open(url, "_blank", "noopener,noreferrer")}
+      >
+        <Linkedin size={14} />
+        <span>LinkedIn</span>
+        <ExternalLink size={11} />
+      </div>
+    );
+  };
+
+  const getMembershipBadgeStyle = (status) => {
+    if (status === "Active Partner") {
+      return { background: "#e8f5e8", color: "#2e7d32" };
+    } else if (status === "Pending Approval") {
+      return { background: "#fff3e0", color: "#ed6c02" };
+    }
+    return { background: "#fdeaea", color: "#c62828" };
+  };
+
+  return createPortal(
+    <div style={modalOverlayStyle}>
+      <div style={modalContentStyle}>
+        <div style={modalHeaderStyle}>
+          <div style={headerContentStyle}>
+            <div style={investorHeaderStyle}>
+              <h2 style={investorNameStyle}>{investor.fundName}</h2>
+              <div style={investorMetaStyle}>
+                <span style={firmTypeBadgeStyle}>{investor.firmType}</span>
+                <span style={locationStyle}>
+                  <MapPin size={14} />
+                  {investor.headOfficeLocation || investor.location}
+                </span>
+                <span style={{ ...membershipStatusStyle, ...getMembershipBadgeStyle(investor.membershipStatus) }}>
+                  {investor.membershipStatus || "Status Unknown"}
+                </span>
+              </div>
+            </div>
+            <button onClick={onClose} style={closeButtonStyle}>
+              <X size={20} />
+            </button>
+          </div>
+
+          <div style={tabsContainerStyle}>
+            {tabs.map((tab) => {
+              const IconComponent = tab.icon;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  style={{
+                    ...tabStyle,
+                    ...(activeTab === tab.id ? activeTabStyle : {}),
+                  }}
+                >
+                  <IconComponent size={16} />
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div style={modalBodyStyle}>
+          {activeTab === "overview" && (
+            <div style={tabContentStyle}>
+              <div style={gridStyle}>
+                <div style={infoCardStyle}>
+                  <h3 style={cardTitleStyle}><Building2 size={18} />Organization Information</h3>
+                  <div style={infoGridStyle}>
+                    <InfoItem label="Fund Name" value={investor.fundName} />
+                    <InfoItem label="Firm Type" value={investor.firmType} />
+                    <InfoItem label="Status" value={formatLabel(investor.status)} />
+                    <InfoItem label="Portfolio Companies" value={investor.portfolioCount} />
+                    <InfoItem label="Team Size" value={investor.teamSize || "Not specified"} />
+                  </div>
+                  {investor.description && (
+                    <div style={descriptionStyle}>
+                      <strong>Description:</strong>
+                      <p>{investor.description}</p>
+                    </div>
+                  )}
+                </div>
+
+                <div style={infoCardStyle}>
+                  <h3 style={cardTitleStyle}><Target size={18} />Focus Areas</h3>
+                  <div style={tagsContainerStyle}>
+                    {investor.focusAreas?.map((area, idx) => (
+                      <span key={idx} style={tagStyle}>{area}</span>
+                    ))}
+                  </div>
+                </div>
+
+                <div style={infoCardStyle}>
+                  <h3 style={cardTitleStyle}><Globe size={18} />Location & Contact</h3>
+                  <div style={infoGridStyle}>
+                    <InfoItem label="Head Office" value={investor.headOfficeLocation || investor.location} />
+                    <InfoItem label="Phone" value={investor.phone} />
+                    <InfoItem label="Email" value={investor.email} />
+                    {investor.website && (
+                      <div style={linkItemStyle}>
+                        <strong>Website:</strong>
+                        <a href={investor.website} target="_blank" rel="noopener noreferrer" style={linkStyle}>
+                          Visit Website <ExternalLink size={12} />
+                        </a>
+                      </div>
+                    )}
+                    {investor.linkedin && renderLinkedInLink(investor.linkedin)}
+                  </div>
+                </div>
+
+                <div style={infoCardStyle}>
+                  <h3 style={cardTitleStyle}><DollarSign size={18} />Financial Overview</h3>
+                  <div style={infoGridStyle}>
+                    <InfoItem label="Committed Capital" value={investor.committedCapital} />
+                    <InfoItem label="Min Funding" value={investor.minFunding} />
+                    <InfoItem label="Max Funding" value={investor.maxFunding} />
+                    <InfoItem label="Total Invested" value={investor.totalInvested || "Not specified"} />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === "investment" && (
+            <div style={tabContentStyle}>
+              <div style={gridStyle}>
+                <div style={infoCardStyle}>
+                  <h3 style={cardTitleStyle}><Target size={18} />Investment Criteria</h3>
+                  <div style={infoGridStyle}>
+                    <InfoItem label="Stage Preference" value={investor.stagePreference} />
+                    <InfoItem label="Ticket Size" value={`${investor.minFunding} - ${investor.maxFunding}`} />
+                    <InfoItem label="Focus Areas" value={investor.focusAreas?.join(" • ")} />
+                  </div>
+                  {investor.investmentThesis && (
+                    <div style={descriptionStyle}>
+                      <strong>Investment Thesis:</strong>
+                      <p>{investor.investmentThesis}</p>
+                    </div>
+                  )}
+                </div>
+
+                <div style={infoCardStyle}>
+                  <h3 style={cardTitleStyle}><Award size={18} />Track Record</h3>
+                  <div style={infoGridStyle}>
+                    <InfoItem label="Portfolio Companies" value={investor.portfolioCount} />
+                    <InfoItem label="Total Deployed" value={investor.totalInvested || "Not specified"} />
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === "team" && (
+            <div style={tabContentStyle}>
+              <div style={gridStyle}>
+                <div style={infoCardStyle}>
+                  <h3 style={cardTitleStyle}><Users size={18} />Key Contacts</h3>
+                  {investor.keyContacts && investor.keyContacts.length > 0 ? (
+                    <div style={contactsListStyle}>
+                      {investor.keyContacts.map((contact, idx) => (
+                        <div key={idx} style={contactCardStyle}>
+                          <strong>{contact.name}</strong>
+                          <span>{contact.role}</span>
+                          <a href={`mailto:${contact.email}`} style={contactEmailStyle}>
+                            <Mail size={12} /> {contact.email}
+                          </a>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div style={emptyStateStyle}>No key contacts listed</div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === "documents" && (
+            <div style={tabContentStyle}>
+              <div style={infoCardStyle}>
+                <h3 style={cardTitleStyle}><FileText size={18} />Public Documents</h3>
+                <div style={documentsGridStyle}>
+                  {renderDocumentLink(investor.documents?.profile, "Firm Profile")}
+                  {renderDocumentLink(investor.documents?.portfolioReport, "Portfolio Report")}
+                  {(!investor.documents || Object.keys(investor.documents).length === 0) && (
+                    <div style={emptyStateStyle}>No documents available</div>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+};
+
+const InfoItem = ({ label, value }) => (
+  <div style={infoItemStyle}>
+    <strong style={{ color: "#7d5a50" }}>{label}:</strong>
+    <span style={{ color: "#4a352f" }}>{value || "Not provided"}</span>
+  </div>
+);
+
+// Modal Styles
+const modalOverlayStyle = {
+  position: "fixed",
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 0,
+  backgroundColor: "rgba(0, 0, 0, 0.7)",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  zIndex: 1000,
+  padding: "20px",
+};
+
+const modalContentStyle = {
+  background: "white",
+  borderRadius: "12px",
+  width: "100%",
+  maxWidth: "900px",
+  maxHeight: "90vh",
+  overflow: "hidden",
+  boxShadow: "0 20px 60px rgba(0, 0, 0, 0.3)",
+};
+
+const modalHeaderStyle = {
+  background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
+  color: "white",
+  padding: "0",
+};
+
+const headerContentStyle = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "flex-start",
+  padding: "24px",
+};
+
+const investorHeaderStyle = {
+  flex: 1,
+};
+
+const investorNameStyle = {
+  margin: "0 0 8px 0",
+  fontSize: "24px",
+  fontWeight: "700",
+};
+
+const investorMetaStyle = {
+  display: "flex",
+  gap: "16px",
+  alignItems: "center",
+  flexWrap: "wrap",
+};
+
+const firmTypeBadgeStyle = {
+  background: "rgba(255, 255, 255, 0.2)",
+  padding: "4px 12px",
+  borderRadius: "20px",
+  fontSize: "14px",
+  fontWeight: "600",
+};
+
+const membershipStatusStyle = {
+  padding: "4px 12px",
+  borderRadius: "20px",
+  fontSize: "14px",
+  fontWeight: "500",
+};
+
+const locationStyle = {
+  display: "flex",
+  alignItems: "center",
+  gap: "4px",
+  fontSize: "14px",
+};
+
+const closeButtonStyle = {
+  background: "rgba(255, 255, 255, 0.2)",
+  border: "none",
+  borderRadius: "8px",
+  padding: "8px",
+  color: "white",
+  cursor: "pointer",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+};
+
+const tabsContainerStyle = {
+  display: "flex",
+  background: "rgba(255, 255, 255, 0.1)",
+  padding: "0 24px",
+  flexWrap: "wrap",
+};
+
+const tabStyle = {
+  display: "flex",
+  alignItems: "center",
+  gap: "8px",
+  padding: "12px 16px",
+  background: "none",
+  border: "none",
+  color: "rgba(255, 255, 255, 0.8)",
+  cursor: "pointer",
+  fontSize: "14px",
+  fontWeight: "500",
+  borderBottom: "3px solid transparent",
+  transition: "all 0.2s ease",
+};
+
+const activeTabStyle = {
+  color: "white",
+  borderBottomColor: "white",
+  background: "rgba(255, 255, 255, 0.1)",
+};
+
+const modalBodyStyle = {
+  padding: "0",
+  maxHeight: "calc(90vh - 140px)",
+  overflowY: "auto",
+};
+
+const tabContentStyle = {
+  padding: "24px",
+};
+
+const gridStyle = {
+  display: "grid",
+  gap: "20px",
+};
+
+const infoCardStyle = {
+  background: "#FEFCFA",
+  border: "1px solid #E8D5C4",
+  borderRadius: "8px",
+  padding: "20px",
+};
+
+const cardTitleStyle = {
+  display: "flex",
+  alignItems: "center",
+  gap: "8px",
+  margin: "0 0 16px 0",
+  fontSize: "18px",
+  fontWeight: "600",
+  color: "#5D2A0A",
+};
+
+const infoGridStyle = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "12px",
+};
+
+const infoItemStyle = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "flex-start",
+  gap: "16px",
+  flexWrap: "wrap",
+  borderBottom: "1px solid #f0e6d9",
+  paddingBottom: "8px",
+};
+
+const descriptionStyle = {
+  marginTop: "16px",
+  padding: "12px",
+  background: "rgba(166, 124, 82, 0.05)",
+  borderRadius: "6px",
+  border: "1px solid #E8D5C4",
+};
+
+const tagsContainerStyle = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: "8px",
+};
+
+const tagStyle = {
+  background: "rgba(166, 124, 82, 0.1)",
+  padding: "6px 14px",
+  borderRadius: "20px",
+  fontSize: "13px",
+  fontWeight: "500",
+  color: "#5D2A0A",
+};
+
+const linkItemStyle = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: "16px",
+  flexWrap: "wrap",
+  borderBottom: "1px solid #f0e6d9",
+  paddingBottom: "8px",
+};
+
+const linkStyle = {
+  color: "#a67c52",
+  textDecoration: "none",
+  display: "flex",
+  alignItems: "center",
+  gap: "4px",
+  fontWeight: "500",
+};
+
+const contactEmailStyle = {
+  color: "#a67c52",
+  textDecoration: "none",
+  fontSize: "12px",
+  display: "flex",
+  alignItems: "center",
+  gap: "4px",
+};
+
+const contactsListStyle = {
+  display: "grid",
+  gap: "12px",
+};
+
+const contactCardStyle = {
+  background: "rgba(166, 124, 82, 0.05)",
+  padding: "12px",
+  borderRadius: "8px",
+  display: "flex",
+  flexDirection: "column",
+  gap: "6px",
+  border: "1px solid #E8D5C4",
+};
+
+const emptyStateStyle = {
+  textAlign: "center",
+  color: "#999",
+  fontStyle: "italic",
+  padding: "40px",
+  background: "#F9F9F9",
+  borderRadius: "8px",
+  border: "1px dashed #E8D5C4",
+};
+
+const documentsGridStyle = {
+  display: "flex",
+  flexDirection: "column",
+  gap: "12px",
+};
 
 // ---------- MAIN INVESTOR ECOSYSTEM COMPONENT ----------
 function InvestorEcosystem() {
@@ -104,7 +619,6 @@ function InvestorEcosystem() {
         
         for (const docSnap of querySnapshot.docs) {
           const data = docSnap.data();
-          // The data structure: data.formData.fundManageOverview
           const formData = data.formData || {};
           const fundManageOverview = formData.fundManageOverview || {};
           
@@ -113,7 +627,6 @@ function InvestorEcosystem() {
           
           console.log(`Investor ${docSnap.id}: memberOfAssociation=${memberOfAssociation}, associations=${JSON.stringify(industryAssociations)}`);
           
-          // Check if this investor's associations include our association name
           if (memberOfAssociation === "yes" && industryAssociations.includes(associationName)) {
             console.log(`✅ MATCH FOUND: ${fundManageOverview.registeredName}`);
             
@@ -296,7 +809,6 @@ function InvestorEcosystem() {
         )}
       </div>
 
-      {/* Debug Info - Remove after testing */}
       {debugInfo && (
         <div style={styles.debugContainer}>
           <strong>Debug Info:</strong> {debugInfo}
@@ -392,6 +904,14 @@ function InvestorEcosystem() {
             </div>
           )}
         </>
+      )}
+
+      {showViewModal && selectedInvestor && (
+        <InvestorDetailsModal 
+          investor={selectedInvestor} 
+          isOpen={showViewModal} 
+          onClose={() => setShowViewModal(false)} 
+        />
       )}
     </div>
   );
