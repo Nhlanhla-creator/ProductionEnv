@@ -1,6 +1,8 @@
+// src/associator/MyPortfolios/portfolio.js
 import React, { useState } from "react";
-import { FiSearch, FiActivity, FiTrendingUp, FiTarget, FiLogOut, FiAward, FiBookOpen, FiPieChart, FiDollarSign, FiBarChart2, FiHeart, FiLogOut as FiExit } from "react-icons/fi";
+import { FiDollarSign, FiHeart, FiTrendingUp, FiLogOut as FiExit } from "react-icons/fi";
 import { PortfolioProvider } from "../../context/PortfolioContext";
+import { AssociationAnalyticsProvider } from "../../context/AssociationAnalyticsContext";
 import Performance from "./Performance";
 import CapitalFlow from "./CapitalFlow";
 import InclusionImpact from "./InclusionImpact";
@@ -13,7 +15,7 @@ const MY_PORTFOLIO_TABS = [
   { id: "liquidity-exits",   label: "Liquidity & Exits", icon: FiExit,       purpose: "Monitor exit activity, returns, and time to exit across sectors." },
 ];
 
-const AssociatorPortfolio = () => {
+const AssociatorPortfolioContent = () => {
   const [activeSubTab, setActiveSubTab] = useState("capital-flow");
 
   const renderSubTab = () => {
@@ -30,14 +32,11 @@ const AssociatorPortfolio = () => {
 
   return (
     <div className="min-h-screen p-6 pb-8 transition-[padding-left] duration-300 box-border w-full">
-
-      {/* Page Heading */}
       <div className="mb-5">
         <h1 className="text-2xl font-bold text-darkBrown tracking-tight">Market Insights</h1>
         <p className="text-xs text-textBrown mt-1">Overview of capital, performance and portfolio analytics</p>
       </div>
 
-      {/* Sub-tabs */}
       <div className="flex gap-[5px] flex-wrap bg-white rounded-xl p-1.5 border border-paleBrown shadow-[0_2px_8px_rgba(59,36,9,0.06)] mb-0">
         {MY_PORTFOLIO_TABS.map(tab => {
           const active = activeSubTab === tab.id;
@@ -73,6 +72,12 @@ const AssociatorPortfolio = () => {
     </div>
   );
 };
+
+const AssociatorPortfolio = () => (
+  <AssociationAnalyticsProvider>
+    <AssociatorPortfolioContent />
+  </AssociationAnalyticsProvider>
+);
 
 const MyPortfolio = () => (
   <PortfolioProvider>
