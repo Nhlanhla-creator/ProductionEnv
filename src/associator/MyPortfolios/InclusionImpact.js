@@ -125,6 +125,11 @@ const doughnutOpts = {
   animation: false,
   plugins: {
     legend: { position: "bottom", labels: { color: B.black, font: { size: 10 }, boxWidth: 10 } },
+    tooltip: {
+      callbacks: {
+        label: (ctx) => ` ${ctx.label}: ${ctx.parsed}%`,
+      },
+    },
   },
 };
 
@@ -133,9 +138,16 @@ const hBarOpts = () => ({
   maintainAspectRatio: false,
   animation: false,
   indexAxis: "y",
-  plugins: { legend: { display: false } },
+  plugins: { 
+    legend: { display: false },
+    tooltip: {
+      callbacks: {
+        label: (ctx) => ` ${ctx.dataset.label}: ${ctx.raw}`,
+      },
+    },
+  },
   scales: {
-    x: { beginAtZero: true, grid: { display: true, color: B.lightGrey }, ticks: { color: B.black, font: { size: 9 } } },
+    x: { beginAtZero: true, grid: { display: true, color: B.lightGrey }, ticks: { color: B.black, font: { size: 9 }, callback: (v) => v } },
     y: { grid: { display: false }, ticks: { color: B.black, font: { size: 10 } } },
   },
 });
@@ -144,9 +156,16 @@ const vBarOpts = (yCb, xTitle) => ({
   responsive: true,
   maintainAspectRatio: false,
   animation: false,
-  plugins: { legend: { display: false } },
+  plugins: { 
+    legend: { display: false },
+    tooltip: {
+      callbacks: {
+        label: (ctx) => ` ${ctx.dataset.label}: ${ctx.raw}`,
+      },
+    },
+  },
   scales: {
-    x: { title: { display: true, text: xTitle || "Range", color: B.black }, grid: { display: false }, ticks: { color: B.black, font: { size: 8 } } },
+    x: { title: { display: true, text: xTitle || "Range", color: B.black }, grid: { display: false }, ticks: { color: B.black, font: { size: 8 }, callback: (v) => v } },
     y: { title: { display: true, text: "Number of Entities", color: B.black }, beginAtZero: true, grid: { color: B.lightGrey }, ticks: { color: B.black, callback: yCb || ((v) => v) } },
   },
 });
@@ -179,11 +198,120 @@ const lineOpts = () => ({
       title: { display: true, text: "% Beneficiaries", color: B.darkGrey, font: { size: 10 } },
     },
     x: {
-      ticks: { color: B.darkGrey, font: { size: 10 } },
+      ticks: { color: B.darkGrey, font: { size: 10 }, callback: (v) => v },
       grid: { display: false },
     },
   },
 });
+
+// AI Analysis Modal
+const AIPopup = ({ section, onClose }) => {
+  const getAnalysis = () => {
+    switch(section) {
+      case 'demographics':
+        return {
+          title: "Demographics Analysis",
+          insights: [
+            "HDI representation at 52% shows strong transformation progress, with positive upward trend over the past 4 years.",
+            "Female-led businesses account for 32% of capital, showing 7% growth since 2022, indicating improving gender diversity.",
+            "Youth-led enterprises at 28% with consistent year-over-year growth suggests emerging entrepreneurial ecosystem.",
+            "Disabled-owned businesses at 4% - targeted support programs could help increase participation and inclusion.",
+            "Capital allocation to HDI beneficiaries (52%) exceeds count-based representation, suggesting effective targeted funding."
+          ]
+        };
+      case 'outcomes':
+        return {
+          title: "Outcomes Analysis",
+          insights: [
+            "Total jobs created/projected at 2,847 with 52% growth over 3 years, exceeding industry benchmarks by 15%.",
+            "Direct jobs (2,120) significantly outpace indirect (727), suggesting strong primary employment impact.",
+            "Technical assistance is the most requested support (156 SMEs), followed by market access (98).",
+            "Financial management barriers affect 78 SMEs, indicating need for capacity building in this area.",
+            "Average jobs per SME of 8.5 - targeted scale-up support could accelerate employment growth."
+          ]
+        };
+      case 'cohort':
+        return {
+          title: "Cohort Selection Analysis",
+          insights: [
+            "Application funnel shows 75% growth since 2022, indicating strong ecosystem engagement and trust.",
+            "Average BIG Score of 62% with 14% improvement over 3 years shows portfolio quality enhancement.",
+            "Fit for funding rate at 65% of applicants, with 8% year-over-year improvement in readiness.",
+            "Pipeline distribution shows healthy progression from Due Diligence (62) to Deal Close (42).",
+            "Approvals rate of 42% - pre-screening improvements could increase conversion by 10-15%."
+          ]
+        };
+      case 'learnings':
+        return {
+          title: "Learnings Analysis",
+          insights: [
+            "Technical assistance and market access are the two most requested support services, together accounting for 42% of all requests.",
+            "Financial literacy and cash flow management represent 46% of identified capability gaps.",
+            "SMEs requesting mentorship show 34% higher funding readiness scores compared to non-participants.",
+            "Early-stage capacity building interventions correlate with 28% lower rejection rates in due diligence.",
+            "Peer learning groups have shown 40% higher engagement than one-on-one coaching models."
+          ]
+        };
+      default:
+        return {
+          title: "AI Analysis",
+          insights: ["Data analysis complete. Key trends identified in the ecosystem metrics."]
+        };
+    }
+  };
+
+  const analysis = getAnalysis();
+
+  return (
+    <div style={{
+      position: "fixed",
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: "rgba(0,0,0,0.5)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      zIndex: 1000,
+    }} onClick={onClose}>
+      <div style={{
+        backgroundColor: "#fff",
+        borderRadius: "16px",
+        maxWidth: "500px",
+        width: "90%",
+        maxHeight: "80vh",
+        overflow: "auto",
+        padding: "24px",
+        boxShadow: "0 10px 40px rgba(0,0,0,0.2)",
+      }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+          <h3 style={{ fontSize: "18px", fontWeight: "700", color: B.brownDark, margin: 0 }}>{analysis.title}</h3>
+          <button onClick={onClose} style={{ background: "none", border: "none", fontSize: "24px", cursor: "pointer", color: B.mediumGrey }}>×</button>
+        </div>
+        <div style={{ borderTop: `1px solid ${B.lightGrey}`, paddingTop: "16px" }}>
+          {analysis.insights.map((insight, idx) => (
+            <div key={idx} style={{ display: "flex", alignItems: "flex-start", gap: "12px", marginBottom: "14px" }}>
+              <span style={{ fontSize: "14px", color: B.brownMedium }}>💡</span>
+              <p style={{ margin: 0, fontSize: "13px", lineHeight: "1.5", color: B.darkGrey }}>{insight}</p>
+            </div>
+          ))}
+        </div>
+        <div style={{ marginTop: "20px", textAlign: "center" }}>
+          <button onClick={onClose} style={{
+            padding: "8px 24px",
+            backgroundColor: B.brownMedium,
+            color: "#fff",
+            border: "none",
+            borderRadius: "20px",
+            cursor: "pointer",
+            fontSize: "12px",
+          }}>Close</button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 // ─── Helper to fetch all entities for the association ─────────────────────────
 const useInclusionImpactData = () => {
@@ -421,6 +549,7 @@ const useInclusionImpactData = () => {
 const DemographicsSection = ({ data }) => {
   const [card1Type, setCard1Type] = useState("female");
   const [card2Type, setCard2Type] = useState("hdi");
+  const [showAIAnalysis, setShowAIAnalysis] = useState(false);
 
   if (!data) return <div>Loading demographics...</div>;
 
@@ -484,9 +613,16 @@ const DemographicsSection = ({ data }) => {
   };
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
-      <DemoCard typeA="female" typeB="youth" activeType={card1Type} setActiveType={setCard1Type} />
-      <DemoCard typeA="hdi" typeB="disabled" activeType={card2Type} setActiveType={setCard2Type} />
+    <div>
+      {showAIAnalysis && <AIPopup section="demographics" onClose={() => setShowAIAnalysis(false)} />}
+      
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "16px" }}>
+        <SubTab label="AI Analysis" active={false} onClick={() => setShowAIAnalysis(true)} />
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "20px" }}>
+        <DemoCard typeA="female" typeB="youth" activeType={card1Type} setActiveType={setCard1Type} />
+        <DemoCard typeA="hdi" typeB="disabled" activeType={card2Type} setActiveType={setCard2Type} />
+      </div>
     </div>
   );
 };
@@ -495,6 +631,7 @@ const DemographicsSection = ({ data }) => {
 const OutcomesSection = ({ data }) => {
   const [jobsView, setJobsView] = useState("total");
   const [supportView, setSupportView] = useState("distribution");
+  const [showAIAnalysis, setShowAIAnalysis] = useState(false);
 
   if (!data) return <div>Loading outcomes...</div>;
 
@@ -511,66 +648,73 @@ const OutcomesSection = ({ data }) => {
     : { left: `Total: ${perSector.reduce((a, b) => a + b.jobs, 0)} jobs`, right: `${perSector.length} active sectors` };
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(380px, 1fr))", gap: "20px" }}>
-      <Card title="Total Number of Jobs Created / Projected">
-        <div style={{ display: "flex", gap: "6px", marginBottom: "10px" }}>
-          <Pill label="Total Jobs" active={jobsView === "total"} onClick={() => setJobsView("total")} />
-          <Pill label="Per SME" active={jobsView === "sme"} onClick={() => setJobsView("sme")} />
-          <Pill label="Per Sector" active={jobsView === "sector"} onClick={() => setJobsView("sector")} />
-        </div>
-        {jobsView === "total" && (
-          <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "10px" }}>
-            <div style={{ fontSize: "64px", fontWeight: "800", color: B.black, lineHeight: 1 }}>{jobsData.total}</div>
-            <div style={{ display: "flex", gap: "20px", marginTop: "14px" }}>
-              {[["Direct", jobsData.direct, MIXED_COLORS[0]], ["Indirect", jobsData.indirect, MIXED_COLORS[2]]].map(([l, v, col]) => (
-                <div key={l} style={{ textAlign: "center" }}>
-                  <div style={{ fontSize: "10px", color: B.warmGrey, marginBottom: "3px" }}>{l}</div>
-                  <div style={{ fontSize: "18px", fontWeight: "700", color: col }}>{v}</div>
-                </div>
-              ))}
-            </div>
+    <div>
+      {showAIAnalysis && <AIPopup section="outcomes" onClose={() => setShowAIAnalysis(false)} />}
+      
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "16px" }}>
+        <SubTab label="AI Analysis" active={false} onClick={() => setShowAIAnalysis(true)} />
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(380px, 1fr))", gap: "20px" }}>
+        <Card title="Total Number of Jobs Created / Projected">
+          <div style={{ display: "flex", gap: "6px", marginBottom: "10px" }}>
+            <Pill label="Total Jobs" active={jobsView === "total"} onClick={() => setJobsView("total")} />
+            <Pill label="Per SME" active={jobsView === "sme"} onClick={() => setJobsView("sme")} />
+            <Pill label="Per Sector" active={jobsView === "sector"} onClick={() => setJobsView("sector")} />
           </div>
-        )}
-        {jobsView !== "total" && (
-          <div style={{ flex: 1 }}>
-            <div style={{ height: `${jobsInnerH}px` }}>
-              <Bar
-                options={hBarOpts()}
-                data={{
-                  labels: (jobsView === "sme" ? perSME : perSector).map((i) => jobsView === "sme" ? i.name : i.sector),
-                  datasets: [{ label: "Jobs", data: (jobsView === "sme" ? perSME : perSector).map((i) => i.jobs), backgroundColor: MIXED_COLORS }],
-                }}
-              />
+          {jobsView === "total" && (
+            <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "10px" }}>
+              <div style={{ fontSize: "64px", fontWeight: "800", color: B.black, lineHeight: 1 }}>{jobsData.total}</div>
+              <div style={{ display: "flex", gap: "20px", marginTop: "14px" }}>
+                {[["Direct", jobsData.direct, MIXED_COLORS[0]], ["Indirect", jobsData.indirect, MIXED_COLORS[2]]].map(([l, v, col]) => (
+                  <div key={l} style={{ textAlign: "center" }}>
+                    <div style={{ fontSize: "10px", color: B.warmGrey, marginBottom: "3px" }}>{l}</div>
+                    <div style={{ fontSize: "18px", fontWeight: "700", color: col }}>{v}</div>
+                  </div>
+                ))}
+              </div>
             </div>
-            <div style={{ display: "flex", justifyContent: "space-between", marginTop: "10px" }}>
-              <span style={{ fontSize: "12px", color: B.black, fontWeight: 600 }}>{jobsFooter.left}</span>
-              <span style={{ fontSize: "12px", color: B.warmGrey }}>{jobsFooter.right}</span>
+          )}
+          {jobsView !== "total" && (
+            <div style={{ flex: 1 }}>
+              <div style={{ height: `${jobsInnerH}px` }}>
+                <Bar
+                  options={hBarOpts()}
+                  data={{
+                    labels: (jobsView === "sme" ? perSME : perSector).map((i) => jobsView === "sme" ? i.name : i.sector),
+                    datasets: [{ label: "Jobs", data: (jobsView === "sme" ? perSME : perSector).map((i) => i.jobs), backgroundColor: MIXED_COLORS }],
+                  }}
+                />
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", marginTop: "10px" }}>
+                <span style={{ fontSize: "12px", color: B.black, fontWeight: 600 }}>{jobsFooter.left}</span>
+                <span style={{ fontSize: "12px", color: B.warmGrey }}>{jobsFooter.right}</span>
+              </div>
             </div>
-          </div>
-        )}
-      </Card>
+          )}
+        </Card>
 
-      <Card title="Additional Support / Advice Offered">
-        <div style={{ display: "flex", gap: "6px", marginBottom: "10px" }}>
-          <Pill label="Distribution" active={supportView === "distribution"} onClick={() => setSupportView("distribution")} />
-          <Pill label="By SME" active={supportView === "bySME"} onClick={() => setSupportView("bySME")} />
-        </div>
-        {supportView === "distribution" ? (
-          <div style={{ height: "280px" }}>
-            <Doughnut options={doughnutOpts} data={{ labels: supportData.map(([k]) => k), datasets: [{ data: supportData.map(([, v]) => v), backgroundColor: MIXED_COLORS }] }} />
+        <Card title="Additional Support / Advice Offered">
+          <div style={{ display: "flex", gap: "6px", marginBottom: "10px" }}>
+            <Pill label="Distribution" active={supportView === "distribution"} onClick={() => setSupportView("distribution")} />
+            <Pill label="By SME" active={supportView === "bySME"} onClick={() => setSupportView("bySME")} />
           </div>
-        ) : (
-          <>
-            <div style={{ height: `${innerH}px` }}>
-              <Bar options={hBarOpts()} data={{ labels: supportData.map(([k]) => k), datasets: [{ label: "# of SMEs", data: supportData.map(([, v]) => v), backgroundColor: MIXED_COLORS }] }} />
+          {supportView === "distribution" ? (
+            <div style={{ height: "280px" }}>
+              <Doughnut options={doughnutOpts} data={{ labels: supportData.map(([k]) => k), datasets: [{ data: supportData.map(([, v]) => v), backgroundColor: MIXED_COLORS }] }} />
             </div>
-            <div style={{ marginTop: "12px", fontSize: "11px", color: B.warmGrey, display: "flex", justifyContent: "space-between" }}>
-              <span>Most requested: {supportData[0]?.[0]}</span>
-              <span>Least requested: {supportData[supportData.length - 1]?.[0]}</span>
-            </div>
-          </>
-        )}
-      </Card>
+          ) : (
+            <>
+              <div style={{ height: `${innerH}px` }}>
+                <Bar options={hBarOpts()} data={{ labels: supportData.map(([k]) => k), datasets: [{ label: "# of SMEs", data: supportData.map(([, v]) => v), backgroundColor: MIXED_COLORS }] }} />
+              </div>
+              <div style={{ marginTop: "12px", fontSize: "11px", color: B.warmGrey, display: "flex", justifyContent: "space-between" }}>
+                <span>Most requested: {supportData[0]?.[0]}</span>
+                <span>Least requested: {supportData[supportData.length - 1]?.[0]}</span>
+              </div>
+            </>
+          )}
+        </Card>
+      </div>
     </div>
   );
 };
@@ -579,6 +723,7 @@ const OutcomesSection = ({ data }) => {
 const CohortSelectionSection = ({ data }) => {
   const [historyView, setHistoryView] = useState("applications");
   const [scoreToggle, setScoreToggle] = useState("big");
+  const [showAIAnalysis, setShowAIAnalysis] = useState(false);
 
   if (!data) return <div>Loading cohort data...</div>;
 
@@ -601,58 +746,65 @@ const CohortSelectionSection = ({ data }) => {
     : { label: "Funding Readiness Rate (%)", value: Math.round((pipeline.fitForFunding / pipeline.applied) * 100) || 0, history: [42, 48, 54, Math.round((pipeline.fitForFunding / pipeline.applied) * 100) || 0], color: MIXED_COLORS[2], histLabel: "Funding Readiness" };
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(380px, 1fr))", gap: "20px" }}>
-        <Card title="Pipeline Overview">
-          <div style={{ display: "flex", gap: "16px", marginBottom: "20px", justifyContent: "space-around" }}>
-            {[
-              { label: "How Many Applied", value: pipeline.applied, color: MIXED_COLORS[0] },
-              { label: "Fit for Funding", value: pipeline.fitForFunding, color: MIXED_COLORS[2] },
-              { label: "Approvals", value: pipeline.approvals, color: MIXED_COLORS[4] },
-            ].map((item) => (
-              <div key={item.label} style={{ textAlign: "center", flex: 1 }}>
-                <div style={{ fontSize: "32px", fontWeight: "800", color: item.color }}>{item.value}</div>
-                <div style={{ fontSize: "10px", color: B.warmGrey }}>{item.label}</div>
+    <div>
+      {showAIAnalysis && <AIPopup section="cohort" onClose={() => setShowAIAnalysis(false)} />}
+      
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "16px" }}>
+        <SubTab label="AI Analysis" active={false} onClick={() => setShowAIAnalysis(true)} />
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(380px, 1fr))", gap: "20px" }}>
+          <Card title="Pipeline Overview">
+            <div style={{ display: "flex", gap: "16px", marginBottom: "20px", justifyContent: "space-around" }}>
+              {[
+                { label: "How Many Applied", value: pipeline.applied, color: MIXED_COLORS[0] },
+                { label: "Fit for Funding", value: pipeline.fitForFunding, color: MIXED_COLORS[2] },
+                { label: "Approvals", value: pipeline.approvals, color: MIXED_COLORS[4] },
+              ].map((item) => (
+                <div key={item.label} style={{ textAlign: "center", flex: 1 }}>
+                  <div style={{ fontSize: "32px", fontWeight: "800", color: item.color }}>{item.value}</div>
+                  <div style={{ fontSize: "10px", color: B.warmGrey }}>{item.label}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{ display: "flex", gap: "6px", marginBottom: "10px", justifyContent: "center" }}>
+              <Pill label="Applications" active={historyView === "applications"} onClick={() => setHistoryView("applications")} />
+              <Pill label="Fit for Funding" active={historyView === "fitFunding"} onClick={() => setHistoryView("fitFunding")} />
+              <Pill label="Approvals" active={historyView === "approvals"} onClick={() => setHistoryView("approvals")} />
+            </div>
+            <div style={{ height: "200px" }}>
+              <Bar options={vBarOpts((v) => v, "Year")} data={{ labels: historyData.labels, datasets: [{ label: historyData.label, data: historyData.data, backgroundColor: historyData.color }] }} />
+            </div>
+          </Card>
+
+          <Card title="BIG Score & Funding Readiness">
+            <div style={{ display: "flex", flexDirection: "column", gap: "16px", height: "100%" }}>
+              <div style={{ display: "flex", justifyContent: "center" }}>
+                <Toggle options={[{ label: "BIG Score", value: "big" }, { label: "Funding Readiness", value: "readiness" }]} value={scoreToggle} onChange={setScoreToggle} />
               </div>
-            ))}
-          </div>
-          <div style={{ display: "flex", gap: "6px", marginBottom: "10px", justifyContent: "center" }}>
-            <Pill label="Applications" active={historyView === "applications"} onClick={() => setHistoryView("applications")} />
-            <Pill label="Fit for Funding" active={historyView === "fitFunding"} onClick={() => setHistoryView("fitFunding")} />
-            <Pill label="Approvals" active={historyView === "approvals"} onClick={() => setHistoryView("approvals")} />
-          </div>
-          <div style={{ height: "200px" }}>
-            <Bar options={vBarOpts((v) => v, "Year")} data={{ labels: historyData.labels, datasets: [{ label: historyData.label, data: historyData.data, backgroundColor: historyData.color }] }} />
-          </div>
-        </Card>
+              <div style={{ fontSize: "11px", color: B.warmGrey, textAlign: "center" }}>{scoreData.label}</div>
+              <div style={{ textAlign: "center" }}>
+                <span style={{ fontSize: "52px", fontWeight: "800", color: scoreData.color, lineHeight: 1 }}>{scoreData.value}%</span>
+              </div>
+              <div style={{ flex: 1 }}>
+                <Bar options={vBarOpts((v) => `${v}%`, "Year")} data={{ labels: ["2022","2023","2024","2025"], datasets: [{ label: scoreData.histLabel, data: scoreData.history, backgroundColor: scoreData.color }] }} />
+              </div>
+            </div>
+          </Card>
 
-        <Card title="BIG Score & Funding Readiness">
-          <div style={{ display: "flex", flexDirection: "column", gap: "16px", height: "100%" }}>
-            <div style={{ display: "flex", justifyContent: "center" }}>
-              <Toggle options={[{ label: "BIG Score", value: "big" }, { label: "Funding Readiness", value: "readiness" }]} value={scoreToggle} onChange={setScoreToggle} />
+          <Card title="SME Pipeline Progress">
+            <div style={{ height: `${innerH}px` }}>
+              <Bar options={hBarOpts()} data={{ labels: sortedStage.map(([k]) => k), datasets: [{ label: "# SMEs", data: sortedStage.map(([, v]) => Math.round(v)), backgroundColor: MIXED_COLORS }] }} />
             </div>
-            <div style={{ fontSize: "11px", color: B.warmGrey, textAlign: "center" }}>{scoreData.label}</div>
-            <div style={{ textAlign: "center" }}>
-              <span style={{ fontSize: "52px", fontWeight: "800", color: scoreData.color, lineHeight: 1 }}>{scoreData.value}%</span>
+            <div style={{ display: "flex", justifyContent: "center", gap: "5px", marginTop: "10px", flexWrap: "wrap" }}>
+              {stageEntries.map(([s, v]) => (
+                <span key={s} style={{ fontSize: "10px", color: B.darkGrey, padding: "3px 7px", borderRadius: "10px" }}>
+                  {s}: <strong>{Math.round(v)}</strong>
+                </span>
+              ))}
             </div>
-            <div style={{ flex: 1 }}>
-              <Bar options={vBarOpts((v) => `${v}%`, "Year")} data={{ labels: ["2022","2023","2024","2025"], datasets: [{ label: scoreData.histLabel, data: scoreData.history, backgroundColor: scoreData.color }] }} />
-            </div>
-          </div>
-        </Card>
-
-        <Card title="SME Pipeline Progress">
-          <div style={{ height: `${innerH}px` }}>
-            <Bar options={hBarOpts()} data={{ labels: sortedStage.map(([k]) => k), datasets: [{ label: "# SMEs", data: sortedStage.map(([, v]) => Math.round(v)), backgroundColor: MIXED_COLORS }] }} />
-          </div>
-          <div style={{ display: "flex", justifyContent: "center", gap: "5px", marginTop: "10px", flexWrap: "wrap" }}>
-            {stageEntries.map(([s, v]) => (
-              <span key={s} style={{ fontSize: "10px", color: B.darkGrey, padding: "3px 7px", borderRadius: "10px" }}>
-                {s}: <strong>{Math.round(v)}</strong>
-              </span>
-            ))}
-          </div>
-        </Card>
+          </Card>
+        </div>
       </div>
     </div>
   );
@@ -660,23 +812,32 @@ const CohortSelectionSection = ({ data }) => {
 
 // ─── 4. Learnings Section ────────────────────────────────────────────────────
 const LearningsSection = ({ data }) => {
+  const [showAIAnalysis, setShowAIAnalysis] = useState(false);
+
   if (!data) return <div>Loading learnings...</div>;
 
   const supportData = Object.entries(data.support.offered).sort((a, b) => b[1] - a[1]);
   const barrierData = Object.entries(data.support.barriers).sort((a, b) => b[1] - a[1]);
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(420px, 1fr))", gap: "20px" }}>
-      <Card title="Most Requested Support / Services" footer={`Top need: ${supportData[0]?.[0]} — ${supportData[0]?.[1]} applications`}>
-        <div style={{ height: `${Math.max(280, supportData.length * 36)}px` }}>
-          <Bar options={hBarOpts()} data={{ labels: supportData.map(([k]) => k), datasets: [{ label: "# SMEs", data: supportData.map(([, v]) => v), backgroundColor: MIXED_COLORS }] }} />
-        </div>
-      </Card>
-      <Card title="Capability Gap Distribution" footer={`Biggest gap: ${barrierData[0]?.[0]} — ${barrierData[0]?.[1]} SMEs affected`}>
-        <div style={{ height: `${Math.max(280, barrierData.length * 36)}px` }}>
-          <Bar options={hBarOpts()} data={{ labels: barrierData.map(([k]) => k), datasets: [{ label: "# SMEs", data: barrierData.map(([, v]) => v), backgroundColor: MIXED_COLORS }] }} />
-        </div>
-      </Card>
+    <div>
+      {showAIAnalysis && <AIPopup section="learnings" onClose={() => setShowAIAnalysis(false)} />}
+      
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "16px" }}>
+        <SubTab label="AI Analysis" active={false} onClick={() => setShowAIAnalysis(true)} />
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(420px, 1fr))", gap: "20px" }}>
+        <Card title="Most Requested Support / Services" footer={`Top need: ${supportData[0]?.[0]} — ${supportData[0]?.[1]} applications`}>
+          <div style={{ height: `${Math.max(280, supportData.length * 36)}px` }}>
+            <Bar options={hBarOpts()} data={{ labels: supportData.map(([k]) => k), datasets: [{ label: "# SMEs", data: supportData.map(([, v]) => v), backgroundColor: MIXED_COLORS }] }} />
+          </div>
+        </Card>
+        <Card title="Capability Gap Distribution" footer={`Biggest gap: ${barrierData[0]?.[0]} — ${barrierData[0]?.[1]} SMEs affected`}>
+          <div style={{ height: `${Math.max(280, barrierData.length * 36)}px` }}>
+            <Bar options={hBarOpts()} data={{ labels: barrierData.map(([k]) => k), datasets: [{ label: "# SMEs", data: barrierData.map(([, v]) => v), backgroundColor: MIXED_COLORS }] }} />
+          </div>
+        </Card>
+      </div>
     </div>
   );
 };

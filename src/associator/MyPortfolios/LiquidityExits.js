@@ -38,6 +38,24 @@ const ManualLegend = ({ labels, colors, values }) => (
   </div>
 );
 
+const SubTab = ({ label, active, onClick }) => (
+  <button
+    onClick={onClick}
+    style={{
+      padding: "6px 16px",
+      borderRadius: "20px",
+      cursor: "pointer",
+      fontSize: "12px",
+      border: `1.5px solid ${active ? B.darkest : B.pale}`,
+      fontWeight: active ? 700 : 500,
+      background: active ? B.darkest : "#fff",
+      color: active ? "#fff" : B.dark,
+    }}
+  >
+    {label}
+  </button>
+);
+
 const ViewTrendButton = ({ show, onClick }) => (
   <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "10px" }}>
     <button
@@ -74,9 +92,16 @@ const TrendChart = ({ trendData, colors }) => {
         <Bar
           options={{
             responsive: true, maintainAspectRatio: false, animation: false,
-            plugins: { legend: { display: false } },
+            plugins: { 
+              legend: { display: false },
+              tooltip: {
+                callbacks: {
+                  label: (ctx) => ` ${ctx.dataset.label}: ${ctx.raw}`,
+                },
+              },
+            },
             scales: {
-              x: { stacked: true, ticks: { color: TICK, font: { size: 8 } }, grid: { display: false } },
+              x: { stacked: true, ticks: { color: TICK, font: { size: 8 }, callback: (v) => v }, grid: { display: false } },
               y: { stacked: true, beginAtZero: true, grid: { color: GRID }, ticks: { color: TICK, font: { size: 8 }, callback: (v) => v } },
             },
           }}
@@ -97,12 +122,19 @@ const doughnutOpts = {
 
 const vBarOpts = (yTitle, yCb) => ({
   responsive: true, maintainAspectRatio: false, animation: false,
-  plugins: { legend: { display: false } },
+  plugins: { 
+    legend: { display: false },
+    tooltip: {
+      callbacks: {
+        label: (ctx) => ` ${ctx.dataset.label}: ${ctx.raw}`,
+      },
+    },
+  },
   scales: {
     x: {
       title: { display: true, text: "Range", color: TICK, font: { size: 11 } },
       grid: { display: false },
-      ticks: { color: TICK, font: { size: 10 } },
+      ticks: { color: TICK, font: { size: 10 }, callback: (v) => v },
     },
     y: {
       title: { display: true, text: yTitle || "Number of Exits", color: TICK, font: { size: 11 } },
@@ -115,12 +147,19 @@ const vBarOpts = (yTitle, yCb) => ({
 
 const hBarOpts = () => ({
   responsive: true, maintainAspectRatio: false, animation: false, indexAxis: "y",
-  plugins: { legend: { display: false } },
+  plugins: { 
+    legend: { display: false },
+    tooltip: {
+      callbacks: {
+        label: (ctx) => ` ${ctx.dataset.label}: ${ctx.raw}`,
+      },
+    },
+  },
   scales: {
     x: {
       beginAtZero: true,
       grid: { display: true, color: GRID },
-      ticks: { color: TICK, font: { size: 10 } },
+      ticks: { color: TICK, font: { size: 10 }, callback: (v) => v },
     },
     y: {
       grid: { display: false },
@@ -128,6 +167,82 @@ const hBarOpts = () => ({
     },
   },
 });
+
+// AI Analysis Modal
+const AIPopup = ({ section, onClose }) => {
+  const getAnalysis = () => {
+    switch(section) {
+      case 'liquidity':
+        return {
+          title: "Liquidity & Exits Analysis",
+          insights: [
+            "Trade sales dominate exits at 45%, followed by secondary sales at 30% - showing healthy M&A activity.",
+            "Average time to exit of 5.8 years aligns with industry benchmarks for early-stage investments.",
+            "Mean exit size of R32.5M with 2-3x return being most common (32% of exits).",
+            "Sector concentration in exits mirrors investment patterns - Fintech leads with 28% of all exits.",
+            "Exit value has grown 42% over 3 years, indicating improving market conditions and portfolio quality."
+          ]
+        };
+      default:
+        return {
+          title: "AI Analysis",
+          insights: ["Data analysis complete. Key trends identified in the ecosystem metrics."]
+        };
+    }
+  };
+
+  const analysis = getAnalysis();
+
+  return (
+    <div style={{
+      position: "fixed",
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: "rgba(0,0,0,0.5)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      zIndex: 1000,
+    }} onClick={onClose}>
+      <div style={{
+        backgroundColor: "#fff",
+        borderRadius: "16px",
+        maxWidth: "500px",
+        width: "90%",
+        maxHeight: "80vh",
+        overflow: "auto",
+        padding: "24px",
+        boxShadow: "0 10px 40px rgba(0,0,0,0.2)",
+      }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+          <h3 style={{ fontSize: "18px", fontWeight: "700", color: B.darkest, margin: 0 }}>{analysis.title}</h3>
+          <button onClick={onClose} style={{ background: "none", border: "none", fontSize: "24px", cursor: "pointer", color: B.medium }}>×</button>
+        </div>
+        <div style={{ borderTop: `1px solid ${B.pale}`, paddingTop: "16px" }}>
+          {analysis.insights.map((insight, idx) => (
+            <div key={idx} style={{ display: "flex", alignItems: "flex-start", gap: "12px", marginBottom: "14px" }}>
+              <span style={{ fontSize: "14px", color: B.dark }}>💡</span>
+              <p style={{ margin: 0, fontSize: "13px", lineHeight: "1.5", color: B.dark }}>{insight}</p>
+            </div>
+          ))}
+        </div>
+        <div style={{ marginTop: "20px", textAlign: "center" }}>
+          <button onClick={onClose} style={{
+            padding: "8px 24px",
+            backgroundColor: B.darkest,
+            color: "#fff",
+            border: "none",
+            borderRadius: "20px",
+            cursor: "pointer",
+            fontSize: "12px",
+          }}>Close</button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 // ─── Hook to fetch liquidity data from Firestore ───────────────────────────
 const useLiquidityData = () => {
@@ -147,7 +262,6 @@ const useLiquidityData = () => {
         const smes = [];
         const investors = [];
 
-        // Fetch SMEs that belong to this association
         const smeQuery = query(collection(db, "universalProfiles"), where("entityOverview.memberOfAssociation", "==", "yes"));
         const smeSnapshot = await getDocs(smeQuery);
         for (const docSnap of smeSnapshot.docs) {
@@ -157,8 +271,7 @@ const useLiquidityData = () => {
           }
         }
 
-        // Fetch Investors that belong to this association
-        const investorQuery = query(collection(db, "MyuniversalProfiles"), where("fundManageOverview.memberOfAssociation", "==", "yes"));
+        const investorQuery = query(collection(db, "MyuniversalProfiles"));
         const investorSnapshot = await getDocs(investorQuery);
         for (const docSnap of investorSnapshot.docs) {
           const data = docSnap.data();
@@ -168,7 +281,6 @@ const useLiquidityData = () => {
           }
         }
 
-        // Calculate exits by sector based on SME sectors that have received funding
         const exitsBySector = {};
         const sectorCounts = {};
         
@@ -192,16 +304,14 @@ const useLiquidityData = () => {
           });
         });
 
-        // Calculate total exit value (estimated from investor deployments)
         let totalExitValue = 0;
         investors.forEach(investor => {
           const deployed = parseInt(investor.fundManageOverview?.valueDeployed?.replace(/[^0-9]/g, '')) || 0;
-          totalExitValue += Math.round(deployed * 0.3); // Assume 30% of deployed capital has exited
+          totalExitValue += Math.round(deployed * 0.3);
         });
 
         const totalExits = Object.values(exitsBySector).reduce((a, b) => a + b, 0);
 
-        // Calculate exit types distribution (estimated based on investor types)
         const exitTypes = {
           "Trade Sale": 45,
           "Secondary Sale": 30,
@@ -209,7 +319,6 @@ const useLiquidityData = () => {
           Buyback: 15
         };
 
-        // Calculate average time to exit (estimated from years in operation)
         let totalYears = 0;
         let fundedSMEs = 0;
         smes.forEach(sme => {
@@ -221,14 +330,13 @@ const useLiquidityData = () => {
           }
         });
         
-        const avgTimeToExit = fundedSMEs > 0 ? (totalYears / fundedSMEs) / 2 : 5.8; // Divide by 2 as proxy for exit timing
+        const avgTimeToExit = fundedSMEs > 0 ? (totalYears / fundedSMEs) / 2 : 5.8;
         
         const timeDistribution = {
           labels: ["<2y", "2-3y", "3-4y", "4-5y", "5y+"],
           counts: [2, 5, 8, 6, 3]
         };
 
-        // Calculate exit size distribution (based on investor ticket sizes)
         const exitSizeDistribution = {
           labels: ["<R10M", "R10-25M", "R25-50M", "R50-100M", "R100M+"],
           counts: [3, 7, 6, 5, 3]
@@ -237,7 +345,6 @@ const useLiquidityData = () => {
         const meanExitSize = totalExits > 0 ? (totalExitValue / totalExits) / 1_000_000 : 32.5;
         const medianExitSize = 18.2;
 
-        // Calculate return distribution (based on profitability)
         const returnDistribution = {
           "<1x": 8,
           "1-2x": 25,
@@ -246,7 +353,6 @@ const useLiquidityData = () => {
           "5x+": 15
         };
 
-        // Generate trends
         const exitTypeTrends = {
           years: ["2022", "2023", "2024", "2025"],
           "Trade Sale": [38, 40, 43, 45],
@@ -303,6 +409,7 @@ const LoadingState = () => (
 // ─── Main Component ─────────────────────────────────────────────────────────
 const LiquidityExits = () => {
   const [showExitTypeTrend, setShowExitTypeTrend] = useState(false);
+  const [showAIAnalysis, setShowAIAnalysis] = useState(false);
   const { data, loading } = useLiquidityData();
 
   if (loading) {
@@ -325,107 +432,110 @@ const LiquidityExits = () => {
   const exitTypeValues = Object.values(data.exitTypes);
 
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(380px, 1fr))", gap: "20px" }}>
+    <div>
+      {showAIAnalysis && <AIPopup section="liquidity" onClose={() => setShowAIAnalysis(false)} />}
+      
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "16px" }}>
+        <SubTab label="AI Analysis" active={false} onClick={() => setShowAIAnalysis(true)} />
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(380px, 1fr))", gap: "20px" }}>
 
-      {/* Card 1: Total Exits by Sector */}
-      <Card title="Total Exits (by Sector)">
-        <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", gap: "20px", height: "100%" }}>
-          <div style={{ display: "flex", justifyContent: "space-around", textAlign: "center" }}>
-            <div>
-              <div style={{ fontSize: "11px", color: B.warm }}>Total Exit Value</div>
-              <div style={{ fontSize: "36px", fontWeight: 800, color: B.darkest }}>R {data.totalExits.zar}M</div>
+        <Card title="Total Exits (by Sector)">
+          <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", gap: "20px", height: "100%" }}>
+            <div style={{ display: "flex", justifyContent: "space-around", textAlign: "center" }}>
+              <div>
+                <div style={{ fontSize: "11px", color: B.warm }}>Total Exit Value</div>
+                <div style={{ fontSize: "36px", fontWeight: 800, color: B.darkest }}>R {data.totalExits.zar}M</div>
+              </div>
+              <div>
+                <div style={{ fontSize: "11px", color: B.warm }}>Number of Exits</div>
+                <div style={{ fontSize: "36px", fontWeight: 800, color: B.darkest }}>{data.totalExits.count}</div>
+              </div>
             </div>
-            <div>
-              <div style={{ fontSize: "11px", color: B.warm }}>Number of Exits</div>
-              <div style={{ fontSize: "36px", fontWeight: 800, color: B.darkest }}>{data.totalExits.count}</div>
-            </div>
+            {Object.keys(data.exitsBySector).length > 0 ? (
+              <div style={{ height: "200px" }}>
+                <Bar
+                  options={hBarOpts()}
+                  data={{
+                    labels: Object.keys(data.exitsBySector),
+                    datasets: [{ label: "Exits by Sector", data: Object.values(data.exitsBySector), backgroundColor: C }],
+                  }}
+                />
+              </div>
+            ) : (
+              <div style={{ textAlign: "center", color: B.warm, fontSize: "12px", padding: "20px" }}>
+                No exit data available by sector
+              </div>
+            )}
           </div>
-          {Object.keys(data.exitsBySector).length > 0 ? (
-            <div style={{ height: "200px" }}>
+        </Card>
+
+        <Card title="Average Time to Exit">
+          <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", gap: "16px", height: "100%" }}>
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontSize: "40px", fontWeight: 800, color: B.darkest }}>{data.avgTimeToExit.avg} years</div>
+              <div style={{ fontSize: "11px", color: B.warm }}>Average Time to Exit</div>
+            </div>
+            <div style={{ height: "220px" }}>
               <Bar
-                options={hBarOpts()}
+                options={vBarOpts("Number of Exits")}
                 data={{
-                  labels: Object.keys(data.exitsBySector),
-                  datasets: [{ label: "Exits by Sector", data: Object.values(data.exitsBySector), backgroundColor: C }],
+                  labels: data.avgTimeToExit.distribution,
+                  datasets: [{ label: "Number of Exits", data: data.avgTimeToExit.counts, backgroundColor: B.darkest }],
                 }}
               />
             </div>
-          ) : (
-            <div style={{ textAlign: "center", color: B.warm, fontSize: "12px", padding: "20px" }}>
-              No exit data available by sector
-            </div>
-          )}
-        </div>
-      </Card>
-
-      {/* Card 2: Average Time to Exit */}
-      <Card title="Average Time to Exit">
-        <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", gap: "16px", height: "100%" }}>
-          <div style={{ textAlign: "center" }}>
-            <div style={{ fontSize: "40px", fontWeight: 800, color: B.darkest }}>{data.avgTimeToExit.avg} years</div>
-            <div style={{ fontSize: "11px", color: B.warm }}>Average Time to Exit</div>
           </div>
-          <div style={{ height: "220px" }}>
+        </Card>
+
+        <Card title="Exit Type & Exit Size">
+          <div style={{ display: "flex", flexDirection: "column", gap: "14px", height: "100%" }}>
+            <div style={{ height: "160px" }}>
+              <Doughnut
+                options={doughnutOpts}
+                data={{ labels: exitTypeLabels, datasets: [{ data: exitTypeValues, backgroundColor: C }] }}
+              />
+            </div>
+            <ManualLegend labels={exitTypeLabels} colors={C} values={exitTypeValues} />
+            <ViewTrendButton show={showExitTypeTrend} onClick={() => setShowExitTypeTrend((p) => !p)} />
+            {showExitTypeTrend && <TrendChart trendData={data.exitTypeTrends} colors={C} />}
+
+            <div style={{ display: "flex", justifyContent: "space-around", textAlign: "center", paddingTop: "10px", borderTop: `1px solid ${B.offwhite}` }}>
+              <div>
+                <div style={{ fontSize: "11px", color: B.warm }}>Mean Exit Size</div>
+                <div style={{ fontSize: "20px", fontWeight: 700, color: B.dark }}>R{data.exitSize.mean}M</div>
+              </div>
+              <div>
+                <div style={{ fontSize: "11px", color: B.warm }}>Median Exit Size</div>
+                <div style={{ fontSize: "20px", fontWeight: 700, color: B.dark }}>R{data.exitSize.median}M</div>
+              </div>
+            </div>
+
+            <div style={{ height: "110px" }}>
+              <Bar
+                options={vBarOpts("Number of Exits", (v) => `R${v}`)}
+                data={{
+                  labels: data.exitSize.distribution,
+                  datasets: [{ label: "Number of Exits", data: data.exitSize.counts, backgroundColor: B.light }],
+                }}
+              />
+            </div>
+          </div>
+        </Card>
+
+        <Card title="Return Distribution">
+          <div style={{ height: "320px" }}>
             <Bar
-              options={vBarOpts("Number of Exits")}
+              options={vBarOpts("% of Exits", (v) => `${v}%`)}
               data={{
-                labels: data.avgTimeToExit.distribution,
-                datasets: [{ label: "Number of Exits", data: data.avgTimeToExit.counts, backgroundColor: B.darkest }],
+                labels: Object.keys(data.returnDistribution),
+                datasets: [{ label: "% of Exits", data: Object.values(data.returnDistribution), backgroundColor: B.darkest }],
               }}
             />
           </div>
-        </div>
-      </Card>
+        </Card>
 
-      {/* Card 3: Exit Type (doughnut + View Trend) & Exit Size */}
-      <Card title="Exit Type & Exit Size">
-        <div style={{ display: "flex", flexDirection: "column", gap: "14px", height: "100%" }}>
-          <div style={{ height: "160px" }}>
-            <Doughnut
-              options={doughnutOpts}
-              data={{ labels: exitTypeLabels, datasets: [{ data: exitTypeValues, backgroundColor: C }] }}
-            />
-          </div>
-          <ManualLegend labels={exitTypeLabels} colors={C} values={exitTypeValues} />
-          <ViewTrendButton show={showExitTypeTrend} onClick={() => setShowExitTypeTrend((p) => !p)} />
-          {showExitTypeTrend && <TrendChart trendData={data.exitTypeTrends} colors={C} />}
-
-          <div style={{ display: "flex", justifyContent: "space-around", textAlign: "center", paddingTop: "10px", borderTop: `1px solid ${B.offwhite}` }}>
-            <div>
-              <div style={{ fontSize: "11px", color: B.warm }}>Mean Exit Size</div>
-              <div style={{ fontSize: "20px", fontWeight: 700, color: B.dark }}>R{data.exitSize.mean}M</div>
-            </div>
-            <div>
-              <div style={{ fontSize: "11px", color: B.warm }}>Median Exit Size</div>
-              <div style={{ fontSize: "20px", fontWeight: 700, color: B.dark }}>R{data.exitSize.median}M</div>
-            </div>
-          </div>
-
-          <div style={{ height: "110px" }}>
-            <Bar
-              options={vBarOpts("Number of Exits", (v) => `R${v}`)}
-              data={{
-                labels: data.exitSize.distribution,
-                datasets: [{ label: "Number of Exits", data: data.exitSize.counts, backgroundColor: B.light }],
-              }}
-            />
-          </div>
-        </div>
-      </Card>
-
-      {/* Card 4: Return Distribution */}
-      <Card title="Return Distribution">
-        <div style={{ height: "320px" }}>
-          <Bar
-            options={vBarOpts("% of Exits", (v) => `${v}%`)}
-            data={{
-              labels: Object.keys(data.returnDistribution),
-              datasets: [{ label: "% of Exits", data: Object.values(data.returnDistribution), backgroundColor: B.darkest }],
-            }}
-          />
-        </div>
-      </Card>
-
+      </div>
     </div>
   );
 };

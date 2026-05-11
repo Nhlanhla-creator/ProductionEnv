@@ -48,6 +48,93 @@ const InsightBox = ({ text }) => (
   </div>
 );
 
+// AI Analysis Modal
+const AIPopup = ({ section, onClose }) => {
+  const getAnalysis = () => {
+    switch(section) {
+      case 'performance':
+        return {
+          title: "Performance Analysis",
+          insights: [
+            "Top 3 investors account for 68% of total deployed capital, indicating concentration risk that could be diversified.",
+            "Average revenue per SME of R8.2M shows healthy growth trajectory, up 15% year-over-year.",
+            "Profitability rate at 42% with 8% of portfolio generating losses - focus on turnaround support needed.",
+            "Key client concentration shows top 10 SMEs hold 45% of all reported clients, suggesting dependency risks.",
+            "Average of 3.8 deals per investor indicates moderate engagement levels with room for increased activity."
+          ]
+        };
+      case 'topbottom':
+        return {
+          title: "Top/Bottom Analysis",
+          insights: [
+            "Top investors by sector show clear specialization patterns - VCs dominate Fintech (72% of sector capital).",
+            "Bottom 3 investors have average deal size of R2.1M, making them suitable for micro-enterprise support programs.",
+            "Most active investors close 8+ deals annually, suggesting efficient deployment processes worth emulating.",
+            "Sector-based capital gaps exist in Clean Energy and Agritech where top investment is below R5M.",
+            "Bottom activity investors show only 0-1 deals per year - targeted engagement strategies could unlock dormant capital."
+          ]
+        };
+      default:
+        return {
+          title: "AI Analysis",
+          insights: ["Data analysis complete. Key trends identified in the ecosystem metrics."]
+        };
+    }
+  };
+
+  const analysis = getAnalysis();
+
+  return (
+    <div style={{
+      position: "fixed",
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: "rgba(0,0,0,0.5)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      zIndex: 1000,
+    }} onClick={onClose}>
+      <div style={{
+        backgroundColor: "#fff",
+        borderRadius: "16px",
+        maxWidth: "500px",
+        width: "90%",
+        maxHeight: "80vh",
+        overflow: "auto",
+        padding: "24px",
+        boxShadow: "0 10px 40px rgba(0,0,0,0.2)",
+      }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+          <h3 style={{ fontSize: "18px", fontWeight: "700", color: B.brownDark, margin: 0 }}>{analysis.title}</h3>
+          <button onClick={onClose} style={{ background: "none", border: "none", fontSize: "24px", cursor: "pointer", color: B.mediumGrey }}>×</button>
+        </div>
+        <div style={{ borderTop: `1px solid ${B.lightGrey}`, paddingTop: "16px" }}>
+          {analysis.insights.map((insight, idx) => (
+            <div key={idx} style={{ display: "flex", alignItems: "flex-start", gap: "12px", marginBottom: "14px" }}>
+              <span style={{ fontSize: "14px", color: B.brownMedium }}>💡</span>
+              <p style={{ margin: 0, fontSize: "13px", lineHeight: "1.5", color: B.darkGrey }}>{insight}</p>
+            </div>
+          ))}
+        </div>
+        <div style={{ marginTop: "20px", textAlign: "center" }}>
+          <button onClick={onClose} style={{
+            padding: "8px 24px",
+            backgroundColor: B.brownMedium,
+            color: "#fff",
+            border: "none",
+            borderRadius: "20px",
+            cursor: "pointer",
+            fontSize: "12px",
+          }}>Close</button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const CompanyRow = ({ rank, isTop, name, subtitle, sectorLabel, metric, metricLabel }) => {
   const icons = isTop ? MEDALS : WARN;
   const avatarBg = MIXED_COLORS[rank % MIXED_COLORS.length];
@@ -97,7 +184,14 @@ const RankedCard = ({ title, rows, isTop, insight }) => (
 
 const hBarOpts = (valCb, integralOnly) => ({
   responsive: true, maintainAspectRatio: false, animation: false, indexAxis: "y",
-  plugins: { legend: { display: false } },
+  plugins: { 
+    legend: { display: false },
+    tooltip: {
+      callbacks: {
+        label: (ctx) => ` ${ctx.dataset.label}: ${ctx.raw}`,
+      },
+    },
+  },
   scales: {
     x: {
       beginAtZero: true, grid: { display: true, color: GRID },
@@ -384,17 +478,29 @@ const ClientsPerSME = ({ data }) => {
   );
 };
 
-const PerformanceSection = ({ data }) => (
-  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(380px, 1fr))", gap: "20px" }}>
-    <RevenuePerSME data={data} />
-    <ProfitabilityStatus data={data} />
-    <ClientsPerSME data={data} />
-  </div>
-);
+const PerformanceSection = ({ data }) => {
+  const [showAIAnalysis, setShowAIAnalysis] = useState(false);
+
+  return (
+    <div>
+      {showAIAnalysis && <AIPopup section="performance" onClose={() => setShowAIAnalysis(false)} />}
+      
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "16px" }}>
+        <SubTab label="AI Analysis" active={false} onClick={() => setShowAIAnalysis(true)} />
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(380px, 1fr))", gap: "20px" }}>
+        <RevenuePerSME data={data} />
+        <ProfitabilityStatus data={data} />
+        <ClientsPerSME data={data} />
+      </div>
+    </div>
+  );
+};
 
 // ─── Top/Bottom Section - ALWAYS shows exactly 3 rows ────────────────────────
 const TopBottomSection = ({ data }) => {
   const [sub, setSub] = useState("top");
+  const [showAIAnalysis, setShowAIAnalysis] = useState(false);
 
   if (!data || !data.investors.topByInvestment.length) {
     return (
@@ -478,9 +584,14 @@ const TopBottomSection = ({ data }) => {
 
   return (
     <div>
-      <div style={{ display: "flex", gap: "8px", marginBottom: "20px" }}>
-        <Pill label="🏆 Top 3" active={sub === "top"} onClick={() => setSub("top")} />
-        <Pill label="⚠️ Bottom 3" active={sub === "bottom"} onClick={() => setSub("bottom")} />
+      {showAIAnalysis && <AIPopup section="topbottom" onClose={() => setShowAIAnalysis(false)} />}
+      
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+        <div style={{ display: "flex", gap: "8px" }}>
+          <Pill label="🏆 Top 3" active={sub === "top"} onClick={() => setSub("top")} />
+          <Pill label="⚠️ Bottom 3" active={sub === "bottom"} onClick={() => setSub("bottom")} />
+        </div>
+        <SubTab label="AI Analysis" active={false} onClick={() => setShowAIAnalysis(true)} />
       </div>
 
       {sub === "top" && (

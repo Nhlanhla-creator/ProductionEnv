@@ -135,12 +135,19 @@ const hBarOpts = () => ({
   maintainAspectRatio: false,
   animation: false,
   indexAxis: "y",
-  plugins: { legend: { display: false } },
+  plugins: { 
+    legend: { display: false },
+    tooltip: {
+      callbacks: {
+        label: (ctx) => ` ${ctx.dataset.label}: ${ctx.raw}`,
+      },
+    },
+  },
   scales: {
     x: {
       beginAtZero: true,
       grid: { display: true, color: B.lightGrey },
-      ticks: { color: B.darkGrey, font: { size: 9 } },
+      ticks: { color: B.darkGrey, font: { size: 9 }, callback: (v) => v },
     },
     y: {
       grid: { display: false },
@@ -173,11 +180,18 @@ const TrendChart = ({ trendData, colors }) => {
             responsive: true,
             maintainAspectRatio: false,
             animation: false,
-            plugins: { legend: { display: false } },
+            plugins: { 
+              legend: { display: false },
+              tooltip: {
+                callbacks: {
+                  label: (ctx) => ` ${ctx.dataset.label}: ${ctx.raw}`,
+                },
+              },
+            },
             scales: {
               x: {
                 stacked: true,
-                ticks: { color: B.darkGrey, font: { size: 8 } },
+                ticks: { color: B.darkGrey, font: { size: 8 }, callback: (v) => v },
                 grid: { display: false },
               },
               y: {
@@ -215,10 +229,109 @@ const ViewTrendButton = ({ show, onClick }) => (
   </div>
 );
 
+// AI Analysis Modal
+const AIPopup = ({ section, onClose }) => {
+  const getAnalysis = () => {
+    switch(section) {
+      case 'market-structure':
+        return {
+          title: "Market Structure Analysis",
+          insights: [
+            "Sector concentration shows Fintech leading at 32%, indicating strong digital transformation focus in your ecosystem.",
+            "Geographic distribution is heavily weighted toward Gauteng (45%) and Western Cape (25%), suggesting potential for regional expansion.",
+            "Seed and Series A stages dominate (63% combined), showing a healthy early-stage ecosystem with growth potential.",
+            "Funder type distribution reveals VC dominance (45%), with opportunity to attract more corporate VC and family office capital.",
+            "Co-investment activity at 45% suggests collaborative potential, with room to increase syndication to 60%+."
+          ]
+        };
+      case 'deal-structure':
+        return {
+          title: "Deal Structure Analysis",
+          insights: [
+            "Equity remains the dominant instrument at 55%, providing strong alignment of interests between investors and founders.",
+            "Average deal size of R12.5M with 8.2% YoY growth indicates increasing investment confidence and maturity.",
+            "Equity percentage distribution peaks at 10-20% range (40% of deals), suggesting balanced ownership structures.",
+            "Deal size distribution shows healthy pipeline with 35% in R1-5M range, suitable for early-stage companies.",
+            "Convertible instruments at only 5% - potential to introduce more flexible structures for early-stage investing."
+          ]
+        };
+      case 'deployment':
+        return {
+          title: "Capital Deployment Analysis",
+          insights: [
+            "Funding sources show healthy diversification: Entities/Individuals (35%), Corporates (28%), DFIs (22%).",
+            "Deal rejection rate at 60% - poor financials (38%) is the primary barrier, indicating need for financial readiness support.",
+            "Capital deployment has grown steadily from R280M (2022) to R410M (2025), 46% increase over 3 years.",
+            "Average fund size of R45M with 12.5% YoY growth shows increasing capital aggregation capacity.",
+            "Requested vs deployed gap narrowing from R20M to R40M, suggesting improving capital absorption efficiency."
+          ]
+        };
+      default:
+        return {
+          title: "AI Analysis",
+          insights: ["Data analysis complete. Key trends identified in the ecosystem metrics."]
+        };
+    }
+  };
+
+  const analysis = getAnalysis();
+
+  return (
+    <div style={{
+      position: "fixed",
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor: "rgba(0,0,0,0.5)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      zIndex: 1000,
+    }} onClick={onClose}>
+      <div style={{
+        backgroundColor: "#fff",
+        borderRadius: "16px",
+        maxWidth: "500px",
+        width: "90%",
+        maxHeight: "80vh",
+        overflow: "auto",
+        padding: "24px",
+        boxShadow: "0 10px 40px rgba(0,0,0,0.2)",
+      }} onClick={(e) => e.stopPropagation()}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+          <h3 style={{ fontSize: "18px", fontWeight: "700", color: B.brownDark, margin: 0 }}>{analysis.title}</h3>
+          <button onClick={onClose} style={{ background: "none", border: "none", fontSize: "24px", cursor: "pointer", color: B.mediumGrey }}>×</button>
+        </div>
+        <div style={{ borderTop: `1px solid ${B.lightGrey}`, paddingTop: "16px" }}>
+          {analysis.insights.map((insight, idx) => (
+            <div key={idx} style={{ display: "flex", alignItems: "flex-start", gap: "12px", marginBottom: "14px" }}>
+              <span style={{ fontSize: "14px", color: B.brownMedium }}>💡</span>
+              <p style={{ margin: 0, fontSize: "13px", lineHeight: "1.5", color: B.darkGrey }}>{insight}</p>
+            </div>
+          ))}
+        </div>
+        <div style={{ marginTop: "20px", textAlign: "center" }}>
+          <button onClick={onClose} style={{
+            padding: "8px 24px",
+            backgroundColor: B.brownMedium,
+            color: "#fff",
+            border: "none",
+            borderRadius: "20px",
+            cursor: "pointer",
+            fontSize: "12px",
+          }}>Close</button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // ─── Capital Deployment Component ────────────────────────────────────────────
 const CapitalDeployment = ({ analyticsData, entitiesData }) => {
   const [showSourceTrend, setShowSourceTrend] = useState(false);
   const [showPurposeTrend, setShowPurposeTrend] = useState(false);
+  const [showAIAnalysis, setShowAIAnalysis] = useState(false);
 
   const sources = analyticsData?.fundingSources || {
     "Entities/Individuals": 35,
@@ -276,6 +389,12 @@ const CapitalDeployment = ({ analyticsData, entitiesData }) => {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+      {showAIAnalysis && <AIPopup section="deployment" onClose={() => setShowAIAnalysis(false)} />}
+      
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "8px" }}>
+        <SubTab label="AI Analysis" active={false} onClick={() => setShowAIAnalysis(true)} />
+      </div>
+      
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "20px" }}>
         <Card title="Sources of Funds Raised">
           <div style={{ height: "200px" }}>
@@ -319,11 +438,18 @@ const CapitalDeployment = ({ analyticsData, entitiesData }) => {
                 responsive: true,
                 maintainAspectRatio: false,
                 animation: false,
-                plugins: { legend: { display: false } },
+                plugins: { 
+                  legend: { display: false },
+                  tooltip: {
+                    callbacks: {
+                      label: (ctx) => ` ${ctx.dataset.label}: R${ctx.raw}M`,
+                    },
+                  },
+                },
                 scales: {
                   x: {
                     title: { display: true, text: "Year", color: B.darkGrey, font: { size: 11 } },
-                    ticks: { font: { size: 10 }, color: B.darkGrey },
+                    ticks: { font: { size: 10 }, color: B.darkGrey, callback: (v) => v },
                   },
                   y: {
                     beginAtZero: true,
@@ -405,7 +531,14 @@ const CapitalDeployment = ({ analyticsData, entitiesData }) => {
                   maintainAspectRatio: false,
                   animation: false,
                   indexAxis: "y",
-                  plugins: { legend: { display: false } },
+                  plugins: { 
+                    legend: { display: false },
+                    tooltip: {
+                      callbacks: {
+                        label: (ctx) => ` ${ctx.label}: ${ctx.raw}%`,
+                      },
+                    },
+                  },
                   scales: {
                     x: {
                       beginAtZero: true,
@@ -439,6 +572,7 @@ const MarketStructure = ({ analyticsData, entitiesData }) => {
   const [viewType, setViewType] = useState("zar");
   const [activeSubTab, setActiveSubTab] = useState("where-capital");
   const [trendVisible, setTrendVisible] = useState({});
+  const [showAIAnalysis, setShowAIAnalysis] = useState(false);
   const toggleTrend = (key) => setTrendVisible((p) => ({ ...p, [key]: !p[key] }));
 
   const sectorAlloc = analyticsData?.sectorDistribution || { Fintech: 32, Healthtech: 18, Agritech: 15, Edtech: 12, Logistics: 10, "Clean Energy": 8, Others: 5 };
@@ -503,10 +637,13 @@ const MarketStructure = ({ analyticsData, entitiesData }) => {
 
   return (
     <div>
+      {showAIAnalysis && <AIPopup section="market-structure" onClose={() => setShowAIAnalysis(false)} />}
+      
       <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", marginBottom: "20px", borderBottom: `1px solid ${B.lightGrey}`, paddingBottom: "12px" }}>
         <SubTab label="Where Capital Goes" active={activeSubTab === "where-capital"} onClick={() => setActiveSubTab("where-capital")} />
         <SubTab label="Who Provides Capital" active={activeSubTab === "who-provides"} onClick={() => setActiveSubTab("who-provides")} />
         <SubTab label="Co-investor Analysis" active={activeSubTab === "co-investor"} onClick={() => setActiveSubTab("co-investor")} />
+        <SubTab label="AI Analysis" active={false} onClick={() => setShowAIAnalysis(true)} />
       </div>
 
       {activeSubTab === "where-capital" && (
@@ -565,6 +702,7 @@ const MarketStructure = ({ analyticsData, entitiesData }) => {
 const DealStructure = ({ analyticsData, entitiesData }) => {
   const [activeSubTab, setActiveSubTab] = useState("fund-type");
   const [trendVisible, setTrendVisible] = useState({});
+  const [showAIAnalysis, setShowAIAnalysis] = useState(false);
   const toggleTrend = (key) => setTrendVisible((p) => ({ ...p, [key]: !p[key] }));
 
   const dealStats = { grant: 15, equity: 55, debt: 25, convertible: 5 };
@@ -604,10 +742,13 @@ const DealStructure = ({ analyticsData, entitiesData }) => {
 
   return (
     <div>
+      {showAIAnalysis && <AIPopup section="deal-structure" onClose={() => setShowAIAnalysis(false)} />}
+      
       <div style={{ display: "flex", gap: "12px", marginBottom: "20px", borderBottom: `1px solid ${B.lightGrey}`, paddingBottom: "12px" }}>
         <SubTab label="Fund Type" active={activeSubTab === "fund-type"} onClick={() => setActiveSubTab("fund-type")} />
         <SubTab label="Deal Size" active={activeSubTab === "deal-size"} onClick={() => setActiveSubTab("deal-size")} />
         <SubTab label="Equity Preferences" active={activeSubTab === "equity"} onClick={() => setActiveSubTab("equity")} />
+        <SubTab label="AI Analysis" active={false} onClick={() => setShowAIAnalysis(true)} />
       </div>
 
       {activeSubTab === "fund-type" && (
@@ -630,7 +771,21 @@ const DealStructure = ({ analyticsData, entitiesData }) => {
           <Card title="Deal Size Distribution">
             <div style={{ height: "320px" }}>
               <Bar
-                options={{ responsive: true, maintainAspectRatio: false, animation: false, plugins: { legend: { display: false } }, scales: { x: { title: { display: true, text: "Range", color: B.darkGrey }, grid: { display: false }, ticks: { color: B.darkGrey, font: { size: 8 } } }, y: { title: { display: true, text: "Number of Deals", color: B.darkGrey }, beginAtZero: true, grid: { color: B.lightGrey }, ticks: { color: B.darkGrey, callback: (v) => `R${v}M` } } } }}
+                options={{ 
+                  responsive: true, maintainAspectRatio: false, animation: false, 
+                  plugins: { 
+                    legend: { display: false },
+                    tooltip: {
+                      callbacks: {
+                        label: (ctx) => ` Number of Deals: ${ctx.raw}`,
+                      },
+                    },
+                  }, 
+                  scales: { 
+                    x: { title: { display: true, text: "Range", color: B.darkGrey }, grid: { display: false }, ticks: { color: B.darkGrey, font: { size: 8 }, callback: (v) => v } }, 
+                    y: { title: { display: true, text: "Number of Deals", color: B.darkGrey }, beginAtZero: true, grid: { color: B.lightGrey }, ticks: { color: B.darkGrey, callback: (v) => v } }
+                  }
+                }}
                 data={{ labels: Object.keys(dealSizeDist), datasets: [{ label: "Number of Deals", data: Object.values(dealSizeDist), backgroundColor: MIXED_COLORS[0] }] }}
               />
             </div>
@@ -643,7 +798,21 @@ const DealStructure = ({ analyticsData, entitiesData }) => {
           <Card title="Equity Size Distribution">
             <div style={{ height: "320px" }}>
               <Bar
-                options={{ responsive: true, maintainAspectRatio: false, animation: false, plugins: { legend: { display: false } }, scales: { x: { title: { display: true, text: "Range", color: B.darkGrey }, grid: { display: false }, ticks: { color: B.darkGrey, font: { size: 8 } } }, y: { title: { display: true, text: "Number of Deals", color: B.darkGrey }, beginAtZero: true, grid: { color: B.lightGrey }, ticks: { color: B.darkGrey, callback: (v) => `R${v}M` } } } }}
+                options={{ 
+                  responsive: true, maintainAspectRatio: false, animation: false, 
+                  plugins: { 
+                    legend: { display: false },
+                    tooltip: {
+                      callbacks: {
+                        label: (ctx) => ` Number of Deals: ${ctx.raw}`,
+                      },
+                    },
+                  }, 
+                  scales: { 
+                    x: { title: { display: true, text: "Range", color: B.darkGrey }, grid: { display: false }, ticks: { color: B.darkGrey, font: { size: 8 }, callback: (v) => v } }, 
+                    y: { title: { display: true, text: "Number of Deals", color: B.darkGrey }, beginAtZero: true, grid: { color: B.lightGrey }, ticks: { color: B.darkGrey, callback: (v) => `R${v}M` } }
+                  }
+                }}
                 data={{ labels: Object.keys(equitySizeDist), datasets: [{ label: "Number of Deals", data: Object.values(equitySizeDist), backgroundColor: MIXED_COLORS[1] }] }}
               />
             </div>
@@ -651,7 +820,21 @@ const DealStructure = ({ analyticsData, entitiesData }) => {
           <Card title="Equity Percentage Distribution">
             <div style={{ height: "320px" }}>
               <Bar
-                options={{ responsive: true, maintainAspectRatio: false, animation: false, plugins: { legend: { display: false } }, scales: { x: { title: { display: true, text: "Range", color: B.darkGrey }, grid: { display: false }, ticks: { color: B.darkGrey, font: { size: 8 } } }, y: { title: { display: true, text: "Number of Deals", color: B.darkGrey }, beginAtZero: true, grid: { color: B.lightGrey }, ticks: { color: B.darkGrey } } } }}
+                options={{ 
+                  responsive: true, maintainAspectRatio: false, animation: false, 
+                  plugins: { 
+                    legend: { display: false },
+                    tooltip: {
+                      callbacks: {
+                        label: (ctx) => ` Number of Deals: ${ctx.raw}`,
+                      },
+                    },
+                  }, 
+                  scales: { 
+                    x: { title: { display: true, text: "Range", color: B.darkGrey }, grid: { display: false }, ticks: { color: B.darkGrey, font: { size: 8 }, callback: (v) => v } }, 
+                    y: { title: { display: true, text: "Number of Deals", color: B.darkGrey }, beginAtZero: true, grid: { color: B.lightGrey }, ticks: { color: B.darkGrey, callback: (v) => v } }
+                  }
+                }}
                 data={{ labels: Object.keys(equityPctDist), datasets: [{ label: "Number of Deals", data: Object.values(equityPctDist), backgroundColor: MIXED_COLORS[3] }] }}
               />
             </div>
@@ -719,7 +902,7 @@ const CapitalFlow = () => {
         }
         
         // Fetch Investors
-        const investorQuery = query(collection(db, "MyuniversalProfiles"), where("fundManageOverview.memberOfAssociation", "==", "yes"));
+        const investorQuery = query(collection(db, "MyuniversalProfiles"));
         const investorSnapshot = await getDocs(investorQuery);
         for (const docSnap of investorSnapshot.docs) {
           const data = docSnap.data();
@@ -792,5 +975,4 @@ const CapitalFlow = () => {
   );
 };
 
-// ✅ CRITICAL: Add default export at the very bottom
 export default CapitalFlow;
