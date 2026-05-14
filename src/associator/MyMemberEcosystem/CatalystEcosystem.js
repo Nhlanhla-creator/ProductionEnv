@@ -25,223 +25,13 @@ import {
   CheckCircle,
   Globe,
   Linkedin,
+  AlertTriangle,
 } from "lucide-react";
 import * as XLSX from 'xlsx';
+import { db, auth } from '../../firebaseConfig';
+import { collection, query, where, getDocs, getDoc, doc } from 'firebase/firestore';
 
-// ---------- MOCK DATA (Placeholder details - No Backend) ----------
-const mockCatalysts = [
-  {
-    id: "1",
-    username: "tech_innovators",
-    email: "info@techinnovators.co.za",
-    organizationName: "Tech Innovators Hub",
-    programType: "Accelerator",
-    firmType: "Non-Profit Organization",
-    focusAreas: ["AI", "Fintech", "SaaS"],
-    duration: "12 weeks",
-    cohortSize: "15-20 companies",
-    location: "Cape Town",
-    headOfficeLocation: "Cape Town, Western Cape",
-    membershipStatus: "Active Partner",
-    phone: "+27 21 123 4567",
-    website: "https://techinnovators.co.za",
-    linkedin: "https://linkedin.com/company/techinnovators",
-    description: "Leading technology accelerator focused on AI and fintech startups across Africa.",
-    status: "active",
-    createdAt: new Date("2023-06-15"),
-    alumniCount: 87,
-    successRate: "85%",
-    programDetails: {
-      applicationPeriod: "January - March",
-      programFee: "R5,000",
-      equityRequired: "5-7%",
-      mentorship: "Yes, 20+ mentors",
-      fundingProvided: "Up to R500k",
-      demoDay: "Yes",
-      virtualOption: "Yes",
-    },
-    teamSize: 12,
-    keyContacts: [
-      { name: "Sarah Johnson", role: "Program Director", email: "sarah@techinnovators.co.za" },
-      { name: "Mike Peters", role: "Mentorship Coordinator", email: "mike@techinnovators.co.za" },
-    ],
-    successStories: [
-      { company: "FinTech Startup X", achievement: "Raised R2M post-program" },
-      { company: "AI Health Solutions", achievement: "Acquired by major healthcare provider" },
-    ],
-    documents: {
-      brochure: "/docs/tech-innovators-brochure.pdf",
-      applicationGuide: "/docs/tech-innovators-guide.pdf",
-    },
-  },
-  {
-    id: "2",
-    username: "green_future",
-    email: "hello@greenfuture.co.za",
-    organizationName: "Green Future Incubator",
-    programType: "Incubator",
-    firmType: "Social Enterprise",
-    focusAreas: ["CleanTech", "Renewable Energy", "Sustainability"],
-    duration: "6 months",
-    cohortSize: "10-12 companies",
-    location: "Johannesburg",
-    headOfficeLocation: "Johannesburg, Gauteng",
-    membershipStatus: "Active Partner",
-    phone: "+27 11 987 6543",
-    website: "https://greenfuture.co.za",
-    linkedin: "https://linkedin.com/company/greenfuture",
-    description: "Incubator supporting cleantech and sustainable energy startups.",
-    status: "active",
-    createdAt: new Date("2023-08-22"),
-    alumniCount: 45,
-    successRate: "78%",
-    programDetails: {
-      applicationPeriod: "Rolling",
-      programFee: "R2,500",
-      equityRequired: "3-5%",
-      mentorship: "Yes, industry experts",
-      fundingProvided: "Up to R250k",
-      demoDay: "Yes",
-      virtualOption: "Yes",
-    },
-    teamSize: 8,
-    keyContacts: [
-      { name: "Lisa Green", role: "Program Manager", email: "lisa@greenfuture.co.za" },
-    ],
-    successStories: [
-      { company: "SolarStart", achievement: "Secured R1.5M in seed funding" },
-    ],
-    documents: {
-      brochure: "/docs/green-future-brochure.pdf",
-    },
-  },
-  {
-    id: "3",
-    username: "retail_lab",
-    email: "info@retaillab.co.za",
-    organizationName: "Retail Innovation Lab",
-    programType: "Hub",
-    firmType: "For-Profit",
-    focusAreas: ["Retail Tech", "E-commerce", "Logistics"],
-    duration: "Ongoing",
-    cohortSize: "25+ members",
-    location: "Durban",
-    headOfficeLocation: "Durban, KwaZulu-Natal",
-    membershipStatus: "Pending Approval",
-    phone: "+27 31 456 7890",
-    website: "https://retaillab.co.za",
-    description: "Innovation hub connecting retail startups with industry partners.",
-    status: "pending",
-    createdAt: new Date("2024-01-10"),
-    alumniCount: 32,
-    successRate: "N/A",
-    programDetails: {
-      applicationPeriod: "Quarterly",
-      programFee: "R1,000/month",
-      equityRequired: "None",
-      mentorship: "Yes",
-      fundingProvided: "Network access only",
-      demoDay: "No",
-      virtualOption: "Hybrid",
-    },
-    teamSize: 5,
-    keyContacts: [
-      { name: "David Chen", role: "Hub Manager", email: "david@retaillab.co.za" },
-    ],
-    successStories: [],
-    documents: {},
-  },
-  {
-    id: "4",
-    username: "health_hub",
-    email: "contact@healthhub.co.za",
-    organizationName: "HealthTech Hub",
-    programType: "Accelerator",
-    firmType: "Non-Profit Organization",
-    focusAreas: ["HealthTech", "MedTech", "Wellness"],
-    duration: "10 weeks",
-    cohortSize: "12-15 companies",
-    location: "Pretoria",
-    headOfficeLocation: "Pretoria, Gauteng",
-    membershipStatus: "Active Partner",
-    phone: "+27 12 345 6789",
-    website: "https://healthhub.co.za",
-    linkedin: "https://linkedin.com/company/healthhub",
-    description: "Accelerator program for health technology and medical innovation startups.",
-    status: "active",
-    createdAt: new Date("2023-11-05"),
-    alumniCount: 54,
-    successRate: "82%",
-    programDetails: {
-      applicationPeriod: "February - April",
-      programFee: "R3,000",
-      equityRequired: "4-6%",
-      mentorship: "Yes, medical professionals",
-      fundingProvided: "Up to R350k",
-      demoDay: "Yes",
-      virtualOption: "Yes",
-    },
-    teamSize: 10,
-    keyContacts: [
-      { name: "Dr. Amanda Smith", role: "Clinical Advisor", email: "amanda@healthhub.co.za" },
-      { name: "Paul Jacobs", role: "Program Lead", email: "paul@healthhub.co.za" },
-    ],
-    successStories: [
-      { company: "MediApp", achievement: "Piloted in 5 hospitals" },
-      { company: "WellnessConnect", achievement: "10,000+ active users" },
-    ],
-    documents: {
-      brochure: "/docs/healthhub-brochure.pdf",
-      applicationGuide: "/docs/healthhub-guide.pdf",
-    },
-  },
-  {
-    id: "5",
-    username: "agri_growth",
-    email: "info@agrigrowth.co.za",
-    organizationName: "AgriGrowth Programme",
-    programType: "Program",
-    firmType: "Public Benefit Organization",
-    focusAreas: ["AgriTech", "Farming", "Food Security"],
-    duration: "8 weeks",
-    cohortSize: "20 companies",
-    location: "Stellenbosch",
-    headOfficeLocation: "Stellenbosch, Western Cape",
-    membershipStatus: "Active Partner",
-    phone: "+27 21 876 5432",
-    website: "https://agrigrowth.co.za",
-    description: "Support program for agricultural technology and farming innovation.",
-    status: "active",
-    createdAt: new Date("2023-09-18"),
-    alumniCount: 68,
-    successRate: "75%",
-    programDetails: {
-      applicationPeriod: "August - October",
-      programFee: "Free",
-      equityRequired: "None",
-      mentorship: "Yes, agricultural experts",
-      fundingProvided: "Grant funding available",
-      demoDay: "Yes",
-      virtualOption: "Yes",
-    },
-    teamSize: 7,
-    keyContacts: [
-      { name: "Thabo Nkosi", role: "Program Director", email: "thabo@agrigrowth.co.za" },
-    ],
-    successStories: [
-      { company: "FarmConnect", achievement: "Expanded to 500+ farmers" },
-      { company: "CropSense", achievement: "Won national agritech award" },
-    ],
-    documents: {
-      brochure: "/docs/agrigrowth-brochure.pdf",
-      applicationGuide: "/docs/agrigrowth-guide.pdf",
-    },
-  },
-];
-
-const programTypes = ["Accelerator", "Incubator", "Hub", "Program"];
-
-// ---------- CATALYST DETAILS MODAL (With Tabs) ----------
+// ---------- CATALYST DETAILS MODAL ----------
 const CatalystDetailsModal = ({ catalyst, isOpen, onClose }) => {
   const [activeTab, setActiveTab] = useState("overview");
   const [mounted, setMounted] = useState(false);
@@ -252,14 +42,12 @@ const CatalystDetailsModal = ({ catalyst, isOpen, onClose }) => {
 
   if (!isOpen || !catalyst || !mounted) return null;
 
-  // Helper functions
   const formatLabel = (value) => {
     if (!value) return "Not provided";
     if (typeof value === "boolean") return value ? "Yes" : "No";
     return value.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
   };
 
-  // Tabs configuration
   const tabs = [
     { id: "overview", label: "Overview", icon: Building2 },
     { id: "program", label: "Program Details", icon: Rocket },
@@ -321,7 +109,7 @@ const CatalystDetailsModal = ({ catalyst, isOpen, onClose }) => {
   };
 
   const getMembershipBadgeStyle = (status) => {
-    if (status === "Active Partner") {
+    if (status === "Active Partner" || status === "Active Member") {
       return { background: "#e8f5e8", color: "#2e7d32" };
     } else if (status === "Pending Approval") {
       return { background: "#fff3e0", color: "#ed6c02" };
@@ -332,7 +120,6 @@ const CatalystDetailsModal = ({ catalyst, isOpen, onClose }) => {
   return createPortal(
     <div style={modalOverlayStyle}>
       <div style={modalContentStyle}>
-        {/* Header */}
         <div style={modalHeaderStyle}>
           <div style={headerContentStyle}>
             <div style={catalystHeaderStyle}>
@@ -353,8 +140,6 @@ const CatalystDetailsModal = ({ catalyst, isOpen, onClose }) => {
               <X size={20} />
             </button>
           </div>
-
-          {/* Tabs */}
           <div style={tabsContainerStyle}>
             {tabs.map((tab) => {
               const IconComponent = tab.icon;
@@ -362,10 +147,7 @@ const CatalystDetailsModal = ({ catalyst, isOpen, onClose }) => {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  style={{
-                    ...tabStyle,
-                    ...(activeTab === tab.id ? activeTabStyle : {}),
-                  }}
+                  style={{ ...tabStyle, ...(activeTab === tab.id ? activeTabStyle : {}) }}
                 >
                   <IconComponent size={16} />
                   {tab.label}
@@ -374,24 +156,18 @@ const CatalystDetailsModal = ({ catalyst, isOpen, onClose }) => {
             })}
           </div>
         </div>
-
-        {/* Content */}
         <div style={modalBodyStyle}>
-          {/* Overview Tab */}
           {activeTab === "overview" && (
             <div style={tabContentStyle}>
               <div style={gridStyle}>
                 <div style={infoCardStyle}>
-                  <h3 style={cardTitleStyle}>
-                    <Building2 size={18} />
-                    Organization Information
-                  </h3>
+                  <h3 style={cardTitleStyle}><Building2 size={18} />Organization Information</h3>
                   <div style={infoGridStyle}>
                     <InfoItem label="Organization Name" value={catalyst.organizationName} />
                     <InfoItem label="Program Type" value={catalyst.programType} />
                     <InfoItem label="Firm Type" value={catalyst.firmType} />
                     <InfoItem label="Status" value={formatLabel(catalyst.status)} />
-                    <InfoItem label="Founded / Started" value={catalyst.createdAt ? new Date(catalyst.createdAt).getFullYear() : "Not specified"} />
+                    <InfoItem label="Year Established" value={catalyst.yearEstablished} />
                   </div>
                   {catalyst.description && (
                     <div style={descriptionStyle}>
@@ -400,24 +176,16 @@ const CatalystDetailsModal = ({ catalyst, isOpen, onClose }) => {
                     </div>
                   )}
                 </div>
-
                 <div style={infoCardStyle}>
-                  <h3 style={cardTitleStyle}>
-                    <Target size={18} />
-                    Focus Areas
-                  </h3>
+                  <h3 style={cardTitleStyle}><Target size={18} />Focus Areas</h3>
                   <div style={tagsContainerStyle}>
-                    {catalyst.focusAreas.map((area, idx) => (
+                    {catalyst.focusAreas?.map((area, idx) => (
                       <span key={idx} style={tagStyle}>{area}</span>
                     ))}
                   </div>
                 </div>
-
                 <div style={infoCardStyle}>
-                  <h3 style={cardTitleStyle}>
-                    <Globe size={18} />
-                    Location & Contact
-                  </h3>
+                  <h3 style={cardTitleStyle}><Globe size={18} />Location & Contact</h3>
                   <div style={infoGridStyle}>
                     <InfoItem label="Head Office" value={catalyst.headOfficeLocation || catalyst.location} />
                     <InfoItem label="Phone" value={catalyst.phone} />
@@ -433,16 +201,12 @@ const CatalystDetailsModal = ({ catalyst, isOpen, onClose }) => {
                     {catalyst.linkedin && renderLinkedInLink(catalyst.linkedin)}
                   </div>
                 </div>
-
                 <div style={infoCardStyle}>
-                  <h3 style={cardTitleStyle}>
-                    <TrendingUp size={18} />
-                    Impact Metrics
-                  </h3>
+                  <h3 style={cardTitleStyle}><TrendingUp size={18} />Impact Metrics</h3>
                   <div style={infoGridStyle}>
                     <InfoItem label="Alumni Companies" value={catalyst.alumniCount} />
                     <InfoItem label="Success Rate" value={catalyst.successRate} />
-                    <InfoItem label="Team Size" value={catalyst.teamSize || "Not specified"} />
+                    <InfoItem label="Team Size" value={catalyst.teamSize} />
                     <InfoItem label="Cohort Size" value={catalyst.cohortSize} />
                     <InfoItem label="Program Duration" value={catalyst.duration} />
                   </div>
@@ -450,16 +214,11 @@ const CatalystDetailsModal = ({ catalyst, isOpen, onClose }) => {
               </div>
             </div>
           )}
-
-          {/* Program Details Tab */}
           {activeTab === "program" && catalyst.programDetails && (
             <div style={tabContentStyle}>
               <div style={gridStyle}>
                 <div style={infoCardStyle}>
-                  <h3 style={cardTitleStyle}>
-                    <Rocket size={18} />
-                    Program Information
-                  </h3>
+                  <h3 style={cardTitleStyle}><Rocket size={18} />Program Information</h3>
                   <div style={infoGridStyle}>
                     <InfoItem label="Application Period" value={catalyst.programDetails.applicationPeriod} />
                     <InfoItem label="Program Fee" value={catalyst.programDetails.programFee} />
@@ -470,31 +229,21 @@ const CatalystDetailsModal = ({ catalyst, isOpen, onClose }) => {
                     <InfoItem label="Virtual Option" value={catalyst.programDetails.virtualOption} />
                   </div>
                 </div>
-
                 <div style={infoCardStyle}>
-                  <h3 style={cardTitleStyle}>
-                    <Clock size={18} />
-                    Timeline & Commitment
-                  </h3>
+                  <h3 style={cardTitleStyle}><Clock size={18} />Timeline & Commitment</h3>
                   <div style={infoGridStyle}>
                     <InfoItem label="Duration" value={catalyst.duration} />
                     <InfoItem label="Cohort Size" value={catalyst.cohortSize} />
-                    <InfoItem label="Expected Commitment" value="Full-time during program" />
                   </div>
                 </div>
               </div>
             </div>
           )}
-
-          {/* Team & Contacts Tab */}
           {activeTab === "team" && (
             <div style={tabContentStyle}>
               <div style={gridStyle}>
                 <div style={infoCardStyle}>
-                  <h3 style={cardTitleStyle}>
-                    <Users size={18} />
-                    Key Contacts
-                  </h3>
+                  <h3 style={cardTitleStyle}><Users size={18} />Key Contacts</h3>
                   {catalyst.keyContacts && catalyst.keyContacts.length > 0 ? (
                     <div style={contactsListStyle}>
                       {catalyst.keyContacts.map((contact, idx) => (
@@ -511,29 +260,20 @@ const CatalystDetailsModal = ({ catalyst, isOpen, onClose }) => {
                     <div style={emptyStateStyle}>No key contacts listed</div>
                   )}
                 </div>
-
                 <div style={infoCardStyle}>
-                  <h3 style={cardTitleStyle}>
-                    <Users size={18} />
-                    Team Overview
-                  </h3>
+                  <h3 style={cardTitleStyle}><Users size={18} />Team Overview</h3>
                   <div style={infoGridStyle}>
-                    <InfoItem label="Total Team Size" value={catalyst.teamSize || "Not specified"} />
-                    <InfoItem label="Mentors Network" value={catalyst.programDetails?.mentorship || "Not specified"} />
+                    <InfoItem label="Total Team Size" value={catalyst.teamSize} />
+                    <InfoItem label="Mentors Network" value={catalyst.programDetails?.mentorship} />
                   </div>
                 </div>
               </div>
             </div>
           )}
-
-          {/* Success Stories Tab */}
           {activeTab === "success" && (
             <div style={tabContentStyle}>
               <div style={infoCardStyle}>
-                <h3 style={cardTitleStyle}>
-                  <Award size={18} />
-                  Success Stories
-                </h3>
+                <h3 style={cardTitleStyle}><Award size={18} />Success Stories</h3>
                 {catalyst.successStories && catalyst.successStories.length > 0 ? (
                   <div style={storiesListStyle}>
                     {catalyst.successStories.map((story, idx) => (
@@ -550,12 +290,8 @@ const CatalystDetailsModal = ({ catalyst, isOpen, onClose }) => {
                   <div style={emptyStateStyle}>No success stories available yet</div>
                 )}
               </div>
-
               <div style={infoCardStyle}>
-                <h3 style={cardTitleStyle}>
-                  <TrendingUp size={18} />
-                  Overall Impact
-                </h3>
+                <h3 style={cardTitleStyle}><TrendingUp size={18} />Overall Impact</h3>
                 <div style={infoGridStyle}>
                   <InfoItem label="Total Alumni Companies" value={catalyst.alumniCount} />
                   <InfoItem label="Success Rate" value={catalyst.successRate} />
@@ -563,15 +299,10 @@ const CatalystDetailsModal = ({ catalyst, isOpen, onClose }) => {
               </div>
             </div>
           )}
-
-          {/* Documents Tab */}
           {activeTab === "documents" && (
             <div style={tabContentStyle}>
               <div style={infoCardStyle}>
-                <h3 style={cardTitleStyle}>
-                  <FileText size={18} />
-                  Public Documents
-                </h3>
+                <h3 style={cardTitleStyle}><FileText size={18} />Public Documents</h3>
                 <div style={documentsGridStyle}>
                   {renderDocumentLink(catalyst.documents?.brochure, "Program Brochure")}
                   {renderDocumentLink(catalyst.documents?.applicationGuide, "Application Guide")}
@@ -589,7 +320,6 @@ const CatalystDetailsModal = ({ catalyst, isOpen, onClose }) => {
   );
 };
 
-// Helper Components for Modal
 const InfoItem = ({ label, value }) => (
   <div style={infoItemStyle}>
     <strong style={{ color: "#7d5a50" }}>{label}:</strong>
@@ -881,7 +611,7 @@ const documentsGridStyle = {
   gap: "12px",
 };
 
-// ---------- MAIN CATALYST ECOSYSTEM COMPONENT ----------
+// ---------- MAIN CATALYST ECOSYSTEM COMPONENT (For Associations to see Catalysts) ----------
 function CatalystEcosystem() {
   const [searchTerm, setSearchTerm] = useState("");
   const [programFilter, setProgramFilter] = useState("all");
@@ -889,7 +619,126 @@ function CatalystEcosystem() {
   const [showViewModal, setShowViewModal] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
-  const [catalystData] = useState(mockCatalysts);
+  const [catalystData, setCatalystData] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [associationName, setAssociationName] = useState("");
+  const [error, setError] = useState(null);
+
+  const programTypes = ["Accelerator", "Incubator", "Hub", "Program"];
+
+  // Fetch current association's profile to get their name
+  useEffect(() => {
+    const fetchAssociationProfile = async () => {
+      try {
+        const currentUser = auth.currentUser;
+        if (!currentUser) {
+          setError("Please log in to view catalysts");
+          setLoading(false);
+          return;
+        }
+
+        const profileDocRef = doc(db, "universalProfiles", currentUser.uid);
+        const profileDoc = await getDoc(profileDocRef);
+        
+        if (profileDoc.exists()) {
+          const profileData = profileDoc.data();
+          const assocName = profileData.entityOverview?.industryAssociation;
+          if (assocName) {
+            setAssociationName(assocName);
+          } else {
+            setError("Your association profile does not have an industry association selected. Please complete your profile first.");
+            setLoading(false);
+          }
+        } else {
+          setError("Association profile not found. Please complete your profile first.");
+          setLoading(false);
+        }
+      } catch (err) {
+        console.error("Error fetching association profile:", err);
+        setError("Failed to load association profile. Please try again.");
+        setLoading(false);
+      }
+    };
+
+    fetchAssociationProfile();
+  }, []);
+
+  // Fetch Catalysts that selected this association from catalystProfiles collection
+  useEffect(() => {
+    const fetchMatchingCatalysts = async () => {
+      if (!associationName) return;
+      
+      setLoading(true);
+      try {
+        const profilesRef = collection(db, "catalystProfiles");
+        const querySnapshot = await getDocs(profilesRef);
+        const matchingCatalysts = [];
+        
+        for (const docSnap of querySnapshot.docs) {
+          const data = docSnap.data();
+          const formData = data.formData || {};
+          const entityOverview = formData.entityOverview || {};
+          const industryAssociations = entityOverview.industryAssociations || [];
+          const memberOfAssociation = entityOverview.memberOfAssociation;
+          
+          // Check if this catalyst's associations include our association name
+          if (memberOfAssociation === "yes" && industryAssociations.includes(associationName)) {
+            const contactDetails = formData.contactDetails || {};
+            const programPref = formData.programBriefMatchingPreference || {};
+            
+            matchingCatalysts.push({
+              id: docSnap.id,
+              organizationName: entityOverview.registeredName || entityOverview.tradingName || "Unnamed Organization",
+              programType: programPref.programType || "Program",
+              firmType: entityOverview.legalEntityType || "Organization",
+              focusAreas: entityOverview.industrySector ? [entityOverview.industrySector] : [],
+              duration: programPref.programDuration || "Not specified",
+              cohortSize: "Contact for details",
+              location: contactDetails.physicalAddress || "Not specified",
+              headOfficeLocation: contactDetails.physicalAddress || "Not specified",
+              membershipStatus: "Active Partner",
+              phone: contactDetails.businessTel || "",
+              email: contactDetails.businessEmail || "",
+              website: entityOverview.website || "",
+              linkedin: contactDetails.linkedin || "",
+              description: entityOverview.briefDescription || "",
+              status: "active",
+              yearEstablished: entityOverview.yearEstablished || "Not specified",
+              alumniCount: 0,
+              successRate: "N/A",
+              teamSize: 0,
+              programDetails: {
+                applicationPeriod: "Contact for details",
+                programFee: "Contact for details",
+                equityRequired: "Contact for details",
+                mentorship: programPref.supportFramework || "Not specified",
+                fundingProvided: programPref.minimumSupportTicket ? `R ${programPref.minimumSupportTicket} - R ${programPref.maximumSupportTicket}` : "Contact for details",
+                demoDay: "Contact for details",
+                virtualOption: "Contact for details",
+              },
+              keyContacts: [
+                { name: contactDetails.primaryContactName || "", role: contactDetails.primaryContactPosition || "", email: contactDetails.primaryContactEmail || "" },
+                { name: contactDetails.secondaryContactName || "", role: contactDetails.secondaryContactPosition || "", email: contactDetails.secondaryContactEmail || "" }
+              ].filter(c => c.name),
+              successStories: [],
+              documents: formData.documentUpload || {},
+            });
+          }
+        }
+        
+        setCatalystData(matchingCatalysts);
+      } catch (err) {
+        console.error("Error fetching catalysts:", err);
+        setError("Failed to load catalyst data. Please try again.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (associationName) {
+      fetchMatchingCatalysts();
+    }
+  }, [associationName]);
 
   const stats = {
     total: catalystData.length,
@@ -898,8 +747,11 @@ function CatalystEcosystem() {
     alumniCount: catalystData.reduce((sum, c) => sum + (c.alumniCount || 0), 0)
   };
 
+  const uniqueProgramTypes = [...new Set(catalystData.map(c => c.programType).filter(p => p && p !== "Not specified"))];
+
   const filteredCatalysts = catalystData.filter((catalyst) => {
-    const matchesSearch = catalyst.organizationName.toLowerCase().includes(searchTerm.toLowerCase()) || catalyst.username.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch = catalyst.organizationName.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                         catalyst.email?.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesProgram = programFilter === "all" || catalyst.programType === programFilter;
     return matchesSearch && matchesProgram;
   });
@@ -915,6 +767,7 @@ function CatalystEcosystem() {
       "Firm Type": catalyst.firmType,
       "Head Office Location": catalyst.headOfficeLocation,
       "Membership Status": catalyst.membershipStatus,
+      "Email": catalyst.email,
     }));
     const worksheet = XLSX.utils.json_to_sheet(dataToExport);
     const workbook = XLSX.utils.book_new();
@@ -925,6 +778,7 @@ function CatalystEcosystem() {
   const getMembershipStatusBadge = (status) => {
     const statusColors = {
       "Active Partner": { background: '#e8f5e8', color: '#2e7d32' },
+      "Active Member": { background: '#e8f5e8', color: '#2e7d32' },
       "Pending Approval": { background: '#fff3e0', color: '#ed6c02' },
     };
     const colors = statusColors[status] || { background: '#fdeaea', color: '#c62828' };
@@ -968,86 +822,156 @@ function CatalystEcosystem() {
     pagination: { display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '16px', marginTop: '24px' },
     paginationBtn: { background: 'white', border: '1px solid #e0d5c8', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '14px', color: '#4a352f' },
     pageNumber: { color: '#7d5a50', fontSize: '14px' },
+    loadingContainer: { display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '400px', fontSize: '16px', color: '#7d5a50' },
+    errorContainer: { background: '#fdeaea', border: '1px solid #c62828', borderRadius: '8px', padding: '20px', textAlign: 'center', margin: '40px', color: '#c62828' },
+    emptyContainer: { textAlign: 'center', padding: '60px', color: '#7d5a50', background: 'white', borderRadius: '12px' },
   };
+
+  if (loading) {
+    return (
+      <div style={styles.container}>
+        <div style={styles.loadingContainer}>
+          <div className="spinner" style={{ width: '40px', height: '40px', border: '3px solid #e0d5c8', borderTop: '3px solid #a67c52', borderRadius: '50%', animation: 'spin 1s linear infinite', marginRight: '12px' }}></div>
+          Loading catalysts...
+        </div>
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div style={styles.container}>
+        <div style={styles.errorContainer}>
+          <AlertTriangle size={48} style={{ marginBottom: '16px' }} />
+          <h3>Error Loading Catalysts</h3>
+          <p>{error}</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={styles.container}>
       <div style={styles.header}>
         <div style={styles.headerContent}>
           <h1 style={styles.title}>Catalysts in Ecosystem</h1>
-          <p style={styles.subtitle}>Discover accelerators, incubators, and support programs</p>
+          <p style={styles.subtitle}>Discover accelerators, incubators, and support programs connected through <strong>{associationName || "your association"}</strong></p>
         </div>
-        <button style={styles.exportButton} onClick={exportToExcel}><Download size={16} /> Export to Excel</button>
+        {catalystData.length > 0 && (
+          <button style={styles.exportButton} onClick={exportToExcel}>
+            <Download size={16} /> Export to Excel
+          </button>
+        )}
       </div>
 
       <div style={styles.statsGrid}>
-        <div style={styles.statCard}><Building2 size={24} style={styles.statIcon} /><div style={styles.statInfo}><h3 style={{ margin: 0, fontSize: '24px', color: '#4a352f' }}>{stats.total}</h3><p style={{ margin: 0, color: '#7d5a50' }}>Total Catalysts</p></div></div>
-        <div style={styles.statCard}><Rocket size={24} style={styles.statIcon} /><div style={styles.statInfo}><h3 style={{ margin: 0, fontSize: '24px', color: '#4a352f' }}>{stats.programs}</h3><p style={{ margin: 0, color: '#7d5a50' }}>Program Types</p></div></div>
-        <div style={styles.statCard}><Users size={24} style={styles.statIcon} /><div style={styles.statInfo}><h3 style={{ margin: 0, fontSize: '24px', color: '#4a352f' }}>{stats.alumniCount}</h3><p style={{ margin: 0, color: '#7d5a50' }}>Alumni Companies</p></div></div>
-        <div style={styles.statCard}><TrendingUp size={24} style={styles.statIcon} /><div style={styles.statInfo}><h3 style={{ margin: 0, fontSize: '24px', color: '#4a352f' }}>{stats.active}</h3><p style={{ margin: 0, color: '#7d5a50' }}>Active Programs</p></div></div>
-      </div>
-
-      <div style={styles.controls}>
-        <div style={styles.searchContainer}>
-          <Search size={20} style={styles.searchIcon} />
-          <input type="text" placeholder="Search by organization name..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} style={styles.searchInput} />
+        <div style={styles.statCard}>
+          <Building2 size={24} style={styles.statIcon} />
+          <div style={styles.statInfo}>
+            <h3 style={{ margin: 0, fontSize: '24px', color: '#4a352f' }}>{stats.total}</h3>
+            <p style={{ margin: 0, color: '#7d5a50' }}>Total Catalysts</p>
+          </div>
         </div>
-        <select value={programFilter} onChange={(e) => setProgramFilter(e.target.value)} style={styles.filterSelect}>
-          <option value="all">All Programs</option>
-          {programTypes.map(type => <option key={type} value={type}>{type}</option>)}
-        </select>
-      </div>
-
-      <div style={styles.tableContainer}>
-        <table style={styles.table}>
-          <thead>
-            <tr style={{ borderBottom: '1px solid #f0e6d9', background: '#faf7f2' }}>
-              <th style={{ padding: '16px', textAlign: 'left', color: '#4a352f' }}>Business Name</th>
-              <th style={{ padding: '16px', textAlign: 'left', color: '#4a352f' }}>Programme Type</th>
-              <th style={{ padding: '16px', textAlign: 'left', color: '#4a352f' }}>Firm Type</th>
-              <th style={{ padding: '16px', textAlign: 'left', color: '#4a352f' }}>Head Office Location</th>
-              <th style={{ padding: '16px', textAlign: 'left', color: '#4a352f' }}>Membership Status</th>
-              <th style={{ padding: '16px', textAlign: 'left', color: '#4a352f' }}>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {currentCatalysts.map((catalyst) => (
-              <tr key={catalyst.id} style={{ borderBottom: '1px solid #f0e6d9' }}>
-                <td style={{ padding: '16px' }}>
-                  <div style={styles.companyCell}>
-                    <div style={styles.companyAvatar}>{catalyst.organizationName.charAt(0).toUpperCase()}</div>
-                    <div>
-                      <div style={styles.companyName}>{catalyst.organizationName}</div>
-                      <div style={styles.companyEmail}>{catalyst.email}</div>
-                    </div>
-                  </div>
-                </td>
-                <td style={{ padding: '16px', color: '#4a352f' }}>{catalyst.programType}</td>
-                <td style={{ padding: '16px', color: '#4a352f' }}>{catalyst.firmType || "Not specified"}</td>
-                <td style={{ padding: '16px', color: '#4a352f' }}>{catalyst.headOfficeLocation || catalyst.location || "Not specified"}</td>
-                <td style={{ padding: '16px' }}>{getMembershipStatusBadge(catalyst.membershipStatus)}</td>
-                <td style={{ padding: '16px' }}>
-                  <button 
-                    style={styles.viewBtn} 
-                    onClick={() => { setSelectedCatalyst(catalyst); setShowViewModal(true); }}
-                    onMouseEnter={(e) => e.currentTarget.style.background = '#faf7f2'}
-                    onMouseLeave={(e) => e.currentTarget.style.background = 'none'}
-                  >
-                    <Eye size={16} /> View
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {totalPages > 1 && (
-        <div style={styles.pagination}>
-          <button onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} disabled={currentPage === 1} style={{ ...styles.paginationBtn, opacity: currentPage === 1 ? 0.5 : 1 }}><ChevronLeft size={16} /> Previous</button>
-          <span style={styles.pageNumber}>Page {currentPage} of {totalPages}</span>
-          <button onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))} disabled={currentPage === totalPages} style={{ ...styles.paginationBtn, opacity: currentPage === totalPages ? 0.5 : 1 }}>Next <ChevronRight size={16} /></button>
+        <div style={styles.statCard}>
+          <Rocket size={24} style={styles.statIcon} />
+          <div style={styles.statInfo}>
+            <h3 style={{ margin: 0, fontSize: '24px', color: '#4a352f' }}>{stats.programs}</h3>
+            <p style={{ margin: 0, color: '#7d5a50' }}>Program Types</p>
+          </div>
         </div>
+        <div style={styles.statCard}>
+          <Users size={24} style={styles.statIcon} />
+          <div style={styles.statInfo}>
+            <h3 style={{ margin: 0, fontSize: '24px', color: '#4a352f' }}>{stats.alumniCount}</h3>
+            <p style={{ margin: 0, color: '#7d5a50' }}>Alumni Companies</p>
+          </div>
+        </div>
+        <div style={styles.statCard}>
+          <TrendingUp size={24} style={styles.statIcon} />
+          <div style={styles.statInfo}>
+            <h3 style={{ margin: 0, fontSize: '24px', color: '#4a352f' }}>{stats.active}</h3>
+            <p style={{ margin: 0, color: '#7d5a50' }}>Active Programs</p>
+          </div>
+        </div>
+      </div>
+
+      {catalystData.length === 0 ? (
+        <div style={styles.emptyContainer}>
+          <Users size={64} style={{ marginBottom: '16px', opacity: 0.5 }} />
+          <h3>No catalysts found</h3>
+          <p>There are currently no accelerators, incubators, or support programs that have selected {associationName || "your association"}.</p>
+          <p style={{ fontSize: '14px', marginTop: '8px' }}>When catalysts complete their profile and select your association, they will appear here.</p>
+        </div>
+      ) : (
+        <>
+          <div style={styles.controls}>
+            <div style={styles.searchContainer}>
+              <Search size={20} style={styles.searchIcon} />
+              <input type="text" placeholder="Search by organization name..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} style={styles.searchInput} />
+            </div>
+            <select value={programFilter} onChange={(e) => setProgramFilter(e.target.value)} style={styles.filterSelect}>
+              <option value="all">All Programs</option>
+              {uniqueProgramTypes.map(type => <option key={type} value={type}>{type}</option>)}
+            </select>
+          </div>
+
+          <div style={styles.tableContainer}>
+            <table style={styles.table}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid #f0e6d9', background: '#faf7f2' }}>
+                  <th style={{ padding: '16px', textAlign: 'left', color: '#4a352f' }}>Business Name</th>
+                  <th style={{ padding: '16px', textAlign: 'left', color: '#4a352f' }}>Programme Type</th>
+                  <th style={{ padding: '16px', textAlign: 'left', color: '#4a352f' }}>Firm Type</th>
+                  <th style={{ padding: '16px', textAlign: 'left', color: '#4a352f' }}>Head Office Location</th>
+                  <th style={{ padding: '16px', textAlign: 'left', color: '#4a352f' }}>Membership Status</th>
+                  <th style={{ padding: '16px', textAlign: 'left', color: '#4a352f' }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {currentCatalysts.map((catalyst) => (
+                  <tr key={catalyst.id} style={{ borderBottom: '1px solid #f0e6d9' }}>
+                    <td style={{ padding: '16px' }}>
+                      <div style={styles.companyCell}>
+                        <div style={styles.companyAvatar}>{catalyst.organizationName.charAt(0).toUpperCase()}</div>
+                        <div>
+                          <div style={styles.companyName}>{catalyst.organizationName}</div>
+                          <div style={styles.companyEmail}>{catalyst.email}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td style={{ padding: '16px', color: '#4a352f' }}>{catalyst.programType}</td>
+                    <td style={{ padding: '16px', color: '#4a352f' }}>{catalyst.firmType || "Not specified"}</td>
+                    <td style={{ padding: '16px', color: '#4a352f' }}>{catalyst.headOfficeLocation || catalyst.location || "Not specified"}</td>
+                    <td style={{ padding: '16px' }}>{getMembershipStatusBadge(catalyst.membershipStatus)}</td>
+                    <td style={{ padding: '16px' }}>
+                      <button 
+                        style={styles.viewBtn} 
+                        onClick={() => { setSelectedCatalyst(catalyst); setShowViewModal(true); }}
+                        onMouseEnter={(e) => e.currentTarget.style.background = '#faf7f2'}
+                        onMouseLeave={(e) => e.currentTarget.style.background = 'none'}
+                      >
+                        <Eye size={16} /> View
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {totalPages > 1 && (
+            <div style={styles.pagination}>
+              <button onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))} disabled={currentPage === 1} style={{ ...styles.paginationBtn, opacity: currentPage === 1 ? 0.5 : 1 }}>
+                <ChevronLeft size={16} /> Previous
+              </button>
+              <span style={styles.pageNumber}>Page {currentPage} of {totalPages}</span>
+              <button onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))} disabled={currentPage === totalPages} style={{ ...styles.paginationBtn, opacity: currentPage === totalPages ? 0.5 : 1 }}>
+                Next <ChevronRight size={16} />
+              </button>
+            </div>
+          )}
+        </>
       )}
 
       {showViewModal && selectedCatalyst && (

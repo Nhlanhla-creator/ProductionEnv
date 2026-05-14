@@ -152,7 +152,7 @@ const southAfricanProvinces = [
   { value: "Western Cape", label: "Western Cape" },
 ]
 
-// ── NEW: Industry Associations ─────────────────────────────────────────────
+// ── Industry Associations (same list as association profile) ──
 const industryAssociations = [
   { value: "SA Township Traders Association", label: "SA Township Traders Association" },
   { value: "Minerals Council South Africa", label: "Minerals Council South Africa" },
@@ -489,6 +489,17 @@ export default function EntityOverview({ data = {}, updateData }) {
           const companyLogo = getDocumentUrlFromAnyLocation('Company Logo', profileData);
           const orgStructure = getDocumentUrlFromAnyLocation('Org Structure', profileData);
 
+          // Initialize industry associations if they don't exist
+          if (!entityData.memberOfAssociation) {
+            entityData.memberOfAssociation = "";
+          }
+          if (!entityData.industryAssociations) {
+            entityData.industryAssociations = [];
+          }
+          if (!entityData.industryAssociationsOther) {
+            entityData.industryAssociationsOther = "";
+          }
+
           updateFormData({
             ...entityData,
             companyLetterhead,
@@ -502,7 +513,13 @@ export default function EntityOverview({ data = {}, updateData }) {
             orgStructure,
           });
         } else {
-          updateFormData(data);
+          // Initialize with default values if no profile exists
+          updateFormData({
+            ...data,
+            memberOfAssociation: "",
+            industryAssociations: [],
+            industryAssociationsOther: "",
+          });
         }
       } catch (error) {
         console.error("Error loading entity overview:", error);
@@ -955,26 +972,56 @@ export default function EntityOverview({ data = {}, updateData }) {
           </FormField>
 
           {memberOfAssociation === "yes" && (
-            <FormField label="Select your association(s)">
-              <MultiSelectDropdown
-                options={industryAssociations}
-                selected={Array.isArray(formData.industryAssociations) ? formData.industryAssociations : []}
-                onChange={(value) => handleMultiSelectChange("industryAssociations", value)}
-                placeholder="Select associations..."
-              />
-              {Array.isArray(formData.industryAssociations) && formData.industryAssociations.includes("Other") && (
-                <div style={{ marginTop: '10px' }}>
-                  <input
-                    type="text"
-                    name="industryAssociationsOther"
-                    value={formData.industryAssociationsOther || ""}
-                    onChange={handleChange}
-                    placeholder="Please specify your association..."
-                    style={{ ...inputStyle, marginTop: '4px' }}
-                  />
-                </div>
-              )}
-            </FormField>
+            <>
+              <FormField label="Select your association(s)">
+                <MultiSelectDropdown
+                  options={industryAssociations}
+                  selected={Array.isArray(formData.industryAssociations) ? formData.industryAssociations : []}
+                  onChange={(value) => handleMultiSelectChange("industryAssociations", value)}
+                  placeholder="Select associations..."
+                />
+                {Array.isArray(formData.industryAssociations) && formData.industryAssociations.includes("Other") && (
+                  <div style={{ marginTop: '10px' }}>
+                    <input
+                      type="text"
+                      name="industryAssociationsOther"
+                      value={formData.industryAssociationsOther || ""}
+                      onChange={handleChange}
+                      placeholder="Please specify your association..."
+                      style={{ ...inputStyle, marginTop: '4px' }}
+                    />
+                  </div>
+                )}
+              </FormField>
+              
+              {/* Help text to explain matching */}
+              <div style={{
+                marginTop: '8px',
+                padding: '10px 12px',
+                backgroundColor: '#f0f7f0',
+                borderLeft: '3px solid #4CAF50',
+                borderRadius: '4px',
+                fontSize: '12px',
+                color: '#2e7d32',
+              }}>
+                <strong>📌 Note:</strong> The associations you select here will be able to see your business in their member ecosystem. 
+                Make sure to select all associations you are a member of.
+              </div>
+            </>
+          )}
+
+          {/* Only show "No associations selected" message if they answered "no" */}
+          {memberOfAssociation === "no" && (
+            <div style={{
+              marginTop: '8px',
+              padding: '10px 12px',
+              backgroundColor: '#f5f5f5',
+              borderRadius: '4px',
+              fontSize: '12px',
+              color: '#666',
+            }}>
+              You indicated that you are not a member of any industry association. You can update this later if needed.
+            </div>
           )}
 
           {/* Company Logo */}

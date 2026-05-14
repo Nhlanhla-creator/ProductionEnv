@@ -57,6 +57,7 @@ export default function Settings() {
   const [userRoles, setUserRoles] = useState([]);
   const [roleListDeleted, setRoleListDeleted] = useState([]);
   const [deletedRoles, setDeletedRoles] = useState([])
+  const [toast, setToast] = useState({ show: false, message: "", type: "success" });
   const [roleSelectionModal, setRoleSelectionModal] = useState({
     show: false,
     roles: [],
@@ -103,6 +104,27 @@ const loadInvitations = async (companyId) => {
     setInvitations(invitationsList);
   } catch (error) {
     console.error("Error loading invitations:", error);
+  }
+};
+
+// Update email notification preference in Firestore
+const updateEmailPreference = async (enabled) => {
+  setLoading(true);
+  try {
+    const user = auth.currentUser;
+    if (!user) return;
+    
+    await updateDoc(doc(db, "users", user.uid), {
+      notifications: enabled
+    });
+    
+    setMessage("Notification preference saved!");
+    setTimeout(() => setMessage(""), 3000);
+  } catch (error) {
+    console.error("Error saving preference:", error);
+    setMessage("Error saving preference");
+  } finally {
+    setLoading(false);
   }
 };
 
@@ -182,10 +204,11 @@ useEffect(() => {
 
           // ✅ Set form data
           setFormData(prev => ({
-            ...prev,
-            email: data.email || "",
-            phone: data.phone || "",
-            notifications: data.notifications ?? true,
+          ...prev,
+          email: data.email || "",
+          phone: data.phone || "",
+          notifications: data.notifications ?? true,  
+          sms: data.smsNotifications ?? false,
             marketingEmails: data.marketingEmails ?? false,
             darkMode: data.darkMode ?? false,
             language: data.language || "en",
@@ -1170,42 +1193,75 @@ const handleUpdateRole = async (memberId, newRole) => {
               </div>
 
               <div style={{ display: "grid", gap: "1.5rem", maxWidth: "600px" }}>
-                <div
+            <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  padding: "1.5rem",
+                  backgroundColor: colors.backgroundBrown,
+                  borderRadius: "8px",
+                  border: `1px solid ${colors.lightBrown}`,
+                }}
+              >
+                <input
+                  type="checkbox"
+                  id="notifications"
+                  name="notifications"
+                  checked={formData.notifications}
+                  onChange={async (e) => {
+                    const checked = e.target.checked;
+                    
+                    // Optimistic update - update UI immediately
+                    setFormData(prev => ({ ...prev, notifications: checked }));
+                    
+                    try {
+                      const user = auth.currentUser;
+                      if (user) {
+                        await updateDoc(doc(db, "users", user.uid), {
+                          notifications: checked
+                        });
+                        
+                        // Show toast notification
+                        setToast({
+                          show: true,
+                          message: checked 
+                             ? "Email notifications enabled. You'll now receive updates from BIG Marketplace."
+                            : "Email notifications disabled. You won't receive any email updates.",
+                          type: checked ? "success" : "error" 
+                        });
+                        setTimeout(() => setToast({ show: false, message: "", type: "success" }), 4000);
+                      }
+                    } catch (error) {
+                      console.error("Error saving preference:", error);
+                      // Revert on error
+                      setFormData(prev => ({ ...prev, notifications: !checked }));
+                      setToast({
+                        show: true,
+                        message: "Failed to save preference. Please try again.",
+                        type: "error"
+                      });
+                      setTimeout(() => setToast({ show: false, message: "", type: "success" }), 4000);
+                    }
+                  }}
                   style={{
-                    display: "flex",
-                    alignItems: "center",
-                    padding: "1.5rem",
-                    backgroundColor: colors.backgroundBrown,
-                    borderRadius: "8px",
-                    border: `1px solid ${colors.lightBrown}`,
+                    width: "18px",
+                    height: "18px",
+                    marginRight: "1rem",
+                    accentColor: colors.primaryBrown,
+                  }}
+                />
+                <label
+                  htmlFor="notifications"
+                  style={{
+                    color: colors.textBrown,
+                    fontWeight: "500",
+                    cursor: "pointer",
+                    fontSize: "1rem",
                   }}
                 >
-                  <input
-                    type="checkbox"
-                    id="notifications"
-                    name="notifications"
-                    checked={formData.notifications}
-                    onChange={handleInputChange}
-                    style={{
-                      width: "18px",
-                      height: "18px",
-                      marginRight: "1rem",
-                      accentColor: colors.primaryBrown,
-                    }}
-                  />
-                  <label
-                    htmlFor="notifications"
-                    style={{
-                      color: colors.textBrown,
-                      fontWeight: "500",
-                      cursor: "pointer",
-                      fontSize: "1rem",
-                    }}
-                  >
-                    Enable Email Notifications
-                  </label>
-                </div>
-
+                  Enable Email Notifications
+                </label>
+              </div>
                 <div
                   style={{
                     display: "flex",
@@ -2302,6 +2358,39 @@ const handleUpdateRole = async (memberId, newRole) => {
   </div>
 )}
 
+// Add toast notification JSX at the bottom of your settings page (before closing divs)
+{toast.show && (
+  <div style={{
+    position: "fixed",
+    bottom: "20px",
+    right: "20px",
+    padding: "12px 20px",
+    backgroundColor: toast.type === "success" ? "#10b981" : "#ef4444",
+    color: "white",
+    borderRadius: "8px",
+    fontSize: "14px",
+    fontWeight: "500",
+    boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+    zIndex: 1000,
+    animation: "slideIn 0.3s ease-out"
+  }}>
+    {toast.message}
+  </div>
+)}
+
+// Add CSS animation
+<style>{`
+  @keyframes slideIn {
+    from {
+      transform: translateX(100%);
+      opacity: 0;
+    }
+    to {
+      transform: translateX(0);
+      opacity: 1;
+    }
+  }
+`}</style>
 
 {show2FASetup && (
   <TwoFactorSetup
