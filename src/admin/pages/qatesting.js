@@ -9,9 +9,10 @@ import {
   loadAllContent
 } from './services/qa';
 import { useAuth } from '../../smses/hooks/useAuth';
-import { AlertCircle } from 'lucide-react';
+import { AlertCircle, CheckCircle, X } from 'lucide-react';
 import { QAMasterTable } from './structure/qaMasterTable';
 import { loadQATable, saveQATable } from './services/qaMasterTable';
+import AddTaskModal from './structure/AddTaskModal';
 
 function debounce(fn, ms) {
   let t;
@@ -32,6 +33,8 @@ const QATesting = () => {
   const [qaTasks, setQaTasks]   = useState([]);
   const [isSaving, setIsSaving] = useState(false);
   const debouncedSaveRef = useRef(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [toast, setToast] = useState(null);
 
   useEffect(() => {
     if (!user) { setIsLoading(false); return; }
@@ -78,18 +81,24 @@ const QATesting = () => {
     });
   }, [persistTasks]);
 
-  const handleAddTask = useCallback(() => {
-    const newTask = {
-      taskId: '', category: '', dashboard: '', section: '', taskName: '',
-      status: 'Not started', dueDate: '', testedWhen: '',
-      assignedTo: '', testType: '', actionStatus: 'Not started',
-    };
+  const handleAddTask = useCallback((taskData) => {
+    if (!taskData) return;
     setQaTasks(prev => {
-      const updated = [...prev, newTask];
+      const updated = [...prev, taskData];
       persistTasks(updated);
       return updated;
     });
+    setToast({ type: 'success', message: 'Task added successfully' });
+    setTimeout(() => setToast(null), 3000);
   }, [persistTasks]);
+
+  const handleOpenModal = useCallback(() => {
+    setIsModalOpen(true);
+  }, []);
+
+  const handleCloseModal = useCallback(() => {
+    setIsModalOpen(false);
+  }, []);
 
   const handleDeleteTask = useCallback((rowIdx) => {
     if (!window.confirm('Delete this test row?')) return;
@@ -132,7 +141,6 @@ const QATesting = () => {
     if (!selectedPath || !user) return;
     try {
       setIsUploading(true);
-      // FIX: always call uploadFile directly — it handles appending internally
       await uploadFile(selectedPath, file);
       const pathKey = selectedPath.join(' > ');
       setContentStatus(prev => ({ ...prev, [pathKey]: true }));
@@ -215,11 +223,18 @@ const QATesting = () => {
           <QAMasterTable
             tasks={qaTasks}
             onUpdateTask={handleUpdateTask}
-            onAddTask={handleAddTask}
+            onAddTask={handleOpenModal}
             onDeleteTask={handleDeleteTask}
             isSaving={isSaving}
           />
         </div>
+
+        <AddTaskModal
+          isOpen={isModalOpen}
+          onClose={handleCloseModal}
+          onAddTask={handleAddTask}
+          existingTasks={qaTasks}
+        />
 
         <div style={{ marginBottom: 12 }}>
           <h3 style={{ fontSize: 16, color: '#4a352f', margin: 0, fontWeight: 600 }}>Test Documents &amp; Files</h3>
@@ -264,6 +279,45 @@ const QATesting = () => {
           )}
         </div>
       </div>
+
+      {/* Toast Notification */}
+      {toast && (
+        <div
+          style={{
+            position: 'fixed',
+            bottom: 24,
+            right: 24,
+            padding: '12px 16px',
+            borderRadius: 8,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+            zIndex: 2000,
+            backgroundColor: toast.type === 'success' ? '#10b981' : '#ef4444',
+            color: '#fff',
+            fontSize: 14,
+            fontWeight: 500,
+            animation: 'slideIn 0.3s ease-out',
+          }}
+        >
+          {toast.type === 'success' ? <CheckCircle size={18} /> : <AlertCircle size={18} />}
+          <span>{toast.message}</span>
+          <button
+            onClick={() => setToast(null)}
+            style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}
+          >
+            <X size={16} />
+          </button>
+        </div>
+      )}
+
+      <style>{`
+        @keyframes slideIn {
+          from { transform: translateY(100%); opacity: 0; }
+          to { transform: translateY(0); opacity: 1; }
+        }
+      `}</style>
     </>
   );
 };
