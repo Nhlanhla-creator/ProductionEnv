@@ -24,151 +24,13 @@ import {
   Target,
   Clock,
   CheckCircle,
+  AlertTriangle,
 } from "lucide-react";
 import * as XLSX from 'xlsx';
+import { db, auth } from '../../firebaseConfig';
+import { collection, getDocs, getDoc, doc } from 'firebase/firestore';
 
-// ---------- MOCK DATA (Placeholder details - No Backend) ----------
-const mockAdvisors = [
-  {
-    id: "1",
-    username: "strategic_partners",
-    email: "contact@strategicpartners.co.za",
-    fullName: "Dr. Sarah Johnson",
-    firmType: "Strategic Advisory Firm",
-    title: "Strategic Business Advisor",
-    expertise: ["Strategy", "Growth Planning", "Business Modeling"],
-    industries: ["Technology", "Finance", "Retail"],
-    experience: "15+ years",
-    location: "Cape Town",
-    headOfficeLocation: "Cape Town, Western Cape",
-    membershipStatus: "Active Partner",
-    phone: "+27 21 123 4567",
-    website: "https://strategicpartners.co.za",
-    linkedin: "https://linkedin.com/in/sarahjohnson",
-    bio: "Strategic business advisor with over 15 years of experience helping SMEs scale their operations and achieve sustainable growth.",
-    status: "active",
-    createdAt: new Date("2023-06-15"),
-    rating: 4.8,
-    reviews: 127,
-    hourlyRate: "R1,500 - R2,500",
-    qualifications: ["MBA (UCT)", "Certified Business Advisor"],
-    keyClients: ["Tech Startup A", "Retail Chain B"],
-    documents: {
-      profile: "/docs/sarah-johnson-profile.pdf",
-    },
-  },
-  {
-    id: "2",
-    username: "finance_guru",
-    email: "info@financeguru.co.za",
-    fullName: "Michael Chen",
-    firmType: "Financial Advisory",
-    title: "Financial Advisor",
-    expertise: ["Finance", "Investment", "Financial Planning"],
-    industries: ["Finance", "Real Estate", "Manufacturing"],
-    experience: "12+ years",
-    location: "Johannesburg",
-    headOfficeLocation: "Johannesburg, Gauteng",
-    membershipStatus: "Active Partner",
-    phone: "+27 11 987 6543",
-    website: "https://financeguru.co.za",
-    linkedin: "https://linkedin.com/in/michaelchen",
-    bio: "Specializing in financial strategy, investment planning, and capital raising for growing businesses.",
-    status: "active",
-    createdAt: new Date("2023-08-22"),
-    rating: 4.6,
-    reviews: 89,
-    hourlyRate: "R1,200 - R2,000",
-    qualifications: ["CFA", "Financial Planning Certificate"],
-    keyClients: ["Growing SME Fund", "Real Estate Group"],
-    documents: {},
-  },
-  {
-    id: "3",
-    username: "marketing_pro",
-    email: "hello@marketingpro.co.za",
-    fullName: "Thabo Nkosi",
-    firmType: "Marketing Consultancy",
-    title: "Marketing Strategist",
-    expertise: ["Marketing", "Digital Strategy", "Brand Building"],
-    industries: ["Retail", "E-commerce", "Services"],
-    experience: "10+ years",
-    location: "Durban",
-    headOfficeLocation: "Durban, KwaZulu-Natal",
-    membershipStatus: "Pending Approval",
-    phone: "+27 31 456 7890",
-    website: "https://marketingpro.co.za",
-    bio: "Digital marketing expert helping businesses build strong brands and acquire customers online.",
-    status: "pending",
-    createdAt: new Date("2024-01-10"),
-    rating: 4.5,
-    reviews: 56,
-    hourlyRate: "R800 - R1,500",
-    qualifications: ["Digital Marketing Certified"],
-    keyClients: ["E-commerce Startup", "Local Brand"],
-    documents: {},
-  },
-  {
-    id: "4",
-    username: "legal_eagle",
-    email: "info@legaleagle.co.za",
-    fullName: "Priya Patel",
-    firmType: "Legal Practice",
-    title: "Legal Advisor",
-    expertise: ["Legal", "Compliance", "Contract Law"],
-    industries: ["Legal", "Technology", "Healthcare"],
-    experience: "8+ years",
-    location: "Pretoria",
-    headOfficeLocation: "Pretoria, Gauteng",
-    membershipStatus: "Active Partner",
-    phone: "+27 12 345 6789",
-    website: "https://legaleagle.co.za",
-    linkedin: "https://linkedin.com/in/priyapatel",
-    bio: "Corporate lawyer specializing in startup legal frameworks, intellectual property, and compliance.",
-    status: "active",
-    createdAt: new Date("2023-11-05"),
-    rating: 4.9,
-    reviews: 203,
-    hourlyRate: "R2,000 - R3,500",
-    qualifications: ["LLB", "Certificate in Corporate Law"],
-    keyClients: ["Tech Startups", "Healthcare Providers"],
-    documents: {
-      profile: "/docs/priya-patel-profile.pdf",
-    },
-  },
-  {
-    id: "5",
-    username: "ops_expert",
-    email: "contact@opsexpert.co.za",
-    fullName: "James Wilson",
-    firmType: "Operations Advisory",
-    title: "Operations Advisor",
-    expertise: ["Operations", "Supply Chain", "Process Improvement"],
-    industries: ["Manufacturing", "Logistics", "Retail"],
-    experience: "18+ years",
-    location: "Port Elizabeth",
-    headOfficeLocation: "Port Elizabeth, Eastern Cape",
-    membershipStatus: "Active Partner",
-    phone: "+27 41 123 4567",
-    website: "https://opsexpert.co.za",
-    linkedin: "https://linkedin.com/in/jameswilson",
-    bio: "Operations expert focused on efficiency, cost reduction, and supply chain optimization.",
-    status: "active",
-    createdAt: new Date("2023-09-18"),
-    rating: 4.7,
-    reviews: 142,
-    hourlyRate: "R1,500 - R2,800",
-    qualifications: ["Six Sigma Black Belt", "Supply Chain Management"],
-    keyClients: ["Manufacturing Corp", "Logistics Company"],
-    documents: {
-      profile: "/docs/james-wilson-profile.pdf",
-    },
-  },
-];
-
-const allExpertise = [...new Set(mockAdvisors.flatMap(a => a.expertise))];
-
-// ---------- ADVISOR DETAILS MODAL (With Tabs) ----------
+// ---------- ADVISOR DETAILS MODAL ----------
 const AdvisorDetailsModal = ({ advisor, isOpen, onClose }) => {
   const [activeTab, setActiveTab] = useState("overview");
   const [mounted, setMounted] = useState(false);
@@ -179,14 +41,12 @@ const AdvisorDetailsModal = ({ advisor, isOpen, onClose }) => {
 
   if (!isOpen || !advisor || !mounted) return null;
 
-  // Helper functions
   const formatLabel = (value) => {
     if (!value) return "Not provided";
     if (typeof value === "boolean") return value ? "Yes" : "No";
     return value;
   };
 
-  // Tabs configuration
   const tabs = [
     { id: "overview", label: "Overview", icon: Building2 },
     { id: "expertise", label: "Expertise & Industries", icon: Target },
@@ -257,7 +117,7 @@ const AdvisorDetailsModal = ({ advisor, isOpen, onClose }) => {
   };
 
   const getMembershipBadgeStyle = (status) => {
-    if (status === "Active Partner") {
+    if (status === "Active Partner" || status === "Active Member") {
       return { background: "#e8f5e8", color: "#2e7d32" };
     } else if (status === "Pending Approval") {
       return { background: "#fff3e0", color: "#ed6c02" };
@@ -268,13 +128,12 @@ const AdvisorDetailsModal = ({ advisor, isOpen, onClose }) => {
   return createPortal(
     <div style={modalOverlayStyle}>
       <div style={modalContentStyle}>
-        {/* Header */}
         <div style={modalHeaderStyle}>
           <div style={headerContentStyle}>
             <div style={advisorHeaderStyle}>
               <h2 style={advisorNameStyle}>{advisor.fullName}</h2>
               <div style={advisorMetaStyle}>
-                <span style={firmTypeBadgeStyle}>{advisor.firmType}</span>
+                <span style={firmTypeBadgeStyle}>{advisor.firmType || "Advisor"}</span>
                 <span style={titleBadgeStyle}>{advisor.title}</span>
                 <span style={locationStyle}>
                   <MapPin size={14} />
@@ -290,7 +149,6 @@ const AdvisorDetailsModal = ({ advisor, isOpen, onClose }) => {
             </button>
           </div>
 
-          {/* Tabs */}
           <div style={tabsContainerStyle}>
             {tabs.map((tab) => {
               const IconComponent = tab.icon;
@@ -298,10 +156,7 @@ const AdvisorDetailsModal = ({ advisor, isOpen, onClose }) => {
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  style={{
-                    ...tabStyle,
-                    ...(activeTab === tab.id ? activeTabStyle : {}),
-                  }}
+                  style={{ ...tabStyle, ...(activeTab === tab.id ? activeTabStyle : {}) }}
                 >
                   <IconComponent size={16} />
                   {tab.label}
@@ -311,23 +166,17 @@ const AdvisorDetailsModal = ({ advisor, isOpen, onClose }) => {
           </div>
         </div>
 
-        {/* Content */}
         <div style={modalBodyStyle}>
-          {/* Overview Tab */}
           {activeTab === "overview" && (
             <div style={tabContentStyle}>
               <div style={gridStyle}>
                 <div style={infoCardStyle}>
-                  <h3 style={cardTitleStyle}>
-                    <Building2 size={18} />
-                    Professional Information
-                  </h3>
+                  <h3 style={cardTitleStyle}><Building2 size={18} />Professional Information</h3>
                   <div style={infoGridStyle}>
                     <InfoItem label="Full Name" value={advisor.fullName} />
-                    <InfoItem label="Firm Type" value={advisor.firmType} />
                     <InfoItem label="Title" value={advisor.title} />
                     <InfoItem label="Experience" value={advisor.experience} />
-                    <InfoItem label="Status" value={advisor.status.charAt(0).toUpperCase() + advisor.status.slice(1)} />
+                    <InfoItem label="Status" value={advisor.status?.charAt(0).toUpperCase() + advisor.status?.slice(1)} />
                   </div>
                   {advisor.bio && (
                     <div style={descriptionStyle}>
@@ -338,30 +187,23 @@ const AdvisorDetailsModal = ({ advisor, isOpen, onClose }) => {
                 </div>
 
                 <div style={infoCardStyle}>
-                  <h3 style={cardTitleStyle}>
-                    <Award size={18} />
-                    Qualifications & Rating
-                  </h3>
+                  <h3 style={cardTitleStyle}><Award size={18} />Qualifications & Rating</h3>
                   <div style={infoGridStyle}>
                     <InfoItem label="Qualifications" value={advisor.qualifications?.join(" • ") || "Not specified"} />
-                    <InfoItem label="Hourly Rate" value={advisor.hourlyRate || "Not specified"} />
                     <div style={infoItemStyle}>
                       <strong style={{ color: "#7d5a50" }}>Rating:</strong>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        {renderStars(advisor.rating)}
-                        <span style={{ color: "#4a352f" }}>({advisor.reviews} reviews)</span>
+                        {renderStars(advisor.rating || 0)}
+                        <span style={{ color: "#4a352f" }}>({advisor.reviews || 0} reviews)</span>
                       </div>
                     </div>
                   </div>
                 </div>
 
                 <div style={infoCardStyle}>
-                  <h3 style={cardTitleStyle}>
-                    <Globe size={18} />
-                    Location & Contact
-                  </h3>
+                  <h3 style={cardTitleStyle}><Globe size={18} />Location & Contact</h3>
                   <div style={infoGridStyle}>
-                    <InfoItem label="Head Office" value={advisor.headOfficeLocation || advisor.location} />
+                    <InfoItem label="Location" value={advisor.headOfficeLocation || advisor.location} />
                     <InfoItem label="Phone" value={advisor.phone} />
                     <InfoItem label="Email" value={advisor.email} />
                     {advisor.website && (
@@ -379,29 +221,22 @@ const AdvisorDetailsModal = ({ advisor, isOpen, onClose }) => {
             </div>
           )}
 
-          {/* Expertise & Industries Tab */}
           {activeTab === "expertise" && (
             <div style={tabContentStyle}>
               <div style={gridStyle}>
                 <div style={infoCardStyle}>
-                  <h3 style={cardTitleStyle}>
-                    <Target size={18} />
-                    Areas of Expertise
-                  </h3>
+                  <h3 style={cardTitleStyle}><Target size={18} />Areas of Expertise</h3>
                   <div style={tagsContainerStyle}>
-                    {advisor.expertise.map((exp, idx) => (
+                    {advisor.expertise?.map((exp, idx) => (
                       <span key={idx} style={tagStyle}>{exp}</span>
                     ))}
                   </div>
                 </div>
 
                 <div style={infoCardStyle}>
-                  <h3 style={cardTitleStyle}>
-                    <Briefcase size={18} />
-                    Industries Served
-                  </h3>
+                  <h3 style={cardTitleStyle}><Briefcase size={18} />Industries Served</h3>
                   <div style={tagsContainerStyle}>
-                    {advisor.industries.map((ind, idx) => (
+                    {advisor.industries?.map((ind, idx) => (
                       <span key={idx} style={tagStyle}>{ind}</span>
                     ))}
                   </div>
@@ -409,10 +244,7 @@ const AdvisorDetailsModal = ({ advisor, isOpen, onClose }) => {
 
                 {advisor.keyClients && advisor.keyClients.length > 0 && (
                   <div style={infoCardStyle}>
-                    <h3 style={cardTitleStyle}>
-                      <CheckCircle size={18} />
-                      Key Clients
-                    </h3>
+                    <h3 style={cardTitleStyle}><CheckCircle size={18} />Key Clients</h3>
                     <div style={tagsContainerStyle}>
                       {advisor.keyClients.map((client, idx) => (
                         <span key={idx} style={tagStyle}>{client}</span>
@@ -424,27 +256,20 @@ const AdvisorDetailsModal = ({ advisor, isOpen, onClose }) => {
             </div>
           )}
 
-          {/* Contact Tab */}
           {activeTab === "contact" && (
             <div style={tabContentStyle}>
               <div style={gridStyle}>
                 <div style={infoCardStyle}>
-                  <h3 style={cardTitleStyle}>
-                    <Mail size={18} />
-                    Contact Details
-                  </h3>
+                  <h3 style={cardTitleStyle}><Mail size={18} />Contact Details</h3>
                   <div style={infoGridStyle}>
                     <InfoItem label="Email" value={advisor.email} />
                     <InfoItem label="Phone" value={advisor.phone} />
-                    <InfoItem label="Office Location" value={advisor.headOfficeLocation || advisor.location} />
+                    <InfoItem label="Location" value={advisor.headOfficeLocation || advisor.location} />
                   </div>
                 </div>
 
                 <div style={infoCardStyle}>
-                  <h3 style={cardTitleStyle}>
-                    <Globe size={18} />
-                    Online Presence
-                  </h3>
+                  <h3 style={cardTitleStyle}><Globe size={18} />Online Presence</h3>
                   <div style={infoGridStyle}>
                     {advisor.website && (
                       <div style={linkItemStyle}>
@@ -461,14 +286,10 @@ const AdvisorDetailsModal = ({ advisor, isOpen, onClose }) => {
             </div>
           )}
 
-          {/* Documents Tab */}
           {activeTab === "documents" && (
             <div style={tabContentStyle}>
               <div style={infoCardStyle}>
-                <h3 style={cardTitleStyle}>
-                  <FileText size={18} />
-                  Public Documents
-                </h3>
+                <h3 style={cardTitleStyle}><FileText size={18} />Public Documents</h3>
                 <div style={documentsGridStyle}>
                   {renderDocumentLink(advisor.documents?.profile, "Professional Profile")}
                   {(!advisor.documents || Object.keys(advisor.documents).length === 0) && (
@@ -485,7 +306,6 @@ const AdvisorDetailsModal = ({ advisor, isOpen, onClose }) => {
   );
 };
 
-// Helper Components for Modal
 const InfoItem = ({ label, value }) => (
   <div style={infoItemStyle}>
     <strong style={{ color: "#7d5a50" }}>{label}:</strong>
@@ -724,7 +544,7 @@ const documentsGridStyle = {
   gap: "12px",
 };
 
-// ---------- MAIN ADVISOR ECOSYSTEM COMPONENT ----------
+// ---------- MAIN ADVISOR ECOSYSTEM COMPONENT (For Associations to see Advisors) ----------
 function AdvisorEcosystem() {
   const [searchTerm, setSearchTerm] = useState("");
   const [expertiseFilter, setExpertiseFilter] = useState("all");
@@ -732,19 +552,144 @@ function AdvisorEcosystem() {
   const [showViewModal, setShowViewModal] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
-  const [advisorData] = useState(mockAdvisors);
+  const [advisorData, setAdvisorData] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [associationName, setAssociationName] = useState("");
+  const [error, setError] = useState(null);
+  const [debugInfo, setDebugInfo] = useState("");
+  const [allExpertise, setAllExpertise] = useState([]);
+
+  // Fetch current association's profile to get their name
+  useEffect(() => {
+    const fetchAssociationProfile = async () => {
+      try {
+        const currentUser = auth.currentUser;
+        if (!currentUser) {
+          setError("Please log in to view advisors");
+          setLoading(false);
+          return;
+        }
+
+        const profileDocRef = doc(db, "universalProfiles", currentUser.uid);
+        const profileDoc = await getDoc(profileDocRef);
+        
+        if (profileDoc.exists()) {
+          const profileData = profileDoc.data();
+          const assocName = profileData.entityOverview?.industryAssociation;
+          if (assocName) {
+            setAssociationName(assocName);
+            console.log("Association name found:", assocName);
+          } else {
+            setError("Your association profile does not have an industry association selected. Please complete your profile first.");
+            setLoading(false);
+          }
+        } else {
+          setError("Association profile not found. Please complete your profile first.");
+          setLoading(false);
+        }
+      } catch (err) {
+        console.error("Error fetching association profile:", err);
+        setError("Failed to load association profile. Please try again.");
+        setLoading(false);
+      }
+    };
+
+    fetchAssociationProfile();
+  }, []);
+
+  // Fetch Advisors that selected this association from advisorProfiles collection
+  useEffect(() => {
+    const fetchMatchingAdvisors = async () => {
+      if (!associationName) return;
+      
+      setLoading(true);
+      setDebugInfo("Searching for advisors...");
+      try {
+        const profilesRef = collection(db, "advisorProfiles");
+        const querySnapshot = await getDocs(profilesRef);
+        
+        console.log(`Found ${querySnapshot.docs.length} total advisor profiles`);
+        setDebugInfo(`Found ${querySnapshot.docs.length} total advisor profiles. Looking for association: ${associationName}`);
+        
+        const matchingAdvisors = [];
+        const expertiseSet = new Set();
+        
+        for (const docSnap of querySnapshot.docs) {
+          const data = docSnap.data();
+          const formData = data.formData || {};
+          const personalOverview = formData.personalProfessionalOverview || {};
+          
+          const memberOfAssociation = personalOverview.memberOfAssociation;
+          const industryAssociations = personalOverview.industryAssociations || [];
+          
+          console.log(`Advisor ${docSnap.id}: memberOfAssociation=${memberOfAssociation}, associations=${JSON.stringify(industryAssociations)}`);
+          
+          // Check if this advisor's associations include our association name
+          if (memberOfAssociation === "yes" && industryAssociations.includes(associationName)) {
+            console.log(`✅ MATCH FOUND: ${personalOverview.professionalHeadline || "Advisor"}`);
+            
+            const contactDetails = formData.contactDetails || {};
+            const selectionCriteria = formData.selectionCriteria || {};
+            const professionalCredentials = formData.professionalCredentials || {};
+            
+            // Collect expertise for filter
+            const expertise = personalOverview.functionalExpertise || [];
+            expertise.forEach(exp => expertiseSet.add(exp));
+            
+            matchingAdvisors.push({
+              id: docSnap.id,
+              fullName: `${contactDetails.name || ""} ${contactDetails.surname || ""}`.trim() || "Advisor",
+              firmType: "Advisory",
+              title: personalOverview.professionalHeadline || "Professional Advisor",
+              expertise: expertise,
+              industries: personalOverview.industryExperience || [],
+              experience: personalOverview.yearsOfExperience || "Not specified",
+              location: contactDetails.country || "Not specified",
+              headOfficeLocation: contactDetails.country || "Not specified",
+              membershipStatus: "Active Partner",
+              phone: contactDetails.mobile || "",
+              email: contactDetails.email || "",
+              website: contactDetails.website || "",
+              linkedin: contactDetails.linkedin || "",
+              bio: personalOverview.briefBio || "",
+              status: "active",
+              rating: 0,
+              reviews: 0,
+              qualifications: professionalCredentials.qualifications || [],
+              keyClients: [],
+              documents: formData.requiredDocuments || {},
+            });
+          }
+        }
+        
+        setAllExpertise(Array.from(expertiseSet));
+        console.log(`Found ${matchingAdvisors.length} matching advisors`);
+        setDebugInfo(`Found ${matchingAdvisors.length} advisors that selected "${associationName}"`);
+        setAdvisorData(matchingAdvisors);
+      } catch (err) {
+        console.error("Error fetching advisors:", err);
+        setError("Failed to load advisor data. Please try again.");
+        setDebugInfo(`Error: ${err.message}`);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (associationName) {
+      fetchMatchingAdvisors();
+    }
+  }, [associationName]);
 
   const stats = {
     total: advisorData.length,
     active: advisorData.filter(a => a.status === 'active').length,
     expertiseAreas: allExpertise.length,
-    avgRating: advisorData.reduce((sum, a) => sum + a.rating, 0) / advisorData.length || 0
+    avgRating: advisorData.reduce((sum, a) => sum + (a.rating || 0), 0) / advisorData.length || 0
   };
 
   const filteredAdvisors = advisorData.filter((advisor) => {
     const matchesSearch = 
       advisor.fullName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      advisor.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
       advisor.email.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesExpertise = expertiseFilter === "all" || advisor.expertise.includes(expertiseFilter);
     return matchesSearch && matchesExpertise;
@@ -756,11 +701,13 @@ function AdvisorEcosystem() {
 
   const exportToExcel = () => {
     const dataToExport = filteredAdvisors.map(advisor => ({
-      "Business Name": advisor.fullName,
-      "Firm Type": advisor.firmType,
+      "Name": advisor.fullName,
+      "Title": advisor.title,
+      "Expertise": advisor.expertise.join(", "),
       "Industries": advisor.industries.join(", "),
-      "Head Office Location": advisor.headOfficeLocation,
+      "Location": advisor.headOfficeLocation,
       "Membership Status": advisor.membershipStatus,
+      "Email": advisor.email,
     }));
     const worksheet = XLSX.utils.json_to_sheet(dataToExport);
     const workbook = XLSX.utils.book_new();
@@ -771,6 +718,7 @@ function AdvisorEcosystem() {
   const getMembershipStatusBadge = (status) => {
     const statusColors = {
       "Active Partner": { background: '#e8f5e8', color: '#2e7d32' },
+      "Active Member": { background: '#e8f5e8', color: '#2e7d32' },
       "Pending Approval": { background: '#fff3e0', color: '#ed6c02' },
     };
     const colors = statusColors[status] || { background: '#fdeaea', color: '#c62828' };
@@ -807,7 +755,7 @@ function AdvisorEcosystem() {
     tableContainer: { background: 'white', borderRadius: '12px', overflow: 'auto', boxShadow: '0 2px 8px rgba(0,0,0,0.06)' },
     table: { width: '100%', borderCollapse: 'collapse', minWidth: '800px' },
     companyCell: { display: 'flex', alignItems: 'center', gap: '12px' },
-    companyAvatar: { width: '40px', height: '40px', background: 'linear-gradient(135deg, #a67c52, #7d5a50)', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 'bold' },
+    companyAvatar: { width: '40px', height: '40px', background: 'linear-gradient(135deg, #a67c52, #7d5a50)', borderRadius: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white', fontWeight: 'bold', fontSize: '18px' },
     companyName: { fontWeight: '600', color: '#4a352f' },
     companyEmail: { fontSize: '12px', color: '#7d5a50' },
     tags: { display: 'flex', gap: '6px', flexWrap: 'wrap' },
@@ -816,19 +764,60 @@ function AdvisorEcosystem() {
     pagination: { display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '16px', marginTop: '24px' },
     paginationBtn: { background: 'white', border: '1px solid #e0d5c8', padding: '8px 16px', borderRadius: '6px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '14px', color: '#4a352f' },
     pageNumber: { color: '#7d5a50', fontSize: '14px' },
+    loadingContainer: { display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '400px', fontSize: '16px', color: '#7d5a50', flexDirection: 'column', gap: '16px' },
+    errorContainer: { background: '#fdeaea', border: '1px solid #c62828', borderRadius: '8px', padding: '20px', textAlign: 'center', margin: '40px', color: '#c62828' },
+    emptyContainer: { textAlign: 'center', padding: '60px', color: '#7d5a50', background: 'white', borderRadius: '12px' },
+    debugContainer: { background: '#f0f0f0', border: '1px solid #ccc', borderRadius: '8px', padding: '12px', margin: '20px', fontSize: '12px', color: '#333', fontFamily: 'monospace' },
   };
+
+  if (loading) {
+    return (
+      <div style={styles.container}>
+        <div style={styles.loadingContainer}>
+          <div className="spinner" style={{ width: '40px', height: '40px', border: '3px solid #e0d5c8', borderTop: '3px solid #a67c52', borderRadius: '50%', animation: 'spin 1s linear infinite' }}></div>
+          <div>Loading advisors...</div>
+          {debugInfo && <div style={{ fontSize: '12px', color: '#666' }}>{debugInfo}</div>}
+        </div>
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div style={styles.container}>
+        <div style={styles.errorContainer}>
+          <AlertTriangle size={48} style={{ marginBottom: '16px' }} />
+          <h3>Error Loading Advisors</h3>
+          <p>{error}</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={styles.container}>
       <div style={styles.header}>
         <div style={styles.headerContent}>
           <h1 style={styles.title}>Advisors in Ecosystem</h1>
-          <p style={styles.subtitle}>Browse expert advisors and mentors</p>
+          <p style={styles.subtitle}>Discover expert advisors and mentors connected through <strong>{associationName || "your association"}</strong></p>
         </div>
-        <button style={styles.exportButton} onClick={exportToExcel}>
-          <Download size={16} /> Export to Excel
-        </button>
+        {advisorData.length > 0 && (
+          <button style={styles.exportButton} onClick={exportToExcel}>
+            <Download size={16} /> Export to Excel
+          </button>
+        )}
       </div>
+
+      {debugInfo && (
+        <div style={styles.debugContainer}>
+          <strong>Debug Info:</strong> {debugInfo}
+          <br />
+          <strong>Association Name:</strong> {associationName}
+          <br />
+          <strong>Total Advisors Found:</strong> {advisorData.length}
+        </div>
+      )}
 
       <div style={styles.statsGrid}>
         <div style={styles.statCard}>
@@ -861,102 +850,119 @@ function AdvisorEcosystem() {
         </div>
       </div>
 
-      <div style={styles.controls}>
-        <div style={styles.searchContainer}>
-          <Search size={20} style={styles.searchIcon} />
-          <input
-            type="text"
-            placeholder="Search by name, username, or email..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            style={styles.searchInput}
-          />
+      {advisorData.length === 0 ? (
+        <div style={styles.emptyContainer}>
+          <Users size={64} style={{ marginBottom: '16px', opacity: 0.5 }} />
+          <h3>No advisors found</h3>
+          <p>There are currently no advisors that have selected {associationName || "your association"}.</p>
+          <p style={{ fontSize: '14px', marginTop: '8px' }}>When advisors complete their profile and select your association, they will appear here.</p>
+          <ul style={{ fontSize: '12px', color: '#999', textAlign: 'left', display: 'inline-block', marginTop: '16px' }}>
+            <li>1. Select "Yes" for "Are you a member of any industry association?"</li>
+            <li>2. Select "{associationName}" from the dropdown</li>
+            <li>3. Click "Save" after making selections</li>
+          </ul>
         </div>
-        <select
-          value={expertiseFilter}
-          onChange={(e) => setExpertiseFilter(e.target.value)}
-          style={styles.filterSelect}
-        >
-          <option value="all">All Expertise</option>
-          {allExpertise.map(exp => <option key={exp} value={exp}>{exp}</option>)}
-        </select>
-      </div>
+      ) : (
+        <>
+          <div style={styles.controls}>
+            <div style={styles.searchContainer}>
+              <Search size={20} style={styles.searchIcon} />
+              <input
+                type="text"
+                placeholder="Search by name or email..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                style={styles.searchInput}
+              />
+            </div>
+            <select
+              value={expertiseFilter}
+              onChange={(e) => setExpertiseFilter(e.target.value)}
+              style={styles.filterSelect}
+            >
+              <option value="all">All Expertise</option>
+              {allExpertise.map(exp => <option key={exp} value={exp}>{exp}</option>)}
+            </select>
+          </div>
 
-      <div style={styles.tableContainer}>
-        <table style={styles.table}>
-          <thead>
-            <tr style={{ borderBottom: '1px solid #f0e6d9', background: '#faf7f2' }}>
-              <th style={{ padding: '16px', textAlign: 'left', color: '#4a352f' }}>Business Name</th>
-              <th style={{ padding: '16px', textAlign: 'left', color: '#4a352f' }}>Firm Type</th>
-              <th style={{ padding: '16px', textAlign: 'left', color: '#4a352f' }}>Industries</th>
-              <th style={{ padding: '16px', textAlign: 'left', color: '#4a352f' }}>Head Office Location</th>
-              <th style={{ padding: '16px', textAlign: 'left', color: '#4a352f' }}>Membership Status</th>
-              <th style={{ padding: '16px', textAlign: 'left', color: '#4a352f' }}>Actions</th>
-            </tr>          </thead>
-          <tbody>
-            {currentAdvisors.map((advisor) => (
-              <tr key={advisor.id} style={{ borderBottom: '1px solid #f0e6d9' }}>
-                <td style={{ padding: '16px' }}>
-                  <div style={styles.companyCell}>
-                    <div style={styles.companyAvatar}>
-                      {advisor.fullName.charAt(0).toUpperCase()}
-                    </div>
-                    <div>
-                      <div style={styles.companyName}>{advisor.fullName}</div>
-                      <div style={styles.companyEmail}>{advisor.email}</div>
-                    </div>
-                  </div>
-                </td>
-                <td style={{ padding: '16px', color: '#4a352f' }}>{advisor.firmType || "Not specified"}</td>
-                <td style={{ padding: '16px' }}>
-                  <div style={styles.tags}>
-                    {advisor.industries.slice(0, 2).map((ind, i) => (
-                      <span key={i} style={styles.tag}>{ind}</span>
-                    ))}
-                    {advisor.industries.length > 2 && (
-                      <span style={styles.tag}>+{advisor.industries.length - 2}</span>
-                    )}
-                  </div>
-                </td>
-                <td style={{ padding: '16px', color: '#4a352f' }}>{advisor.headOfficeLocation || advisor.location || "Not specified"}</td>
-                <td style={{ padding: '16px' }}>{getMembershipStatusBadge(advisor.membershipStatus)}</td>
-                <td style={{ padding: '16px' }}>
-                  <button
-                    style={styles.viewBtn}
-                    onClick={() => {
-                      setSelectedAdvisor(advisor);
-                      setShowViewModal(true);
-                    }}
-                    onMouseEnter={(e) => e.currentTarget.style.background = '#faf7f2'}
-                    onMouseLeave={(e) => e.currentTarget.style.background = 'none'}
-                  >
-                    <Eye size={16} /> View
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+          <div style={styles.tableContainer}>
+            <table style={styles.table}>
+              <thead>
+                <tr style={{ borderBottom: '1px solid #f0e6d9', background: '#faf7f2' }}>
+                  <th style={{ padding: '16px', textAlign: 'left', color: '#4a352f' }}>Name</th>
+                  <th style={{ padding: '16px', textAlign: 'left', color: '#4a352f' }}>Title</th>
+                  <th style={{ padding: '16px', textAlign: 'left', color: '#4a352f' }}>Industries</th>
+                  <th style={{ padding: '16px', textAlign: 'left', color: '#4a352f' }}>Location</th>
+                  <th style={{ padding: '16px', textAlign: 'left', color: '#4a352f' }}>Membership Status</th>
+                  <th style={{ padding: '16px', textAlign: 'left', color: '#4a352f' }}>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {currentAdvisors.map((advisor) => (
+                  <tr key={advisor.id} style={{ borderBottom: '1px solid #f0e6d9' }}>
+                    <td style={{ padding: '16px' }}>
+                      <div style={styles.companyCell}>
+                        <div style={styles.companyAvatar}>
+                          {advisor.fullName.charAt(0).toUpperCase()}
+                        </div>
+                        <div>
+                          <div style={styles.companyName}>{advisor.fullName}</div>
+                          <div style={styles.companyEmail}>{advisor.email}</div>
+                        </div>
+                      </div>
+                    </td>
+                    <td style={{ padding: '16px', color: '#4a352f' }}>{advisor.title || "Not specified"}</td>
+                    <td style={{ padding: '16px' }}>
+                      <div style={styles.tags}>
+                        {advisor.industries.slice(0, 2).map((ind, i) => (
+                          <span key={i} style={styles.tag}>{ind}</span>
+                        ))}
+                        {advisor.industries.length > 2 && (
+                          <span style={styles.tag}>+{advisor.industries.length - 2}</span>
+                        )}
+                      </div>
+                    </td>
+                    <td style={{ padding: '16px', color: '#4a352f' }}>{advisor.headOfficeLocation || advisor.location || "Not specified"}</td>
+                    <td style={{ padding: '16px' }}>{getMembershipStatusBadge(advisor.membershipStatus)}</td>
+                    <td style={{ padding: '16px' }}>
+                      <button
+                        style={styles.viewBtn}
+                        onClick={() => {
+                          setSelectedAdvisor(advisor);
+                          setShowViewModal(true);
+                        }}
+                        onMouseEnter={(e) => e.currentTarget.style.background = '#faf7f2'}
+                        onMouseLeave={(e) => e.currentTarget.style.background = 'none'}
+                      >
+                        <Eye size={16} /> View
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
 
-      {totalPages > 1 && (
-        <div style={styles.pagination}>
-          <button
-            onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
-            disabled={currentPage === 1}
-            style={{ ...styles.paginationBtn, opacity: currentPage === 1 ? 0.5 : 1 }}
-          >
-            <ChevronLeft size={16} /> Previous
-          </button>
-          <span style={styles.pageNumber}>Page {currentPage} of {totalPages}</span>
-          <button
-            onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
-            disabled={currentPage === totalPages}
-            style={{ ...styles.paginationBtn, opacity: currentPage === totalPages ? 0.5 : 1 }}
-          >
-            Next <ChevronRight size={16} />
-          </button>
-        </div>
+          {totalPages > 1 && (
+            <div style={styles.pagination}>
+              <button
+                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                disabled={currentPage === 1}
+                style={{ ...styles.paginationBtn, opacity: currentPage === 1 ? 0.5 : 1 }}
+              >
+                <ChevronLeft size={16} /> Previous
+              </button>
+              <span style={styles.pageNumber}>Page {currentPage} of {totalPages}</span>
+              <button
+                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                disabled={currentPage === totalPages}
+                style={{ ...styles.paginationBtn, opacity: currentPage === totalPages ? 0.5 : 1 }}
+              >
+                Next <ChevronRight size={16} />
+              </button>
+            </div>
+          )}
+        </>
       )}
 
       {showViewModal && selectedAdvisor && (

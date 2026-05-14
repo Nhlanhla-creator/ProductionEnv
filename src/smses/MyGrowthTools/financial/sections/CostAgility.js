@@ -19,6 +19,7 @@ import {
   getRangeComputed,
   computeCostChartData,
 } from "../data_utils/financialUtils";
+import CostAgilityAnalysisModal from "../../../hooks/CostAgilityAnalysisModal";
 
 const _now        = new Date();
 const _defaultTo  = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, "0")}`;
@@ -37,6 +38,8 @@ const CostAgility = ({ activeSection, user, isInvestorView }) => {
   const [showCalcModal, setShowCalcModal]     = useState(false);
   const [selectedCalc, setSelectedCalc]       = useState({ title: "", calculation: "" });
   const [currencyUnit]                        = useState("zar_million");
+const [showAnalysisModal, setShowAnalysisModal] = useState(false);
+const [selectedMetricForAnalysis, setSelectedMetricForAnalysis] = useState(null);
 
   // Date range — default to last 12 months
   const [fromDate, setFromDate] = useState(_defaultFrom);
@@ -50,6 +53,18 @@ const CostAgility = ({ activeSection, user, isInvestorView }) => {
     firstDataMonth,
     loadCostData,
   } = useCostAgilityData(user);
+
+  const getCurrentCostMetrics = () => {
+  return {
+    fixedVariableRatio: firebaseChartData.fixedVariableRatio?.actual?.at(-1) ?? 0,
+    discretionaryPercentage: firebaseChartData.discretionaryPercentage?.actual?.at(-1) ?? 0,
+    lockInDuration: firebaseChartData.lockInDuration?.actual?.at(-1) ?? 0,
+    fixedCosts: firebaseChartData.fixedCosts?.actual?.at(-1) ?? 0,
+    variableCosts: firebaseChartData.variableCosts?.actual?.at(-1) ?? 0,
+    discretionaryCosts: firebaseChartData.discretionaryCosts?.actual?.at(-1) ?? 0,
+    semiVariableCosts: firebaseChartData.semiVariableCosts?.actual?.at(-1) ?? 0,
+  };
+};
 
   const formatValue = makeFormatValue(currencyUnit);
 
@@ -126,51 +141,59 @@ const CostAgility = ({ activeSection, user, isInvestorView }) => {
   };
 
   const KPI_CONFIG = [
-    {
-      dataKey:      "fixedVariableRatio",
-      title:        "Fixed/Variable Ratio",
-      unitLabel:    "%",
-      formatCircle: (v) => parseFloat(v).toFixed(2),
-    },
-    {
-      dataKey:      "discretionaryPercentage",
-      title:        "Discretionary Spend",
-      unitLabel:    "%",
-      formatCircle: (v) => parseFloat(v).toFixed(2),
-    },
-    {
-      dataKey:      "lockInDuration",
-      title:        "Cost Lock-in",
-      unitLabel:    "months",
-      formatCircle: (v) => parseFloat(v).toFixed(1),
-    },
-  ];
+  {
+    dataKey:      "fixedVariableRatio",
+    title:        "Fixed/Variable Ratio",
+    unitLabel:    "%",
+    formatCircle: (v) => parseFloat(v).toFixed(2),
+  },
+  {
+    dataKey:      "discretionaryPercentage",
+    title:        "Discretionary Spend",
+    unitLabel:    "%",
+    formatCircle: (v) => parseFloat(v).toFixed(2),
+  },
+  {
+    dataKey:      "lockInDuration",
+    title:        "Cost Lock-in",
+    unitLabel:    "months",
+    formatCircle: (v) => parseFloat(v).toFixed(1),
+  },
+];
 
   const renderKPI = ({ dataKey, title, unitLabel, formatCircle }) => {
-    const data    = firebaseChartData[dataKey] || { actual: [] };
-    const current = data.actual?.at(-1) ?? 0;
-    const calc    = CALCULATION_TEXTS.costAgility?.[dataKey] || "";
-    return (
-      <KPICard
-        key={dataKey}
-        title={title}
-        actualValue={current}
-        budgetValue={0}
-        unit={currencyUnit}
-        unitLabel={unitLabel}
-        singleCircle
-        formatCircleValue={formatCircle}
-        onEyeClick={() => openCalc(title, calc)}
-        onAddNotes={(notes) => setChartNotes((p) => ({ ...p, [dataKey]: notes }))}
-        onAnalysis={() =>
-          setExpandedNotes((p) => ({ ...p, [`${dataKey}_analysis`]: !p[`${dataKey}_analysis`] }))
-        }
-        onTrend={() => openTrend(title, dataKey, unitLabel === "%")}
-        notes={chartNotes[dataKey]}
-        formatValue={formatValue}
-      />
-    );
-  };
+  const data    = firebaseChartData[dataKey] || { actual: [] };
+  const current = data.actual?.at(-1) ?? 0;
+  const calc    = CALCULATION_TEXTS.costAgility?.[dataKey] || "";
+  
+  return (
+    <KPICard
+      key={dataKey}
+      title={title}
+      actualValue={current}
+      budgetValue={0}
+      unit={currencyUnit}
+      unitLabel={unitLabel}
+      singleCircle
+      formatCircleValue={formatCircle}
+      onEyeClick={() => openCalc(title, calc)}
+      onAddNotes={(notes) => setChartNotes((p) => ({ ...p, [dataKey]: notes }))}
+      onAnalysis={() => {
+        // Open cost agility-specific analysis modal
+        setSelectedMetricForAnalysis({
+          title: title,
+          key: dataKey,
+          value: current,
+        });
+        setShowAnalysisModal(true);
+      }}
+      onTrend={() => openTrend(title, dataKey, unitLabel === "%")}
+      notes={chartNotes[dataKey]}
+      formatValue={formatValue}
+    />
+  );
+};
+
 
   if (activeSection !== "cost-agility") return null;
 
@@ -228,6 +251,23 @@ const CostAgility = ({ activeSection, user, isInvestorView }) => {
           loading={trendLoading}
         />
       )}
+  
+{showAnalysisModal && selectedMetricForAnalysis && (
+  <CostAgilityAnalysisModal
+    isOpen={showAnalysisModal}
+    onClose={() => {
+      setShowAnalysisModal(false);
+      setSelectedMetricForAnalysis(null);
+    }}
+    metricTitle={selectedMetricForAnalysis.title}
+    metricKey={selectedMetricForAnalysis.key}
+    metricValue={selectedMetricForAnalysis.value}
+    costData={getCurrentCostMetrics()}
+    currentUser={user}
+  />
+)}
+
+
     </div>
   );
 };

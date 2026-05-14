@@ -138,104 +138,7 @@ const industryAssociations = [
   { value: "Other", label: "Other" },
 ]
 
-// Original MultiSelectDropdown (kept for existing fields)
-function MultiSelectDropdown({
-  options,
-  value = [],
-  onChange,
-  placeholder = "Select options",
-  name,
-  required = false,
-}) {
-  const [isOpen, setIsOpen] = useState(false)
-  const [selectedOptions, setSelectedOptions] = useState(value)
-  const dropdownRef = useRef(null)
-
-  useEffect(() => {
-    setSelectedOptions(value)
-  }, [value])
-
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-        setIsOpen(false)
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside)
-    return () => document.removeEventListener("mousedown", handleClickOutside)
-  }, [])
-
-  const toggleOption = (optionValue) => {
-    let newSelectedOptions
-    if (selectedOptions.includes(optionValue)) {
-      newSelectedOptions = selectedOptions.filter((value) => value !== optionValue)
-    } else {
-      newSelectedOptions = [...selectedOptions, optionValue]
-    }
-    setSelectedOptions(newSelectedOptions)
-    onChange(newSelectedOptions)
-  }
-
-  const toggleDropdown = () => setIsOpen(!isOpen)
-
-  const getSelectedLabels = () =>
-    options.filter((option) => selectedOptions.includes(option.value)).map((option) => option.label)
-
-  return (
-    <div className={styles.multiSelectContainer} ref={dropdownRef}>
-      <div className={styles.multiSelectHeader} onClick={toggleDropdown} aria-haspopup="listbox" aria-expanded={isOpen}>
-        {selectedOptions.length > 0 ? (
-          <div className={styles.selectedItems}>
-            {getSelectedLabels().map((label) => (
-              <span key={label} className={styles.selectedItem}>{label}</span>
-            ))}
-          </div>
-        ) : (
-          <span className={styles.placeholder}>{placeholder}</span>
-        )}
-        <ChevronDown size={16} />
-      </div>
-
-      {isOpen && (
-        <div className={styles.multiSelectDropdown}>
-          <div className={styles.multiSelectOptions} role="listbox">
-            {options.map((option) => (
-              <div
-                key={option.value}
-                className={`${styles.multiSelectOption} ${selectedOptions.includes(option.value) ? styles.selected : ""}`}
-                onClick={() => toggleOption(option.value)}
-                role="option"
-                aria-selected={selectedOptions.includes(option.value)}
-              >
-                <input
-                  type="checkbox"
-                  className={styles.multiSelectCheckbox}
-                  checked={selectedOptions.includes(option.value)}
-                  onChange={() => {}}
-                  id={`${name}-${option.value}`}
-                />
-                <label htmlFor={`${name}-${option.value}`}>{option.label}</label>
-              </div>
-            ))}
-          </div>
-          <div className={styles.multiSelectActions}>
-            <button type="button" className={styles.multiSelectButton} onClick={() => setIsOpen(false)}>
-              Done
-            </button>
-          </div>
-        </div>
-      )}
-
-      <select name={name} multiple value={selectedOptions} onChange={() => {}} required={required} style={{ display: "none" }}>
-        {options.map((option) => (
-          <option key={option.value} value={option.value}>{option.label}</option>
-        ))}
-      </select>
-    </div>
-  )
-}
-
-// Associations-specific MultiSelectDropdown (earth-tone pill style)
+// MultiSelectDropdown for associations (earth-tone pill style)
 function AssociationsMultiSelect({ options, selected = [], onChange, placeholder = "Select associations..." }) {
   const [isOpen, setIsOpen] = useState(false)
 
@@ -354,6 +257,103 @@ function AssociationsMultiSelect({ options, selected = [], onChange, placeholder
   )
 }
 
+// Original MultiSelectDropdown (for other fields)
+function MultiSelectDropdown({
+  options,
+  value = [],
+  onChange,
+  placeholder = "Select options",
+  name,
+  required = false,
+}) {
+  const [isOpen, setIsOpen] = useState(false)
+  const [selectedOptions, setSelectedOptions] = useState(value)
+  const dropdownRef = useRef(null)
+
+  useEffect(() => {
+    setSelectedOptions(value)
+  }, [value])
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false)
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => document.removeEventListener("mousedown", handleClickOutside)
+  }, [])
+
+  const toggleOption = (optionValue) => {
+    let newSelectedOptions
+    if (selectedOptions.includes(optionValue)) {
+      newSelectedOptions = selectedOptions.filter((value) => value !== optionValue)
+    } else {
+      newSelectedOptions = [...selectedOptions, optionValue]
+    }
+    setSelectedOptions(newSelectedOptions)
+    onChange(newSelectedOptions)
+  }
+
+  const toggleDropdown = () => setIsOpen(!isOpen)
+
+  const getSelectedLabels = () =>
+    options.filter((option) => selectedOptions.includes(option.value)).map((option) => option.label)
+
+  return (
+    <div className={styles.multiSelectContainer} ref={dropdownRef}>
+      <div className={styles.multiSelectHeader} onClick={toggleDropdown} aria-haspopup="listbox" aria-expanded={isOpen}>
+        {selectedOptions.length > 0 ? (
+          <div className={styles.selectedItems}>
+            {getSelectedLabels().map((label) => (
+              <span key={label} className={styles.selectedItem}>{label}</span>
+            ))}
+          </div>
+        ) : (
+          <span className={styles.placeholder}>{placeholder}</span>
+        )}
+        <ChevronDown size={16} />
+      </div>
+
+      {isOpen && (
+        <div className={styles.multiSelectDropdown}>
+          <div className={styles.multiSelectOptions} role="listbox">
+            {options.map((option) => (
+              <div
+                key={option.value}
+                className={`${styles.multiSelectOption} ${selectedOptions.includes(option.value) ? styles.selected : ""}`}
+                onClick={() => toggleOption(option.value)}
+                role="option"
+                aria-selected={selectedOptions.includes(option.value)}
+              >
+                <input
+                  type="checkbox"
+                  className={styles.multiSelectCheckbox}
+                  checked={selectedOptions.includes(option.value)}
+                  onChange={() => {}}
+                  id={`${name}-${option.value}`}
+                />
+                <label htmlFor={`${name}-${option.value}`}>{option.label}</label>
+              </div>
+            ))}
+          </div>
+          <div className={styles.multiSelectActions}>
+            <button type="button" className={styles.multiSelectButton} onClick={() => setIsOpen(false)}>
+              Done
+            </button>
+          </div>
+        </div>
+      )}
+
+      <select name={name} multiple value={selectedOptions} onChange={() => {}} required={required} style={{ display: "none" }}>
+        {options.map((option) => (
+          <option key={option.value} value={option.value}>{option.label}</option>
+        ))}
+      </select>
+    </div>
+  )
+}
+
 export default function EntityOverview({ data = {}, updateData }) {
   const handleChange = (e) => {
     const { name, value } = e.target
@@ -383,6 +383,11 @@ export default function EntityOverview({ data = {}, updateData }) {
   }
 
   const memberOfAssociation = data.memberOfAssociation
+
+  // Handle association selection - ensures data is properly saved
+  const handleAssociationChange = (selectedValues) => {
+    updateData({ industryAssociations: selectedValues })
+  }
 
   return (
     <div className={styles.productApplicationContainer}>
@@ -545,11 +550,14 @@ export default function EntityOverview({ data = {}, updateData }) {
         {/* ── INDUSTRY ASSOCIATIONS ── */}
         <div style={{ margin: '2rem 0 1rem 0', paddingTop: '1rem', borderTop: '1px solid #e5e7eb' }}>
           <h3 style={{ fontSize: '1.25rem', fontWeight: '600', color: '#1f2937', marginBottom: '1rem' }}>Industry Associations</h3>
+          <p style={{ fontSize: '0.875rem', color: '#6b7280', marginBottom: '1rem' }}>
+            Select the industry associations you belong to. This helps match you with relevant opportunities and allows associations to see your firm in their ecosystem.
+          </p>
         </div>
 
         <div className={styles.gridContainer}>
           <FormField label="Are you a member of any industry association?">
-            <div style={{ display: "flex", gap: "16px" }}>
+            <div style={{ display: "flex", gap: "16px", marginBottom: memberOfAssociation === "yes" ? "1rem" : 0 }}>
               {["yes", "no"].map((opt) => (
                 <label
                   key={opt}
@@ -593,7 +601,7 @@ export default function EntityOverview({ data = {}, updateData }) {
               <AssociationsMultiSelect
                 options={industryAssociations}
                 selected={Array.isArray(data.industryAssociations) ? data.industryAssociations : []}
-                onChange={(value) => updateData({ industryAssociations: value })}
+                onChange={handleAssociationChange}
                 placeholder="Select associations..."
               />
               {Array.isArray(data.industryAssociations) && data.industryAssociations.includes("Other") && (
@@ -612,6 +620,35 @@ export default function EntityOverview({ data = {}, updateData }) {
           )}
         </div>
 
+        {/* Help text for Investors */}
+        {memberOfAssociation === "yes" && (
+          <div style={{
+            marginTop: "16px",
+            padding: "12px 16px",
+            backgroundColor: "#f0f7f0",
+            borderLeft: "4px solid #4CAF50",
+            borderRadius: "4px",
+            fontSize: "14px",
+            color: "#2e7d32",
+          }}>
+            <strong>📌 Note:</strong> The associations you select here will be able to see your firm in their investor ecosystem. 
+            This helps connect you with relevant opportunities and partnerships through shared industry networks.
+          </div>
+        )}
+
+        {memberOfAssociation === "no" && (
+          <div style={{
+            marginTop: "16px",
+            padding: "12px 16px",
+            backgroundColor: "#f5f5f5",
+            borderRadius: "4px",
+            fontSize: "14px",
+            color: "#666",
+          }}>
+            <strong>ℹ️ Note:</strong> You indicated that you are not a member of any industry association. 
+            You can update this later if needed. Selecting associations helps with visibility in the ecosystem.
+          </div>
+        )}
       </div>
     </div>
   )

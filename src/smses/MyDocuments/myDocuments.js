@@ -269,30 +269,78 @@ const MyDocuments = () => {
    }
  };
   
+// In MyDocuments.js - Replace your validateDocumentWithAI function with this:
+
 const validateDocumentWithAI = async (docLabel, file, registeredName) => {
- try {
-   const base64Data = await new Promise((resolve) => {
-     const reader = new FileReader();
-     reader.readAsDataURL(file);
-     reader.onload = () => resolve(reader.result.split(',')[1]);
-   });
+  try {
+    const base64Data = await new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve(reader.result.split(',')[1]);
+    });
 
+    const validateMyDocument = httpsCallable(functions, 'validateMyDocument');
 
-   const validateMyDocument = httpsCallable(functions, 'validateMyDocument');
+    const result = await validateMyDocument({
+      documentLabel: docLabel,
+      base64File: base64Data,
+      mimeType: file.type,
+      registeredName: registeredName,
+    });
 
-   const result = await validateMyDocument({
-     documentLabel: docLabel,
-     base64File: base64Data,
-     mimeType: file.type,
-     registeredName: registeredName,
-   });
+    return result.data.validationResult;
 
-   return result.data.validationResult;
+  } catch (error) {
+    console.error("AI validation error:", error);
 
- } catch (error) {
-   console.error("AI validation failed:", error);
-   throw new Error("Network error - please check your connection and try again");
- }
+    // ========== RATE LIMIT ERROR HANDLING ==========
+    if (error.code === 'resource-exhausted' || 
+        error.message?.includes('RATE_LIMIT_EXCEEDED')) {
+      
+      const errorDetails = error.details || {};
+      const limitType = errorDetails.limitType || 'day';
+      const remaining = errorDetails.remaining || 0;
+      const limit = errorDetails.limit || 30;
+      const retryAfter = errorDetails.retryAfter || 60;
+
+      let userMessage = '';
+
+      if (limitType === 'perMinute') {
+        userMessage = `⏱️ You're validating too quickly. You can only validate 10 documents per minute. Please wait ${retryAfter} seconds and try again.`;
+      } else {
+        const hours = Math.floor(retryAfter / 3600);
+        const minutes = Math.floor((retryAfter % 3600) / 60);
+        
+        let timeString = '';
+        if (hours > 0) {
+          timeString = `${hours} hour${hours > 1 ? 's' : ''}`;
+        } else if (minutes > 0) {
+          timeString = `${minutes} minute${minutes > 1 ? 's' : ''}`;
+        } else {
+          timeString = `${retryAfter} second${retryAfter !== 1 ? 's' : ''}`;
+        }
+        
+        userMessage = `📋 You've used ${limit - remaining}/${limit} daily validations. You have ${remaining} remaining. Please try again in ${timeString}.`;
+      }
+
+      // Create error object to throw
+      const rateLimitError = new Error(userMessage);
+      rateLimitError.type = 'RATE_LIMIT';
+      rateLimitError.details = errorDetails;
+      throw rateLimitError;
+    }
+    // ========== END RATE LIMIT HANDLING ==========
+
+    // Authentication error
+    if (error.code === 'unauthenticated') {
+      const authError = new Error('🔐 Please log in to validate documents.');
+      authError.type = 'AUTH_ERROR';
+      throw authError;
+    }
+
+    // Network or other errors
+    throw new Error("Network error - please check your connection and try again");
+  }
 };
  
   const getMultipleDocumentData = (docLabel, profileData) => {
@@ -357,127 +405,91 @@ const validateDocumentWithAI = async (docLabel, file, registeredName) => {
     return [];
   };
 
-  const handleIndividualDocumentUpload = async (docLabel, file, docIndex) => {
-   const auth = getAuth();
-   const user = auth.currentUser;
-   if (!user || !file) return;
+  // In MyDocuments.js - Replace your handleIndividualDocumentUpload function with this:
 
-   setIsUploading(true);
-   setIsOverlayVisible(true);
+const handleIndividualDocumentUpload = async (docLabel, file, docIndex) => {
+  const auth = getAuth();
+  const user = auth.currentUser;
+  if (!user || !file) return;
 
-   try {
-     const registeredName = await getRegisteredName();
-     const storage = getStorage();
-     const documentId = getDocumentId(docLabel);
-     const profileRef = doc(db, "universalProfiles", user.uid);
+  setIsUploading(true);
+  setIsOverlayVisible(true);
 
-     const validationResult = await validateDocumentWithAI(docLabel, file, registeredName);
+  try {
+    const registeredName = await getRegisteredName();
+    const storage = getStorage();
+    const documentId = getDocumentId(docLabel);
+    const profileRef = doc(db, "universalProfiles", user.uid);
 
-     setValidationResults(prev => ({
-       ...prev,
-       [docLabel]: validationResult
-     }));
+    const validationResult = await validateDocumentWithAI(docLabel, file, registeredName);
 
-     if (!validationResult.isValid) {
-       const fileExtension = file.name.toLowerCase().split('.').pop();
-       const fileName = `${documentId}_${Date.now()}_${docIndex}.${fileExtension}`;
-       const storageRef = ref(storage, `universalProfiles/documents/${user.uid}/${fileName}`);
+    setValidationResults(prev => ({
+      ...prev,
+      [docLabel]: validationResult
+    }));
 
-       await uploadBytes(storageRef, file);
-       const downloadURL = await getDownloadURL(storageRef);
+    const fileExtension = file.name.toLowerCase().split('.').pop();
+    const fileName = `${documentId}_${Date.now()}_${docIndex}.${fileExtension}`;
+    const storageRef = ref(storage, `universalProfiles/documents/${user.uid}/${fileName}`);
 
-       const newDocData = {
-         url: downloadURL,
-         status: validationResult.status,
-         message: validationResult.message,
-         uploadedAt: new Date().toISOString(),
-         customName: null
-       };
+    await uploadBytes(storageRef, file);
+    const downloadURL = await getDownloadURL(storageRef);
 
-       const existingDocs = getMultipleDocumentData(docLabel, profileData);
-       let updatedDocs;
+    const newDocData = {
+      url: downloadURL,
+      status: validationResult.status,
+      message: validationResult.message,
+      uploadedAt: new Date().toISOString(),
+      customName: null
+    };
 
-       if (docIndex < existingDocs.length) {
-         updatedDocs = existingDocs.map((doc, index) =>
-           index === docIndex ? newDocData : doc
-         );
-       } else {
-         updatedDocs = [...existingDocs, newDocData];
-       }
+    const existingDocs = getMultipleDocumentData(docLabel, profileData);
+    let updatedDocs;
 
-       const updateData = {
-         [`documents.${documentId}_multiple`]: updatedDocs,
-         [`documents.${documentId}_multiple_updated`]: serverTimestamp(),
-         [`documents.${documentId}_count`]: updatedDocs.length
-       };
-
-       await updateDoc(profileRef, updateData);
-
-       const updatedProfileSnap = await getDoc(profileRef);
-       if (updatedProfileSnap.exists()) {
-         setProfileData(updatedProfileSnap.data());
-       }
-
-       setIsUploading(false);
-       setTimeout(() => {
-         setIsOverlayVisible(false);
-       }, 300);
-       return;
-     }
-
-     const fileExtension = file.name.toLowerCase().split('.').pop();
-     const fileName = `${documentId}_${Date.now()}_${docIndex}.${fileExtension}`;
-     const storageRef = ref(storage, `universalProfiles/documents/${user.uid}/${fileName}`);
-
-     await uploadBytes(storageRef, file);
-     const downloadURL = await getDownloadURL(storageRef);
-
-     const newDocData = {
-       url: downloadURL,
-       status: validationResult.status,
-       message: validationResult.message,
-       uploadedAt: new Date().toISOString(),
-       customName: null
-     };
-
-     const existingDocs = getMultipleDocumentData(docLabel, profileData);
-     let updatedDocs;
-
-     if (docIndex < existingDocs.length) {
-       updatedDocs = existingDocs.map((doc, index) =>
-         index === docIndex ? newDocData : doc
-       );
-     } else {
-       updatedDocs = [...existingDocs, newDocData];
-     }
-
-     const updateData = {
-       [`documents.${documentId}_multiple`]: updatedDocs,
-       [`documents.${documentId}_multiple_updated`]: serverTimestamp(),
-       [`documents.${documentId}_count`]: updatedDocs.length
-     };
-
-      await updateDoc(profileRef, updateData);
-      
-      const updatedProfileSnap = await getDoc(profileRef);
-      if (updatedProfileSnap.exists()) {
-        setProfileData(updatedProfileSnap.data());
-      }
-      
-      setIsUploading(false);
-      setTimeout(() => {
-        setIsOverlayVisible(false);
-      }, 300);
-      
-    } catch (error) {
-      console.error("Individual document upload failed:", error);
-      setIsUploading(false);
-      setTimeout(() => {
-        setIsOverlayVisible(false);
-        alert(error.message || "Network error - please try again");
-      }, 300);
+    if (docIndex < existingDocs.length) {
+      updatedDocs = existingDocs.map((doc, index) =>
+        index === docIndex ? newDocData : doc
+      );
+    } else {
+      updatedDocs = [...existingDocs, newDocData];
     }
-  };
+
+    const updateData = {
+      [`documents.${documentId}_multiple`]: updatedDocs,
+      [`documents.${documentId}_multiple_updated`]: serverTimestamp(),
+      [`documents.${documentId}_count`]: updatedDocs.length
+    };
+
+    await updateDoc(profileRef, updateData);
+
+    const updatedProfileSnap = await getDoc(profileRef);
+    if (updatedProfileSnap.exists()) {
+      setProfileData(updatedProfileSnap.data());
+    }
+
+    setIsUploading(false);
+    setTimeout(() => {
+      setIsOverlayVisible(false);
+    }, 300);
+    
+  } catch (error) {
+    console.error("Individual document upload failed:", error);
+    
+    // Handle rate limit error
+    if (error.type === 'RATE_LIMIT') {
+      alert(error.message);
+    } else if (error.type === 'AUTH_ERROR') {
+      alert(error.message);
+    } else {
+      alert(error.message || "Network error - please try again");
+    }
+
+    setIsUploading(false);
+    setTimeout(() => {
+      setIsOverlayVisible(false);
+    }, 300);
+  }
+};
 
  const handleDeleteIndividualDocument = async (docLabel, displayIndex) => {
    const auth = getAuth();
@@ -957,90 +969,125 @@ const validateDocumentWithAI = async (docLabel, file, registeredName) => {
    );
  };
 
-   const handleFileUpload = async (docLabel, file) => {
-   const auth = getAuth();
-   const user = auth.currentUser;
-   if (!user || !file) return;
+  // In MyDocuments.js - Replace your handleFileUpload function with this:
 
-   const allowedTypes = ['.pdf', '.jpg', '.jpeg', '.png'];
-   const fileExtension = file.name.toLowerCase().split('.').pop();
+const handleFileUpload = async (docLabel, file) => {
+  const auth = getAuth();
+  const user = auth.currentUser;
+  if (!user || !file) return;
 
-   if (!allowedTypes.includes(`.${fileExtension}`)) {
-     setValidationResults(prev => ({
-       ...prev,
-       [docLabel]: {
-         isValid: false,
-         status: "rejected",
-         message: `Invalid file type. Please upload only PDF or Image files (.pdf, .jpg, .jpeg, .png)`,
-         warnings: []
-       }
-     }));
-     return;
-   }
+  const allowedTypes = ['.pdf', '.jpg', '.jpeg', '.png'];
+  const fileExtension = file.name.toLowerCase().split('.').pop();
 
-   const maxSize = 10 * 1024 * 1024;
-   if (file.size > maxSize) {
-     setValidationResults(prev => ({
-       ...prev,
-       [docLabel]: {
-         isValid: false,
-         status: "rejected",
-         message: `File size exceeds 10MB limit. Please upload a smaller file.`,
-         warnings: []
-       }
-     }));
-     return;
-   }
+  if (!allowedTypes.includes(`.${fileExtension}`)) {
+    setValidationResults(prev => ({
+      ...prev,
+      [docLabel]: {
+        isValid: false,
+        status: "rejected",
+        message: `Invalid file type. Please upload only PDF or Image files (.pdf, .jpg, .jpeg, .png)`,
+        warnings: []
+      }
+    }));
+    return;
+  }
 
-   setIsUploading(true);
-   setIsOverlayVisible(true);
+  const maxSize = 10 * 1024 * 1024;
+  if (file.size > maxSize) {
+    setValidationResults(prev => ({
+      ...prev,
+      [docLabel]: {
+        isValid: false,
+        status: "rejected",
+        message: `File size exceeds 10MB limit. Please upload a smaller file.`,
+        warnings: []
+      }
+    }));
+    return;
+  }
 
-   try {
-     const registeredName = await getRegisteredName();
-     const validationResult = await validateDocumentWithAI(docLabel, file, registeredName);
+  setIsUploading(true);
+  setIsOverlayVisible(true);
 
-     setValidationResults(prev => ({
-       ...prev,
-       [docLabel]: validationResult
-     }));
+  try {
+    const registeredName = await getRegisteredName();
+    const validationResult = await validateDocumentWithAI(docLabel, file, registeredName);
 
-     if (validationResult.warnings && validationResult.warnings.length > 0) {
-       console.log("Document has warnings:", validationResult.warnings);
-     }
+    setValidationResults(prev => ({
+      ...prev,
+      [docLabel]: validationResult
+    }));
 
-     const storage = getStorage();
-     const documentId = getDocumentId(docLabel);
+    if (validationResult.warnings && validationResult.warnings.length > 0) {
+      console.log("Document has warnings:", validationResult.warnings);
+    }
 
-     const fileName = `${documentId}.${fileExtension}`;
-     const storageRef = ref(storage, `universalProfiles/documents/${user.uid}/${fileName}`);
+    const storage = getStorage();
+    const documentId = getDocumentId(docLabel);
 
-     await uploadBytes(storageRef, file);
-     const downloadURL = await getDownloadURL(storageRef);
+    const fileName = `${documentId}.${fileExtension}`;
+    const storageRef = ref(storage, `universalProfiles/documents/${user.uid}/${fileName}`);
 
-     await uploadDocumentWithSync(docLabel, downloadURL, validationResult);
+    await uploadBytes(storageRef, file);
+    const downloadURL = await getDownloadURL(storageRef);
 
-     setSubmittedDocuments((prev) => Array.from(new Set([...prev, docLabel])));
+    await uploadDocumentWithSync(docLabel, downloadURL, validationResult);
 
-     const profileRef = doc(db, "universalProfiles", user.uid);
-     const updatedProfileSnap = await getDoc(profileRef);
-     if (updatedProfileSnap.exists()) {
-       setProfileData(updatedProfileSnap.data());
-     }
+    setSubmittedDocuments((prev) => Array.from(new Set([...prev, docLabel])));
 
-     setIsUploading(false);
-     setTimeout(() => {
-       setIsOverlayVisible(false);
-     }, 300);
+    const profileRef = doc(db, "universalProfiles", user.uid);
+    const updatedProfileSnap = await getDoc(profileRef);
+    if (updatedProfileSnap.exists()) {
+      setProfileData(updatedProfileSnap.data());
+    }
 
-   } catch (error) {
-     console.error("Upload failed:", error);
-     setIsUploading(false);
-     setTimeout(() => {
-       setIsOverlayVisible(false);
-       alert(error.message || "Network error - please try again");
-     }, 300);
-   }
- };
+    setIsUploading(false);
+    setTimeout(() => {
+      setIsOverlayVisible(false);
+    }, 300);
+
+  } catch (error) {
+    console.error("Upload failed:", error);
+    
+    // Handle rate limit error
+    if (error.type === 'RATE_LIMIT') {
+      setValidationResults(prev => ({
+        ...prev,
+        [docLabel]: {
+          isValid: false,
+          status: "rate_limit",
+          message: error.message,
+          warnings: []
+        }
+      }));
+    } else if (error.type === 'AUTH_ERROR') {
+      setValidationResults(prev => ({
+        ...prev,
+        [docLabel]: {
+          isValid: false,
+          status: "auth_error",
+          message: error.message,
+          warnings: []
+        }
+      }));
+    } else {
+      setValidationResults(prev => ({
+        ...prev,
+        [docLabel]: {
+          isValid: false,
+          status: "error",
+          message: error.message || "Network error - please try again",
+          warnings: []
+        }
+      }));
+    }
+
+    setIsUploading(false);
+    setTimeout(() => {
+      setIsOverlayVisible(false);
+    }, 300);
+  }
+};
 
  
   const getDocumentStatus = (docLabel) => {
