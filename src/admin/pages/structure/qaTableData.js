@@ -53,6 +53,25 @@ export const DASHBOARD_COLORS = {
   'All':      '#10b981',
 };
 
+// Dashboard code mapping
+export const DASHBOARD_CODE_MAP = {
+  'SMSE':     'SD',
+  'Investor': 'ID',
+  'Advisor':  'AD',
+  'Catalyst': 'CD',
+  'All':      'D',
+};
+
+// Category code mapping
+export const CATEGORY_CODE_MAP = {
+  'Security':           'ST',
+  'Unit Tests':          'UT',
+  'Integration Tests':  'IT',
+  'E2E Tests':           'FT',
+  'Performance Tests':  'PT',
+  'Test Data':           'TD',
+};
+
 // ============================================================================
 // STATIC INITIAL DATA (from Notion screenshots)
 // ============================================================================

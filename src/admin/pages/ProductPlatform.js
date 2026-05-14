@@ -35,7 +35,8 @@ import {
 import { loadDocChecklist, saveDocChecklist } from './services/docGovChecklist';
 import { loadQATable, saveQATable } from './services/qaMasterTable';
 import { useAuth } from '../../smses/hooks/useAuth';
-import { AlertCircle, ClipboardList } from 'lucide-react';
+import { AlertCircle, ClipboardList, CheckCircle, X } from 'lucide-react';
+import AddTaskModal from './structure/AddTaskModal';
 
 function debounce(fn, ms) {
   let t;
@@ -70,6 +71,8 @@ const ProductPlatform = () => {
   // ── QA table state ────────────────────────────────────────────────────────
   const [qaTasks, setQaTasks]     = useState([]);
   const [isSavingQA, setIsSavingQA] = useState(false);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [toast, setToast] = useState(null);
 
   const debouncedChecklistRef = useRef(null);
   const debouncedQARef        = useRef(null);
@@ -355,13 +358,23 @@ const ProductPlatform = () => {
     });
   }, []);
 
-  const handleAddTask = useCallback(() => {
-    const newTask = { taskId: '', category: '', dashboard: '', section: '', taskName: '', status: 'Not started', dueDate: '', testedWhen: '', assignedTo: '', testType: '', actionStatus: 'Not started' };
+  const handleAddTask = useCallback((taskData) => {
+    if (!taskData) return;
     setQaTasks(prev => {
-      const updated = [...prev, newTask];
+      const updated = [...prev, taskData];
       debouncedQARef.current?.(updated);
       return updated;
     });
+    setToast({ type: 'success', message: 'Task added successfully' });
+    setTimeout(() => setToast(null), 3000);
+  }, []);
+
+  const handleOpenModal = useCallback(() => {
+    setIsModalOpen(true);
+  }, []);
+
+  const handleCloseModal = useCallback(() => {
+    setIsModalOpen(false);
   }, []);
 
   const handleDeleteTask = useCallback((rowIdx) => {
@@ -533,7 +546,7 @@ const ProductPlatform = () => {
                 <QAMasterTable
                   tasks={qaTasks}
                   onUpdateTask={handleUpdateTask}
-                  onAddTask={handleAddTask}
+                  onAddTask={handleOpenModal}
                   onDeleteTask={handleDeleteTask}
                   isSaving={isSavingQA}
                 />
@@ -550,6 +563,52 @@ const ProductPlatform = () => {
         onClose={closeCreateDialog}
         onCreate={handleCreateItem}
       />
+
+      <AddTaskModal
+        isOpen={isModalOpen}
+        onClose={handleCloseModal}
+        onAddTask={handleAddTask}
+        existingTasks={qaTasks}
+      />
+
+      {/* Toast Notification */}
+      {toast && (
+        <div
+          style={{
+            position: 'fixed',
+            bottom: 24,
+            right: 24,
+            padding: '12px 16px',
+            borderRadius: 8,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+            zIndex: 2000,
+            backgroundColor: toast.type === 'success' ? '#10b981' : '#ef4444',
+            color: '#fff',
+            fontSize: 14,
+            fontWeight: 500,
+            animation: 'slideIn 0.3s ease-out',
+          }}
+        >
+          {toast.type === 'success' ? <CheckCircle size={18} /> : <AlertCircle size={18} />}
+          <span>{toast.message}</span>
+          <button
+            onClick={() => setToast(null)}
+            style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center' }}
+          >
+            <X size={16} />
+          </button>
+        </div>
+      )}
+
+      <style>{`
+        @keyframes slideIn {
+          from { transform: translateY(100%); opacity: 0; }
+          to { transform: translateY(0); opacity: 1; }
+        }
+      `}</style>
     </>
   );
 };

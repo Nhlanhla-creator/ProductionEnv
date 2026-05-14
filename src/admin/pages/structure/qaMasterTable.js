@@ -236,12 +236,12 @@ export const QAMasterTable = ({ tasks, onUpdateTask, onAddTask, onDeleteTask, is
             {CATEGORY_OPTIONS.map(c => <option key={c} value={c}>{c}</option>)}
           </select>
 
-          {/* Add row */}
+          {/* Add task */}
           <button
             onClick={onAddTask}
             style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 14px', background: '#a67c52', color: '#fff', border: 'none', borderRadius: 6, fontSize: 12, fontWeight: 600, cursor: 'pointer', maxWidth: 10485760 }}
           >
-            <Plus size={14} /> Add Row
+            <Plus size={14} /> Add task
           </button>
         </div>
       </div>
