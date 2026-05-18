@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react"
 import { Chart, registerables } from "chart.js"
 import { TrendingUp, Users, Clock, Award, UserCheck, Brain, Target } from "lucide-react"
 import "../MyFunderMatches/funding-insights.css"
+import "../../styles/insights-grid.css"
 
 Chart.register(...registerables)
 

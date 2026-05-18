@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+﻿import React, { useState } from "react";
 import { usePortfolio } from "../../context/PortfolioContext";
 
 const B = { darkest: "#3b2409", dark: "#5e3f26", medium: "#7d5a36", warm: "#9c7c54", light: "#b8a082", pale: "#d4c4b0", offwhite: "#f0e8de" };
@@ -19,9 +19,18 @@ const Pill = ({ label, active, onClick }) => (
 );
 
 const MEDALS = ["🥇", "🥈", "🥉"];
-const WARN   = ["⚠️", "🔸", "🔹"];
 
-const RankedTable = ({ rows, isTop, metricLabel, unit = "", fmt }) => {
+const uniqByName = (rows = []) => {
+  const seen = new Set();
+  return rows.filter((row) => {
+    const key = (row?.name || "").trim().toLowerCase();
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+};
+
+const RankedTable = ({ rows, isTop, metricLabel, unit = "", fmt, bottomStartRank = 0 }) => {
   if (!rows || rows.length === 0) {
     return <div style={{ color: B.light, fontSize: "12px", fontStyle: "italic", padding: "1rem" }}>Not enough data yet</div>;
   }
@@ -34,14 +43,14 @@ const RankedTable = ({ rows, isTop, metricLabel, unit = "", fmt }) => {
           background: isTop ? (i === 0 ? "#f5ede4" : B.offwhite) : (i === 0 ? "#fdf0ec" : B.offwhite),
           border: `1px solid ${isTop ? B.pale : "#e8d4cc"}`,
         }}>
-          <span style={{ fontSize: "18px", minWidth: "24px" }}>{isTop ? MEDALS[i] : WARN[i]}</span>
+          <span style={{ fontSize: "18px", minWidth: "24px" }}>{isTop ? MEDALS[i] : (bottomStartRank - i)}</span>
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: "13px", fontWeight: "700", color: B.darkest }}>{row.name}</div>
-            <div style={{ fontSize: "11px", color: B.warm }}>{row.sector || "–"} · {row.stage || "–"}</div>
+            <div style={{ fontSize: "11px", color: B.warm }}>{row.sector || "-"} | {row.stage || "-"}</div>
           </div>
           <div style={{ textAlign: "right" }}>
             <div style={{ fontSize: "16px", fontWeight: "800", color: isTop ? B.dark : "#9b3a1a" }}>
-              {fmt ? fmt(row) : (row.value ?? "–")}{unit}
+              {fmt ? fmt(row) : (row.value ?? "-")}{unit}
             </div>
             <div style={{ fontSize: "10px", color: B.light }}>{metricLabel}</div>
           </div>
@@ -53,111 +62,129 @@ const RankedTable = ({ rows, isTop, metricLabel, unit = "", fmt }) => {
 
 const InsightBox = ({ text }) => (
   <div style={{ marginTop: "12px", padding: "10px 12px", background: "#fdf8f4", borderRadius: "7px", border: `1px dashed ${B.pale}`, fontSize: "12px", color: B.dark, fontStyle: "italic", lineHeight: 1.5 }}>
-    💡 {text}
+    Tip: {text}
   </div>
 );
 
-// ── TOP 3 ─────────────────────────────────────────────────────────────────────
-const HighestBIGScore = () => {
-  const { portfolioMetrics } = usePortfolio();
-  const rows = portfolioMetrics?.performers?.topBig || [];
+const HighestBIGScore = ({ metrics }) => {
+  const rows = uniqByName(metrics?.performers?.topBig || []).slice(0, 3);
   return (
-    <Card title="Highest BIG Score" subLabel="Top 3 — ranked by BIG score">
+    <Card title="Highest BIG Score">
       <RankedTable isTop rows={rows} metricLabel="BIG Score" unit="%" fmt={r => r.bigScore} />
       {rows.length > 0 && <InsightBox text={`Top BIG scorer is ${rows[0]?.name} at ${rows[0]?.bigScore}%. Highest-scoring SMEs are strongest candidates for Deal Close.`} />}
     </Card>
   );
 };
 
-const HighestMatchScore = () => {
-  const { portfolioMetrics } = usePortfolio();
-  const rows = portfolioMetrics?.performers?.topMatch || [];
+const HighestMatchScore = ({ metrics }) => {
+  const rows = uniqByName(metrics?.performers?.topMatch || []).slice(0, 3);
   return (
-    <Card title="Highest Match %" subLabel="Top 3 — ranked by programme match percentage">
+    <Card title="Highest Match %">
       <RankedTable isTop rows={rows} metricLabel="Match %" unit="%" fmt={r => r.matchPct} />
       {rows.length > 0 && <InsightBox text={`${rows[0]?.name} is the strongest programme fit at ${rows[0]?.matchPct}% match. Prioritise these SMEs for accelerated support.`} />}
     </Card>
   );
 };
 
-const HighestFundability = () => {
-  const { portfolioMetrics } = usePortfolio();
-  const rows = (portfolioMetrics?.performers?.topBig || []).filter(r => r.fundability > 0);
+const HighestFundability = ({ metrics }) => {
+  const rows = uniqByName(metrics?.performers?.topFundability || metrics?.performers?.topBig || []).slice(0, 3);
   return (
-    <Card title="Highest Fundability Score" subLabel="Top 3 — ranked by fundability sub-score">
+    <Card title="Highest Fundability Score">
       <RankedTable isTop rows={rows} metricLabel="Fundability" unit="%" fmt={r => r.fundability} />
       {rows.length > 0 && <InsightBox text="High fundability SMEs have the strongest case for external capital. Consider facilitating investor introductions." />}
     </Card>
   );
 };
 
-const HighestRevenue = () => {
-  const { portfolioMetrics } = usePortfolio();
-  const perSME = (portfolioMetrics?.revenue?.perSME || []).filter(s => s.revenue > 0).sort((a, b) => b.revenue - a.revenue).slice(0, 3);
+const HighestComplianceScore = ({ metrics }) => {
+  const topCompliance = metrics?.performers?.topCompliance || [];
+  const fallback = [...(metrics?.performers?.topBig || [])]
+    .sort((a, b) => (b.compliance || 0) - (a.compliance || 0));
+  const rows = uniqByName(topCompliance.length ? topCompliance : fallback).slice(0, 3);
+  return (
+    <Card title="Highest Compliance Score">
+      <RankedTable isTop rows={rows} metricLabel="Compliance" unit="%" fmt={r => r.compliance} />
+      {rows.length > 0 && <InsightBox text="Highly compliant SMEs are lower-risk and typically ready for smoother due diligence and funding processes." />}
+    </Card>
+  );
+};
+
+const HighestRevenue = ({ metrics }) => {
+  const perSME = uniqByName(metrics?.revenue?.perSME || [])
+    .filter(s => s.revenue > 0)
+    .sort((a, b) => b.revenue - a.revenue)
+    .slice(0, 3);
   const rows = perSME.map(s => ({ name: s.name, sector: s.sector, stage: s.profitability }));
   return (
-    <Card title="Highest Revenue SMEs" subLabel="Top 3 — ranked by annual revenue">
-      <RankedTable isTop rows={rows} metricLabel="Annual Revenue" unit="" fmt={(_, i) => perSME[i] ? "R" + (perSME[i].revenue / 1000000).toFixed(1) + "M" : "–"} />
+    <Card title="Highest Revenue SMEs">
+      <RankedTable isTop rows={rows} metricLabel="Annual Revenue" unit="" fmt={(_, i) => perSME[i] ? "R" + (perSME[i].revenue / 1000000).toFixed(1) + "M" : "-"} />
       {rows.length > 0 && <InsightBox text="Revenue leaders in the portfolio are likely the most investable. Use their traction as case studies for other SMEs." />}
     </Card>
   );
 };
 
-// ── BOTTOM 3 ──────────────────────────────────────────────────────────────────
-const LowestBIGScore = () => {
-  const { portfolioMetrics } = usePortfolio();
-  const rows = portfolioMetrics?.performers?.bottomBig || [];
+const LowestBIGScore = ({ metrics, bottomStartRank }) => {
+  const rows = uniqByName(metrics?.performers?.bottomBig || []).slice(0, 3);
   return (
-    <Card title="Lowest BIG Score" subLabel="Bottom 3 — require immediate support">
-      <RankedTable isTop={false} rows={rows} metricLabel="BIG Score" unit="%" fmt={r => r.bigScore} />
+    <Card title="Lowest BIG Score">
+      <RankedTable isTop={false} rows={rows} metricLabel="BIG Score" unit="%" fmt={r => r.bigScore} bottomStartRank={bottomStartRank} />
       {rows.length > 0 && <InsightBox text="SMEs with the lowest BIG scores need targeted capability-building before the next assessment cycle." />}
     </Card>
   );
 };
 
-const LowestMatchScore = () => {
-  const { portfolioMetrics } = usePortfolio();
-  const rows = portfolioMetrics?.performers?.bottomMatch || [];
+const LowestMatchScore = ({ metrics, bottomStartRank }) => {
+  const rows = uniqByName(metrics?.performers?.bottomMatch || []).slice(0, 3);
   return (
-    <Card title="Lowest Match %" subLabel="Bottom 3 — weakest programme fit">
-      <RankedTable isTop={false} rows={rows} metricLabel="Match %" unit="%" fmt={r => r.matchPct} />
+    <Card title="Lowest Match %">
+      <RankedTable isTop={false} rows={rows} metricLabel="Match %" unit="%" fmt={r => r.matchPct} bottomStartRank={bottomStartRank} />
       {rows.length > 0 && <InsightBox text="Low-match SMEs may need re-evaluation of programme fit. Consider tailored support tracks or alternative referrals." />}
     </Card>
   );
 };
 
-const LowestComplianceScore = () => {
-  const { portfolioMetrics } = usePortfolio();
-  const rows = (portfolioMetrics?.performers?.lowCompliance || []).filter(r => r.compliance > 0);
+const LowestComplianceScore = ({ metrics, bottomStartRank }) => {
+  const rows = uniqByName(metrics?.performers?.lowCompliance || []).slice(0, 3);
   return (
-    <Card title="Lowest Compliance Score" subLabel="Bottom 3 — compliance risk flagged">
-      <RankedTable isTop={false} rows={rows} metricLabel="Compliance" unit="%" fmt={r => r.compliance} />
+    <Card title="Lowest Compliance Score">
+      <RankedTable isTop={false} rows={rows} metricLabel="Compliance" unit="%" fmt={r => r.compliance} bottomStartRank={bottomStartRank} />
       {rows.length > 0 && <InsightBox text="Non-compliant SMEs pose reputational risk. A compliance clinic covering tax, CIPC and labour law is recommended." />}
     </Card>
   );
 };
 
-const LowestFundability = () => {
-  const { portfolioMetrics } = usePortfolio();
-  const rows = (portfolioMetrics?.performers?.lowFundability || []).filter(r => r.fundability > 0);
+const LowestFundability = ({ metrics, bottomStartRank }) => {
+  const rows = uniqByName(metrics?.performers?.lowFundability || []).slice(0, 3);
   return (
-    <Card title="Lowest Fundability Score" subLabel="Bottom 3 — least investment-ready">
-      <RankedTable isTop={false} rows={rows} metricLabel="Fundability" unit="%" fmt={r => r.fundability} />
+    <Card title="Lowest Fundability Score">
+      <RankedTable isTop={false} rows={rows} metricLabel="Fundability" unit="%" fmt={r => r.fundability} bottomStartRank={bottomStartRank} />
       {rows.length > 0 && <InsightBox text="These SMEs need urgent financial structuring support before being introduced to investors or funders." />}
     </Card>
   );
 };
 
 const SUBS = [
-  { id: "top-3",    label: "Top 3" },
+  { id: "top-3", label: "Top 3" },
   { id: "bottom-3", label: "Bottom 3" },
 ];
 
-const TopBottom = () => {
+const TopBottom = ({ metrics }) => {
   const [sub, setSub] = useState("top-3");
-  const { loading } = usePortfolio();
+  const { loading, portfolioMetrics } = usePortfolio();
+  const sourceMetrics = metrics || portfolioMetrics;
 
-  if (loading) return <div style={{ padding: "2rem", textAlign: "center", color: B.warm }}>Loading performer data…</div>;
+  const uniqueNamesFromRows = (arr = []) => arr.map(r => (r?.name || "").trim().toLowerCase()).filter(Boolean);
+  const totalSMEs = sourceMetrics?.totalSMEs || new Set([
+    ...uniqueNamesFromRows(sourceMetrics?.performers?.topBig || []),
+    ...uniqueNamesFromRows(sourceMetrics?.performers?.bottomBig || []),
+    ...uniqueNamesFromRows(sourceMetrics?.performers?.topMatch || []),
+    ...uniqueNamesFromRows(sourceMetrics?.performers?.bottomMatch || []),
+    ...uniqueNamesFromRows(sourceMetrics?.performers?.lowCompliance || []),
+    ...uniqueNamesFromRows(sourceMetrics?.performers?.lowFundability || []),
+    ...uniqueNamesFromRows(sourceMetrics?.revenue?.perSME || []),
+  ]).size;
+
+  if (loading) return <div style={{ padding: "2rem", textAlign: "center", color: B.warm }}>Loading performer data...</div>;
 
   return (
     <div style={{ width: "100%" }}>
@@ -167,19 +194,20 @@ const TopBottom = () => {
 
       {sub === "top-3" && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(380px, 1fr))", gap: "20px" }}>
-          <HighestBIGScore />
-          <HighestMatchScore />
-          <HighestFundability />
-          <HighestRevenue />
+          <HighestBIGScore metrics={sourceMetrics} />
+          <HighestMatchScore metrics={sourceMetrics} />
+          <HighestFundability metrics={sourceMetrics} />
+          <HighestComplianceScore metrics={sourceMetrics} />
+          <HighestRevenue metrics={sourceMetrics} />
         </div>
       )}
 
       {sub === "bottom-3" && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(380px, 1fr))", gap: "20px" }}>
-          <LowestBIGScore />
-          <LowestMatchScore />
-          <LowestComplianceScore />
-          <LowestFundability />
+          <LowestBIGScore metrics={sourceMetrics} bottomStartRank={totalSMEs} />
+          <LowestMatchScore metrics={sourceMetrics} bottomStartRank={totalSMEs} />
+          <LowestComplianceScore metrics={sourceMetrics} bottomStartRank={totalSMEs} />
+          <LowestFundability metrics={sourceMetrics} bottomStartRank={totalSMEs} />
         </div>
       )}
     </div>

@@ -140,7 +140,7 @@
 /* Chart Container - Using your exact styling */
 .insightsContainer {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
   gap: 1.25rem;
   position: relative;
   animation: fadeInUp 0.6s ease-in-out;
@@ -148,7 +148,7 @@
 
 .chartContainer {
   position: relative;
-  height: 220px;
+  height: 460px;
   background-color: var(--white);
   border-radius: 10px;
   padding: 1rem;
@@ -177,7 +177,7 @@
 }
 
 .leaderboardContainer {
-  height: 220px !important;
+  height: 460px !important;
 }
 
 .leaderboard h3 {

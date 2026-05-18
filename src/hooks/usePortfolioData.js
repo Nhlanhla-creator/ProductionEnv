@@ -342,18 +342,35 @@ function computeMetrics(enriched) {
     revenue: parseAmt(a.profile?.financialOverview?.annualRevenue),
   });
 
-  const byBig = [...enriched].sort(
-    (a, b) => (b.bigScore || 0) - (a.bigScore || 0),
-  );
-  const byMatch = [...enriched].sort(
-    (a, b) => (b.matchPercentage || 0) - (a.matchPercentage || 0),
-  );
-  const byCompliance = [...enriched].sort(
-    (a, b) => (a.compliance || 0) - (b.compliance || 0),
-  );
-  const byFundability = [...enriched].sort(
-    (a, b) => (a.fundability || 0) - (b.fundability || 0),
-  );
+  const uniqueRank = (arr, getScore, order = "desc") => {
+    const byKey = new Map();
+    arr.forEach((a) => {
+      const key = a.smeId || a.smeName || a.docId || Math.random().toString(36);
+      const existing = byKey.get(key);
+      if (!existing) {
+        byKey.set(key, a);
+        return;
+      }
+      const curr = Number(getScore(existing) || 0);
+      const cand = Number(getScore(a) || 0);
+      const better = order === "desc" ? cand > curr : cand < curr;
+      if (better) byKey.set(key, a);
+    });
+    return [...byKey.values()].sort((a, b) => {
+      const aScore = Number(getScore(a) || 0);
+      const bScore = Number(getScore(b) || 0);
+      if (order === "desc") return bScore - aScore;
+      return aScore - bScore;
+    });
+  };
+  const byBigUnique = uniqueRank(enriched, (a) => a.bigScore, "desc");
+  const byBigUniqueAsc = [...byBigUnique].reverse();
+  const byMatchUnique = uniqueRank(enriched, (a) => a.matchPercentage, "desc");
+  const byMatchUniqueAsc = [...byMatchUnique].reverse();
+  const byComplianceUnique = uniqueRank(enriched, (a) => a.compliance, "desc");
+  const byComplianceUniqueAsc = [...byComplianceUnique].reverse();
+  const byFundabilityUnique = uniqueRank(enriched, (a) => a.fundability, "desc");
+  const byFundabilityUniqueAsc = [...byFundabilityUnique].reverse();
 
   const barriers = {};
   enriched.forEach((a) => {
@@ -425,12 +442,14 @@ function computeMetrics(enriched) {
       graduationRate: n ? Math.round((closed.length / n) * 100) : 0,
     },
     performers: {
-      topBig: byBig.slice(0, 3).map(toRow),
-      bottomBig: byBig.slice(-3).reverse().map(toRow),
-      topMatch: byMatch.slice(0, 3).map(toRow),
-      bottomMatch: byMatch.slice(-3).reverse().map(toRow),
-      lowCompliance: byCompliance.slice(0, 3).map(toRow),
-      lowFundability: byFundability.slice(0, 3).map(toRow),
+      topBig: byBigUnique.slice(0, 3).map(toRow),
+      bottomBig: byBigUniqueAsc.slice(0, 3).map(toRow),
+      topMatch: byMatchUnique.slice(0, 3).map(toRow),
+      bottomMatch: byMatchUniqueAsc.slice(0, 3).map(toRow),
+      topCompliance: byComplianceUnique.slice(0, 3).map(toRow),
+      lowCompliance: byComplianceUniqueAsc.slice(0, 3).map(toRow),
+      topFundability: byFundabilityUnique.slice(0, 3).map(toRow),
+      lowFundability: byFundabilityUniqueAsc.slice(0, 3).map(toRow),
     },
     learnings: { barriers, support: supportFocus, services: servicesFocus },
   };
