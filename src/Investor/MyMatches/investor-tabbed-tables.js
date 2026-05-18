@@ -3,8 +3,9 @@ import { useState, useRef, useEffect } from "react"
 import { ChevronDown, X, Trophy, TrendingUp, Calendar, DollarSign, Users, BarChart3, Info } from "lucide-react"
 import { InvestorSMETable } from "./investor-sme-table"
 import styles from "./investor-funding.module.css"
-import { collection, query, where, getDocs, onSnapshot, doc, getDoc } from "firebase/firestore"
+import { collection, query, where, getDocs, doc, getDoc } from "firebase/firestore"
 import { db } from "../../firebaseConfig"
+import { getAuth } from "firebase/auth"
 
 const formatLabel = (value) => { 
   if (!value) return ""
@@ -101,142 +102,85 @@ const SuccessfulDealsTable = () => {
   const [deals, setDeals] = useState([])
   const [selectedDeal, setSelectedDeal] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [processedDeals, setProcessedDeals] = useState(new Set()) // Track processed deal IDs
 
   useEffect(() => {
     const fetchSuccessfulDeals = async () => {
       try {
         setLoading(true)
-        // Query for deals with "Deal Complete" status
-        const q = query(collection(db, "investorApplications"), where("pipelineStage", "==", "Deal Complete"))
-
-        const unsubscribe = onSnapshot(q, async (querySnapshot) => {
-          console.log("[v0] Found successful deals:", querySnapshot.docs.length)
-
-          const newDeals = []
-          const newProcessedDeals = new Set(processedDeals)
-
-          for (const docSnap of querySnapshot.docs) {
-            const data = docSnap.data()
-            
-            // Skip if we've already processed this deal
-            if (newProcessedDeals.has(docSnap.id)) {
-              continue
-            }
-
-            console.log("[v0] Processing deal with smeId:", data.smeId)
-
+        const auth = getAuth()
+        const user = auth.currentUser
+        
+        if (!user) {
+          console.log("No user logged in")
+          setLoading(false)
+          return
+        }
+        
+        // Query for Deal Complete applications for current investor only
+        const dealCompleteQuery = query(
+          collection(db, "investorApplications"), 
+          where("funderId", "==", user.uid),
+          where("pipelineStage", "in", ["Deal Complete", "deal complete", "deals closed", "Deals Closed"])
+        )
+        
+        const dealCompleteSnapshot = await getDocs(dealCompleteQuery)
+        
+        const successfulDeals = []
+        
+        for (const docSnap of dealCompleteSnapshot.docs) {
+          const data = docSnap.data()
+          
+          // Fetch SME profile
+          let smeName = data.companyName || data.smeName || "Unnamed Business"
+          let location = "Not specified"
+          let sector = "Not specified"
+          let teamSize = "Not specified"
+          
+          // Try to get more details from universalProfiles
+          if (data.smeId) {
             try {
-              let profileData = {}
-              let smeName = "Unnamed Business"
-
-              // First try with smeId as document ID
-              if (data.smeId) {
-                const profileRef = doc(db, "universalProfiles", data.smeId)
-                const profileSnap = await getDoc(profileRef)
-
-                if (profileSnap.exists()) {
-                  profileData = profileSnap.data()
-                  smeName = profileData.entityOverview?.tradingName || 
-                           profileData.entityOverview?.registeredName || 
-                           data.companyName || 
-                           data.smeName || 
-                           "Unnamed Business"
-                  console.log("[v0] Found profile data for smeId:", data.smeId, smeName)
-                } else {
-                  console.log("[v0] No profile found for smeId:", data.smeId)
-
-                  // If not found, try with userId field
-                  if (data.userId) {
-                    const userProfileRef = doc(db, "universalProfiles", data.userId)
-                    const userProfileSnap = await getDoc(userProfileRef)
-
-                    if (userProfileSnap.exists()) {
-                      profileData = userProfileSnap.data()
-                      smeName = profileData.entityOverview?.tradingName || 
-                               profileData.entityOverview?.registeredName || 
-                               data.companyName || 
-                               data.smeName || 
-                               "Unnamed Business"
-                      console.log("[v0] Found profile data for userId:", data.userId, smeName)
-                    }
-                  }
-                }
+              const profileRef = doc(db, "universalProfiles", data.smeId)
+              const profileSnap = await getDoc(profileRef)
+              
+              if (profileSnap.exists()) {
+                const profileData = profileSnap.data()
+                smeName = profileData.entityOverview?.tradingName || 
+                         profileData.entityOverview?.registeredName || 
+                         smeName
+                location = formatLabel(profileData.entityOverview?.location) || location
+                sector = formatLabel(profileData.entityOverview?.economicSectors?.[0]) || sector
+                teamSize = profileData.entityOverview?.employeeCount || teamSize
               }
-
-              // If we still don't have a proper name, use available data
-              if (smeName === "Unnamed Business") {
-                smeName = data.companyName || data.smeName || "Unnamed Business"
-              }
-
-              const location = formatLabel(profileData.entityOverview?.location) || formatLabel(data.location) || "Not specified"
-              const sector = formatLabel(profileData.entityOverview?.economicSectors?.[0]) || formatLabel(data.sector) || "Not specified"
-              const teamSize = profileData.entityOverview?.employeeCount || data.teamSize || "Not specified"
-
-              console.log("[v0] Final deal data:", { smeName, location, sector, teamSize })
-
-              const deal = {
-                id: docSnap.id,
-                smeName,
-                dealAmount: data.fundingDetails?.amountApproved || data.fundingRequired || "Not specified",
-                dealType: data.fundingDetails?.investmentType || data.investmentType || "equity",
-                completionDate: data.updatedAt || data.createdAt,
-                sector,
-                dealStructure: data.fundingDetails?.paymentDeployment || "Not specified",
-                dealDuration: "Not specified",
-                supportProvided: "Funding and Strategic Support",
-                currentStatus: "Active Investment",
-                roi: "Pending",
-                exitStrategy: "To be determined",
-                location,
-                teamSize,
-                revenueGrowth: "Pending",
-                fundingDetails: data.fundingDetails || {},
-              }
-
-              newDeals.push(deal)
-              newProcessedDeals.add(docSnap.id)
-
             } catch (error) {
-              console.error("[v0] Error fetching profile for deal:", data.smeId, error)
-              const fallbackDeal = {
-                id: docSnap.id,
-                smeName: data.companyName || data.smeName || "Unnamed Business",
-                dealAmount: data.fundingDetails?.amountApproved || data.fundingRequired || "Not specified",
-                dealType: data.fundingDetails?.investmentType || data.investmentType || "equity",
-                completionDate: data.updatedAt || data.createdAt,
-                sector: formatLabel(data.sector) || "Not specified",
-                dealStructure: data.fundingDetails?.paymentDeployment || "Not specified",
-                dealDuration: "Not specified",
-                supportProvided: "Funding and Strategic Support",
-                currentStatus: "Active Investment",
-                roi: "Pending",
-                exitStrategy: "To be determined",
-                location: formatLabel(data.location) || "Not specified",
-                teamSize: data.teamSize || "Not specified",
-                revenueGrowth: "Pending",
-                fundingDetails: data.fundingDetails || {},
-              }
-              newDeals.push(fallbackDeal)
-              newProcessedDeals.add(docSnap.id)
+              console.error("Error fetching profile for:", data.smeId, error)
             }
-          }
-
-          // Only update if we have new deals to prevent infinite re-renders
-          if (newDeals.length > 0) {
-            setDeals(prev => {
-              const updatedDeals = [...newDeals, ...prev.filter(deal => !newProcessedDeals.has(deal.id))]
-              return updatedDeals.slice(0, 50) // Keep only latest 50 deals
-            })
-            setProcessedDeals(newProcessedDeals)
           }
           
-          setLoading(false)
-        })
-
-        return () => unsubscribe()
+          successfulDeals.push({
+            id: docSnap.id,
+            smeName,
+            dealAmount: data.fundingDetails?.amountApproved || data.fundingRequired || "Not specified",
+            dealType: data.fundingDetails?.investmentType || data.investmentType || "equity",
+            completionDate: data.updatedAt || data.createdAt,
+            sector,
+            dealStructure: data.fundingDetails?.paymentDeployment || "Not specified",
+            dealDuration: "Not specified",
+            supportProvided: "Funding and Strategic Support",
+            currentStatus: "Active Investment",
+            roi: "Pending",
+            exitStrategy: "To be determined",
+            location,
+            teamSize,
+            revenueGrowth: "Pending",
+            fundingDetails: data.fundingDetails || {},
+          })
+        }
+        
+        setDeals(successfulDeals)
+        setLoading(false)
+        
       } catch (error) {
-        console.error("[v0] Error fetching successful deals:", error)
+        console.error("Error fetching successful deals:", error)
         setLoading(false)
       }
     }
@@ -492,44 +436,19 @@ const SuccessfulDealsTable = () => {
                 </tr>
               ))
             ) : (
-              // Empty state row to show table structure
               <tr>
-                <td style={{ padding: "2rem 8px", color: "#ccc", textAlign: "center" }}>-</td>
-                <td style={{ padding: "2rem 8px", color: "#ccc", textAlign: "center" }}>-</td>
-                <td style={{ padding: "2rem 8px", color: "#ccc", textAlign: "center" }}>-</td>
-                <td style={{ padding: "2rem 8px", color: "#ccc", textAlign: "center" }}>-</td>
-                <td style={{ padding: "2rem 8px", color: "#ccc", textAlign: "center" }}>-</td>
-                <td style={{ padding: "2rem 8px", color: "#ccc", textAlign: "center" }}>-</td>
-                <td style={{ padding: "2rem 8px", color: "#ccc", textAlign: "center" }}>-</td>
-                <td style={{ padding: "2rem 8px", color: "#ccc", textAlign: "center" }}>-</td>
-                <td style={{ padding: "2rem 8px", color: "#ccc", textAlign: "center" }}>-</td>
-                <td style={{ padding: "2rem 8px", color: "#ccc", textAlign: "center" }}>-</td>
-                <td style={{ padding: "2rem 8px", color: "#ccc", textAlign: "center" }}>-</td>
+                <td colSpan="11" style={{ padding: "2rem 8px", textAlign: "center" }}>
+                  <Trophy size={48} style={{ color: "#a67c52", marginBottom: "16px" }} />
+                  <h3 style={{ color: "#5d4037", marginBottom: "8px" }}>No Successful Deals Yet</h3>
+                  <p style={{ color: "#7d5a50" }}>
+                    Your successful investment deals will appear here once you complete funding transactions.
+                  </p>
+                </td>
               </tr>
             )}
           </tbody>
         </table>
       </div>
-
-      {/* Message shown when no deals */}
-      {deals.length === 0 && (
-        <div
-          style={{
-            backgroundColor: "#f8f5f3",
-            padding: "24px",
-            borderRadius: "8px",
-            textAlign: "center",
-            border: "1px solid #e8d5c4",
-            marginTop: "24px",
-          }}
-        >
-          <Trophy size={48} style={{ color: "#a67c52", marginBottom: "16px" }} />
-          <h3 style={{ color: "#5d4037", marginBottom: "8px" }}>No Successful Deals Yet</h3>
-          <p style={{ color: "#7d5a50" }}>
-            Your successful investment deals will appear here once you complete funding transactions.
-          </p>
-        </div>
-      )}
 
       {/* Deal Details Modal */}
       {selectedDeal && (
@@ -854,22 +773,45 @@ const InvestorTabbedTables = ({ filters, stageFilter, activeTab, setActiveTab, o
     gap: "8px",
   })
 
-  // Calculate counts for tab badges
-  const smeOpportunitiesCount = 8
   const [portfolioCompaniesCount, setPortfolioCompaniesCount] = useState(0)
 
   useEffect(() => {
     const fetchSuccessfulDealsCount = async () => {
       try {
-        const q = query(collection(db, "investorApplications"), where("pipelineStage", "==", "Deal Complete"))
+        const auth = getAuth()
+        const user = auth.currentUser
+        if (!user) {
+          setPortfolioCompaniesCount(0)
+          return
+        }
+        
+        // Count only Deal Complete applications for CURRENT investor
+        const q = query(
+          collection(db, "investorApplications"), 
+          where("funderId", "==", user.uid),
+          where("pipelineStage", "in", ["Deal Complete", "deal complete", "deals closed", "Deals Closed"])
+        )
         const snapshot = await getDocs(q)
         setPortfolioCompaniesCount(snapshot.size)
       } catch (error) {
         console.error("Error fetching successful deals count:", error)
+        setPortfolioCompaniesCount(0)
       }
     }
 
     fetchSuccessfulDealsCount()
+    
+    // Add listener for auth state changes
+    const auth = getAuth()
+    const unsubscribe = auth.onAuthStateChanged((user) => {
+      if (user) {
+        fetchSuccessfulDealsCount()
+      } else {
+        setPortfolioCompaniesCount(0)
+      }
+    })
+    
+    return () => unsubscribe()
   }, [])
 
   return (
@@ -903,7 +845,6 @@ const InvestorTabbedTables = ({ filters, stageFilter, activeTab, setActiveTab, o
         >
           <Users size={18} />
           My Matches
-          
         </button>
 
         <button
@@ -965,7 +906,6 @@ const InvestorTabbedTables = ({ filters, stageFilter, activeTab, setActiveTab, o
         {activeTab === "portfolio" && <SuccessfulDealsTable />}
       </div>
 
-      {/* Enhanced styling for tab transitions */}
       <style>{`
         @keyframes fadeIn {
           from { 
