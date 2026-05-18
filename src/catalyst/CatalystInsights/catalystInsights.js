@@ -1,14 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { Chart, registerables } from "chart.js";
-import {
-  BarChart, PieChart, LineChart,
-  TrendingUp, DollarSign, Users, Clock,
-  Rocket, Target, Award, Activity
-} from "lucide-react";
+import { TrendingUp, DollarSign, Users, Clock, Rocket, Target, Award, Activity } from "lucide-react";
 import { Bar, Doughnut } from "react-chartjs-2";
 import { usePortfolio } from "../../context/PortfolioContext";
+import TopBottom from "../MyInvestment/TopBottom";
+import "../../styles/insights-grid.css";
 
 Chart.register(...registerables);
 
@@ -93,6 +91,33 @@ const csDoughnutOpts = {
     datalabels: { color: BP.offwhite },
   },
 };
+
+const csMonthlyComboOpts = (max) => ({
+  responsive: true,
+  maintainAspectRatio: false,
+  animation: false,
+  plugins: {
+    legend: {
+      position: "bottom",
+      labels: { color: BP.dark, font: { size: 11 }, boxWidth: 12 },
+    },
+    datalabels: { display: false },
+  },
+  scales: {
+    x: {
+      grid: { display: false },
+      ticks: { color: BP.dark, font: { size: 10 } },
+      title: { display: true, text: "Month", color: BP.dark },
+    },
+    y: {
+      beginAtZero: true,
+      max,
+      grid: { color: BP.offwhite },
+      ticks: { color: BP.dark, callback: (v) => Number.isInteger(v) ? v : "" },
+      title: { display: true, text: "Number of Applications", color: BP.dark },
+    },
+  },
+});
 
 // ── Shared primitives ─────────────────────────────────────────────────────────
 const CsCard = ({ title, footer, children }) => (
@@ -221,7 +246,7 @@ const CsAverageMatchStrength = ({ metrics, portfolioMetrics }) => {
         view === "range"
           ? <CsScoreRangeView min={m.min} pipelineAvg={m.avg} max={m.max} target={75} ecoSystemAvg={m.avg} />
           : <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-              <div style={{ height: CS_CHART_H }}>
+              <div style={{ flex: 1, minHeight: 0 }}>
                 <Bar options={csHistogramOpts(v => v, "Average Match Strength (%)")} data={buildHistogramData(ecosystemDist, portfolioDist)} />
               </div>
             </div>
@@ -246,7 +271,7 @@ const CsAverageBIGScore = ({ metrics, portfolioMetrics }) => {
         view === "range"
           ? <CsScoreRangeView min={b.min} pipelineAvg={b.avg} max={b.max} target={70} ecoSystemAvg={b.avg} />
           : <div style={{ flex: 1, display: "flex", flexDirection: "column" }}>
-              <div style={{ height: CS_CHART_H }}>
+              <div style={{ flex: 1, minHeight: 0 }}>
                 <Bar options={csHistogramOpts(v => v, "Average BIG Score (%)")} data={buildHistogramData(ecosystemDist, portfolioDist)} />
               </div>
             </div>
@@ -344,7 +369,7 @@ const CsSMEPipelineProgress = ({ metrics }) => {
                 <Bar options={csHBarOpts(true)} data={{ labels: hbarLabels, datasets: [{ label: "# SMEs", data: hbarValues, backgroundColor: BCOLORS.slice(0, hbarLabels.length) }] }} />
               </div>
             ) : (
-              <div style={{ height: CS_CHART_H }}>
+              <div style={{ flex: 1, minHeight: 0 }}>
                 <Doughnut options={csDoughnutOpts} data={{ labels: doughnutLabels, datasets: [{ data: doughnutValues, backgroundColor: BCOLORS.slice(0, doughnutLabels.length), borderWidth: 2, borderColor: "#fff" }] }} />
               </div>
             )}
@@ -469,7 +494,6 @@ const CohortSelectionTabContent = () => {
 // ── Main Component ────────────────────────────────────────────────────────────
 export function AcceleratorInsights() {
   const [activeTab, setActiveTab] = useState("cohort-selection");
-  const charts = useRef([]);
 
   // All data sourced from the universal batch — same view for every logged-in user
   const { universalEnriched, universalMetrics, loading } = usePortfolio();
@@ -692,6 +716,7 @@ export function AcceleratorInsights() {
     matchRate:                    universalMetrics?.match?.avg           ?? 0,
     averageFundingAmount:         universalMetrics?.funding?.avg         ?? 0,
     activeFundersCount:           new Set(apps.map(a => a.catalystId).filter(Boolean)).size,
+    totalSMEs:                    universalMetrics?.totalSMEs            ?? apps.length,
     averageProcessingTime:        universalMetrics?.vetting?.avg         ?? 0,
     supportTypeBreakdown:         processSupportTypeBreakdown(),
     activeProgramsByStage:        processActiveProgramsByStage(),
@@ -710,114 +735,23 @@ export function AcceleratorInsights() {
   const memoizedInsights = useDeepCompareMemo(insightsData);
 
   // ── Chart refs ────────────────────────────────────────────────────────────
-  const chartRefs = {
-    supportTypeBreakdown:           useRef(null),
-    activeProgramsByStage:          useRef(null),
-    programsBySector:               useRef(null),
-    smeIndustryMatchDistribution:   useRef(null),
-    avgIntakeByIndustry:            useRef(null),
-    bigScoreComparison:             useRef(null),
-    avgFundingSecuredByProgramType: useRef(null),
-    completionRateByProgramType:    useRef(null),
-    applicationVolumeOverTime:      useRef(null),
-    timeToAcceptanceByMonth:        useRef(null),
-    rejectedVsAcceptedApplicants:   useRef(null),
-  };
+  const ceilMax = (vals) => Math.ceil(Math.max(0, ...(vals || []).map(v => Number(v) || 0)));
+  const fmtLabel = (l) => l.split("_").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+  const csHBarOptsWithMax = (xTitle, max, stacked = false, tickCb) => ({
+    ...csHBarOpts(true),
+    scales: {
+      x: {
+        ...csHBarOpts(true).scales.x,
+        max,
+        stacked,
+        title: { display: true, text: xTitle, color: BP.dark },
+        ticks: { ...csHBarOpts(true).scales.x.ticks, callback: tickCb || (v => Number.isInteger(v) ? v : "") },
+      },
+      y: { ...csHBarOpts(true).scales.y, stacked },
+    },
+  });
 
-  useEffect(() => {
-    if (loading) return;
-    charts.current.forEach(c => c.destroy());
-    charts.current = [];
-
-    const bp = {
-      primary: "#6d4c41", secondary: "#8d6e63", tertiary: "#a1887f",
-      light: "#bcaaa4", lighter: "#d7ccc8", lightest: "#efebe9",
-      accent1: "#5d4037", accent2: "#4e342e", accent3: "#3e2723",
-    };
-    const fmtLabel = (l) => l.split("_").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
-    const createChart = (ref, config) => {
-      if (!ref.current) return;
-      const ctx = ref.current.getContext("2d");
-      if (ctx) charts.current.push(new Chart(ctx, config));
-    };
-    const yScale = (title) => ({
-      beginAtZero: true, max: 50,
-      title: { display: true, text: title, color: bp.primary },
-      ticks: { color: bp.primary, font: { size: 10 }, stepSize: 10 },
-      grid: { color: bp.lighter },
-    });
-    const xBase = { ticks: { color: bp.primary, font: { size: 10 } }, grid: { color: bp.lighter } };
-
-    if (activeTab === "program-types") {
-      createChart(chartRefs.supportTypeBreakdown, {
-        type: "bar",
-        data: { labels: Object.keys(memoizedInsights.supportTypeBreakdown).map(fmtLabel), datasets: [{ label: "Programs", data: Object.values(memoizedInsights.supportTypeBreakdown), backgroundColor: bp.primary, borderColor: bp.accent1, borderWidth: 1 }] },
-        options: { responsive: true, maintainAspectRatio: false, plugins: { title: { display: true, text: "Support Type Breakdown", color: bp.primary, font: { weight: "bold", size: 12 } }, legend: { display: false } }, scales: { x: { ...xBase, title: { display: true, text: "Support Type", color: bp.primary }, ticks: { ...xBase.ticks, maxRotation: 45 } }, y: yScale("Number of SMEs") } },
-      });
-      createChart(chartRefs.activeProgramsByStage, {
-        type: "bar",
-        data: { labels: Object.keys(memoizedInsights.activeProgramsByStage), datasets: [{ label: "SMEs", data: Object.values(memoizedInsights.activeProgramsByStage), backgroundColor: bp.secondary, borderColor: bp.primary, borderWidth: 1 }] },
-        options: { indexAxis: "y", responsive: true, maintainAspectRatio: false, plugins: { title: { display: true, text: "SMEs by Operation Stage", color: bp.primary, font: { weight: "bold", size: 12 } }, legend: { display: false } }, scales: { x: yScale("Number of SMEs"), y: { ...xBase, title: { display: true, text: "Stage", color: bp.primary } } } },
-      });
-    }
-
-    if (activeTab === "sector-focus") {
-      createChart(chartRefs.programsBySector, {
-        type: "bar",
-        data: { labels: Object.keys(memoizedInsights.programsBySector).map(fmtLabel), datasets: [{ label: "SMEs", data: Object.values(memoizedInsights.programsBySector), backgroundColor: bp.accent1, borderColor: bp.primary, borderWidth: 1 }] },
-        options: { indexAxis: "y", responsive: true, maintainAspectRatio: false, plugins: { title: { display: true, text: "Support Focus Distribution", color: bp.primary, font: { weight: "bold", size: 12 } }, legend: { display: false } }, scales: { x: yScale("Number of SMEs"), y: { ...xBase, title: { display: true, text: "Support Focus", color: bp.primary } } } },
-      });
-      createChart(chartRefs.smeIndustryMatchDistribution, {
-        type: "bar",
-        data: { labels: Object.keys(memoizedInsights.smeIndustryMatchDistribution), datasets: [{ label: "Approved", data: Object.values(memoizedInsights.smeIndustryMatchDistribution).map(d => d.matched), backgroundColor: bp.primary }, { label: "In Pipeline", data: Object.values(memoizedInsights.smeIndustryMatchDistribution).map(d => d.unmatched), backgroundColor: bp.lighter }] },
-        options: { indexAxis: "y", responsive: true, maintainAspectRatio: false, plugins: { title: { display: true, text: "SME Industry Match Distribution", color: bp.primary, font: { weight: "bold", size: 12 } }, legend: { position: "top", labels: { color: bp.primary, font: { size: 10 } } } }, scales: { x: { stacked: true, beginAtZero: true, max: 100, title: { display: true, text: "SME Count", color: bp.primary }, ticks: { color: bp.primary, font: { size: 10 }, stepSize: 20 }, grid: { color: bp.lighter } }, y: { stacked: true, ...xBase, title: { display: true, text: "Industry", color: bp.primary } } } },
-      });
-      createChart(chartRefs.avgIntakeByIndustry, {
-        type: "bar",
-        data: { labels: Object.keys(memoizedInsights.avgIntakeByIndustry), datasets: [{ label: "SMEs", data: Object.values(memoizedInsights.avgIntakeByIndustry), backgroundColor: bp.tertiary, borderColor: bp.primary, borderWidth: 1 }] },
-        options: { responsive: true, maintainAspectRatio: false, plugins: { title: { display: true, text: "SME Intake by Industry", color: bp.primary, font: { weight: "bold", size: 12 } }, legend: { display: false } }, scales: { x: { ...xBase, title: { display: true, text: "Industry", color: bp.primary }, ticks: { ...xBase.ticks, maxRotation: 45 } }, y: yScale("Number of SMEs") } },
-      });
-    }
-
-    if (activeTab === "outcomes-effectiveness") {
-      createChart(chartRefs.bigScoreComparison, {
-        type: "bar",
-        data: { labels: Object.keys(memoizedInsights.bigScoreComparison), datasets: [{ label: "Average BIG Score", data: Object.values(memoizedInsights.bigScoreComparison), backgroundColor: [bp.lighter, bp.primary], borderColor: bp.accent1, borderWidth: 1 }] },
-        options: { responsive: true, maintainAspectRatio: false, plugins: { title: { display: true, text: "BIG Score: Approved vs In Pipeline", color: bp.primary, font: { weight: "bold", size: 12 } }, legend: { display: false } }, scales: { x: { ...xBase, title: { display: true, text: "Catalyst Stage", color: bp.primary } }, y: { beginAtZero: true, max: 100, title: { display: true, text: "Average BIG Score", color: bp.primary }, ticks: { color: bp.primary, font: { size: 10 }, stepSize: 20 }, grid: { color: bp.lighter } } } },
-      });
-      createChart(chartRefs.avgFundingSecuredByProgramType, {
-        type: "bar",
-        data: { labels: Object.keys(memoizedInsights.avgFundingSecuredByProgramType).map(fmtLabel), datasets: [{ label: "Avg Funding (ZAR)", data: Object.values(memoizedInsights.avgFundingSecuredByProgramType), backgroundColor: bp.light, borderColor: bp.primary, borderWidth: 1 }] },
-        options: { responsive: true, maintainAspectRatio: false, plugins: { title: { display: true, text: "Avg. Funding Required by Program Type", color: bp.primary, font: { weight: "bold", size: 12 } }, legend: { display: false } }, scales: { x: { ...xBase, title: { display: true, text: "Program Type", color: bp.primary }, ticks: { ...xBase.ticks, maxRotation: 45 } }, y: { beginAtZero: true, max: 50, title: { display: true, text: "Avg Funding (Millions ZAR)", color: bp.primary }, ticks: { color: bp.primary, font: { size: 10 }, callback: v => v + "M", stepSize: 10 }, grid: { color: bp.lighter } } } },
-      });
-      createChart(chartRefs.completionRateByProgramType, {
-        type: "bar",
-        data: { labels: memoizedInsights.completionRateByProgramType.map(d => fmtLabel(d.type)), datasets: [{ label: "Approval Rate (%)", data: memoizedInsights.completionRateByProgramType.map(d => d.rate), backgroundColor: bp.primary, borderColor: bp.accent1, borderWidth: 1 }] },
-        options: { indexAxis: "y", responsive: true, maintainAspectRatio: false, plugins: { title: { display: true, text: "Approval Rate by Program Type", color: bp.primary, font: { weight: "bold", size: 12 } }, legend: { display: false } }, scales: { x: { beginAtZero: true, max: 100, title: { display: true, text: "Approval Rate (%)", color: bp.primary }, ticks: { color: bp.primary, font: { size: 10 }, callback: v => v + "%", stepSize: 20 }, grid: { color: bp.lighter } }, y: { ...xBase, title: { display: true, text: "Program Type", color: bp.primary } } } },
-      });
-    }
-
-    if (activeTab === "engagement-patterns") {
-      const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-      createChart(chartRefs.applicationVolumeOverTime, {
-        type: "line",
-        data: { labels: memoizedInsights.applicationVolumeOverTime.map(d => d.month), datasets: [{ label: "Applications", data: memoizedInsights.applicationVolumeOverTime.map(d => d.applications), borderColor: bp.primary, backgroundColor: bp.lighter, tension: 0.4, fill: true, pointBackgroundColor: bp.primary, pointRadius: 4 }] },
-        options: { responsive: true, maintainAspectRatio: false, plugins: { title: { display: true, text: "Application Volume Over Time", color: bp.primary, font: { weight: "bold", size: 12 } }, legend: { display: false } }, scales: { x: { ...xBase, title: { display: true, text: "Month", color: bp.primary } }, y: yScale("Applications") } },
-      });
-      createChart(chartRefs.rejectedVsAcceptedApplicants, {
-        type: "doughnut",
-        data: { labels: Object.keys(memoizedInsights.rejectedVsAcceptedApplicants), datasets: [{ data: Object.values(memoizedInsights.rejectedVsAcceptedApplicants), backgroundColor: [bp.primary, bp.lighter], borderWidth: 1 }] },
-        options: { responsive: true, maintainAspectRatio: false, plugins: { title: { display: true, text: "Rejected vs Accepted Applicants", color: bp.primary, font: { weight: "bold", size: 12 } }, legend: { position: "bottom", labels: { color: bp.primary, boxWidth: 8, padding: 8, font: { size: 9 } } } } },
-      });
-      createChart(chartRefs.timeToAcceptanceByMonth, {
-        type: "line",
-        data: { labels: months, datasets: [{ label: "Applications Submitted", data: months.map(m => memoizedInsights.timeToAcceptanceData.applied[m] || 0), borderColor: bp.primary, backgroundColor: "transparent", tension: 0.4, pointBackgroundColor: bp.primary, pointRadius: 4 }, { label: "Applications Accepted", data: months.map(m => memoizedInsights.timeToAcceptanceData.accepted[m] || 0), borderColor: bp.secondary, backgroundColor: "transparent", tension: 0.4, pointBackgroundColor: bp.secondary, pointRadius: 4 }] },
-        options: { responsive: true, maintainAspectRatio: false, plugins: { title: { display: true, text: "Applications vs Acceptances by Month", color: bp.primary, font: { weight: "bold", size: 12 } }, legend: { position: "top", labels: { color: bp.primary, font: { size: 10 } } } }, scales: { x: { ...xBase, title: { display: true, text: "Month", color: bp.primary } }, y: yScale("Number of Applications") } },
-      });
-    }
-
-    return () => { charts.current.forEach(c => c.destroy()); };
-  }, [activeTab, memoizedInsights, loading]);
+  
 
   // ── Tab config ────────────────────────────────────────────────────────────
   const tabs = [
@@ -826,12 +760,13 @@ export function AcceleratorInsights() {
     { id: "sector-focus",           label: "Sector Focus",             icon: Target   },
     { id: "outcomes-effectiveness", label: "Outcomes & Effectiveness", icon: Award    },
     { id: "engagement-patterns",    label: "Engagement Patterns",      icon: Activity },
+    { id: "top-bottom",             label: "Top & Bottom",             icon: Award    },
   ];
 
   const statCards = [
     { icon: TrendingUp, value: `${memoizedInsights.matchRate}%`,                                 label: "Ecosystem Match Rate"  },
     { icon: DollarSign, value: `R${memoizedInsights.averageFundingAmount >= 1000000 ? (memoizedInsights.averageFundingAmount / 1000000).toFixed(2) + 'M' : (memoizedInsights.averageFundingAmount / 1000).toFixed(0) + 'K'}`, label: "Avg. Funding Required" },
-    { icon: Users,      value: `${memoizedInsights.activeFundersCount}`,                          label: "Active Catalysts"      },
+    { icon: Users,      value: `${memoizedInsights.activeFundersCount}/${memoizedInsights.totalSMEs}`, label: "Catalysts to SMEs Ratio" },
     { icon: Clock,      value: `${memoizedInsights.averageProcessingTime}d`,                      label: "Avg. Vetting Time"     },
   ];
 
@@ -878,7 +813,7 @@ export function AcceleratorInsights() {
         ))}
       </div>
 
-      <div className={activeTab === "cohort-selection" ? "" : "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5"}>
+      <div className={activeTab === "cohort-selection" || activeTab === "top-bottom" ? "" : "insights-grid"}>
 
         {activeTab === "cohort-selection" && <CohortSelectionTabContent />}
 
@@ -886,29 +821,27 @@ export function AcceleratorInsights() {
           <><CanvasCardSkeleton /><CanvasCardSkeleton /><LeaderboardSkeleton /></>
         ) : (
           <>
-            <div className="bg-white rounded-2xl border border-lightTan p-4 shadow-sm" style={{ height: 280 }}>
-              <canvas ref={chartRefs.supportTypeBreakdown} />
-            </div>
-            <div className="bg-white rounded-2xl border border-lightTan p-4 shadow-sm" style={{ height: 280 }}>
-              <canvas ref={chartRefs.activeProgramsByStage} />
-            </div>
-            <div className="bg-white rounded-2xl border border-lightTan p-5 shadow-sm flex flex-col">
-              <h3 className="text-sm font-bold text-mediumBrown mb-4 m-0">Top 3 Longest Active SMEs</h3>
+            <CsCard title="Support Type Breakdown">
+              <div style={{ flex: 1, minHeight: 0 }}>
+                <Bar data={{ labels: Object.keys(memoizedInsights.supportTypeBreakdown).map(fmtLabel), datasets: [{ label: "Programs", data: Object.values(memoizedInsights.supportTypeBreakdown), backgroundColor: BCOLORS.slice(0, Object.keys(memoizedInsights.supportTypeBreakdown).length) }] }} options={csHBarOptsWithMax("Number of SMEs", ceilMax(Object.values(memoizedInsights.supportTypeBreakdown)))} />
+              </div>
+            </CsCard>
+            <CsCard title="SMEs by Operation Stage">
+              <div style={{ flex: 1, minHeight: 0 }}>
+                <Bar data={{ labels: Object.keys(memoizedInsights.activeProgramsByStage), datasets: [{ label: "SMEs", data: Object.values(memoizedInsights.activeProgramsByStage), backgroundColor: BCOLORS.slice(0, Object.keys(memoizedInsights.activeProgramsByStage).length) }] }} options={csHBarOptsWithMax("Number of SMEs", ceilMax(Object.values(memoizedInsights.activeProgramsByStage)))} />
+              </div>
+            </CsCard>
+            <CsCard title="Top 3 Longest Active SMEs">
               <div className="flex flex-col gap-0 flex-1">
                 {memoizedInsights.longestRunningPrograms.map((prog, i) => (
                   <div key={i} className="flex items-center gap-3 py-3 border-b border-lightTan last:border-0">
-                    <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0 ${i === 0 ? "bg-accentGold" : i === 1 ? "bg-lightBrown" : "bg-lightTan text-textBrown"}`}>
-                      #{i + 1}
-                    </span>
+                    <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0 ${i === 0 ? "bg-accentGold" : i === 1 ? "bg-lightBrown" : "bg-lightTan text-textBrown"}`}>#{i + 1}</span>
                     <span className="flex-1 text-sm text-textBrown font-medium truncate">{prog.name}</span>
                     <span className="text-xs text-lightBrown whitespace-nowrap">{prog.daysSinceSubmission}d ago</span>
                   </div>
                 ))}
-                {memoizedInsights.longestRunningPrograms.length === 0 && (
-                  <p className="text-sm text-lightBrown italic">No programs found</p>
-                )}
               </div>
-            </div>
+            </CsCard>
           </>
         ))}
 
@@ -916,15 +849,9 @@ export function AcceleratorInsights() {
           <><CanvasCardSkeleton /><CanvasCardSkeleton /><CanvasCardSkeleton /></>
         ) : (
           <>
-            <div className="bg-white rounded-2xl border border-lightTan p-4 shadow-sm" style={{ height: 280 }}>
-              <canvas ref={chartRefs.programsBySector} />
-            </div>
-            <div className="bg-white rounded-2xl border border-lightTan p-4 shadow-sm" style={{ height: 280 }}>
-              <canvas ref={chartRefs.smeIndustryMatchDistribution} />
-            </div>
-            <div className="bg-white rounded-2xl border border-lightTan p-4 shadow-sm" style={{ height: 280 }}>
-              <canvas ref={chartRefs.avgIntakeByIndustry} />
-            </div>
+            <CsCard title="Support Focus Distribution"><div style={{ flex: 1, minHeight: 0 }}><Bar data={{ labels: Object.keys(memoizedInsights.programsBySector).map(fmtLabel), datasets: [{ label: "SMEs", data: Object.values(memoizedInsights.programsBySector), backgroundColor: BCOLORS.slice(0, Object.keys(memoizedInsights.programsBySector).length) }] }} options={csHBarOptsWithMax("Number of SMEs", ceilMax(Object.values(memoizedInsights.programsBySector)))} /></div></CsCard>
+            <CsCard title="SME Industry Match Distribution"><div style={{ flex: 1, minHeight: 0 }}><Bar data={{ labels: Object.keys(memoizedInsights.smeIndustryMatchDistribution), datasets: [{ label: "Approved", data: Object.values(memoizedInsights.smeIndustryMatchDistribution).map(d => d.matched), backgroundColor: BP.dark }, { label: "In Pipeline", data: Object.values(memoizedInsights.smeIndustryMatchDistribution).map(d => d.unmatched), backgroundColor: BP.pale }] }} options={csHBarOptsWithMax("SME Count", ceilMax(Object.values(memoizedInsights.smeIndustryMatchDistribution).map(d => (d.matched || 0) + (d.unmatched || 0))), true)} /></div></CsCard>
+            <CsCard title="SME Intake by Industry"><div style={{ flex: 1, minHeight: 0 }}><Bar data={{ labels: Object.keys(memoizedInsights.avgIntakeByIndustry), datasets: [{ label: "SMEs", data: Object.values(memoizedInsights.avgIntakeByIndustry), backgroundColor: BCOLORS.slice(0, Object.keys(memoizedInsights.avgIntakeByIndustry).length) }] }} options={csHBarOptsWithMax("Number of SMEs", ceilMax(Object.values(memoizedInsights.avgIntakeByIndustry)))} /></div></CsCard>
           </>
         ))}
 
@@ -932,15 +859,9 @@ export function AcceleratorInsights() {
           <><CanvasCardSkeleton /><CanvasCardSkeleton /><CanvasCardSkeleton /></>
         ) : (
           <>
-            <div className="bg-white rounded-2xl border border-lightTan p-4 shadow-sm" style={{ height: 280 }}>
-              <canvas ref={chartRefs.bigScoreComparison} />
-            </div>
-            <div className="bg-white rounded-2xl border border-lightTan p-4 shadow-sm" style={{ height: 280 }}>
-              <canvas ref={chartRefs.avgFundingSecuredByProgramType} />
-            </div>
-            <div className="bg-white rounded-2xl border border-lightTan p-4 shadow-sm" style={{ height: 280 }}>
-              <canvas ref={chartRefs.completionRateByProgramType} />
-            </div>
+            <CsCard title="BIG Score: Approved vs In Pipeline"><div style={{ flex: 1, minHeight: 0 }}><Bar data={{ labels: Object.keys(memoizedInsights.bigScoreComparison), datasets: [{ label: "Average BIG Score", data: Object.values(memoizedInsights.bigScoreComparison), backgroundColor: [BP.pale, BP.dark] }] }} options={csHBarOptsWithMax("Average BIG Score", ceilMax(Object.values(memoizedInsights.bigScoreComparison)))} /></div></CsCard>
+            <CsCard title="Avg. Funding Required by Program Type"><div style={{ flex: 1, minHeight: 0 }}><Bar data={{ labels: Object.keys(memoizedInsights.avgFundingSecuredByProgramType).map(fmtLabel), datasets: [{ label: "Avg Funding (ZAR)", data: Object.values(memoizedInsights.avgFundingSecuredByProgramType), backgroundColor: BCOLORS.slice(0, Object.keys(memoizedInsights.avgFundingSecuredByProgramType).length) }] }} options={csHBarOptsWithMax("Avg Funding (Millions ZAR)", ceilMax(Object.values(memoizedInsights.avgFundingSecuredByProgramType)), false, (v) => Number.isInteger(v) ? `${v}M` : "")} /></div></CsCard>
+            <CsCard title="Approval Rate by Program Type"><div style={{ flex: 1, minHeight: 0 }}><Bar data={{ labels: memoizedInsights.completionRateByProgramType.map(d => fmtLabel(d.type)), datasets: [{ label: "Approval Rate (%)", data: memoizedInsights.completionRateByProgramType.map(d => d.rate), backgroundColor: BCOLORS.slice(0, memoizedInsights.completionRateByProgramType.length) }] }} options={csHBarOptsWithMax("Approval Rate (%)", ceilMax(memoizedInsights.completionRateByProgramType.map(d => d.rate)), false, (v) => Number.isInteger(v) ? `${v}%` : "")} /></div></CsCard>
           </>
         ))}
 
@@ -948,17 +869,12 @@ export function AcceleratorInsights() {
           <><CanvasCardSkeleton /><CanvasCardSkeleton /><CanvasCardSkeleton /></>
         ) : (
           <>
-            <div className="bg-white rounded-2xl border border-lightTan p-4 shadow-sm" style={{ height: 280 }}>
-              <canvas ref={chartRefs.applicationVolumeOverTime} />
-            </div>
-            <div className="bg-white rounded-2xl border border-lightTan p-4 shadow-sm" style={{ height: 280 }}>
-              <canvas ref={chartRefs.rejectedVsAcceptedApplicants} />
-            </div>
-            <div className="bg-white rounded-2xl border border-lightTan p-4 shadow-sm" style={{ height: 280 }}>
-              <canvas ref={chartRefs.timeToAcceptanceByMonth} />
-            </div>
+            <CsCard title="Rejected vs Accepted Applicants"><div style={{ flex: 1, minHeight: 0 }}><Doughnut options={csDoughnutOpts} data={{ labels: Object.keys(memoizedInsights.rejectedVsAcceptedApplicants), datasets: [{ data: Object.values(memoizedInsights.rejectedVsAcceptedApplicants), backgroundColor: [BP.dark, BP.pale], borderWidth: 2, borderColor: "#fff" }] }} /></div></CsCard>
+            <CsCard title="Applications vs Acceptances by Month"><div style={{ flex: 1, minHeight: 0 }}><Bar data={{ labels: ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"], datasets: [{ type: "bar", label: "Applications Submitted", data: ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"].map(m => memoizedInsights.timeToAcceptanceData.applied[m] || 0), backgroundColor: BP.warm, borderRadius: 4 }, { type: "line", label: "Applications Approved", data: ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"].map(m => memoizedInsights.timeToAcceptanceData.accepted[m] || 0), borderColor: PORTFOLIO_LINE_COLOR, backgroundColor: "transparent", tension: 0.35, pointBackgroundColor: PORTFOLIO_LINE_COLOR, pointBorderColor: "#fff", pointBorderWidth: 2, pointRadius: 4, pointHoverRadius: 6 }] }} options={csMonthlyComboOpts(ceilMax([..."Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec".split(" ").map(m => memoizedInsights.timeToAcceptanceData.applied[m] || 0), ..."Jan Feb Mar Apr May Jun Jul Aug Sep Oct Nov Dec".split(" ").map(m => memoizedInsights.timeToAcceptanceData.accepted[m] || 0)]))} /></div></CsCard>
           </>
         ))}
+
+        {activeTab === "top-bottom" && <TopBottom metrics={universalMetrics} />}
 
       </div>
     </div>

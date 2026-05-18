@@ -7,6 +7,7 @@ import { getAuth } from "firebase/auth"
 import { collection, query, where, onSnapshot, getDocs } from "firebase/firestore"
 import { db } from "../../firebaseConfig";
 import "../MyFunderMatches/funding-insights.css"
+import "../../styles/insights-grid.css"
 
 Chart.register(...registerables)
 

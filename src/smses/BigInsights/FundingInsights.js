@@ -6,6 +6,7 @@ import { TrendingUp, DollarSign, Users, Clock, Building2, MapPin, Target, Award 
 import { collection, onSnapshot, query, where, getDocs } from "firebase/firestore"
 import { db } from "../../firebaseConfig"
 import "../MyFunderMatches/funding-insights.css"
+import "../../styles/insights-grid.css"
 
 Chart.register(...registerables)
 
