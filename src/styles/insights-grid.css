@@ -1,0 +1,368 @@
+/* ─────────────────────────────────────────────────────────────────────────────
+   Unified Insights Grid & Card Styling
+   Standardized layout for all Big Insights sections across all profiles
+   ───────────────────────────────────────────────────────────────────────────── */
+
+/* ─ Brown Palette (CSS Variables) ─ */
+:root {
+  --insights-darkest: #3b2409;
+  --insights-dark: #5e3f26;
+  --insights-medium: #7d5a36;
+  --insights-warm: #9c7c54;
+  --insights-light: #b8a082;
+  --insights-pale: #d4c4b0;
+  --insights-offwhite: #f0e8de;
+  --insights-bg: #ffffff;
+  --insights-shadow: 0 2px 10px rgba(59, 36, 9, 0.07);
+  --insights-border: 1px solid #d4c4b0;
+  --insights-gap: 20px;
+}
+
+/* ─ Insights Grid (2-column auto-responsive) ─ */
+.insights-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+  gap: var(--insights-gap);
+  width: 100%;
+}
+
+/* Responsive adjustments for very small screens */
+@media (max-width: 640px) {
+  .insights-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ─ Insights Card Container ─ */
+.insights-card {
+  background: var(--insights-bg);
+  border-radius: 10px;
+  border: var(--insights-border);
+  box-shadow: var(--insights-shadow);
+  padding: 20px;
+  min-height: 460px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* ─ Card Header ─ */
+.insights-card-header {
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--insights-offwhite);
+  margin-bottom: 8px;
+  flex-shrink: 0;
+}
+
+.insights-card-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--insights-dark);
+  margin: 0;
+}
+
+/* ─ Card Body (Main Content) ─ */
+.insights-card-body {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ─ Card Footer ─ */
+.insights-card-footer {
+  margin-top: 8px;
+  padding: 7px 10px;
+  background: var(--insights-offwhite);
+  border-radius: 6px;
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--insights-warm);
+  font-weight: 500;
+}
+
+/* ─ Chart Container ─ */
+.insights-chart-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  overflow: auto;
+}
+
+/* Fixed height for canvas charts */
+.insights-chart-height {
+  height: 260px;
+}
+
+/* ─ Empty State ─ */
+.insights-empty {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--insights-light);
+  font-size: 12px;
+  font-style: italic;
+}
+
+/* ─ Pill Button (for view toggles) ─ */
+.insights-pill {
+  padding: 5px 14px;
+  border-radius: 20px;
+  cursor: pointer;
+  font-size: 11px;
+  border: 1.5px solid var(--insights-pale);
+  font-weight: 500;
+  background: var(--insights-bg);
+  color: var(--insights-medium);
+  transition: all 0.2s ease;
+}
+
+.insights-pill.active {
+  border-color: var(--insights-medium);
+  font-weight: 700;
+  background: var(--insights-medium);
+  color: var(--insights-bg);
+}
+
+.insights-pill:hover {
+  border-color: var(--insights-medium);
+}
+
+/* ─ Pill Container ─ */
+.insights-pill-group {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 10px;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+}
+
+/* ─ Skeleton Loaders ─ */
+@keyframes shimmer {
+  0% {
+    background-position: -1000px 0;
+  }
+  100% {
+    background-position: 1000px 0;
+  }
+}
+
+.insights-skeleton-card {
+  background: var(--insights-bg);
+  border-radius: 10px;
+  border: var(--insights-border);
+  box-shadow: var(--insights-shadow);
+  padding: 20px;
+  min-height: 460px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.shimmer-element {
+  background: linear-gradient(
+    90deg,
+    var(--insights-offwhite) 25%,
+    var(--insights-pale) 50%,
+    var(--insights-offwhite) 75%
+  );
+  background-size: 1000px 100%;
+  animation: shimmer 2s infinite;
+  border-radius: 6px;
+}
+
+.shimmer-title {
+  height: 16px;
+  width: 60%;
+  border-radius: 4px;
+}
+
+.shimmer-content {
+  flex: 1;
+  border-radius: 8px;
+}
+
+/* ─ Stats Display ─ */
+.insights-stat-large {
+  font-size: 64px;
+  font-weight: 800;
+  color: var(--insights-darkest);
+  line-height: 1;
+  margin: 0;
+}
+
+.insights-stat-suffix {
+  font-size: 32px;
+}
+
+.insights-stat-label {
+  font-size: 14px;
+  color: var(--insights-medium);
+  font-weight: 600;
+  margin-top: 8px;
+}
+
+/* ─ Progress Bar ─ */
+.insights-progress-bar {
+  width: 100%;
+  background: var(--insights-pale);
+  border-radius: 6px;
+  height: 12px;
+  overflow: hidden;
+  margin: 8px 0;
+}
+
+.insights-progress-fill {
+  height: 100%;
+  background: var(--insights-medium);
+  border-radius: 6px;
+  transition: width 0.3s ease;
+}
+
+/* ─ Leaderboard / List Items ─ */
+.insights-list-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--insights-pale);
+}
+
+.insights-list-item:last-child {
+  border-bottom: none;
+}
+
+.insights-list-rank {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--insights-bg);
+  flex-shrink: 0;
+}
+
+.insights-list-rank.rank-1 {
+  background: #d4a574;
+}
+
+.insights-list-rank.rank-2 {
+  background: var(--insights-light);
+}
+
+.insights-list-rank.rank-3 {
+  background: var(--insights-pale);
+  color: var(--insights-dark);
+}
+
+.insights-list-content {
+  flex: 1;
+  font-size: 13px;
+  color: var(--insights-dark);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.insights-list-meta {
+  font-size: 11px;
+  color: var(--insights-light);
+  white-space: nowrap;
+}
+
+/* ─ Utility: Flex Center ─ */
+.insights-flex-center {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+/* ─ Horizontal Bar Container ─ */
+.insights-hbar-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+}
+
+/* ─ Doughnut/Pie Container ─ */
+.insights-doughnut-container {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ─ Range Display ─ */
+.insights-range-display {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.insights-range-bar-wrapper {
+  position: relative;
+  width: 100%;
+  height: 12px;
+  background: var(--insights-pale);
+  border-radius: 6px;
+  overflow: visible;
+  margin-bottom: 8px;
+}
+
+.insights-range-segment {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.insights-range-labels {
+  position: relative;
+  width: 100%;
+  height: 40px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.insights-range-label {
+  position: absolute;
+  transform: translateX(-50%);
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.insights-range-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  font-size: 11px;
+}
+
+.insights-range-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.insights-range-legend-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 6px;
+}

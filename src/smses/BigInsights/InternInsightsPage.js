@@ -6,6 +6,7 @@ import { TrendingUp, Users, Clock, Award, GitBranch, UserCheck, BarChart3 } from
 import { collection, getDocs, query, orderBy } from "firebase/firestore"
 import { db } from '../../firebaseConfig';
 import "../MyFunderMatches/funding-insights.css"
+import "../../styles/insights-grid.css"
 
 Chart.register(...registerables)
 
