@@ -1,5 +1,5 @@
 "use client"
-import React from "react"
+import React, { useEffect } from "react"
 import FormField from "./FormField"
 import styles from "./catalyst-universal-profile.module.css"
 
@@ -32,50 +32,56 @@ const smeVaultDocumentOptions = [
   { value: "company_profile_vault", label: "Company Profile" },
   { value: "org_structure", label: "Organisational Structure" },
   { value: "client_references", label: "Client References" },
-    { value: "pitch_deck", label: "Pitch Deck" },
-
-  
+  { value: "pitch_deck", label: "Pitch Deck" },
 ]
 
 export default function CatalystApplicationBrief({ data = {}, updateData }) {
-const handleChange = (e) => {
-  const { name, value } = e.target
-  updateData({ [name]: value })
-}
-
-const handleCheckboxChange = (category, value) => {
-  const currentValues = data[category] || []
-  let newValues
+  // Ensure data is an object with default values
+  const safeData = data || {}
   
-  if (value === "other") {
-    // When checking "other", add it to the array
-    if (currentValues.includes("other")) {
-      newValues = currentValues.filter((item) => item !== "other")
-      // Also clear the other text when unchecking
-      updateData({ coreDocumentsOther: "" })
+  const handleChange = (e) => {
+    const { name, value } = e.target
+    updateData({ [name]: value })
+  }
+
+  const handleCheckboxChange = (category, value) => {
+    const currentValues = safeData[category] || []
+    let newValues
+    
+    if (value === "other") {
+      // When checking "other", add it to the array
+      if (currentValues.includes("other")) {
+        newValues = currentValues.filter((item) => item !== "other")
+        // Also clear the other text when unchecking
+        updateData({ coreDocumentsOther: "" })
+      } else {
+        newValues = [...currentValues, "other"]
+      }
     } else {
-      newValues = [...currentValues, "other"]
+      newValues = currentValues.includes(value)
+        ? currentValues.filter((item) => item !== value)
+        : [...currentValues, value]
     }
-  } else {
-    newValues = currentValues.includes(value)
-      ? currentValues.filter((item) => item !== value)
-      : [...currentValues, value]
+    
+    updateData({ [category]: newValues })
   }
-  
-  updateData({ [category]: newValues })
-}
 
-const handleOtherTextChange = (e) => {
-  const { value } = e.target
-  // Save the other text
-  updateData({ coreDocumentsOther: value })
-  
-  // If there's text and "other" is not checked, automatically check it
-  if (value.trim() !== "" && !(data.coreDocuments || []).includes("other")) {
-    const currentValues = data.coreDocuments || []
-    updateData({ coreDocuments: [...currentValues, "other"] })
+  const handleOtherTextChange = (e) => {
+    const { value } = e.target
+    // Save the other text
+    updateData({ coreDocumentsOther: value })
+    
+    // If there's text and "other" is not checked, automatically check it
+    if (value.trim() !== "" && !(safeData.coreDocuments || []).includes("other")) {
+      const currentValues = safeData.coreDocuments || []
+      updateData({ coreDocuments: [...currentValues, "other"] })
+    }
   }
-}
+
+  // Debug: Log when data changes
+  useEffect(() => {
+    console.log("ApplicationBrief data updated:", safeData)
+  }, [safeData])
 
   const checkboxStyle = {
     width: "16px",
@@ -138,14 +144,10 @@ const handleOtherTextChange = (e) => {
     borderBottom: "2px solid #dca06d",
   }
 
-  const requestedVaultDocs = Array.isArray(data.cohortVaultDocuments) ? data.cohortVaultDocuments : []
-
   return (
     <div>
       <h2 className={styles.sectionTitle}>Application Brief</h2>
       <div className={styles.formWrapper}>
-
-        {/* ── Section 1 REMOVED (now lives in Program Brief & Matching Preference) ── */}
 
         {/* 2. Instructions for Applicants */}
         <div className={styles.section}>
@@ -153,7 +155,7 @@ const handleOtherTextChange = (e) => {
           <FormField label="">
             <textarea
               name="instructionsForApplying"
-              value={data.instructionsForApplying || ""}
+              value={safeData.instructionsForApplying || ""}
               onChange={handleChange}
               rows={4}
               className={styles.input}
@@ -170,7 +172,7 @@ const handleOtherTextChange = (e) => {
               <input
                 type="text"
                 name="estimatedReviewTime"
-                value={data.estimatedReviewTime || ""}
+                value={safeData.estimatedReviewTime || ""}
                 onChange={handleChange}
                 className={styles.input}
                 placeholder="e.g., 2-3 weeks"
@@ -181,7 +183,7 @@ const handleOtherTextChange = (e) => {
               <input
                 type="text"
                 name="programOnboardingTime"
-                value={data.programOnboardingTime || ""}
+                value={safeData.programOnboardingTime || ""}
                 onChange={handleChange}
                 className={styles.input}
                 placeholder="e.g., 1-2 weeks after approval"
@@ -193,7 +195,7 @@ const handleOtherTextChange = (e) => {
             <input
               type="text"
               name="applicationWindow"
-              value={data.applicationWindow || ""}
+              value={safeData.applicationWindow || ""}
               onChange={handleChange}
               className={styles.input}
               placeholder="e.g., Rolling / Open until [Date] / Quarterly Intake"
@@ -221,32 +223,32 @@ const handleOtherTextChange = (e) => {
             </thead>
             <tbody>
               <tr>
-           <td style={{ ...cellStyle, width: "50%", verticalAlign: "top" }}>
-              {coreDocumentsOptions.map((option) => (
-                <label key={option.value} style={checkboxLabelStyle}>
-                  <input
-                    type="checkbox"
-                    checked={(data.coreDocuments || []).includes(option.value)}
-                    onChange={() => handleCheckboxChange("coreDocuments", option.value)}
-                    style={checkboxStyle}
-                  />
-                  <span>{option.label}</span>
-                </label>
-              ))}
-              {(data.coreDocuments || []).includes("other") && (
-                <div style={{ marginTop: "10px", marginLeft: "26px" }}>
-                  <input
-                    type="text"
-                    name="coreDocumentsOther"
-                    value={data.coreDocumentsOther || ""}
-                    onChange={handleOtherTextChange}
-                    className={styles.input}
-                    placeholder="Please specify other core documents..."
-                    style={{ width: "100%", maxWidth: "280px" }}
-                  />
-                </div>
-              )}
-            </td>
+                <td style={{ ...cellStyle, width: "50%", verticalAlign: "top" }}>
+                  {coreDocumentsOptions.map((option) => (
+                    <label key={option.value} style={checkboxLabelStyle}>
+                      <input
+                        type="checkbox"
+                        checked={(safeData.coreDocuments || []).includes(option.value)}
+                        onChange={() => handleCheckboxChange("coreDocuments", option.value)}
+                        style={checkboxStyle}
+                      />
+                      <span>{option.label}</span>
+                    </label>
+                  ))}
+                  {(safeData.coreDocuments || []).includes("other") && (
+                    <div style={{ marginTop: "10px", marginLeft: "26px" }}>
+                      <input
+                        type="text"
+                        name="coreDocumentsOther"
+                        value={safeData.coreDocumentsOther || ""}
+                        onChange={handleOtherTextChange}
+                        className={styles.input}
+                        placeholder="Please specify other core documents..."
+                        style={{ width: "100%", maxWidth: "280px" }}
+                      />
+                    </div>
+                  )}
+                </td>
                 <td style={{ ...cellStyle, width: "50%", verticalAlign: "top" }}>
 
                   {/* Grant/Funding */}
@@ -258,12 +260,11 @@ const handleOtherTextChange = (e) => {
                       { value: "business_plan", label: "Business Plan" },
                       { key: "financial_statements", label: "Financial Statements" },
                       { key: "pitch_deck", label: "Pitch Deck" },
-
                     ].map(({ key, label }) => (
                       <label key={key} style={checkboxLabelStyle}>
                         <input
                           type="checkbox"
-                          checked={(data.grantDocuments || []).includes(key)}
+                          checked={(safeData.grantDocuments || []).includes(key)}
                           onChange={() => handleCheckboxChange("grantDocuments", key)}
                           style={checkboxStyle}
                         />
@@ -282,7 +283,7 @@ const handleOtherTextChange = (e) => {
                       <label key={key} style={checkboxLabelStyle}>
                         <input
                           type="checkbox"
-                          checked={(data.trainingDocuments || []).includes(key)}
+                          checked={(safeData.trainingDocuments || []).includes(key)}
                           onChange={() => handleCheckboxChange("trainingDocuments", key)}
                           style={checkboxStyle}
                         />
@@ -297,7 +298,7 @@ const handleOtherTextChange = (e) => {
                     <label style={checkboxLabelStyle}>
                       <input
                         type="checkbox"
-                        checked={(data.impactDocuments || []).includes("impact_measurement")}
+                        checked={(safeData.impactDocuments || []).includes("impact_measurement")}
                         onChange={() => handleCheckboxChange("impactDocuments", "impact_measurement")}
                         style={checkboxStyle}
                       />
@@ -311,7 +312,7 @@ const handleOtherTextChange = (e) => {
                     <input
                       type="text"
                       name="otherAdditionalDocuments"
-                      value={data.otherAdditionalDocuments || ""}
+                      value={safeData.otherAdditionalDocuments || ""}
                       onChange={handleChange}
                       className={styles.input}
                       placeholder="Please specify any additional documents..."
@@ -325,14 +326,13 @@ const handleOtherTextChange = (e) => {
           </table>
         </div>
 
-       
         {/* 5. Evaluation / Selection Criteria */}
         <div className={styles.section}>
           <h3 className={styles.subSectionTitle}>4. Selection Criteria</h3>
           <FormField label="">
             <textarea
               name="evaluationCriteria"
-              value={data.evaluationCriteria || ""}
+              value={safeData.evaluationCriteria || ""}
               onChange={handleChange}
               rows={4}
               className={styles.input}
@@ -347,7 +347,7 @@ const handleOtherTextChange = (e) => {
           <FormField label="">
             <textarea
               name="impactAlignment"
-              value={data.impactAlignment || ""}
+              value={safeData.impactAlignment || ""}
               onChange={handleChange}
               rows={3}
               className={styles.input}

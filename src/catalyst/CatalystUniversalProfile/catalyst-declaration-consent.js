@@ -1,12 +1,20 @@
 "use client"
-import React from "react"
+import React, { useEffect } from "react"
 import styles from "./catalyst-universal-profile.module.css"
 
 export default function CatalystDeclarationConsent({ data = {}, updateData }) {
+  // Ensure data is an object with default values
+  const safeData = data || {}
+  
   const handleChange = (e) => {
     const { name, checked } = e.target
     updateData({ [name]: checked })
   }
+
+  // Debug: Log when data changes
+  useEffect(() => {
+    console.log("DeclarationConsent data updated:", safeData)
+  }, [safeData])
 
   return (
     <div>
@@ -24,7 +32,7 @@ export default function CatalystDeclarationConsent({ data = {}, updateData }) {
               <input
                 type="checkbox"
                 name="accuracy"
-                checked={data.accuracy || false}
+                checked={safeData.accuracy || false}
                 onChange={handleChange}
                 className={`${styles.checkbox} h-4 w-4`}
                 required
@@ -52,7 +60,7 @@ export default function CatalystDeclarationConsent({ data = {}, updateData }) {
               <input
                 type="checkbox"
                 name="dataProcessing"
-                checked={data.dataProcessing || false}
+                checked={safeData.dataProcessing || false}
                 onChange={handleChange}
                 className={`${styles.checkbox} h-4 w-4`}
                 required
@@ -79,7 +87,7 @@ export default function CatalystDeclarationConsent({ data = {}, updateData }) {
               <input
                 type="checkbox"
                 name="termsConditions"
-                checked={data.termsConditions || false}
+                checked={safeData.termsConditions || false}
                 onChange={handleChange}
                 className={`${styles.checkbox} h-4 w-4`}
                 required

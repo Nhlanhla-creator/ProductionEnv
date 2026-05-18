@@ -14,7 +14,56 @@ const intangibleSupportOptions = [
   { value: "social_impact", label: "Social Impact Support", tooltip: "Support for community development and social responsibility" },
 ]
 
-// Matches SME FundingApplication exactly
+// Intangible Support Sub-types (dynamically based on main selection)
+const intangibleSupportSubtypes = {
+  advisory_services: [
+    { value: "legal_advisory", label: "Legal Advisory" },
+    { value: "financial_advisory", label: "Financial Advisory" },
+    { value: "strategic_planning", label: "Strategic Planning" },
+    { value: "hr_advisory", label: "HR Advisory" },
+    { value: "it_advisory", label: "IT Advisory" },
+    { value: "marketing_advisory", label: "Marketing Advisory" },
+  ],
+  mentorship: [
+    { value: "one_on_one_mentorship", label: "One-on-One Mentorship" },
+    { value: "group_mentorship", label: "Group Mentorship" },
+    { value: "peer_mentorship", label: "Peer Mentorship" },
+    { value: "executive_mentorship", label: "Executive Mentorship" },
+  ],
+  capacity_building: [
+    { value: "leadership_training", label: "Leadership Training" },
+    { value: "financial_literacy", label: "Financial Literacy" },
+    { value: "digital_skills", label: "Digital Skills" },
+    { value: "operations_management", label: "Operations Management" },
+    { value: "sales_training", label: "Sales Training" },
+    { value: "customer_service", label: "Customer Service" },
+  ],
+  networking: [
+    { value: "industry_events", label: "Industry Events" },
+    { value: "investor_connections", label: "Investor Connections" },
+    { value: "corporate_partnerships", label: "Corporate Partnerships" },
+    { value: "alumni_network", label: "Alumni Network" },
+  ],
+  market_access: [
+    { value: "distribution_channels", label: "Distribution Channels" },
+    { value: "supply_chain_integration", label: "Supply Chain Integration" },
+    { value: "export_assistance", label: "Export Assistance" },
+    { value: "government_tenders", label: "Government Tenders" },
+  ],
+  technology: [
+    { value: "software_licenses", label: "Software Licenses" },
+    { value: "hardware_provision", label: "Hardware Provision" },
+    { value: "tech_infrastructure", label: "Tech Infrastructure" },
+    { value: "digital_transformation", label: "Digital Transformation" },
+  ],
+  social_impact: [
+    { value: "community_engagement", label: "Community Engagement" },
+    { value: "social_impact_measurement", label: "Social Impact Measurement" },
+    { value: "esg_compliance", label: "ESG Compliance" },
+    { value: "b_corp_support", label: "B Corp Support" },
+  ],
+}
+
 const fundingInstrumentOptions = [
   { value: "Any", label: "Any" },
   { value: "Equity", label: "Equity (Buying shares in the business)", tooltip: "Investor purchases ownership stake in your company in exchange for capital" },
@@ -213,7 +262,7 @@ const labelStyle = {
   fontSize: "14px",
 }
 
-// ─── MultiSelect (kept for Sections 3 & 4) ────────────────────────────────────
+// ─── MultiSelect ────────────────────────────────────────────────────
 
 function MultiSelect({ options, selected = [], onChange, placeholder = "Select options...", includeSelectAll = true }) {
   const [isOpen, setIsOpen] = useState(false)
@@ -347,6 +396,14 @@ export default function CatalystProgramBriefMatchingPreference({ data = {}, upda
   const h = (field, value) => updateData({ [field]: value })
 
   const isFundingSelected = data.fundingSupport === "yes"
+  
+  // Get available subtypes based on selected intangible support
+  const getAvailableSubtypes = () => {
+    if (!data.intangibleSupport || !intangibleSupportSubtypes[data.intangibleSupport]) {
+      return []
+    }
+    return intangibleSupportSubtypes[data.intangibleSupport]
+  }
 
   const showProvinces = (data.geographicFocus || []).includes("province_specific")
   const showCountries = (data.geographicFocus || []).includes("country_specific")
@@ -446,7 +503,11 @@ export default function CatalystProgramBriefMatchingPreference({ data = {}, upda
             <label style={labelStyle}>Intangible Support</label>
             <select
               value={data.intangibleSupport || ""}
-              onChange={(e) => h("intangibleSupport", e.target.value)}
+              onChange={(e) => {
+                h("intangibleSupport", e.target.value)
+                // Clear sub-type when main selection changes
+                h("intangibleSupportSubtype", "")
+              }}
               style={selectStyle}
             >
               <option value="">Select Intangible Support</option>
@@ -469,7 +530,11 @@ export default function CatalystProgramBriefMatchingPreference({ data = {}, upda
               <option value="">
                 {data.intangibleSupport ? "Select Sub-type" : "Select Intangible Support first"}
               </option>
-              {/* You can add sub-types for each intangible support option here if needed */}
+              {getAvailableSubtypes().map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
             </select>
           </div>
 
