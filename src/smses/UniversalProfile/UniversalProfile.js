@@ -19,6 +19,7 @@ import Documents from "./Documents"
 import DeclarationConsent from "./declaration-consent"
 import ProfileSummary from "./ProfileSummary"
 import { onAuthStateChanged } from "firebase/auth"
+import { getFunctions, httpsCallable } from "firebase/functions";
 
 const sections = [
   { id: "instructions", label: "Instructions" },
@@ -172,10 +173,6 @@ export default function UniversalProfile() {
       operatingCountries: [], operatingProvinces: [],
       companyLogo: "", companyLetterhead: "",
       orgStructure: "", orgStructureFileName: "", orgStructureUpdatedAt: "",
-      // ── NEW: Industry Associations ──────────────────────────────────────
-      memberOfAssociation: "",        // "yes" | "no" | ""
-      industryAssociations: [],       // string[]
-      industryAssociationsOther: "",  // free-text when "Other" is selected
     },
 
     ownershipManagement: {
@@ -402,24 +399,75 @@ export default function UniversalProfile() {
     navigateToNextSection()
   }
 
-  const handleSubmitProfile = async () => {
-    markSectionAsCompleted("declarationConsent")
-    const { allValid, sectionStatus } = validateAllSections(formData, completedSections)
-    if (!allValid) {
-      const issues = Object.entries(sectionStatus).filter(([_, status]) => !status.valid || !status.completed).map(([_, status]) => `❌ ${status.name.replace(/\n/g, " ")} is incomplete or invalid.`)
-      alert("Profile submission blocked:\n\n" + issues.join("\n")); return
-    }
-    try {
-      await saveDataToFirebase()
-      setProfileSubmitted(true)
-      const hasSeenCongratulationsPopup = localStorage.getItem(getUserSpecificKey("hasSeenCongratulationsPopup")) === "true"
-      if (!hasSeenCongratulationsPopup) { setShowCongratulationsPopup(true); localStorage.setItem(getUserSpecificKey("hasSeenCongratulationsPopup"), "true") }
-      else setShowSummary(true)
-      setIsEditing(false); window.scrollTo(0, 0)
-    } catch (err) {
-      console.error("Failed to submit profile:", err); alert("Failed to submit profile. Please try again."); setProfileSubmitted(false)
-    }
+const sendConsentConfirmationEmail = async (userEmail, smeName) => {
+  try {
+    const functions = getFunctions();
+    const sendConsentConfirmation = httpsCallable(functions, 'sendConsentConfirmation');
+    await sendConsentConfirmation({
+      userId: auth.currentUser?.uid,
+      email: userEmail,
+      name: smeName
+    });
+    console.log("Consent confirmation email sent");
+  } catch (error) {
+    console.error("Failed to send consent email:", error);
   }
+};
+
+const handleSubmitProfile = async () => {
+  markSectionAsCompleted("declarationConsent")
+  const { allValid, sectionStatus } = validateAllSections(formData, completedSections)
+  if (!allValid) {
+    const issues = Object.entries(sectionStatus)
+      .filter(([_, status]) => !status.valid || !status.completed)
+      .map(([_, status]) => `❌ ${status.name.replace(/\n/g, " ")} is incomplete or invalid.`)
+    alert("Profile submission blocked:\n\n" + issues.join("\n"))
+    return
+  }
+  
+  try {
+    // 👇 ADD THIS CALL RIGHT HERE - AFTER VALIDATION, BEFORE SAVING
+    const user = auth.currentUser;
+    if (user) {
+      const smeName = formData.entityOverview?.registeredName || "there";
+      const userEmail = formData.contactDetails?.email;
+      
+      if (userEmail) {
+        // Call your cloud function to send consent confirmation email
+        const sendConsentConfirmation = getFunctions().httpsCallable('sendConsentConfirmation');
+        await sendConsentConfirmation({
+          userId: user.uid,
+          email: userEmail,
+          name: smeName
+        }).catch(err => console.error("Consent email failed:", err));
+      }
+    }
+    // 👆 END OF ADDED CODE
+    
+    await saveDataToFirebase()
+    const userEmail = formData.contactDetails?.email;
+    const smeName = formData.entityOverview?.registeredName || "there";
+
+    if (userEmail) {
+      await sendConsentConfirmationEmail(userEmail, smeName);
+    }
+
+    setProfileSubmitted(true)
+    const hasSeenCongratulationsPopup = localStorage.getItem(getUserSpecificKey("hasSeenCongratulationsPopup")) === "true"
+    if (!hasSeenCongratulationsPopup) { 
+      setShowCongratulationsPopup(true)
+      localStorage.setItem(getUserSpecificKey("hasSeenCongratulationsPopup"), "true")
+    } else {
+      setShowSummary(true)
+    }
+    setIsEditing(false)
+    window.scrollTo(0, 0)
+  } catch (err) {
+    console.error("Failed to submit profile:", err)
+    alert("Failed to submit profile. Please try again.")
+    setProfileSubmitted(false)
+  }
+}
 
   const handleRegistrationComplete = async () => { alert("Your profile has been successfully submitted!"); navigate("/dashboard") }
   const handleNextOnboardingStep = () => { if (currentOnboardingStep < onboardingSteps.length - 1) setCurrentOnboardingStep(currentOnboardingStep + 1); else setShowWelcomePopup(false) }
@@ -553,6 +601,8 @@ export default function UniversalProfile() {
       )}
 
       <h1>My Universal Profile</h1>
+
+
 
       <div className="profile-tracker">
         {isCompanyMember && (

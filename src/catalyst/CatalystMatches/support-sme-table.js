@@ -7,6 +7,7 @@ import { DayPicker } from "react-day-picker"
 import "react-day-picker/dist/style.css"
 import { usePortfolio } from "../../context/PortfolioContext"
 import SMEDetailsModal from "./SMEDetailsModal"
+import { getFunctions, httpsCallable } from "firebase/functions";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const formatLabel = (value) => {
@@ -421,81 +422,82 @@ if (!stageFilter) { setSmes(mapped); onSMEsLoaded?.(mapped); return }
   const clearFilters = () => setLocalFilters({ location: "", matchScore: 50, minFunding: "", maxFunding: "", instruments: [], stages: [], sectors: [], supportTypes: [], smeType: "", sortBy: "" })
   const applyFilters = () => { console.log("Applying filters:", localFilters); setShowFilters(false) }
 
-  // ── Stage update ───────────────────────────────────────────────────────────
- const handleStageUpdate = async () => {
-    const stageFields = getStageFields(nextStage)
-    const errors = {}
-    if (!nextStage) errors.nextStage = "Please select a stage"
-    if (stageFields.showMessage && !message.trim()) errors.message = "Please provide a message"
-    if (stageFields.showMeeting) {
-      if (!meetingLocation.trim()) errors.meetingLocation = "Please provide a meeting location"
-      if (!meetingPurpose.trim()) errors.meetingPurpose = "Please provide a meeting purpose"
+  const functions = getFunctions();
+// ── Stage update ───────────────────────────────────────────────────────────
+const handleStageUpdate = async () => {
+  const stageFields = getStageFields(nextStage)
+  const errors = {}
+  if (!nextStage) errors.nextStage = "Please select a stage"
+  if (stageFields.showMessage && !message.trim()) errors.message = "Please provide a message"
+  if (stageFields.showMeeting) {
+    if (!meetingLocation.trim()) errors.meetingLocation = "Please provide a meeting location"
+    if (!meetingPurpose.trim()) errors.meetingPurpose = "Please provide a meeting purpose"
+  }
+  if (stageFields.showAvailability && !availabilities.length) errors.availabilities = "Please select at least one available date"
+  if (stageFields.showTermSheet && termSheetFile) {
+    const allowed = ["application/pdf", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"]
+    if (!allowed.includes(termSheetFile.type)) {
+      errors.termSheetFile = "Only PDF or Word documents are accepted"
+    } else if (termSheetFile.size > 10 * 1024 * 1024) {
+      errors.termSheetFile = "File must be under 10 MB"
     }
-    if (stageFields.showAvailability && !availabilities.length) errors.availabilities = "Please select at least one available date"
-    if (stageFields.showTermSheet && termSheetFile) {
-      const allowed = ["application/pdf", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"]
-      if (!allowed.includes(termSheetFile.type)) {
-        errors.termSheetFile = "Only PDF or Word documents are accepted"
-      } else if (termSheetFile.size > 10 * 1024 * 1024) {
-        errors.termSheetFile = "File must be under 10 MB"
-      }
+  }
+  if (Object.keys(errors).length > 0) { setFormErrors(errors); return }
+  setIsSubmitting(true)
+  try {
+    const user = auth.currentUser
+    if (!user) throw new Error("User not authenticated")
+    const catalystId = user.uid
+    const smeId = selectedSMEForStage.id
+    const programIndex = selectedSMEForStage.programIndex || "0"
+    const documentId = `${catalystId}_${smeId}_${programIndex}`
+    const documentsmeId = `${smeId}_${catalystId}_${programIndex}`
+    let attachmentUrl = null
+    if (termSheetFile) {
+      const storageRef = ref(storage, `support_termsheets/${smeId}/${termSheetFile.name}`)
+      const snapshot = await uploadBytes(storageRef, termSheetFile)
+      attachmentUrl = await getDownloadURL(snapshot.ref)
     }
-    if (Object.keys(errors).length > 0) { setFormErrors(errors); return }
-    setIsSubmitting(true)
+    const computedNextStage = getNextStage(nextStage)
+    const updateData = {
+      status: nextStage, pipelineStage: nextStage, nextStage: computedNextStage,
+      updatedAt: serverTimestamp(),
+      ...(message && { lastMessage: message }),
+      ...(stageFields.showMeeting && { meetingDetails: { time: meetingTime, location: meetingLocation, purpose: meetingPurpose } }),
+    }
+    if (stageFields.showAvailability && availabilities.length > 0) {
+      updateData.availableDates = availabilities.map((a) => ({
+        date: a.date.toISOString(), timeSlots: a.timeSlots, timeZone: a.timeZone, status: a.status,
+      }))
+    }
+    const docRef = doc(db, "catalystApplications", documentId)
+    const docSnapshot = await getDoc(docRef)
+    if (!docSnapshot.exists()) throw new Error(`Document ${documentId} does not exist`)
+    await updateDoc(docRef, updateData)
     try {
-      const user = auth.currentUser
-      if (!user) throw new Error("User not authenticated")
-      const catalystId = user.uid
-      const smeId = selectedSMEForStage.id
-      const programIndex = selectedSMEForStage.programIndex || "0"
-      const documentId = `${catalystId}_${smeId}_${programIndex}`
-      const documentsmeId = `${smeId}_${catalystId}_${programIndex}`
-      let attachmentUrl = null
-      if (termSheetFile) {
-        const storageRef = ref(storage, `support_termsheets/${smeId}/${termSheetFile.name}`)
-        const snapshot = await uploadBytes(storageRef, termSheetFile)
-        attachmentUrl = await getDownloadURL(snapshot.ref)
-      }
-      const computedNextStage = getNextStage(nextStage)
-      const updateData = {
-        status: nextStage, pipelineStage: nextStage, nextStage: computedNextStage,
-        updatedAt: serverTimestamp(),
-        ...(message && { lastMessage: message }),
-        ...(stageFields.showMeeting && { meetingDetails: { time: meetingTime, location: meetingLocation, purpose: meetingPurpose } }),
-      }
-      if (stageFields.showAvailability && availabilities.length > 0) {
-        updateData.availableDates = availabilities.map((a) => ({
-          date: a.date.toISOString(), timeSlots: a.timeSlots, timeZone: a.timeZone, status: a.status,
-        }))
-      }
-      const docRef = doc(db, "catalystApplications", documentId)
-      const docSnapshot = await getDoc(docRef)
-      if (!docSnapshot.exists()) throw new Error(`Document ${documentId} does not exist`)
-      await updateDoc(docRef, updateData)
+      await updateDoc(doc(db, "smeCatalystApplications", documentsmeId), {
+        status: nextStage, nextStage: computedNextStage,
+        ...(updateData.availableDates && { availableDates: updateData.availableDates }),
+      })
+    } catch (e) { console.warn("Could not update smeCatalystApplications:", e.message) }
+    if (stageFields.showMeeting && meetingLocation && meetingPurpose) {
       try {
-        await updateDoc(doc(db, "smeCatalystApplications", documentsmeId), {
-          status: nextStage, nextStage: computedNextStage,
+        await addDoc(collection(db, "smeCalendarEvents"), {
+          smeId, catalystId, title: meetingPurpose, date: meetingTime,
+          location: meetingLocation, type: "support_meeting", createdAt: new Date().toISOString(),
           ...(updateData.availableDates && { availableDates: updateData.availableDates }),
         })
-      } catch (e) { console.warn("Could not update smeCatalystApplications:", e.message) }
-      if (stageFields.showMeeting && meetingLocation && meetingPurpose) {
-        try {
-          await addDoc(collection(db, "smeCalendarEvents"), {
-            smeId, catalystId, title: meetingPurpose, date: meetingTime,
-            location: meetingLocation, type: "support_meeting", createdAt: new Date().toISOString(),
-            ...(updateData.availableDates && { availableDates: updateData.availableDates }),
-          })
-        } catch (e) { console.error("Error creating calendar event:", e) }
-      }
-      
-      // Update local state with the new stage
-      const stageKey = `${smeId}_${programIndex}`
-      setUpdatedStages((prev) => ({ ...prev, [stageKey]: nextStage }))
-      
-      setSmes((prev) => {
-        const next = prev.map((s) =>
-          s.id === smeId && s.programIndex === programIndex
-            ? {
+      } catch (e) { console.error("Error creating calendar event:", e) }
+    }
+    
+    // Update local state with the new stage
+    const stageKey = `${smeId}_${programIndex}`
+    setUpdatedStages((prev) => ({ ...prev, [stageKey]: nextStage }))
+    
+    setSmes((prev) => {
+      const next = prev.map((s) =>
+        s.id === smeId && s.programIndex === programIndex
+          ? {
               ...s, 
               status: nextStage, 
               nextStage: computedNextStage, 
@@ -505,83 +507,135 @@ if (!stageFilter) { setSmes(mapped); onSMEsLoaded?.(mapped); return }
               ...(stageFields.showMeeting && { meetingDetails: { time: meetingTime, location: meetingLocation, purpose: meetingPurpose } }),
               ...(updateData.availableDates && { availableDates: updateData.availableDates })
             }
-            : s
-        )
-        onSMEsLoaded?.(next)
-        return next
-      })
-      
-      // Call onStageOverride to notify parent component about stage changes
-      if (onStageOverride) {
-        onStageOverride(
-          smes.map(s => ({
-            smeId: s.id,
-            programIndex: s.programIndex,
-            pipelineStage: s.id === smeId && s.programIndex === programIndex
-              ? nextStage
-              : (s.pipelineStage || s.currentStatus),
-            status: s.id === smeId && s.programIndex === programIndex
-              ? nextStage
-              : (s.currentStatus || s.pipelineStage),
-          }))
-        )
-      }
-      
-      setNotification({ type: "success", message: `Application status updated to ${nextStage} successfully` })
-      setShowStageModal(false)
-      resetStageModal()
-      
-      const subject = `Update: ${nextStage} Stage for Your Application`
-      let content = `Dear ${selectedSMEForStage.name},\n\nWe are pleased to inform you that your application has progressed to the "${nextStage}" stage.\n\n${message}`
-
-     if (stageFields.showMeeting && meetingLocation && meetingPurpose) {
-        content += `\n\nMeeting Details:\n- Location: ${meetingLocation}\n- Purpose: ${meetingPurpose}`
-      }
-
-      if (attachmentUrl) {
-        content += `\n\nTerm Sheet Document:\nPlease review the attached term sheet using the link below:\n${attachmentUrl}\n\nKindly review and respond with your acceptance or decline of the terms.`
-      }
-
-      if (stageFields.showAvailability && availabilities.length > 0) {
-        content += `\n\nAvailable Meeting Times:\n` +
-          availabilities.map((a, i) => {
-            const d = a.date.toLocaleDateString("en-US", {
-              weekday: "long", year: "numeric", month: "long", day: "numeric"
-            })
-            const t = a.timeSlots?.[0]
-              ? `${a.timeSlots[0].start} - ${a.timeSlots[0].end} ${a.timeZone}`
-              : "Time not specified"
-            return `${i + 1}. ${d} (${t})`
-          }).join("\n")
-        content += `\n\nPlease reply with your preferred meeting time from the above options.`
-      }
-
-      content += `\n\nBest regards,\nSupport Team`
-      const messagePayload = {
-        to: smeId,
-        from: catalystId,
-        subject: `Update: ${nextStage} Stage for Your Application`,
-        content,
-        date: new Date().toISOString(),
-        read: false,
-        type: "inbox",
-        applicationId: documentId,
-        attachments: attachmentUrl ? [attachmentUrl] : [],
-        ...(attachmentUrl && { documentUrl: attachmentUrl, documentType: "support_agreement" }),
-        ...(updateData.availableDates && { availableDates: updateData.availableDates }),
-      }
-
-      await Promise.all([
-        addDoc(collection(db, "messages"), messagePayload),
-        addDoc(collection(db, "messages"), { ...messagePayload, read: true, type: "sent" }),
-      ])
-    } catch (error) {
-      console.error("Stage update error:", error)
-      setNotification({ type: "error", message: `Failed to update status: ${error.message}` })
-    } finally {
-      setIsSubmitting(false)
+          : s
+      )
+      onSMEsLoaded?.(next)
+      return next
+    })
+    
+    // Call onStageOverride to notify parent component about stage changes
+    if (onStageOverride) {
+      onStageOverride(
+        smes.map(s => ({
+          smeId: s.id,
+          programIndex: s.programIndex,
+          pipelineStage: s.id === smeId && s.programIndex === programIndex
+            ? nextStage
+            : (s.pipelineStage || s.currentStatus),
+          status: s.id === smeId && s.programIndex === programIndex
+            ? nextStage
+            : (s.currentStatus || s.pipelineStage),
+        }))
+      )
     }
+    
+    setNotification({ type: "success", message: `Application status updated to ${nextStage} successfully` })
+    setShowStageModal(false)
+    resetStageModal()
+    
+    const subject = `Update: ${nextStage} Stage for Your Application`
+    let content = `Dear ${selectedSMEForStage.name},\n\nWe are pleased to inform you that your application has progressed to the "${nextStage}" stage.\n\n${message}`
+
+    if (stageFields.showMeeting && meetingLocation && meetingPurpose) {
+      content += `\n\nMeeting Details:\n- Location: ${meetingLocation}\n- Purpose: ${meetingPurpose}`
+    }
+
+    if (attachmentUrl) {
+      content += `\n\nTerm Sheet Document:\nPlease review the attached term sheet using the link below:\n${attachmentUrl}\n\nKindly review and respond with your acceptance or decline of the terms.`
+    }
+
+    if (stageFields.showAvailability && availabilities.length > 0) {
+      content += `\n\nAvailable Meeting Times:\n` +
+        availabilities.map((a, i) => {
+          const d = a.date.toLocaleDateString("en-US", {
+            weekday: "long", year: "numeric", month: "long", day: "numeric"
+          })
+          const t = a.timeSlots?.[0]
+            ? `${a.timeSlots[0].start} - ${a.timeSlots[0].end} ${a.timeZone}`
+            : "Time not specified"
+          return `${i + 1}. ${d} (${t})`
+        }).join("\n")
+      content += `\n\nPlease reply with your preferred meeting time from the above options.`
+    }
+
+    content += `\n\nBest regards,\nSupport Team`
+    
+    const messagePayload = {
+      to: smeId,
+      from: catalystId,
+      subject: `Update: ${nextStage} Stage for Your Application`,
+      content,
+      date: new Date().toISOString(),
+      read: false,
+      type: "inbox",
+      applicationId: documentId,
+      attachments: attachmentUrl ? [attachmentUrl] : [],
+      ...(attachmentUrl && { documentUrl: attachmentUrl, documentType: "support_agreement" }),
+      ...(updateData.availableDates && { availableDates: updateData.availableDates }),
+    }
+
+    await Promise.all([
+      addDoc(collection(db, "messages"), messagePayload),
+      addDoc(collection(db, "messages"), { ...messagePayload, read: true, type: "sent" }),
+    ])
+// ========== SEND EMAIL NOTIFICATION ==========
+let smeEmail = null;
+try {
+  const smeUserDoc = await getDoc(doc(db, "users", smeId));
+  if (smeUserDoc.exists()) {
+    smeEmail = smeUserDoc.data().email;
   }
+} catch (emailError) {
+  console.error("Error fetching SME email:", emailError);
+}
+
+if (smeEmail) {
+  try {
+    const response = await fetch('https://us-central1-tuts-7ea8c.cloudfunctions.net/sendStageUpdateEmail', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        data: {
+          to: smeEmail,
+          name: selectedSMEForStage.name,
+          stage: nextStage,
+          message: message,
+          meetingLocation: stageFields.showMeeting ? meetingLocation : null,
+          meetingPurpose: stageFields.showMeeting ? meetingPurpose : null,
+          attachmentUrl: attachmentUrl,
+          hasAvailability: stageFields.showAvailability && availabilities.length > 0,
+          availabilityDates: stageFields.showAvailability ? availabilities.map(a => ({
+            date: a.date.toLocaleDateString("en-US", { 
+              weekday: "long", 
+              year: "numeric", 
+              month: "long", 
+              day: "numeric" 
+            }),
+            time: a.timeSlots?.[0] ? `${a.timeSlots[0].start} - ${a.timeSlots[0].end} ${a.timeZone}` : "Time not specified"
+          })) : []
+        }
+      })
+    });
+    
+    const result = await response.json();
+    if (result.data?.success) {
+      console.log("✅ Stage update email sent to SME");
+    } else {
+      console.error("Email sending failed:", result);
+    }
+  } catch (emailError) {
+    console.error("Failed to send stage update email:", emailError);
+  }
+}
+// ========== END EMAIL NOTIFICATION ==========
+
+  } catch (error) {
+    console.error("Stage update error:", error)
+    setNotification({ type: "error", message: `Failed to update status: ${error.message}` })
+  } finally {
+    setIsSubmitting(false)
+  }
+}
 
   // Load existing shared NDAs for all SMEs
 useEffect(() => {

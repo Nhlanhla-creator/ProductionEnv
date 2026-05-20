@@ -9,10 +9,13 @@ import { renderDocumentUploads } from "./document-uploads"
 import ApplicationSummary from "./application-summary"
 import { updateDoc, doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore"
 import { onAuthStateChanged } from "firebase/auth"
-
+import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage"
 // Firebase configuration - Replace with your actual config
 import { db, auth } from "../../firebaseConfig"
+import { getAuth } from "firebase/auth"
 
+
+const storage = getStorage()
 // Updated sections to match new structure
 export const sections = [
   {
@@ -55,6 +58,16 @@ export default function FundingApplication() {
   const [showWelcomePopup, setShowWelcomePopup] = useState(false)
   const [showCongratulationsPopup, setShowCongratulationsPopup] = useState(false)
   const [currentOnboardingStep, setCurrentOnboardingStep] = useState(0)
+  const [existingUniversalDocs, setExistingUniversalDocs] = useState({
+    businessPlan: null,
+    financialStatements: [],
+    loading: true
+  })
+  const [documentSelections, setDocumentSelections] = useState({
+  businessPlan: "existing", // "existing", "new", or "none"
+  latestFinancials: "existing"
+})
+
 
   // Firebase states
   const [user, setUser] = useState(null)
@@ -102,6 +115,11 @@ export default function FundingApplication() {
     advisoryNeedsAssessment: {},
     documentUploads: {},
   })
+
+  const handleDocumentSelection = (docType, choice) => {
+  setDocumentSelections(prev => ({ ...prev, [docType]: choice }))
+  updateFormData("documentUploads", { [`selected${docType.charAt(0).toUpperCase() + docType.slice(1)}`]: choice })
+}
 
   // Firebase functions
   const saveToFirebase = async (sectionData, sectionName) => {
@@ -151,64 +169,139 @@ export default function FundingApplication() {
       setTimeout(() => setSaveStatus(""), 3000)
     }
   }
-  const saveCompleteApplication = async () => {
-    if (!user) {
-      console.warn("No user authenticated, cannot save complete application")
-      return
-    }
-
-    try {
-      const docRef = doc(db, "advisoryApplications", user.uid)
-      await updateDoc(docRef, {
-        ...formData,
-        status: "submitted",
-        completedSections,
-        submittedAt: serverTimestamp(),
-        lastUpdated: serverTimestamp(),
-        userId: user.uid,
-        userEmail: user.email,
-      })
-    } catch (error) {
-      console.error("Error saving complete application:", error)
-    }
+const saveCompleteApplication = async () => {
+  if (!user) {
+    console.warn("No user authenticated, cannot save complete application")
+    return
   }
 
-  const loadExistingApplication = async () => {
-    if (!user) return
-
-    try {
-      setIsLoading(true)
-
-      const docRef = doc(db, "advisoryApplications", user.uid)
-      const docSnap = await getDoc(docRef)
-
-      if (docSnap.exists()) {
-        const data = docSnap.data()
-
-        // Restore form data
-        setFormData({
-          advisoryNeedsAssessment: data.advisoryNeedsAssessment || {},
-          documentUploads: data.documentUploads || {},
-        })
-
-        // Restore section completion
-        const completed = data.completedSections || {}
-        setCompletedSections(completed)
-
-        // Check if all sections are complete
-        const allComplete = sections.every((section) => completed[section.id] === true)
-
-        if (data.status === "submitted" || allComplete) {
-          setApplicationSubmitted(true)
-          setShowSummary(true)
+  setIsLoading(true)
+  
+  try {
+    // Handle Business Plan (single document)
+    let businessPlanUrl = null
+    
+    if (documentSelections?.businessPlan === "new" && formData.documentUploads?.businessPlan?.length > 0) {
+      const file = formData.documentUploads.businessPlan[0]
+      
+      if (typeof file === 'string') {
+        businessPlanUrl = file
+      } else if (file instanceof File) {
+        const storageRef = ref(storage, `advisoryApplications/${user.uid}/businessPlan_${Date.now()}.pdf`)
+        const uploadResult = await uploadBytes(storageRef, file)
+        businessPlanUrl = await getDownloadURL(uploadResult.ref)
+        // Update formData with the URL
+        updateFormData("documentUploads", { businessPlan: [businessPlanUrl] })
+      }
+    } else if (documentSelections?.businessPlan === "existing") {
+      businessPlanUrl = existingUniversalDocs?.businessPlan || null
+    }
+    
+    // Handle Latest Financials (ARRAY of documents)
+    let latestFinancialsUrls = []
+    
+    if (documentSelections?.latestFinancials === "new" && formData.documentUploads?.latestFinancials?.length > 0) {
+      for (const file of formData.documentUploads.latestFinancials) {
+        if (typeof file === 'string') {
+          latestFinancialsUrls.push(file)
+        } else if (file instanceof File) {
+          const storageRef = ref(storage, `advisoryApplications/${user.uid}/financials_${Date.now()}_${file.name}`)
+          const uploadResult = await uploadBytes(storageRef, file)
+          const downloadUrl = await getDownloadURL(uploadResult.ref)
+          latestFinancialsUrls.push(downloadUrl)
         }
       }
-    } catch (error) {
-      console.error("Error loading existing application:", error)
-    } finally {
-      setIsLoading(false)
+      // Update formData with the URLs array
+      updateFormData("documentUploads", { latestFinancials: latestFinancialsUrls })
+    } else if (documentSelections?.latestFinancials === "existing") {
+      // existingUniversalDocs.financialStatements is already an array of objects with url property
+      latestFinancialsUrls = existingUniversalDocs?.financialStatements?.map(doc => doc.url) || []
     }
+
+    const docRef = doc(db, "advisoryApplications", user.uid)
+    
+    await setDoc(docRef, {
+      userId: user.uid,
+      userEmail: user.email,
+      status: "submitted",
+      submittedAt: serverTimestamp(),
+      lastUpdated: serverTimestamp(),
+      
+      smeProfileSnapshot: formData.smeProfileSnapshot || {},
+      advisoryNeedsAssessment: formData.advisoryNeedsAssessment || {},
+      urgencyTimeline: formData.urgencyTimeline || {},
+      
+      documentUploads: {
+        businessPlanSource: documentSelections?.businessPlan || "none",
+        businessPlanUrl: businessPlanUrl,
+        latestFinancialsSource: documentSelections?.latestFinancials || "none",
+        latestFinancialsUrls: latestFinancialsUrls,  // This is an ARRAY
+        currentBoardList: formData.documentUploads?.currentBoardList || "None"
+      },
+      
+      completedSections: completedSections,
+      applicationType: "advisory",
+      version: "1.0"
+      
+    }, { merge: true })
+    
+    console.log("Application saved successfully")
+    
+  } catch (error) {
+    console.error("Error saving complete application:", error)
+    alert("Failed to save application: " + error.message)
+    throw error
+  } finally {
+    setIsLoading(false)
   }
+}
+
+  const loadExistingApplication = async () => {
+  if (!user) return
+
+  try {
+    setIsLoading(true)
+
+    const docRef = doc(db, "advisoryApplications", user.uid)
+    const docSnap = await getDoc(docRef)
+
+    if (docSnap.exists()) {
+      const data = docSnap.data()
+
+      // Restore form data
+      setFormData({
+        smeProfileSnapshot: data.smeProfileSnapshot || {},
+        advisoryNeedsAssessment: data.advisoryNeedsAssessment || {},
+        urgencyTimeline: data.urgencyTimeline || {},
+        documentUploads: data.documentUploads?.originalUploads || {}
+      })
+
+      // Restore document selections
+      if (data.documentUploads) {
+        setDocumentSelections({
+          businessPlan: data.documentUploads.businessPlanSource || "none",
+          latestFinancials: data.documentUploads.latestFinancialsSource || "none"
+        })
+      }
+
+      // Restore section completion
+      const completed = data.completedSections || {}
+      setCompletedSections(completed)
+
+      // Check if all sections are complete
+      const allComplete = sections.every((section) => completed[section.id] === true)
+
+      if (data.status === "submitted" || allComplete) {
+        setApplicationSubmitted(true)
+        setShowSummary(true)
+      }
+    }
+  } catch (error) {
+    console.error("Error loading existing application:", error)
+  } finally {
+    setIsLoading(false)
+  }
+}
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
@@ -373,9 +466,15 @@ export default function FundingApplication() {
     switch (activeSection) {
       case "advisoryNeedsAssessment":
         return renderAdvisoryNeedsAssessment(formData.advisoryNeedsAssessment, updateFormData)
-  
-      case "documentUploads":
-        return renderDocumentUploads(formData.documentUploads, updateFormData)
+
+  case "documentUploads":
+  return renderDocumentUploads(
+    formData.documentUploads, 
+    updateFormData, 
+    existingUniversalDocs,
+    documentSelections,
+    handleDocumentSelection
+  )
       default:
         return null
     }
@@ -409,6 +508,52 @@ export default function FundingApplication() {
     // Move to next section
     navigateToNextSection()
   }
+
+  useEffect(() => {
+  const fetchExistingDocuments = async () => {
+    const auth = getAuth()
+    const user = auth.currentUser
+    if (!user) {
+      setExistingUniversalDocs(prev => ({ ...prev, loading: false }))
+      return
+    }
+
+    try {
+      const universalProfileRef = doc(db, "universalProfiles", user.uid)
+      const profileSnap = await getDoc(universalProfileRef)
+
+      if (profileSnap.exists()) {
+        const profileData = profileSnap.data()
+        const documents = profileData.documents || {}
+
+        const businessPlanUrl = documents.businessPlan || null
+        
+        let financialStatementsUrls = []
+        if (documents.financialStatements_multiple && Array.isArray(documents.financialStatements_multiple)) {
+          financialStatementsUrls = documents.financialStatements_multiple
+            .filter(doc => doc.url && doc.url !== "")
+            .map(doc => ({
+              url: doc.url,
+              customName: doc.customName || "Financial Statement",
+            }))
+        }
+
+        setExistingUniversalDocs({
+          businessPlan: businessPlanUrl,
+          financialStatements: financialStatementsUrls,
+          loading: false
+        })
+      } else {
+        setExistingUniversalDocs(prev => ({ ...prev, loading: false }))
+      }
+    } catch (error) {
+      console.error("Error fetching existing documents:", error)
+      setExistingUniversalDocs(prev => ({ ...prev, loading: false }))
+    }
+  }
+
+  fetchExistingDocuments()
+}, [])
 
   useEffect(() => {
     // Auto-complete document uploads section since it's optional
@@ -452,7 +597,8 @@ export default function FundingApplication() {
 
   // Show summary if application is submitted - EARLY RETURN
   if (showSummary) {
-    return <ApplicationSummary formData={formData} onEdit={handleEditApplication} />
+    return <ApplicationSummary formData={formData} onEdit={handleEditApplication} documentSelections={documentSelections}
+    existingUniversalDocs={existingUniversalDocs} />
   }
 
   // Authentication check
