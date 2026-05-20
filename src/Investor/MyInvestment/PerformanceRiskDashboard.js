@@ -1,6 +1,6 @@
 // tabs/PerformanceRiskDashboard.js
-import React from 'react';
-import { Bar, Line, Radar } from 'react-chartjs-2';
+import React, { useState } from 'react';
+import { Bar, Line, Radar, Doughnut } from 'react-chartjs-2';
 import { FiEye } from 'react-icons/fi';
 import {
   Chart as ChartJS,
@@ -10,11 +10,15 @@ import {
   LineElement,
   PointElement,
   RadialLinearScale,
+  ArcElement,
   Title,
   Tooltip,
   Legend,
   Filler
-} from 'chart.js'; 
+} from 'chart.js';
+
+// Import sub-tab components
+import ESGImpactPerformance from './ESGImpactPerformance';
 
 // Register ChartJS components
 ChartJS.register(
@@ -24,16 +28,43 @@ ChartJS.register(
   LineElement,
   PointElement,
   RadialLinearScale,
+  ArcElement,
   Title,
   Tooltip,
   Legend,
   Filler
 );
 
-// Styles for PerformanceRiskDashboard
+// Styles
 const styles = `
 .performance-risk {
   width: 100%;
+}
+
+.main-tabs-container {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 20px;
+  border-bottom: 1px solid #c4c4c4;
+  padding-bottom: 12px;
+}
+
+.main-tab-btn {
+  padding: 6px 16px;
+  border-radius: 20px;
+  cursor: pointer;
+  font-size: 12px;
+  border: 1.5px solid #c4c4c4;
+  font-weight: 500;
+  background: #fff;
+  color: #4a4a4a;
+}
+
+.main-tab-btn.active {
+  border-color: #8b694e;
+  font-weight: 700;
+  background: #8b694e;
+  color: #fff;
 }
 
 .performance-charts-grid {
@@ -53,16 +84,6 @@ const styles = `
   height: 420px;
   position: relative;
   overflow: hidden;
-  transition: none !important;
-  animation: none !important;
-  transform: none !important;
-}
-
-.chart-container:hover {
-  transform: none !important;
-  animation: none !important;
-  transition: none !important;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
 }
 
 .chart-header {
@@ -82,8 +103,6 @@ const styles = `
   display: flex;
   align-items: center;
   justify-content: space-between;
-  line-height: 1.3;
-  min-height: 40px;
 }
 
 .breakdown-icon-btn {
@@ -98,15 +117,10 @@ const styles = `
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: none !important;
-  animation: none !important;
-  transform: none !important;
 }
 
 .breakdown-icon-btn:hover {
   background: #f0f0f0;
-  transform: none !important;
-  animation: none !important;
 }
 
 .chart-title-fixed {
@@ -165,16 +179,11 @@ const styles = `
   cursor: pointer;
   padding: 5px;
   border-radius: 4px;
-  transition: none !important;
-  animation: none !important;
-  transform: none !important;
 }
 
 .popup-close:hover {
   background: #f0f0f0;
   color: #333;
-  transform: none !important;
-  animation: none !important;
 }
 
 .popup-content {
@@ -240,12 +249,10 @@ const styles = `
   font-size: 14px;
 }
 
-/* Responsive Design */
 @media (max-width: 992px) {
   .performance-charts-grid {
     grid-template-columns: 1fr;
   }
-  
   .chart-container {
     height: 380px;
   }
@@ -263,7 +270,6 @@ const styles = `
     padding: 15px;
     height: 320px;
   }
-  
   .performance-charts-grid {
     padding: 0 5px;
   }
@@ -280,7 +286,6 @@ const brownShades = [
   '#3f2a18', '#d4c4b0', '#5D4037', '#3E2723'
 ];
 
-// Static options
 const staticBarOptions = {
   responsive: true,
   maintainAspectRatio: false,
@@ -296,10 +301,7 @@ const staticLineOptions = {
   responsive: true,
   maintainAspectRatio: false,
   animation: false,
-  elements: {
-    line: { tension: 0 },
-    point: { radius: 3 }
-  },
+  elements: { line: { tension: 0 }, point: { radius: 3 } },
   scales: {
     x: { grid: { display: false } },
     y: { beginAtZero: true, grid: { drawBorder: false } }
@@ -310,88 +312,48 @@ const staticRadarOptions = {
   responsive: true,
   maintainAspectRatio: false,
   animation: false,
-  scales: {
-    r: {
-      beginAtZero: true,
-      max: 100,
-      ticks: { stepSize: 20 }
-    }
-  }
+  scales: { r: { beginAtZero: true, max: 100, ticks: { stepSize: 20 } } }
 };
 
-const PerformanceRiskDashboard = ({ openPopup }) => {
+// ==================== PERFORMANCE METRICS MAIN COMPONENT ====================
+const PerformanceRiskDashboard = ({ openPopup, downloadSectionAsPDF, currentUser }) => {
+  const [activeMainTab, setActiveMainTab] = useState("performance"); // performance, esg
+
   // Data generation functions
   const generateBarData = (labels, data, label, colorIndex) => ({
     labels,
-    datasets: [{
-      label,
-      data,
-      backgroundColor: brownShades[colorIndex % brownShades.length]
-    }]
+    datasets: [{ label, data, backgroundColor: brownShades[colorIndex % brownShades.length] }]
   });
 
   const generateStackedBarData = (labels, datasets) => ({
     labels,
-    datasets: datasets.map((ds, i) => ({
-      label: ds.label,
-      data: ds.values,
-      backgroundColor: brownShades[i % brownShades.length]
-    }))
+    datasets: datasets.map((ds, i) => ({ label: ds.label, data: ds.values, backgroundColor: brownShades[i % brownShades.length] }))
   });
 
   const generateLineData = (labels, datasets) => ({
     labels,
-    datasets: datasets.map((ds, i) => ({
-      label: ds.label,
-      data: ds.values,
-      borderColor: brownShades[i % brownShades.length],
-      backgroundColor: brownShades[i % brownShades.length] + '20',
-      borderWidth: 2,
-      fill: ds.fill || false,
-      tension: 0
-    }))
+    datasets: datasets.map((ds, i) => ({ label: ds.label, data: ds.values, borderColor: brownShades[i % brownShades.length], backgroundColor: brownShades[i % brownShades.length] + '20', borderWidth: 2, fill: ds.fill || false, tension: 0 }))
   });
 
   const generateRadarData = (labels, actualData, targetData) => ({
     labels,
     datasets: [
-      {
-        label: 'Actual',
-        data: actualData,
-        backgroundColor: 'rgba(94, 63, 38, 0.2)',
-        borderColor: brownShades[0],
-        pointBackgroundColor: brownShades[0],
-        borderWidth: 2
-      },
-      {
-        label: 'Target',
-        data: targetData,
-        backgroundColor: 'rgba(125, 90, 54, 0.2)',
-        borderColor: brownShades[1],
-        pointBackgroundColor: brownShades[1],
-        borderWidth: 2
-      }
+      { label: 'Actual', data: actualData, backgroundColor: 'rgba(94, 63, 38, 0.2)', borderColor: brownShades[0], pointBackgroundColor: brownShades[0], borderWidth: 2 },
+      { label: 'Target', data: targetData, backgroundColor: 'rgba(125, 90, 54, 0.2)', borderColor: brownShades[1], pointBackgroundColor: brownShades[1], borderWidth: 2 }
     ]
   });
 
   // Chart Components
-  const BarChartWithTitle = ({ data, title, chartTitle, chartId }) => {
+  const BarChartWithTitle = ({ data, title, chartTitle }) => {
     const handleEyeClick = () => {
       openPopup(
         <div className="popup-content">
           <h3>{title}</h3>
-          <div className="popup-description">
-            Detailed breakdown of {title.toLowerCase()}
-          </div>
-          <div className="popup-chart">
-            <Bar data={data} options={staticBarOptions} />
-          </div>
+          <div className="popup-description">Detailed breakdown of {title.toLowerCase()}</div>
+          <div className="popup-chart"><Bar data={data} options={staticBarOptions} /></div>
           <div className="popup-details">
             {data.labels.map((label, index) => (
-              <div key={label} className="detail-item">
-                <span className="detail-label">{label}:</span>
-                <span className="detail-value">{data.datasets[0].data[index]}</span>
-              </div>
+              <div key={label} className="detail-item"><span className="detail-label">{label}:</span><span className="detail-value">{data.datasets[0].data[index]}</span></div>
             ))}
           </div>
         </div>
@@ -402,36 +364,26 @@ const PerformanceRiskDashboard = ({ openPopup }) => {
       <div className="chart-container">
         <div className="chart-header">
           <h3 className="chart-title">{title}</h3>
-          <button className="breakdown-icon-btn" onClick={handleEyeClick} title="View breakdown">
-            <FiEye />
-          </button>
+          <button className="breakdown-icon-btn" onClick={handleEyeClick}><FiEye /></button>
         </div>
         <div className="chart-title-fixed">{chartTitle}</div>
-        <div className="chart-area">
-          <Bar data={data} options={staticBarOptions} />
-        </div>
+        <div className="chart-area"><Bar data={data} options={staticBarOptions} /></div>
       </div>
     );
   };
 
-  const LineChartWithTitle = ({ data, title, chartTitle, chartId }) => {
+  const LineChartWithTitle = ({ data, title, chartTitle }) => {
     const handleEyeClick = () => {
       openPopup(
         <div className="popup-content">
           <h3>{title}</h3>
-          <div className="popup-description">
-            Detailed trend analysis of {title.toLowerCase()}
-          </div>
-          <div className="popup-chart">
-            <Line data={data} options={staticLineOptions} />
-          </div>
+          <div className="popup-description">Detailed trend analysis of {title.toLowerCase()}</div>
+          <div className="popup-chart"><Line data={data} options={staticLineOptions} /></div>
           <div className="popup-details">
             {data.labels.map((label, index) => (
               <div key={label} className="detail-item">
                 <span className="detail-label">{label}:</span>
-                <span className="detail-value">
-                  {data.datasets.map(ds => `${ds.label}: ${ds.data[index]}`).join(' | ')}
-                </span>
+                <span className="detail-value">{data.datasets.map(ds => `${ds.label}: ${ds.data[index]}`).join(' | ')}</span>
               </div>
             ))}
           </div>
@@ -443,36 +395,26 @@ const PerformanceRiskDashboard = ({ openPopup }) => {
       <div className="chart-container">
         <div className="chart-header">
           <h3 className="chart-title">{title}</h3>
-          <button className="breakdown-icon-btn" onClick={handleEyeClick} title="View breakdown">
-            <FiEye />
-          </button>
+          <button className="breakdown-icon-btn" onClick={handleEyeClick}><FiEye /></button>
         </div>
         <div className="chart-title-fixed">{chartTitle}</div>
-        <div className="chart-area">
-          <Line data={data} options={staticLineOptions} />
-        </div>
+        <div className="chart-area"><Line data={data} options={staticLineOptions} /></div>
       </div>
     );
   };
 
-  const RadarChartWithTitle = ({ data, title, chartId }) => {
+  const RadarChartWithTitle = ({ data, title }) => {
     const handleEyeClick = () => {
       openPopup(
         <div className="popup-content">
           <h3>{title}</h3>
-          <div className="popup-description">
-            Performance comparison across different diversity and inclusion metrics
-          </div>
-          <div className="popup-chart">
-            <Radar data={data} options={staticRadarOptions} />
-          </div>
+          <div className="popup-description">Performance comparison across diversity and inclusion metrics</div>
+          <div className="popup-chart"><Radar data={data} options={staticRadarOptions} /></div>
           <div className="popup-details">
             {data.labels.map((label, index) => (
               <div key={label} className="detail-item">
                 <span className="detail-label">{label}:</span>
-                <span className="detail-value">
-                  Actual: {data.datasets[0].data[index]} | Target: {data.datasets[1].data[index]}
-                </span>
+                <span className="detail-value">Actual: {data.datasets[0].data[index]} | Target: {data.datasets[1].data[index]}</span>
               </div>
             ))}
           </div>
@@ -484,81 +426,61 @@ const PerformanceRiskDashboard = ({ openPopup }) => {
       <div className="chart-container">
         <div className="chart-header">
           <h3 className="chart-title">{title}</h3>
-          <button className="breakdown-icon-btn" onClick={handleEyeClick} title="View breakdown">
-            <FiEye />
-          </button>
+          <button className="breakdown-icon-btn" onClick={handleEyeClick}><FiEye /></button>
         </div>
-        <div className="chart-area">
-          <Radar data={data} options={staticRadarOptions} />
-        </div>
+        <div className="chart-area"><Radar data={data} options={staticRadarOptions} /></div>
       </div>
     );
   };
 
   return (
     <div className="performance-risk">
-      <div className="performance-charts-grid">
-        <BarChartWithTitle
-          data={generateBarData(
-            ['Q1', 'Q2', 'Q3', 'Q4'],
-            [7.5, 9.8, 6.1, 4.2],
-            '% Defaults',
-            0
-          )}
-          title="Default / Non-performing Ratio"
-          chartTitle="Default rates per quarter (%)"
-          chartId="default-ratio"
-        />
-
-        <LineChartWithTitle
-          data={generateLineData(
-            ['Q1', 'Q2', 'Q3', 'Q4'],
-            [
-              { label: 'Revenue Growth', values: [9, 10, 12, 11] },
-              { label: 'Benchmark (8%)', values: [8, 8, 8, 8] }
-            ]
-          )}
-          title="SME Growth Index"
-          chartTitle="Revenue growth vs benchmark (%)"
-          chartId="sme-growth-index"
-        />
-
-        <BarChartWithTitle
-          data={generateStackedBarData(
-            ['Agriculture', 'Services', 'Manufacturing', 'Retail', 'Tech'],
-            [
-              { label: 'New Jobs', values: [800, 1000, 600, 400, 300] },
-              { label: 'Retained Jobs', values: [400, 500, 400, 300, 200] }
-            ]
-          )}
-          title="Job Creation / Retention"
-          chartTitle="Jobs created and retained by sector"
-          chartId="job-creation"
-        />
-
-        <LineChartWithTitle
-          data={generateLineData(
-            ['Q1', 'Q2', 'Q3', 'Q4'],
-            [
-              { label: 'Graduation Rate', values: [15, 17, 18, 19] },
-              { label: 'Target (25%)', values: [20, 21, 23, 25] }
-            ]
-          )}
-          title="SME Graduation Rate (to 80+ BIG Score)"
-          chartTitle="Graduation rate vs target (%)"
-          chartId="graduation-rate"
-        />
-
-        <RadarChartWithTitle
-          data={generateRadarData(
-            ['Women', 'Youth', 'Rural', 'Black-owned'],
-            [38, 24, 45, 72],
-            [35, 25, 40, 70]
-          )}
-          title="Diversity & Inclusion Score"
-          chartId="diversity-inclusion"
-        />
+      {/* Main Tabs - Performance Metrics (charts), ESG Impact */}
+      <div className="main-tabs-container">
+        <button className={`main-tab-btn ${activeMainTab === "performance" ? "active" : ""}`} onClick={() => setActiveMainTab("performance")}>
+          Performance Metrics
+        </button>
+        <button className={`main-tab-btn ${activeMainTab === "esg" ? "active" : ""}`} onClick={() => setActiveMainTab("esg")}>
+          ESG Impact Performance
+        </button>
       </div>
+
+      {/* PERFORMANCE METRICS CHARTS - visible when performance is selected */}
+      {activeMainTab === "performance" && (
+        <div className="performance-charts-grid">
+          <BarChartWithTitle
+            data={generateBarData(['Q1', 'Q2', 'Q3', 'Q4'], [7.5, 9.8, 6.1, 4.2], '% Defaults', 0)}
+            title="Default / Non-performing Ratio"
+            chartTitle="Default rates per quarter (%)"
+          />
+
+          <LineChartWithTitle
+            data={generateLineData(['Q1', 'Q2', 'Q3', 'Q4'], [{ label: 'Revenue Growth', values: [9, 10, 12, 11] }, { label: 'Benchmark (8%)', values: [8, 8, 8, 8] }])}
+            title="SME Growth Index"
+            chartTitle="Revenue growth vs benchmark (%)"
+          />
+
+          <BarChartWithTitle
+            data={generateStackedBarData(['Agriculture', 'Services', 'Manufacturing', 'Retail', 'Tech'], [{ label: 'New Jobs', values: [800, 1000, 600, 400, 300] }, { label: 'Retained Jobs', values: [400, 500, 400, 300, 200] }])}
+            title="Job Creation / Retention"
+            chartTitle="Jobs created and retained by sector"
+          />
+
+          <LineChartWithTitle
+            data={generateLineData(['Q1', 'Q2', 'Q3', 'Q4'], [{ label: 'Graduation Rate', values: [15, 17, 18, 19] }, { label: 'Target (25%)', values: [20, 21, 23, 25] }])}
+            title="SME Graduation Rate (to 80+ BIG Score)"
+            chartTitle="Graduation rate vs target (%)"
+          />
+
+          <RadarChartWithTitle
+            data={generateRadarData(['Women', 'Youth', 'Rural', 'Black-owned'], [38, 24, 45, 72], [35, 25, 40, 70])}
+            title="Diversity & Inclusion Score"
+          />
+        </div>
+      )}
+
+      {/* ESG IMPACT PERFORMANCE SUB-TAB */}
+      {activeMainTab === "esg" && <ESGImpactPerformance openPopup={openPopup} />}
     </div>
   );
 };
