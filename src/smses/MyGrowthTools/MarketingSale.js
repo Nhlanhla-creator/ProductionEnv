@@ -12,6 +12,7 @@ import {
   getDocs,
   addDoc,
   deleteDoc,
+  updateDoc,
 } from "firebase/firestore";
 import { auth, db } from "../../firebaseConfig";
 import { onAuthStateChanged } from "firebase/auth";
@@ -23,6 +24,8 @@ import {
   X,
   TrendingUp,
   TrendingDown,
+  Settings,
+  Check,
 } from "lucide-react";
 import {
   DateRangePicker,
@@ -161,7 +164,531 @@ const circleColors = [
   { border: "#006400", background: "#ADFF2F", text: "#003300" },
 ];
 
-// ==================== COMPONENTS ====================
+// ==================== AVAILABLE FIELDS FOR TABLE ====================
+
+const AVAILABLE_FIELDS = [
+ { id: "tier", label: "Tier Category", type: "dropdown", options: ["Core anchor", "Land & expand", "Flagship", "Coopetition", "Capital corridor","Provincial Multiplier"] },
+  { id: "accountWebsite", label: "Account Website", type: "text" },
+  { id: "targetCategory", label: "Target Category", type: "dropdown", options: ["Strategic", "Tactical", "Operational"] },
+  { id: "sector", label: "Sector", type: "dropdown", options: ["Generalist", "Agriculture", "Automotive", "Banking, Finance & Insurance", "Beauty / Cosmetics / Personal Care", "Construction", "Consulting", "Creative Arts / Design", "Customer Service", "Education & Training", "Engineering", "Environmental / Natural Sciences", "Government / Public Sector", "Healthcare / Medical", "Hospitality / Tourism", "Human Resources", "Information Technology (IT)", "Infrastructure", "Legal / Law", "Logistics / Supply Chain", "Manufacturing", "Marketing / Advertising / PR", "Media / Journalism / Broadcasting", "Mining", "Energy", "Oil & Gas", "Non-Profit / NGO", "Property / Real Estate", "Retail / Wholesale", "Safety & Security / Police / Defence", "Sales", "Science & Research", "Social Services / Social Work", "Sports / Recreation / Fitness", "Telecommunications", "Transport", "Utilities (Water, Electricity, Waste)", "Industry multiplier", "Provincial multiplier"] },
+  { id: "publicPrivate", label: "Public / Private", type: "dropdown", options: ["Public", "Private"] },
+  { id: "channel", label: "Channel", type: "dropdown", options: ["Direct", "Partner", "Reseller", "Online", "Referral"] },
+  { id: "bigHook", label: "BIG Hook", type: "text" },
+  { id: "revPotential", label: "Rev potential", type: "currency" },
+  { id: "fyEnd", label: "FY End", type: "text" },
+  { id: "strategicSignal", label: "Strategic Signal", type: "dropdown", options: ["High", "Medium", "Low"] },
+  { id: "targetModel", label: "Target Model", type: "dropdown", options: ["ICP", "Lookalike", "Niche", "Mass Market"] },
+  { id: "compliance", label: "Compliance", type: "boolean" },
+  { id: "esd", label: "ESD (incl compliance, intelligence)", type: "boolean" },
+  { id: "prevettedSupplyChain", label: "Prevetted Supply Chain Pipeline", type: "boolean" },
+  { id: "prevettedFunding", label: "Prevetted Funding Pipeline", type: "boolean" },
+  { id: "postInvestmentSupport", label: "Post-Investment Support (Growth Suite)", type: "boolean" },
+  { id: "portfolioIntelligence", label: "Portfolio Intelligence", type: "boolean" },
+  { id: "marketIntelligence", label: "Market Intelligence", type: "boolean" },
+  { id: "internSponsorship", label: "InTern Sponsorship", type: "boolean" },
+  { id: "likelyBuyer", label: "Likely Buyer", type: "text" },
+  { id: "keyContact", label: "Key Contact (Name & Surname)", type: "text" },
+  { id: "keyContactRole", label: "Key Contact Role & Department", type: "text" },
+  { id: "keyContactEmail", label: "Key Contact email", type: "text" },
+  { id: "keyContactPhone", label: "Key Contact Phone", type: "text" },
+  { id: "warmIntroPath", label: "Warm Intro Path", type: "text" },
+  { id: "lastEngagement", label: "Last Engagement", type: "date" },
+  { id: "probability", label: "Probability %", type: "number" },
+  { id: "nextCta", label: "Next CTA", type: "text" },
+  { id: "byWhom", label: "By Whom", type: "text" },
+  { id: "byWhen", label: "By When", type: "date" },
+  { id: "notes", label: "Notes", type: "text" },
+];
+
+const DEFAULT_VISIBLE_FIELDS = [
+  "tier",
+  "accountWebsite",
+  "sector",
+  "revPotential",
+  "probability",
+  "nextCta",
+  "byWhen",
+];
+
+// ==================== COLUMN SELECTOR MODAL ====================
+
+const ColumnSelector = ({ isOpen, onClose, visibleFields, onToggleField }) => {
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex justify-center items-center z-[1000]">
+      <div className="bg-[#fdfcfb] p-5 rounded-lg max-w-[600px] w-[90%] max-h-[80vh] overflow-auto">
+        <div className="flex justify-between items-center mb-4">
+          <h3 className="text-mediumBrown text-lg font-semibold">Select Columns to Display</h3>
+          <button onClick={onClose} className="text-mediumBrown hover:text-warmBrown">
+            <X size={20} />
+          </button>
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          {AVAILABLE_FIELDS.map((field) => (
+            <label key={field.id} className="flex items-center gap-2 text-sm text-mediumBrown cursor-pointer">
+              <input
+                type="checkbox"
+                checked={visibleFields.includes(field.id)}
+                onChange={() => onToggleField(field.id)}
+                className="w-4 h-4 rounded border-[#e8ddd4] accent-mediumBrown"
+              />
+              {field.label}
+            </label>
+          ))}
+        </div>
+        <div className="flex justify-end mt-5">
+          <button
+            onClick={onClose}
+            className="px-4 py-2 bg-mediumBrown text-white rounded-md text-sm"
+          >
+            Done
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ==================== CELL RENDERERS ====================
+
+const BooleanCell = ({ value, onChange, isEditing }) => {
+  if (isEditing) {
+    return (
+      <select
+        value={value ? "yes" : "no"}
+        onChange={(e) => onChange(e.target.value === "yes")}
+        className="w-full p-1 rounded border border-[#e8ddd4] text-sm bg-white"
+      >
+        <option value="yes">Yes</option>
+        <option value="no">No</option>
+      </select>
+    );
+  }
+  return (
+    <span className={`text-sm font-medium ${value ? "text-green-600" : "text-red-500"}`}>
+      {value ? "✓ Yes" : "✗ No"}
+    </span>
+  );
+};
+
+const DropdownCell = ({ value, options, onChange, isEditing }) => {
+  if (isEditing) {
+    return (
+      <select
+        value={value || ""}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full p-1 rounded border border-[#e8ddd4] text-sm bg-white"
+      >
+        <option value="">Select...</option>
+        {options.map((opt) => (
+          <option key={opt} value={opt}>{opt}</option>
+        ))}
+      </select>
+    );
+  }
+  return <span className="text-sm text-mediumBrown">{value || "-"}</span>;
+};
+
+const TextCell = ({ value, onChange, isEditing, type }) => {
+  if (isEditing) {
+    if (type === "currency") {
+      return (
+        <input
+          type="number"
+          step="0.01"
+          value={value || ""}
+          onChange={(e) => onChange(parseFloat(e.target.value) || 0)}
+          className="w-full p-1 rounded border border-[#e8ddd4] text-sm"
+        />
+      );
+    }
+    if (type === "number") {
+      return (
+        <input
+          type="number"
+          step="1"
+          value={value || ""}
+          onChange={(e) => onChange(parseFloat(e.target.value) || 0)}
+          className="w-full p-1 rounded border border-[#e8ddd4] text-sm"
+        />
+      );
+    }
+    if (type === "date") {
+      return (
+        <input
+          type="date"
+          value={value || ""}
+          onChange={(e) => onChange(e.target.value)}
+          className="w-full p-1 rounded border border-[#e8ddd4] text-sm"
+        />
+      );
+    }
+    return (
+      <input
+        type="text"
+        value={value || ""}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full p-1 rounded border border-[#e8ddd4] text-sm"
+      />
+    );
+  }
+  if (type === "currency") {
+    return <span className="text-sm text-mediumBrown">{formatCurrency(value)}</span>;
+  }
+  return <span className="text-sm text-mediumBrown">{value || "-"}</span>;
+};
+
+// ==================== PIPELINE TABLE COMPONENT ====================
+
+const PipelineTable = ({
+  currentUser,
+  isInvestorView,
+  onDataChange,
+}) => {
+  const [records, setRecords] = useState([]);
+  const [filteredRecords, setFilteredRecords] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [showColumnSelector, setShowColumnSelector] = useState(false);
+  const [visibleFields, setVisibleFields] = useState(DEFAULT_VISIBLE_FIELDS);
+  const [editingId, setEditingId] = useState(null);
+  const [editData, setEditData] = useState({});
+  const [filters, setFilters] = useState({});
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
+
+  // Load records from Firestore
+  const loadRecords = async () => {
+    if (!currentUser) return;
+    setLoading(true);
+    try {
+      const recordsRef = collection(db, "users", currentUser.uid, "pipelineRecords");
+      const querySnapshot = await getDocs(recordsRef);
+      const recordsData = [];
+      querySnapshot.forEach((doc) => {
+        recordsData.push({ id: doc.id, ...doc.data() });
+      });
+      setRecords(recordsData);
+      setFilteredRecords(recordsData);
+      if (onDataChange) onDataChange(recordsData);
+    } catch (error) {
+      console.error("Error loading records:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (currentUser) {
+      loadRecords();
+    }
+  }, [currentUser]);
+
+  // Apply filters
+  useEffect(() => {
+    let filtered = [...records];
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value && value.trim() !== "") {
+        filtered = filtered.filter((record) => {
+          const recordValue = record[key];
+          if (recordValue === undefined || recordValue === null) return false;
+          return recordValue.toString().toLowerCase().includes(value.toLowerCase());
+        });
+      }
+    });
+    setFilteredRecords(filtered);
+  }, [filters, records]);
+
+  const handleAddRecord = async () => {
+    if (!currentUser) return;
+    const newRecord = {};
+    AVAILABLE_FIELDS.forEach((field) => {
+      if (field.type === "boolean") {
+        newRecord[field.id] = false;
+      } else if (field.type === "currency" || field.type === "number") {
+        newRecord[field.id] = 0;
+      } else {
+        newRecord[field.id] = "";
+      }
+    });
+    newRecord.createdAt = new Date().toISOString();
+    
+    try {
+      const recordsRef = collection(db, "users", currentUser.uid, "pipelineRecords");
+      const docRef = await addDoc(recordsRef, newRecord);
+      setRecords([{ id: docRef.id, ...newRecord }, ...records]);
+      setEditingId(docRef.id);
+      setEditData({ ...newRecord });
+    } catch (error) {
+      console.error("Error adding record:", error);
+      alert("Failed to add record");
+    }
+  };
+
+  const handleSaveEdit = async () => {
+    if (!currentUser || !editingId) return;
+    try {
+      const recordRef = doc(db, "users", currentUser.uid, "pipelineRecords", editingId);
+      await updateDoc(recordRef, editData);
+      setRecords(records.map(r => r.id === editingId ? { ...r, ...editData } : r));
+      setEditingId(null);
+      setEditData({});
+    } catch (error) {
+      console.error("Error saving record:", error);
+      alert("Failed to save changes");
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditingId(null);
+    setEditData({});
+  };
+
+  const handleDeleteRecord = async (id) => {
+    if (!currentUser) return;
+    try {
+      const recordRef = doc(db, "users", currentUser.uid, "pipelineRecords", id);
+      await deleteDoc(recordRef);
+      setRecords(records.filter(r => r.id !== id));
+      setShowDeleteConfirm(null);
+    } catch (error) {
+      console.error("Error deleting record:", error);
+      alert("Failed to delete record");
+    }
+  };
+
+  const handleEditChange = (fieldId, value) => {
+    setEditData({ ...editData, [fieldId]: value });
+  };
+
+  const toggleField = (fieldId) => {
+    if (visibleFields.includes(fieldId)) {
+      setVisibleFields(visibleFields.filter(f => f !== fieldId));
+    } else {
+      setVisibleFields([...visibleFields, fieldId]);
+    }
+  };
+
+  const clearFilters = () => {
+    setFilters({});
+  };
+
+  const getFieldConfig = (fieldId) => {
+    return AVAILABLE_FIELDS.find(f => f.id === fieldId);
+  };
+
+  const renderCell = (record, fieldId, isEditing) => {
+    const fieldConfig = getFieldConfig(fieldId);
+    if (!fieldConfig) return null;
+    
+    const value = isEditing ? editData[fieldId] : record[fieldId];
+    
+    if (fieldConfig.type === "boolean") {
+      return (
+        <BooleanCell
+          value={value}
+          onChange={(newVal) => handleEditChange(fieldId, newVal)}
+          isEditing={isEditing}
+        />
+      );
+    }
+    
+    if (fieldConfig.type === "dropdown") {
+      return (
+        <DropdownCell
+          value={value}
+          options={fieldConfig.options}
+          onChange={(newVal) => handleEditChange(fieldId, newVal)}
+          isEditing={isEditing}
+        />
+      );
+    }
+    
+    return (
+      <TextCell
+        value={value}
+        onChange={(newVal) => handleEditChange(fieldId, newVal)}
+        isEditing={isEditing}
+        type={fieldConfig.type}
+      />
+    );
+  };
+
+  return (
+    <div className="mt-5">
+      <ColumnSelector
+        isOpen={showColumnSelector}
+        onClose={() => setShowColumnSelector(false)}
+        visibleFields={visibleFields}
+        onToggleField={toggleField}
+      />
+
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black/50 flex justify-center items-center z-[1000]">
+          <div className="bg-[#fdfcfb] p-5 rounded-lg max-w-[400px] w-[90%]">
+            <h3 className="text-mediumBrown text-lg mb-3">Confirm Delete</h3>
+            <p className="text-mediumBrown mb-5">Are you sure you want to delete this record? This action cannot be undone.</p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowDeleteConfirm(null)}
+                className="px-4 py-2 bg-[#e8ddd4] text-mediumBrown rounded-md"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleDeleteRecord(showDeleteConfirm)}
+                className="px-4 py-2 bg-red-600 text-white rounded-md"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="flex justify-between items-center mb-4 flex-wrap gap-3">
+        <div className="flex gap-2">
+          {!isInvestorView && (
+            <button
+              onClick={handleAddRecord}
+              className="px-4 py-2 bg-mediumBrown text-white rounded-md text-sm font-semibold hover:bg-warmBrown transition"
+            >
+              + Add Record
+            </button>
+          )}
+          <button
+            onClick={() => setShowColumnSelector(true)}
+            className="px-4 py-2 bg-[#e8ddd4] text-mediumBrown rounded-md text-sm font-semibold flex items-center gap-2 hover:bg-[#d4c4b8] transition"
+          >
+            <Settings size={16} />
+            Columns
+          </button>
+        </div>
+      </div>
+
+      {/* Single Row Filters */}
+      <div className="bg-[#f5f0eb] p-3 rounded-lg mb-4 border border-[#e8ddd4] overflow-x-auto">
+        <div className="flex gap-3 items-center flex-nowrap min-w-max">
+          {visibleFields.map((fieldId) => {
+            const fieldConfig = getFieldConfig(fieldId);
+            if (!fieldConfig) return null;
+            return (
+              <div key={`filter-${fieldId}`} className="flex-shrink-0 min-w-[120px]">
+                <input
+                  type="text"
+                  placeholder={`Filter ${fieldConfig.label}`}
+                  value={filters[fieldId] || ""}
+                  onChange={(e) => setFilters({ ...filters, [fieldId]: e.target.value })}
+                  className="w-full p-1.5 rounded border border-[#e8ddd4] text-xs bg-white"
+                />
+              </div>
+            );
+          })}
+          <button
+            onClick={clearFilters}
+            className="px-3 py-1.5 bg-mediumBrown text-white rounded-md text-xs font-semibold whitespace-nowrap"
+          >
+            Clear Filters
+          </button>
+        </div>
+      </div>
+
+      {/* Data Table */}
+      <div className="overflow-x-auto bg-[#fdfcfb] rounded-lg border border-[#e8ddd4]">
+        <table className="w-full border-collapse">
+          <thead>
+            <tr className="bg-mediumBrown text-white">
+              {visibleFields.map((fieldId) => {
+                const fieldConfig = getFieldConfig(fieldId);
+                return (
+                  <th key={fieldId} className="p-3 text-left text-sm font-semibold whitespace-nowrap">
+                    {fieldConfig?.label || fieldId}
+                  </th>
+                );
+              })}
+              {!isInvestorView && (
+                <th className="p-3 text-center text-sm font-semibold whitespace-nowrap">Actions</th>
+              )}
+            </tr>
+          </thead>
+          <tbody>
+            {filteredRecords.length === 0 ? (
+              <tr>
+                <td colSpan={visibleFields.length + (isInvestorView ? 0 : 1)} className="p-8 text-center text-lightBrown">
+                  {loading ? "Loading..." : "No records found. Click 'Add Record' to get started."}
+                </td>
+              </tr>
+            ) : (
+              filteredRecords.map((record, idx) => (
+                <tr
+                  key={record.id}
+                  className={`border-b border-[#e8ddd4] ${idx % 2 === 0 ? "bg-white" : "bg-[#faf8f5]"}`}
+                >
+                  {visibleFields.map((fieldId) => (
+                    <td key={fieldId} className="p-2.5 align-middle">
+                      {renderCell(record, fieldId, editingId === record.id)}
+                    </td>
+                  ))}
+                  {!isInvestorView && (
+                    <td className="p-2.5 text-center whitespace-nowrap">
+                      {editingId === record.id ? (
+                        <div className="flex gap-1 justify-center">
+                          <button
+                            onClick={handleSaveEdit}
+                            className="p-1 bg-green-600 text-white rounded hover:bg-green-700"
+                            title="Save"
+                          >
+                            <Check size={16} />
+                          </button>
+                          <button
+                            onClick={handleCancelEdit}
+                            className="p-1 bg-gray-400 text-white rounded hover:bg-gray-500"
+                            title="Cancel"
+                          >
+                            <X size={16} />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex gap-1 justify-center">
+                          <button
+                            onClick={() => {
+                              setEditingId(record.id);
+                              setEditData({ ...record });
+                            }}
+                            className="p-1 bg-mediumBrown text-white rounded hover:bg-warmBrown"
+                            title="Edit"
+                          >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M17 3l4 4-7 7H10v-4l7-7z" />
+                              <path d="M4 20h16" />
+                            </svg>
+                          </button>
+                          <button
+                            onClick={() => setShowDeleteConfirm(record.id)}
+                            className="p-1 bg-red-600 text-white rounded hover:bg-red-700"
+                            title="Delete"
+                          >
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                              <path d="M4 7h16M10 11v6M14 11v6M5 7l1 13a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2l1-13" />
+                              <path d="M9 4h6a1 1 0 0 1 1 1v2H8V5a1 1 0 0 1 1-1z" />
+                            </svg>
+                          </button>
+                        </div>
+                      )}
+                    </td>
+                  )}
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      <div className="mt-4 bg-[#f5f0eb] p-3 rounded-lg text-sm text-mediumBrown">
+        Showing {filteredRecords.length} of {records.length} records
+      </div>
+    </div>
+  );
+};
 
 // ==================== UNIVERSAL ADD DATA MODAL ====================
 
@@ -193,7 +720,6 @@ const UniversalAddDataModal = ({
     "Dec",
   ];
 
-  // Derive year tabs and per-year visible month indices from the date range
   const rangeMonths =
     fromDate && toDate ? getRangeMonths(fromDate, toDate) : null;
   const rangeYears = rangeMonths
@@ -208,7 +734,6 @@ const UniversalAddDataModal = ({
     rangeYears[rangeYears.length - 1],
   );
 
-  // Reset selectedYear when range changes
   useEffect(() => {
     setSelectedYear(rangeYears[rangeYears.length - 1]);
   }, [fromDate, toDate]);
@@ -221,7 +746,6 @@ const UniversalAddDataModal = ({
     { id: "pipeline-table", label: "Pipeline Table" },
   ];
 
-  // Pipeline visibility: keyed by year so multi-year ranges work
   const emptyVisYear = () => ({
     newLeads: Array(12).fill(""),
     newLeadsBudget: Array(12).fill(0),
@@ -285,9 +809,6 @@ const UniversalAddDataModal = ({
     signedDate: "",
   });
 
-  // Helper: safely coerce a Firestore field to a 12-string array
-  // Safely extract the actual values array from a Firestore field.
-  // Handles plain arrays AND the {actual:[...], budget:[...]} shape.
   const toStrArray = (val) => {
     if (!val) return Array(12).fill("");
     const arr = Array.isArray(val)
@@ -298,7 +819,6 @@ const UniversalAddDataModal = ({
     if (!arr) return Array(12).fill("");
     return arr.map(String);
   };
-  // Keep the budget array when it exists so we don't overwrite it on save
   const toBudgetArray = (val) => {
     if (!val) return Array(12).fill(0);
     return Array.isArray(val?.budget) ? val.budget : Array(12).fill(0);
@@ -312,7 +832,6 @@ const UniversalAddDataModal = ({
     try {
       switch (tabId) {
         case "pipeline-visibility":
-          // Load all years in range, merge into visibilityByYear
           const updates = {};
           await Promise.all(
             rangeYears.map(async (yr) => {
@@ -404,7 +923,6 @@ const UniversalAddDataModal = ({
     try {
       switch (activeTab) {
         case "pipeline-visibility":
-          // Save each year in the range separately, preserving budget arrays
           await Promise.all(
             rangeYears.map(async (yr) => {
               const yd = visibilityByYear[yr] || emptyVisYear();
@@ -541,7 +1059,6 @@ const UniversalAddDataModal = ({
   const inputCls = "w-full p-2 rounded border border-[#e8ddd4] text-sm";
   const labelCls = "text-xs text-mediumBrown font-semibold";
 
-  // Renders only the months visible in the current range for the active year tab
   const renderMonthlyInputs = (dataArray, setDataArray, options = {}) => {
     const { step = "0.01" } = options;
     const visibleIndices = monthIndicesForYear(selectedYear);
@@ -577,7 +1094,6 @@ const UniversalAddDataModal = ({
 
   if (!isOpen) return null;
 
-  // Year tab bar — shown for all tabs when range spans multiple years, or for visibility always
   const showYearTabs =
     rangeYears.length > 1 || activeTab === "pipeline-visibility";
 
@@ -594,7 +1110,6 @@ const UniversalAddDataModal = ({
           </button>
         </div>
 
-        {/* Section tab navigation */}
         <div className="flex gap-1 mb-5 flex-wrap border-b-2 border-[#e8ddd4] pb-2.5">
           {tabs.map((tab) => (
             <button
@@ -607,7 +1122,6 @@ const UniversalAddDataModal = ({
           ))}
         </div>
 
-        {/* Year tabs — one per year in the selected date range */}
         {showYearTabs && (
           <div className="flex gap-2 mb-5 flex-wrap items-center">
             <span className="text-mediumBrown text-sm font-semibold mr-1">
@@ -630,7 +1144,6 @@ const UniversalAddDataModal = ({
           </div>
         )}
 
-        {/* Pipeline Visibility */}
         {activeTab === "pipeline-visibility" &&
           (() => {
             const yd = visibilityByYear[selectedYear] || emptyVisYear();
@@ -686,7 +1199,6 @@ const UniversalAddDataModal = ({
             );
           })()}
 
-        {/* Pipeline Sufficiency */}
         {activeTab === "pipeline-sufficiency" && (
           <div>
             <h4 className="text-mediumBrown mb-5">Pipeline Sufficiency Data</h4>
@@ -755,7 +1267,6 @@ const UniversalAddDataModal = ({
           </div>
         )}
 
-        {/* Revenue Concentration */}
         {activeTab === "revenue-concentration" && (
           <div>
             <h4 className="text-mediumBrown mb-5">
@@ -882,7 +1393,6 @@ const UniversalAddDataModal = ({
           </div>
         )}
 
-        {/* Demand Sustainability */}
         {activeTab === "demand-sustainability" && (
           <div>
             <h4 className="text-mediumBrown mb-5">
@@ -988,7 +1498,6 @@ const UniversalAddDataModal = ({
           </div>
         )}
 
-        {/* Pipeline Table */}
         {activeTab === "pipeline-table" && (
           <div className="p-5">
             <h4 className="text-mediumBrown mb-5">Add New Deal</h4>
@@ -1157,7 +1666,6 @@ const UniversalAddDataModal = ({
           </div>
         )}
 
-        {/* Action Buttons */}
         <div className="flex gap-2.5 justify-end mt-5">
           <button
             onClick={onClose}
@@ -1173,403 +1681,6 @@ const UniversalAddDataModal = ({
             {loading ? "Saving..." : "Save Data"}
           </button>
         </div>
-      </div>
-    </div>
-  );
-};
-
-// ==================== PIPELINE TABLE COMPONENT ====================
-
-const PipelineTable = ({
-  currentUser,
-  isInvestorView,
-  selectedYear,
-  onAddData,
-  onDealChange, // Add callback for when deals change
-}) => {
-  const [deals, setDeals] = useState([]);
-  const [filteredDeals, setFilteredDeals] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [confirmDialog, setConfirmDialog] = useState({
-    show: false,
-    dealId: null,
-  });
-  const [filters, setFilters] = useState({
-    clientName: "",
-    segment: "",
-    stage: "",
-    source: "",
-    owner: "",
-    minValue: "",
-    maxValue: "",
-  });
-
-  const stageOptions = [
-    { value: "initial-contact", label: "Initial Contact" },
-    { value: "qualification", label: "Qualification" },
-    { value: "proposal", label: "Proposal" },
-    { value: "negotiation", label: "Negotiation" },
-    { value: "closed-won", label: "Closed Won" },
-    { value: "closed-lost", label: "Closed Lost" },
-  ];
-
-  useEffect(() => {
-    if (currentUser) loadDeals();
-  }, [currentUser, selectedYear]);
-  useEffect(() => {
-    applyFilters();
-  }, [deals, filters]);
-
-  const loadDeals = async () => {
-    if (!currentUser) return;
-    setLoading(true);
-    try {
-      const dealsRef = collection(
-        db,
-        "users",
-        currentUser.uid,
-        "pipelineDeals",
-      );
-      const q = query(dealsRef, where("year", "==", selectedYear));
-      const querySnapshot = await getDocs(q);
-      const dealsData = [];
-      querySnapshot.forEach((doc) => {
-        dealsData.push({ id: doc.id, ...doc.data() });
-      });
-      setDeals(dealsData);
-      setFilteredDeals(dealsData);
-      // Notify parent component that deals have changed
-      if (onDealChange) {
-        onDealChange(dealsData);
-      }
-    } catch (error) {
-      console.error("Error loading deals:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const applyFilters = () => {
-    let filtered = [...deals];
-    if (filters.clientName)
-      filtered = filtered.filter((deal) =>
-        deal.clientName
-          ?.toLowerCase()
-          .includes(filters.clientName.toLowerCase()),
-      );
-    if (filters.segment)
-      filtered = filtered.filter((deal) =>
-        deal.segment?.toLowerCase().includes(filters.segment.toLowerCase()),
-      );
-    if (filters.stage)
-      filtered = filtered.filter((deal) => deal.stage === filters.stage);
-    if (filters.source)
-      filtered = filtered.filter((deal) =>
-        deal.source?.toLowerCase().includes(filters.source.toLowerCase()),
-      );
-    if (filters.owner)
-      filtered = filtered.filter((deal) =>
-        deal.owner?.toLowerCase().includes(filters.owner.toLowerCase()),
-      );
-    if (filters.minValue)
-      filtered = filtered.filter(
-        (deal) => (deal.dealValue || 0) >= parseFloat(filters.minValue),
-      );
-    if (filters.maxValue)
-      filtered = filtered.filter(
-        (deal) => (deal.dealValue || 0) <= parseFloat(filters.maxValue),
-      );
-    setFilteredDeals(filtered);
-  };
-
-  const deleteDeal = async (dealId) => {
-    if (!currentUser || isInvestorView) {
-      alert("You cannot delete deals in this mode.");
-      return;
-    }
-    setConfirmDialog({ show: true, dealId });
-  };
-
-  const handleConfirmDelete = async () => {
-    try {
-      const dealsRef = collection(
-        db,
-        "users",
-        currentUser.uid,
-        "pipelineDeals",
-      );
-      await deleteDoc(doc(dealsRef, confirmDialog.dealId));
-      loadDeals();
-    } catch (error) {
-      console.error("Error deleting deal:", error);
-      alert("Error deleting deal");
-    } finally {
-      setConfirmDialog({ show: false, dealId: null });
-    }
-  };
-
-  const clearFilters = () =>
-    setFilters({
-      clientName: "",
-      segment: "",
-      stage: "",
-      source: "",
-      owner: "",
-      minValue: "",
-      maxValue: "",
-    });
-
-  const totalPipelineValue = filteredDeals.reduce(
-    (sum, deal) => sum + (deal.dealValue || 0),
-    0,
-  );
-  const totalRiskAdjusted = filteredDeals.reduce(
-    (sum, deal) => sum + (deal.riskAdjustedValue || 0),
-    0,
-  );
-  const filterInputCls =
-    "w-full p-2 rounded border border-[#e8ddd4] text-[13px]";
-
-  return (
-    <div className="mt-7">
-      {confirmDialog.show && (
-        <div className="fixed inset-0 bg-black/50 flex justify-center items-center z-[2000]">
-          <div className="bg-[#fdfcfb] p-7 rounded-lg max-w-[400px] w-[90%]">
-            <h3 className="text-mediumBrown mt-0 mb-[15px]">
-              Confirm Deletion
-            </h3>
-            <p className="text-mediumBrown mb-6">
-              Are you sure you want to delete this deal? This action cannot be
-              undone.
-            </p>
-            <div className="flex gap-2.5 justify-end">
-              <button
-                onClick={() => setConfirmDialog({ show: false, dealId: null })}
-                className="px-4 py-2 bg-[#e8ddd4] text-mediumBrown border-0 rounded cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleConfirmDelete}
-                className="px-4 py-2 bg-red-600 text-[#fdfcfb] border-0 rounded cursor-pointer"
-              >
-                Delete
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div className="flex justify-between items-center mb-5 flex-wrap gap-[15px]">
-        <h3 className="text-mediumBrown text-lg font-bold m-0">
-          Pipeline Deals
-        </h3>
-        {!isInvestorView && (
-          <button
-            onClick={onAddData}
-            className="px-4 py-2 bg-mediumBrown text-[#fdfcfb] border-0 rounded cursor-pointer font-semibold text-sm"
-          >
-            Add Deal
-          </button>
-        )}
-      </div>
-
-      {/* Filters */}
-      <div className="bg-[#f5f0eb] p-5 rounded-lg mb-5 border border-[#e8ddd4]">
-        <div className="flex justify-between items-center mb-[15px]">
-          <h4 className="text-mediumBrown text-base font-semibold m-0">
-            Filters
-          </h4>
-          <button
-            onClick={clearFilters}
-            className="px-3 py-1.5 bg-[#e8ddd4] text-mediumBrown border-0 rounded cursor-pointer text-xs font-semibold"
-          >
-            Clear Filters
-          </button>
-        </div>
-        <div className="grid grid-cols-4 gap-[15px]">
-          {[
-            {
-              label: "Client Name",
-              key: "clientName",
-              placeholder: "Search client...",
-              type: "text",
-            },
-            {
-              label: "Segment",
-              key: "segment",
-              placeholder: "Filter by segment...",
-              type: "text",
-            },
-            {
-              label: "Source",
-              key: "source",
-              placeholder: "Filter by source...",
-              type: "text",
-            },
-            {
-              label: "Owner",
-              key: "owner",
-              placeholder: "Filter by owner...",
-              type: "text",
-            },
-            {
-              label: "Min Value (R)",
-              key: "minValue",
-              placeholder: "Min amount...",
-              type: "number",
-            },
-            {
-              label: "Max Value (R)",
-              key: "maxValue",
-              placeholder: "Max amount...",
-              type: "number",
-            },
-          ].map(({ label, key, placeholder, type }) => (
-            <div key={key}>
-              <label className="text-xs text-mediumBrown block mb-1">
-                {label}
-              </label>
-              <input
-                type={type}
-                value={filters[key]}
-                onChange={(e) =>
-                  setFilters({ ...filters, [key]: e.target.value })
-                }
-                placeholder={placeholder}
-                className={filterInputCls}
-              />
-            </div>
-          ))}
-          <div>
-            <label className="text-xs text-mediumBrown block mb-1">Stage</label>
-            <select
-              value={filters.stage}
-              onChange={(e) =>
-                setFilters({ ...filters, stage: e.target.value })
-              }
-              className={filterInputCls}
-            >
-              <option value="">All Stages</option>
-              {stageOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-      </div>
-
-      {/* Deals Table */}
-      <div className="overflow-x-auto bg-[#f5f0eb] rounded-lg p-5 mb-7">
-        {filteredDeals.length === 0 ? (
-          <div className="text-center p-10 text-lightBrown">
-            {deals.length === 0
-              ? "No deals found. Click 'Add Deal' to get started."
-              : "No deals match the current filters."}
-          </div>
-        ) : (
-          <table className="w-full border-collapse">
-            <thead>
-              <tr className="bg-mediumBrown text-[#fdfcfb]">
-                {[
-                  "Client",
-                  "Segment",
-                  "Stage",
-                  "Probability",
-                  "Value",
-                  "Risk Adj",
-                  "Source",
-                  "Owner",
-                  "Expected Close",
-                ].map((h, i) => (
-                  <th
-                    key={h}
-                    className={`p-3 text-[13px] ${i >= 3 && i <= 5 ? "text-right" : "text-left"}`}
-                  >
-                    {h}
-                  </th>
-                ))}
-                {!isInvestorView && (
-                  <th className="p-3 text-center text-[13px]">Actions</th>
-                )}
-              </tr>
-            </thead>
-            <tbody>
-              {filteredDeals.map((deal, index) => {
-                const stageLabel =
-                  stageOptions.find((option) => option.value === deal.stage)
-                    ?.label || deal.stage;
-                return (
-                  <tr
-                    key={deal.id}
-                    className={`border-b border-[#e8ddd4] ${index % 2 === 0 ? "bg-[#fdfcfb]" : "bg-[#f5f0eb]"}`}
-                  >
-                    <td className="p-2.5 text-[13px] text-mediumBrown">
-                      {deal.clientName}
-                    </td>
-                    <td className="p-2.5 text-[13px] text-mediumBrown">
-                      {deal.segment}
-                    </td>
-                    <td className="p-2.5 text-[13px] text-mediumBrown">
-                      {stageLabel}
-                    </td>
-                    <td className="p-2.5 text-[13px] text-mediumBrown text-right">
-                      {deal.probability}%
-                    </td>
-                    <td className="p-2.5 text-[13px] text-mediumBrown text-right">
-                      {formatCurrency(deal.dealValue)}
-                    </td>
-                    <td className="p-2.5 text-[13px] text-mediumBrown text-right">
-                      {formatCurrency(deal.riskAdjustedValue)}
-                    </td>
-                    <td className="p-2.5 text-[13px] text-mediumBrown">
-                      {deal.source}
-                    </td>
-                    <td className="p-2.5 text-[13px] text-mediumBrown">
-                      {deal.owner}
-                    </td>
-                    <td className="p-2.5 text-[13px] text-mediumBrown">
-                      {deal.expectedClose}
-                    </td>
-                    {!isInvestorView && (
-                      <td className="p-2.5 text-center">
-                        <button
-                          onClick={() => deleteDeal(deal.id)}
-                          className="px-3 py-1.5 bg-red-600 text-[#fdfcfb] border-0 rounded cursor-pointer text-xs"
-                        >
-                          Delete
-                        </button>
-                      </td>
-                    )}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
-      </div>
-
-      {/* Summary */}
-      <div className="grid grid-cols-3 gap-[15px] mb-5">
-        {[
-          { label: "Total Deals (Filtered)", value: filteredDeals.length },
-          {
-            label: "Pipeline Value",
-            value: formatCurrency(totalPipelineValue),
-          },
-          { label: "Risk Adjusted", value: formatCurrency(totalRiskAdjusted) },
-        ].map(({ label, value }) => (
-          <div key={label} className="bg-[#f5f0eb] p-5 rounded-md text-center">
-            <div className="text-sm text-mediumBrown mb-2 font-semibold">
-              {label}
-            </div>
-            <div className="text-[28px] text-mediumBrown font-bold">
-              {value}
-            </div>
-          </div>
-        ))}
       </div>
     </div>
   );
@@ -1626,7 +1737,6 @@ const KPITripleCard = ({
     budgetValue !== 0 ? (variance / Math.abs(budgetValue)) * 100 : 0;
   const colors = circleColors;
 
-  // Derive currency scale from the larger of actual/budget so label stays consistent
   const getCurrencyScale = (val) => {
     const n = Math.abs(Number.parseFloat(val) || 0);
     if (n >= 1e9) return { label: "R b", divisor: 1e9 };
@@ -1638,7 +1748,6 @@ const KPITripleCard = ({
     Math.max(Math.abs(actualValue), Math.abs(budgetValue)),
   );
 
-  // Unit label shown next to heading only; circles show plain numbers
   const unitLabel =
     unit === "currency"
       ? currencyScale.label
@@ -1648,7 +1757,6 @@ const KPITripleCard = ({
           ? "%"
           : null;
 
-  // Circle values: plain numbers, no unit suffix
   const formatValue = (val) => {
     const n = Number.parseFloat(val) || 0;
     if (unit === "currency") return (n / currencyScale.divisor).toFixed(2);
@@ -1668,7 +1776,6 @@ const KPITripleCard = ({
         border: "1px solid #e8ddd4",
       }}
     >
-      {/* Eye icon */}
       <div
         onClick={onEyeClick}
         style={{
@@ -1711,7 +1818,6 @@ const KPITripleCard = ({
           <path d="M22 12c0 5.52-4.48 10-10 10S2 17.52 2 12 6.48 2 12 2s10 4.48 10 10z"></path>
         </svg>
       </div>
-      {/* Title with optional unit label */}
       <h4
         style={{
           color: "#5d4037",
@@ -1724,7 +1830,6 @@ const KPITripleCard = ({
         {title}
         {unitLabel && ` (${unitLabel})`}
       </h4>
-      {/* Three circles */}
       <div
         style={{
           display: "flex",
@@ -1816,7 +1921,6 @@ const KPITripleCard = ({
           </div>
         </div>
       </div>
-      {/* Action buttons */}
       <div style={{ borderTop: "1px solid #e8ddd4", paddingTop: "15px" }}>
         <div
           style={{
@@ -1911,7 +2015,6 @@ const PipelineVisibility = ({
   activeSection,
   currentUser,
   isInvestorView,
-  onAddData,
   fromDate,
   toDate,
 }) => {
@@ -1927,15 +2030,12 @@ const PipelineVisibility = ({
       />
       <SectionControlsBar
         title="Pipeline Visibility"
-        onAddData={!isInvestorView ? onAddData : null}
-        showAddData={!isInvestorView}
+        showAddData={false}
         showViewMode={false}
       />
       <PipelineTable
         currentUser={currentUser}
         isInvestorView={isInvestorView}
-        selectedYear={toDate ? parseInt(toDate.split("-")[0]) : new Date().getFullYear()}
-        onAddData={onAddData}
       />
     </div>
   );
@@ -1968,7 +2068,6 @@ const PipelineSufficiency = ({
     targetRevenue: 0,
     notes: "",
   });
-  // rangeData stores arrays aligned to the exact range months for charts
   const [rangeData, setRangeData] = useState({
     newLeads: [],
     salesVelocity: [],
@@ -1979,7 +2078,6 @@ const PipelineSufficiency = ({
     labels: [],
   });
 
-  // toDate year = most recent year in range — this is what we display
   const toYear = toDate
     ? parseInt(toDate.split("-")[0])
     : new Date().getFullYear();
@@ -1993,20 +2091,17 @@ const PipelineSufficiency = ({
     setLoading(true);
     try {
       const rangeMonths = getRangeMonths(fromDate, toDate);
-      // Fetch one doc per unique year in range
       const years = [...new Set(rangeMonths.map((r) => r.year))];
       const visibilityDocs = {};
       const sufficiencyDocs = {};
       
       await Promise.all(
         years.map(async (yr) => {
-          // Fetch visibility data for charts
           const visibilitySnap = await getDoc(
             doc(db, "pipelineData", `${currentUser.uid}_visibility_${yr}`),
           );
           if (visibilitySnap.exists()) visibilityDocs[yr] = visibilitySnap.data();
           
-          // Fetch sufficiency data for charts
           const sufficiencySnap = await getDoc(
             doc(db, "pipelineData", `${currentUser.uid}_sufficiency_${yr}`),
           );
@@ -2014,7 +2109,6 @@ const PipelineSufficiency = ({
         }),
       );
       
-      // Build per-month arrays for exactly the range
       const getActual = (field) =>
         Array.isArray(field)
           ? field
@@ -2051,7 +2145,6 @@ const PipelineSufficiency = ({
         labels: rangeMonths.map((r) => r.label),
       });
       
-      // Also set current values for KPIs (latest month)
       const latestNewLeads = newLeads[newLeads.length - 1] || 0;
       const latestSalesVelocity = salesVelocity[salesVelocity.length - 1] || 0;
       const latestConversionRates = conversionRates[conversionRates.length - 1] || 0;
@@ -2100,7 +2193,6 @@ const PipelineSufficiency = ({
     let actualValue = 0;
     let trendDataArray = [];
     
-    // Handle different KPI types
     if (dataKey === "newLeads") {
       actualValue = pipelineData.newLeads || 0;
       trendDataArray = rangeData.newLeads;
@@ -2112,7 +2204,6 @@ const PipelineSufficiency = ({
       trendDataArray = rangeData.conversionRates;
     } else if (dataKey === "riskAdjustedValue") {
       actualValue = (pipelineData.totalPipelineValue * pipelineData.probability) / 100;
-      // Calculate trend for risk adjusted value
       trendDataArray = rangeData.totalPipelineValue.map((val, idx) => 
         (val * (rangeData.probability[idx] || 0)) / 100
       );
@@ -2120,7 +2211,6 @@ const PipelineSufficiency = ({
       actualValue = pipelineData.targetRevenue > 0
         ? (pipelineData.totalPipelineValue / pipelineData.targetRevenue) * 100
         : 0;
-      // Calculate trend for pipeline coverage
       trendDataArray = rangeData.totalPipelineValue.map((val, idx) => 
         rangeData.targetRevenue[idx] > 0 
           ? (val / rangeData.targetRevenue[idx]) * 100 
@@ -2182,7 +2272,6 @@ const PipelineSufficiency = ({
         showViewMode={false}
       />
       <KpiGrid2>
-        {/* Moved from PipelineVisibility */}
         {renderKPICard(
           "New Leads",
           "newLeads",
@@ -2204,8 +2293,6 @@ const PipelineSufficiency = ({
           "percentage",
           "up",
         )}
-        
-        {/* Only Risk Adjusted Value and Pipeline Coverage remain */}
         {renderKPICard(
           "Risk Adjusted Value",
           "riskAdjustedValue",
@@ -2495,7 +2582,6 @@ const RevenueConcentration = ({
         )}
       </KpiGrid2>
 
-      {/* Top 3 Concentration Table */}
       <div className="bg-[#f5f0eb] p-5 rounded-lg mb-7">
         <h3 className="text-mediumBrown mt-0 mb-[15px] text-base">
           Top 3 Concentration
@@ -2538,7 +2624,6 @@ const RevenueConcentration = ({
         </div>
       </div>
 
-      {/* Bar Chart */}
       <div className="bg-[#f5f0eb] p-5 rounded-lg mb-7">
         <h3 className="text-mediumBrown mt-0 mb-[15px] text-base">
           {activeTab === "channel"
@@ -2610,7 +2695,6 @@ const RevenueConcentration = ({
         </div>
       </div>
 
-      {/* Channel Performance Table */}
       <div className="bg-[#f5f0eb] p-5 rounded-lg mb-7">
         <h3 className="text-mediumBrown mt-0 mb-[15px] text-base">
           Channel Performance
@@ -2682,7 +2766,6 @@ const RevenueConcentration = ({
         </div>
       </div>
 
-      {/* Concentration Risk Analysis */}
       <div className="bg-[#f5f0eb] p-[15px] rounded-md">
         <h4 className="text-mediumBrown mt-0 mb-2.5">
           Concentration Risk Analysis
@@ -2828,7 +2911,6 @@ const DemandSustainability = ({
 
   const openTrendModal = (itemName, dataArray, isPercentage = false) => {
     const rangeMonths = getRangeMonths(fromDate, toDate);
-    // dataArray is already aligned to range months (or campaign count); pad/trim to range
     const labels = rangeMonths.map((r) => r.label);
     const data = rangeMonths.map(
       (_, i) => dataArray[i] ?? dataArray[dataArray.length - 1] ?? 0,
@@ -2982,7 +3064,6 @@ const DemandSustainability = ({
         )}
       </KpiGrid2>
 
-      {/* Campaign Table */}
       <div className="bg-[#f5f0eb] p-[15px] rounded-md mb-5">
         <h4 className="text-mediumBrown mt-0 mb-2.5">Campaign Performance</h4>
         <div className="overflow-x-auto">
@@ -3067,11 +3148,10 @@ export default function MarketingSales() {
   const [isInvestorView, setIsInvestorView] = useState(false);
   const [viewingSMEId, setViewingSMEId] = useState(null);
   const [viewingSMEName, setViewingSMEName] = useState("");
-  const [viewOrigin, setViewOrigin] = useState("investor"); // ADD THIS LINE
+  const [viewOrigin, setViewOrigin] = useState("investor");
   const [showAddDataModal, setShowAddDataModal] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // Date range — YYYY-MM strings, default = last 12 months ending today
   const _now = new Date();
   const _toYM = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, "0")}`;
   const _fromD = new Date(_now.getFullYear(), _now.getMonth() - 11, 1);
@@ -3084,12 +3164,12 @@ export default function MarketingSales() {
     const investorViewMode = sessionStorage.getItem("investorViewMode");
     const smeId = sessionStorage.getItem("viewingSMEId");
     const smeName = sessionStorage.getItem("viewingSMEName");
-    const origin = sessionStorage.getItem("viewOrigin"); // ADD THIS
+    const origin = sessionStorage.getItem("viewOrigin");
     if (investorViewMode === "true" && smeId) {
       setIsInvestorView(true);
       setViewingSMEId(smeId);
       setViewingSMEName(smeName || "SME");
-      setViewOrigin(origin || "investor"); // ADD THIS
+      setViewOrigin(origin || "investor");
     }
   }, []);
 
@@ -3103,17 +3183,15 @@ export default function MarketingSales() {
   }, [isInvestorView, viewingSMEId]);
 
   const handleExitInvestorView = () => {
-    // Clear all session storage items
     sessionStorage.removeItem("viewingSMEId");
     sessionStorage.removeItem("viewingSMEName");
     sessionStorage.removeItem("investorViewMode");
-    sessionStorage.removeItem("viewOrigin"); // ADD THIS
+    sessionStorage.removeItem("viewOrigin");
 
-    // Navigate based on origin
     if (viewOrigin === "catalyst") {
-      window.location.href = "/catalyst/cohorts"; // Go back to Catalyst cohorts
+      window.location.href = "/catalyst/cohorts";
     } else {
-      window.location.href = "/my-cohorts"; // Go back to Investor cohorts
+      window.location.href = "/my-cohorts";
     }
   };
 
@@ -3164,7 +3242,6 @@ export default function MarketingSales() {
             </h1>
           </div>
 
-          {/* About Dashboard */}
           <div className="bg-[#fdfcfb] p-5 rounded-lg shadow-sm mb-7 border border-mediumBrown">
             <div
               onClick={() => setShowFullDescription(!showFullDescription)}
@@ -3216,7 +3293,6 @@ export default function MarketingSales() {
             )}
           </div>
 
-          {/* Date Range Picker */}
           <div className="mb-7">
             <DateRangePicker
               filterMode={filterMode}
@@ -3228,7 +3304,6 @@ export default function MarketingSales() {
             />
           </div>
 
-          {/* Section Buttons */}
           <div className="flex gap-[15px] mb-7 bg-[#fdfcfb] rounded-lg shadow-sm flex-wrap">
             {sectionButtons.map((button) => (
               <button
@@ -3241,12 +3316,10 @@ export default function MarketingSales() {
             ))}
           </div>
 
-          {/* Section Components */}
           <PipelineVisibility
             activeSection={activeSection}
             currentUser={user}
             isInvestorView={isInvestorView}
-            onAddData={() => setShowAddDataModal(true)}
             fromDate={fromDate}
             toDate={toDate}
           />
