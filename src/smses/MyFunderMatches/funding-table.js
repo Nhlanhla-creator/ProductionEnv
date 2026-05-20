@@ -23,6 +23,8 @@ import get from "lodash.get"
 import styles from "./funding.module.css"
 import { useNavigate } from "react-router-dom"
 import FunderDetailsModal from "./FunderDetailsModal"
+import { getFunctions, httpsCallable } from "firebase/functions";
+
 const ADJACENT_INDUSTRIES = {
   ict: ["technology", "software", "digital services"],
   education: ["e-learning", "training", "edtech"],
@@ -1656,89 +1658,143 @@ export const FundingTable = ({ filters = {}, onInsightsData, onPrimaryMatchCount
     return () => unsubscribe();
   }, [effectiveUserId]);
 
+  const functions = getFunctions();
+
   // Update handleApplyClick to use effectiveUserId
   const handleApplyClick = async (funder) => {
-    try {
-      const auth = getAuth();
-      const user = auth.currentUser;
-      if (!user) throw new Error("User not authenticated");
+  try {
+    const auth = getAuth();
+    const user = auth.currentUser;
+    if (!user) throw new Error("User not authenticated");
 
-      if (bigScore === null) {
-        setNotification({
-          type: "info",
-          message: "Please wait while we verify your eligibility..."
-        });
-        return;
-      }
-
-      if (bigScore < 85) {
-        setShowBigScoreWarning(true);
-        return;
-      }
-
-      // Check permissions for company members
-      if (isCompanyMember && !['owner', 'admin'].includes(userRole)) {
-        setNotification({
-          type: "warning",
-          message: "Only company owners and admins can submit applications.",
-        });
-        return;
-      }
-
-      const applicationKey = `${funder.funderId}_${funder.name}`;
-      if (existingApplications[applicationKey]) {
-        setNotification({
-          type: "warning",
-          message: "You've already submitted an application to this funder.",
-        });
-        return;
-      }
-
-      // Use effectiveUserId for profile data
-      const [funderSnap, profileSnap] = await Promise.all([
-        getDoc(doc(db, "MyuniversalProfiles", funder.funderId)),
-        getDoc(doc(db, "universalProfiles", effectiveUserId)),
-      ]);
-
-      if (!funderSnap.exists() || !profileSnap.exists()) {
-        throw new Error("Missing funder or profile data");
-      }
-
-      const funderData = funderSnap.data()
-      const profile = profileSnap.data()
-      const coreDocs = funderData.formData?.applicationBrief?.coreDocuments || []
-      const docUploadMap = profile.documentUpload || {}
-      const submitted = []
-
-      const normalize = (str) => str?.toLowerCase().replace(/[\s_-]/g, "").trim()
-
-      coreDocs.forEach((docLabel) => {
-        const normalizedLabel = normalize(docLabel)
-        const isSubmitted = Object.entries(docUploadMap).some(([key, urls]) => {
-          return (
-            normalize(key) === normalizedLabel &&
-            Array.isArray(urls) &&
-            urls.length > 0 &&
-            urls.some((url) => typeof url === "string" && url.startsWith("http"))
-          )
-        })
-
-        if (isSubmitted) submitted.push(docLabel)
-      })
-
-      setProfileData(profile)
-      setSubmittedDocuments(submitted)
-      setSelectedDocs([])
-      setApplyingFunder({
-        ...funder,
-        fullProfile: funderData.formData,
-        requiredDocuments: coreDocs,
-      })
-    } catch (err) {
-      console.error("Error in handleApplyClick:", err)
-      setNotification({ type: "error", message: "Failed to load application requirements." })
+    if (bigScore === null) {
+      setNotification({
+        type: "info",
+        message: "Please wait while we verify your eligibility..."
+      });
+      return;
     }
+
+    if (bigScore < 85) {
+      setShowBigScoreWarning(true);
+      return;
+    }
+
+    // Check permissions for company members
+    if (isCompanyMember && !['owner', 'admin'].includes(userRole)) {
+      setNotification({
+        type: "warning",
+        message: "Only company owners and admins can submit applications.",
+      });
+      return;
+    }
+
+    const applicationKey = `${funder.funderId}_${funder.name}`;
+    if (existingApplications[applicationKey]) {
+      setNotification({
+        type: "warning",
+        message: "You've already submitted an application to this funder.",
+      });
+      return;
+    }
+
+    // Use effectiveUserId for profile data
+    const [funderSnap, profileSnap] = await Promise.all([
+      getDoc(doc(db, "MyuniversalProfiles", funder.funderId)),
+      getDoc(doc(db, "universalProfiles", effectiveUserId)),
+    ]);
+
+    if (!funderSnap.exists() || !profileSnap.exists()) {
+      throw new Error("Missing funder or profile data");
+    }
+
+    const funderData = funderSnap.data();
+    const profile = profileSnap.data();
+    const coreDocs = funderData.formData?.applicationBrief?.coreDocuments || [];
+    const docUploadMap = profile.documentUpload || {};
+    const submitted = [];
+
+    const normalize = (str) => str?.toLowerCase().replace(/[\s_-]/g, "").trim();
+
+    coreDocs.forEach((docLabel) => {
+      const normalizedLabel = normalize(docLabel);
+      const isSubmitted = Object.entries(docUploadMap).some(([key, urls]) => {
+        return (
+          normalize(key) === normalizedLabel &&
+          Array.isArray(urls) &&
+          urls.length > 0 &&
+          urls.some((url) => typeof url === "string" && url.startsWith("http"))
+        );
+      });
+      if (isSubmitted) submitted.push(docLabel);
+    });
+
+    setProfileData(profile);
+    setSubmittedDocuments(submitted);
+    setSelectedDocs([]);
+    setApplyingFunder({
+      ...funder,
+      fullProfile: funderData.formData,
+      requiredDocuments: coreDocs,
+    });
+
+    // ========== SEND EMAIL NOTIFICATION TO FUNDER ==========
+    // Fetch funder email
+    let funderEmail = null;
+    let funderName = funder.name;
+    
+    try {
+      const funderProfileRef = doc(db, "MyuniversalProfiles", funder.funderId);
+      const funderProfileSnap = await getDoc(funderProfileRef);
+      if (funderProfileSnap.exists()) {
+        const funderProfileData = funderProfileSnap.data();
+        funderEmail = funderProfileData.formData?.contactDetails?.businessEmail ||
+                      funderProfileData.formData?.contactDetails?.email ||
+                      funderProfileData.email;
+        funderName = funderProfileData.formData?.fundManageOverview?.registeredName || 
+                     funderProfileData.formData?.entityOverview?.registeredName ||
+                     funder.name;
+      }
+    } catch (error) {
+      console.error("Error fetching funder email:", error);
+    }
+
+    if (funderEmail) {
+      try {
+        const smeName = profile.entityOverview?.registeredName || "An SME";
+        const smeLocation = profile.entityOverview?.location || "Not specified";
+        const smeSector = (profile.entityOverview?.economicSectors || []).join(", ") || "Not specified";
+        const fundingStage = profile.applicationOverview?.fundingStage || "Not specified";
+        const fundingRequired = profile.useOfFunds?.amountRequested || "Not specified";
+        const matchPercentage = funder.matchPercentage || 0;
+
+        const sendFundingApplicationNotification = httpsCallable(functions, 'sendFundingApplicationNotification');
+        await sendFundingApplicationNotification({
+          funderEmail: funderEmail,
+          funderName: funderName,
+          smeName: smeName,
+          matchPercentage: matchPercentage,
+          smeLocation: smeLocation,
+          smeSector: smeSector,
+          fundingStage: fundingStage,
+          fundingRequired: fundingRequired,
+          bigScore: bigScore,
+          applicationLink: `https://www.bigmarketplace.africa/funder/applications`
+        });
+        console.log("✅ Funding application notification email sent to funder");
+      } catch (emailError) {
+        console.error("Failed to send funding application notification:", emailError);
+      }
+    } else {
+      console.log("⚠️ No funder email found, skipping email notification");
+    }
+    // ========== END EMAIL NOTIFICATION ==========
+
+  } catch (err) {
+    console.error("Error in handleApplyClick:", err);
+    setNotification({ type: "error", message: "Failed to load application requirements." });
   }
+};
 
   const handleUpload = async (docLabel, file) => {
     const auth = getAuth()
@@ -1776,142 +1832,207 @@ export const FundingTable = ({ filters = {}, onInsightsData, onPrimaryMatchCount
   const isAllDocumentsSubmitted = () => {
     return selectedDocs.every((doc) => submittedDocuments.includes(doc))
   }
+const submitApplication = async (funder) => {
+  try {
+    const auth = getAuth();
+    const user = auth.currentUser;
+    if (!user || !currentBusiness) throw new Error("Missing user or business");
 
-  const submitApplication = async (funder) => {
-    try {
-      const auth = getAuth();
-      const user = auth.currentUser;
-      if (!user || !currentBusiness) throw new Error("Missing user or business");
+    // Check permissions
+    if (isCompanyMember && !['owner', 'admin'].includes(userRole)) {
+      setNotification({
+        type: "warning",
+        message: "Only company owners and admins can submit applications.",
+      });
+      return;
+    }
 
-      // Check permissions
-      if (isCompanyMember && !['owner', 'admin'].includes(userRole)) {
-        setNotification({
-          type: "warning",
-          message: "Only company owners and admins can submit applications.",
-        });
-        return;
+    const existingAppQuery = query(
+      collection(db, "smeApplications"),
+      where("smeId", "==", effectiveUserId),
+      where("funderId", "==", funder.funderId),
+      where("fundName", "==", funder.name),
+    );
+
+    const existingAppSnapshot = await getDocs(existingAppQuery);
+    if (!existingAppSnapshot.empty) {
+      setNotification({
+        type: "warning",
+        message: "Application already submitted to this funder.",
+      });
+      return;
+    }
+
+    const applicationDate = new Date().toISOString().split("T")[0];
+
+    const baseApplicationData = {
+      smeId: effectiveUserId,
+      submittedBy: user.uid,
+      submittedByRole: userRole,
+      funderId: funder.funderId,
+      fundName: funder.name,
+      smeName: currentBusiness.registeredName || "Unnamed Business",
+      investmentType: funder.investmentType,
+      entityType: currentBusiness.useOfFunds?.entityType || "Not specified",
+      supportFormat: currentBusiness.applicationOverview?.supportFormat || "Not specified",
+      matchPercentage: funder.matchPercentage,
+      location: currentBusiness.location || "Not specified",
+      stage: currentBusiness.operationStage || "Not specified",
+      sector: currentBusiness.economicSectors?.join(", ") || "Not specified",
+      fundingNeeded: currentBusiness.useOfFunds?.amountRequested || "Not specified",
+      applicationDate,
+      pipelineStage: "Application Sent",
+      teamSize: currentBusiness.teamSize || "Not specified",
+      revenue: currentBusiness.financials?.annualRevenue || "Not specified",
+      focusArea: currentBusiness.businessDescription || "Not specified",
+      documents: selectedDocs,
+      createdAt: new Date().toISOString(),
+      waitingTime: "unspecified",
+    }
+
+    const documentURLs = {}
+    selectedDocs.forEach((docLabel) => {
+      const path = DOCUMENT_PATHS[docLabel]
+      const url = get(profileData, path)?.[0]
+      if (url) {
+        documentURLs[docLabel] = url
       }
+    })
 
-      const existingAppQuery = query(
-        collection(db, "smeApplications"),
-        where("smeId", "==", effectiveUserId), // Use effectiveUserId
-        where("funderId", "==", funder.funderId),
-        where("fundName", "==", funder.name),
-      );
+    const investorApplicationData = {
+      ...baseApplicationData,
+      documentURLs,
+      fundType: funder.investmentType,
+      fundTicketSize: formatTicketSize(funder.minInvestment, funder.maxInvestment),
+      fundFocusSectors: formatSectorLabel(funder.sectorFocus),
+      fundStagePreferences: formatInvestmentStage(funder.targetStage),
+    }
 
-      const existingAppSnapshot = await getDocs(existingAppQuery);
-      if (!existingAppSnapshot.empty) {
-        setNotification({
-          type: "warning",
-          message: "Application already submitted to this funder.",
-        });
-        return;
-      }
+    const smeApplicationData = {
+      ...baseApplicationData,
+      funderSupportOffered: funder.supportOffered || "Not specified",
+      funderDecisionCriteria: funder.fullProfile?.applicationBrief?.evaluationCriteria || "Not specified",
+      fundTicketSize: formatTicketSize(funder.minInvestment, funder.maxInvestment),
+    }
 
-      const applicationDate = new Date().toISOString().split("T")[0];
+    await Promise.all([
+      addDoc(collection(db, "investorApplications"), investorApplicationData),
+      addDoc(collection(db, "smeApplications"), smeApplicationData),
+    ])
 
-      const baseApplicationData = {
-        smeId: effectiveUserId, // Use effectiveUserId
-        submittedBy: user.uid, // Track who submitted
-        submittedByRole: userRole, // Track their role
-        funderId: funder.funderId,
-        fundName: funder.name,
-        smeName: currentBusiness.registeredName || "Unnamed Business",
-        investmentType: funder.investmentType,
-        entityType: currentBusiness.useOfFunds?.entityType || "Not specified",
-        supportFormat: currentBusiness.applicationOverview?.supportFormat || "Not specified",
-        matchPercentage: funder.matchPercentage,
-        location: currentBusiness.location || "Not specified",
-        stage: currentBusiness.operationStage || "Not specified",
-        sector: currentBusiness.economicSectors?.join(", ") || "Not specified",
-        fundingNeeded: currentBusiness.useOfFunds?.amountRequested || "Not specified",
-        applicationDate,
-        pipelineStage: "Application Sent",
-        teamSize: currentBusiness.teamSize || "Not specified",
-        revenue: currentBusiness.financials?.annualRevenue || "Not specified",
-        focusArea: currentBusiness.businessDescription || "Not specified",
-        documents: selectedDocs,
-        createdAt: new Date().toISOString(),
-        waitingTime: "unspecified",
-      }
+    setStatuses((prev) => ({ ...prev, [funder.id]: "Pending" }))
+    setPipelineStages((prev) => ({ ...prev, [funder.id]: "Application Sent" }))
+    setApplicationDates((prev) => ({ ...prev, [funder.id]: applicationDate }))
+    setWaitingTimes((prev) => ({ ...prev, [funder.id]: "3-5 days" }))
 
-      const documentURLs = {}
-      selectedDocs.forEach((docLabel) => {
-        const path = DOCUMENT_PATHS[docLabel]
-        const url = get(profileData, path)?.[0]
-        if (url) {
-          documentURLs[docLabel] = url
-        }
-      })
+    const dispatchNotification = () => {
+      const notificationMessage = `Application to ${funder.name} submitted successfully`
+      console.log("Dispatching notification:", notificationMessage)
 
-      const investorApplicationData = {
-        ...baseApplicationData,
-        documentURLs,
-        fundType: funder.investmentType,
-        fundTicketSize: formatTicketSize(funder.minInvestment, funder.maxInvestment),
-        fundFocusSectors: formatSectorLabel(funder.sectorFocus),
-        fundStagePreferences: formatInvestmentStage(funder.targetStage),
-      }
-
-      const smeApplicationData = {
-        ...baseApplicationData,
-        funderSupportOffered: funder.supportOffered || "Not specified",
-        funderDecisionCriteria: funder.fullProfile?.applicationBrief?.evaluationCriteria || "Not specified",
-        fundTicketSize: formatTicketSize(funder.minInvestment, funder.maxInvestment),
-      }
-
-      await Promise.all([
-        addDoc(collection(db, "investorApplications"), investorApplicationData),
-        addDoc(collection(db, "smeApplications"), smeApplicationData),
-      ])
-
-      setStatuses((prev) => ({ ...prev, [funder.id]: "Pending" }))
-      setPipelineStages((prev) => ({ ...prev, [funder.id]: "Application Sent" }))
-      setApplicationDates((prev) => ({ ...prev, [funder.id]: applicationDate }))
-      setWaitingTimes((prev) => ({ ...prev, [funder.id]: "3-5 days" }))
-
-      const dispatchNotification = () => {
-        const notificationMessage = `Application to ${funder.name} submitted successfully`
-        console.log("Dispatching notification:", notificationMessage)
-
-        const event = new CustomEvent("newNotification", {
-          detail: {
-            message: notificationMessage,
-            type: "success",
-            timestamp: new Date().toISOString(),
-          },
-          bubbles: true,
-          cancelable: true,
-          composed: true,
-        })
-
-        setTimeout(() => {
-          window.dispatchEvent(event)
-          console.log("Notification event dispatched")
-        }, 100)
-      }
-
-      dispatchNotification()
-
-      setAllFunders((prevFunders) => prevFunders.map((f) => (f.id === funder.id ? { ...f, hasApplication: true } : f)))
-
-      setNotification({ type: "success", message: "Application submitted!" })
-      setApplyingFunder(null)
-    } catch (err) {
-      console.error("Application submission error:", err)
-
-      const errorEvent = new CustomEvent("newNotification", {
+      const event = new CustomEvent("newNotification", {
         detail: {
-          message: `Failed to submit application: ${err.message}`,
-          type: "error",
+          message: notificationMessage,
+          type: "success",
           timestamp: new Date().toISOString(),
         },
+        bubbles: true,
+        cancelable: true,
+        composed: true,
       })
-      window.dispatchEvent(errorEvent)
 
-      setNotification({ type: "error", message: err.message })
+      setTimeout(() => {
+        window.dispatchEvent(event)
+        console.log("Notification event dispatched")
+      }, 100)
     }
+
+    dispatchNotification()
+
+    setAllFunders((prevFunders) => prevFunders.map((f) => (f.id === funder.id ? { ...f, hasApplication: true } : f)))
+
+    // ========== SEND EMAIL NOTIFICATIONS ==========
+    // 1. Send confirmation email to SME
+    const smeEmail = currentBusiness.contactDetails?.email || user.email;
+    const smeName = currentBusiness.registeredName || "there";
+    
+    if (smeEmail) {
+      try {
+        const sendApplicationConfirmation = httpsCallable(functions, 'sendApplicationConfirmation');
+        await sendApplicationConfirmation({
+          to: smeEmail,
+          name: smeName,
+          funderName: funder.name,
+          applicationDate: applicationDate,
+          matchPercentage: funder.matchPercentage || 0,
+          applicationId: `${funder.funderId}_${effectiveUserId}`,
+          dashboardLink: "https://www.bigmarketplace.africa/my-applications"
+        });
+        console.log("✅ Application confirmation email sent to SME");
+      } catch (emailError) {
+        console.error("Failed to send confirmation email:", emailError);
+      }
+    }
+
+    // 2. Send notification email to funder
+    let funderEmail = null;
+    let funderName = funder.name;
+    
+    try {
+      const funderProfileRef = doc(db, "MyuniversalProfiles", funder.funderId);
+      const funderProfileSnap = await getDoc(funderProfileRef);
+      if (funderProfileSnap.exists()) {
+        const funderProfileData = funderProfileSnap.data();
+        funderEmail = funderProfileData.formData?.contactDetails?.businessEmail ||
+                      funderProfileData.formData?.contactDetails?.email ||
+                      funderProfileData.email;
+        funderName = funderProfileData.formData?.fundManageOverview?.registeredName || 
+                     funderProfileData.formData?.entityOverview?.registeredName ||
+                     funder.name;
+      }
+    } catch (error) {
+      console.error("Error fetching funder email:", error);
+    }
+
+    if (funderEmail) {
+      try {
+        const sendFundingApplicationNotification = httpsCallable(functions, 'sendFundingApplicationNotification');
+        await sendFundingApplicationNotification({
+          funderEmail: funderEmail,
+          funderName: funderName,
+          smeName: smeName,
+          matchPercentage: funder.matchPercentage || 0,
+          smeLocation: currentBusiness.location || "Not specified",
+          smeSector: currentBusiness.economicSectors?.join(", ") || "Not specified",
+          fundingStage: currentBusiness.operationStage || "Not specified",
+          fundingRequired: currentBusiness.useOfFunds?.amountRequested || "Not specified",
+          bigScore: currentBusiness.bigScore || 0,
+          applicationLink: "https://www.bigmarketplace.africa/funder/applications"
+        });
+        console.log("✅ Funding application notification email sent to funder");
+      } catch (emailError) {
+        console.error("Failed to send funder notification:", emailError);
+      }
+    }
+    // ========== END EMAIL NOTIFICATIONS ==========
+
+    setNotification({ type: "success", message: "Application submitted!" })
+    setApplyingFunder(null)
+    
+  } catch (err) {
+    console.error("Application submission error:", err)
+
+    const errorEvent = new CustomEvent("newNotification", {
+      detail: {
+        message: `Failed to submit application: ${err.message}`,
+        type: "error",
+        timestamp: new Date().toISOString(),
+      },
+    })
+    window.dispatchEvent(errorEvent)
+
+    setNotification({ type: "error", message: err.message })
   }
+}
 
   useEffect(() => {
     if (!filters || !effectiveUserId) return;

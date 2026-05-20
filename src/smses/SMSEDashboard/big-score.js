@@ -168,66 +168,86 @@ export function BigScoreCard({
     }
   }
   
-  // FIX 6: Simplified and more robust save execution
-  const executeSave = async (bigScoreValue) => {
-    // Prevent multiple simultaneous saves
-    if (isSavingRef.current) {
-      console.log("[SAVE] Save already in progress - skipping")
-      return
-    }
-    
-    // Don't save if we already have this exact score saved
-    if (savedBigScoreRef.current === bigScoreValue) {
-      console.log(`[SAVE] Score ${bigScoreValue} already saved - skipping`)
-      return
-    }
-    
-    isSavingRef.current = true
-    
-    try {
-      const smeName = profileData?.formData?.entityOverview?.registeredName || "Unnamed SME"
-      const now = new Date().toISOString()
-      
-      // Save to bigEvaluations collection
-      const evaluationRef = doc(db, "bigEvaluations", profileData.id)
-      await setDoc(
-        evaluationRef,
-        {
-          smeName: smeName,
-          scores: {
-            compliance: complianceScore,
-            legitimacy: legitimacyScore,
-            fundability: fundabilityScore,
-            pis: pisScore,
-            leadership: leadershipScore,
-            bigScore: bigScoreValue,
-            lastUpdated: now,
-          },
-          updatedAt: now,
-          createdAt: serverTimestamp(),
-        },
-        { merge: true },
-      )
-      
-      // Update universalProfiles collection
-      const profileRef = doc(db, "universalProfiles", profileData.id)
-      await updateDoc(profileRef, {
-        bigScore: bigScoreValue,
-        bigScoreUpdatedAt: now,
-      })
-      
-      console.log(`[SAVE SUCCESS] BIG Score ${bigScoreValue} saved to database`)
-      
-      // FIX 7: Update saved score ref ONLY after successful save
-      savedBigScoreRef.current = bigScoreValue
-      
-    } catch (err) {
-      console.error("[SAVE ERROR] Failed to update BIG Score in Firestore:", err)
-      // Don't update savedBigScoreRef on error - let it retry next time
-    } finally {
-      isSavingRef.current = false
-    }
+ const executeSave = async (bigScoreValue) => {
+  // Prevent multiple simultaneous saves
+  if (isSavingRef.current) {
+    console.log("[SAVE] Save already in progress - skipping")
+    return
   }
+  
+  // Don't save if we already have this exact score saved
+  if (savedBigScoreRef.current === bigScoreValue) {
+    console.log(`[SAVE] Score ${bigScoreValue} already saved - skipping`)
+    return
+  }
+  
+  isSavingRef.current = true
+  
+  try {
+    const smeName = profileData?.formData?.entityOverview?.registeredName || "Unnamed SME"
+    const now = new Date().toISOString()
+    
+    // Get existing document to check previous score and history
+    const evaluationRef = doc(db, "bigEvaluations", profileData.id)
+    const evaluationSnap = await getDoc(evaluationRef)
+    
+    let scoreHistory = []
+    
+    if (evaluationSnap.exists()) {
+      const existingData = evaluationSnap.data()
+      scoreHistory = existingData.scoreHistory || []
+    }
+    
+    // Add new score to history (keep last 5 entries)
+    scoreHistory.push({
+      score: bigScoreValue,
+      timestamp: now
+    })
+    
+    // Keep only last 5 entries
+    if (scoreHistory.length > 5) {
+      scoreHistory = scoreHistory.slice(-5)
+    }
+    
+    // Save to bigEvaluations collection with score history
+    await setDoc(
+      evaluationRef,
+      {
+        smeName: smeName,
+        scores: {
+          compliance: complianceScore,
+          legitimacy: legitimacyScore,
+          fundability: fundabilityScore,
+          pis: pisScore,
+          leadership: leadershipScore,
+          bigScore: bigScoreValue,
+          lastUpdated: now,
+        },
+        scoreHistory: scoreHistory,
+        updatedAt: now,
+        createdAt: serverTimestamp(),
+      },
+      { merge: true },
+    )
+    
+    // Update universalProfiles collection
+    const profileRef = doc(db, "universalProfiles", profileData.id)
+    await updateDoc(profileRef, {
+      bigScore: bigScoreValue,
+      bigScoreUpdatedAt: now,
+    })
+    
+    console.log(`[SAVE SUCCESS] BIG Score ${bigScoreValue} saved to database`)
+    
+    // Update saved score ref
+    savedBigScoreRef.current = bigScoreValue
+    
+  } catch (err) {
+    console.error("[SAVE ERROR] Failed to update BIG Score in Firestore:", err)
+  } finally {
+    isSavingRef.current = false
+  }
+}
 
   // Cleanup timeout on unmount
   useEffect(() => {

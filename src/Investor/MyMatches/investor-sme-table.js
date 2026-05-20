@@ -17,6 +17,7 @@ import Modal from "components/Modal/Modal"
 import Upsell from "../../components/Upsell/Upsell"
 import useSubscriptionPlan from "../../hooks/useSubscriptionPlan"
 import InvestorSMEDetailsModal from "./InvestorSMEDetailsModal"
+import { getFunctions, httpsCallable } from "firebase/functions";
 
 const formatLabel = (value) => {
   if (!value) return ""
@@ -747,200 +748,283 @@ export function InvestorSMETable(filters, stageFilter, onDealComplete) {
   const hasAvailability = (sme) => {
     return sme.availableDates && sme.availableDates.length > 0
   }
-
+  
   const handleUpdateStatus = async (id, status) => {
-    if (status === "Declined") {
-      const confirmDecline = window.confirm(
-        "Are you sure you want to decline this application? This action cannot be undone.",
-      )
-      if (!confirmDecline) {
-        return
-      }
+  if (status === "Declined") {
+    const confirmDecline = window.confirm(
+      "Are you sure you want to decline this application? This action cannot be undone.",
+    )
+    if (!confirmDecline) {
+      return
+    }
+  }
+
+  if (modalType !== "view") {
+    const errors = {}
+
+    if (!message.trim()) {
+      errors.message = "Please provide a message to the SME"
     }
 
-    if (modalType !== "view") {
-      const errors = {}
-
-      if (!message.trim()) {
-        errors.message = "Please provide a message to the SME"
-      }
-
-      if (modalType === "approve" && !meetingTime) {
-        errors.meetingTime = "Please select a meeting time"
-      }
-
-      if (modalType === "approve" && !meetingLocation.trim()) {
-        errors.meetingLocation = "Please provide a meeting location"
-      }
-
-      if (modalType === "approve" && !meetingPurpose.trim()) {
-        errors.meetingPurpose = "Please provide a purpose for the meeting"
-      }
-
-      if (Object.keys(errors).length > 0) {
-        setFormErrors(errors)
-        return
-      }
+    if (modalType === "approve" && !meetingTime) {
+      errors.meetingTime = "Please select a meeting time"
     }
 
-    setIsSubmitting(true)
+    if (modalType === "approve" && !meetingLocation.trim()) {
+      errors.meetingLocation = "Please provide a meeting location"
+    }
 
-    try {
-      const updateData = {
-        status: status === "Approved" ? "Accepted" : status,
-        responseMessage: message,
-        updatedAt: new Date().toISOString(),
-        pipelineStage: status === "Approved" ? "Under Review" : status,
-      }
-      addInvestorNotification(`Application status changed to ${status} for ${selectedSME.smeName}`, "status_change", id)
+    if (modalType === "approve" && !meetingPurpose.trim()) {
+      errors.meetingPurpose = "Please provide a purpose for the meeting"
+    }
 
-      if (status === "Approved") {
-        const availabilityData = availabilities.map((avail) => ({
-          date: avail.date.toISOString(),
-          timeSlots: avail.timeSlots,
-          timeZone: avail.timeZone,
-        }))
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors)
+      return
+    }
+  }
 
-        updateData.availableDates = availabilityData
-        updateData.meetingLocation = meetingLocation
-        updateData.meetingPurpose = meetingPurpose
-      }
+  setIsSubmitting(true)
 
-      await updateDoc(doc(db, "investorApplications", id), updateData)
+  try {
+    const updateData = {
+      status: status === "Approved" ? "Accepted" : status,
+      responseMessage: message,
+      updatedAt: new Date().toISOString(),
+      pipelineStage: status === "Approved" ? "Under Review" : status,
+    }
+    addInvestorNotification(`Application status changed to ${status} for ${selectedSME.smeName}`, "status_change", id)
 
-      setUpdatedStages((prev) => ({
-        ...prev,
-        [id]: status === "Approved" ? "Under Review" : status,
+    if (status === "Approved") {
+      const availabilityData = availabilities.map((avail) => ({
+        date: avail.date.toISOString(),
+        timeSlots: avail.timeSlots,
+        timeZone: avail.timeZone,
       }))
 
-      const investorAppSnap = await getDoc(doc(db, "investorApplications", id))
-      const { smeId, funderId } = investorAppSnap.data()
+      updateData.availableDates = availabilityData
+      updateData.meetingLocation = meetingLocation
+      updateData.meetingPurpose = meetingPurpose
+    }
 
-      const smeQuery = query(
-        collection(db, "smeApplications"),
-        where("smeId", "==", smeId),
-        where("funderId", "==", funderId),
-      )
+    await updateDoc(doc(db, "investorApplications", id), updateData)
 
-      const smeSnapshot = await getDocs(smeQuery)
-      if (!smeSnapshot.empty) {
-        const smeDocRef = smeSnapshot.docs[0].ref
-        const smeUpdateData = {
-          status: status === "Approved" ? "Accepted" : status,
-          updatedAt: new Date().toISOString(),
-        }
+    setUpdatedStages((prev) => ({
+      ...prev,
+      [id]: status === "Approved" ? "Under Review" : status,
+    }))
 
-        if (status === "Approved") {
-          smeUpdateData.availableDates = updateData.availableDates
-          smeUpdateData.meetingLocation = meetingLocation
-          smeUpdateData.meetingPurpose = meetingPurpose
-        }
+    const investorAppSnap = await getDoc(doc(db, "investorApplications", id))
+    const { smeId, funderId } = investorAppSnap.data()
 
-        await updateDoc(smeDocRef, smeUpdateData)
+    const smeQuery = query(
+      collection(db, "smeApplications"),
+      where("smeId", "==", smeId),
+      where("funderId", "==", funderId),
+    )
+
+    const smeSnapshot = await getDocs(smeQuery)
+    if (!smeSnapshot.empty) {
+      const smeDocRef = smeSnapshot.docs[0].ref
+      const smeUpdateData = {
+        status: status === "Approved" ? "Accepted" : status,
+        updatedAt: new Date().toISOString(),
       }
 
-      if (status === "Approved" || status === "Declined") {
-        const subject = status === "Approved" ? meetingPurpose : "Declined Application"
-        let content
+      if (status === "Approved") {
+        smeUpdateData.availableDates = updateData.availableDates
+        smeUpdateData.meetingLocation = meetingLocation
+        smeUpdateData.meetingPurpose = meetingPurpose
+      }
 
-        if (status === "Approved") {
-          const rsvpLink = `${window.location.origin}/calendar`
+      await updateDoc(smeDocRef, smeUpdateData)
+    }
 
-          content = `${message}
+    if (status === "Approved" || status === "Declined") {
+      const subject = status === "Approved" ? meetingPurpose : "Declined Application"
+      let content
 
-          Meeting Details:
-          Time: click to RSVP (${rsvpLink})
-          Location: ${meetingLocation}
+      if (status === "Approved") {
+        const rsvpLink = `${window.location.origin}/calendar`
 
-          Available Meeting Dates for this application:
-          ${availabilities
-              .map((avail) => {
-                try {
-                  const dateStr =
-                    avail.date instanceof Date
-                      ? avail.date.toLocaleDateString("en-US", {
+        content = `${message}
+
+        Meeting Details:
+        Time: click to RSVP (${rsvpLink})
+        Location: ${meetingLocation}
+
+        Available Meeting Dates for this application:
+        ${availabilities
+            .map((avail) => {
+              try {
+                const dateStr =
+                  avail.date instanceof Date
+                    ? avail.date.toLocaleDateString("en-US", {
+                      weekday: "long",
+                      year: "numeric",
+                      month: "long",
+                      day: "numeric",
+                    })
+                    : "Invalid Date"
+
+                const timeStr = avail.timeSlots?.[0]
+                  ? `${avail.timeSlots[0].start} - ${avail.timeSlots[0].end} ${avail.timeZone}`
+                  : "Time not specified"
+
+                return `${dateStr} (${timeStr})`
+              } catch (e) {
+                return "Invalid availability entry"
+              }
+            })
+            .join("\n")}
+
+      Please reply with your preferred meeting time from the above options.`
+      } else {
+        content = message
+      }
+
+      await addDoc(collection(db, "messages"), {
+        to: smeId,
+        from: funderId,
+        subject,
+        content,
+        date: new Date().toISOString(),
+        read: false,
+        type: "inbox",
+        applicationId: selectedSME.id,
+        availableDates: status === "Approved" ? updateData.availableDates : null,
+      })
+
+      await addDoc(collection(db, "messages"), {
+        to: smeId,
+        from: funderId,
+        subject,
+        content,
+        date: new Date().toISOString(),
+        read: true,
+        type: "sent",
+        applicationId: selectedSME.id,
+        availableDates: status === "Approved" ? updateData.availableDates : null,
+      })
+
+      // ========== SEND EMAIL NOTIFICATION ==========
+      // Get SME email from users collection
+      let smeEmail = null;
+      try {
+        const smeUserDoc = await getDoc(doc(db, "users", smeId));
+        if (smeUserDoc.exists()) {
+          smeEmail = smeUserDoc.data().email;
+        }
+      } catch (emailError) {
+        console.error("Error fetching SME email:", emailError);
+      }
+
+      if (smeEmail) {
+        try {
+          const emailSubject = status === "Approved" 
+            ? `Application Update: ${meetingPurpose || "Meeting Scheduled"}`
+            : `Application Update: ${status}`;
+          
+          let emailContent = `Dear ${selectedSME.smeName},\n\n`;
+          
+          if (status === "Approved") {
+            emailContent += `We are pleased to inform you that your application has been approved!\n\n`;
+            emailContent += `Message from Investor:\n${message}\n\n`;
+            emailContent += `Meeting Details:\n- Location: ${meetingLocation}\n- Purpose: ${meetingPurpose}\n\n`;
+            emailContent += `Available Meeting Dates:\n`;
+            availabilities.forEach((avail, idx) => {
+              const dateStr = avail.date instanceof Date
+                ? avail.date.toLocaleDateString("en-US", {
+                    weekday: "long",
+                    year: "numeric",
+                    month: "long",
+                    day: "numeric",
+                  })
+                : "Invalid Date";
+              const timeStr = avail.timeSlots?.[0]
+                ? `${avail.timeSlots[0].start} - ${avail.timeSlots[0].end} ${avail.timeZone}`
+                : "Time not specified";
+              emailContent += `${idx + 1}. ${dateStr} (${timeStr})\n`;
+            });
+            emailContent += `\nPlease reply with your preferred meeting time.`;
+          } else {
+            emailContent += `We regret to inform you that your application has been ${status.toLowerCase()}.\n\n`;
+            emailContent += `Message from Investor:\n${message}\n\n`;
+          }
+          
+          emailContent += `\nBest regards,\nInvestor Team\nBIG Marketplace Africa`;
+
+          const response = await fetch('https://us-central1-tuts-7ea8c.cloudfunctions.net/sendInvestorUpdateEmail', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              data: {
+                to: smeEmail,
+                name: selectedSME.smeName,
+                status: status,
+                message: message,
+                meetingLocation: status === "Approved" ? meetingLocation : null,
+                meetingPurpose: status === "Approved" ? meetingPurpose : null,
+                availabilityDates: status === "Approved" ? availabilities.map(a => ({
+                  date: a.date instanceof Date
+                    ? a.date.toLocaleDateString("en-US", {
                         weekday: "long",
                         year: "numeric",
                         month: "long",
                         day: "numeric",
                       })
-                      : "Invalid Date"
-
-                  const timeStr = avail.timeSlots?.[0]
-                    ? `${avail.timeSlots[0].start} - ${avail.timeSlots[0].end} ${avail.timeZone}`
-                    : "Time not specified"
-
-                  return `${dateStr} (${timeStr})`
-                } catch (e) {
-                  return "Invalid availability entry"
-                }
-              })
-              .join("\n")}
-
-        Please reply with your preferred meeting time from the above options.`
-        } else {
-          content = message
+                    : "Invalid Date",
+                  time: a.timeSlots?.[0] ? `${a.timeSlots[0].start} - ${a.timeSlots[0].end} ${a.timeZone}` : "Time not specified"
+                })) : []
+              }
+            })
+          });
+          
+          const result = await response.json();
+          if (result.data?.success) {
+            console.log("✅ Investor update email sent to SME");
+          }
+        } catch (emailError) {
+          console.error("Failed to send investor update email:", emailError);
         }
-
-        await addDoc(collection(db, "messages"), {
-          to: smeId,
-          from: funderId,
-          subject,
-          content,
-          date: new Date().toISOString(),
-          read: false,
-          type: "inbox",
-          applicationId: selectedSME.id,
-          availableDates: status === "Approved" ? updateData.availableDates : null,
-        })
-
-        await addDoc(collection(db, "messages"), {
-          to: smeId,
-          from: funderId,
-          subject,
-          content,
-          date: new Date().toISOString(),
-          read: true,
-          type: "sent",
-          applicationId: selectedSME.id,
-          availableDates: status === "Approved" ? updateData.availableDates : null,
-        })
       }
-
-      if (status === "Approved") {
-        await addDoc(collection(db, "smeCalendarEvents"), {
-          smeId,
-          funderId,
-          title: meetingPurpose,
-          date: meetingTime,
-          location: meetingLocation,
-          type: "meeting",
-          createdAt: new Date().toISOString(),
-        })
-      }
-
-      setNotification({
-        type: "success",
-        message: `Application ${status === "Approved" ? "accepted and moved to Under Review" : "declined"} successfully`,
-      })
-
-      setTimeout(() => setNotification(null), 3000)
-      resetModal()
-    } catch (error) {
-      console.error("Error updating application:", error)
-      setNotification({
-        type: "error",
-        message: "Failed to update application",
-      })
-      setUpdatedStages((prev) => {
-        const newState = { ...prev }
-        delete newState[id]
-        return newState
-      })
-    } finally {
-      setIsSubmitting(false)
+      // ========== END EMAIL NOTIFICATION ==========
     }
+
+    if (status === "Approved") {
+      await addDoc(collection(db, "smeCalendarEvents"), {
+        smeId,
+        funderId,
+        title: meetingPurpose,
+        date: meetingTime,
+        location: meetingLocation,
+        type: "meeting",
+        createdAt: new Date().toISOString(),
+      })
+    }
+
+    setNotification({
+      type: "success",
+      message: `Application ${status === "Approved" ? "accepted and moved to Under Review" : "declined"} successfully`,
+    })
+
+    setTimeout(() => setNotification(null), 3000)
+    resetModal()
+  } catch (error) {
+    console.error("Error updating application:", error)
+    setNotification({
+      type: "error",
+      message: "Failed to update application",
+    })
+    setUpdatedStages((prev) => {
+      const newState = { ...prev }
+      delete newState[id]
+      return newState
+    })
+  } finally {
+    setIsSubmitting(false)
   }
+}
 
   const resetModal = () => {
     setSelectedSME(null)
