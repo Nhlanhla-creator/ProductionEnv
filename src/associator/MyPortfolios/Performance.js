@@ -1,9 +1,12 @@
+// Performance.js - Complete updated component
+
 import React, { useState, useEffect } from "react";
 import { Bar } from "react-chartjs-2";
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, Tooltip, Legend } from "chart.js";
 import { db, auth } from "../../firebaseConfig";
-import { collection, query, where, getDocs, getDoc, doc } from "firebase/firestore";
+import { collection, query, where, getDocs, getDoc, doc, setDoc, addDoc, serverTimestamp, orderBy, limit } from "firebase/firestore";
 import { useAssociationAnalytics } from "../../context/AssociationAnalyticsContext";
+import { getFunctions, httpsCallable } from "firebase/functions";
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend);
 
@@ -19,6 +22,364 @@ const WARN   = ["⚠️","🔸","🔹"];
 
 const TICK = "#4a4a4a";
 const GRID = "#e8e8e8";
+
+// ─── Save Analysis to Firebase ───────────────────────────────────────────────
+const saveAnalysisToFirebase = async (userId, analysisType, analysisData, sourceData) => {
+  try {
+    console.log("🔍 Starting save to Firebase for Performance analysis...");
+    
+    if (!auth.currentUser) {
+      throw new Error("No authenticated user");
+    }
+    
+    const userAnalysesRef = collection(db, "users", userId, "aiAnalyses");
+    
+    const analysisDoc = {
+      type: analysisType,
+      title: `${analysisType.replace(/-/g, " ")} Analysis`,
+      analysis: analysisData,
+      sourceData: sourceData,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      userId: userId,
+      createdAtISO: new Date().toISOString(),
+    };
+
+    const docRef = await addDoc(userAnalysesRef, analysisDoc);
+    console.log(`✅ Performance analysis saved with ID: ${docRef.id}`);
+    return docRef.id;
+  } catch (error) {
+    console.error("❌ Error saving performance analysis to Firebase:", error);
+    throw error;
+  }
+};
+
+// ─── Fetch Latest Analysis from Firebase ─────────────────────────────────────
+const fetchLatestAnalysis = async (userId, analysisType) => {
+  try {
+    const userAnalysesRef = collection(db, "users", userId, "aiAnalyses");
+    const q = query(
+      userAnalysesRef, 
+      where("type", "==", analysisType),
+      orderBy("createdAt", "desc"),
+      limit(1)
+    );
+    
+    const querySnapshot = await getDocs(q);
+    
+    if (!querySnapshot.empty) {
+      const latestDoc = querySnapshot.docs[0];
+      const data = latestDoc.data();
+      console.log(`✅ Retrieved latest ${analysisType} analysis from Firebase`);
+      return {
+        id: latestDoc.id,
+        analysis: data.analysis,
+        sourceData: data.sourceData,
+        createdAt: data.createdAt
+      };
+    }
+    
+    return null;
+  } catch (error) {
+    console.error("❌ Error fetching analysis from Firebase:", error);
+    throw error;
+  }
+};
+
+// ─── AI Analysis Modal ────────────────────────────────────────────────────────
+const AIAnalysisModal = ({ isOpen, title, analysisData, loading, error, onClose, onNewAnalysis, isSaving, saveSuccess, hasSavedAnalysis, onViewSaved }) => {
+  if (!isOpen) return null;
+
+  const renderAnalysis = () => {
+    if (loading) {
+      return (
+        <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "300px", flexDirection: "column", gap: "16px" }}>
+          <div className="spinner" style={{ width: "40px", height: "40px", border: "3px solid #e0d5c8", borderTop: "3px solid #a67c52", borderRadius: "50%", animation: "spin 1s linear infinite" }}></div>
+          <div style={{ fontSize: "14px", color: "#7d5a50" }}>Generating AI analysis...</div>
+          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+        </div>
+      );
+    }
+
+    if (error) {
+      return (
+        <div style={{ padding: "20px", background: "#fce4ec", borderRadius: "8px", color: "#c62828" }}>
+          <p style={{ margin: 0, fontSize: "14px" }}>⚠️ Failed to generate analysis: {error}</p>
+        </div>
+      );
+    }
+
+    if (!analysisData) return null;
+
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+        {/* Save Success Message */}
+        {saveSuccess && (
+          <div style={{ padding: "12px 16px", background: "#e8f5e9", borderRadius: "8px", color: "#2e7d32", border: `1px solid #c8e6c9`, display: "flex", alignItems: "center", gap: "8px" }}>
+            <span style={{ fontSize: "16px" }}>✓</span>
+            <span style={{ fontSize: "13px", fontWeight: 500 }}>Analysis saved to your dashboard</span>
+          </div>
+        )}
+
+        {/* Overall Assessment */}
+        <div style={{ background: B.offwhite, padding: "16px", borderRadius: "8px", borderLeft: `4px solid ${B.brownMedium}` }}>
+          <h4 style={{ margin: "0 0 8px 0", fontSize: "13px", fontWeight: 700, color: B.brownDark }}>Executive Summary</h4>
+          <p style={{ margin: 0, fontSize: "13px", color: B.darkGrey, lineHeight: "1.5" }}>{analysisData.overallAssessment}</p>
+        </div>
+
+        {/* Key Findings */}
+        {analysisData.keyFindings && analysisData.keyFindings.length > 0 && (
+          <div>
+            <h4 style={{ margin: "0 0 12px 0", fontSize: "13px", fontWeight: 700, color: B.brownDark }}>Key Findings</h4>
+            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+              {analysisData.keyFindings.map((finding, idx) => (
+                <div key={idx} style={{ display: "flex", gap: "10px", padding: "10px", background: "#fff", borderRadius: "6px", border: `1px solid ${B.lightGrey}` }}>
+                  <span style={{ color: B.brownMedium, fontWeight: 700, fontSize: "12px", flexShrink: 0 }}>•</span>
+                  <span style={{ fontSize: "12px", color: B.darkGrey, lineHeight: "1.4" }}>{finding}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Insights Sections */}
+        {analysisData.revenueInsights && <InsightSection title="Revenue Insights" insights={analysisData.revenueInsights} />}
+        {analysisData.profitabilityInsights && <InsightSection title="Profitability Insights" insights={analysisData.profitabilityInsights} />}
+        {analysisData.clientInsights && <InsightSection title="Client Insights" insights={analysisData.clientInsights} />}
+        {analysisData.investorInsights && <InsightSection title="Investor Insights" insights={analysisData.investorInsights} />}
+
+        {/* Performance Metrics */}
+        {analysisData.performanceMetrics && (
+          <div>
+            <h4 style={{ margin: "0 0 12px 0", fontSize: "13px", fontWeight: 700, color: B.brownDark }}>Performance Metrics</h4>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "12px" }}>
+              {Object.entries(analysisData.performanceMetrics).map(([key, value]) => (
+                <div key={key} style={{ padding: "10px", background: "#fff", borderRadius: "6px", border: `1px solid ${B.lightGrey}` }}>
+                  <div style={{ fontSize: "10px", color: B.warmGrey, fontWeight: 600, textTransform: "uppercase" }}>
+                    {key.replace(/([A-Z])/g, ' $1')}
+                  </div>
+                  <div style={{ fontSize: "12px", fontWeight: 500, color: B.black, marginTop: "4px" }}>{value}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Strategic Recommendations */}
+        {analysisData.strategicRecommendations && analysisData.strategicRecommendations.length > 0 && (
+          <div>
+            <h4 style={{ margin: "0 0 12px 0", fontSize: "13px", fontWeight: 700, color: B.brownDark }}>Strategic Recommendations</h4>
+            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+              {analysisData.strategicRecommendations.map((rec, idx) => (
+                <div key={idx} style={{ padding: "12px", background: "#fff", borderRadius: "6px", border: `1px solid ${B.lightGrey}` }}>
+                  <h5 style={{ margin: "0 0 8px 0", fontSize: "12px", fontWeight: 700, color: B.brownMedium }}>{rec.title}</h5>
+                  <p style={{ margin: "0 0 8px 0", fontSize: "11px", color: B.darkGrey, lineHeight: "1.4" }}>{rec.description}</p>
+                  {rec.steps && rec.steps.length > 0 && (
+                    <ol style={{ margin: "0", paddingLeft: "16px", fontSize: "11px", color: B.mediumGrey }}>
+                      {rec.steps.map((step, i) => (
+                        <li key={i} style={{ marginBottom: "4px" }}>{step}</li>
+                      ))}
+                    </ol>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <div style={{
+      position: "fixed",
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      background: "rgba(0, 0, 0, 0.5)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      zIndex: 1000,
+      padding: "20px",
+    }}>
+      <div style={{
+        background: "#fff",
+        borderRadius: "12px",
+        maxWidth: "800px",
+        width: "100%",
+        maxHeight: "90vh",
+        overflow: "auto",
+        boxShadow: "0 20px 60px rgba(0, 0, 0, 0.3)",
+      }}>
+        {/* Header */}
+        <div style={{
+          padding: "20px",
+          borderBottom: `1px solid ${B.lightGrey}`,
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          background: B.offwhite,
+          position: "sticky",
+          top: 0,
+          zIndex: 10,
+        }}>
+          <h2 style={{ margin: 0, fontSize: "18px", fontWeight: 700, color: B.brownDark }}>
+            🤖 AI Analysis: {title}
+          </h2>
+          <button
+            onClick={onClose}
+            style={{
+              background: "none",
+              border: "none",
+              fontSize: "24px",
+              cursor: "pointer",
+              color: B.mediumGrey,
+              transition: "color 0.2s",
+            }}
+            onMouseEnter={(e) => e.target.style.color = B.brownDark}
+            onMouseLeave={(e) => e.target.style.color = B.mediumGrey}
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Content */}
+        <div style={{ padding: "20px" }}>
+          {renderAnalysis()}
+        </div>
+
+        {/* Footer Actions */}
+        {analysisData && !loading && !error && (
+          <div style={{
+            padding: "16px 20px",
+            borderTop: `1px solid ${B.lightGrey}`,
+            display: "flex",
+            gap: "12px",
+            justifyContent: "flex-end",
+            background: B.offwhite,
+            position: "sticky",
+            bottom: 0,
+          }}>
+            <button
+              onClick={onClose}
+              style={{
+                padding: "8px 16px",
+                borderRadius: "6px",
+                cursor: "pointer",
+                fontSize: "12px",
+                border: `1.5px solid ${B.lightGrey}`,
+                fontWeight: 600,
+                background: "#fff",
+                color: B.darkGrey,
+                transition: "all 0.2s",
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.borderColor = B.brownMedium;
+                e.target.style.color = B.brownMedium;
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.borderColor = B.lightGrey;
+                e.target.style.color = B.darkGrey;
+              }}
+            >
+              Close
+            </button>
+            <button
+              onClick={onNewAnalysis}
+              disabled={isSaving}
+              style={{
+                padding: "8px 16px",
+                borderRadius: "6px",
+                cursor: isSaving ? "not-allowed" : "pointer",
+                fontSize: "12px",
+                border: "none",
+                fontWeight: 600,
+                background: B.brownMedium,
+                color: "#fff",
+                transition: "all 0.2s",
+                opacity: isSaving ? 0.7 : 1,
+              }}
+              onMouseEnter={(e) => !isSaving && (e.target.style.background = B.brownDark)}
+              onMouseLeave={(e) => !isSaving && (e.target.style.background = B.brownMedium)}
+            >
+              {isSaving ? "💾 Saving..." : "🔄 New Analysis"}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ─── Insight Section Helper ──────────────────────────────────────────────────
+const InsightSection = ({ title, insights }) => (
+  <div>
+    <h4 style={{ margin: "0 0 12px 0", fontSize: "13px", fontWeight: 700, color: B.brownDark }}>{title}</h4>
+    <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+      {insights.map((insight, idx) => (
+        <div key={idx} style={{ padding: "12px", background: "#fff", borderRadius: "6px", border: `1px solid ${B.lightGrey}` }}>
+          <h5 style={{ margin: "0 0 4px 0", fontSize: "12px", fontWeight: 700, color: B.brownMedium }}>{insight.title}</h5>
+          <p style={{ margin: "0 0 6px 0", fontSize: "11px", color: B.darkGrey, lineHeight: "1.4" }}>{insight.description}</p>
+          <div style={{ fontSize: "10px", color: B.warmGrey, fontWeight: 600 }}>Impact: {insight.impact}</div>
+        </div>
+      ))}
+    </div>
+  </div>
+);
+
+// ─── AI Analysis Button ──────────────────────────────────────────────────────
+const AIAnalysisButton = ({ onClick, loading, hasSavedAnalysis, onViewSaved }) => (
+  <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+    {hasSavedAnalysis && (
+      <button
+        onClick={onViewSaved}
+        style={{
+          padding: "6px 12px",
+          borderRadius: "20px",
+          cursor: "pointer",
+          fontSize: "11px",
+          border: `1.5px solid ${B.brownLight}`,
+          fontWeight: 700,
+          background: "#fff",
+          color: B.brownMedium,
+          transition: "all 0.3s ease",
+        }}
+        onMouseEnter={(e) => {
+          e.target.style.background = B.brownLight;
+          e.target.style.color = "#fff";
+        }}
+        onMouseLeave={(e) => {
+          e.target.style.background = "#fff";
+          e.target.style.color = B.brownMedium;
+        }}
+      >
+        📊 View Saved
+      </button>
+    )}
+    <button
+      onClick={onClick}
+      disabled={loading}
+      style={{
+        padding: "6px 12px",
+        borderRadius: "20px",
+        cursor: loading ? "not-allowed" : "pointer",
+        fontSize: "11px",
+        border: `1.5px solid ${B.brownMedium}`,
+        fontWeight: 700,
+        background: loading ? B.lightGrey : B.brownMedium,
+        color: "#fff",
+        transition: "all 0.3s ease",
+        opacity: loading ? 0.7 : 1,
+      }}
+      onMouseEnter={(e) => !loading && (e.target.style.background = B.brownDark)}
+      onMouseLeave={(e) => !loading && (e.target.style.background = B.brownMedium)}
+    >
+      {loading ? "🔄" : "🤖"} {loading ? "..." : hasSavedAnalysis ? "New AI" : "AI"}
+    </button>
+  </div>
+);
 
 const SubTab = ({ label, active, onClick }) => (
   <button onClick={onClick} style={{ padding: "6px 16px", borderRadius: "20px", cursor: "pointer", fontSize: "12px", border: `1.5px solid ${active ? B.brownMedium : B.lightGrey}`, fontWeight: active ? 700 : 500, background: active ? B.brownMedium : "#fff", color: active ? "#fff" : B.darkGrey }}>
@@ -47,93 +408,6 @@ const InsightBox = ({ text }) => (
     💡 {text}
   </div>
 );
-
-// AI Analysis Modal
-const AIPopup = ({ section, onClose }) => {
-  const getAnalysis = () => {
-    switch(section) {
-      case 'performance':
-        return {
-          title: "Performance Analysis",
-          insights: [
-            "Top 3 investors account for 68% of total deployed capital, indicating concentration risk that could be diversified.",
-            "Average revenue per SME of R8.2M shows healthy growth trajectory, up 15% year-over-year.",
-            "Profitability rate at 42% with 8% of portfolio generating losses - focus on turnaround support needed.",
-            "Key client concentration shows top 10 SMEs hold 45% of all reported clients, suggesting dependency risks.",
-            "Average of 3.8 deals per investor indicates moderate engagement levels with room for increased activity."
-          ]
-        };
-      case 'topbottom':
-        return {
-          title: "Top/Bottom Analysis",
-          insights: [
-            "Top investors by sector show clear specialization patterns - VCs dominate Fintech (72% of sector capital).",
-            "Bottom 3 investors have average deal size of R2.1M, making them suitable for micro-enterprise support programs.",
-            "Most active investors close 8+ deals annually, suggesting efficient deployment processes worth emulating.",
-            "Sector-based capital gaps exist in Clean Energy and Agritech where top investment is below R5M.",
-            "Bottom activity investors show only 0-1 deals per year - targeted engagement strategies could unlock dormant capital."
-          ]
-        };
-      default:
-        return {
-          title: "AI Analysis",
-          insights: ["Data analysis complete. Key trends identified in the ecosystem metrics."]
-        };
-    }
-  };
-
-  const analysis = getAnalysis();
-
-  return (
-    <div style={{
-      position: "fixed",
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      backgroundColor: "rgba(0,0,0,0.5)",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      zIndex: 1000,
-    }} onClick={onClose}>
-      <div style={{
-        backgroundColor: "#fff",
-        borderRadius: "16px",
-        maxWidth: "500px",
-        width: "90%",
-        maxHeight: "80vh",
-        overflow: "auto",
-        padding: "24px",
-        boxShadow: "0 10px 40px rgba(0,0,0,0.2)",
-      }} onClick={(e) => e.stopPropagation()}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-          <h3 style={{ fontSize: "18px", fontWeight: "700", color: B.brownDark, margin: 0 }}>{analysis.title}</h3>
-          <button onClick={onClose} style={{ background: "none", border: "none", fontSize: "24px", cursor: "pointer", color: B.mediumGrey }}>×</button>
-        </div>
-        <div style={{ borderTop: `1px solid ${B.lightGrey}`, paddingTop: "16px" }}>
-          {analysis.insights.map((insight, idx) => (
-            <div key={idx} style={{ display: "flex", alignItems: "flex-start", gap: "12px", marginBottom: "14px" }}>
-              <span style={{ fontSize: "14px", color: B.brownMedium }}>💡</span>
-              <p style={{ margin: 0, fontSize: "13px", lineHeight: "1.5", color: B.darkGrey }}>{insight}</p>
-            </div>
-          ))}
-        </div>
-        <div style={{ marginTop: "20px", textAlign: "center" }}>
-          <button onClick={onClose} style={{
-            padding: "8px 24px",
-            backgroundColor: B.brownMedium,
-            color: "#fff",
-            border: "none",
-            borderRadius: "20px",
-            cursor: "pointer",
-            fontSize: "12px",
-          }}>Close</button>
-        </div>
-      </div>
-    </div>
-  );
-};
 
 const CompanyRow = ({ rank, isTop, name, subtitle, sectorLabel, metric, metricLabel }) => {
   const icons = isTop ? MEDALS : WARN;
@@ -186,6 +460,7 @@ const hBarOpts = (valCb, integralOnly) => ({
   responsive: true, maintainAspectRatio: false, animation: false, indexAxis: "y",
   plugins: { 
     legend: { display: false },
+    datalabels: { color: '#ffffff' },
     tooltip: {
       callbacks: {
         label: (ctx) => ` ${ctx.dataset.label}: ${ctx.raw}`,
@@ -278,6 +553,10 @@ const usePerformanceData = () => {
         });
 
         const avgRevenue = smes.length > 0 ? totalRevenue / smes.length : 0;
+        const profitableCount = profitabilityCounts.Profitable || 0;
+        const breakevenCount = profitabilityCounts.Breakeven || 0;
+        const lossMakingCount = profitabilityCounts.Unprofitable || 0;
+        const totalSMEs = smes.length || 1;
 
         // Calculate investor performance metrics
         const investorPerformance = investors.map(investor => {
@@ -295,13 +574,33 @@ const usePerformanceData = () => {
           };
         });
 
-        // Ensure we ALWAYS have at least 3 items for top/bottom (pad with placeholders if needed)
-        const topInvestors = [...investorPerformance].sort((a, b) => b.totalInvestment - a.totalInvestment);
-        const bottomInvestors = [...investorPerformance].sort((a, b) => a.totalInvestment - b.totalInvestment);
-        const mostActive = [...investorPerformance].sort((a, b) => b.dealsCount - a.dealsCount);
-        const leastActive = [...investorPerformance].sort((a, b) => a.dealsCount - b.dealsCount);
+        const totalCapitalDeployed = investorPerformance.reduce((sum, inv) => sum + inv.totalInvestment, 0);
+        const totalDeals = investorPerformance.reduce((sum, inv) => sum + inv.dealsCount, 0);
+        const avgDealsPerInvestor = investorPerformance.length > 0 ? totalDeals / investorPerformance.length : 0;
 
-        // Pad to ensure 3 items
+        // Calculate top investor concentration
+        const sortedByInvestment = [...investorPerformance].sort((a, b) => b.totalInvestment - a.totalInvestment);
+        const top3Investment = sortedByInvestment.slice(0, 3).reduce((sum, inv) => sum + inv.totalInvestment, 0);
+        const topInvestorConcentration = totalCapitalDeployed > 0 ? (top3Investment / totalCapitalDeployed) * 100 : 0;
+
+        // Calculate client concentration (top 10% SMEs revenue concentration)
+        const sortedByRevenue = [...revenuePerSME].sort((a, b) => b.revenue - a.revenue);
+        const top10PercentCount = Math.max(1, Math.ceil(revenuePerSME.length * 0.1));
+        const top10PercentRevenue = sortedByRevenue.slice(0, top10PercentCount).reduce((sum, sme) => sum + sme.revenue, 0);
+        const clientConcentration = totalRevenue > 0 ? (top10PercentRevenue / totalRevenue) * 100 : 0;
+
+        // Get top sectors by investment
+        const sectorInvestment = {};
+        investorPerformance.forEach(inv => {
+          if (inv.sector && inv.sector !== "Not specified") {
+            sectorInvestment[inv.sector] = (sectorInvestment[inv.sector] || 0) + inv.totalInvestment;
+          }
+        });
+        const topSectors = Object.entries(sectorInvestment)
+          .sort((a, b) => b[1] - a[1])
+          .map(([sector]) => sector);
+
+        // Ensure we ALWAYS have at least 3 items for top/bottom (pad with placeholders if needed)
         const padToThree = (arr, defaultItem) => {
           const result = [...arr];
           while (result.length < 3) {
@@ -321,8 +620,10 @@ const usePerformanceData = () => {
         // Group by sector for top/bottom by sector
         const sectorMap = {};
         investorPerformance.forEach(inv => {
-          if (!sectorMap[inv.sector]) sectorMap[inv.sector] = [];
-          sectorMap[inv.sector].push(inv);
+          if (inv.sector && inv.sector !== "Not specified") {
+            if (!sectorMap[inv.sector]) sectorMap[inv.sector] = [];
+            sectorMap[inv.sector].push(inv);
+          }
         });
 
         const topBySector = {};
@@ -342,12 +643,28 @@ const usePerformanceData = () => {
           profitability: profitabilityCounts,
           keyClients: keyClientsPerSME.sort((a, b) => b.count - a.count),
           investors: {
-            topByInvestment: padToThree(topInvestors, defaultInvestor),
-            bottomByInvestment: padToThree(bottomInvestors, defaultInvestor),
-            mostActive: padToThree(mostActive, defaultInvestor),
-            leastActive: padToThree(leastActive, defaultInvestor),
+            topByInvestment: padToThree(sortedByInvestment, defaultInvestor),
+            bottomByInvestment: padToThree([...sortedByInvestment].reverse(), defaultInvestor),
+            mostActive: padToThree([...investorPerformance].sort((a, b) => b.dealsCount - a.dealsCount), defaultInvestor),
+            leastActive: padToThree([...investorPerformance].sort((a, b) => a.dealsCount - b.dealsCount), defaultInvestor),
             topBySector: topBySector,
             bottomBySector: bottomBySector
+          },
+          // Store aggregated metrics for AI analysis
+          aggregatedMetrics: {
+            totalRevenue,
+            avgRevenue,
+            smeCount: totalSMEs,
+            profitabilityRate: (profitableCount / totalSMEs) * 100,
+            breakevenRate: (breakevenCount / totalSMEs) * 100,
+            lossMakingRate: (lossMakingCount / totalSMEs) * 100,
+            totalInvestors: investorPerformance.length,
+            avgDealsPerInvestor,
+            totalCapitalDeployed,
+            topInvestorConcentration,
+            topInvestors: sortedByInvestment.slice(0, 3).map(inv => ({ name: inv.name, investment: inv.totalInvestment, deals: inv.dealsCount })),
+            topSectors: topSectors.slice(0, 3),
+            clientConcentration
           },
           timestamp: new Date().toISOString()
         });
@@ -365,7 +682,6 @@ const usePerformanceData = () => {
   return { data, loading };
 };
 
-// ─── Performance Section ─────────────────────────────────────────────────────
 const RevenuePerSME = ({ data }) => {
   if (!data || !data.revenue.perSME.length) {
     return (
@@ -478,15 +794,16 @@ const ClientsPerSME = ({ data }) => {
   );
 };
 
-const PerformanceSection = ({ data }) => {
-  const [showAIAnalysis, setShowAIAnalysis] = useState(false);
-
+const PerformanceSection = ({ data, onAIAnalysis, aiLoading, hasSavedAnalysis, onViewSaved }) => {
   return (
     <div>
-      {showAIAnalysis && <AIPopup section="performance" onClose={() => setShowAIAnalysis(false)} />}
-      
       <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "16px" }}>
-        <SubTab label="AI Analysis" active={false} onClick={() => setShowAIAnalysis(true)} />
+        <AIAnalysisButton 
+          onClick={onAIAnalysis} 
+          loading={aiLoading} 
+          hasSavedAnalysis={hasSavedAnalysis} 
+          onViewSaved={onViewSaved} 
+        />
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(380px, 1fr))", gap: "20px" }}>
         <RevenuePerSME data={data} />
@@ -498,17 +815,26 @@ const PerformanceSection = ({ data }) => {
 };
 
 // ─── Top/Bottom Section - ALWAYS shows exactly 3 rows ────────────────────────
-const TopBottomSection = ({ data }) => {
+const TopBottomSection = ({ data, onAIAnalysis, aiLoading, hasSavedAnalysis, onViewSaved }) => {
   const [sub, setSub] = useState("top");
-  const [showAIAnalysis, setShowAIAnalysis] = useState(false);
 
   if (!data || !data.investors.topByInvestment.length) {
     return (
-      <Card title="Top / Bottom Investors">
-        <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: B.warmGrey, fontSize: "12px" }}>
-          No investor data available for this association
+      <div>
+        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "16px" }}>
+          <AIAnalysisButton 
+            onClick={onAIAnalysis} 
+            loading={aiLoading} 
+            hasSavedAnalysis={hasSavedAnalysis} 
+            onViewSaved={onViewSaved} 
+          />
         </div>
-      </Card>
+        <Card title="Top / Bottom Investors">
+          <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", color: B.warmGrey, fontSize: "12px" }}>
+            No investor data available for this association
+          </div>
+        </Card>
+      </div>
     );
   }
 
@@ -584,14 +910,17 @@ const TopBottomSection = ({ data }) => {
 
   return (
     <div>
-      {showAIAnalysis && <AIPopup section="topbottom" onClose={() => setShowAIAnalysis(false)} />}
-      
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
         <div style={{ display: "flex", gap: "8px" }}>
           <Pill label="🏆 Top 3" active={sub === "top"} onClick={() => setSub("top")} />
           <Pill label="⚠️ Bottom 3" active={sub === "bottom"} onClick={() => setSub("bottom")} />
         </div>
-        <SubTab label="AI Analysis" active={false} onClick={() => setShowAIAnalysis(true)} />
+        <AIAnalysisButton 
+          onClick={onAIAnalysis} 
+          loading={aiLoading} 
+          hasSavedAnalysis={hasSavedAnalysis} 
+          onViewSaved={onViewSaved} 
+        />
       </div>
 
       {sub === "top" && (
@@ -655,7 +984,133 @@ const LoadingState = () => (
 // ─── Main Component ─────────────────────────────────────────────────────────
 const Performance = () => {
   const [activeTab, setActiveTab] = useState("performance");
+  const [aiModalOpen, setAiModalOpen] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiAnalysis, setAiAnalysis] = useState(null);
+  const [aiError, setAiError] = useState(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [hasSavedAnalysis, setHasSavedAnalysis] = useState(false);
   const { data, loading } = usePerformanceData();
+
+  // Check for saved analysis on component mount
+  useEffect(() => {
+    const checkSavedAnalysis = async () => {
+      const user = auth.currentUser;
+      if (user) {
+        try {
+          const savedAnalysis = await fetchLatestAnalysis(user.uid, "performance");
+          setHasSavedAnalysis(!!savedAnalysis);
+          if (savedAnalysis && savedAnalysis.analysis) {
+            setAiAnalysis(savedAnalysis.analysis);
+          }
+        } catch (error) {
+          console.error("Error checking saved analysis:", error);
+        }
+      }
+    };
+    checkSavedAnalysis();
+  }, []);
+
+  const handleViewSavedAnalysis = async () => {
+    setAiLoading(true);
+    setAiError(null);
+    try {
+      const user = auth.currentUser;
+      if (!user) {
+        throw new Error("User not authenticated");
+      }
+      
+      const savedAnalysis = await fetchLatestAnalysis(user.uid, "performance");
+      if (savedAnalysis && savedAnalysis.analysis) {
+        setAiAnalysis(savedAnalysis.analysis);
+        setAiModalOpen(true);
+      } else {
+        setAiError("No saved analysis found. Generate a new one first.");
+      }
+    } catch (error) {
+      console.error("Error loading saved analysis:", error);
+      setAiError(error.message || "Failed to load saved analysis");
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const handleAIAnalysis = async () => {
+    setAiLoading(true);
+    setAiError(null);
+    setSaveSuccess(false);
+    try {
+      const functions = getFunctions();
+  const generateAssociationPerformanceInsights = httpsCallable(functions, "generateAssociationPerformanceInsights");
+      // Prepare performance data for AI
+      const performanceDataPayload = {
+        totalRevenue: data?.aggregatedMetrics?.totalRevenue || 0,
+        avgRevenue: data?.aggregatedMetrics?.avgRevenue || 0,
+        smeCount: data?.aggregatedMetrics?.smeCount || 0,
+        profitabilityRate: data?.aggregatedMetrics?.profitabilityRate || 0,
+        breakevenRate: data?.aggregatedMetrics?.breakevenRate || 0,
+        lossMakingRate: data?.aggregatedMetrics?.lossMakingRate || 0,
+        totalInvestors: data?.aggregatedMetrics?.totalInvestors || 0,
+        avgDealsPerInvestor: data?.aggregatedMetrics?.avgDealsPerInvestor || 0,
+        totalCapitalDeployed: data?.aggregatedMetrics?.totalCapitalDeployed || 0,
+        topInvestorConcentration: data?.aggregatedMetrics?.topInvestorConcentration || 0,
+        topInvestors: data?.aggregatedMetrics?.topInvestors || [],
+        topSectors: data?.aggregatedMetrics?.topSectors || [],
+        clientConcentration: data?.aggregatedMetrics?.clientConcentration || 0
+      };
+
+      console.log("Calling generateAssociationPerformanceInsights with:", performanceDataPayload);
+      
+        const result = await generateAssociationPerformanceInsights({
+          performanceData: performanceDataPayload,
+          analysisType: "comprehensive"
+        });
+
+      console.log("Received analysis:", result.data);
+      
+      const analysisData = result.data;
+      setAiAnalysis(analysisData);
+      setAiModalOpen(true);
+      
+      // Auto-save to Firebase
+      const user = auth.currentUser;
+      if (user) {
+        try {
+          await saveAnalysisToFirebase(
+            user.uid,
+            "performance",
+            analysisData,
+            performanceDataPayload
+          );
+          setSaveSuccess(true);
+          setHasSavedAnalysis(true);
+          setTimeout(() => setSaveSuccess(false), 3000);
+        } catch (saveError) {
+          console.error("Error auto-saving analysis:", saveError);
+        }
+      }
+    } catch (error) {
+      console.error("AI Analysis error:", error);
+      setAiError(error.message || "Failed to generate analysis");
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const handleNewAnalysis = async () => {
+    setIsSaving(true);
+    try {
+      setAiModalOpen(false);
+      setAiAnalysis(null);
+      await handleAIAnalysis();
+    } catch (error) {
+      console.error("Error generating new analysis:", error);
+      setAiError("Failed to generate new analysis: " + error.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   if (loading) {
     return <LoadingState />;
@@ -663,12 +1118,44 @@ const Performance = () => {
 
   return (
     <div>
+      <AIAnalysisModal 
+        isOpen={aiModalOpen} 
+        title="Performance & Investor Analysis" 
+        analysisData={aiAnalysis} 
+        loading={aiLoading} 
+        error={aiError} 
+        onClose={() => setAiModalOpen(false)}
+        onNewAnalysis={handleNewAnalysis}
+        isSaving={isSaving}
+        saveSuccess={saveSuccess}
+        hasSavedAnalysis={hasSavedAnalysis}
+        onViewSaved={handleViewSavedAnalysis}
+      />
+
       <div style={{ display: "flex", gap: "12px", marginBottom: "20px", borderBottom: `1px solid ${B.lightGrey}`, paddingBottom: "12px" }}>
         <SubTab label="Performance" active={activeTab === "performance"} onClick={() => setActiveTab("performance")} />
         <SubTab label="Top / Bottom" active={activeTab === "topbottom"} onClick={() => setActiveTab("topbottom")} />
       </div>
-      {activeTab === "performance" && <PerformanceSection data={data} />}
-      {activeTab === "topbottom" && <TopBottomSection data={data} />}
+      
+      {activeTab === "performance" && (
+        <PerformanceSection 
+          data={data} 
+          onAIAnalysis={handleAIAnalysis}
+          aiLoading={aiLoading}
+          hasSavedAnalysis={hasSavedAnalysis}
+          onViewSaved={handleViewSavedAnalysis}
+        />
+      )}
+      
+      {activeTab === "topbottom" && (
+        <TopBottomSection 
+          data={data} 
+          onAIAnalysis={handleAIAnalysis}
+          aiLoading={aiLoading}
+          hasSavedAnalysis={hasSavedAnalysis}
+          onViewSaved={handleViewSavedAnalysis}
+        />
+      )}
     </div>
   );
 };

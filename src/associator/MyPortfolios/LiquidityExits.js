@@ -1,9 +1,12 @@
+// LiquidityExits.js - Updated with full AI analysis functionality
+
 import React, { useState, useEffect } from "react";
 import { Bar, Doughnut } from "react-chartjs-2";
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend } from "chart.js";
 import { db, auth } from "../../firebaseConfig";
-import { collection, query, where, getDocs, getDoc, doc } from "firebase/firestore";
+import { collection, query, where, getDocs, getDoc, doc, setDoc, addDoc, serverTimestamp, orderBy, limit } from "firebase/firestore";
 import { useAssociationAnalytics } from "../../context/AssociationAnalyticsContext";
+import { getFunctions, httpsCallable } from "firebase/functions";
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend);
 
@@ -15,6 +18,364 @@ const C = ["#3b2409", "#5e3f26", "#7d5a36", "#9c7c54", "#b8a082", "#c2a882", "#d
 
 const TICK = "#4a352f";
 const GRID = "#e8ddd5";
+
+// ─── Save Analysis to Firebase ───────────────────────────────────────────────
+const saveAnalysisToFirebase = async (userId, analysisType, analysisData, sourceData) => {
+  try {
+    console.log("🔍 Starting save to Firebase for Liquidity analysis...");
+    
+    if (!auth.currentUser) {
+      throw new Error("No authenticated user");
+    }
+    
+    const userAnalysesRef = collection(db, "users", userId, "aiAnalyses");
+    
+    const analysisDoc = {
+      type: analysisType,
+      title: `${analysisType.replace(/-/g, " ")} Analysis`,
+      analysis: analysisData,
+      sourceData: sourceData,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      userId: userId,
+      createdAtISO: new Date().toISOString(),
+    };
+
+    const docRef = await addDoc(userAnalysesRef, analysisDoc);
+    console.log(`✅ Liquidity analysis saved with ID: ${docRef.id}`);
+    return docRef.id;
+  } catch (error) {
+    console.error("❌ Error saving liquidity analysis to Firebase:", error);
+    throw error;
+  }
+};
+
+// ─── Fetch Latest Analysis from Firebase ─────────────────────────────────────
+const fetchLatestAnalysis = async (userId, analysisType) => {
+  try {
+    const userAnalysesRef = collection(db, "users", userId, "aiAnalyses");
+    const q = query(
+      userAnalysesRef, 
+      where("type", "==", analysisType),
+      orderBy("createdAt", "desc"),
+      limit(1)
+    );
+    
+    const querySnapshot = await getDocs(q);
+    
+    if (!querySnapshot.empty) {
+      const latestDoc = querySnapshot.docs[0];
+      const data = latestDoc.data();
+      console.log(`✅ Retrieved latest ${analysisType} analysis from Firebase`);
+      return {
+        id: latestDoc.id,
+        analysis: data.analysis,
+        sourceData: data.sourceData,
+        createdAt: data.createdAt
+      };
+    }
+    
+    return null;
+  } catch (error) {
+    console.error("❌ Error fetching analysis from Firebase:", error);
+    throw error;
+  }
+};
+
+// ─── AI Analysis Modal ────────────────────────────────────────────────────────
+const AIAnalysisModal = ({ isOpen, title, analysisData, loading, error, onClose, onNewAnalysis, isSaving, saveSuccess, hasSavedAnalysis, onViewSaved }) => {
+  if (!isOpen) return null;
+
+  const renderAnalysis = () => {
+    if (loading) {
+      return (
+        <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "300px", flexDirection: "column", gap: "16px" }}>
+          <div className="spinner" style={{ width: "40px", height: "40px", border: "3px solid #e0d5c8", borderTop: "3px solid #a67c52", borderRadius: "50%", animation: "spin 1s linear infinite" }}></div>
+          <div style={{ fontSize: "14px", color: "#7d5a50" }}>Generating AI analysis...</div>
+          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+        </div>
+      );
+    }
+
+    if (error) {
+      return (
+        <div style={{ padding: "20px", background: "#fce4ec", borderRadius: "8px", color: "#c62828" }}>
+          <p style={{ margin: 0, fontSize: "14px" }}>⚠️ Failed to generate analysis: {error}</p>
+        </div>
+      );
+    }
+
+    if (!analysisData) return null;
+
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+        {/* Save Success Message */}
+        {saveSuccess && (
+          <div style={{ padding: "12px 16px", background: "#e8f5e9", borderRadius: "8px", color: "#2e7d32", border: `1px solid #c8e6c9`, display: "flex", alignItems: "center", gap: "8px" }}>
+            <span style={{ fontSize: "16px" }}>✓</span>
+            <span style={{ fontSize: "13px", fontWeight: 500 }}>Analysis saved to your dashboard</span>
+          </div>
+        )}
+
+        {/* Overall Assessment */}
+        <div style={{ background: B.offwhite, padding: "16px", borderRadius: "8px", borderLeft: `4px solid ${B.darkest}` }}>
+          <h4 style={{ margin: "0 0 8px 0", fontSize: "13px", fontWeight: 700, color: B.darkest }}>Executive Summary</h4>
+          <p style={{ margin: 0, fontSize: "13px", color: TICK, lineHeight: "1.5" }}>{analysisData.overallAssessment}</p>
+        </div>
+
+        {/* Key Findings */}
+        {analysisData.keyFindings && analysisData.keyFindings.length > 0 && (
+          <div>
+            <h4 style={{ margin: "0 0 12px 0", fontSize: "13px", fontWeight: 700, color: B.darkest }}>Key Findings</h4>
+            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+              {analysisData.keyFindings.map((finding, idx) => (
+                <div key={idx} style={{ display: "flex", gap: "10px", padding: "10px", background: "#fff", borderRadius: "6px", border: `1px solid ${B.pale}` }}>
+                  <span style={{ color: B.darkest, fontWeight: 700, fontSize: "12px", flexShrink: 0 }}>•</span>
+                  <span style={{ fontSize: "12px", color: TICK, lineHeight: "1.4" }}>{finding}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Insights Sections */}
+        {analysisData.exitTypeInsights && <InsightSection title="Exit Type Insights" insights={analysisData.exitTypeInsights} />}
+        {analysisData.exitTimingInsights && <InsightSection title="Exit Timing Insights" insights={analysisData.exitTimingInsights} />}
+        {analysisData.returnInsights && <InsightSection title="Return Insights" insights={analysisData.returnInsights} />}
+        {analysisData.sectorExitInsights && <InsightSection title="Sector Exit Insights" insights={analysisData.sectorExitInsights} />}
+
+        {/* Liquidity Metrics */}
+        {analysisData.liquidityMetrics && (
+          <div>
+            <h4 style={{ margin: "0 0 12px 0", fontSize: "13px", fontWeight: 700, color: B.darkest }}>Liquidity Metrics</h4>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "12px" }}>
+              {Object.entries(analysisData.liquidityMetrics).map(([key, value]) => (
+                <div key={key} style={{ padding: "10px", background: "#fff", borderRadius: "6px", border: `1px solid ${B.pale}` }}>
+                  <div style={{ fontSize: "10px", color: B.warm, fontWeight: 600, textTransform: "uppercase" }}>
+                    {key.replace(/([A-Z])/g, ' $1')}
+                  </div>
+                  <div style={{ fontSize: "12px", fontWeight: 500, color: B.dark, marginTop: "4px" }}>{value}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Strategic Recommendations */}
+        {analysisData.strategicRecommendations && analysisData.strategicRecommendations.length > 0 && (
+          <div>
+            <h4 style={{ margin: "0 0 12px 0", fontSize: "13px", fontWeight: 700, color: B.darkest }}>Strategic Recommendations</h4>
+            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+              {analysisData.strategicRecommendations.map((rec, idx) => (
+                <div key={idx} style={{ padding: "12px", background: "#fff", borderRadius: "6px", border: `1px solid ${B.pale}` }}>
+                  <h5 style={{ margin: "0 0 8px 0", fontSize: "12px", fontWeight: 700, color: B.medium }}>{rec.title}</h5>
+                  <p style={{ margin: "0 0 8px 0", fontSize: "11px", color: TICK, lineHeight: "1.4" }}>{rec.description}</p>
+                  {rec.steps && rec.steps.length > 0 && (
+                    <ol style={{ margin: "0", paddingLeft: "16px", fontSize: "11px", color: B.warm }}>
+                      {rec.steps.map((step, i) => (
+                        <li key={i} style={{ marginBottom: "4px" }}>{step}</li>
+                      ))}
+                    </ol>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <div style={{
+      position: "fixed",
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      background: "rgba(0, 0, 0, 0.5)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      zIndex: 1000,
+      padding: "20px",
+    }}>
+      <div style={{
+        background: "#fff",
+        borderRadius: "12px",
+        maxWidth: "800px",
+        width: "100%",
+        maxHeight: "90vh",
+        overflow: "auto",
+        boxShadow: "0 20px 60px rgba(0, 0, 0, 0.3)",
+      }}>
+        {/* Header */}
+        <div style={{
+          padding: "20px",
+          borderBottom: `1px solid ${B.pale}`,
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          background: B.offwhite,
+          position: "sticky",
+          top: 0,
+          zIndex: 10,
+        }}>
+          <h2 style={{ margin: 0, fontSize: "18px", fontWeight: 700, color: B.darkest }}>
+            🤖 AI Analysis: {title}
+          </h2>
+          <button
+            onClick={onClose}
+            style={{
+              background: "none",
+              border: "none",
+              fontSize: "24px",
+              cursor: "pointer",
+              color: B.warm,
+              transition: "color 0.2s",
+            }}
+            onMouseEnter={(e) => e.target.style.color = B.darkest}
+            onMouseLeave={(e) => e.target.style.color = B.warm}
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Content */}
+        <div style={{ padding: "20px" }}>
+          {renderAnalysis()}
+        </div>
+
+        {/* Footer Actions */}
+        {analysisData && !loading && !error && (
+          <div style={{
+            padding: "16px 20px",
+            borderTop: `1px solid ${B.pale}`,
+            display: "flex",
+            gap: "12px",
+            justifyContent: "flex-end",
+            background: B.offwhite,
+            position: "sticky",
+            bottom: 0,
+          }}>
+            <button
+              onClick={onClose}
+              style={{
+                padding: "8px 16px",
+                borderRadius: "6px",
+                cursor: "pointer",
+                fontSize: "12px",
+                border: `1.5px solid ${B.pale}`,
+                fontWeight: 600,
+                background: "#fff",
+                color: TICK,
+                transition: "all 0.2s",
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.borderColor = B.medium;
+                e.target.style.color = B.medium;
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.borderColor = B.pale;
+                e.target.style.color = TICK;
+              }}
+            >
+              Close
+            </button>
+            <button
+              onClick={onNewAnalysis}
+              disabled={isSaving}
+              style={{
+                padding: "8px 16px",
+                borderRadius: "6px",
+                cursor: isSaving ? "not-allowed" : "pointer",
+                fontSize: "12px",
+                border: "none",
+                fontWeight: 600,
+                background: B.darkest,
+                color: "#fff",
+                transition: "all 0.2s",
+                opacity: isSaving ? 0.7 : 1,
+              }}
+              onMouseEnter={(e) => !isSaving && (e.target.style.background = B.medium)}
+              onMouseLeave={(e) => !isSaving && (e.target.style.background = B.darkest)}
+            >
+              {isSaving ? "💾 Saving..." : "🔄 New Analysis"}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ─── Insight Section Helper ──────────────────────────────────────────────────
+const InsightSection = ({ title, insights }) => (
+  <div>
+    <h4 style={{ margin: "0 0 12px 0", fontSize: "13px", fontWeight: 700, color: B.darkest }}>{title}</h4>
+    <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+      {insights.map((insight, idx) => (
+        <div key={idx} style={{ padding: "12px", background: "#fff", borderRadius: "6px", border: `1px solid ${B.pale}` }}>
+          <h5 style={{ margin: "0 0 4px 0", fontSize: "12px", fontWeight: 700, color: B.medium }}>{insight.title}</h5>
+          <p style={{ margin: "0 0 6px 0", fontSize: "11px", color: TICK, lineHeight: "1.4" }}>{insight.description}</p>
+          <div style={{ fontSize: "10px", color: B.warm, fontWeight: 600 }}>Impact: {insight.impact}</div>
+        </div>
+      ))}
+    </div>
+  </div>
+);
+
+// ─── AI Analysis Button ──────────────────────────────────────────────────────
+const AIAnalysisButton = ({ onClick, loading, hasSavedAnalysis, onViewSaved }) => (
+  <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+    {hasSavedAnalysis && (
+      <button
+        onClick={onViewSaved}
+        style={{
+          padding: "6px 12px",
+          borderRadius: "20px",
+          cursor: "pointer",
+          fontSize: "11px",
+          border: `1.5px solid ${B.light}`,
+          fontWeight: 700,
+          background: "#fff",
+          color: B.medium,
+          transition: "all 0.3s ease",
+        }}
+        onMouseEnter={(e) => {
+          e.target.style.background = B.light;
+          e.target.style.color = "#fff";
+        }}
+        onMouseLeave={(e) => {
+          e.target.style.background = "#fff";
+          e.target.style.color = B.medium;
+        }}
+      >
+        📊 View Saved
+      </button>
+    )}
+    <button
+      onClick={onClick}
+      disabled={loading}
+      style={{
+        padding: "6px 12px",
+        borderRadius: "20px",
+        cursor: loading ? "not-allowed" : "pointer",
+        fontSize: "11px",
+        border: `1.5px solid ${B.medium}`,
+        fontWeight: 700,
+        background: loading ? B.pale : B.medium,
+        color: "#fff",
+        transition: "all 0.3s ease",
+        opacity: loading ? 0.7 : 1,
+      }}
+      onMouseEnter={(e) => !loading && (e.target.style.background = B.darkest)}
+      onMouseLeave={(e) => !loading && (e.target.style.background = B.medium)}
+    >
+      {loading ? "🔄" : "🤖"} {loading ? "..." : hasSavedAnalysis ? "New AI" : "AI"}
+    </button>
+  </div>
+);
 
 const Card = ({ title, children }) => (
   <div style={{ background: "#fff", borderRadius: "10px", padding: "20px", minHeight: "400px", boxShadow: "0 2px 10px rgba(59,36,9,0.07)", border: `1px solid ${B.pale}`, display: "flex", flexDirection: "column" }}>
@@ -94,6 +455,7 @@ const TrendChart = ({ trendData, colors }) => {
             responsive: true, maintainAspectRatio: false, animation: false,
             plugins: { 
               legend: { display: false },
+                datalabels: { color: '#ffffff' },
               tooltip: {
                 callbacks: {
                   label: (ctx) => ` ${ctx.dataset.label}: ${ctx.raw}`,
@@ -113,17 +475,30 @@ const TrendChart = ({ trendData, colors }) => {
 };
 
 const doughnutOpts = {
-  responsive: true, maintainAspectRatio: false, animation: false,
-  plugins: {
-    legend: { display: false },
-    tooltip: { callbacks: { label: (ctx) => ` ${ctx.label}: ${ctx.parsed}%` } },
-  },
+  responsive: true,
+   maintainAspectRatio: false,
+   animation: false,
+   plugins: {
+     legend: { display: false },
+     datalabels: {
+       color: '#ffffff',  // ← Change number color here
+       font: { weight: 'bold', size: 12 },
+     },
+     tooltip: {
+       callbacks: {
+         label: (ctx) => ` ${ctx.label}: ${ctx.parsed}%`,
+       },
+     },
+   },
 };
 
 const vBarOpts = (yTitle, yCb) => ({
   responsive: true, maintainAspectRatio: false, animation: false,
   plugins: { 
     legend: { display: false },
+     datalabels: {
+       color: '#ffffff',  // ← Change number color here
+     },
     tooltip: {
       callbacks: {
         label: (ctx) => ` ${ctx.dataset.label}: ${ctx.raw}`,
@@ -149,6 +524,7 @@ const hBarOpts = () => ({
   responsive: true, maintainAspectRatio: false, animation: false, indexAxis: "y",
   plugins: { 
     legend: { display: false },
+      datalabels: { color: '#ffffff' },
     tooltip: {
       callbacks: {
         label: (ctx) => ` ${ctx.dataset.label}: ${ctx.raw}`,
@@ -167,82 +543,6 @@ const hBarOpts = () => ({
     },
   },
 });
-
-// AI Analysis Modal
-const AIPopup = ({ section, onClose }) => {
-  const getAnalysis = () => {
-    switch(section) {
-      case 'liquidity':
-        return {
-          title: "Liquidity & Exits Analysis",
-          insights: [
-            "Trade sales dominate exits at 45%, followed by secondary sales at 30% - showing healthy M&A activity.",
-            "Average time to exit of 5.8 years aligns with industry benchmarks for early-stage investments.",
-            "Mean exit size of R32.5M with 2-3x return being most common (32% of exits).",
-            "Sector concentration in exits mirrors investment patterns - Fintech leads with 28% of all exits.",
-            "Exit value has grown 42% over 3 years, indicating improving market conditions and portfolio quality."
-          ]
-        };
-      default:
-        return {
-          title: "AI Analysis",
-          insights: ["Data analysis complete. Key trends identified in the ecosystem metrics."]
-        };
-    }
-  };
-
-  const analysis = getAnalysis();
-
-  return (
-    <div style={{
-      position: "fixed",
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      backgroundColor: "rgba(0,0,0,0.5)",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      zIndex: 1000,
-    }} onClick={onClose}>
-      <div style={{
-        backgroundColor: "#fff",
-        borderRadius: "16px",
-        maxWidth: "500px",
-        width: "90%",
-        maxHeight: "80vh",
-        overflow: "auto",
-        padding: "24px",
-        boxShadow: "0 10px 40px rgba(0,0,0,0.2)",
-      }} onClick={(e) => e.stopPropagation()}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-          <h3 style={{ fontSize: "18px", fontWeight: "700", color: B.darkest, margin: 0 }}>{analysis.title}</h3>
-          <button onClick={onClose} style={{ background: "none", border: "none", fontSize: "24px", cursor: "pointer", color: B.medium }}>×</button>
-        </div>
-        <div style={{ borderTop: `1px solid ${B.pale}`, paddingTop: "16px" }}>
-          {analysis.insights.map((insight, idx) => (
-            <div key={idx} style={{ display: "flex", alignItems: "flex-start", gap: "12px", marginBottom: "14px" }}>
-              <span style={{ fontSize: "14px", color: B.dark }}>💡</span>
-              <p style={{ margin: 0, fontSize: "13px", lineHeight: "1.5", color: B.dark }}>{insight}</p>
-            </div>
-          ))}
-        </div>
-        <div style={{ marginTop: "20px", textAlign: "center" }}>
-          <button onClick={onClose} style={{
-            padding: "8px 24px",
-            backgroundColor: B.darkest,
-            color: "#fff",
-            border: "none",
-            borderRadius: "20px",
-            cursor: "pointer",
-            fontSize: "12px",
-          }}>Close</button>
-        </div>
-      </div>
-    </div>
-  );
-};
 
 // ─── Hook to fetch liquidity data from Firestore ───────────────────────────
 const useLiquidityData = () => {
@@ -397,23 +697,156 @@ const useLiquidityData = () => {
   return { data, loading };
 };
 
-// ─── Loading State ──────────────────────────────────────────────────────────
-const LoadingState = () => (
-  <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "400px", flexDirection: "column", gap: "16px" }}>
-    <div className="spinner" style={{ width: "40px", height: "40px", border: "3px solid #e0d5c8", borderTop: "3px solid #a67c52", borderRadius: "50%", animation: "spin 1s linear infinite" }}></div>
-    <div style={{ fontSize: "14px", color: "#7d5a50" }}>Loading liquidity & exits data...</div>
-    <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-  </div>
-);
-
 // ─── Main Component ─────────────────────────────────────────────────────────
 const LiquidityExits = () => {
   const [showExitTypeTrend, setShowExitTypeTrend] = useState(false);
-  const [showAIAnalysis, setShowAIAnalysis] = useState(false);
+  const [aiModalOpen, setAiModalOpen] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiAnalysis, setAiAnalysis] = useState(null);
+  const [aiError, setAiError] = useState(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [hasSavedAnalysis, setHasSavedAnalysis] = useState(false);
   const { data, loading } = useLiquidityData();
 
+  // Check for saved analysis on component mount
+  useEffect(() => {
+    const checkSavedAnalysis = async () => {
+      const user = auth.currentUser;
+      if (user) {
+        try {
+          const savedAnalysis = await fetchLatestAnalysis(user.uid, "liquidity-exits");
+          setHasSavedAnalysis(!!savedAnalysis);
+          if (savedAnalysis && savedAnalysis.analysis) {
+            setAiAnalysis(savedAnalysis.analysis);
+          }
+        } catch (error) {
+          console.error("Error checking saved analysis:", error);
+        }
+      }
+    };
+    checkSavedAnalysis();
+  }, []);
+
+  const handleViewSavedAnalysis = async () => {
+    setAiLoading(true);
+    setAiError(null);
+    try {
+      const user = auth.currentUser;
+      if (!user) {
+        throw new Error("User not authenticated");
+      }
+      
+      const savedAnalysis = await fetchLatestAnalysis(user.uid, "liquidity-exits");
+      if (savedAnalysis && savedAnalysis.analysis) {
+        setAiAnalysis(savedAnalysis.analysis);
+        setAiModalOpen(true);
+      } else {
+        setAiError("No saved analysis found. Generate a new one first.");
+      }
+    } catch (error) {
+      console.error("Error loading saved analysis:", error);
+      setAiError(error.message || "Failed to load saved analysis");
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  // In your LiquidityExits component, update the function call:
+
+const handleAIAnalysis = async () => {
+  setAiLoading(true);
+  setAiError(null);
+  setSaveSuccess(false);
+  try {
+    const functions = getFunctions();
+    // Use the corrected function name
+    const generateLiquidityExitsAnalysis = httpsCallable(functions, "generateLiquidityExitsAnalysis");
+    
+    // Prepare the data with proper defaults
+    const liquidityDataPayload = {
+      totalExitsZar: data?.totalExits?.zar || 0,
+      totalExitsCount: data?.totalExits?.count || 0,
+      exitTypes: data?.exitTypes || { "Trade Sale": 45, "Secondary Sale": 30, "IPO": 10, "Buyback": 15 },
+      exitTimingDistribution: data?.avgTimeToExit?.distribution?.reduce((acc, label, idx) => {
+        acc[label] = data.avgTimeToExit.counts[idx];
+        return acc;
+      }, {}),
+      exitSizeDistribution: data?.exitSize?.distribution?.reduce((acc, label, idx) => {
+        acc[label] = data.exitSize.counts[idx];
+        return acc;
+      }, {}),
+      returnDistribution: data?.returnDistribution || { "<1x": 8, "1-2x": 25, "2-3x": 32, "3-5x": 20, "5x+": 15 },
+      avgTimeToExit: parseFloat(data?.avgTimeToExit?.avg) || 5.8,
+      meanExitSize: parseFloat(data?.exitSize?.mean) || 32.5,
+      medianExitSize: data?.exitSize?.median || 18.2,
+      exitsBySector: data?.exitsBySector || {},
+    };
+
+    console.log("Calling generateLiquidityExitsAnalysis with:", liquidityDataPayload);
+    
+    const result = await generateLiquidityExitsAnalysis({
+      liquidityData: liquidityDataPayload,
+    });
+
+    console.log("Received analysis:", result.data);
+    
+    const analysisData = result.data;
+    setAiAnalysis(analysisData);
+    setAiModalOpen(true);
+    
+    // Auto-save to Firebase
+    const user = auth.currentUser;
+    if (user) {
+      try {
+        await saveAnalysisToFirebase(
+          user.uid,
+          "liquidity-exits",
+          analysisData,
+          liquidityDataPayload
+        );
+        setSaveSuccess(true);
+        setHasSavedAnalysis(true);
+        setTimeout(() => setSaveSuccess(false), 3000);
+      } catch (saveError) {
+        console.error("Error auto-saving analysis:", saveError);
+      }
+    }
+  } catch (error) {
+    console.error("AI Analysis error:", error);
+    setAiError(error.message || "Failed to generate analysis");
+  } finally {
+    setAiLoading(false);
+  }
+};
+
+  const handleNewAnalysis = async () => {
+    setIsSaving(true);
+    try {
+      const user = auth.currentUser;
+      if (!user) {
+        throw new Error("User not authenticated");
+      }
+
+      setAiModalOpen(false);
+      setAiAnalysis(null);
+      await handleAIAnalysis();
+    } catch (error) {
+      console.error("Error generating new analysis:", error);
+      setAiError("Failed to generate new analysis: " + error.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   if (loading) {
-    return <LoadingState />;
+    return (
+      <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "400px", flexDirection: "column", gap: "16px" }}>
+        <div className="spinner" style={{ width: "40px", height: "40px", border: "3px solid #e0d5c8", borderTop: "3px solid #a67c52", borderRadius: "50%", animation: "spin 1s linear infinite" }}></div>
+        <div style={{ fontSize: "14px", color: "#7d5a50" }}>Loading liquidity & exits data...</div>
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
   }
 
   if (!data) {
@@ -433,11 +866,29 @@ const LiquidityExits = () => {
 
   return (
     <div>
-      {showAIAnalysis && <AIPopup section="liquidity" onClose={() => setShowAIAnalysis(false)} />}
+      <AIAnalysisModal 
+        isOpen={aiModalOpen} 
+        title="Liquidity & Exits" 
+        analysisData={aiAnalysis} 
+        loading={aiLoading} 
+        error={aiError} 
+        onClose={() => setAiModalOpen(false)}
+        onNewAnalysis={handleNewAnalysis}
+        isSaving={isSaving}
+        saveSuccess={saveSuccess}
+        hasSavedAnalysis={hasSavedAnalysis}
+        onViewSaved={handleViewSavedAnalysis}
+      />
       
       <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "16px" }}>
-        <SubTab label="AI Analysis" active={false} onClick={() => setShowAIAnalysis(true)} />
+        <AIAnalysisButton 
+          onClick={handleAIAnalysis} 
+          loading={aiLoading} 
+          hasSavedAnalysis={hasSavedAnalysis} 
+          onViewSaved={handleViewSavedAnalysis} 
+        />
       </div>
+      
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(380px, 1fr))", gap: "20px" }}>
 
         <Card title="Total Exits (by Sector)">

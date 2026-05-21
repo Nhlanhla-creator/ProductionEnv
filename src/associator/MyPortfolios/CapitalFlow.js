@@ -3,10 +3,13 @@ import React, { useState, useEffect } from "react";
 import { Bar, Doughnut } from "react-chartjs-2";
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend } from "chart.js";
 import { db, auth } from "../../firebaseConfig";
-import { collection, query, where, getDocs, getDoc, doc } from "firebase/firestore";
+import { collection, query, where, getDocs, getDoc, doc, setDoc, addDoc, serverTimestamp, orderBy, limit } from "firebase/firestore";
 import { useAssociationAnalytics } from "../../context/AssociationAnalyticsContext";
+import { getFunctions, httpsCallable } from "firebase/functions";
+import ChartDataLabels from 'chartjs-plugin-datalabels';
 
-ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend);
+ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend, ChartDataLabels);
+
 
 const B = {
   black: "#1a1a1a",
@@ -36,12 +39,427 @@ const MIXED_COLORS = [
   "#e0d6c8",
 ];
 
+// ─── Save Analysis to Firebase ───────────────────────────────────────────────
+// Debug version of saveAnalysisToFirebase
+const saveAnalysisToFirebase = async (userId, analysisType, analysisData, sourceData) => {
+  try {
+    console.log("🔍 Starting save to Firebase...");
+    console.log("📝 User ID:", userId);
+    console.log("📝 Analysis Type:", analysisType);
+    console.log("📝 Analysis Data:", JSON.stringify(analysisData, null, 2));
+    console.log("📝 Source Data:", JSON.stringify(sourceData, null, 2));
+
+    // Check if user is authenticated
+    if (!auth.currentUser) {
+      throw new Error("No authenticated user");
+    }
+
+    // Verify user ID matches current user
+    if (userId !== auth.currentUser.uid) {
+      console.warn("⚠️ User ID mismatch:", userId, "vs", auth.currentUser.uid);
+    }
+
+    const userAnalysesRef = collection(db, "users", userId, "aiAnalyses");
+
+    const analysisDoc = {
+      type: analysisType,
+      title: `${analysisType.replace(/-/g, " ")} Analysis`,
+      analysis: analysisData,
+      sourceData: sourceData,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      userId: userId,
+      createdAtISO: new Date().toISOString(), // Fallback timestamp
+    };
+
+    console.log("💾 Attempting to save document with structure:", Object.keys(analysisDoc));
+
+    const docRef = await addDoc(userAnalysesRef, analysisDoc);
+
+    console.log(`✅ Analysis saved with ID: ${docRef.id}`);
+    console.log(`🔗 Full path: users/${userId}/aiAnalyses/${docRef.id}`);
+
+    // Verify the save by reading it back
+    const savedDoc = await getDoc(docRef);
+    if (savedDoc.exists()) {
+      console.log("✅ Verified save - document exists in Firebase");
+    } else {
+      console.warn("⚠️ Document not found immediately after save");
+    }
+
+    return docRef.id;
+  } catch (error) {
+    console.error("❌ Error saving analysis to Firebase:");
+    console.error("Error name:", error.name);
+    console.error("Error message:", error.message);
+    console.error("Error code:", error.code);
+    console.error("Full error:", error);
+
+    // Handle specific Firebase errors
+    if (error.code === 'permission-denied') {
+      console.error("Permission denied - check Firebase rules");
+    } else if (error.code === 'unavailable') {
+      console.error("Firebase unavailable - check network");
+    } else if (error.code === 'not-found') {
+      console.error("Collection not found - check path");
+    }
+
+    throw error;
+  }
+};
+
+// ─── Fetch Latest Analysis from Firebase ─────────────────────────────────────
+const fetchLatestAnalysis = async (userId, analysisType) => {
+  try {
+    const userAnalysesRef = collection(db, "users", userId, "aiAnalyses");
+    const q = query(
+      userAnalysesRef,
+      where("type", "==", analysisType),
+      orderBy("createdAt", "desc"),
+      limit(1)
+    );
+
+    const querySnapshot = await getDocs(q);
+
+    if (!querySnapshot.empty) {
+      const latestDoc = querySnapshot.docs[0];
+      const data = latestDoc.data();
+      console.log(`✅ Retrieved latest ${analysisType} analysis from Firebase`);
+      return {
+        id: latestDoc.id,
+        analysis: data.analysis,
+        sourceData: data.sourceData,
+        createdAt: data.createdAt
+      };
+    }
+
+    console.log(`ℹ️ No saved ${analysisType} analysis found`);
+    return null;
+  } catch (error) {
+    console.error("❌ Error fetching analysis from Firebase:", error);
+    throw error;
+  }
+};
+
+// ─── AI Analysis Modal ────────────────────────────────────────────────────────
+const AIAnalysisModal = ({ isOpen, title, analysisData, loading, error, onClose, onNewAnalysis, isSaving, saveSuccess, hasExistingAnalysis, onViewSaved }) => {
+  if (!isOpen) return null;
+
+  const renderAnalysis = () => {
+    if (loading) {
+      return (
+        <div style={{ display: "flex", justifyContent: "center", alignItems: "center", minHeight: "300px", flexDirection: "column", gap: "16px" }}>
+          <div className="spinner" style={{ width: "40px", height: "40px", border: "3px solid #e0d5c8", borderTop: "3px solid #a67c52", borderRadius: "50%", animation: "spin 1s linear infinite" }}></div>
+          <div style={{ fontSize: "14px", color: "#7d5a50" }}>Generating AI analysis...</div>
+          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+        </div>
+      );
+    }
+
+    if (error) {
+      return (
+        <div style={{ padding: "20px", background: "#fce4ec", borderRadius: "8px", color: "#c62828" }}>
+          <p style={{ margin: 0, fontSize: "14px" }}>⚠️ Failed to generate analysis: {error}</p>
+        </div>
+      );
+    }
+
+    if (!analysisData) return null;
+
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+        {/* Save Success Message */}
+        {saveSuccess && (
+          <div style={{ padding: "12px 16px", background: "#e8f5e9", borderRadius: "8px", color: "#2e7d32", border: `1px solid #c8e6c9`, display: "flex", alignItems: "center", gap: "8px" }}>
+            <span style={{ fontSize: "16px" }}>✓</span>
+            <span style={{ fontSize: "13px", fontWeight: 500 }}>Analysis saved to your dashboard</span>
+          </div>
+        )}
+
+        {/* Overall Assessment */}
+        <div style={{ background: B.offwhite, padding: "16px", borderRadius: "8px", borderLeft: `4px solid ${B.brownMedium}` }}>
+          <h4 style={{ margin: "0 0 8px 0", fontSize: "13px", fontWeight: 700, color: B.brownDark }}>Executive Summary</h4>
+          <p style={{ margin: 0, fontSize: "13px", color: B.darkGrey, lineHeight: "1.5" }}>{analysisData.overallAssessment}</p>
+        </div>
+
+        {/* Key Findings */}
+        {analysisData.keyFindings && analysisData.keyFindings.length > 0 && (
+          <div>
+            <h4 style={{ margin: "0 0 12px 0", fontSize: "13px", fontWeight: 700, color: B.brownDark }}>Key Findings</h4>
+            <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+              {analysisData.keyFindings.map((finding, idx) => (
+                <div key={idx} style={{ display: "flex", gap: "10px", padding: "10px", background: "#fff", borderRadius: "6px", border: `1px solid ${B.lightGrey}` }}>
+                  <span style={{ color: B.brownMedium, fontWeight: 700, fontSize: "12px", flexShrink: 0 }}>•</span>
+                  <span style={{ fontSize: "12px", color: B.darkGrey, lineHeight: "1.4" }}>{finding}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Insights Sections */}
+        {analysisData.sectorInsights && <InsightSection title="Sector Insights" insights={analysisData.sectorInsights} />}
+        {analysisData.geographicInsights && <InsightSection title="Geographic Insights" insights={analysisData.geographicInsights} />}
+        {analysisData.funderInsights && <InsightSection title="Funder Insights" insights={analysisData.funderInsights} />}
+        {analysisData.demographicInsights && <InsightSection title="Demographic Insights" insights={analysisData.demographicInsights} />}
+        {analysisData.transformationInsights && <InsightSection title="Transformation Insights" insights={analysisData.transformationInsights} />}
+        {analysisData.coInvestorInsights && <InsightSection title="Co-investor Insights" insights={analysisData.coInvestorInsights} />}
+        {analysisData.fundTypeInsights && <InsightSection title="Fund Type Insights" insights={analysisData.fundTypeInsights} />}
+        {analysisData.dealSizeInsights && <InsightSection title="Deal Size Insights" insights={analysisData.dealSizeInsights} />}
+        {analysisData.equityInsights && <InsightSection title="Equity Insights" insights={analysisData.equityInsights} />}
+        {analysisData.sourceInsights && <InsightSection title="Funding Sources" insights={analysisData.sourceInsights} />}
+        {analysisData.rejectionInsights && <InsightSection title="Rejection Pattern Insights" insights={analysisData.rejectionInsights} />}
+        {analysisData.efficiencyInsights && <InsightSection title="Efficiency Insights" insights={analysisData.efficiencyInsights} />}
+
+        {/* Market Trends */}
+        {analysisData.marketTrends && (
+          <div>
+            <h4 style={{ margin: "0 0 12px 0", fontSize: "13px", fontWeight: 700, color: B.brownDark }}>Market Trends</h4>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "12px" }}>
+              {Object.entries(analysisData.marketTrends).map(([key, value]) => (
+                <div key={key} style={{ padding: "10px", background: "#fff", borderRadius: "6px", border: `1px solid ${B.lightGrey}` }}>
+                  <div style={{ fontSize: "10px", color: B.warmGrey, fontWeight: 600, textTransform: "uppercase" }}>
+                    {key.replace(/([A-Z])/g, ' $1')}
+                  </div>
+                  {Array.isArray(value) ? (
+                    <div style={{ fontSize: "11px", color: B.darkGrey, marginTop: "4px" }}>
+                      {value.join(", ")}
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: "13px", fontWeight: 700, color: B.black, marginTop: "4px" }}>{value}</div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Strategic Recommendations */}
+        {analysisData.strategicRecommendations && analysisData.strategicRecommendations.length > 0 && (
+          <div>
+            <h4 style={{ margin: "0 0 12px 0", fontSize: "13px", fontWeight: 700, color: B.brownDark }}>Strategic Recommendations</h4>
+            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+              {analysisData.strategicRecommendations.map((rec, idx) => (
+                <div key={idx} style={{ padding: "12px", background: "#fff", borderRadius: "6px", border: `1px solid ${B.lightGrey}` }}>
+                  <h5 style={{ margin: "0 0 8px 0", fontSize: "12px", fontWeight: 700, color: B.brownMedium }}>{rec.title}</h5>
+                  <p style={{ margin: "0 0 8px 0", fontSize: "11px", color: B.darkGrey, lineHeight: "1.4" }}>{rec.description}</p>
+                  {rec.steps && rec.steps.length > 0 && (
+                    <ol style={{ margin: "0", paddingLeft: "16px", fontSize: "11px", color: B.mediumGrey }}>
+                      {rec.steps.map((step, i) => (
+                        <li key={i} style={{ marginBottom: "4px" }}>{step}</li>
+                      ))}
+                    </ol>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <div style={{
+      position: "fixed",
+      top: 0,
+      left: 0,
+      right: 0,
+      bottom: 0,
+      background: "rgba(0, 0, 0, 0.5)",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      zIndex: 1000,
+      padding: "20px",
+    }}>
+      <div style={{
+        background: "#fff",
+        borderRadius: "12px",
+        maxWidth: "800px",
+        width: "100%",
+        maxHeight: "90vh",
+        overflow: "auto",
+        boxShadow: "0 20px 60px rgba(0, 0, 0, 0.3)",
+      }}>
+        {/* Header */}
+        <div style={{
+          padding: "20px",
+          borderBottom: `1px solid ${B.lightGrey}`,
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          background: B.offwhite,
+          position: "sticky",
+          top: 0,
+          zIndex: 10,
+        }}>
+          <h2 style={{ margin: 0, fontSize: "18px", fontWeight: 700, color: B.brownDark }}>
+            🤖 AI Analysis: {title}
+          </h2>
+          <button
+            onClick={onClose}
+            style={{
+              background: "none",
+              border: "none",
+              fontSize: "24px",
+              cursor: "pointer",
+              color: B.mediumGrey,
+              transition: "color 0.2s",
+            }}
+            onMouseEnter={(e) => e.target.style.color = B.brownDark}
+            onMouseLeave={(e) => e.target.style.color = B.mediumGrey}
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Content */}
+        <div style={{ padding: "20px" }}>
+          {renderAnalysis()}
+        </div>
+
+        {/* Footer Actions */}
+        {analysisData && !loading && !error && (
+          <div style={{
+            padding: "16px 20px",
+            borderTop: `1px solid ${B.lightGrey}`,
+            display: "flex",
+            gap: "12px",
+            justifyContent: "flex-end",
+            background: B.offwhite,
+            position: "sticky",
+            bottom: 0,
+          }}>
+            <button
+              onClick={onClose}
+              style={{
+                padding: "8px 16px",
+                borderRadius: "6px",
+                cursor: "pointer",
+                fontSize: "12px",
+                border: `1.5px solid ${B.lightGrey}`,
+                fontWeight: 600,
+                background: "#fff",
+                color: B.darkGrey,
+                transition: "all 0.2s",
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.borderColor = B.brownMedium;
+                e.target.style.color = B.brownMedium;
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.borderColor = B.lightGrey;
+                e.target.style.color = B.darkGrey;
+              }}
+            >
+              Close
+            </button>
+            <button
+              onClick={onNewAnalysis}
+              disabled={isSaving}
+              style={{
+                padding: "8px 16px",
+                borderRadius: "6px",
+                cursor: isSaving ? "not-allowed" : "pointer",
+                fontSize: "12px",
+                border: "none",
+                fontWeight: 600,
+                background: B.brownMedium,
+                color: "#fff",
+                transition: "all 0.2s",
+                opacity: isSaving ? 0.7 : 1,
+              }}
+              onMouseEnter={(e) => !isSaving && (e.target.style.background = B.brownDark)}
+              onMouseLeave={(e) => !isSaving && (e.target.style.background = B.brownMedium)}
+            >
+              {isSaving ? "💾 Saving..." : "🔄 New Analysis"}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ─── Insight Section Helper ──────────────────────────────────────────────────
+const InsightSection = ({ title, insights }) => (
+  <div>
+    <h4 style={{ margin: "0 0 12px 0", fontSize: "13px", fontWeight: 700, color: B.brownDark }}>{title}</h4>
+    <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+      {insights.map((insight, idx) => (
+        <div key={idx} style={{ padding: "12px", background: "#fff", borderRadius: "6px", border: `1px solid ${B.lightGrey}` }}>
+          <h5 style={{ margin: "0 0 4px 0", fontSize: "12px", fontWeight: 700, color: B.brownMedium }}>{insight.title}</h5>
+          <p style={{ margin: "0 0 6px 0", fontSize: "11px", color: B.darkGrey, lineHeight: "1.4" }}>{insight.description}</p>
+          <div style={{ fontSize: "10px", color: B.warmGrey, fontWeight: 600 }}>Impact: {insight.impact}</div>
+        </div>
+      ))}
+    </div>
+  </div>
+);
+
+// ─── AI Analysis Button ──────────────────────────────────────────────────────
+const AIAnalysisButton = ({ onClick, loading, hasSavedAnalysis, onViewSaved }) => (
+  <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+    {hasSavedAnalysis && (
+      <button
+        onClick={onViewSaved}
+        style={{
+          padding: "6px 12px",
+          borderRadius: "20px",
+          cursor: "pointer",
+          fontSize: "11px",
+          border: `1.5px solid ${B.brownLight}`,
+          fontWeight: 700,
+          background: "#fff",
+          color: B.brownMedium,
+          transition: "all 0.3s ease",
+        }}
+        onMouseEnter={(e) => {
+          e.target.style.background = B.brownLight;
+          e.target.style.color = "#fff";
+        }}
+        onMouseLeave={(e) => {
+          e.target.style.background = "#fff";
+          e.target.style.color = B.brownMedium;
+        }}
+      >
+        📊 View Saved
+      </button>
+    )}
+    <button
+      onClick={onClick}
+      disabled={loading}
+      style={{
+        padding: "6px 12px",
+        borderRadius: "20px",
+        cursor: loading ? "not-allowed" : "pointer",
+        fontSize: "11px",
+        border: `1.5px solid ${B.brownMedium}`,
+        fontWeight: 700,
+        background: loading ? B.lightGrey : B.brownMedium,
+        color: "#fff",
+        transition: "all 0.3s ease",
+        opacity: loading ? 0.7 : 1,
+      }}
+      onMouseEnter={(e) => !loading && (e.target.style.background = B.brownDark)}
+      onMouseLeave={(e) => !loading && (e.target.style.background = B.brownMedium)}
+    >
+      {loading ? "🔄" : "🤖"} {loading ? "..." : hasSavedAnalysis ? "New AI" : "AI"}
+    </button>
+  </div>
+);
+
 const doughnutOpts = {
   responsive: true,
   maintainAspectRatio: false,
   animation: false,
   plugins: {
     legend: { display: false },
+    datalabels: {
+      color: '#ffffff',  // ← Change number color here
+      font: { weight: 'bold', size: 12 },
+    },
     tooltip: {
       callbacks: {
         label: (ctx) => ` ${ctx.label}: ${ctx.parsed}%`,
@@ -106,6 +524,32 @@ const Card = ({ title, children, footer }) => (
   </div>
 );
 
+const CardWithAI = ({ title, children, footer, onAIAnalysis, aiLoading, hasSavedAnalysis, onViewSaved }) => (
+  <div
+    style={{
+      background: "#fff",
+      borderRadius: "10px",
+      padding: "20px",
+      minHeight: "400px",
+      boxShadow: "0 2px 10px rgba(0,0,0,0.05)",
+      border: `1px solid ${B.lightGrey}`,
+      display: "flex",
+      flexDirection: "column",
+    }}
+  >
+    <div style={{ paddingBottom: "10px", borderBottom: `1px solid ${B.offwhite}`, marginBottom: "10px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+      <h3 style={{ fontSize: "14px", fontWeight: "700", color: B.black, margin: 0 }}>{title}</h3>
+      {onAIAnalysis && <AIAnalysisButton onClick={onAIAnalysis} loading={aiLoading} hasSavedAnalysis={hasSavedAnalysis} onViewSaved={onViewSaved} />}
+    </div>
+    <div style={{ flex: 1 }}>{children}</div>
+    {footer && (
+      <div style={{ marginTop: "12px", paddingTop: "10px", borderTop: `1px solid ${B.offwhite}`, fontSize: "11px", color: B.warmGrey }}>
+        {footer}
+      </div>
+    )}
+  </div>
+);
+
 const Pill = ({ label, active, onClick }) => (
   <button
     onClick={onClick}
@@ -135,19 +579,20 @@ const hBarOpts = () => ({
   maintainAspectRatio: false,
   animation: false,
   indexAxis: "y",
-  plugins: { 
+  plugins: {
     legend: { display: false },
-    tooltip: {
-      callbacks: {
-        label: (ctx) => ` ${ctx.dataset.label}: ${ctx.raw}`,
-      },
+    datalabels: {
+      color: '#ffffff',  // ← Change number color here
+      font: { weight: 'bold', size: 11 },
+      anchor: 'end',
+      align: 'right',
     },
   },
   scales: {
     x: {
       beginAtZero: true,
       grid: { display: true, color: B.lightGrey },
-      ticks: { color: B.darkGrey, font: { size: 9 }, callback: (v) => v },
+      ticks: { color: B.darkGrey, font: { size: 9 } },
     },
     y: {
       grid: { display: false },
@@ -155,7 +600,6 @@ const hBarOpts = () => ({
     },
   },
 });
-
 const TrendChart = ({ trendData, colors }) => {
   const keys = Object.keys(trendData).filter((k) => k !== "years");
   const datasets = keys.map((key, i) => ({
@@ -180,18 +624,11 @@ const TrendChart = ({ trendData, colors }) => {
             responsive: true,
             maintainAspectRatio: false,
             animation: false,
-            plugins: { 
-              legend: { display: false },
-              tooltip: {
-                callbacks: {
-                  label: (ctx) => ` ${ctx.dataset.label}: ${ctx.raw}`,
-                },
-              },
-            },
+            plugins: { legend: { display: false } },
             scales: {
               x: {
                 stacked: true,
-                ticks: { color: B.darkGrey, font: { size: 8 }, callback: (v) => v },
+                ticks: { color: B.darkGrey, font: { size: 8 } },
                 grid: { display: false },
               },
               y: {
@@ -229,109 +666,17 @@ const ViewTrendButton = ({ show, onClick }) => (
   </div>
 );
 
-// AI Analysis Modal
-const AIPopup = ({ section, onClose }) => {
-  const getAnalysis = () => {
-    switch(section) {
-      case 'market-structure':
-        return {
-          title: "Market Structure Analysis",
-          insights: [
-            "Sector concentration shows Fintech leading at 32%, indicating strong digital transformation focus in your ecosystem.",
-            "Geographic distribution is heavily weighted toward Gauteng (45%) and Western Cape (25%), suggesting potential for regional expansion.",
-            "Seed and Series A stages dominate (63% combined), showing a healthy early-stage ecosystem with growth potential.",
-            "Funder type distribution reveals VC dominance (45%), with opportunity to attract more corporate VC and family office capital.",
-            "Co-investment activity at 45% suggests collaborative potential, with room to increase syndication to 60%+."
-          ]
-        };
-      case 'deal-structure':
-        return {
-          title: "Deal Structure Analysis",
-          insights: [
-            "Equity remains the dominant instrument at 55%, providing strong alignment of interests between investors and founders.",
-            "Average deal size of R12.5M with 8.2% YoY growth indicates increasing investment confidence and maturity.",
-            "Equity percentage distribution peaks at 10-20% range (40% of deals), suggesting balanced ownership structures.",
-            "Deal size distribution shows healthy pipeline with 35% in R1-5M range, suitable for early-stage companies.",
-            "Convertible instruments at only 5% - potential to introduce more flexible structures for early-stage investing."
-          ]
-        };
-      case 'deployment':
-        return {
-          title: "Capital Deployment Analysis",
-          insights: [
-            "Funding sources show healthy diversification: Entities/Individuals (35%), Corporates (28%), DFIs (22%).",
-            "Deal rejection rate at 60% - poor financials (38%) is the primary barrier, indicating need for financial readiness support.",
-            "Capital deployment has grown steadily from R280M (2022) to R410M (2025), 46% increase over 3 years.",
-            "Average fund size of R45M with 12.5% YoY growth shows increasing capital aggregation capacity.",
-            "Requested vs deployed gap narrowing from R20M to R40M, suggesting improving capital absorption efficiency."
-          ]
-        };
-      default:
-        return {
-          title: "AI Analysis",
-          insights: ["Data analysis complete. Key trends identified in the ecosystem metrics."]
-        };
-    }
-  };
-
-  const analysis = getAnalysis();
-
-  return (
-    <div style={{
-      position: "fixed",
-      top: 0,
-      left: 0,
-      right: 0,
-      bottom: 0,
-      backgroundColor: "rgba(0,0,0,0.5)",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      zIndex: 1000,
-    }} onClick={onClose}>
-      <div style={{
-        backgroundColor: "#fff",
-        borderRadius: "16px",
-        maxWidth: "500px",
-        width: "90%",
-        maxHeight: "80vh",
-        overflow: "auto",
-        padding: "24px",
-        boxShadow: "0 10px 40px rgba(0,0,0,0.2)",
-      }} onClick={(e) => e.stopPropagation()}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-          <h3 style={{ fontSize: "18px", fontWeight: "700", color: B.brownDark, margin: 0 }}>{analysis.title}</h3>
-          <button onClick={onClose} style={{ background: "none", border: "none", fontSize: "24px", cursor: "pointer", color: B.mediumGrey }}>×</button>
-        </div>
-        <div style={{ borderTop: `1px solid ${B.lightGrey}`, paddingTop: "16px" }}>
-          {analysis.insights.map((insight, idx) => (
-            <div key={idx} style={{ display: "flex", alignItems: "flex-start", gap: "12px", marginBottom: "14px" }}>
-              <span style={{ fontSize: "14px", color: B.brownMedium }}>💡</span>
-              <p style={{ margin: 0, fontSize: "13px", lineHeight: "1.5", color: B.darkGrey }}>{insight}</p>
-            </div>
-          ))}
-        </div>
-        <div style={{ marginTop: "20px", textAlign: "center" }}>
-          <button onClick={onClose} style={{
-            padding: "8px 24px",
-            backgroundColor: B.brownMedium,
-            color: "#fff",
-            border: "none",
-            borderRadius: "20px",
-            cursor: "pointer",
-            fontSize: "12px",
-          }}>Close</button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// ─── Capital Deployment Component ────────────────────────────────────────────
+// ─── Capital Deployment Component ────────────────────────────────────────────────────────
 const CapitalDeployment = ({ analyticsData, entitiesData }) => {
   const [showSourceTrend, setShowSourceTrend] = useState(false);
   const [showPurposeTrend, setShowPurposeTrend] = useState(false);
-  const [showAIAnalysis, setShowAIAnalysis] = useState(false);
+  const [aiModalOpen, setAiModalOpen] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiAnalysis, setAiAnalysis] = useState(null);
+  const [aiError, setAiError] = useState(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [hasSavedAnalysis, setHasSavedAnalysis] = useState(false);
 
   const sources = analyticsData?.fundingSources || {
     "Entities/Individuals": 35,
@@ -382,28 +727,149 @@ const CapitalDeployment = ({ analyticsData, entitiesData }) => {
     },
   };
 
-  const sourceLabels = Object.keys(sources);
-  const sourceValues = Object.values(sources);
-  const purposeLabels = Object.keys(purposes);
-  const purposeValues = Object.values(purposes);
+  // Check for saved analysis on component mount
+  useEffect(() => {
+    const checkSavedAnalysis = async () => {
+      const user = auth.currentUser;
+      if (user) {
+        try {
+          const savedAnalysis = await fetchLatestAnalysis(user.uid, "capital-deployment");
+          setHasSavedAnalysis(!!savedAnalysis);
+        } catch (error) {
+          console.error("Error checking saved analysis:", error);
+        }
+      }
+    };
+    checkSavedAnalysis();
+  }, []);
+
+  const handleViewSavedAnalysis = async () => {
+    setAiLoading(true);
+    setAiError(null);
+    try {
+      const user = auth.currentUser;
+      if (!user) {
+        throw new Error("User not authenticated");
+      }
+
+      const savedAnalysis = await fetchLatestAnalysis(user.uid, "capital-deployment");
+      if (savedAnalysis && savedAnalysis.analysis) {
+        setAiAnalysis(savedAnalysis.analysis);
+        setAiModalOpen(true);
+      } else {
+        setAiError("No saved analysis found. Generate a new one first.");
+      }
+    } catch (error) {
+      console.error("Error loading saved analysis:", error);
+      setAiError(error.message || "Failed to load saved analysis");
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const handleAIAnalysis = async () => {
+    setAiLoading(true);
+    setAiError(null);
+    setSaveSuccess(false);
+    try {
+      const functions = getFunctions();
+      const generateCapitalDeploymentAnalysis = httpsCallable(functions, "generateCapitalDeploymentAnalysis");
+
+      const result = await generateCapitalDeploymentAnalysis({
+        deploymentData: {
+          fundingSources: sources,
+          fundingPurposes: purposes,
+          averageFundSize: avgFundSize.current,
+          fundsRaisedVsDeployed: fundsVsDeployed,
+          rejectionData: rejectionData,
+        },
+      });
+
+      const analysisData = result.data;
+      setAiAnalysis(analysisData);
+      setAiModalOpen(true);
+
+      // ✅ AUTOMATICALLY SAVE when AI generates analysis (first time)
+      const user = auth.currentUser;
+      if (user) {
+        try {
+          await saveAnalysisToFirebase(
+            user.uid,
+            "capital-deployment",
+            analysisData,
+            {
+              fundingSources: sources,
+              fundingPurposes: purposes,
+              averageFundSize: avgFundSize.current,
+              fundsRaisedVsDeployed: fundsVsDeployed,
+              rejectionData: rejectionData,
+            }
+          );
+          setSaveSuccess(true);
+          setHasSavedAnalysis(true);
+          // Hide success message after 3 seconds
+          setTimeout(() => setSaveSuccess(false), 3000);
+        } catch (saveError) {
+          console.error("Error auto-saving analysis:", saveError);
+          // Don't show error to user, just log it
+        }
+      }
+
+      setHasSavedAnalysis(true);
+    } catch (error) {
+      console.error("AI Analysis error:", error);
+      setAiError(error.message || "Failed to generate analysis");
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const handleNewAnalysis = async () => {
+    setIsSaving(true);
+    try {
+      const user = auth.currentUser;
+      if (!user) {
+        throw new Error("User not authenticated");
+      }
+
+      // Close current modal and reset
+      setAiModalOpen(false);
+      setAiAnalysis(null);
+
+      // Generate new analysis (this will auto-save again)
+      await handleAIAnalysis();
+
+    } catch (error) {
+      console.error("Error generating new analysis:", error);
+      setAiError("Failed to generate new analysis: " + error.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-      {showAIAnalysis && <AIPopup section="deployment" onClose={() => setShowAIAnalysis(false)} />}
-      
-      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "8px" }}>
-        <SubTab label="AI Analysis" active={false} onClick={() => setShowAIAnalysis(true)} />
-      </div>
-      
+      <AIAnalysisModal
+        isOpen={aiModalOpen}
+        title="Capital Deployment"
+        analysisData={aiAnalysis}
+        loading={aiLoading}
+        error={aiError}
+        onClose={() => setAiModalOpen(false)}
+        onNewAnalysis={handleNewAnalysis}
+        isSaving={isSaving}
+        saveSuccess={saveSuccess}
+      />
+
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "20px" }}>
         <Card title="Sources of Funds Raised">
           <div style={{ height: "200px" }}>
             <Doughnut
               options={doughnutOpts}
-              data={{ labels: sourceLabels, datasets: [{ data: sourceValues, backgroundColor: MIXED_COLORS }] }}
+              data={{ labels: Object.keys(sources), datasets: [{ data: Object.values(sources), backgroundColor: MIXED_COLORS }] }}
             />
           </div>
-          <ManualLegend labels={sourceLabels} colors={MIXED_COLORS} values={sourceValues} />
+          <ManualLegend labels={Object.keys(sources)} colors={MIXED_COLORS} values={Object.values(sources)} />
           <ViewTrendButton show={showSourceTrend} onClick={() => setShowSourceTrend((p) => !p)} />
           {showSourceTrend && <TrendChart trendData={sourceTrends} colors={MIXED_COLORS} />}
         </Card>
@@ -412,22 +878,28 @@ const CapitalDeployment = ({ analyticsData, entitiesData }) => {
           <div style={{ height: "200px" }}>
             <Doughnut
               options={doughnutOpts}
-              data={{ labels: purposeLabels, datasets: [{ data: purposeValues, backgroundColor: MIXED_COLORS.slice(3) }] }}
+              data={{ labels: Object.keys(purposes), datasets: [{ data: Object.values(purposes), backgroundColor: MIXED_COLORS.slice(3) }] }}
             />
           </div>
-          <ManualLegend labels={purposeLabels} colors={MIXED_COLORS.slice(3)} values={purposeValues} />
+          <ManualLegend labels={Object.keys(purposes)} colors={MIXED_COLORS.slice(3)} values={Object.values(purposes)} />
           <ViewTrendButton show={showPurposeTrend} onClick={() => setShowPurposeTrend((p) => !p)} />
           {showPurposeTrend && <TrendChart trendData={purposeTrends} colors={MIXED_COLORS.slice(3)} />}
         </Card>
 
-        <Card title="Average Fund Size (ZAR M)">
+        <CardWithAI
+          title="Average Fund Size (ZAR M)"
+          onAIAnalysis={handleAIAnalysis}
+          aiLoading={aiLoading}
+          hasSavedAnalysis={hasSavedAnalysis}
+          onViewSaved={handleViewSavedAnalysis}
+        >
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%" }}>
             <div style={{ fontSize: "44px", fontWeight: "800", color: B.black }}>R {avgFundSize.current}M</div>
             <div style={{ fontSize: "12px", color: B.mediumGrey, marginTop: "8px" }}>
               YoY Growth <TrendIcon growth={avgFundSize.yoyGrowth} />
             </div>
           </div>
-        </Card>
+        </CardWithAI>
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "1.4fr 1fr", gap: "20px" }}>
@@ -438,18 +910,12 @@ const CapitalDeployment = ({ analyticsData, entitiesData }) => {
                 responsive: true,
                 maintainAspectRatio: false,
                 animation: false,
-                plugins: { 
-                  legend: { display: false },
-                  tooltip: {
-                    callbacks: {
-                      label: (ctx) => ` ${ctx.dataset.label}: R${ctx.raw}M`,
-                    },
-                  },
-                },
+                plugins: { legend: { display: false },datalabels: {color: '#ffffff'}, },
+
                 scales: {
                   x: {
                     title: { display: true, text: "Year", color: B.darkGrey, font: { size: 11 } },
-                    ticks: { font: { size: 10 }, color: B.darkGrey, callback: (v) => v },
+                    ticks: { font: { size: 10 }, color: B.darkGrey },
                   },
                   y: {
                     beginAtZero: true,
@@ -531,14 +997,7 @@ const CapitalDeployment = ({ analyticsData, entitiesData }) => {
                   maintainAspectRatio: false,
                   animation: false,
                   indexAxis: "y",
-                  plugins: { 
-                    legend: { display: false },
-                    tooltip: {
-                      callbacks: {
-                        label: (ctx) => ` ${ctx.label}: ${ctx.raw}%`,
-                      },
-                    },
-                  },
+                     plugins: { legend: { display: false },datalabels: {color: '#ffffff'}, },
                   scales: {
                     x: {
                       beginAtZero: true,
@@ -572,13 +1031,22 @@ const MarketStructure = ({ analyticsData, entitiesData }) => {
   const [viewType, setViewType] = useState("zar");
   const [activeSubTab, setActiveSubTab] = useState("where-capital");
   const [trendVisible, setTrendVisible] = useState({});
-  const [showAIAnalysis, setShowAIAnalysis] = useState(false);
+  const [aiModalOpen, setAiModalOpen] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiAnalysis, setAiAnalysis] = useState(null);
+  const [aiError, setAiError] = useState(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [hasSavedAnalysis, setHasSavedAnalysis] = useState(false);
+
   const toggleTrend = (key) => setTrendVisible((p) => ({ ...p, [key]: !p[key] }));
 
   const sectorAlloc = analyticsData?.sectorDistribution || { Fintech: 32, Healthtech: 18, Agritech: 15, Edtech: 12, Logistics: 10, "Clean Energy": 8, Others: 5 };
   const geoAlloc = analyticsData?.geographicDistribution || { Gauteng: 45, "Western Cape": 25, KZN: 15, "Eastern Cape": 8, Others: 7 };
   const stageAlloc = analyticsData?.stageDistribution || { "Pre-seed": 12, Seed: 28, "Series A": 35, "Series B": 18, "Series C+": 7 };
-  const sizeAlloc = analyticsData?.sizeDistribution || { Micro: 25, Small: 40, Medium: 25, Large: 10 };
+  const funderContribution = analyticsData?.investorTypes || { VC: 45, Angel: 20, DFI: 18, "Corporate VC": 12, "Family Office": 5 };
+  const coDeals = { yes: 45, no: 55 };
+  const coLocation = { Johannesburg: 48, CapeTown: 25, Durban: 12, Pretoria: 8, International: 7 };
 
   const calculateTrends = (data) => {
     const years = ["2022", "2023", "2024", "2025"];
@@ -597,25 +1065,127 @@ const MarketStructure = ({ analyticsData, entitiesData }) => {
   const sectorTrends = calculateTrends(sectorAlloc);
   const geoTrends = calculateTrends(geoAlloc);
   const stageTrends = calculateTrends(stageAlloc);
-
-  const funderContribution = analyticsData?.investorTypes || { VC: 45, Angel: 20, DFI: 18, "Corporate VC": 12, "Family Office": 5 };
   const funderTrends = calculateTrends(funderContribution);
-
-  const bbbee = { level1: 12, level2: 18, level3: 24, level4: 20, nonCompliant: 26 };
   const fundManagerLoc = { Johannesburg: 45, CapeTown: 28, Durban: 12, Pretoria: 8, Others: 7 };
   const fundManagerTrends = calculateTrends(fundManagerLoc);
-  const coDeals = { yes: 45, no: 55 };
   const coDealsTrends = calculateTrends(coDeals);
-  const coLocation = { Johannesburg: 48, CapeTown: 25, Durban: 12, Pretoria: 8, International: 7 };
   const coLocationTrends = calculateTrends(coLocation);
-
-  const currentSectorData = sectorAlloc;
-  const currentGeoData = geoAlloc;
-  const currentStageData = stageAlloc;
-  const currentFunderData = funderContribution;
+  const bbbee = { level1: 12, level2: 18, level3: 24, level4: 20, nonCompliant: 26 };
 
   const topSectors = Object.entries(sectorAlloc).sort((a, b) => b[1] - a[1]).slice(0, 3);
   const bottomSectors = Object.entries(sectorAlloc).sort((a, b) => a[1] - b[1]).slice(0, 3);
+
+  // Check for saved analysis on component mount
+  useEffect(() => {
+    const checkSavedAnalysis = async () => {
+      const user = auth.currentUser;
+      if (user) {
+        try {
+          const savedAnalysis = await fetchLatestAnalysis(user.uid, "market-structure");
+          setHasSavedAnalysis(!!savedAnalysis);
+        } catch (error) {
+          console.error("Error checking saved analysis:", error);
+        }
+      }
+    };
+    checkSavedAnalysis();
+  }, []);
+
+  const handleViewSavedAnalysis = async () => {
+    setAiLoading(true);
+    setAiError(null);
+    try {
+      const user = auth.currentUser;
+      if (!user) {
+        throw new Error("User not authenticated");
+      }
+
+      const savedAnalysis = await fetchLatestAnalysis(user.uid, "market-structure");
+      if (savedAnalysis && savedAnalysis.analysis) {
+        setAiAnalysis(savedAnalysis.analysis);
+        setAiModalOpen(true);
+      } else {
+        setAiError("No saved analysis found. Generate a new one first.");
+      }
+    } catch (error) {
+      console.error("Error loading saved analysis:", error);
+      setAiError(error.message || "Failed to load saved analysis");
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const handleAIAnalysis = async () => {
+    setAiLoading(true);
+    setAiError(null);
+    setSaveSuccess(false);
+    try {
+      const functions = getFunctions();
+      const generateMarketStructureAnalysis = httpsCallable(functions, "generateMarketStructureAnalysis");
+
+      const result = await generateMarketStructureAnalysis({
+        marketData: {
+          sectorDistribution: sectorAlloc,
+          geographicDistribution: geoAlloc,
+          stageDistribution: stageAlloc,
+          investorTypes: funderContribution,
+          coInvestmentRate: coDeals.yes,
+          fundManagerLocations: fundManagerLoc,
+          bbbeeCompliance: bbbee,
+          coInvestorLocations: coLocation,
+        },
+      });
+
+      setAiAnalysis(result.data);
+      setAiModalOpen(true);
+      setHasSavedAnalysis(true);
+    } catch (error) {
+      console.error("AI Analysis error:", error);
+      setAiError(error.message || "Failed to generate analysis");
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const handleNewAnalysis = async () => {
+    setIsSaving(true);
+    try {
+      const user = auth.currentUser;
+      if (!user) {
+        throw new Error("User not authenticated");
+      }
+
+      await saveAnalysisToFirebase(
+        user.uid,
+        "market-structure",
+        aiAnalysis,
+        {
+          sectorDistribution: sectorAlloc,
+          geographicDistribution: geoAlloc,
+          stageDistribution: stageAlloc,
+          investorTypes: funderContribution,
+          coInvestmentRate: coDeals.yes,
+          fundManagerLocations: fundManagerLoc,
+          bbbeeCompliance: bbbee,
+          coInvestorLocations: coLocation,
+        }
+      );
+
+      setSaveSuccess(true);
+
+      setTimeout(() => {
+        setAiAnalysis(null);
+        setAiModalOpen(false);
+        setSaveSuccess(false);
+        handleAIAnalysis();
+      }, 1500);
+    } catch (error) {
+      console.error("Error saving analysis:", error);
+      setAiError("Failed to save analysis: " + error.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const DoughnutCard = ({ title, data, colors, trendKey, trendData, footer }) => {
     const labels = Object.keys(data);
@@ -637,13 +1207,25 @@ const MarketStructure = ({ analyticsData, entitiesData }) => {
 
   return (
     <div>
-      {showAIAnalysis && <AIPopup section="market-structure" onClose={() => setShowAIAnalysis(false)} />}
-      
-      <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", marginBottom: "20px", borderBottom: `1px solid ${B.lightGrey}`, paddingBottom: "12px" }}>
-        <SubTab label="Where Capital Goes" active={activeSubTab === "where-capital"} onClick={() => setActiveSubTab("where-capital")} />
-        <SubTab label="Who Provides Capital" active={activeSubTab === "who-provides"} onClick={() => setActiveSubTab("who-provides")} />
-        <SubTab label="Co-investor Analysis" active={activeSubTab === "co-investor"} onClick={() => setActiveSubTab("co-investor")} />
-        <SubTab label="AI Analysis" active={false} onClick={() => setShowAIAnalysis(true)} />
+      <AIAnalysisModal
+        isOpen={aiModalOpen}
+        title="Market Structure"
+        analysisData={aiAnalysis}
+        loading={aiLoading}
+        error={aiError}
+        onClose={() => setAiModalOpen(false)}
+        onNewAnalysis={handleNewAnalysis}
+        isSaving={isSaving}
+        saveSuccess={saveSuccess}
+      />
+
+      <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", marginBottom: "20px", borderBottom: `1px solid ${B.lightGrey}`, paddingBottom: "12px", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ display: "flex", gap: "12px" }}>
+          <SubTab label="Where Capital Goes" active={activeSubTab === "where-capital"} onClick={() => setActiveSubTab("where-capital")} />
+          <SubTab label="Who Provides Capital" active={activeSubTab === "who-provides"} onClick={() => setActiveSubTab("who-provides")} />
+          <SubTab label="Co-investor Analysis" active={activeSubTab === "co-investor"} onClick={() => setActiveSubTab("co-investor")} />
+        </div>
+        <AIAnalysisButton onClick={handleAIAnalysis} loading={aiLoading} hasSavedAnalysis={hasSavedAnalysis} onViewSaved={handleViewSavedAnalysis} />
       </div>
 
       {activeSubTab === "where-capital" && (
@@ -652,9 +1234,9 @@ const MarketStructure = ({ analyticsData, entitiesData }) => {
             <Pill label="By Allocation" active={viewType === "zar"} onClick={() => setViewType("zar")} />
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(380px, 1fr))", gap: "20px" }}>
-            <DoughnutCard title="Sector Concentration" data={currentSectorData} colors={MIXED_COLORS} trendKey="sector" trendData={sectorTrends} footer={`Top 3: ${topSectors.map((s) => s[0]).join(", ")} | Bottom 3: ${bottomSectors.map((s) => s[0]).join(", ")}`} />
-            <DoughnutCard title="Geographic Concentration" data={currentGeoData} colors={MIXED_COLORS} trendKey="geo" trendData={geoTrends} />
-            <DoughnutCard title="Deal Stage Concentration" data={currentStageData} colors={MIXED_COLORS} trendKey="stage" trendData={stageTrends} />
+            <DoughnutCard title="Sector Concentration" data={sectorAlloc} colors={MIXED_COLORS} trendKey="sector" trendData={sectorTrends} footer={`Top 3: ${topSectors.map((s) => s[0]).join(", ")} | Bottom 3: ${bottomSectors.map((s) => s[0]).join(", ")}`} />
+            <DoughnutCard title="Geographic Concentration" data={geoAlloc} colors={MIXED_COLORS} trendKey="geo" trendData={geoTrends} />
+            <DoughnutCard title="Deal Stage Concentration" data={stageAlloc} colors={MIXED_COLORS} trendKey="stage" trendData={stageTrends} />
           </div>
         </div>
       )}
@@ -665,7 +1247,7 @@ const MarketStructure = ({ analyticsData, entitiesData }) => {
             <Pill label="By Allocation" active={viewType === "zar"} onClick={() => setViewType("zar")} />
           </div>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(380px, 1fr))", gap: "20px" }}>
-            <DoughnutCard title="Funder Type Distribution" data={currentFunderData} colors={MIXED_COLORS} trendKey="funder" trendData={funderTrends} />
+            <DoughnutCard title="Funder Type Distribution" data={funderContribution} colors={MIXED_COLORS} trendKey="funder" trendData={funderTrends} />
             <Card title="Funder B-BBEE Compliance Status">
               <div style={{ height: "260px" }}>
                 <Bar
@@ -697,12 +1279,18 @@ const MarketStructure = ({ analyticsData, entitiesData }) => {
     </div>
   );
 };
-
 // ─── Deal Structure ───────────────────────────────────────────────────────────
 const DealStructure = ({ analyticsData, entitiesData }) => {
   const [activeSubTab, setActiveSubTab] = useState("fund-type");
   const [trendVisible, setTrendVisible] = useState({});
-  const [showAIAnalysis, setShowAIAnalysis] = useState(false);
+  const [aiModalOpen, setAiModalOpen] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiAnalysis, setAiAnalysis] = useState(null);
+  const [aiError, setAiError] = useState(null);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
+  const [hasSavedAnalysis, setHasSavedAnalysis] = useState(false);
+
   const toggleTrend = (key) => setTrendVisible((p) => ({ ...p, [key]: !p[key] }));
 
   const dealStats = { grant: 15, equity: 55, debt: 25, convertible: 5 };
@@ -721,6 +1309,132 @@ const DealStructure = ({ analyticsData, entitiesData }) => {
   const avgDealsPerInvestor = { current: 3.8, yoyGrowth: 5.6 };
   const equitySizeDist = { "<R1M": 20, "R1-5M": 40, "R5-10M": 25, "R10-20M": 10, "R20M+": 5 };
   const equityPctDist = { "0-10%": 25, "10-20%": 40, "20-30%": 20, "30-50%": 10, "50%+": 5 };
+
+  // Check for saved analysis on component mount
+  useEffect(() => {
+    const checkSavedAnalysis = async () => {
+      const user = auth.currentUser;
+      if (user) {
+        try {
+          const savedAnalysis = await fetchLatestAnalysis(user.uid, "deal-structure");
+          if (savedAnalysis && savedAnalysis.analysis) {
+            setHasSavedAnalysis(true);
+            // Optionally load the saved analysis for "View Saved" button
+            setAiAnalysis(savedAnalysis.analysis);
+          }
+        } catch (error) {
+          console.error("Error checking saved analysis:", error);
+        }
+      }
+    };
+    checkSavedAnalysis();
+  }, []);
+
+  const handleViewSavedAnalysis = async () => {
+    setAiLoading(true);
+    setAiError(null);
+    try {
+      const user = auth.currentUser;
+      if (!user) {
+        throw new Error("User not authenticated");
+      }
+
+      const savedAnalysis = await fetchLatestAnalysis(user.uid, "deal-structure");
+      if (savedAnalysis && savedAnalysis.analysis) {
+        setAiAnalysis(savedAnalysis.analysis);
+        setAiModalOpen(true);
+      } else {
+        setAiError("No saved analysis found. Generate a new one first.");
+      }
+    } catch (error) {
+      console.error("Error loading saved analysis:", error);
+      setAiError(error.message || "Failed to load saved analysis");
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const handleAIAnalysis = async () => {
+    setAiLoading(true);
+    setAiError(null);
+    setSaveSuccess(false);
+    try {
+      const functions = getFunctions();
+      const generateDealStructureAnalysis = httpsCallable(functions, "generateDealStructureAnalysis");
+
+      const result = await generateDealStructureAnalysis({
+        dealData: {
+          fundTypeDistribution: fundTypeAlloc,
+          dealSizeDistribution: dealSizeDist,
+          averageDealSize: avgDealSize.current,
+          averageDealsPerInvestor: avgDealsPerInvestor.current,
+          equitySizeDistribution: equitySizeDist,
+          equityPercentageDistribution: equityPctDist,
+        },
+      });
+
+      const analysisData = result.data;
+      setAiAnalysis(analysisData);
+      setAiModalOpen(true);
+
+      // ✅ AUTO-SAVE immediately after getting analysis
+      const user = auth.currentUser;
+      if (user) {
+        try {
+          await saveAnalysisToFirebase(
+            user.uid,
+            "deal-structure",
+            analysisData,
+            {
+              fundTypeDistribution: fundTypeAlloc,
+              dealSizeDistribution: dealSizeDist,
+              averageDealSize: avgDealSize.current,
+              averageDealsPerInvestor: avgDealsPerInvestor.current,
+              equitySizeDistribution: equitySizeDist,
+              equityPercentageDistribution: equityPctDist,
+            }
+          );
+          setSaveSuccess(true);
+          setHasSavedAnalysis(true);
+          // Auto-hide success message after 3 seconds
+          setTimeout(() => setSaveSuccess(false), 3000);
+        } catch (saveError) {
+          console.error("Error auto-saving analysis:", saveError);
+          // Show user-friendly error but don't block the modal
+          setAiError("Analysis generated but failed to save: " + saveError.message);
+        }
+      }
+    } catch (error) {
+      console.error("AI Analysis error:", error);
+      setAiError(error.message || "Failed to generate analysis");
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
+  const handleNewAnalysis = async () => {
+    setIsSaving(true);
+    try {
+      const user = auth.currentUser;
+      if (!user) {
+        throw new Error("User not authenticated");
+      }
+
+      // Close current modal and reset
+      setAiModalOpen(false);
+      setAiAnalysis(null);
+      setSaveSuccess(false);
+
+      // Generate new analysis (will auto-save)
+      await handleAIAnalysis();
+
+    } catch (error) {
+      console.error("Error generating new analysis:", error);
+      setAiError("Failed to generate new analysis: " + error.message);
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const DoughnutCard = ({ title, data, colors, trendKey, trendData }) => {
     const labels = Object.keys(data);
@@ -742,13 +1456,32 @@ const DealStructure = ({ analyticsData, entitiesData }) => {
 
   return (
     <div>
-      {showAIAnalysis && <AIPopup section="deal-structure" onClose={() => setShowAIAnalysis(false)} />}
-      
-      <div style={{ display: "flex", gap: "12px", marginBottom: "20px", borderBottom: `1px solid ${B.lightGrey}`, paddingBottom: "12px" }}>
-        <SubTab label="Fund Type" active={activeSubTab === "fund-type"} onClick={() => setActiveSubTab("fund-type")} />
-        <SubTab label="Deal Size" active={activeSubTab === "deal-size"} onClick={() => setActiveSubTab("deal-size")} />
-        <SubTab label="Equity Preferences" active={activeSubTab === "equity"} onClick={() => setActiveSubTab("equity")} />
-        <SubTab label="AI Analysis" active={false} onClick={() => setShowAIAnalysis(true)} />
+      <AIAnalysisModal
+        isOpen={aiModalOpen}
+        title="Deal Structure"
+        analysisData={aiAnalysis}
+        loading={aiLoading}
+        error={aiError}
+        onClose={() => setAiModalOpen(false)}
+        onNewAnalysis={handleNewAnalysis}
+        isSaving={isSaving}
+        saveSuccess={saveSuccess}
+        hasSavedAnalysis={hasSavedAnalysis}
+        onViewSaved={handleViewSavedAnalysis}
+      />
+
+      <div style={{ display: "flex", gap: "12px", marginBottom: "20px", borderBottom: `1px solid ${B.lightGrey}`, paddingBottom: "12px", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ display: "flex", gap: "12px" }}>
+          <SubTab label="Fund Type" active={activeSubTab === "fund-type"} onClick={() => setActiveSubTab("fund-type")} />
+          <SubTab label="Deal Size" active={activeSubTab === "deal-size"} onClick={() => setActiveSubTab("deal-size")} />
+          <SubTab label="Equity Preferences" active={activeSubTab === "equity"} onClick={() => setActiveSubTab("equity")} />
+        </div>
+        <AIAnalysisButton
+          onClick={handleAIAnalysis}
+          loading={aiLoading}
+          hasSavedAnalysis={hasSavedAnalysis}
+          onViewSaved={handleViewSavedAnalysis}
+        />
       </div>
 
       {activeSubTab === "fund-type" && (
@@ -771,21 +1504,7 @@ const DealStructure = ({ analyticsData, entitiesData }) => {
           <Card title="Deal Size Distribution">
             <div style={{ height: "320px" }}>
               <Bar
-                options={{ 
-                  responsive: true, maintainAspectRatio: false, animation: false, 
-                  plugins: { 
-                    legend: { display: false },
-                    tooltip: {
-                      callbacks: {
-                        label: (ctx) => ` Number of Deals: ${ctx.raw}`,
-                      },
-                    },
-                  }, 
-                  scales: { 
-                    x: { title: { display: true, text: "Range", color: B.darkGrey }, grid: { display: false }, ticks: { color: B.darkGrey, font: { size: 8 }, callback: (v) => v } }, 
-                    y: { title: { display: true, text: "Number of Deals", color: B.darkGrey }, beginAtZero: true, grid: { color: B.lightGrey }, ticks: { color: B.darkGrey, callback: (v) => v } }
-                  }
-                }}
+                options={{ responsive: true, maintainAspectRatio: false, animation: false, plugins: { legend: { display: false }, datalabels: {color: '#ffffff'}, }, scales: { x: { title: { display: true, text: "Range", color: B.darkGrey }, grid: { display: false }, ticks: { color: B.darkGrey, font: { size: 8 } } }, y: { title: { display: true, text: "Number of Deals", color: B.darkGrey }, beginAtZero: true, grid: { color: B.lightGrey }, ticks: { color: B.darkGrey, callback: (v) => `R${v}M` } } } }}
                 data={{ labels: Object.keys(dealSizeDist), datasets: [{ label: "Number of Deals", data: Object.values(dealSizeDist), backgroundColor: MIXED_COLORS[0] }] }}
               />
             </div>
@@ -798,21 +1517,7 @@ const DealStructure = ({ analyticsData, entitiesData }) => {
           <Card title="Equity Size Distribution">
             <div style={{ height: "320px" }}>
               <Bar
-                options={{ 
-                  responsive: true, maintainAspectRatio: false, animation: false, 
-                  plugins: { 
-                    legend: { display: false },
-                    tooltip: {
-                      callbacks: {
-                        label: (ctx) => ` Number of Deals: ${ctx.raw}`,
-                      },
-                    },
-                  }, 
-                  scales: { 
-                    x: { title: { display: true, text: "Range", color: B.darkGrey }, grid: { display: false }, ticks: { color: B.darkGrey, font: { size: 8 }, callback: (v) => v } }, 
-                    y: { title: { display: true, text: "Number of Deals", color: B.darkGrey }, beginAtZero: true, grid: { color: B.lightGrey }, ticks: { color: B.darkGrey, callback: (v) => `R${v}M` } }
-                  }
-                }}
+                options={{ responsive: true, maintainAspectRatio: false, animation: false, plugins: { legend: { display: false },datalabels: {color: '#ffffff'}, }, scales: { x: { title: { display: true, text: "Range", color: B.darkGrey }, grid: { display: false }, ticks: { color: B.darkGrey, font: { size: 8 } } }, y: { title: { display: true, text: "Number of Deals", color: B.darkGrey }, beginAtZero: true, grid: { color: B.lightGrey }, ticks: { color: B.darkGrey, callback: (v) => `R${v}M` } } } }}
                 data={{ labels: Object.keys(equitySizeDist), datasets: [{ label: "Number of Deals", data: Object.values(equitySizeDist), backgroundColor: MIXED_COLORS[1] }] }}
               />
             </div>
@@ -820,21 +1525,7 @@ const DealStructure = ({ analyticsData, entitiesData }) => {
           <Card title="Equity Percentage Distribution">
             <div style={{ height: "320px" }}>
               <Bar
-                options={{ 
-                  responsive: true, maintainAspectRatio: false, animation: false, 
-                  plugins: { 
-                    legend: { display: false },
-                    tooltip: {
-                      callbacks: {
-                        label: (ctx) => ` Number of Deals: ${ctx.raw}`,
-                      },
-                    },
-                  }, 
-                  scales: { 
-                    x: { title: { display: true, text: "Range", color: B.darkGrey }, grid: { display: false }, ticks: { color: B.darkGrey, font: { size: 8 }, callback: (v) => v } }, 
-                    y: { title: { display: true, text: "Number of Deals", color: B.darkGrey }, beginAtZero: true, grid: { color: B.lightGrey }, ticks: { color: B.darkGrey, callback: (v) => v } }
-                  }
-                }}
+                options={{ responsive: true, maintainAspectRatio: false, animation: false, plugins: { legend: { display: false },datalabels: {color: '#ffffff'}, }, scales: { x: { title: { display: true, text: "Range", color: B.darkGrey }, grid: { display: false }, ticks: { color: B.darkGrey, font: { size: 8 } } }, y: { title: { display: true, text: "Number of Deals", color: B.darkGrey }, beginAtZero: true, grid: { color: B.lightGrey }, ticks: { color: B.darkGrey } } } }}
                 data={{ labels: Object.keys(equityPctDist), datasets: [{ label: "Number of Deals", data: Object.values(equityPctDist), backgroundColor: MIXED_COLORS[3] }] }}
               />
             </div>
@@ -887,10 +1578,10 @@ const CapitalFlow = () => {
   useEffect(() => {
     const fetchEntities = async () => {
       if (!associationName) return;
-      
+
       try {
         const results = { smes: [], investors: [], catalysts: [], advisors: [] };
-        
+
         // Fetch SMEs
         const smeQuery = query(collection(db, "universalProfiles"), where("entityOverview.memberOfAssociation", "==", "yes"));
         const smeSnapshot = await getDocs(smeQuery);
@@ -900,9 +1591,9 @@ const CapitalFlow = () => {
             results.smes.push(data);
           }
         }
-        
+
         // Fetch Investors
-        const investorQuery = query(collection(db, "MyuniversalProfiles"));
+        const investorQuery = query(collection(db, "MyuniversalProfiles"), where("fundManageOverview.memberOfAssociation", "==", "yes"));
         const investorSnapshot = await getDocs(investorQuery);
         for (const docSnap of investorSnapshot.docs) {
           const data = docSnap.data();
@@ -911,7 +1602,7 @@ const CapitalFlow = () => {
             results.investors.push(formData);
           }
         }
-        
+
         // Fetch Catalysts
         const catalystSnapshot = await getDocs(collection(db, "catalystProfiles"));
         for (const docSnap of catalystSnapshot.docs) {
@@ -921,7 +1612,7 @@ const CapitalFlow = () => {
             results.catalysts.push(formData);
           }
         }
-        
+
         // Fetch Advisors
         const advisorSnapshot = await getDocs(collection(db, "advisorProfiles"));
         for (const docSnap of advisorSnapshot.docs) {
@@ -931,13 +1622,13 @@ const CapitalFlow = () => {
             results.advisors.push(formData);
           }
         }
-        
+
         setEntitiesData(results);
       } catch (err) {
         console.error("Error fetching entities:", err);
       }
     };
-    
+
     if (associationName) {
       fetchEntities();
     }
@@ -961,13 +1652,13 @@ const CapitalFlow = () => {
           Data aggregated from {entitiesData.smes.length} SMEs, {entitiesData.investors.length} Investors, {entitiesData.catalysts.length} Catalysts, and {entitiesData.advisors.length} Advisors
         </p>
       </div>
-      
+
       <div style={{ display: "flex", gap: "12px", marginBottom: "20px", borderBottom: `1px solid ${B.lightGrey}`, paddingBottom: "12px" }}>
         <SubTab label="Market Structure" active={activeMainTab === "market-structure"} onClick={() => setActiveMainTab("market-structure")} />
         <SubTab label="Deal Structure" active={activeMainTab === "deal-structure"} onClick={() => setActiveMainTab("deal-structure")} />
         <SubTab label="Capital Deployment" active={activeMainTab === "deployment"} onClick={() => setActiveMainTab("deployment")} />
       </div>
-      
+
       {activeMainTab === "market-structure" && <MarketStructure analyticsData={analyticsData} entitiesData={entitiesData} />}
       {activeMainTab === "deal-structure" && <DealStructure analyticsData={analyticsData} entitiesData={entitiesData} />}
       {activeMainTab === "deployment" && <CapitalDeployment analyticsData={analyticsData} entitiesData={entitiesData} />}
@@ -975,4 +1666,5 @@ const CapitalFlow = () => {
   );
 };
 
+// ✅ CRITICAL: Add default export at the very bottom
 export default CapitalFlow;
