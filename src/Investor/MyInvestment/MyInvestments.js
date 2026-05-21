@@ -1,29 +1,11 @@
 // MyInvestments.js
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  FiPieChart,
-  FiDollarSign,
-  FiUsers,
-  FiAlertTriangle,
-  FiMap,
-  FiTrendingUp,
   FiEye,
-  FiPieChart as FiComposition,
   FiBarChart2,
-  FiGlobe,
-  FiTarget,
-  FiDollarSign as FiLiquidity,
-  FiHeart,
-  FiActivity,
   FiShield,
-  FiClock,
-  FiCheckCircle,
-  FiArrowUp,
-  FiArrowDown,
-  FiCalendar,
+  FiDollarSign as FiLiquidity,
   FiDownload,
-  FiTrendingUp as FiTrendingUpIcon,
-  FiInfo,
   FiX
 } from 'react-icons/fi';
 import html2canvas from 'html2canvas';
@@ -36,14 +18,9 @@ import useSubscriptionPlan from "../../hooks/useSubscriptionPlan"
 
 // Import all tab components
 import PortfolioOverview from './PortfolioOverview';
-import PortfolioComposition from './PortfolioComposition';
-import ExitLiquidityMetrics from './ExitLiquidityMetrics';
-import FunderHealthEfficiency from './FunderHealthEfficiency';
 import PerformanceRiskDashboard from './PerformanceRiskDashboard';
-import ESGImpactPerformance from './ESGImpactPerformance';
 import DataIntegrityTrustLayer from './DataIntegrityTrustLayer';
-import InsightsAIRecommendations from './InsightsAIRecommendations';
-import PipelineFutureOpportunities from './PipelineFutureOpportunities';
+import ExitLiquidityMetrics from './ExitLiquidityMetrics';
 
 // Styles for MyInvestments
 const styles = `
@@ -69,77 +46,79 @@ const styles = `
   padding-left: 10px;
 }
 
-/* Horizontal scrolling tabs */
-.categories-scroll-container {
-  width: 100%;
-  overflow-x: auto;
-  padding-bottom: 10px;
-  margin-bottom: 25px;
-  padding: 0 10px;
-}
-
-.categories-scroll-container::-webkit-scrollbar {
-  height: 6px;
-}
-
-.categories-scroll-container::-webkit-scrollbar-thumb {
-  background-color: #d4c4b0;
-  border-radius: 3px;
-}
-
-.categories-grid {
+/* Tabs container */
+.tabs-container {
   display: flex;
+  gap: 5px;
   flex-wrap: wrap;
-  gap: 12px;
-  padding: 5px 0;
-} 
+  background-color: white;
+  border-radius: 12px;
+  padding: 6px;
+  border: 1px solid #d4bca8;
+  box-shadow: 0 2px 8px rgba(59, 36, 9, 0.06);
+  margin-bottom: 0;
+}
 
-.category-btn {
-  padding: 12px 20px;
-  background-color: #ede4d8;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-  font-weight: 500;
-  color: #5e3f26;
+/* Tab button */
+.tab-btn {
   display: flex;
   align-items: center;
+  gap: 7px;
+  padding: 10px 18px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  flex: 1;
   justify-content: center;
-  gap: 8px;
-  font-size: 14px;
-  flex-shrink: 0;
-  min-width: max-content;
-  transition: none !important;
-  animation: none !important;
-  transform: none !important;
+  transition: all 0.15s ease;
+  background-color: transparent;
+  color: #7d5a36;
 }
 
-.category-btn:hover {
-  background-color: #d4c4b0;
-  transform: none !important;
-  animation: none !important;
+.tab-btn:hover {
+  background-color: rgba(125, 90, 54, 0.1);
 }
 
-.category-btn.active {
+.tab-btn.active {
   background-color: #7d5a36;
   color: white;
   font-weight: 600;
-  box-shadow: 0 4px 8px rgba(125, 90, 54, 0.3);
-  transform: none !important;
-  animation: none !important;
+  box-shadow: 0 3px 10px rgba(166, 124, 82, 0.3);
 }
 
-.btn-icon {
-  font-size: 16px;
+.tab-icon {
+  font-size: 14px;
 }
 
-/* Section content */
-.section-content {
-  width: 100%;
-  min-height: 600px;
+/* Tab underline */
+.tab-underline {
+  height: 3px;
+  background-color: #7d5a36;
+  border-radius: 0 0 4px 4px;
+  margin-bottom: 20px;
 }
 
-/* Section Header */
+/* Purpose section */
+.purpose-section {
+  background-color: white;
+  border-left: 4px solid #7d5a36;
+  border-radius: 0 8px 8px 0;
+  padding: 12px 16px;
+  margin-bottom: 20px;
+  font-size: 13px;
+  color: #5e3f26;
+  box-shadow: 0 1px 4px rgba(59, 36, 9, 0.05);
+}
+
+.purpose-label {
+  font-weight: 700;
+  color: #3d2a1f;
+}
+
+/* Section header */
 .section-header {
   display: flex;
   justify-content: space-between;
@@ -156,25 +135,7 @@ const styles = `
   flex-shrink: 0;
 }
 
-/* Purpose */
-.purpose {
-  background: white;
-  border-radius: 8px;
-  padding: 15px 20px;
-  margin-bottom: 20px;
-  border-left: 4px solid #7d5a36;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-  flex: 1;
-  margin-left: 0;
-}
-
-.purpose-text {
-  color: #5e3f26;
-  font-size: 14px;
-  line-height: 1.4;
-}
-
-/* Download Section Button */
+/* Download button */
 .download-section-btn {
   background: #7d5a36;
   color: white;
@@ -187,15 +148,11 @@ const styles = `
   align-items: center;
   gap: 8px;
   font-size: 14px;
-  transition: none !important;
-  animation: none !important;
-  transform: none !important;
+  transition: all 0.15s ease;
 }
 
 .download-section-btn:hover {
   background: #5e3f26;
-  transform: none !important;
-  animation: none !important;
 }
 
 /* Download Options */
@@ -244,16 +201,11 @@ const styles = `
   cursor: pointer;
   font-weight: 500;
   text-align: left;
-  transition: none !important;
-  animation: none !important;
-  transform: none !important;
 }
 
 .download-options-list button:hover {
   background: #7d5a36;
   color: white;
-  transform: none !important;
-  animation: none !important;
 }
 
 .close-download {
@@ -265,16 +217,11 @@ const styles = `
   border-radius: 6px;
   cursor: pointer;
   font-weight: 500;
-  transition: none !important;
-  animation: none !important;
-  transform: none !important;
 }
 
 .close-download:hover {
   background: #666;
   color: white;
-  transform: none !important;
-  animation: none !important;
 }
 
 /* Popup Styles */
@@ -314,26 +261,41 @@ const styles = `
   cursor: pointer;
   padding: 5px;
   border-radius: 4px;
-  transition: none !important;
-  animation: none !important;
-  transform: none !important;
 }
 
 .popup-close:hover {
   background: #f0f0f0;
   color: #333;
-  transform: none !important;
-  animation: none !important;
 }
 
 .popup-content {
   width: 100%;
 }
 
+/* Section content */
+.section-content {
+  width: 100%;
+  min-height: 600px;
+}
+
 /* Responsive design */
-@media (max-width: 1200px) {
+@media (max-width: 768px) {
   .investments-container {
-    margin-left: 200px;
+    padding: 15px;
+  }
+  
+  .tabs-container {
+    gap: 4px;
+    padding: 4px;
+  }
+  
+  .tab-btn {
+    padding: 8px 12px;
+    font-size: 11px;
+  }
+  
+  .tab-icon {
+    font-size: 12px;
   }
   
   .section-header {
@@ -343,90 +305,30 @@ const styles = `
   
   .section-controls {
     width: 100%;
-    justify-content: space-between;
-  }
-}
-
-@media (max-width: 992px) {
-  .categories-grid {
-    gap: 8px;
-  }
-  
-  .category-btn {
-    padding: 10px 16px;
-    font-size: 13px;
-  }
-}
-
-@media (max-width: 768px) {
-  .investments-container {
-    margin-left: 0;
-    padding-top: 70px;
-  }
-  
-  .categories-grid {
-    gap: 6px;
-  }
-  
-  .category-btn {
-    padding: 8px 12px;
-    font-size: 12px;
-  }
-  
-  .btn-icon {
-    font-size: 14px;
-  }
-  
-  .section-controls {
-    flex-direction: column;
-    gap: 10px;
+    justify-content: flex-end;
   }
   
   .download-section-btn {
-    width: 100%;
-    justify-content: center;
+    padding: 8px 16px;
+    font-size: 12px;
   }
 }
 
 @media (max-width: 576px) {
   .investments-title {
-    font-size: 22px;
+    font-size: 20px;
+    margin-bottom: 15px;
   }
   
-  .categories-scroll-container {
-    padding-bottom: 5px;
+  .tab-btn {
+    padding: 6px 10px;
+    font-size: 10px;
   }
   
-  .categories-grid {
-    padding: 3px 0;
+  .purpose-section {
+    font-size: 11px;
+    padding: 10px 12px;
   }
-  
-  .purpose,
-  .section-content {
-    padding: 0 5px;
-  }
-}
-
-/* Categories grid spacing */
-.categories-scroll-container {
-  margin-bottom: 15px;
-}
-
-.categories-scroll-container:last-of-type {
-  margin-bottom: 25px;
-}
-
-/* Ensure all content areas have consistent padding */
-.portfolio-overview,
-.portfolio-composition,
-.pipeline-opportunities,
-.exit-liquidity,
-.funder-efficiency,
-.insights-ai,
-.performance-risk,
-.esg-impact,
-.data-integrity {
-  width: 100%;
 }
 `;
 
@@ -436,34 +338,31 @@ styleSheet.textContent = styles;
 document.head.appendChild(styleSheet);
 
 const MyInvestments = () => {
-  const [activeCategory, setActiveCategory] = useState('Portfolio Overview');
+  const [activeTab, setActiveTab] = useState('portfolio-overview');
   const [showDownloadOptions, setShowDownloadOptions] = useState(false);
   const [popupContent, setPopupContent] = useState(null);
   const [showPopup, setShowPopup] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
-  const { currentPlan, subscriptionLoading } = useSubscriptionPlan(currentUser?.uid)
+  const { currentPlan, subscriptionLoading } = useSubscriptionPlan(currentUser?.uid);
   const sectionRef = useRef(null);
 
-  // Get current user from Firebase auth or your auth context
+  // Tab configuration matching portfolio.js design
+  const MY_PORTFOLIO_TABS = [
+    { id: "portfolio-overview", label: "Portfolio Overview", icon: FiEye, purpose: "Track portfolio composition, funder health efficiency, and overall portfolio performance across your investment ecosystem." },
+    { id: "performance-risk",    label: "Performance & Risk Dashboard", icon: FiBarChart2, purpose: "Track financial growth, revenue, profitability, default rates, and ESG impact performance across the portfolio." },
+    { id: "data-integrity",     label: "Data Integrity & Trust Layer", icon: FiShield, purpose: "Ensure transparency, compliance, and auditability with AI-driven insights and recommendations." },
+    { id: "liquidity-exits",    label: "Exit & Liquidity Metrics", icon: FiLiquidity, purpose: "Monitor exit activity, returns, time to exit, and liquidity flow across sectors." },
+  ];
+
+  // Get current user from Firebase auth
   useEffect(() => {
-    // This should be replaced with your actual authentication logic
     const getCurrentUser = () => {
-      // Example: Get user from Firebase auth
-      // import { getAuth, onAuthStateChanged } from 'firebase/auth';
-      // const auth = getAuth();
-      // onAuthStateChanged(auth, (user) => {
-      //   if (user) {
-      //     setCurrentUser(user);
-      //   }
-      // });
-      
-      // For now, using a mock user - replace this with your actual auth logic
-      const mockUser = {
-        uid: "investor-user-id-123",
-        email: "investor@example.com",
-        displayName: "Test Investor"
-      };
-      setCurrentUser(mockUser);
+      const unsubscribe = auth.onAuthStateChanged((user) => {
+        if (user) {
+          setCurrentUser(user);
+        }
+      });
+      return unsubscribe;
     };
 
     getCurrentUser();
@@ -483,14 +382,14 @@ const MyInvestments = () => {
   // Download functionality
   const downloadSectionAsPDF = async (sectionName = 'all') => {
     try {
-      const originalCategory = activeCategory;
+      const originalTab = activeTab;
       
       if (sectionName === 'all') {
         const pdf = new jsPDF('landscape', 'mm', 'a4');
         let currentPage = 1;
         
-        for (const category of allCategories) {
-          setActiveCategory(category);
+        for (const tab of MY_PORTFOLIO_TABS) {
+          setActiveTab(tab.id);
           await new Promise(resolve => setTimeout(resolve, 1000));
           
           const element = document.querySelector('.section-content');
@@ -518,10 +417,10 @@ const MyInvestments = () => {
           currentPage++;
         }
         
-        setActiveCategory(originalCategory);
+        setActiveTab(originalTab);
         pdf.save('MyInvestments_Complete_Report.pdf');
       } else {
-        setActiveCategory(sectionName);
+        setActiveTab(sectionName);
         await new Promise(resolve => setTimeout(resolve, 1000));
         
         const element = document.querySelector('.section-content');
@@ -544,10 +443,11 @@ const MyInvestments = () => {
         
         pdf.addImage(imgData, 'PNG', 10, 10, imgWidth, imgHeight);
         
-        const fileName = `MyInvestments_${sectionName.replace(/\s+/g, '_')}.pdf`;
+        const tabLabel = MY_PORTFOLIO_TABS.find(t => t.id === sectionName)?.label || sectionName;
+        const fileName = `MyInvestments_${tabLabel.replace(/\s+/g, '_')}.pdf`;
         pdf.save(fileName);
         
-        setActiveCategory(originalCategory);
+        setActiveTab(originalTab);
       }
       setShowDownloadOptions(false);
     } catch (error) {
@@ -556,11 +456,10 @@ const MyInvestments = () => {
   };
 
   // Purpose Component
-  const Purpose = ({ purpose }) => (
-    <div className="purpose">
-      <div className="purpose-text">
-        <strong>Purpose:</strong> {purpose}
-      </div>
+  const PurposeSection = ({ purpose }) => (
+    <div className="purpose-section">
+      <span className="purpose-label">Purpose: </span>
+      {purpose}
     </div>
   );
 
@@ -571,9 +470,9 @@ const MyInvestments = () => {
         <h4>Download Report</h4>
         <div className="download-options-list">
           <button onClick={() => downloadSectionAsPDF('all')}>All Sections</button>
-          {allCategories.map(section => (
-            <button key={section} onClick={() => downloadSectionAsPDF(section)}>
-              {section}
+          {MY_PORTFOLIO_TABS.map(tab => (
+            <button key={tab.id} onClick={() => downloadSectionAsPDF(tab.id)}>
+              {tab.label}
             </button>
           ))}
         </div>
@@ -600,97 +499,31 @@ const MyInvestments = () => {
     );
   };
 
-  // Section data mapping - UPDATED to include currentUser prop
-  const sectionData = {
-    'Portfolio Overview': {
-      icon: <FiEye />,
-      purpose: 'Provide a high-level snapshot of overall performance and exposure at a glance',
-      component: <PortfolioOverview 
-        openPopup={openPopup} 
-        downloadSectionAsPDF={downloadSectionAsPDF} 
-        currentUser={currentUser}
-      />
-    },
-    'Portfolio Composition': {
-      icon: <FiComposition />,
-      purpose: 'Show diversification and concentration by sector, stage, location, etc.',
-      component: <PortfolioComposition 
-        openPopup={openPopup} 
-        downloadSectionAsPDF={downloadSectionAsPDF} 
-        currentUser={currentUser}
-      />
-    },
-    'Exit & Liquidity Metrics': {
-      icon: <FiLiquidity />,
-      purpose: 'Measure realized outcomes, repayments, and liquidity flow',
-      component: <ExitLiquidityMetrics 
-        openPopup={openPopup} 
-        downloadSectionAsPDF={downloadSectionAsPDF} 
-        currentUser={currentUser}
-      />
-    },
-    'Funder Health & Efficiency': {
-      icon: <FiHeart />,
-      purpose: 'Track funder/catalyst performance and operational efficiency',
-      component: <FunderHealthEfficiency 
-        openPopup={openPopup} 
-        downloadSectionAsPDF={downloadSectionAsPDF} 
-        currentUser={currentUser}
-      />
-    },
-    'Performance & Risk Dashboard': {
-      icon: <FiBarChart2 />,
-      purpose: 'Assess growth, risk, and inclusion performance of portfolio',
-      component: <PerformanceRiskDashboard 
-        openPopup={openPopup} 
-        downloadSectionAsPDF={downloadSectionAsPDF} 
-        currentUser={currentUser}
-      />
-    },
-    'ESG & Impact Performance': {
-      icon: <FiGlobe />,
-      purpose: 'Measure environmental, social, and governance outcomes',
-      component: <ESGImpactPerformance 
-        openPopup={openPopup} 
-        downloadSectionAsPDF={downloadSectionAsPDF} 
-        currentUser={currentUser}
-      />
-    },
-    'Data Integrity & Trust Layer': {
-      icon: <FiShield />,
-      purpose: 'Ensure transparency, compliance, and auditability',
-      component: <DataIntegrityTrustLayer 
-        openPopup={openPopup} 
-        downloadSectionAsPDF={downloadSectionAsPDF} 
-        currentUser={currentUser}
-      />
-    },
-    'Insights & AI Recommendations': {
-      icon: <FiActivity />,
-      purpose: 'Provide AI-driven opportunities, risks, and alerts',
-      component: <InsightsAIRecommendations 
-        openPopup={openPopup} 
-        downloadSectionAsPDF={downloadSectionAsPDF} 
-        currentUser={currentUser}
-      />
-    },
-    'Pipeline & Future Opportunities': {
-      icon: <FiTarget />,
-      purpose: 'Show pipeline strength and forecast future capital needs',
-      component: <PipelineFutureOpportunities 
-        openPopup={openPopup} 
-        downloadSectionAsPDF={downloadSectionAsPDF} 
-        currentUser={currentUser}
-      />
+  // Render the active tab component
+  const renderTabContent = () => {
+    switch (activeTab) {
+      case 'portfolio-overview':
+        return <PortfolioOverview openPopup={openPopup} downloadSectionAsPDF={downloadSectionAsPDF} currentUser={currentUser} />;
+      case 'performance-risk':
+        return <PerformanceRiskDashboard openPopup={openPopup} downloadSectionAsPDF={downloadSectionAsPDF} currentUser={currentUser} />;
+      case 'data-integrity':
+        return <DataIntegrityTrustLayer openPopup={openPopup} downloadSectionAsPDF={downloadSectionAsPDF} currentUser={currentUser} />;
+      case 'liquidity-exits':
+        return <ExitLiquidityMetrics openPopup={openPopup} downloadSectionAsPDF={downloadSectionAsPDF} currentUser={currentUser} />;
+      default:
+        return <PortfolioOverview openPopup={openPopup} downloadSectionAsPDF={downloadSectionAsPDF} currentUser={currentUser} />;
     }
   };
 
+  const currentTab = MY_PORTFOLIO_TABS.find(t => t.id === activeTab);
+
+  // Container styles
   const getContainerStyles = () => ({
     width: "100%",
     minHeight: "100vh",
     maxWidth: "100vw",
     overflowX: "hidden",
-    padding: `20px`,
+    padding: "20px",
     margin: "0",
     boxSizing: "border-box",
     position: "relative",
@@ -708,9 +541,10 @@ const MyInvestments = () => {
           </div>
         </div>
       </div>
-    )
-  } 
+    );
+  }
 
+  // Uncomment for subscription gating
   // if (currentPlan === "basic") {
   //   return (
   //     <Upsell
@@ -722,54 +556,53 @@ const MyInvestments = () => {
   //       upgradeMessage={"Upgrade your subscription to unlock comprehensive portfolio analytics, AI-driven insights, and exportable reports to optimize your investment strategy."}
   //       primaryLabel={"View Available Plans"}
   //     />
-  //   )
+  //   );
   // }
-
-  const allCategories = [
-    'Portfolio Overview',
-    'Portfolio Composition', 
-    'Exit & Liquidity Metrics',
-    'Funder Health & Efficiency',
-    'Performance & Risk Dashboard',
-    'ESG & Impact Performance',
-    'Data Integrity & Trust Layer',
-    'Insights & AI Recommendations',
-    'Pipeline & Future Opportunities'
-  ];
 
   return (
     <div className="investments-container" style={getContainerStyles()}>
       <div className="investments-content">
         <h2 className="investments-title">My Portfolio</h2>
 
-        <div className="categories-scroll-container">
-          <div className="categories-grid">
-            {allCategories.map((category) => (
+        {/* Tabs container - matching portfolio.js design */}
+        <div className="tabs-container">
+          {MY_PORTFOLIO_TABS.map(tab => {
+            const active = activeTab === tab.id;
+            const Icon = tab.icon;
+            return (
               <button
-                key={category}
-                className={`category-btn ${activeCategory === category ? 'active' : ''}`}
-                onClick={() => setActiveCategory(category)}
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`tab-btn ${active ? 'active' : ''}`}
               >
-                <span className="btn-icon">{sectionData[category].icon}</span>
-                {category}
+                <Icon className="tab-icon" />
+                {tab.label}
               </button>
-            ))}
+            );
+          })}
+        </div>
+
+        {/* Tab underline */}
+        <div className="tab-underline" />
+
+        {/* Purpose section */}
+        <PurposeSection purpose={currentTab?.purpose} />
+
+        {/* Section content */}
+        <div className="section-header">
+          <div style={{ flex: 1 }} />
+          <div className="section-controls">
+            <button 
+              className="download-section-btn"
+              onClick={() => setShowDownloadOptions(!showDownloadOptions)}
+            >
+              <FiDownload /> Download
+            </button>
           </div>
-        </div> 
+        </div>
 
         <div className="section-content" ref={sectionRef}>
-          <div className="section-header">
-            <Purpose purpose={sectionData[activeCategory].purpose} />
-            <div className="section-controls">
-              <button 
-                className="download-section-btn"
-                onClick={() => setShowDownloadOptions(!showDownloadOptions)}
-              >
-                <FiDownload /> Download
-              </button>
-            </div>
-          </div>
-          {sectionData[activeCategory].component}
+          {renderTabContent()}
         </div>
       </div>
 

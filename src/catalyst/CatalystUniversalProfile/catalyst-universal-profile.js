@@ -55,15 +55,13 @@ export default function CatalystUniversalProfile() {
       briefDescription: "",
       referralSource: "",
       referralSourceOther: "",
-      // ── Industry Associations ──────────────────────────────────────────
-      memberOfAssociation: "",        // "yes" | "no" | ""
-      industryAssociations: [],       // string[]
-      industryAssociationsOther: "",  // free-text when "Other" is selected
+      memberOfAssociation: "",
+      industryAssociations: [],
+      industryAssociationsOther: "",
     },
     contactDetails: {
       sameAsPhysical: false,
     },
-    // Merged section — holds both program details and matching preferences
     programBriefMatchingPreference: {
       // Section 1 — Program Details
       programName: "",
@@ -73,11 +71,12 @@ export default function CatalystUniversalProfile() {
       programGoals: "",
       supportFramework: "",
       // Section 2 — Support Focus
-      supportFocus: [],
-      supportFocusSubtype: [],
-      targetBusinessStage: [],
-      minimumSupportTicket: "",
-      maximumSupportTicket: "",
+      intangibleSupport: "",
+      intangibleSupportSubtype: "",
+      fundingSupport: "",
+      fundingInstruments: [],
+      ticketSize: "",
+      revenueThreshold: "",
       // Section 3 — Target Beneficiaries
       demographics: [],
       bbbeeLevel: [],
@@ -136,14 +135,6 @@ export default function CatalystUniversalProfile() {
           if (docSnap.exists()) {
             const data = docSnap.data()
             if (data?.formData) {
-              // Migrate legacy separate sections into merged section if needed
-              const merged = data.formData.programBriefMatchingPreference || {}
-              if (data.formData.generalMatchingPreference && !data.formData.programBriefMatchingPreference) {
-                Object.assign(merged, data.formData.generalMatchingPreference)
-              }
-              if (data.formData.programmeDetails && !data.formData.programBriefMatchingPreference) {
-                Object.assign(merged, data.formData.programmeDetails)
-              }
               setFormData((prev) => ({
                 ...prev,
                 ...data.formData,
@@ -151,16 +142,22 @@ export default function CatalystUniversalProfile() {
                   ...prev.entityOverview,
                   ...data.formData.entityOverview,
                 },
-                programBriefMatchingPreference: merged,
+                programBriefMatchingPreference: {
+                  ...prev.programBriefMatchingPreference,
+                  ...data.formData.programBriefMatchingPreference,
+                },
+                applicationBrief: {
+                  ...prev.applicationBrief,
+                  ...data.formData.applicationBrief,
+                },
+                declarationConsent: {
+                  ...prev.declarationConsent,
+                  ...data.formData.declarationConsent,
+                },
               }))
             }
             if (data?.completedSections) {
-              // Migrate legacy completed section keys
-              const cs = { ...data.completedSections }
-              if (cs.generalMatchingPreference || cs.programmeDetails) {
-                cs.programBriefMatchingPreference = cs.generalMatchingPreference || cs.programmeDetails || false
-              }
-              setCompletedSections(cs)
+              setCompletedSections(data.completedSections)
             }
             if (data?.completedSections?.declarationConsent) {
               setShowSummary(true)
@@ -244,6 +241,7 @@ export default function CatalystUniversalProfile() {
         },
         { merge: true }
       )
+      console.log(`Section ${activeSection} saved successfully`)
     } catch (error) {
       console.error("Error saving section:", error)
       alert("Failed to save.")
@@ -313,7 +311,7 @@ export default function CatalystUniversalProfile() {
   }
 
   if (loading) {
-    return <div className="flex justify-center items-center h-screen text-lg"></div>
+    return <div className="flex justify-center items-center h-screen text-lg">Loading...</div>
   }
 
   if (showSummary) {

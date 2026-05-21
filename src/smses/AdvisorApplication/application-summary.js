@@ -1,12 +1,12 @@
 "use client"
 
 import { useState } from "react"
-import { ChevronDown, ChevronUp, Edit, ExternalLink, FileText, Target, Upload } from "lucide-react"
+import { ChevronDown, ChevronUp, Edit, ExternalLink, FileText, Target, Upload, CheckCircle, Circle } from "lucide-react"
 
-const ApplicationSummary = ({ formData, onEdit }) => {
+const ApplicationSummary = ({ formData, onEdit, documentSelections, existingUniversalDocs }) => {
   const [expandedSections, setExpandedSections] = useState({
     advisoryNeedsAssessment: false,
-    documentUploads: false,
+    documentUploads: true,
   })
 
   const toggleSection = (section) => {
@@ -16,7 +16,7 @@ const ApplicationSummary = ({ formData, onEdit }) => {
     }))
   }
 
-  const renderDocumentLink = (url, label = "View Document") => {
+  const renderDocumentLink = (url, label) => {
     if (!url) return <span style={{ color: "#7d5a50", fontStyle: "italic" }}>No document uploaded</span>
 
     return (
@@ -77,6 +77,33 @@ const ApplicationSummary = ({ formData, onEdit }) => {
   const handleEdit = () => {
     if (onEdit) onEdit()
   }
+// Business Plan (single)
+const getBusinessPlanUrl = () => {
+  if (documentSelections?.businessPlan === "existing") {
+    return existingUniversalDocs?.businessPlan
+  } else if (documentSelections?.businessPlan === "new") {
+    const uploadedFile = formData?.documentUploads?.businessPlan?.[0]
+    return typeof uploadedFile === 'string' ? uploadedFile : null
+  }
+  return null
+}
+
+// Financial Statements (ARRAY)
+const getFinancialStatements = () => {
+  if (documentSelections?.latestFinancials === "existing") {
+    return existingUniversalDocs?.financialStatements || []
+  } else if (documentSelections?.latestFinancials === "new") {
+    const newFiles = formData?.documentUploads?.latestFinancials || []
+    // Handle both string URLs and objects with url property
+    return newFiles
+      .filter(file => file && typeof file === 'string')
+      .map(url => ({ 
+        url: url, 
+        customName: "New Financial Statement" 
+      }))
+  }
+  return []
+}
 
   return (
     <>
@@ -130,7 +157,6 @@ const ApplicationSummary = ({ formData, onEdit }) => {
               overflow: "hidden",
             }}
           >
-            {/* Background decoration */}
             <div
               style={{
                 position: "absolute",
@@ -154,7 +180,6 @@ const ApplicationSummary = ({ formData, onEdit }) => {
                 flexWrap: "wrap",
               }}
             >
-              {/* Title */}
               <div style={{ flex: "1", minWidth: "250px" }}>
                 <h1
                   style={{
@@ -181,7 +206,6 @@ const ApplicationSummary = ({ formData, onEdit }) => {
                 </p>
               </div>
 
-              {/* Action Button */}
               <button
                 onClick={handleEdit}
                 style={{
@@ -277,7 +301,6 @@ const ApplicationSummary = ({ formData, onEdit }) => {
                     animation: "slideDown 0.3s ease-out",
                   }}
                 >
-                  {/* Advisors Section */}
                   <div
                     style={{
                       background: "rgba(166, 124, 82, 0.1)",
@@ -305,7 +328,6 @@ const ApplicationSummary = ({ formData, onEdit }) => {
                     </div>
                   </div>
 
-                  {/* Engagement Preferences */}
                   <div
                     style={{
                       display: "grid",
@@ -331,14 +353,6 @@ const ApplicationSummary = ({ formData, onEdit }) => {
                           padding: "16px",
                           border: "1px solid rgba(200, 182, 166, 0.2)",
                           transition: "all 0.3s ease",
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.transform = "translateY(-1px)"
-                          e.currentTarget.style.boxShadow = "0 4px 16px rgba(74, 53, 47, 0.08)"
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.transform = "translateY(0)"
-                          e.currentTarget.style.boxShadow = "none"
                         }}
                       >
                         <span
@@ -368,7 +382,6 @@ const ApplicationSummary = ({ formData, onEdit }) => {
                     ))}
                   </div>
 
-                  {/* Matching Preferences */}
                   <div
                     style={{
                       background: "rgba(166, 124, 82, 0.1)",
@@ -495,13 +508,13 @@ const ApplicationSummary = ({ formData, onEdit }) => {
                       marginBottom: "16px",
                     }}
                   >
+                    {/* Business Plan */}
                     <div
                       style={{
                         background: "rgba(250, 247, 242, 0.8)",
                         borderRadius: "12px",
                         padding: "16px",
                         border: "1px solid rgba(200, 182, 166, 0.2)",
-                        transition: "all 0.3s ease",
                       }}
                     >
                       <span
@@ -517,20 +530,26 @@ const ApplicationSummary = ({ formData, onEdit }) => {
                       >
                         Business Plan
                       </span>
-                      {formData?.documentUploads?.businessPlan && formData.documentUploads.businessPlan.length > 0 ? (
-                        renderDocumentLink(formData.documentUploads.businessPlan[0], "Business Plan")
+                      
+                      {getBusinessPlanUrl() ? (
+                        <div>
+                          <div style={{ fontSize: "11px", color: "#999", marginBottom: "4px" }}>
+                            Source: {documentSelections?.businessPlan === "existing" ? "From Universal Profile" : "Newly Uploaded"}
+                          </div>
+                          {renderDocumentLink(getBusinessPlanUrl(), "View Business Plan")}
+                        </div>
                       ) : (
-                        <span style={{ color: "#7d5a50", fontStyle: "italic" }}>Not uploaded</span>
+                        <span style={{ color: "#7d5a50", fontStyle: "italic" }}>Not included in this application</span>
                       )}
                     </div>
 
+                    {/* Financial Statements */}
                     <div
                       style={{
                         background: "rgba(250, 247, 242, 0.8)",
                         borderRadius: "12px",
                         padding: "16px",
                         border: "1px solid rgba(200, 182, 166, 0.2)",
-                        transition: "all 0.3s ease",
                       }}
                     >
                       <span
@@ -544,17 +563,29 @@ const ApplicationSummary = ({ formData, onEdit }) => {
                           letterSpacing: "0.5px",
                         }}
                       >
-                        Latest Financials
+                        Financial Statements
                       </span>
-                      {formData?.documentUploads?.latestFinancials &&
-                      formData.documentUploads.latestFinancials.length > 0 ? (
-                        renderDocumentLink(formData.documentUploads.latestFinancials[0], "Latest Financials")
+                      
+                      {getFinancialStatements().length > 0 ? (
+                        <div>
+                          <div style={{ fontSize: "11px", color: "#999", marginBottom: "8px" }}>
+                            Source: {documentSelections?.latestFinancials === "existing" ? "From Universal Profile" : "Newly Uploaded"}
+                          </div>
+                          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                            {getFinancialStatements().map((doc, idx) => (
+                              <div key={idx}>
+                                {renderDocumentLink(doc.url, doc.customName || `Financial Statement ${idx + 1}`)}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
                       ) : (
-                        <span style={{ color: "#7d5a50", fontStyle: "italic" }}>Not uploaded</span>
+                        <span style={{ color: "#7d5a50", fontStyle: "italic" }}>Not included in this application</span>
                       )}
                     </div>
                   </div>
 
+                  {/* Current Board List */}
                   <div
                     style={{
                       background: "rgba(166, 124, 82, 0.1)",
