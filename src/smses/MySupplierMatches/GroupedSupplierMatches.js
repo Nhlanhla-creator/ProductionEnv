@@ -316,7 +316,7 @@ const GroupedSupplierMatches = ({ onSuppliersUpdate, onSupplierContacted }) => {
                       ) : (
                         <>
                           <Brain size={12} />
-                          {hasAi ? "Re-run AI" : "Run AI Analysis"}
+                          {hasAi ? "Re-run Analysis" : "Run Analysis"}
                         </>
                       )}
                     </button>

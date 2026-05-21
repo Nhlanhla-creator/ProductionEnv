@@ -23,7 +23,7 @@ import SupplierDetailsModal from "./SupplierDetailsModal"
  *   dense          Optional: render smaller paddings for embedded contexts.
  */
 // ── Reusable breakdown card (mirrors FunderMatches pattern) ──────────
-const BreakdownCard = ({ label, weight, score, appValue, supplierValue }) => {
+const BreakdownCard = ({ label, weight, score, appValue, supplierValue, devMode }) => {
   const color = score >= 75 ? "#388E3C" : score >= 50 ? "#F57C00" : "#D32F2F"
   return (
     <div
@@ -37,7 +37,7 @@ const BreakdownCard = ({ label, weight, score, appValue, supplierValue }) => {
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.75rem" }}>
         <h4 style={{ fontSize: "0.875rem", fontWeight: 600, color: "#5D2A0A", margin: 0, flex: 1, lineHeight: 1.3 }}>
-          {label} (Weight: {Math.round(weight * 100)}%)
+          {label}{devMode ? ` (Weight: ${Math.round(weight * 100)}%)` : ""}
         </h4>
         <span style={{ fontSize: "1.25rem", fontWeight: "bold", color, marginLeft: "1rem" }}>
           {Math.round(score)}%
@@ -65,7 +65,21 @@ const SupplierMatchesTable = ({
   const [modalSupplier, setModalSupplier] = useState(null)
   const [breakdownSupplier, setBreakdownSupplier] = useState(null)
   const [mounted, setMounted] = useState(false)
+  const [devMode, setDevMode] = useState(false)
   useEffect(() => { setMounted(true) }, [])
+
+  // Secret: Ctrl+Alt+P while breakdown modal is open toggles verbose dev labels
+  useEffect(() => {
+    if (!breakdownSupplier) { setDevMode(false); return }
+    const handler = (e) => {
+      if (e.ctrlKey && e.altKey && e.key === "p") {
+        e.preventDefault()
+        setDevMode((v) => !v)
+      }
+    }
+    window.addEventListener("keydown", handler)
+    return () => window.removeEventListener("keydown", handler)
+  }, [breakdownSupplier])
 
   const rows = useMemo(() => suppliers || [], [suppliers])
 
@@ -224,7 +238,7 @@ const SupplierMatchesTable = ({
                       <div style={{ display: "flex", gap: 8, marginTop: 2 }}>
                         {s.hasPrimaryAnalysis && (
                           <span style={{ fontSize: "10px", color: "#388E3C", fontWeight: 500 }}>
-                            AI {Math.round(s.primaryScore)}%
+                            Primary {Math.round(s.primaryScore)}%
                           </span>
                         )}
                         {s.secondaryScore != null && (
@@ -234,7 +248,7 @@ const SupplierMatchesTable = ({
                         )}
                         {!s.hasPrimaryAnalysis && (
                           <span style={{ fontSize: "10px", color: "#bbb", fontStyle: "italic" }}>
-                            AI pending
+                            Pending
                           </span>
                         )}
                       </div>
@@ -389,8 +403,11 @@ const SupplierMatchesTable = ({
           >
             {/* Header */}
             <div style={{ padding: "1.5rem 2rem", borderBottom: "2px solid #E8D5C4", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 700, color: "#5D2A0A" }}>
+              <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 700, color: "#5D2A0A", display: "flex", alignItems: "center", gap: 8 }}>
                 Match Breakdown — {supplierName(breakdownSupplier)}
+                {devMode && (
+                  <span style={{ fontSize: "0.65rem", fontWeight: 600, color: "#a67c52", background: "rgba(166,124,82,0.12)", border: "1px solid rgba(166,124,82,0.3)", borderRadius: 4, padding: "2px 6px", letterSpacing: "0.5px" }}>DEV</span>
+                )}
               </h3>
               <button
                 onClick={() => setBreakdownSupplier(null)}
@@ -411,7 +428,9 @@ const SupplierMatchesTable = ({
                 </div>
                 <p style={{ fontSize: "1rem", color: "#8D6E63", margin: 0 }}>Overall Match Score</p>
                 <p style={{ fontSize: "0.8rem", color: "#bbb", margin: "4px 0 0" }}>
-                  {breakdownSupplier.hasPrimaryAnalysis ? "60% AI Primary + 40% Preferences" : "Preferences only — run AI for full analysis"}
+                  {devMode
+                    ? (breakdownSupplier.hasPrimaryAnalysis ? "60% AI Primary + 40% Preferences" : "Preferences only — run AI for full analysis")
+                    : (breakdownSupplier.hasPrimaryAnalysis ? "Primary + Preference Score" : "Run Analysis for full score")}
                 </p>
               </div>
 
@@ -420,15 +439,15 @@ const SupplierMatchesTable = ({
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: "1rem" }}>
                   <Brain size={18} style={{ color: "#5D2A0A" }} />
                   <h4 style={{ margin: 0, fontSize: "1rem", fontWeight: 700, color: "#5D2A0A" }}>
-                    Primary Matching — AI Product/Service Analysis
-                    <span style={{ fontWeight: 400, fontSize: "0.85rem", color: "#8D6E63" }}> (60% weight)</span>
+                    {devMode ? "Primary Matching — AI Product/Service Analysis" : "Primary Matching"}
+                    {devMode && <span style={{ fontWeight: 400, fontSize: "0.85rem", color: "#8D6E63" }}> (60% weight)</span>}
                   </h4>
                 </div>
 
                 {breakdownSupplier.primaryBreakdown ? (
                   <div style={{ background: "#FEFCFA", border: "1px solid #E8D5C4", borderRadius: 8, padding: "1.25rem", borderLeft: `4px solid ${scoreColor(breakdownSupplier.primaryScore || 0)}` }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
-                      <span style={{ fontWeight: 600, color: "#5D2A0A" }}>AI Semantic Score</span>
+                      <span style={{ fontWeight: 600, color: "#5D2A0A" }}>{devMode ? "AI Semantic Score" : "Semantic Score"}</span>
                       <span style={{ fontSize: "1.5rem", fontWeight: "bold", color: scoreColor(breakdownSupplier.primaryScore || 0) }}>
                         {Math.round(breakdownSupplier.primaryScore || 0)}%
                       </span>
@@ -542,8 +561,8 @@ const SupplierMatchesTable = ({
                 ) : (
                   <div style={{ background: "#f9f5f0", border: "1px dashed #E8D5C4", borderRadius: 8, padding: "1.25rem", textAlign: "center", color: "#8D6E63" }}>
                     <Brain size={24} style={{ opacity: 0.3, marginBottom: 6 }} className="mx-auto" />
-                    <p style={{ margin: 0, fontSize: "0.85rem" }}>AI analysis has not been run for this application yet.</p>
-                    <p style={{ margin: "4px 0 0", fontSize: "0.75rem", color: "#bbb" }}>Run AI Analysis on the Supplier Matches page to generate primary scores.</p>
+                    <p style={{ margin: 0, fontSize: "0.85rem" }}>{devMode ? "AI analysis has not been run for this application yet." : "Primary analysis pending."}</p>
+                    <p style={{ margin: "4px 0 0", fontSize: "0.75rem", color: "#bbb" }}>{devMode ? "Run AI Analysis on the Supplier Matches page to generate primary scores." : "Run Analysis on the Supplier Matches page."}</p>
                   </div>
                 )}
               </div>
@@ -553,8 +572,8 @@ const SupplierMatchesTable = ({
                 <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: "1rem" }}>
                   <Settings2 size={18} style={{ color: "#5D2A0A" }} />
                   <h4 style={{ margin: 0, fontSize: "1rem", fontWeight: 700, color: "#5D2A0A" }}>
-                    Secondary Matching — Applicant Preferences
-                    <span style={{ fontWeight: 400, fontSize: "0.85rem", color: "#8D6E63" }}> (40% weight)</span>
+                    {devMode ? "Secondary Matching — Applicant Preferences" : "Secondary Matching"}
+                    {devMode && <span style={{ fontWeight: 400, fontSize: "0.85rem", color: "#8D6E63" }}> (40% weight)</span>}
                   </h4>
                   <span style={{ marginLeft: "auto", fontSize: "1.25rem", fontWeight: "bold", color: scoreColor(breakdownSupplier.secondaryScore || 0) }}>
                     {Math.round(breakdownSupplier.secondaryScore || 0)}%
@@ -571,6 +590,7 @@ const SupplierMatchesTable = ({
                         score={item.score}
                         appValue={item.appValue}
                         supplierValue={item.supplierValue}
+                        devMode={devMode}
                       />
                     ))}
                   </div>
