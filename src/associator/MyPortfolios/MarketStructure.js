@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Bar, Doughnut } from "react-chartjs-2";
 import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend } from "chart.js";
 import { usePortfolio } from "../../context/PortfolioContext";
+import MarketStructureAnalysisModal from "./MarketStructureAnalysisModal";
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend);
 
@@ -82,7 +83,7 @@ const MarketStructure = () => {
   const coLocation = marketPulse?.marketStructure?.whoProvidesCapital?.coInvestor?.location || { Johannesburg: 48, CapeTown: 25, Durban: 12, Pretoria: 8, International: 7 };
 
   const [coView, setCoView] = useState("overview");
-
+const [showAnalysisModal, setShowAnalysisModal] = useState(false);
   const currentSectorData = viewType === "zar" ? sectorAlloc : sectorDist;
   const currentGeoData = viewType === "zar" ? geoAlloc : geoDist;
   const currentStageData = viewType === "zar" ? stageAlloc : stageDist;
@@ -91,6 +92,25 @@ const MarketStructure = () => {
 
   const topSectors = Object.entries(sectorAlloc).sort((a, b) => b[1] - a[1]).slice(0, 3);
   const bottomSectors = Object.entries(sectorAlloc).sort((a, b) => a[1] - b[1]).slice(0, 3);
+
+  const prepareMarketDataForAnalysis = () => ({
+  sectorAllocation: sectorAlloc,
+  sectorDistribution: sectorDist,
+  sectorTrends: sectorTrends,
+  geoAllocation: geoAlloc,
+  geoDistribution: geoDist,
+  stageAllocation: stageAlloc,
+  stageDistribution: stageDist,
+  lifecycleAllocation: lifecycleAlloc,
+  lifecycleDistribution: lifecycleDist,
+  funderContribution: funderContribution,
+  funderDistribution: funderDistribution,
+  bbbeeCompliance: bbbee,
+  fundManagerLocation: fundManagerLoc,
+  demographics: demographics,
+  coInvestorDeals: coDeals,
+  coInvestorLocation: coLocation,
+});
 
   return (
     <div>
@@ -223,6 +243,44 @@ const MarketStructure = () => {
           </div>
         </div>
       )}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+  <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", borderBottom: `1px solid ${B.pale}`, paddingBottom: "12px", flex: 1 }}>
+    <SubTab label="Where Capital Goes" active={activeSubTab === "where-capital"} onClick={() => setActiveSubTab("where-capital")} />
+    <SubTab label="Who Provides Capital" active={activeSubTab === "who-provides"} onClick={() => setActiveSubTab("who-provides")} />
+    <SubTab label="Funder Demographics" active={activeSubTab === "funder-demo"} onClick={() => setActiveSubTab("funder-demo")} />
+    <SubTab label="Co-investor Analysis" active={activeSubTab === "co-investor"} onClick={() => setActiveSubTab("co-investor")} />
+  </div>
+
+  <button
+    onClick={() => setShowAnalysisModal(true)}
+    style={{
+      padding: "8px 16px",
+      borderRadius: "20px",
+      cursor: "pointer",
+      fontSize: "12px",
+      fontWeight: 600,
+      border: `1.5px solid ${B.medium}`,
+      background: B.medium,
+      color: "#fff",
+      display: "flex",
+      alignItems: "center",
+      gap: "6px",
+      marginLeft: "12px",
+    }}
+  >
+    🤖 AI Analysis
+  </button>
+</div>
+
+
+{showAnalysisModal && (
+  <MarketStructureAnalysisModal
+    isOpen={showAnalysisModal}
+    onClose={() => setShowAnalysisModal(false)}
+    marketData={prepareMarketDataForAnalysis()}
+    currentUser={currentUser} // You'll need to pass currentUser from parent or auth
+  />
+)}
     </div>
   );
 };
