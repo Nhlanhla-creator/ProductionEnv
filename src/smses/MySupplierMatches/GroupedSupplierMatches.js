@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useMemo, useRef, useState, useCallback } from "react"
-import { FileText, Package, Calendar, Hash, RefreshCw, Brain, Loader2 } from "lucide-react"
+import { FileText, Package, Calendar, Hash, RefreshCw, Brain, Loader2, Eye } from "lucide-react"
 import { useNavigate } from "react-router-dom"
 import useMatches, { deriveAppId } from "../hooks/useMatches"
 import { runAiAnalysisForApplication } from "./supplier-table"
@@ -21,18 +21,42 @@ const GroupedSupplierMatches = ({ onSuppliersUpdate, onSupplierContacted }) => {
 
   // Per-app AI analysis state: { [appFullId]: { running, progress, error } }
   const [aiState, setAiState] = useState({})
+  const [showIneligibleSuppliers, setShowIneligibleSuppliers] = useState(false)
 
   const handleRunAi = useCallback(async (app) => {
     const id = app.id
-    setAiState((prev) => ({ ...prev, [id]: { running: true, progress: null, error: null } }))
+    setAiState((prev) => ({ ...prev, [id]: { running: true, progress: { current: 0, total: null }, error: null } }))
+
+    // Simulated ticker: increments every 1.2 s so users see movement while
+    // the Firebase callable is in-flight. It tracks the real total once
+    // onProgress fires, and never advances past total-1 (so it can't
+    // "complete" before the actual work finishes).
+    let simCurrent = 0
+    let simTotal = null
+    const ticker = setInterval(() => {
+      if (simTotal !== null && simCurrent >= simTotal) return
+      simCurrent += 1
+      if (simTotal !== null) simCurrent = Math.min(simCurrent, simTotal - 1)
+      setAiState((prev) => {
+        if (!prev[id]?.running) return prev
+        return { ...prev, [id]: { ...prev[id], progress: { current: simCurrent, total: simTotal } } }
+      })
+    }, 1200)
+
     try {
       await runAiAnalysisForApplication(app, suppliers, {
-        onProgress: (p) =>
-          setAiState((prev) => ({ ...prev, [id]: { ...prev[id], progress: p } })),
+        onProgress: (p) => {
+          // Sync ticker state to real values; don't let sim go backwards.
+          simTotal = p.total
+          simCurrent = Math.max(simCurrent, p.current)
+          setAiState((prev) => ({ ...prev, [id]: { ...prev[id], progress: p } }))
+        },
       })
+      clearInterval(ticker)
       await refreshAiCache(id)
       setAiState((prev) => ({ ...prev, [id]: { running: false, progress: null, error: null } }))
     } catch (err) {
+      clearInterval(ticker)
       console.error("[GroupedSupplierMatches] AI analysis failed for", id, err)
       setAiState((prev) => ({
         ...prev,
@@ -159,7 +183,10 @@ const GroupedSupplierMatches = ({ onSuppliersUpdate, onSupplierContacted }) => {
           "Uncategorized"
 
         return (
-          <section key={app.id} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <section
+            key={app.id}
+            style={{ display: "flex", flexDirection: "column", gap: 10 }}
+          >
             {/* AppID ─── divider header */}
             <div
               style={{
@@ -208,14 +235,11 @@ const GroupedSupplierMatches = ({ onSuppliersUpdate, onSupplierContacted }) => {
                 }}
               >
                 <span
-                  style={{ display: "inline-flex", alignItems: "center", gap: 5 }}
-                  title="Purpose"
-                >
-                  <Package size={12} />
-                  <strong style={{ color: "#4A352F", fontWeight: 600 }}>{purpose}</strong>
-                </span>
-                <span
-                  style={{ display: "inline-flex", alignItems: "center", gap: 5 }}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 5,
+                  }}
                   title="Primary category"
                 >
                   <span
@@ -231,20 +255,30 @@ const GroupedSupplierMatches = ({ onSuppliersUpdate, onSupplierContacted }) => {
                     {primaryCategory}
                   </span>
                 </span>
-                <span style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
+                <span
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 5,
+                  }}
+                >
                   <Calendar size={12} />
                   {matches.length} {matches.length === 1 ? "match" : "matches"}
                 </span>
 
                 {/* Run AI Analysis button */}
                 {(() => {
-                  const st = aiState[app.id] || {}
-                  const hasAi = matches.some((m) => m.hasPrimaryAnalysis)
+                  const st = aiState[app.id] || {};
+                  const hasAi = matches.some((m) => m.hasPrimaryAnalysis);
                   return (
                     <button
                       disabled={st.running || matches.length === 0}
                       onClick={() => handleRunAi(app)}
-                      title={hasAi ? "Re-run AI analysis for this application" : "Run AI analysis to generate primary scores"}
+                      title={
+                        hasAi
+                          ? "Re-run AI analysis for this application"
+                          : "Run AI analysis to generate primary scores"
+                      }
                       style={{
                         display: "inline-flex",
                         alignItems: "center",
@@ -255,8 +289,14 @@ const GroupedSupplierMatches = ({ onSuppliersUpdate, onSupplierContacted }) => {
                           : hasAi
                             ? "rgba(56,142,60,0.1)"
                             : "linear-gradient(135deg,#a67c52,#7d5a50)",
-                        color: st.running ? "#8D6E63" : hasAi ? "#388E3C" : "#FAF7F2",
-                        border: hasAi ? "1px solid rgba(56,142,60,0.3)" : "none",
+                        color: st.running
+                          ? "#8D6E63"
+                          : hasAi
+                            ? "#388E3C"
+                            : "#FAF7F2",
+                        border: hasAi
+                          ? "1px solid rgba(56,142,60,0.3)"
+                          : "none",
                         borderRadius: 6,
                         fontSize: 11,
                         fontWeight: 600,
@@ -267,8 +307,11 @@ const GroupedSupplierMatches = ({ onSuppliersUpdate, onSupplierContacted }) => {
                     >
                       {st.running ? (
                         <>
-                          <Loader2 size={12} style={{ animation: "gsm-spin 0.8s linear infinite" }} />
-                          Analyzing{st.progress ? ` (${st.progress.current}/${st.progress.total})` : "…"}
+                          <Loader2 size={12} className="animate-spin" />
+                          Analyzing
+                          {st.progress
+                            ? ` (${st.progress.current}${st.progress.total != null ? `/${st.progress.total}` : ""})`
+                            : "…"}
                         </>
                       ) : (
                         <>
@@ -277,21 +320,59 @@ const GroupedSupplierMatches = ({ onSuppliersUpdate, onSupplierContacted }) => {
                         </>
                       )}
                     </button>
-                  )
+                  );
                 })()}
                 {aiState[app.id]?.error && (
-                  <span style={{ fontSize: 11, color: "#D32F2F" }}>{aiState[app.id].error}</span>
+                  <span style={{ fontSize: 11, color: "#D32F2F" }}>
+                    {aiState[app.id].error}
+                  </span>
                 )}
+
+                {/* <button
+                  onClick={() => setShowIneligibleSuppliers(!showIneligibleSuppliers)}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: 5,
+                    padding: "4px 10px",
+                    background: showIneligibleSuppliers ? "#5D2A0A" : "#E8D5C4",
+                    color: showIneligibleSuppliers ? "#FAF7F2" : "#5D2A0A",
+                    border: showIneligibleSuppliers ? "1px solid #5D2A0A" : "1px solid #D9C4B8",
+                    borderRadius: 6,
+                    fontSize: 11,
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    whiteSpace: "nowrap",
+                    transition: "all 0.2s"
+                  }}
+                  title={showIneligibleSuppliers ? "Hide ineligible suppliers" : "Show all suppliers (including incomplete profiles)"}
+                >
+                  <Eye size={12} />
+                  {showIneligibleSuppliers ? "Show All" : "Eligible Only"}
+                </button> */}
               </div>
+            </div>
+            <div
+              style={{ display: "inline-flex", alignItems: "center", gap: 5 }}
+              title="Purpose"
+            >
+              <span style={{ color: "#4A352F" }}>
+                {purpose}
+              </span>
             </div>
 
             <SupplierMatchesTable
               suppliers={matches}
-              onContact={onSupplierContacted ? (supplier) => onSupplierContacted(supplier.id) : undefined}
+              showIneligibleSuppliers={showIneligibleSuppliers}
+              onContact={
+                onSupplierContacted
+                  ? (supplier) => onSupplierContacted(supplier.id)
+                  : undefined
+              }
               emptyMessage="No supplier matches for this application yet."
             />
           </section>
-        )
+        );
       })}
     </div>
   )

@@ -222,6 +222,7 @@ const ApplicationsList = ({ onViewSummary, onEditApplication, onCreateNew, embed
                   const { label, color, bg, Icon } = getStatusBadge(app)
                   const isExpanded = expandedAppId === app.id
                   const matches = matchesByAppId[app.appId] || []
+                  console.log("Application:", app)
                   return (
                     <Fragment key={app.id}>
                       <tr>
