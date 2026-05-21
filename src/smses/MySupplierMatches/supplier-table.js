@@ -20,8 +20,7 @@ import {
 
   getDoc,
 
-  onSnapshot,
-
+  
   query,
 
   where,
@@ -50,16 +49,10 @@ import {
 
   AlertCircle,
 
-  CheckCircle,
-
-  TrendingUp,
-
-  RefreshCw,
-
-  Users,
-
-  X
-
+  
+  TrendingUp
+  
+  
 } from "lucide-react"
 
 import { useNavigate } from "react-router-dom"
@@ -72,9 +65,108 @@ import { API_KEYS } from "../../API"
 
 import SupplierDetailsModal from './SupplierDetailsModal'
 
-import { findSynonyms, expandSearchTerms, containsTermOrSynonyms } from '../../utils/synonyms'
+import { expandSearchTerms } from '../../utils/synonyms'
 
 import { getFunctions, httpsCallable } from "firebase/functions"
+
+// Local AI analysis for development/testing without incurring Cloud Function costs. In production, this will call the Cloud Function as normal.
+async function analyzeSupplierMatchesWithFallback(payload) {
+
+  const functions = getFunctions();
+
+  const analyzeSupplierMatches = httpsCallable(functions, "analyzeSupplierMatches");
+
+  return analyzeSupplierMatches(payload);
+
+}
+
+
+
+const AI_SUPPLIER_ANALYSIS_LIMIT = 100
+
+function hasSupplierCategoryData(productsServices = {}) {
+
+  return [
+
+    productsServices.productCategories,
+
+    productsServices.serviceCategories,
+
+    productsServices.categories,
+
+  ].some((categories) => Array.isArray(categories) && categories.length > 0)
+
+}
+
+function getSupplierAiEligibility(supplier, currentUserId = null) {
+
+  const completedSections = supplier?.completedSections || {}
+
+  const hasName = !!(
+
+    supplier?.entityOverview?.tradingName ||
+
+    supplier?.entityOverview?.registeredName
+
+  )
+
+  const hasCategories = hasSupplierCategoryData(supplier?.productsServices || {})
+
+  const reasons = []
+
+  if (currentUserId && supplier?.id === currentUserId) reasons.push("Current user's own profile")
+
+  if (completedSections.entityOverview !== true) reasons.push("Entity Overview incomplete")
+
+  if (completedSections.productsServices !== true) reasons.push("Products & Services incomplete")
+
+  if (!hasName) reasons.push("Supplier name missing")
+
+  if (!hasCategories) reasons.push("No product/service categories")
+
+  return {
+
+    eligible: reasons.length === 0,
+
+    reasons,
+
+    label: reasons.length > 0 ? reasons.join("; ") : "AI eligible",
+
+  }
+
+}
+
+function withSupplierAiEligibility(supplier, currentUserId = null) {
+
+  return {
+
+    ...supplier,
+
+    aiEligibility: getSupplierAiEligibility(supplier, currentUserId),
+
+  }
+
+}
+
+function getSupplierRankingScore(supplier) {
+
+  return supplier?.matchPercentage || supplier?.newMatchScore || 0
+
+}
+
+function selectSuppliersForAiAnalysis(suppliers, currentUserId = null) {
+
+  return suppliers
+
+    .map((supplier) => withSupplierAiEligibility(supplier, currentUserId))
+
+    .filter((supplier) => supplier.aiEligibility.eligible)
+
+    .sort((a, b) => getSupplierRankingScore(b) - getSupplierRankingScore(a))
+
+    .slice(0, AI_SUPPLIER_ANALYSIS_LIMIT)
+
+}
 
 
 
@@ -1452,21 +1544,27 @@ export async function runAiAnalysisForApplication(application, suppliers, { onPr
 
   }))
 
+  const eligibleSuppliersForAnalysis = selectSuppliersForAiAnalysis(suppliers)
+
+  const selectedSupplierIds = new Set(eligibleSuppliersForAnalysis.map((s) => s.id))
+
+  const selectedSuppliersForAnalysis = suppliersForAnalysis.filter((s) => selectedSupplierIds.has(s.id))
+
+  if (selectedSuppliersForAnalysis.length === 0) {
+
+    throw new Error("No AI-eligible suppliers found. Supplier profiles need completed Entity Overview, Products & Services, a name, and at least one category.")
+
+  }
 
 
-  const functions = getFunctions()
 
-  const analyzeSupplierMatches = httpsCallable(functions, "analyzeSupplierMatches")
-
-
-
-  if (onProgress) onProgress({ current: 0, total: suppliersForAnalysis.length })
+  if (onProgress) onProgress({ current: 0, total: selectedSuppliersForAnalysis.length })
 
 
 
-  const result = await analyzeSupplierMatches({
+  const result = await analyzeSupplierMatchesWithFallback({
 
-    suppliers: suppliersForAnalysis,
+    suppliers: selectedSuppliersForAnalysis,
 
     customerPurpose,
 
@@ -1478,7 +1576,7 @@ export async function runAiAnalysisForApplication(application, suppliers, { onPr
 
     analyzeAll: true,
 
-    maxSuppliers: suppliersForAnalysis.length,
+    maxSuppliers: selectedSuppliersForAnalysis.length,
 
   })
 
@@ -1538,7 +1636,7 @@ export async function runAiAnalysisForApplication(application, suppliers, { onPr
 
 
 
-  if (onProgress) onProgress({ current: Object.keys(processedMatches).length, total: suppliersForAnalysis.length })
+  if (onProgress) onProgress({ current: Object.keys(processedMatches).length, total: selectedSuppliersForAnalysis.length })
 
 
 
@@ -1976,6 +2074,8 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
 
   const [aiAnalysisError, setAiAnalysisError] = useState("")
 
+  const [showIneligibleSuppliers, setShowIneligibleSuppliers] = useState(false)
+
 
 
   const navigate = useNavigate()
@@ -2184,6 +2284,10 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
 
     const filtered = suppliersArray.filter((supplier) => {
 
+      const aiEligibility = supplier.aiEligibility || getSupplierAiEligibility(supplier, currentUser?.uid);
+
+      if (!showIneligibleSuppliers && !aiEligibility.eligible) return false
+
       if (filters.location && !supplier.entityOverview?.location?.includes(filters.location)) return false
 
       const effectiveScore = getEffectiveScore(supplier);
@@ -2231,6 +2335,16 @@ export function SupplierTable({ onSupplierContacted, onSuppliersUpdate, onSuppli
     }
 
   }
+
+  useEffect(() => {
+
+    if (allSuppliers.length > 0) {
+
+      applyFiltersWithUpdatedSuppliers(allSuppliers)
+
+    }
+
+  }, [showIneligibleSuppliers])
 
 
 
@@ -2392,11 +2506,7 @@ Remember: The matches array must contain exactly ${suppliers.length} entries, on
 
   }
 
-
-
   // In your runSecondaryAiAnalysis function, add this check at the beginning:
-
-
 
   const runSecondaryAiAnalysis = async () => {
 
@@ -2408,27 +2518,33 @@ Remember: The matches array must contain exactly ${suppliers.length} entries, on
 
     }
 
-
-
     const applicationId = currentUserApplication.id ||
 
       `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
+    const annotatedSuppliers = allSuppliers.map((supplier) =>
 
+      withSupplierAiEligibility(supplier, currentUser?.uid)
 
-    console.log("Starting AI analysis for ALL suppliers:", {
+    );
 
-      totalSuppliers: filteredSuppliers.length,
+    const suppliersToAnalyze = selectSuppliersForAiAnalysis(annotatedSuppliers, currentUser?.uid);
 
-      applicationId
+    const ineligibleCount = annotatedSuppliers.filter((supplier) => !supplier.aiEligibility.eligible).length;
 
-    });
+    if (suppliersToAnalyze.length === 0) {
 
+      const message = "No AI-eligible suppliers found. Supplier profiles need completed Entity Overview, Products & Services, a name, and at least one category.";
 
+      setAiAnalysisError(message);
 
-    // Use ALL filtered suppliers, not just first 5
+      setNotification({ type: "warning", message });
 
-    const suppliersToAnalyze = allSuppliers.filter(s => s.id !== currentUser?.uid);
+      setTimeout(() => setNotification(null), 4000);
+
+      return;
+
+    }
 
 
 
@@ -2438,17 +2554,7 @@ Remember: The matches array must contain exactly ${suppliers.length} entries, on
 
     setAiAnalysisError("");
 
-    console.log(`Starting AI analysis for ${suppliersToAnalyze.length} suppliers`);
-
-
-
     try {
-
-      const functions = getFunctions();
-
-      const analyzeSupplierMatches = httpsCallable(functions, "analyzeSupplierMatches");
-
-
 
       // Prepare ALL supplier data for AI analysis
 
@@ -2462,25 +2568,15 @@ Remember: The matches array must contain exactly ${suppliers.length} entries, on
 
       }));
 
-
-
       const customerPurpose = currentUserApplication.requestOverview?.purpose ||
 
         currentUserApplication.purpose ||
 
         "General business procurement needs";
 
-
-
-      console.log("Sending", suppliersForAnalysis.length, "suppliers for AI analysis");
-
-
-
       setAiAnalysisProgress({ current: 0, total: suppliersToAnalyze.length });
 
-
-
-      const result = await analyzeSupplierMatches({
+      const result = await analyzeSupplierMatchesWithFallback({
 
         suppliers: suppliersForAnalysis,
 
@@ -2493,10 +2589,6 @@ Remember: The matches array must contain exactly ${suppliers.length} entries, on
         maxSuppliers: suppliersForAnalysis.length  // explicit count
 
       });
-
-
-
-      console.log("AI analysis completed successfully:", result.data);
 
 
 
@@ -2576,7 +2668,7 @@ Remember: The matches array must contain exactly ${suppliers.length} entries, on
 
         if (analysis) {
 
-          return {
+          return withSupplierAiEligibility({
 
             ...supplier,
 
@@ -2586,11 +2678,11 @@ Remember: The matches array must contain exactly ${suppliers.length} entries, on
 
             secondaryMatchCapabilities: analysis.capabilities
 
-          };
+          }, currentUser?.uid);
 
         }
 
-        return supplier;
+        return withSupplierAiEligibility(supplier, currentUser?.uid);
 
       };
 
@@ -2610,15 +2702,25 @@ Remember: The matches array must contain exactly ${suppliers.length} entries, on
 
       const missedCount = suppliersToAnalyze.length - analyzedIds.length;
 
+      const cappedCount = Math.max(
+
+        0,
+
+        annotatedSuppliers.length - ineligibleCount - suppliersToAnalyze.length
+
+      );
+
+      const analysisMessage = missedCount === 0
+
+        ? `AI analysis complete - ${analyzedIds.length} eligible suppliers analyzed${ineligibleCount ? `, ${ineligibleCount} ineligible skipped` : ""}${cappedCount ? `, ${cappedCount} held for next batch` : ""}`
+
+        : `AI analysis complete - ${analyzedIds.length} analyzed, ${missedCount} missing from AI response, ${ineligibleCount} ineligible skipped`;
+
       setNotification({
 
         type: missedCount === 0 ? "success" : "info",
 
-        message: missedCount === 0
-
-          ? `✅ AI analysis complete — all ${analyzedIds.length} suppliers analyzed`
-
-          : `✅ AI analysis complete — ${analyzedIds.length} analyzed, ${missedCount} skipped (incomplete profiles)`
+        message: analysisMessage
 
       });
 
@@ -3166,7 +3268,7 @@ Remember: The matches array must contain exactly ${suppliers.length} entries, on
 
 
 
-          return {
+          return withSupplierAiEligibility({
 
             ...supplier,
 
@@ -3200,7 +3302,7 @@ Remember: The matches array must contain exactly ${suppliers.length} entries, on
 
             serviceRequired: currentUserApplication?.requestOverview?.purpose || "Not specified"
 
-          };
+          }, currentUser?.uid);
 
         });
 
@@ -3293,6 +3395,8 @@ Remember: The matches array must contain exactly ${suppliers.length} entries, on
       const isPreviousContact = supplier.isPreviousContact;
 
       const hasNewMatch = supplier.hasNewMatch;
+
+      const aiEligibility = supplier.aiEligibility || getSupplierAiEligibility(supplier, currentUser?.uid);
 
 
 
@@ -3480,7 +3584,25 @@ Remember: The matches array must contain exactly ${suppliers.length} entries, on
 
           <td style={tableCellStyle}>
 
-            {supplier.secondaryMatchScore !== null && supplier.secondaryMatchScore !== undefined ? (
+            {!aiEligibility.eligible ? (
+
+              <div style={{ display: "flex", flexDirection: "column", gap: "3px" }}>
+
+                <span style={{ color: "#B45309", fontSize: "0.72rem", fontWeight: "700" }}>
+
+                  Not AI eligible
+
+                </span>
+
+                <span style={{ color: "#8D6E63", fontSize: "0.68rem", lineHeight: "1.25" }}>
+
+                  {aiEligibility.label}
+
+                </span>
+
+              </div>
+
+            ) : supplier.secondaryMatchScore !== null && supplier.secondaryMatchScore !== undefined ? (
 
               <div style={matchContainerStyle}>
 
@@ -5849,7 +5971,7 @@ BIG Marketplace Africa Team`;
                   Filter
 
                 </button>
-
+                
                 {contactedApplications.length > 0 && (
 
                   <button
