@@ -72,7 +72,7 @@ const ApplicationsList = ({ onViewSummary, onEditApplication, onCreateNew, embed
     let name = "Product Request"
     if (purpose?.trim()) name = purpose.trim().split(/\s+/).slice(0, 5).join(" ")
     else if (primaryCategory !== "Uncategorized") name = `${primaryCategory} Request`
-    return { id:docId, appId: deriveAppId(docId), name, primaryCategory, purposePreview: purpose.length > 55 ? purpose.slice(0,55)+"…" : purpose, budgetDisplay, lastUpdatedFormatted, lastUpdatedTimestamp, isComplete, status: data.status || (isComplete ? "complete" : "draft") }
+    return { id:docId, appId: deriveAppId(docId), name, primaryCategory, purposePreview: purpose, budgetDisplay, lastUpdatedFormatted, lastUpdatedTimestamp, isComplete, status: data.status || (isComplete ? "complete" : "draft") }
   }
 
   const handleDelete = async (appId) => {
@@ -222,7 +222,6 @@ const ApplicationsList = ({ onViewSummary, onEditApplication, onCreateNew, embed
                   const { label, color, bg, Icon } = getStatusBadge(app)
                   const isExpanded = expandedAppId === app.id
                   const matches = matchesByAppId[app.appId] || []
-                  console.log("Application:", app)
                   return (
                     <Fragment key={app.id}>
                       <tr>
