@@ -51,7 +51,6 @@ export function ApplicationTracker({ styles, userId }) {
             const data = universalSnap.data();
             const completedSections = data.completedSections || {};
 
-            // ✅ Match EXACTLY the section IDs from FundingApplication.js sectionsWithGuarantees
             const requiredFundingSections = [
               "applicationOverview",
               "useOfFunds",
@@ -67,12 +66,7 @@ export function ApplicationTracker({ styles, userId }) {
               (section) => completedSections[section] === true
             );
 
-            // ✅ Also check the direct submission flag as a fallback
             fundingApplied = sectionsComplete || data.applicationSubmitted === true;
-
-            console.log("📋 Funding - completedSections:", completedSections);
-            console.log("❌ Funding - Missing sections:", requiredFundingSections.filter(s => !completedSections[s]));
-            console.log("✅ Funding - Applied:", fundingApplied);
           }
         } catch (err) {
           console.error("Error fetching funding application:", err);
@@ -90,7 +84,6 @@ export function ApplicationTracker({ styles, userId }) {
             const completedSections = data.completedSections || {};
             const status = data.status || "draft";
 
-            // ✅ Match the section IDs from ProductApplication
             const requiredProductSections = [
               "matchingPreferences",
               "requestOverview",
@@ -101,20 +94,14 @@ export function ApplicationTracker({ styles, userId }) {
               (section) => completedSections[section] === true
             );
 
-            // ✅ Check if application is submitted
             productsApplied = status === "submitted" || sectionsComplete;
-
-            console.log("📋 Products - completedSections:", completedSections);
-            console.log("📋 Products - status:", status);
-            console.log("❌ Products - Missing sections:", requiredProductSections.filter(s => !completedSections[s]));
-            console.log("✅ Products - Applied:", productsApplied);
           }
         } catch (err) {
           console.error("Error fetching products application:", err);
         }
 
         /** -------------------
-         * ADVISORY/BOARD MEMBER
+         * ADVISORY/BOARD MEMBER - UPDATED FOR NEW STRUCTURE
          * ------------------- */
         try {
           const advisoryRef = doc(db, "advisoryApplications", userId);
@@ -122,29 +109,47 @@ export function ApplicationTracker({ styles, userId }) {
 
           if (advisorySnap.exists()) {
             const data = advisorySnap.data();
-            const completedSections = data.completedSections || {};
-
-            const requiredAdvisorySections = [
-              "advisoryNeedsAssessment",
-              "documentUploads",
-              "smeProfileSnapshot",
-              "urgencyTimeline"
-            ];
-
-            advisoryApplied = requiredAdvisorySections.every(
-              (section) => completedSections[section] === true
-            );
-
-            console.log("📋 Advisory - completedSections:", completedSections);
-            console.log("❌ Advisory - Missing sections:", requiredAdvisorySections.filter(s => !completedSections[s]));
+            
+            // Option 1: Check by status field (most reliable)
+            if (data.status === "submitted") {
+              advisoryApplied = true;
+            } 
+            // Option 2: Check by completed sections (new structure has 2 sections)
+            else if (data.completedSections) {
+              const completedSections = data.completedSections || {};
+              
+              // Only check the sections that actually exist in your new structure
+              const requiredAdvisorySections = [
+                "advisoryNeedsAssessment",
+                "documentUploads"
+              ];
+              
+              const sectionsComplete = requiredAdvisorySections.every(
+                (section) => completedSections[section] === true
+              );
+              
+              advisoryApplied = sectionsComplete;
+            }
+            // Option 3: Check if application was submitted via any method
+            else if (data.submittedAt) {
+              advisoryApplied = true;
+            }
+            
+            console.log("📋 Advisory - status:", data.status);
+            console.log("📋 Advisory - completedSections:", data.completedSections);
+            console.log("📋 Advisory - submittedAt:", data.submittedAt);
             console.log("✅ Advisory - Applied:", advisoryApplied);
+          } else {
+            // Document doesn't exist - not applied
+            console.log("📋 Advisory - No application found");
+            advisoryApplied = false;
           }
         } catch (err) {
           console.error("Error fetching advisory application:", err);
         }
 
         /** -------------------
-         * INTERN
+         * INTERN - UPDATED FOR CORRECT STRUCTURE
          * ------------------- */
         try {
           const internRef = doc(db, "internApplications", userId);
@@ -152,22 +157,42 @@ export function ApplicationTracker({ styles, userId }) {
 
           if (internSnap.exists()) {
             const data = internSnap.data();
-            const completedSections = data.completedSections || {};
-
-            const requiredInternSections = [
-              "instructions",
-              "internshipRequest",
-              "jobOverview",
-              "matchingAgreement"
-            ];
-
-            internApplied = requiredInternSections.every(
-              (section) => completedSections[section] === true
-            );
-
-            console.log("📋 Intern - completedSections:", completedSections);
-            console.log("❌ Intern - Missing sections:", requiredInternSections.filter(s => !completedSections[s]));
+            
+            // Option 1: Check by status field (most reliable)
+            if (data.status === "submitted") {
+              internApplied = true;
+            }
+            // Option 2: Check by completed sections (4 sections: instructions, jobOverview, internshipRequest, matchingAgreement)
+            else if (data.completedSections) {
+              const completedSections = data.completedSections || {};
+              
+              // These match the sections from InternApplication component
+              const requiredInternSections = [
+                "instructions",
+                "jobOverview",
+                "internshipRequest",
+                "matchingAgreement"
+              ];
+              
+              const sectionsComplete = requiredInternSections.every(
+                (section) => completedSections[section] === true
+              );
+              
+              internApplied = sectionsComplete;
+            }
+            // Option 3: Check if application was submitted via any method
+            else if (data.submittedAt) {
+              internApplied = true;
+            }
+            
+            console.log("📋 Intern - status:", data.status);
+            console.log("📋 Intern - completedSections:", data.completedSections);
+            console.log("📋 Intern - submittedAt:", data.submittedAt);
             console.log("✅ Intern - Applied:", internApplied);
+          } else {
+            // Document doesn't exist - not applied
+            console.log("📋 Intern - No application found");
+            internApplied = false;
           }
         } catch (err) {
           console.error("Error fetching intern application:", err);
@@ -293,9 +318,6 @@ export function ApplicationTracker({ styles, userId }) {
             </div>
           ))}
         </div>
-
-        {/* Legend */}
-        
       </div>
     </div>
   )
