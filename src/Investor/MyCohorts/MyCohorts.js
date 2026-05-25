@@ -296,19 +296,19 @@ function MyCohorts() {
     )
   }
 
-  if (currentPlan === "basic") {
-    return (
-      <Upsell
-        title={"My Cohorts"}
-        subtitle={"The My Cohorts feature is available on our Engage and Partner plans. Upgrade now to manage your investment cohorts, access detailed portfolio analytics and priority support."}
-        features={["Portfolio & cohort analytics", "Manage and track SME investments", "Private deal room access", "Priority support and reporting"]}
-        variant={"center"}
-        plans={["Engage", "Partner"]}
-        upgradeMessage={"Upgrade your subscription to manage your investment cohorts, access detailed portfolio analytics and priority support."}
-        primaryLabel={"View Available Plans"}
-      />
-    )
-  }
+  // if (currentPlan === "basic") {
+  //   return (
+  //     <Upsell
+  //       title={"My Cohorts"}
+  //       subtitle={"The My Cohorts feature is available on our Engage and Partner plans. Upgrade now to manage your investment cohorts, access detailed portfolio analytics and priority support."}
+  //       features={["Portfolio & cohort analytics", "Manage and track SME investments", "Private deal room access", "Priority support and reporting"]}
+  //       variant={"center"}
+  //       plans={["Engage", "Partner"]}
+  //       upgradeMessage={"Upgrade your subscription to manage your investment cohorts, access detailed portfolio analytics and priority support."}
+  //       primaryLabel={"View Available Plans"}
+  //     />
+  //   )
+  // }
 
   return (
     <div style={{ 
