@@ -915,28 +915,28 @@ export function InvestorInsights() {
     )
   }
 
-  if (currentPlan === "basic") {
-    return (
-      <Upsell
-        title={"BIG Insights Analytics"}
-        subtitle={"Unlock powerful analytics and real-time insights to discover investment opportunities, track market trends, and make data-driven decisions with our comprehensive platform analytics."}
-        features={[
-          "Real-time investment demand analytics",
-          "Success rates & performance trends by investment type",
-          "Sector-level investment analysis & breakdowns",
-          "Deal flow engagement metrics & ROI tracking",
-          "Geographic investment patterns & regional insights",
-          "Market structure & capital deployment analysis",
-          "Funder ecosystem & co-investment insights",
-        ]}
-        variant={"card"}
-        sidebarWidth={280}
-        plans={["Engage", "Partner"]}
-        upgradeMessage={"Upgrade your subscription to access exclusive analytics, advanced reporting, and strategic insights that power successful investment decisions."}
-        primaryLabel={"View Available Plans"}
-      />
-    )
-  }
+  // if (currentPlan === "basic") {
+  //   return (
+  //     <Upsell
+  //       title={"BIG Insights Analytics"}
+  //       subtitle={"Unlock powerful analytics and real-time insights to discover investment opportunities, track market trends, and make data-driven decisions with our comprehensive platform analytics."}
+  //       features={[
+  //         "Real-time investment demand analytics",
+  //         "Success rates & performance trends by investment type",
+  //         "Sector-level investment analysis & breakdowns",
+  //         "Deal flow engagement metrics & ROI tracking",
+  //         "Geographic investment patterns & regional insights",
+  //         "Market structure & capital deployment analysis",
+  //         "Funder ecosystem & co-investment insights",
+  //       ]}
+  //       variant={"card"}
+  //       sidebarWidth={280}
+  //       plans={["Engage", "Partner"]}
+  //       upgradeMessage={"Upgrade your subscription to access exclusive analytics, advanced reporting, and strategic insights that power successful investment decisions."}
+  //       primaryLabel={"View Available Plans"}
+  //     />
+  //   )
+  // }
 
   if (loading || !realTimeInsights || !capitalFlowInsights) {
     return (
