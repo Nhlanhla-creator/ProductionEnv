@@ -4,7 +4,9 @@ import { useState, useEffect } from "react"
 import ApplicationsList from "./ApplicationsList"
 import ProductApplication from "./ProductApplication"
 import ApplicationSummary from "./application-summary"
+import AnalysisProgressOverlay from "./AnalysisProgressOverlay"
 import { auth } from "../../firebaseConfig"
+import useMatches from "../hooks/useMatches"
 
 const ProductApplicationManager = ({ embedded = false, onNavigateToMatches }) => {
   const [currentView, setCurrentView] = useState('list')
@@ -13,6 +15,14 @@ const ProductApplicationManager = ({ embedded = false, onNavigateToMatches }) =>
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   // When true, ProductApplication skips the auto-summary even if status==='submitted'
   const [forceEdit, setForceEdit] = useState(false)
+
+  // AI analysis progress tracking
+  const [analysisProgress, setAnalysisProgress] = useState(null)
+  const [analysisComplete, setAnalysisComplete] = useState(false)
+  const [showAnalysisOverlay, setShowAnalysisOverlay] = useState(false)
+
+  // Get refreshAiCache from useMatches hook so we can refresh after background analysis
+  const { refreshAiCache } = useMatches({ enabled: true })
 
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged((user) => {
@@ -43,10 +53,43 @@ const ProductApplicationManager = ({ embedded = false, onNavigateToMatches }) =>
   }
 
   const handleBackToList = () => {
+    // Prevent navigation while analysis is in progress
+    if (showAnalysisOverlay) return
+    
     setCurrentView('list')
     setSelectedApplicationId(null)
     setSelectedApplicationData(null)
     setForceEdit(false)
+    setAnalysisProgress(null)
+    setAnalysisComplete(false)
+    setShowAnalysisOverlay(false)
+  }
+
+  // Called when analysis starts or progress updates
+  const handleAnalysisProgress = (progress) => {
+    setShowAnalysisOverlay(true)
+    setAnalysisProgress(progress)
+    setAnalysisComplete(false)
+  }
+
+  // Called when analysis completes
+  const handleAnalysisComplete = async (applicationId) => {
+    setAnalysisComplete(true)
+    
+    // Give users a moment to see the "Complete" message
+    await new Promise((resolve) => setTimeout(resolve, 1500))
+    
+    try {
+      // Refresh the AI cache
+      await refreshAiCache(applicationId)
+    } catch (err) {
+      // Silently handle cache refresh errors
+    }
+    
+    // Hide overlay and navigate to matches
+    setShowAnalysisOverlay(false)
+    setAnalysisProgress(null)
+    setAnalysisComplete(false)
   }
 
   // Called from ApplicationSummary's "Edit Application" button
@@ -77,14 +120,22 @@ const ProductApplicationManager = ({ embedded = false, onNavigateToMatches }) =>
 
   if (currentView === 'edit') {
     return (
-      <ProductApplication
-        embedded={embedded}
-        applicationId={selectedApplicationId}
-        forceEdit={forceEdit}               // ← new prop
-        onNavigateBack={handleBackToList}
-        onNavigateToMatches={onNavigateToMatches || handleBackToList}
-        onNavigateToDashboard={handleBackToList}
-      />
+      <>
+        <ProductApplication
+          embedded={embedded}
+          applicationId={selectedApplicationId}
+          forceEdit={forceEdit}               // ← new prop
+          onNavigateBack={handleBackToList}
+          onNavigateToMatches={onNavigateToMatches || handleBackToList}
+          onNavigateToDashboard={handleBackToList}
+          onAnalysisComplete={handleAnalysisComplete}
+          onAnalysisProgress={handleAnalysisProgress}
+        />
+        <AnalysisProgressOverlay
+          progress={analysisProgress}
+          isComplete={analysisComplete}
+        />
+      </>
     )
   }
 

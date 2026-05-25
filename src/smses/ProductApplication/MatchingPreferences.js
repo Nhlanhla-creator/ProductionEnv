@@ -2,32 +2,23 @@
 import FormField from "./FormField"
 import { bbeeLevels, ownershipTypes, engagementTypes, deliveryModes, africanCountries } from "./applicationOptions"
 import "./ProductApplication.css"
-import { getAuth } from "firebase/auth"
-import {
-  addDoc,
-  collection,
-  getDocs,
-  doc,
-  getDoc,
-  onSnapshot,
-  query,
-  where,
-  updateDoc,
-  serverTimestamp,
-  setDoc,
-  arrayUnion
-} from "firebase/firestore"
-import { db } from "../../firebaseConfig"
-import { useNavigate } from "react-router-dom"
 
-// Currency formatter function
+// Currency formatter
 const formatCurrency = (value) => {
-  if (!value) return '';
-  const numericValue = value.replace(/[^\d]/g, '');
-  if (!numericValue) return '';
-  return `R ${parseInt(numericValue).toLocaleString()}`;
-};
+  if (!value) return ""
+  const numericValue = value.replace(/[^\d]/g, "")
+  if (!numericValue) return ""
+  return `R ${parseInt(numericValue).toLocaleString()}`
+}
 
+/**
+ * MatchingPreferences — step 2 of the product application form.
+ *
+ * When used inside ProductApplication (embedded mode), `onSubmit` is provided
+ * and this component ONLY calls it — all Firestore persistence is handled by
+ * the parent. The component never writes to Firestore itself, which prevents
+ * the double-save duplication bug that created multiple application documents.
+ */
 const MatchingPreferences = ({ data = {}, updateData, onSubmit }) => {
   const formData = {
     bbeeLevel: "",
@@ -45,92 +36,37 @@ const MatchingPreferences = ({ data = {}, updateData, onSubmit }) => {
     ...data,
   }
 
-  // Add navigation hook
-  const navigate = useNavigate();
-
-  const handleSubmit = async () => {
-    try {
-      // Save application data to Firestore
-      const user = getAuth().currentUser;
-      if (!user) {
-        console.error("No user logged in");
-        return;
-      }
-
-      const applicationData = {
-        ...formData,
-        matchingPreferences: formData,
-        updatedAt: serverTimestamp(),
-        applicationType: "product",
-        status: "submitted"
-      };
-
-      // Save to Firestore
-      await setDoc(doc(db, "productApplications", user.uid), applicationData, { merge: true });
-
-      console.log("Application saved successfully");
-
-      // CHECK: If we're in embedded mode (from ProductApplication), call onSubmit prop
-      if (onSubmit) {
-        // This will trigger the parent ProductApplication to handle submission
-        onSubmit();
-      } else {
-        // Fallback: Navigate to supplier-matches (with hyphen)
-        navigate('/supplier-matches', {
-          state: {
-            newApplicationSubmitted: true,
-            applicationId: user.uid
-          }
-        });
-      }
-
-    } catch (error) {
-      console.error("Error saving application:", error);
-    }
-  };
-
   const handleChange = (e) => {
     const { name, value } = e.target
-
-    // Handle currency formatting for budget fields
-    if (name === 'minBudget' || name === 'maxBudget') {
-      const formattedValue = formatCurrency(value);
-      updateData({ ...formData, [name]: formattedValue })
+    if (name === "minBudget" || name === "maxBudget") {
+      updateData({ ...formData, [name]: formatCurrency(value) })
     } else {
       updateData({ ...formData, [name]: value })
     }
   }
 
   const handleOwnershipChange = (type) => {
-    const currentValues = formData.ownershipPrefs || []
-    const updatedValues = currentValues.includes(type)
-      ? currentValues.filter((t) => t !== type)
-      : [...currentValues, type]
-
-    updateData({ ...formData, ownershipPrefs: updatedValues })
+    const current = formData.ownershipPrefs || []
+    const updated = current.includes(type)
+      ? current.filter((t) => t !== type)
+      : [...current, type]
+    updateData({ ...formData, ownershipPrefs: updated })
   }
 
   const handleCheckboxChange = (field, value) => {
-    const currentValues = formData[field] || [];
-    const newValues = currentValues.includes(value)
-      ? currentValues.filter(v => v !== value)
-      : [...currentValues, value];
-
-    updateData({ ...formData, [field]: newValues });
-  };
-
-  const handleRadioChange = (value) => {
-    updateData({ ...formData, esdProgram: value === 'yes' });
-  };
-
-  // Add "none" to ownership types if it doesn't exist
-  const allOwnershipTypes = [...ownershipTypes]
-  if (!allOwnershipTypes.includes("None")) {
-    allOwnershipTypes.push("None")
+    const current = formData[field] || []
+    const next = current.includes(value)
+      ? current.filter((v) => v !== value)
+      : [...current, value]
+    updateData({ ...formData, [field]: next })
   }
 
-  // Check if "Other" is selected in engagement type
-  const showEngagementTypeOther = formData.engagementType === 'Other';
+  const handleRadioChange = (value) => {
+    updateData({ ...formData, esdProgram: value === "yes" })
+  }
+
+  const allOwnershipTypes = ownershipTypes.includes("None") ? ownershipTypes : [...ownershipTypes, "None"]
+  const showEngagementTypeOther = formData.engagementType === "Other"
 
   return (
     <div className="matching-preferences-form">
@@ -145,9 +81,7 @@ const MatchingPreferences = ({ data = {}, updateData, onSubmit }) => {
         >
           <option value="">Select level</option>
           {bbeeLevels.map((level) => (
-            <option key={level} value={level}>
-              {level}
-            </option>
+            <option key={level} value={level}>{level}</option>
           ))}
         </select>
       </FormField>
@@ -178,8 +112,7 @@ const MatchingPreferences = ({ data = {}, updateData, onSubmit }) => {
       </FormField>
 
       <div className="grid-container">
-        {/* Engagement Type Dropdown */}
-        <FormField label="Type of Engagement" >
+        <FormField label="Type of Engagement">
           <select
             name="engagementType"
             value={formData.engagementType}
@@ -187,15 +120,14 @@ const MatchingPreferences = ({ data = {}, updateData, onSubmit }) => {
             className="form-select"
           >
             <option value="">Select engagement type</option>
-            {engagementTypes.map(type => (
+            {engagementTypes.map((type) => (
               <option key={type} value={type}>{type}</option>
             ))}
           </select>
         </FormField>
 
-        {/* Show specification field when "Other" is selected */}
         {showEngagementTypeOther && (
-          <FormField label="Please specify engagement type" >
+          <FormField label="Please specify engagement type">
             <input
               type="text"
               name="engagementTypeOther"
@@ -208,15 +140,14 @@ const MatchingPreferences = ({ data = {}, updateData, onSubmit }) => {
           </FormField>
         )}
 
-        {/* Delivery Mode Checkboxes */}
-        <FormField label="Preferred Delivery Mode" >
+        <FormField label="Preferred Delivery Mode">
           <div className="checkbox-group">
-            {deliveryModes.map(mode => (
+            {deliveryModes.map((mode) => (
               <label key={mode} className="checkbox-item">
                 <input
                   type="checkbox"
                   checked={formData.deliveryModes.includes(mode)}
-                  onChange={() => handleCheckboxChange('deliveryModes', mode)}
+                  onChange={() => handleCheckboxChange("deliveryModes", mode)}
                 />
                 {mode}
               </label>
@@ -224,31 +155,29 @@ const MatchingPreferences = ({ data = {}, updateData, onSubmit }) => {
           </div>
         </FormField>
 
-        {/* Date Inputs */}
-        <FormField label="Start Date" >
+        <FormField label="Start Date">
           <input
             type="date"
             name="startDate"
             value={formData.startDate}
             onChange={handleChange}
             className="form-input"
-            min={new Date().toISOString().split('T')[0]}
+            min={new Date().toISOString().split("T")[0]}
           />
         </FormField>
 
-        <FormField label="End Date" >
+        <FormField label="End Date">
           <input
             type="date"
             name="endDate"
             value={formData.endDate}
             onChange={handleChange}
             className="form-input"
-            min={formData.startDate || new Date().toISOString().split('T')[0]}
+            min={formData.startDate || new Date().toISOString().split("T")[0]}
           />
         </FormField>
 
-        {/* Location Dropdown */}
-        <FormField label="Location" >
+        <FormField label="Location">
           <select
             name="location"
             value={formData.location}
@@ -256,14 +185,13 @@ const MatchingPreferences = ({ data = {}, updateData, onSubmit }) => {
             className="form-select"
           >
             <option value="">Select country</option>
-            {africanCountries.map(country => (
+            {africanCountries.map((country) => (
               <option key={country} value={country}>{country}</option>
             ))}
           </select>
         </FormField>
 
-        {/* Budget Inputs with Currency Formatting */}
-        <FormField label="Budget Range (ZAR)" >
+        <FormField label="Budget Range (ZAR)">
           <div className="flex-row">
             <input
               type="text"
@@ -272,7 +200,7 @@ const MatchingPreferences = ({ data = {}, updateData, onSubmit }) => {
               onChange={handleChange}
               placeholder="R 0"
               className="form-input"
-              style={{ color: formData.minBudget ? 'black' : '#9CA3AF' }}
+              style={{ color: formData.minBudget ? "black" : "#9CA3AF" }}
             />
             <span className="mx-2">to</span>
             <input
@@ -282,12 +210,11 @@ const MatchingPreferences = ({ data = {}, updateData, onSubmit }) => {
               onChange={handleChange}
               placeholder="R 0"
               className="form-input"
-              style={{ color: formData.maxBudget ? 'black' : '#9CA3AF' }}
+              style={{ color: formData.maxBudget ? "black" : "#9CA3AF" }}
             />
           </div>
         </FormField>
 
-        {/* Radio Buttons */}
         <FormField label="Linked to ESD/CSR Program?">
           <div className="radio-group">
             <label className="radio-item">
@@ -295,7 +222,7 @@ const MatchingPreferences = ({ data = {}, updateData, onSubmit }) => {
                 type="radio"
                 name="esdProgram"
                 checked={formData.esdProgram === true}
-                onChange={() => handleRadioChange('yes')}
+                onChange={() => handleRadioChange("yes")}
               />
               Yes
             </label>
@@ -304,7 +231,7 @@ const MatchingPreferences = ({ data = {}, updateData, onSubmit }) => {
                 type="radio"
                 name="esdProgram"
                 checked={formData.esdProgram === false}
-                onChange={() => handleRadioChange('no')}
+                onChange={() => handleRadioChange("no")}
               />
               No
             </label>
@@ -312,20 +239,24 @@ const MatchingPreferences = ({ data = {}, updateData, onSubmit }) => {
         </FormField>
       </div>
 
-      {/* Submit Button */}
-      <div className="action-buttons" style={{
-        display: "flex",
-        gap: 10,
-        justifyContent: "flex-end",
-        alignItems: "center",
-        marginTop: 30,
-        padding: "20px 0",
-        borderTop: "1px solid #eee",
-        width: "100%"
-      }}>
+      {/* Submit button — delegates entirely to the parent via onSubmit */}
+      <div
+        className="action-buttons"
+        style={{
+          display: "flex",
+          gap: 10,
+          justifyContent: "flex-end",
+          alignItems: "center",
+          marginTop: 30,
+          padding: "20px 0",
+          borderTop: "1px solid #eee",
+          width: "100%",
+        }}
+      >
         <button
           type="button"
-          onClick={handleSubmit} // Changed to handleSubmit
+          onClick={onSubmit}
+          disabled={!onSubmit}
           className="btn btn-primary"
           style={{
             display: "flex",
@@ -334,7 +265,9 @@ const MatchingPreferences = ({ data = {}, updateData, onSubmit }) => {
             padding: "12px 24px",
             fontSize: "clamp(0.9rem, 2vw, 1rem)",
             minWidth: 140,
-            justifyContent: "center"
+            justifyContent: "center",
+            opacity: onSubmit ? 1 : 0.5,
+            cursor: onSubmit ? "pointer" : "not-allowed",
           }}
         >
           Submit Application
