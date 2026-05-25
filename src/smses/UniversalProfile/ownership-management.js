@@ -3,7 +3,7 @@ import { Plus, Trash2 } from 'lucide-react'
 import FormField from "./form-field"
 import FileUpload from "./file-upload"
 import './UniversalProfile.css';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { db, auth, storage } from '../../firebaseConfig';
 import { doc, setDoc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
@@ -160,10 +160,29 @@ const DEFAULT_BUSINESS_LEADERSHIP = {
   decisionGovernance: "",
 };
 
-// Committee Membership Multi-Select Dropdown Component
+// Committee Membership Multi-Select Dropdown Component (FIXED - Working dropdown)
 const CommitteeMultiSelect = ({ selected = [], onChange, onCustomChange, customValue = "" }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const buttonRef = useRef(null);
+  const dropdownRef = useRef(null);
   const safeSelected = Array.isArray(selected) ? selected : [];
+
+  // Handle click outside to close
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target) && 
+          buttonRef.current && !buttonRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+    
+    if (isOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+      };
+    }
+  }, [isOpen]);
 
   const toggleOption = (value) => {
     const newSelected = safeSelected.includes(value)
@@ -173,8 +192,9 @@ const CommitteeMultiSelect = ({ selected = [], onChange, onCustomChange, customV
   };
 
   return (
-    <div style={{ position: 'relative' }}>
+    <div style={{ position: 'relative', width: '100%' }}>
       <div
+        ref={buttonRef}
         onClick={() => setIsOpen(!isOpen)}
         style={{
           border: '1px solid #ccc',
@@ -187,10 +207,11 @@ const CommitteeMultiSelect = ({ selected = [], onChange, onCustomChange, customV
           minHeight: '32px',
           backgroundColor: 'white',
           fontSize: '12px',
+          width: '100%',
         }}
       >
         {safeSelected.length > 0 ? (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2px' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2px', flex: 1 }}>
             {safeSelected.map((val) => (
               <span key={val} style={{ backgroundColor: '#e0e0e0', padding: '1px 6px', borderRadius: '10px', fontSize: '11px' }}>
                 {val === "Other" ? (customValue || "Other") : committeeMembershipOptions.find(o => o.value === val)?.label || val}
@@ -198,47 +219,97 @@ const CommitteeMultiSelect = ({ selected = [], onChange, onCustomChange, customV
             ))}
           </div>
         ) : (
-          <span style={{ color: '#999', fontSize: '12px' }}>Select committees</span>
+          <span style={{ color: '#999', fontSize: '12px', flex: 1 }}>Select committees</span>
         )}
-        <span style={{ fontSize: '10px' }}>{isOpen ? '▲' : '▼'}</span>
+        <span style={{ fontSize: '10px', marginLeft: '4px' }}>{isOpen ? '▲' : '▼'}</span>
       </div>
+      
+      {/* Dropdown with absolute positioning relative to the button */}
       {isOpen && (
-        <div style={{
-          position: 'absolute', top: '100%', left: 0, right: 0, backgroundColor: 'white',
-          border: '1px solid #ccc', borderRadius: '4px', marginTop: '2px', zIndex: 1000,
-          maxHeight: '250px', overflow: 'auto', boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-        }}>
+        <div
+          ref={dropdownRef}
+          style={{
+            position: 'absolute',
+            top: '100%',
+            left: 0,
+            right: 0,
+            backgroundColor: 'white',
+            border: '1px solid #ccc',
+            borderRadius: '4px',
+            marginTop: '2px',
+            zIndex: 9999,
+            maxHeight: '300px',
+            overflow: 'auto',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+          }}
+        >
           <div style={{ padding: '4px' }}>
             {committeeMembershipOptions.map((option) => (
               <div
                 key={option.value}
                 onClick={() => toggleOption(option.value)}
                 style={{
-                  padding: '6px 8px', cursor: 'pointer', fontSize: '12px',
+                  padding: '8px 12px',
+                  cursor: 'pointer',
+                  fontSize: '12px',
                   backgroundColor: safeSelected.includes(option.value) ? '#f0f0f0' : 'white',
-                  display: 'flex', alignItems: 'center', gap: '6px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  borderRadius: '4px',
+                  transition: 'background-color 0.2s',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = '#f5f5f5';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = safeSelected.includes(option.value) ? '#f0f0f0' : 'white';
                 }}
               >
-                <input type="checkbox" checked={safeSelected.includes(option.value)} onChange={() => {}} style={{ cursor: 'pointer' }} />
+                <input 
+                  type="checkbox" 
+                  checked={safeSelected.includes(option.value)} 
+                  onChange={() => {}} 
+                  style={{ cursor: 'pointer', margin: 0 }}
+                />
                 <span>{option.label}</span>
               </div>
             ))}
           </div>
           {safeSelected.includes("Other") && (
-            <div style={{ padding: '4px 8px', borderTop: '1px solid #eee' }}>
+            <div style={{ padding: '8px', borderTop: '1px solid #eee' }}>
               <input
                 type="text"
                 placeholder="Specify committee"
                 value={customValue}
                 onChange={(e) => onCustomChange(e.target.value)}
-                className="w-full px-2 py-1 border border-brown-300 rounded-md text-xs"
+                style={{ 
+                  width: '100%', 
+                  padding: '6px 8px', 
+                  border: '1px solid #ccc', 
+                  borderRadius: '4px', 
+                  fontSize: '12px',
+                  outline: 'none',
+                }}
                 onClick={(e) => e.stopPropagation()}
               />
             </div>
           )}
-          <div style={{ padding: '4px 8px', borderTop: '1px solid #ccc' }}>
-            <button type="button" onClick={() => setIsOpen(false)}
-              style={{ width: '100%', padding: '6px', backgroundColor: '#8B4513', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>
+          <div style={{ padding: '8px', borderTop: '1px solid #ccc', backgroundColor: '#f9f9f9' }}>
+            <button 
+              type="button" 
+              onClick={() => setIsOpen(false)}
+              style={{
+                width: '100%',
+                padding: '6px',
+                backgroundColor: '#8B4513',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer',
+                fontSize: '12px',
+              }}
+            >
               Done
             </button>
           </div>
@@ -477,20 +548,19 @@ export default function OwnershipManagement({ data = { shareholders: [], directo
     const newDirectors = [...formData.directors];
     newDirectors[index] = { ...newDirectors[index], [field]: value };
     if (field === "position" && value !== "Other") newDirectors[index].customPosition = "";
+    
     const linkedShareholderId = newDirectors[index].linkedShareholderId;
-    if (linkedShareholderId !== null) {
+    if (linkedShareholderId !== null && linkedShareholderId < formData.shareholders.length) {
       const newShareholders = [...formData.shareholders];
-      if (linkedShareholderId < newShareholders.length) {
-        if (field === "name") newShareholders[linkedShareholderId].name = value;
-        if (field === "nationality") newShareholders[linkedShareholderId].country = value;
-        if (field === "linkedin") newShareholders[linkedShareholderId].linkedin = value;
-        if (field === "race") newShareholders[linkedShareholderId].race = value;
-        if (field === "gender") newShareholders[linkedShareholderId].gender = value;
-        if (field === "isYouth") newShareholders[linkedShareholderId].isYouth = value;
-        if (field === "isDisabled") newShareholders[linkedShareholderId].isDisabled = value;
-        updateFormData({ ...formData, directors: newDirectors, shareholders: newShareholders });
-        return;
-      }
+      if (field === "name") newShareholders[linkedShareholderId].name = value;
+      if (field === "nationality") newShareholders[linkedShareholderId].country = value;
+      if (field === "linkedin") newShareholders[linkedShareholderId].linkedin = value;
+      if (field === "race") newShareholders[linkedShareholderId].race = value;
+      if (field === "gender") newShareholders[linkedShareholderId].gender = value;
+      if (field === "isYouth") newShareholders[linkedShareholderId].isYouth = value;
+      if (field === "isDisabled") newShareholders[linkedShareholderId].isDisabled = value;
+      updateFormData({ ...formData, directors: newDirectors, shareholders: newShareholders });
+      return;
     }
     updateFormData({ ...formData, directors: newDirectors });
   };
@@ -521,7 +591,6 @@ export default function OwnershipManagement({ data = { shareholders: [], directo
     updateFormData({ ...formData, executives: (formData.executives || []).filter((_, i) => i !== index) });
   };
 
-  // ─── Business Leadership handler ────────────────────────────────────────────
   const updateBusinessLeadership = (field, value) => {
     const updated = { ...formData, businessLeadership: { ...(formData.businessLeadership || DEFAULT_BUSINESS_LEADERSHIP), [field]: value } };
     updateFormData(updated);
@@ -691,7 +760,7 @@ export default function OwnershipManagement({ data = { shareholders: [], directo
             <Plus className="w-4 h-4 mr-1" /> Add Director
           </button>
         </div>
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto" style={{ overflow: 'visible' }}>
           <table className="min-w-full bg-white border border-brown-200 rounded-lg">
             <thead>
               <tr className="bg-brown-50">
@@ -705,28 +774,55 @@ export default function OwnershipManagement({ data = { shareholders: [], directo
                 <tr key={index} className={`${index % 2 === 0 ? "bg-white" : "bg-brown-50"} ${director.linkedShareholderId !== null ? "border-l-4 border-l-blue-400" : ""}`}>
                   <td className="px-4 py-2 border-b">
                     <div className="flex items-center space-x-2">
-                      <input type="text" value={director.name || ""} onChange={(e) => updateDirector(index, "name", e.target.value)} className="flex-1 px-2 py-1 border border-brown-300 rounded-md focus:outline-none focus:ring-1 focus:ring-brown-500" disabled={director.linkedShareholderId !== null} />
-                      {director.linkedShareholderId !== null && <span className="text-xs text-blue-600" title="Linked to shareholder">🔗</span>}
+                      <input 
+                        type="text" 
+                        value={director.name || ""} 
+                        onChange={(e) => updateDirector(index, "name", e.target.value)} 
+                        className="flex-1 px-2 py-1 border border-brown-300 rounded-md focus:outline-none focus:ring-1 focus:ring-brown-500" 
+                      />
+                      {director.linkedShareholderId !== null && <span className="text-xs text-blue-600" title="Linked to shareholder - edits will sync to shareholder">🔗 Syncs</span>}
                     </div>
                   </td>
                   <td className="px-4 py-2 border-b">
                     <div className="space-y-1">
-                      <select value={director.position || ""} onChange={(e) => updateDirector(index, "position", e.target.value)} className="w-full px-2 py-1 border border-brown-300 rounded-md focus:outline-none focus:ring-1 focus:ring-brown-500">
+                      <select 
+                        value={director.position || ""} 
+                        onChange={(e) => updateDirector(index, "position", e.target.value)} 
+                        className="w-full px-2 py-1 border border-brown-300 rounded-md focus:outline-none focus:ring-1 focus:ring-brown-500"
+                      >
                         <option value="">Select Position</option>
                         {positionOptions.map((pos) => <option key={pos} value={pos}>{pos}</option>)}
                       </select>
-                      {director.position === "Other" && <input type="text" placeholder="Specify position" value={director.customPosition || ""} onChange={(e) => updateDirector(index, "customPosition", e.target.value)} className="w-full px-2 py-1 border border-brown-300 rounded-md focus:outline-none focus:ring-1 focus:ring-brown-500 text-sm" />}
+                      {director.position === "Other" && (
+                        <input 
+                          type="text" 
+                          placeholder="Specify position" 
+                          value={director.customPosition || ""} 
+                          onChange={(e) => updateDirector(index, "customPosition", e.target.value)} 
+                          className="w-full px-2 py-1 border border-brown-300 rounded-md focus:outline-none focus:ring-1 focus:ring-brown-500 text-sm" 
+                        />
+                      )}
                     </div>
                   </td>
                   <td className="px-4 py-2 border-b">
-                    <select value={director.nationality || ""} onChange={(e) => updateDirector(index, "nationality", e.target.value)} className="w-full px-2 py-1 border border-brown-300 rounded-md focus:outline-none focus:ring-1 focus:ring-brown-500" disabled={director.linkedShareholderId !== null}>
+                    <select 
+                      value={director.nationality || ""} 
+                      onChange={(e) => updateDirector(index, "nationality", e.target.value)} 
+                      className="w-full px-2 py-1 border border-brown-300 rounded-md focus:outline-none focus:ring-1 focus:ring-brown-500"
+                    >
                       <option value="">Select</option>
                       {africanCountries.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                     </select>
                   </td>
                   <td className="px-4 py-2 border-b">
                     <div className="space-y-2">
-                      <input type="text" placeholder="LinkedIn URL" value={director.linkedin || ""} onChange={(e) => updateDirector(index, "linkedin", e.target.value)} className="w-full px-2 py-1 border border-brown-300 rounded-md focus:outline-none focus:ring-1 focus:ring-brown-500" disabled={director.linkedShareholderId !== null} />
+                      <input 
+                        type="text" 
+                        placeholder="LinkedIn URL" 
+                        value={director.linkedin || ""} 
+                        onChange={(e) => updateDirector(index, "linkedin", e.target.value)} 
+                        className="w-full px-2 py-1 border border-brown-300 rounded-md focus:outline-none focus:ring-1 focus:ring-brown-500" 
+                      />
                       <div className="flex items-center space-x-2">
                         {director.cv ? (
                           <>
@@ -743,8 +839,7 @@ export default function OwnershipManagement({ data = { shareholders: [], directo
                       </div>
                     </div>
                   </td>
-                  {/* Committee Membership Multi-Select */}
-                  <td className="px-4 py-2 border-b">
+                  <td className="px-4 py-2 border-b" style={{ position: 'relative' }}>
                     <CommitteeMultiSelect
                       selected={director.committeeMembership || []}
                       onChange={(val) => updateDirector(index, "committeeMembership", val)}
@@ -753,27 +848,59 @@ export default function OwnershipManagement({ data = { shareholders: [], directo
                     />
                   </td>
                   <td className="px-4 py-2 border-b">
-                    <select value={director.execType || ""} onChange={(e) => updateDirector(index, "execType", e.target.value)} className="w-full px-2 py-1 border border-brown-300 rounded-md focus:outline-none focus:ring-1 focus:ring-brown-500">
+                    <select 
+                      value={director.execType || ""} 
+                      onChange={(e) => updateDirector(index, "execType", e.target.value)} 
+                      className="w-full px-2 py-1 border border-brown-300 rounded-md focus:outline-none focus:ring-1 focus:ring-brown-500"
+                    >
                       <option value="">Select</option>
                       {execOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                     </select>
                   </td>
                   <td className="px-4 py-2 border-b">
-                    <select value={director.race || ""} onChange={(e) => updateDirector(index, "race", e.target.value)} className="w-full px-2 py-1 border border-brown-300 rounded-md focus:outline-none focus:ring-1 focus:ring-brown-500" disabled={director.linkedShareholderId !== null}>
+                    <select 
+                      value={director.race || ""} 
+                      onChange={(e) => updateDirector(index, "race", e.target.value)} 
+                      className="w-full px-2 py-1 border border-brown-300 rounded-md focus:outline-none focus:ring-1 focus:ring-brown-500"
+                    >
                       <option value="">Select</option>
                       {raceOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                     </select>
                   </td>
                   <td className="px-4 py-2 border-b">
-                    <select value={director.gender || ""} onChange={(e) => updateDirector(index, "gender", e.target.value)} className="w-full px-2 py-1 border border-brown-300 rounded-md focus:outline-none focus:ring-1 focus:ring-brown-500" disabled={director.linkedShareholderId !== null}>
+                    <select 
+                      value={director.gender || ""} 
+                      onChange={(e) => updateDirector(index, "gender", e.target.value)} 
+                      className="w-full px-2 py-1 border border-brown-300 rounded-md focus:outline-none focus:ring-1 focus:ring-brown-500"
+                    >
                       <option value="">Select</option>
                       {genderOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                     </select>
                   </td>
-                  <td className="px-4 py-2 border-b text-center"><input type="checkbox" checked={director.isYouth || false} onChange={(e) => updateDirector(index, "isYouth", e.target.checked)} className="h-4 w-4 text-brown-600 focus:ring-brown-500 border-brown-300 rounded" disabled={director.linkedShareholderId !== null} /></td>
-                  <td className="px-4 py-2 border-b text-center"><input type="checkbox" checked={director.isDisabled || false} onChange={(e) => updateDirector(index, "isDisabled", e.target.checked)} className="h-4 w-4 text-brown-600 focus:ring-brown-500 border-brown-300 rounded" disabled={director.linkedShareholderId !== null} /></td>
+                  <td className="px-4 py-2 border-b text-center">
+                    <input 
+                      type="checkbox" 
+                      checked={director.isYouth || false} 
+                      onChange={(e) => updateDirector(index, "isYouth", e.target.checked)} 
+                      className="h-4 w-4 text-brown-600 focus:ring-brown-500 border-brown-300 rounded" 
+                    />
+                  </td>
+                  <td className="px-4 py-2 border-b text-center">
+                    <input 
+                      type="checkbox" 
+                      checked={director.isDisabled || false} 
+                      onChange={(e) => updateDirector(index, "isDisabled", e.target.checked)} 
+                      className="h-4 w-4 text-brown-600 focus:ring-brown-500 border-brown-300 rounded" 
+                    />
+                  </td>
                   <td className="px-4 py-2 border-b">
-                    <button type="button" onClick={() => removeDirector(index)} className={`text-red-500 hover:text-red-700 ${director.linkedShareholderId !== null ? 'opacity-30 cursor-not-allowed' : ''}`} disabled={director.linkedShareholderId !== null} title={director.linkedShareholderId !== null ? "Uncheck 'Also Director' in shareholder table to remove" : "Remove director"}>
+                    <button 
+                      type="button" 
+                      onClick={() => removeDirector(index)} 
+                      className={`text-red-500 hover:text-red-700 ${director.linkedShareholderId !== null ? 'opacity-30 cursor-not-allowed' : ''}`} 
+                      disabled={director.linkedShareholderId !== null} 
+                      title={director.linkedShareholderId !== null ? "Uncheck 'Also Director' in shareholder table to remove" : "Remove director"}
+                    >
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </td>
@@ -864,7 +991,7 @@ export default function OwnershipManagement({ data = { shareholders: [], directo
         </div>
       </div>
 
-      {/* ─── Business Leadership – Profile Assessment ─────────────────────────── */}
+      {/* Business Leadership – Profile Assessment */}
       <div className="mb-8">
         <div className="mb-4">
           <h3 className="text-lg font-semibold text-brown-700">Business Leadership – Profile Assessment</h3>
