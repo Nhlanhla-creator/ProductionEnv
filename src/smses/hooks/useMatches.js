@@ -11,22 +11,82 @@ import {
 } from "../MySupplierMatches/supplier-table"
 
 /**
- * Derive a short, application-specific AppID from a Firestore doc id.
+ * Derive a short AppID from a Firestore doc id.
  * The canonical doc id is `{uid}_{timestamp}`; the last 8 characters of the
  * timestamp are unique per application while remaining compact for display.
- *
- * @param {string} fullId
- * @returns {string}
  */
 export const deriveAppId = (fullId) => {
   if (!fullId) return ""
   return String(fullId).slice(-8).toUpperCase()
 }
 
+// ── Shared helper functions (also exported for use in other modules) ────
+
+/**
+ * Normalize a category string for alias-safe comparison.
+ * Lowercases, trims, and resolves known aliases (e.g. "IT" → "information technology").
+ */
+export const normalizeCategoryString = (category) => {
+  if (!category) return ""
+  const s = String(category).toLowerCase().trim()
+  const ALIASES = {
+    "it": "information technology",
+    "ict": "information technology",
+    "information technology": "information technology",
+    "tech": "technology",
+    "technology": "technology",
+    "finance": "financial services",
+    "financial services": "financial services",
+    "legal": "attorneys & legal services",
+    "attorneys & legal services": "attorneys & legal services",
+    "transport": "travel & transport",
+    "travel & transport": "travel & transport",
+    "logistics": "logistics",
+    "marketing": "marketing",
+    "construction": "construction",
+    "education": "education",
+    "health": "health and wellness",
+    "health and wellness": "health and wellness",
+    "insurance": "insurance",
+    "agriculture": "agriculture",
+  }
+  return ALIASES[s] || s
+}
+
+/**
+ * Parse a formatted currency string like "R 1,000,000" into a plain number.
+ * Returns 0 if the string is empty or non-numeric.
+ */
+export const parseBudgetValue = (formattedValue) => {
+  if (!formattedValue) return 0
+  const numeric = String(formattedValue).replace(/[^\d.]/g, "")
+  return parseFloat(numeric) || 0
+}
+
+/**
+ * Determine whether a supplier profile is complete enough to participate in matching.
+ * Requires:
+ *  - A trading name or registered name
+ *  - At least one non-empty category array in productsServices
+ *  - bigScore > 0 (profile has been scored by the platform)
+ */
+export const isSupplierProfileComplete = (supplier) => {
+  const hasName = !!(
+    supplier?.entityOverview?.tradingName ||
+    supplier?.entityOverview?.registeredName
+  )
+  const ps = supplier?.productsServices || {}
+  const hasCategories = [
+    ps.productCategories,
+    ps.serviceCategories,
+    ps.categories,
+  ].some((cats) => Array.isArray(cats) && cats.length > 0)
+  const hasBigScore = (supplier?.bigScore || 0) > 0
+  return hasName && hasCategories && hasBigScore
+}
+
 /**
  * Normalise a supplier's declared categories into a flat string list.
- * Suppliers store categories as either plain strings or
- * `{ categories: [...], products|services: [...] }` objects.
  */
 const flattenSupplierCategories = (productsServices = {}) => {
   const out = []
@@ -39,14 +99,11 @@ const flattenSupplierCategories = (productsServices = {}) => {
   ;(productsServices.productCategories || []).forEach(push)
   ;(productsServices.serviceCategories || []).forEach(push)
   ;(productsServices.categories || []).forEach(push)
-  return out
-    .map((c) => String(c).trim())
-    .filter(Boolean)
+  return out.map((c) => String(c).trim()).filter(Boolean)
 }
 
 /**
  * Fetch average ratings for each supplier from the `supplierReviews` collection.
- * Shape: `{ [supplierId]: { average, count, latestComment } }`.
  */
 const fetchSupplierRatings = async () => {
   try {
@@ -87,12 +144,25 @@ const fetchSupplierRatings = async () => {
 /**
  * Fetch cached AI secondary matches for a given applicationId
  * from `aiSecondaryMatches/{applicationId}`.
+ * 
+ * Includes retry logic (up to 3 times with 1s delays) to handle the case
+ * where the background AI analysis is still writing to Firestore. This ensures
+ * we don't miss the data if the user navigates to the matches page while
+ * the analysis is in-flight.
  */
-const fetchAiCache = async (applicationId) => {
+const fetchAiCache = async (applicationId, retries = 3) => {
   try {
     const ref = doc(db, "aiSecondaryMatches", applicationId)
     const snap = await getDoc(ref)
+    
+    // If document doesn't exist and we have retries left, wait and try again
+    if (!snap.exists() && retries > 0) {
+      await new Promise((resolve) => setTimeout(resolve, 1000))
+      return fetchAiCache(applicationId, retries - 1)
+    }
+    
     if (!snap.exists()) return {}
+    
     const data = snap.data()
     return data?.suppliers || {}
   } catch (err) {
@@ -102,12 +172,16 @@ const fetchAiCache = async (applicationId) => {
 }
 
 /**
- * Fetch every supplier (universalProfiles) with productsServices attached.
+ * Fetch all complete supplier profiles (universalProfiles).
+ * Incomplete profiles are filtered out before returning to improve
+ * matching performance and accuracy.
+ *
+ * Exported so it can be reused in ProductApplication.js for auto-AI-analysis.
  */
-const fetchAllSuppliers = async () => {
+export const fetchAllSuppliers = async () => {
   try {
     const snap = await getDocs(collection(db, "universalProfiles"))
-    return snap.docs.map((d) => {
+    const all = snap.docs.map((d) => {
       const data = d.data()
       return {
         id: d.id,
@@ -118,6 +192,8 @@ const fetchAllSuppliers = async () => {
         entityOverview: data.entityOverview || {},
       }
     })
+    const complete = all.filter(isSupplierProfileComplete)
+    return complete
   } catch (err) {
     console.error("[useMatches] Failed to fetch universalProfiles", err)
     return []
@@ -157,13 +233,11 @@ const fetchUserApplications = async (userId) => {
 /**
  * Compute relevance-filtered, scored supplier matches for a single application.
  *
- * Scoring model (revised):
- *   PRIMARY   (60%) — AI semantic analysis of product/service alignment.
- *                     Loaded from aiSecondaryMatches/{appId} Firestore cache.
- *   SECONDARY (40%) — Applicant preference criteria (BBBEE, location, delivery,
- *                     budget, ownership, rating, experience, urgency).
+ * Scoring model:
+ *   PRIMARY   (60%) — AI semantic analysis. Loaded from aiSecondaryMatches/{appId}.
+ *   SECONDARY (40%) — Preference criteria (BBBEE, location, delivery, budget, etc.)
  *   OVERALL         — primary * 0.6 + secondary * 0.4
- *                     When AI hasn't been run yet: overall = secondary (100%).
+ *                     When AI hasn't been run: overall = secondary score alone.
  *
  * Relevance gate: supplier must have calculateCategoryMatch score > 0.
  * Threshold: only suppliers with overall >= 50% are returned.
@@ -175,7 +249,7 @@ const computeMatchesForApplication = (application, suppliers, ratings, aiCache) 
 
   const scored = suppliers
     .map((supplier) => {
-      // Relevance gate — synonym-expanded category match
+      // Relevance gate — category match must be > 0
       const category = calculateCategoryMatch(application, supplier)
       if (!category || category.score <= 0) return null
 
@@ -192,11 +266,11 @@ const computeMatchesForApplication = (application, suppliers, ratings, aiCache) 
       if (hasPrimary) {
         overallScore = Math.round(primaryScore * 0.6 + preference.totalScore * 0.4)
       } else {
-        // Without AI analysis: use preference score alone (clearly flagged)
+        // Without AI analysis: use preference score alone (clearly flagged in UI)
         overallScore = preference.totalScore
       }
 
-      // Legacy score kept for backward compat (used by SupplierTable)
+      // Legacy score kept for SupplierTable backward compat
       const legacy = calculateEnhancedMatchScore(application, supplier, ratings)
 
       return {
@@ -226,7 +300,7 @@ const computeMatchesForApplication = (application, suppliers, ratings, aiCache) 
         supplierCategories: flattenSupplierCategories(supplier.productsServices),
         rating: ratings?.[supplier.id]?.average || 0,
         ratingCount: ratings?.[supplier.id]?.count || 0,
-        // ── AI fields (renamed for clarity) ──
+        // ── AI fields (kept for SupplierTable compat) ──
         secondaryMatchScore: primaryScore,
         secondaryMatchReasoning: aiData?.reasoning || "",
         secondaryMatchCapabilities: aiData?.capabilities || [],
@@ -241,16 +315,15 @@ const computeMatchesForApplication = (application, suppliers, ratings, aiCache) 
 /**
  * useMatches — loads the current user's applications + suppliers + ratings,
  * then exposes a memoised `matchesByAppId` map keyed by the short AppID (last
- * 8 chars of the Firestore doc id). Also returns helpers and the raw data.
+ * 8 chars of the Firestore doc id).
  *
  * Usage:
  *   const { applications, matchesByAppId, getMatchesFor, loading } = useMatches()
- *   const forApp = getMatchesFor(application.id)
  *
  * Options:
- *   - userId (string)     Override the auth.currentUser.uid (useful for tests).
+ *   - userId (string)      Override auth.currentUser.uid (useful for tests).
  *   - applications (array) Skip fetching and use these applications directly.
- *   - enabled (boolean)   Set to false to skip fetching entirely.
+ *   - enabled (boolean)    Set to false to skip fetching entirely.
  */
 export const useMatches = ({ userId: userIdProp, applications: applicationsProp, enabled = true } = {}) => {
   const [userId, setUserId] = useState(userIdProp || auth.currentUser?.uid || null)
@@ -266,9 +339,7 @@ export const useMatches = ({ userId: userIdProp, applications: applicationsProp,
 
   useEffect(() => {
     mountedRef.current = true
-    return () => {
-      mountedRef.current = false
-    }
+    return () => { mountedRef.current = false }
   }, [])
 
   // Track auth changes unless the caller pins a userId explicitly.
@@ -277,9 +348,7 @@ export const useMatches = ({ userId: userIdProp, applications: applicationsProp,
       setUserId(userIdProp)
       return undefined
     }
-    const unsub = auth.onAuthStateChanged((u) => {
-      setUserId(u?.uid || null)
-    })
+    const unsub = auth.onAuthStateChanged((u) => { setUserId(u?.uid || null) })
     return () => unsub()
   }, [userIdProp])
 
@@ -306,6 +375,7 @@ export const useMatches = ({ userId: userIdProp, applications: applicationsProp,
         ])
         if (cancelled || !mountedRef.current) return
         if (!externalApps) setApplications(appsResult)
+        // Exclude the current user's own profile from supplier results
         setSuppliers(suppliersResult.filter((s) => s.id !== userId))
         setRatings(ratingsResult)
       } catch (err) {
@@ -314,9 +384,7 @@ export const useMatches = ({ userId: userIdProp, applications: applicationsProp,
         if (!cancelled && mountedRef.current) setLoading(false)
       }
     })()
-    return () => {
-      cancelled = true
-    }
+    return () => { cancelled = true }
   }, [enabled, userId, externalApps, applicationsProp])
 
   // Secondary loader: AI cache per application.
@@ -335,14 +403,10 @@ export const useMatches = ({ userId: userIdProp, applications: applicationsProp,
       )
       if (cancelled || !mountedRef.current) return
       const next = {}
-      entries.forEach(([id, cache]) => {
-        next[id] = cache
-      })
+      entries.forEach(([id, cache]) => { next[id] = cache })
       setAiCacheByAppId(next)
     })()
-    return () => {
-      cancelled = true
-    }
+    return () => { cancelled = true }
   }, [enabled, applications])
 
   // Memoised matches map keyed by derived AppID.
@@ -387,15 +451,12 @@ export const useMatches = ({ userId: userIdProp, applications: applicationsProp,
   )
 
   // Re-fetch AI cache for one application (after running AI analysis) so
-  // matchesByAppId recomputes with fresh primary scores.
-  const refreshAiCache = useCallback(
-    async (applicationFullId) => {
-      if (!applicationFullId) return
-      const cache = await fetchAiCache(applicationFullId)
-      setAiCacheByAppId((prev) => ({ ...prev, [applicationFullId]: cache }))
-    },
-    [],
-  )
+  // matchesByAppId recomputes with fresh primary scores without duplicating.
+  const refreshAiCache = useCallback(async (applicationFullId) => {
+    if (!applicationFullId) return
+    const cache = await fetchAiCache(applicationFullId)
+    setAiCacheByAppId((prev) => ({ ...prev, [applicationFullId]: cache }))
+  }, [])
 
   return {
     userId,

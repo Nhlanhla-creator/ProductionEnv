@@ -69,18 +69,32 @@ import { expandSearchTerms } from '../../utils/synonyms'
 
 import { getFunctions, httpsCallable } from "firebase/functions"
 
-// Local AI analysis for development/testing without incurring Cloud Function costs. In production, this will call the Cloud Function as normal.
+// Use Firebase Cloud Function for AI analysis
 async function analyzeSupplierMatchesWithFallback(payload) {
-
+  // // Local development fallback (commented out — use Cloud Function in production)
+  // try {
+  //   const response = await fetch("http://localhost:8000/api/suppliers/analyze-matches", {
+  //     method: "POST",
+  //     headers: {
+  //       "Content-Type": "application/json",
+  //     },
+  //     body: JSON.stringify(payload),
+  //   });
+  //   if (!response.ok) {
+  //     throw new Error(`API returned ${response.status}: ${await response.text()}`);
+  //   }
+  //   const data = await response.json();
+  //   return data;
+  // } catch (error) {
+  //   console.error("Error calling local API, falling back to Cloud Function:", error);
+  // }
+  
+  // Use Firebase Cloud Function
   const functions = getFunctions();
-
   const analyzeSupplierMatches = httpsCallable(functions, "analyzeSupplierMatches");
-
-  return analyzeSupplierMatches(payload);
-
+  const result = await analyzeSupplierMatches(payload);
+  return result.data;  // Cloud Function wraps response in .data
 }
-
-
 
 const AI_SUPPLIER_ANALYSIS_LIMIT = 100
 
@@ -695,214 +709,102 @@ export function calculateCategoryMatch(application, supplier) {
 
 
 function calculateLocationMatch(application, supplier) {
-
   const appLocation =
-
     application.matchingPreferences?.location ||
-
-    application.requestOverview?.location || "";
-
-  const supplierLocation = supplier.entityOverview?.location || "";
-
-
-
-  if (!appLocation) return 0.5; // No preference = neutral
-
-  if (!supplierLocation) return 0;
-
-
-
-  const normalizedApp = appLocation.toLowerCase().trim();
-
-  const normalizedSupplier = supplierLocation.toLowerCase().trim();
-
-
-
-  if (normalizedApp === normalizedSupplier) return 1;
-
-  // Partial match (e.g. "Johannesburg" within "Johannesburg, Gauteng")
-
-  if (normalizedSupplier.includes(normalizedApp) || normalizedApp.includes(normalizedSupplier)) return 0.7;
-
-  return 0;
-
+    application.requestOverview?.location ||
+    ""
+  // No preference → 100%
+  if (!appLocation) return 1
+  const supplierLocation = supplier.entityOverview?.location || ""
+  if (!supplierLocation) return 0
+  // Binary: exact country match only (no partial/proximity scoring for now)
+  return appLocation.toLowerCase().trim() === supplierLocation.toLowerCase().trim() ? 1 : 0
 }
-
-
 
 function calculateDeliveryMatch(application, supplier) {
-
   const appModes =
-
     application.matchingPreferences?.deliveryModes ||
-
-    application.requestOverview?.deliveryModes || [];
-
-  const supplierModes = supplier.productsServices?.deliveryModes || [];
-
-
-
-  if (appModes.length === 0) return 0.5; // No preference = neutral
-
-  if (supplierModes.length === 0) return 0;
-
-
-
-  const appHasHybrid = appModes.includes("Hybrid");
-
-  const supplyHasHybrid = supplierModes.includes("Hybrid");
-
-  if (appHasHybrid || supplyHasHybrid) return 1;
-
-
-
-  // Count how many required modes the supplier supports
-
-  const matchedModes = appModes.filter(appMode => supplierModes.includes(appMode));
-
-
-
-  // All modes match = full score, partial = proportional, none = 0
-
-  return matchedModes.length / appModes.length;
-
+    application.requestOverview?.deliveryModes ||
+    []
+  // No preference → 100%
+  if (!appModes.length) return 1
+  const supplierModes = supplier.productsServices?.deliveryModes || []
+  if (!supplierModes.length) return 0
+  // Hybrid compatibility: if either side is Hybrid, all modes are covered
+  const appHasHybrid = appModes.includes("Hybrid")
+  const supplyHasHybrid = supplierModes.includes("Hybrid")
+  if (appHasHybrid || supplyHasHybrid) return 1
+  // Binary: any mode overlap = match
+  const hasOverlap = appModes.some((m) => supplierModes.includes(m))
+  return hasOverlap ? 1 : 0
 }
 
-
+/**
+ * Parse a formatted currency string like "R 1,000,000" into a plain number.
+ * Used by calculateBudgetMatch to handle the formatted values stored in Firestore.
+ */
+function parseBudgetValue(formattedValue) {
+  if (!formattedValue) return 0
+  const numeric = String(formattedValue).replace(/[^\d.]/g, "")
+  return parseFloat(numeric) || 0
+}
 
 function calculateBudgetMatch(application, supplier) {
-
-  // FIX: budget fields are saved under matchingPreferences
-
-  const minBudgetRaw =
-
+  const minRaw =
     application.matchingPreferences?.minBudget ||
-
     application.requestOverview?.minBudget ||
-
-    "0";
-
-  const maxBudgetRaw =
-
+    ""
+  const maxRaw =
     application.matchingPreferences?.maxBudget ||
-
     application.requestOverview?.maxBudget ||
-
-    "0";
-
-
-
-  const appBudgetMin = parseInt(minBudgetRaw.replace(/\D/g, "")) || 0;
-
-  const appBudgetMax = parseInt(maxBudgetRaw.replace(/\D/g, "")) || 1000000;
-
-  const revenue = parseInt((supplier.financialOverview?.annualRevenue || "0").replace(/\D/g, "")) || 0;
-
-
-
-  if (revenue === 0) return 0.5;
-
-  if (revenue >= appBudgetMin && revenue <= appBudgetMax) return 1;
-
-  if (revenue >= appBudgetMin * 0.5 && revenue <= appBudgetMax * 1.5) return 0.7;
-
-  return 0.3;
-
+    ""
+  // Both fields empty → no preference → 100%
+  if (!minRaw && !maxRaw) return 1
+  const appMin = parseBudgetValue(minRaw)
+  const appMax = parseBudgetValue(maxRaw) || Infinity
+  const revenue = parseBudgetValue(supplier.financialOverview?.annualRevenue || "")
+  // If supplier has no revenue data, treat as no match
+  if (revenue === 0) return 0
+  // Binary: within range = 100%, outside = 0%
+  return revenue >= appMin && revenue <= appMax ? 1 : 0
 }
 
 
 
 function calculateBBBEEEMatch(application, supplier) {
-
-  const bbeePreference =
-
-    application.matchingPreferences?.bbeeLevel || "0";
-
-
-
-  const appBBBEEPref = parseInt(bbeePreference.replace(/\D/g, "") || "0") || 0;
-
-  const bbbeeLevel = parseInt(supplier.legalCompliance?.bbbeeLevel || "0") || 0;
-
-
-
-  // If no preference specified, neutral score
-
-  if (appBBBEEPref === 0) return 0.5;
-
-
-
-  // Binary: meets requirement or doesn't
-
-  // Lower level number = better (Level 1 is best)
-
-  if (bbbeeLevel <= appBBBEEPref) return 1;      // Meets or exceeds requirement
-
-  if (bbbeeLevel === appBBBEEPref + 1) return 0.5; // One level off
-
-  return 0;                                         // Does not meet requirement
-
+  const pref = application.matchingPreferences?.bbeeLevel || ""
+  // No preference, "None", or "Any" → 100% (buyer doesn't care)
+  if (!pref || pref === "None" || pref === "Any") return 1
+  const appLevel = parseInt(pref.replace(/\D/g, "") || "0") || 0
+  if (appLevel === 0) return 1
+  const supplierLevel = parseInt(
+    (supplier.legalCompliance?.bbbeeLevel || "").replace(/\D/g, "") || "0"
+  ) || 0
+  if (supplierLevel === 0) return 0 // Supplier has no BBBEE data → no match
+  // Lower level number = better (Level 1 is best). Meets or exceeds = 100%.
+  return supplierLevel <= appLevel ? 1 : 0
 }
 
 
 
 function calculateOwnershipMatch(application, supplier) {
-
-  const appOwnershipPrefs = application.matchingPreferences?.ownershipPrefs || []
-
-  let ownershipScore = 0.5
-
-
-
-  if (appOwnershipPrefs.length > 0) {
-
-    const ownershipDetails = calculateOwnershipPercentages(supplier.ownershipManagement || {})
-
-
-
-    appOwnershipPrefs.forEach((pref) => {
-
-      const normalizedPref = pref.toLowerCase().trim()
-
-      if ((normalizedPref.includes("black-owned") || normalizedPref.includes("black owned")) &&
-
-        ownershipDetails.blackOwnership >= 51) {
-
-        ownershipScore += 0.4
-
-      } else if ((normalizedPref.includes("women-owned") || normalizedPref.includes("women owned")) &&
-
-        ownershipDetails.womenOwnership >= 30) {
-
-        ownershipScore += 0.3
-
-      } else if ((normalizedPref.includes("youth-owned") || normalizedPref.includes("youth owned")) &&
-
-        ownershipDetails.youthOwnership >= 25) {
-
-        ownershipScore += 0.2
-
-      } else if ((normalizedPref.includes("disability") || normalizedPref.includes("disabled")) &&
-
-        ownershipDetails.disabilityOwnership >= 5) {
-
-        ownershipScore += 0.1
-
-      }
-
-    })
-
-    ownershipScore = Math.min(ownershipScore, 1)
-
-  }
-
-
-
-  return ownershipScore
-
+  // Filter out placeholder values
+  const appOwnershipPrefs = (application.matchingPreferences?.ownershipPrefs || [])
+    .filter((p) => p && p !== "None")
+  // No meaningful preference → 100%
+  if (!appOwnershipPrefs.length) return 1
+  const ownershipDetails = calculateOwnershipPercentages(supplier.ownershipManagement || {})
+  // Binary: if any requested ownership type is satisfied → 100%, else 0%
+  const met = appOwnershipPrefs.some((pref) => {
+    const p = pref.toLowerCase().trim()
+    if ((p.includes("black-owned") || p.includes("black owned")) && ownershipDetails.blackOwnership >= 51) return true
+    if ((p.includes("women-owned") || p.includes("women owned")) && ownershipDetails.womenOwnership >= 30) return true
+    if ((p.includes("youth-owned") || p.includes("youth owned")) && ownershipDetails.youthOwnership >= 25) return true
+    if ((p.includes("disability") || p.includes("disabled")) && ownershipDetails.disabilityOwnership >= 5) return true
+    return false
+  })
+  return met ? 1 : 0
 }
-
-
 
 function calculateRatingMatch(supplier, ratingsData) {
 
@@ -1243,233 +1145,130 @@ const PREFERENCE_WEIGHTS = {
 
 
 export function calculatePreferenceScore(application, supplier, ratingsData = null) {
-
   if (!application || !supplier) return { totalScore: 0, breakdown: {} }
-
-
-
+ 
   let totalScore = 0
-
   const breakdown = {}
-
-
-
+ 
   // BBBEE Match (15%)
-
   const bbbeeScore = calculateBBBEEEMatch(application, supplier)
-
   const bbbeeCont = bbbeeScore * PREFERENCE_WEIGHTS.BBBEE_LEVEL.weight * 100
-
   totalScore += bbbeeCont
-
+  const bbbeePref = application.matchingPreferences?.bbeeLevel || ""
   breakdown.bbbee = {
-
     score: Math.round(bbbeeScore * 100),
-
     weight: PREFERENCE_WEIGHTS.BBBEE_LEVEL.weight,
-
     contribution: Math.round(bbbeeCont),
-
     label: PREFERENCE_WEIGHTS.BBBEE_LEVEL.label,
-
-    appValue: application.matchingPreferences?.bbeeLevel || "None specified",
-
+    appValue: bbbeePref && bbbeePref !== "None" && bbbeePref !== "Any" ? bbbeePref : "No preference",
     supplierValue: supplier.legalCompliance?.bbbeeLevel || "N/A",
-
   }
-
-
-
+ 
   // Location Match (15%)
-
   const locationScore = calculateLocationMatch(application, supplier)
-
   const locationCont = locationScore * PREFERENCE_WEIGHTS.LOCATION.weight * 100
-
   totalScore += locationCont
-
+  const locationPref = application.matchingPreferences?.location || application.requestOverview?.location || ""
   breakdown.location = {
-
     score: Math.round(locationScore * 100),
-
     weight: PREFERENCE_WEIGHTS.LOCATION.weight,
-
     contribution: Math.round(locationCont),
-
     label: PREFERENCE_WEIGHTS.LOCATION.label,
-
-    appValue: application.matchingPreferences?.location || application.requestOverview?.location || "Any",
-
+    appValue: locationPref || "No preference",
     supplierValue: supplier.entityOverview?.location || "Not specified",
-
   }
-
-
-
+ 
   // Delivery Mode (15%)
-
   const deliveryScore = calculateDeliveryMatch(application, supplier)
-
   const deliveryCont = deliveryScore * PREFERENCE_WEIGHTS.DELIVERY_MODE.weight * 100
-
   totalScore += deliveryCont
-
+  const deliveryPref = application.matchingPreferences?.deliveryModes || application.requestOverview?.deliveryModes || []
   breakdown.delivery = {
-
     score: Math.round(deliveryScore * 100),
-
     weight: PREFERENCE_WEIGHTS.DELIVERY_MODE.weight,
-
     contribution: Math.round(deliveryCont),
-
     label: PREFERENCE_WEIGHTS.DELIVERY_MODE.label,
-
-    appValue: (application.matchingPreferences?.deliveryModes || application.requestOverview?.deliveryModes || []).join(", ") || "Any",
-
+    appValue: deliveryPref.length ? deliveryPref.join(", ") : "No preference",
     supplierValue: (supplier.productsServices?.deliveryModes || []).join(", ") || "Not specified",
-
   }
-
-
-
+ 
   // Budget Range (20%)
-
   const budgetScore = calculateBudgetMatch(application, supplier)
-
   const budgetCont = budgetScore * PREFERENCE_WEIGHTS.BUDGET_RANGE.weight * 100
-
   totalScore += budgetCont
-
-  const minB = application.matchingPreferences?.minBudget || application.requestOverview?.minBudget || "0"
-
-  const maxB = application.matchingPreferences?.maxBudget || application.requestOverview?.maxBudget || "0"
-
+  const minB = application.matchingPreferences?.minBudget || application.requestOverview?.minBudget || ""
+  const maxB = application.matchingPreferences?.maxBudget || application.requestOverview?.maxBudget || ""
   breakdown.budget = {
-
     score: Math.round(budgetScore * 100),
-
     weight: PREFERENCE_WEIGHTS.BUDGET_RANGE.weight,
-
     contribution: Math.round(budgetCont),
-
     label: PREFERENCE_WEIGHTS.BUDGET_RANGE.label,
-
-    appValue: `R${minB} – R${maxB}`,
-
+    appValue: minB || maxB ? `${minB || "0"} – ${maxB || "∞"}` : "No preference",
     supplierValue: supplier.financialOverview?.annualRevenue || "Not disclosed",
-
   }
-
-
-
+ 
   // Ownership Prefs (10%)
-
   const ownershipScore = calculateOwnershipMatch(application, supplier)
-
   const ownershipCont = ownershipScore * PREFERENCE_WEIGHTS.OWNERSHIP_PREFS.weight * 100
-
   totalScore += ownershipCont
-
+  const ownershipPrefs = (application.matchingPreferences?.ownershipPrefs || []).filter(
+    (p) => p && p !== "None"
+  )
   breakdown.ownership = {
-
     score: Math.round(ownershipScore * 100),
-
     weight: PREFERENCE_WEIGHTS.OWNERSHIP_PREFS.weight,
-
     contribution: Math.round(ownershipCont),
-
     label: PREFERENCE_WEIGHTS.OWNERSHIP_PREFS.label,
-
-    appValue: (application.matchingPreferences?.ownershipPrefs || []).join(", ") || "None specified",
-
+    appValue: ownershipPrefs.length ? ownershipPrefs.join(", ") : "No preference",
     supplierValue: "Evaluated from shareholder data",
-
   }
-
-
-
-  // Rating (10%)
-
+ 
+  // Rating (10%) — objective metric, always scored
   const ratingScore = calculateRatingMatch(supplier, ratingsData)
-
   const ratingCont = ratingScore * PREFERENCE_WEIGHTS.RATING.weight * 100
-
   totalScore += ratingCont
-
   const ratingInfo = ratingsData?.[supplier.id] || { average: 0, count: 0 }
-
   breakdown.rating = {
-
     score: Math.round(ratingScore * 100),
-
     weight: PREFERENCE_WEIGHTS.RATING.weight,
-
     contribution: Math.round(ratingCont),
-
     label: PREFERENCE_WEIGHTS.RATING.label,
-
     appValue: "Platform rating",
-
-    supplierValue: ratingInfo.count > 0 ? `${ratingInfo.average.toFixed(1)}/5 (${ratingInfo.count} reviews)` : "No reviews yet",
-
+    supplierValue:
+      ratingInfo.count > 0
+        ? `${ratingInfo.average.toFixed(1)}/5 (${ratingInfo.count} reviews)`
+        : "No reviews yet",
   }
-
-
-
-  // Experience (10%) — stub
-
-  const experienceScore = 0.5
-
+ 
+  // Sector Experience (10%) — stub; no preference = 100%, preference set but
+  // not evaluatable yet = 50%
+  const sectorExp = application.matchingPreferences?.sectorExperience || ""
+  const experienceScore = sectorExp ? 0.5 : 1
   const experienceCont = experienceScore * PREFERENCE_WEIGHTS.EXPERIENCE.weight * 100
-
   totalScore += experienceCont
-
   breakdown.experience = {
-
     score: Math.round(experienceScore * 100),
-
     weight: PREFERENCE_WEIGHTS.EXPERIENCE.weight,
-
     contribution: Math.round(experienceCont),
-
     label: PREFERENCE_WEIGHTS.EXPERIENCE.label,
-
-    appValue: "Any",
-
-    supplierValue: "Not evaluated yet",
-
+    appValue: sectorExp || "No preference",
+    supplierValue: sectorExp ? "Not fully evaluated yet" : "No requirement set",
   }
-
-
-
-  // Urgency / Lead Time (5%) — stub
-
-  const urgencyScorePref = 0.5
-
-  const urgencyContPref = urgencyScorePref * PREFERENCE_WEIGHTS.URGENCY_LEAD_TIME.weight * 100
-
-  totalScore += urgencyContPref
-
+ 
+  // Urgency / Lead Time (5%) — no structured field to match against; always 100%
+  const urgencyScore = 1
+  const urgencyCont = urgencyScore * PREFERENCE_WEIGHTS.URGENCY_LEAD_TIME.weight * 100
+  totalScore += urgencyCont
   breakdown.urgency = {
-
-    score: Math.round(urgencyScorePref * 100),
-
+    score: Math.round(urgencyScore * 100),
     weight: PREFERENCE_WEIGHTS.URGENCY_LEAD_TIME.weight,
-
-    contribution: Math.round(urgencyContPref),
-
+    contribution: Math.round(urgencyCont),
     label: PREFERENCE_WEIGHTS.URGENCY_LEAD_TIME.label,
-
     appValue: "Any",
-
     supplierValue: "Not evaluated yet",
-
   }
-
-
-
+ 
   return { totalScore: Math.round(totalScore), breakdown }
-
 }
 
 
@@ -1483,185 +1282,98 @@ export function calculatePreferenceScore(application, supplier, ratingsData = nu
 
 
 export async function runAiAnalysisForApplication(application, suppliers, { onProgress } = {}) {
-
   if (!application || !suppliers?.length) {
-
     throw new Error("Application and suppliers are required")
-
   }
 
-
-
   const applicationId = application.id
-
   if (!applicationId) throw new Error("Application must have an id")
 
-
-
   const customerPurpose =
-
     application.requestOverview?.purpose ||
-
     application.purpose ||
-
     "General business procurement needs"
 
-
-
   // Extract explicit categories from the application for detailed breakdown
-
   const productCategories =
-
     application.requestOverview?.productCategories ||
-
     application.productsServices?.productCategories ||
-
     application.requestOverview?.categories ||
-
     application.productsServices?.categories ||
-
     []
-
-
 
   const serviceCategories =
-
     application.requestOverview?.serviceCategories ||
-
     application.productsServices?.serviceCategories ||
-
     []
 
-
-
   const suppliersForAnalysis = suppliers.map((s) => ({
-
     id: s.id,
-
     entityOverview: s.entityOverview || {},
-
     productsServices: s.productsServices || {},
-
   }))
 
   const eligibleSuppliersForAnalysis = selectSuppliersForAiAnalysis(suppliers)
-
   const selectedSupplierIds = new Set(eligibleSuppliersForAnalysis.map((s) => s.id))
-
   const selectedSuppliersForAnalysis = suppliersForAnalysis.filter((s) => selectedSupplierIds.has(s.id))
 
   if (selectedSuppliersForAnalysis.length === 0) {
-
     throw new Error("No AI-eligible suppliers found. Supplier profiles need completed Entity Overview, Products & Services, a name, and at least one category.")
-
   }
-
-
 
   if (onProgress) onProgress({ current: 0, total: selectedSuppliersForAnalysis.length })
 
-
-
   const result = await analyzeSupplierMatchesWithFallback({
-
     suppliers: selectedSuppliersForAnalysis,
-
     customerPurpose,
-
     applicationId,
-
     productCategories,
-
     serviceCategories,
-
     analyzeAll: true,
-
     maxSuppliers: selectedSuppliersForAnalysis.length,
-
   })
 
-
-
-  const { matches, missingSupplierIds = [] } = result.data
-
-
+  // FIX: result.data doesn't exist - the matches are at the root level
+  const { matches, missingSupplierIds = [] } = result  // ✅ Direct destructuring
 
   const processedMatches = {}
-
   matches.forEach((match) => {
-
     const normalizedScore = Math.round((match.score / 5) * 100)
-
     processedMatches[match.supplierId] = {
-
       score: normalizedScore,
-
       reasoning: match.reasoning || "No reasoning provided",
-
       capabilities: match.matchedCapabilities || [],
-
       breakdown: match.breakdown || null,
-
       analyzedAt: new Date().toISOString(),
-
     }
-
   })
-
-
 
   // Mark missing suppliers with a 0 score so they don't stay pending
-
   missingSupplierIds.forEach((id) => {
-
     if (!processedMatches[id]) {
-
       processedMatches[id] = {
-
         score: 0,
-
         reasoning: "AI analysis did not return a result for this supplier.",
-
         capabilities: [],
-
         breakdown: null,
-
         analyzedAt: new Date().toISOString(),
-
       }
-
     }
-
   })
-
-
 
   if (onProgress) onProgress({ current: Object.keys(processedMatches).length, total: selectedSuppliersForAnalysis.length })
 
-
-
   // Persist to Firestore
-
   const matchDocRef = doc(db, "aiSecondaryMatches", applicationId)
-
   await setDoc(matchDocRef, {
-
     suppliers: processedMatches,
-
     requestPurpose: customerPurpose,
-
     analyzedAt: serverTimestamp(),
-
     suppliersAnalyzed: Object.keys(processedMatches).length,
-
     applicationId,
-
   })
 
-
-
   return processedMatches
-
 }
 
 
@@ -2590,6 +2302,7 @@ Remember: The matches array must contain exactly ${suppliers.length} entries, on
 
       });
 
+      console.log("AI analysis result:", result);
 
 
       const { matches } = result.data;
