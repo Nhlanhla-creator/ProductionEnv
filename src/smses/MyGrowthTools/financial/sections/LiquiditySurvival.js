@@ -90,6 +90,7 @@ const LiquiditySurvival = ({ activeSection, user, isInvestorView }) => {
       const RATIO_KEYS   = new Set(["currentRatio", "quickRatio", "cashRatio"]);
       const MONTH_KEYS   = new Set(["cashCover", "monthsRunway"]);
       const BURN_RATE_KEY = "burnRate";
+      const CURRENCY_KEYS = new Set(["cashBalance", "workingCapital", "cashflow", "operatingCashflow", "investingCashflow", "financingCashflow", "loanRepayments"]);
 
       let trendFormatValue, yAxisLabel, yTickFmt;
       if (isPercentage) {
@@ -105,12 +106,24 @@ const LiquiditySurvival = ({ activeSection, user, isInvestorView }) => {
         yAxisLabel       = "Months";
         yTickFmt         = (v) => parseFloat(v).toFixed(1);
       } else if (dataKey === BURN_RATE_KEY) {
-        // Burn Rate is cash outflow per month
         trendFormatValue = (v) => `R${Math.abs(parseFloat(v)).toFixed(2)}m`;
         yAxisLabel       = "Monthly Burn Rate (R millions)";
         yTickFmt         = (v) => Math.abs(v).toFixed(2);
+      } else if (CURRENCY_KEYS.has(dataKey)) {
+        const allVals    = [...(actual || []), ...(budget || [])].filter((v) => v !== null && !isNaN(v));
+        const maxAbs     = allVals.length ? Math.max(...allVals.map(Math.abs)) : 0;
+        const scaleUnit    = maxAbs >= 1_000 ? "R bn" : maxAbs >= 1 ? "R m" : "R k";
+        const scaleDivisor = maxAbs >= 1_000 ? 1_000   : maxAbs >= 1 ? 1    : 0.001;
+        trendFormatValue = (v) => {
+          const num = parseFloat(v) || 0;
+          const abs = Math.abs(num);
+          if (abs >= 1_000) return `R${(num / 1_000).toFixed(2)}bn`;
+          if (abs >= 1)     return `R${num.toFixed(2)}m`;
+          return `R${(num * 1_000).toFixed(2)}k`;
+        };
+        yAxisLabel = `Value (${scaleUnit})`;
+        yTickFmt   = (v) => (v / scaleDivisor).toFixed(2);
       } else {
-        // Currency values stored in millions
         const allVals    = [...(actual || []), ...(budget || [])].filter((v) => v !== null && !isNaN(v));
         const maxAbs     = allVals.length ? Math.max(...allVals.map(Math.abs)) : 0;
         const scaleUnit    = maxAbs >= 1_000 ? "R bn" : maxAbs >= 1 ? "R m" : "R k";
@@ -145,7 +158,6 @@ const LiquiditySurvival = ({ activeSection, user, isInvestorView }) => {
     setShowCalcModal(true);
   };
 
-  // Helper function to calculate Burn Rate from cash balance data
   const calculateBurnRate = (cashBalanceData) => {
     if (!cashBalanceData || !cashBalanceData.actual || cashBalanceData.actual.length < 2) {
       return 0;
@@ -154,18 +166,13 @@ const LiquiditySurvival = ({ activeSection, user, isInvestorView }) => {
     const cashBalances = cashBalanceData.actual.filter(v => v !== null && !isNaN(v));
     if (cashBalances.length < 2) return 0;
     
-    // Get beginning cash (first non-null value) and ending cash (last non-null value)
     const beginningCash = cashBalances[0];
     const endingCash = cashBalances[cashBalances.length - 1];
-    const monthsCount = cashBalances.length - 1; // Number of months between first and last
+    const monthsCount = cashBalances.length - 1;
     
     if (monthsCount === 0) return 0;
     
-    // Burn Rate = (Beginning Cash - Ending Cash) ÷ Months
-    // Positive burn rate means cash is decreasing (outflow)
     const burnRate = (beginningCash - endingCash) / monthsCount;
-    
-    // Return positive value for display (burn rate is typically shown as positive number)
     return Math.abs(burnRate);
   };
 
@@ -186,16 +193,14 @@ const LiquiditySurvival = ({ activeSection, user, isInvestorView }) => {
     let data    = firebaseChartData[dataKey] || { actual: [] };
     let current = data.actual?.at(-1) ?? 0;
     
-    // Special calculation for Burn Rate
     if (dataKey === "burnRate" && type.isCalculated) {
       const cashBalanceData = firebaseChartData.cashBalance || { actual: [] };
       current = calculateBurnRate(cashBalanceData);
-      // Create a computed data object for display
       data = { ...data, actual: [current] };
     }
     
     const calc    = CALCULATION_TEXTS.liquidity?.[dataKey] || 
-      (dataKey === "burnRate" ? "Burn Rate = (Beginning Cash - Ending Cash) ÷ Months\n\nMeasures average monthly cash outflow. A lower burn rate means the company is spending cash more slowly and has a longer runway." : "");
+      (dataKey === "burnRate" ? "Burn Rate = (Beginning Cash - Ending Cash) ÷ Months\n\nMeasures average monthly cash outflow." : "");
 
     const isCurrency    = !type.unitLabel && !isPercentage;
     const unitLabel     = type.unitLabel ?? (isPercentage ? "%" : getSmartUnit(current));
@@ -226,7 +231,6 @@ const LiquiditySurvival = ({ activeSection, user, isInvestorView }) => {
 
   if (activeSection !== "liquidity-survival") return null;
 
-  // Loan table uses raw ZAR values — format as actual amounts e.g. R420,000.00
   const fvRaw = (v) => {
     const num = parseFloat(v) || 0;
     return `R${num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -275,7 +279,6 @@ const LiquiditySurvival = ({ activeSection, user, isInvestorView }) => {
         {renderKPI("Working Capital", "workingCapital")}
       </KpiGrid3>
 
-      {/* Loan Repayments Schedule */}
       <div className="mt-7">
         <div className="flex justify-between items-center mb-4">
           <h3 className="text-mediumBrown text-xl font-semibold">Loan Repayments Schedule</h3>
