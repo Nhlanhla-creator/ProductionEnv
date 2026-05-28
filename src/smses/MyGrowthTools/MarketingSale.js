@@ -49,6 +49,7 @@ import {
   Tooltip,
   Legend,
 } from "chart.js";
+import MarketingAnalysisModal from "../hooks/MarketingAnalysisModal";
 
 ChartJS.register(
   CategoryScale,
@@ -1483,12 +1484,20 @@ const KPITripleCard = ({
   onAddNotes,
   onTrend,
   notes,
+  currentUser,
+  dataKey,
+  section = "general", // Add section prop
+  contextData = {},
 }) => {
   const [expanded, setExpanded] = useState(false);
   const [showAnalysis, setShowAnalysis] = useState(false);
+  const [showAnalysisModal, setShowAnalysisModal] = useState(false);
+  const [selectedMetricForAnalysis, setSelectedMetricForAnalysis] = useState(null);
+  
   const variance = actualValue - budgetValue;
   const variancePercent =
     budgetValue !== 0 ? (variance / Math.abs(budgetValue)) * 100 : 0;
+
 
   const getCurrencyScale = (val) => {
     const n = Math.abs(Number.parseFloat(val) || 0);
@@ -1517,6 +1526,27 @@ const KPITripleCard = ({
     if (unit === "percentage" || isPercentage) return n.toFixed(1);
     return formatNumber(n);
   };
+
+ 
+  const handleAIAnalysis = () => {
+    setSelectedMetricForAnalysis({
+      title: title,
+      key: dataKey || title.toLowerCase().replace(/\s+/g, '_'),
+      value: actualValue,
+      contextData: {
+        budget: budgetValue,
+        target: contextData.target,
+        timeRange: contextData.timeRange,
+        historicalValues: contextData.historicalValues,
+        industryBenchmark: contextData.industryBenchmark,
+        relatedMetrics: contextData.relatedMetrics,
+      }
+    });
+    setShowAnalysisModal(true);
+  };
+  
+  // Update the button onClick
+
 
   return (
     <div className="bg-[#fdfcfb] p-5 rounded-lg shadow-md mb-5 border border-[#e8ddd4] relative">
@@ -1603,12 +1633,12 @@ const KPITripleCard = ({
           >
             Add notes
           </button>
-          <button
-            onClick={() => setShowAnalysis(!showAnalysis)}
-            className="px-3 py-1.5 bg-[#e8ddd4] text-[#5d4037] rounded font-semibold text-xs"
-          >
-            AI analysis
-          </button>
+            <button
+    onClick={handleAIAnalysis} 
+    className="px-3 py-1.5 bg-[#e8ddd4] text-[#5d4037] rounded font-semibold text-xs"
+  >
+    AI analysis
+  </button>
           <button
             onClick={onTrend}
             className="px-3 py-1.5 bg-[#e8ddd4] text-[#5d4037] rounded font-semibold text-xs"
@@ -1629,17 +1659,26 @@ const KPITripleCard = ({
             />
           </div>
         )}
-        {showAnalysis && (
-          <div className="mt-2 p-3 bg-[#faf8f5] rounded border border-[#e8ddd4] text-xs text-[#5d4037]">
-            <strong>AI Analysis:</strong> Based on current data,{" "}
-            {title.toLowerCase()} is{" "}
-            {actualValue > budgetValue ? "above" : "below"} budget.{" "}
-            {actualValue > 0 && budgetValue > 0
-              ? `This represents a variance of ${variancePercent.toFixed(1)}%.`
-              : ""}{" "}
-            Consider reviewing underlying metrics for deeper insights.
-          </div>
-        )}
+  {showAnalysisModal && selectedMetricForAnalysis && (
+      <MarketingAnalysisModal
+        isOpen={showAnalysisModal}
+        onClose={() => {
+          setShowAnalysisModal(false);
+          setSelectedMetricForAnalysis(null);
+        }}
+        kpiTitle={selectedMetricForAnalysis.title}
+        kpiKey={selectedMetricForAnalysis.key}
+        kpiValue={selectedMetricForAnalysis.value}
+        contextData={selectedMetricForAnalysis.contextData}
+        company={{
+          name: "Your Business",
+          stage: "Growth Stage",
+          industry: "General",
+        }}
+        currentUser={currentUser}
+        section={section} // Pass the section
+      />
+    )}
       </div>
     </div>
   );
@@ -2164,42 +2203,51 @@ const PipelineSufficiency = ({
       "Pipeline Coverage = (Risk Adjusted Value ÷ Target Revenue) × 100%.",
   };
 
-  const renderKPICard = (
-    title,
-    dataKey,
-    calculation,
-    unit,
-    goodDirection,
-    value,
-    trendData,
-    budgetVal,
-  ) => (
-    <KPITripleCard
-      key={dataKey}
-      title={title}
-      actualValue={value}
-      budgetValue={budgetVal}
-      unit={unit}
-      goodDirection={goodDirection}
-      onEyeClick={() => {
-        setSelectedCalculation({ title, calculation });
-        setShowCalculationModal(true);
-      }}
-      onAddNotes={(val) =>
-        setKpiNotes((prev) => ({ ...prev, [dataKey]: val }))
-      }
-      onTrend={() => {
-        setSelectedTrendItem({
-          name: title,
-          data: trendData,
-          labels: aggregatedData?.labels || [],
-          isPercentage: unit === "percentage",
-        });
-        setShowTrendModal(true);
-      }}
-      notes={kpiNotes[dataKey]}
-    />
-  );
+ // Inside PipelineSufficiency component, update the renderKPICard function
+const renderKPICard = (
+  title,
+  dataKey,
+  calculation,
+  unit,
+  goodDirection,
+  value,
+  trendData,
+  budgetVal,
+) => (
+  <KPITripleCard
+    key={dataKey}
+    title={title}
+    actualValue={value}
+    budgetValue={budgetVal}
+    unit={unit}
+    goodDirection={goodDirection}
+    onEyeClick={() => {
+      setSelectedCalculation({ title, calculation });
+      setShowCalculationModal(true);
+    }}
+    onAddNotes={(val) =>
+      setKpiNotes((prev) => ({ ...prev, [dataKey]: val }))
+    }
+    onTrend={() => {
+      setSelectedTrendItem({
+        name: title,
+        data: trendData,
+        labels: aggregatedData?.labels || [],
+        isPercentage: unit === "percentage",
+      });
+      setShowTrendModal(true);
+    }}
+    notes={kpiNotes[dataKey]}
+    currentUser={currentUser}  // Add this line
+    dataKey={dataKey}
+    section="pipeline-sufficiency"  // Add this line
+    contextData={{
+      target: targetRevenue,  // targetRevenue should be defined in this component's state
+      budget: budgetVal,
+      timeRange: `${fromDate} to ${toDate}`,
+    }}
+  />
+);
 
   return (
     <div>
@@ -2480,56 +2528,62 @@ const RevenueConcentration = ({
     setShowTrendModal(true);
   };
 
-  const renderKPICard = (
-    title,
-    dataKey,
-    calculation = "",
-    unit = "number",
-    goodDirection = "up",
-  ) => {
-    let actualValue = 0;
-    if (dataKey === "totalMarketingSpend")
-      actualValue = concentrationData.revenueChannels.reduce(
-        (sum, c) => sum + (c.spend || 0),
-        0,
-      );
-    else if (dataKey === "totalROI") {
-      const totalRevenue = concentrationData.revenueChannels.reduce(
-        (sum, c) => sum + (c.revenue || 0),
-        0,
-      );
-      const totalSpend = concentrationData.revenueChannels.reduce(
-        (sum, c) => sum + (c.spend || 0),
-        0,
-      );
-      actualValue =
-        totalSpend > 0
-          ? ((totalRevenue - totalSpend) / totalSpend) * 100
-          : 0;
-    }
-    const budgetVal =
-      dataKey === "totalMarketingSpend"
-        ? budgets.totalMarketingSpend
-        : budgets.overallROI;
-    return (
-      <KPITripleCard
-        key={dataKey}
-        title={title}
-        actualValue={actualValue}
-        budgetValue={budgetVal}
-        unit={unit}
-        goodDirection={goodDirection}
-        onEyeClick={() => handleCalculationClick(title, calculation)}
-        onAddNotes={(val) =>
-          setKpiNotes((prev) => ({ ...prev, [dataKey]: val }))
-        }
-        onTrend={() =>
-          openTrendModal(title, actualValue, unit === "percentage")
-        }
-        notes={kpiNotes[dataKey]}
-      />
+// Inside RevenueConcentration component, update the renderKPICard function
+const renderKPICard = (
+  title,
+  dataKey,
+  calculation = "",
+  unit = "number",
+  goodDirection = "up",
+) => {
+  let actualValue = 0;
+  if (dataKey === "totalMarketingSpend")
+    actualValue = concentrationData.revenueChannels.reduce(
+      (sum, c) => sum + (c.spend || 0),
+      0,
     );
-  };
+  else if (dataKey === "totalROI") {
+    const totalRevenue = concentrationData.revenueChannels.reduce(
+      (sum, c) => sum + (c.revenue || 0),
+      0,
+    );
+    const totalSpend = concentrationData.revenueChannels.reduce(
+      (sum, c) => sum + (c.spend || 0),
+      0,
+    );
+    actualValue =
+      totalSpend > 0
+        ? ((totalRevenue - totalSpend) / totalSpend) * 100
+        : 0;
+  }
+  const budgetVal = budgets[dataKey] || 0;
+  
+  return (
+    <KPITripleCard
+      key={dataKey}
+      title={title}
+      actualValue={actualValue}
+      budgetValue={budgetVal}
+      unit={unit}
+      goodDirection={goodDirection}
+      onEyeClick={() => handleCalculationClick(title, calculation)}
+      onAddNotes={(val) =>
+        setKpiNotes((prev) => ({ ...prev, [dataKey]: val }))
+      }
+      onTrend={() =>
+        openTrendModal(title, actualValue, unit === "percentage")
+      }
+      notes={kpiNotes[dataKey]}
+      currentUser={currentUser}  // Change from 'user' to 'currentUser'
+      dataKey={dataKey}
+      section={activeSection}  // Make sure activeSection is defined (should be "revenue-concentration")
+      contextData={{
+        budget: budgetVal,
+        timeRange: `${fromDate} to ${toDate}`,
+      }}
+    />
+  );
+};
 
   if (activeSection !== "revenue-concentration") return null;
 
@@ -2986,62 +3040,65 @@ const DemandSustainability = ({
     setShowTrendModal(true);
   };
 
-  const renderKPICard = (
-    title,
-    dataKey,
-    calculation = "",
-    unit = "percentage",
-    goodDirection = "up",
-  ) => {
-    let actualValue = 0;
-    if (dataKey === "repeatCustomerRate")
-      actualValue = sustainabilityData.repeatCustomerRate;
-    else if (dataKey === "churnRate")
-      actualValue = sustainabilityData.churnRate;
-    else if (dataKey === "netRetention")
-      actualValue =
-        sustainabilityData.repeatCustomerRate -
-        sustainabilityData.churnRate;
-    else if (dataKey === "campaignROI") {
-      const totalCost = sustainabilityData.campaigns.reduce(
-        (sum, c) => sum + (c.cost || 0),
-        0,
-      );
-      const totalRevenue = sustainabilityData.campaigns.reduce(
-        (sum, c) => sum + (c.revenue || 0),
-        0,
-      );
-      actualValue =
-        totalCost > 0
-          ? ((totalRevenue - totalCost) / totalCost) * 100
-          : 0;
-    }
-    const budgetVal = budgets[dataKey] || 0;
-    return (
-      <KPITripleCard
-        key={dataKey}
-        title={title}
-        actualValue={actualValue}
-        budgetValue={budgetVal}
-        unit={unit}
-        goodDirection={goodDirection}
-        onEyeClick={() =>
-          handleCalculationClick(title, calculation)
-        }
-        onAddNotes={(val) =>
-          setKpiNotes((prev) => ({ ...prev, [dataKey]: val }))
-        }
-        onTrend={() =>
-          openTrendModal(
-            title,
-            actualValue,
-            unit === "percentage",
-          )
-        }
-        notes={kpiNotes[dataKey]}
-      />
+  // Inside DemandSustainability component, update the renderKPICard function
+const renderKPICard = (
+  title,
+  dataKey,
+  calculation = "",
+  unit = "percentage",
+  goodDirection = "up",
+) => {
+  let actualValue = 0;
+  if (dataKey === "repeatCustomerRate")
+    actualValue = sustainabilityData.repeatCustomerRate;
+  else if (dataKey === "churnRate")
+    actualValue = sustainabilityData.churnRate;
+  else if (dataKey === "netRetention")
+    actualValue =
+      sustainabilityData.repeatCustomerRate -
+      sustainabilityData.churnRate;
+  else if (dataKey === "campaignROI") {
+    const totalCost = sustainabilityData.campaigns.reduce(
+      (sum, c) => sum + (c.cost || 0),
+      0,
     );
-  };
+    const totalRevenue = sustainabilityData.campaigns.reduce(
+      (sum, c) => sum + (c.revenue || 0),
+      0,
+    );
+    actualValue =
+      totalCost > 0
+        ? ((totalRevenue - totalCost) / totalCost) * 100
+        : 0;
+  }
+  const budgetVal = budgets[dataKey] || 0;
+  
+  return (
+    <KPITripleCard
+      key={dataKey}
+      title={title}
+      actualValue={actualValue}
+      budgetValue={budgetVal}
+      unit={unit}
+      goodDirection={goodDirection}
+      onEyeClick={() => handleCalculationClick(title, calculation)}
+      onAddNotes={(val) =>
+        setKpiNotes((prev) => ({ ...prev, [dataKey]: val }))
+      }
+      onTrend={() =>
+        openTrendModal(title, actualValue, unit === "percentage")
+      }
+      notes={kpiNotes[dataKey]}
+      currentUser={currentUser}  // Change from 'user' to 'currentUser'
+      dataKey={dataKey}
+      section="demand-sustainability"  // Add this line
+      contextData={{
+        budget: budgetVal,
+        timeRange: `${fromDate} to ${toDate}`,
+      }}
+    />
+  );
+};
 
   if (activeSection !== "demand-sustainability") return null;
 
@@ -3224,7 +3281,9 @@ export default function MarketingSales() {
   const [activeSection, setActiveSection] = useState(
     "pipeline-visibility",
   );
-  const [user, setUser] = useState(null);
+const [user, setUser] = useState(null);  // This should already exist
+  const [currentUser, setCurrentUser] = useState(null);  // Add this if needed
+  
   const [showFullDescription, setShowFullDescription] = useState(false);
   const [isInvestorView, setIsInvestorView] = useState(false);
   const [viewingSMEId, setViewingSMEId] = useState(null);
@@ -3481,6 +3540,9 @@ export default function MarketingSales() {
         fromDate={fromDate}
         toDate={toDate}
       />
+      
+     
+
     </div>
   );
 }
