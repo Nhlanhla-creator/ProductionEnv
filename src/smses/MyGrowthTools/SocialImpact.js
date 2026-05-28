@@ -18,7 +18,8 @@ import {
   Legend,
 } from "chart.js"
 import ChartDataLabels from 'chartjs-plugin-datalabels';
-
+import ESGAnalysisModal from "../hooks/ESGAnalysisModal";
+import { useESGAnalysis } from "../hooks/useESGAnalysis"
 // Register ChartJS components and datalabels plugin
 ChartJS.register(
   CategoryScale,
@@ -1091,37 +1092,148 @@ const DataEntryModal = ({ isOpen, onClose, section, onSave, currentData, financi
   )
 }
 
-// Generic Chart Component with Notes and AI Analysis
-const ESGChartCard = ({ title, chartType, data, options, kpiKey, unit = "", onAddNotes, onAIAnalysis, isInvestorView }) => {
-  const [expandedNotes, setExpandedNotes] = useState(false)
-  const [expandedAnalysis, setExpandedAnalysis] = useState(false)
-  const [notes, setNotes] = useState("")
-  const [analysis, setAnalysis] = useState("")
+const ESGChartCard = ({ 
+  title, 
+  chartType, 
+  data, 
+  options, 
+  kpiKey, 
+  unit = "", 
+  onAddNotes, 
+  onAIAnalysis, 
+  isInvestorView, 
+  currentUser, 
+  section, 
+  subSection, 
+  kpiValue, 
+  contextData = {},
+  metricType = "percentage" // percentage, currency, number, rating
+}) => {
+  const [expandedNotes, setExpandedNotes] = useState(false);
+  const [notes, setNotes] = useState("");
+  const [savedNotes, setSavedNotes] = useState("");
+  const [showAnalysisModal, setShowAnalysisModal] = useState(false);
+  const [selectedMetricForAnalysis, setSelectedMetricForAnalysis] = useState(null);
 
   const handleAddNotes = () => {
-    setExpandedNotes(!expandedNotes)
-    if (onAddNotes) onAddNotes(kpiKey, notes)
-  }
+    setExpandedNotes(!expandedNotes);
+    if (onAddNotes && notes !== savedNotes) {
+      onAddNotes(kpiKey, notes);
+      setSavedNotes(notes);
+    }
+  };
+
+  const handleSaveNotes = () => {
+    if (onAddNotes) {
+      onAddNotes(kpiKey, notes);
+      setSavedNotes(notes);
+      setExpandedNotes(false);
+    }
+  };
 
   const handleAIAnalysis = () => {
-    setExpandedAnalysis(!expandedAnalysis)
-    if (onAIAnalysis) onAIAnalysis(kpiKey, analysis)
-  }
+    // Format value based on metric type for better analysis
+    let formattedValue = kpiValue;
+    if (metricType === "percentage") {
+      formattedValue = `${kpiValue}%`;
+    } else if (metricType === "currency") {
+      formattedValue = `R${(kpiValue / 1000000).toFixed(2)}M`;
+    } else if (metricType === "rating") {
+      formattedValue = `Level ${kpiValue}`;
+    }
+
+    setSelectedMetricForAnalysis({
+      title: title,
+      key: kpiKey,
+      value: kpiValue,
+      formattedValue: formattedValue,
+      contextData: {
+        ...contextData,
+        metricType: metricType,
+        unit: unit,
+      },
+    });
+    setShowAnalysisModal(true);
+  };
 
   const renderChart = () => {
+    const chartOptions = {
+      ...options,
+      plugins: {
+        ...options?.plugins,
+        datalabels: {
+          ...options?.plugins?.datalabels,
+          display: chartType === "pie" || chartType === "doughnut",
+          color: "#ffffff",
+          font: { weight: "bold", size: 14 },
+          formatter: (value, context) => {
+            if (chartType === "pie" || chartType === "doughnut") {
+              return value + '%';
+            }
+            return null;
+          },
+        },
+        tooltip: {
+          enabled: true,
+          callbacks: {
+            label: (context) => {
+              let label = context.dataset.label || '';
+              let value = context.raw;
+              if (metricType === "percentage") {
+                return `${label}: ${value}%`;
+              } else if (metricType === "currency") {
+                return `${label}: R${(value / 1000000).toFixed(2)}M`;
+              }
+              return `${label}: ${value}`;
+            }
+          }
+        }
+      },
+    };
+
     switch (chartType) {
       case "bar":
-        return <Bar data={data} options={options} />
+        return <Bar data={data} options={chartOptions} />;
       case "line":
-        return <Line data={data} options={options} />
+        return <Line data={data} options={chartOptions} />;
       case "pie":
-        return <Pie data={data} options={options} />
+        return <Pie data={data} options={chartOptions} />;
       case "doughnut":
-        return <Doughnut data={data} options={options} />
+        return <Doughnut data={data} options={chartOptions} />;
       default:
-        return <Bar data={data} options={options} />
+        return <Bar data={data} options={chartOptions} />;
     }
-  }
+  };
+
+  // Get benchmark based on metric type and section
+  const getBenchmark = () => {
+    if (contextData.benchmark) return contextData.benchmark;
+    
+    // Default benchmarks by section
+    const benchmarks = {
+      environmental: {
+        complianceRequired: { good: 80, average: 50 },
+        permitsInPlace: { good: 90, average: 60 },
+        controls: { good: 85, average: 55 },
+      },
+      social: {
+        locality: { good: 70, average: 45 },
+        gender: { good: 50, average: 35 },
+        eap: { good: 10, average: 5 },
+        femaleLeadership: { good: 40, average: 25 },
+        youthLeadership: { good: 30, average: 20 },
+        hdiOwnership: { good: 51, average: 30 },
+        bbbeeLevel: { good: 4, average: 6 },
+      },
+      governance: {
+        corePolicies: { good: 85, average: 50 },
+        riskRegister: { good: 90, average: 60 },
+        oversightStructure: { good: 80, average: 50 },
+      },
+    };
+    
+    return benchmarks[section]?.[kpiKey]?.average || 50;
+  };
 
   return (
     <div
@@ -1133,13 +1245,26 @@ const ESGChartCard = ({ title, chartType, data, options, kpiKey, unit = "", onAd
         marginBottom: "20px",
       }}
     >
-      <h4 style={{ color: "#5d4037", marginBottom: "15px", fontSize: "16px" }}>{title}</h4>
+      <h4 style={{ color: "#5d4037", marginBottom: "15px", fontSize: "16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        {title}
+        {metricType === "rating" && (
+          <span style={{
+            fontSize: "12px",
+            backgroundColor: "#e8ddd4",
+            padding: "2px 8px",
+            borderRadius: "12px",
+            color: "#5d4037"
+          }}>
+            B-BBEE Level
+          </span>
+        )}
+      </h4>
       <div style={{ height: "250px" }}>
         {renderChart()}
       </div>
 
       {!isInvestorView && (
-        <div style={{ borderTop: "1px solid #e8ddd4", paddingTop: "15px" }}>
+        <div style={{ borderTop: "1px solid #e8ddd4", paddingTop: "15px", marginTop: "10px" }}>
           <div style={{ display: "flex", gap: "10px", marginBottom: "10px" }}>
             <button
               onClick={handleAddNotes}
@@ -1152,9 +1277,12 @@ const ESGChartCard = ({ title, chartType, data, options, kpiKey, unit = "", onAd
                 cursor: "pointer",
                 fontWeight: "600",
                 fontSize: "12px",
+                transition: "all 0.2s ease",
               }}
+              onMouseEnter={(e) => e.target.style.backgroundColor = "#d4c4b8"}
+              onMouseLeave={(e) => e.target.style.backgroundColor = "#e8ddd4"}
             >
-              ADD notes
+              📝 {expandedNotes ? "Cancel" : "Add Notes"}
             </button>
             <button
               onClick={handleAIAnalysis}
@@ -1167,9 +1295,12 @@ const ESGChartCard = ({ title, chartType, data, options, kpiKey, unit = "", onAd
                 cursor: "pointer",
                 fontWeight: "600",
                 fontSize: "12px",
+                transition: "all 0.2s ease",
               }}
+              onMouseEnter={(e) => e.target.style.backgroundColor = "#d4c4b8"}
+              onMouseLeave={(e) => e.target.style.backgroundColor = "#e8ddd4"}
             >
-              AI analysis
+              🤖 AI Analysis
             </button>
           </div>
 
@@ -1189,7 +1320,7 @@ const ESGChartCard = ({ title, chartType, data, options, kpiKey, unit = "", onAd
               <textarea
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                placeholder="Add notes or comments..."
+                placeholder="Add notes or comments about this metric..."
                 style={{
                   width: "100%",
                   padding: "10px",
@@ -1197,41 +1328,73 @@ const ESGChartCard = ({ title, chartType, data, options, kpiKey, unit = "", onAd
                   border: "1px solid #e8ddd4",
                   minHeight: "60px",
                   fontSize: "13px",
+                  fontFamily: "inherit",
                 }}
               />
-            </div>
-          )}
-
-          {expandedAnalysis && (
-            <div
-              style={{
-                backgroundColor: "#e3f2fd",
-                padding: "15px",
-                borderRadius: "6px",
-                border: "1px solid #90caf9",
-              }}
-            >
-              <label
-                style={{
-                  fontSize: "12px",
-                  color: "#1565c0",
-                  fontWeight: "600",
-                  display: "block",
-                  marginBottom: "8px",
-                }}
-              >
-                AI Analysis:
-              </label>
-              <p style={{ fontSize: "13px", color: "#1565c0", lineHeight: "1.5", margin: 0 }}>
-                {analysis || "AI analysis will be generated based on your data trends, comparing current performance against historical averages and industry benchmarks. This feature provides actionable insights for improving this metric."}
-              </p>
+              <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "8px", gap: "8px" }}>
+                <button
+                  onClick={() => setExpandedNotes(false)}
+                  style={{
+                    padding: "4px 12px",
+                    backgroundColor: "#e8ddd4",
+                    color: "#5d4037",
+                    border: "none",
+                    borderRadius: "4px",
+                    cursor: "pointer",
+                    fontSize: "11px",
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSaveNotes}
+                  style={{
+                    padding: "4px 12px",
+                    backgroundColor: "#5d4037",
+                    color: "#fdfcfb",
+                    border: "none",
+                    borderRadius: "4px",
+                    cursor: "pointer",
+                    fontSize: "11px",
+                  }}
+                >
+                  Save Notes
+                </button>
+              </div>
             </div>
           )}
         </div>
       )}
+
+      {/* ESG Analysis Modal */}
+      {showAnalysisModal && selectedMetricForAnalysis && (
+        <ESGAnalysisModal
+          isOpen={showAnalysisModal}
+          onClose={() => {
+            setShowAnalysisModal(false);
+            setSelectedMetricForAnalysis(null);
+          }}
+          kpiTitle={selectedMetricForAnalysis.title}
+          kpiKey={selectedMetricForAnalysis.key}
+          kpiValue={selectedMetricForAnalysis.value}
+          contextData={{
+            ...selectedMetricForAnalysis.contextData,
+            benchmark: getBenchmark(),
+          }}
+          company={{
+            name: "Your Business",
+            stage: "Growth Stage",
+            industry: "General",
+          }}
+          currentUser={currentUser}
+          section={section}
+          subSection={subSection}
+        />
+      )}
     </div>
-  )
-}
+  );
+};
+
 
 // Policies Table Component - FIXED with full CRUD functionality
 const PoliciesTable = ({ policies, onUpdate, isInvestorView }) => {
@@ -2698,9 +2861,17 @@ const EnvironmentalTab = ({ userData, onSave, isInvestorView }) => {
     </div>
   )
 }
-
 // Social Tab Component - UPDATED with proper data pulling
-const SocialTab = ({ activeSubTab, setActiveSubTab, userData, onSave, isInvestorView, fundingAppData, financialData }) => {
+const SocialTab = ({ 
+  activeSubTab, 
+  setActiveSubTab, 
+  userData, 
+  onSave, 
+  isInvestorView, 
+  fundingAppData, 
+  financialData,
+  currentUser  // Add this line
+}) => {
   const [activeSpendTab, setActiveSpendTab] = useState("csi") // "csi" or "hdi"
   const [activeProcurementTab, setActiveProcurementTab] = useState("amount") // "amount" or "percentage"
   const [financialYearEnd, setFinancialYearEnd] = useState("2026-03")
@@ -2844,25 +3015,32 @@ const SocialTab = ({ activeSubTab, setActiveSubTab, userData, onSave, isInvestor
 
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "20px" }}>
             {/* Locality Chart */}
-            <ESGChartCard
-              title="Locality"
-              chartType="doughnut"
-              data={{
-                labels: ["Local", "Non-Local"],
-                datasets: [
-                  {
-                    data: [workforceData.locality, 100 - workforceData.locality],
-                    backgroundColor: ["#5d4037", "#e8ddd4"],
-                    borderColor: "#ffffff",
-                    borderWidth: 3,
-                  },
-                ],
-              }}
-              options={getPieChartOptions("Locality")}
-              kpiKey="locality"
-              unit="%"
-              isInvestorView={isInvestorView}
-            />
+          
+<ESGChartCard
+  title="Locality"
+  chartType="doughnut"
+  data={{
+    labels: ["Local", "Non-Local"],
+    datasets: [{
+      data: [workforceData.locality, 100 - workforceData.locality],
+      backgroundColor: ["#5d4037", "#e8ddd4"],
+      borderColor: "#ffffff",
+      borderWidth: 3,
+    }],
+  }}
+  options={getPieChartOptions("Locality")}
+  kpiKey="locality"
+  unit="%"
+  isInvestorView={isInvestorView}
+  currentUser={currentUser}
+  section="social"
+  subSection="workforce-demographics"
+  kpiValue={workforceData.locality}
+  contextData={{
+    benchmark: 50, // Industry benchmark for local hiring
+    timeRange: "Current Period",
+  }}
+/>
 
             {/* Gender Chart */}
             <ESGChartCard
@@ -4447,17 +4625,18 @@ const ESG = () => {
             />
           )}
 
-          {activeMainTab === "social" && (
-            <SocialTab 
-              activeSubTab={activeSubTab}
-              setActiveSubTab={setActiveSubTab}
-              userData={userData}
-              onSave={handleSaveData}
-              isInvestorView={isInvestorView}
-              fundingAppData={fundingAppData}
-              financialData={financialData}
-            />
-          )}
+         {activeMainTab === "social" && (
+  <SocialTab 
+    activeSubTab={activeSubTab}
+    setActiveSubTab={setActiveSubTab}
+    userData={userData}
+    onSave={handleSaveData}
+    isInvestorView={isInvestorView}
+    fundingAppData={fundingAppData}
+    financialData={financialData}
+    currentUser={currentUser}  // Add this line
+  />
+)}
 
           {activeMainTab === "governance" && (
             <GovernanceTab 
