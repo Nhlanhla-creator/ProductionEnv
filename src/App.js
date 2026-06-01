@@ -25,6 +25,8 @@ import Subscriptions from "./admin/pages/Subscriptions"
 import QRCodes from "./admin/pages/QRCodes"
 import CardLandingPage from "./admin/pages/CardLandingPage"
 // Admin Settings Subcategory Components
+import ArticleManagement from "./admin/pages/ArticleManagement";
+
 import AdminUsers from "./admin/pages/AdminUserManagement"
 import ApprovalWorkflows from "./admin/pages/ApprovalWorkflows"
 import PaymentGateway from "./admin/pages/PaymentGatewaySettings"
@@ -172,6 +174,7 @@ import HowItWorksAdvisors from "./main_pages/HowItWorksAdvisor"
 import HowItWorksInterns from "main_pages/HowItWorksInterns"
 import HomeContactFormPage from "./main_pages/SMEs/HomeContact"
 import FAQPage from "./main_pages/FAQs"
+
 import HomePage from "./main_pages/SMEs/HomePage"
 import ContactPage from "./main_pages/Contact"
 import InsightsPage from "./main_pages/Insights"
@@ -850,6 +853,7 @@ function App() {
         <Route path="/card/:cardId" element={<CardLandingPage />} />
 
         {/* Admin Notion Routes */}
+        <Route path="/admin/articles" element={withAdminProtection(ArticleManagement)} />
         <Route path="/admin/notion/delivery" element={withAdminProtection(Delivery)} />
         <Route path="/admin/notion/governance" element={withAdminProtection(AdminGovernance)} />
         <Route path="/admin/notion/growth" element={withAdminProtection(Growth)} />
