@@ -3,7 +3,7 @@
 import { Fragment, useState, useEffect } from "react"
 import { collection, query, where, getDocs, orderBy, deleteDoc, doc } from "firebase/firestore"
 import { db, auth } from "../../firebaseConfig"
-import { Eye, FileText, Package, Calendar, Plus, RefreshCw, Trash2, CheckCircle, Clock, AlertCircle, Zap, Hash, ChevronDown, ChevronUp } from "lucide-react"
+import { Eye, FileText, Package, Calendar, Plus, RefreshCw, Trash2, CheckCircle, Clock, AlertCircle, Zap, Hash, ChevronDown, ChevronUp, Building } from "lucide-react"
 import useMatches, { deriveAppId } from "../hooks/useMatches"
 import SupplierMatchesTable from "../MySupplierMatches/SupplierMatchesTable"
 
@@ -191,7 +191,7 @@ const ApplicationsList = ({ onViewSummary, onEditApplication, onCreateNew, embed
         {/* EMPTY */}
         {applications.length === 0 ? (
           <div style={{ background:"linear-gradient(135deg,rgba(250,247,242,0.97),rgba(245,240,225,0.97))", borderRadius:14, padding:"64px 32px", textAlign:"center", border:"1px solid rgba(200,182,166,0.3)", boxShadow:"0 10px 24px rgba(74,53,47,0.07)" }}>
-            <FileText size={42} style={{ color:"#c8b6a6", marginBottom:12 }} />
+            <FileText size={42} style={{ color:"#c8b6a6", margin:"0 auto 12px" }} />
             <h3 style={{ color:"#4a352f", marginBottom:6, fontSize:18, fontWeight:700 }}>No Applications Yet</h3>
             <p style={{ color:"#6b7280", marginBottom:20 }}>Create your first product/service request to get started.</p>
             <button onClick={onCreateNew} style={{ display:"inline-flex", alignItems:"center", gap:7, padding:"10px 24px", background:"linear-gradient(135deg,#a67c52,#7d5a50)", color:"#faf7f2", border:"none", borderRadius:10, fontSize:13, fontWeight:600, cursor:"pointer", boxShadow:"0 4px 14px rgba(166,124,82,0.3)" }}>
@@ -274,17 +274,17 @@ const ApplicationsList = ({ onViewSummary, onEditApplication, onCreateNew, embed
                         {/* Actions */}
                         <td>
                           <div className="al-acts">
-                            <button className="al-btn ab-view" onClick={() => onViewSummary(app.id, app)}>
-                              <Eye size={12} /> View
-                            </button>
                             <button
                               className="al-btn ab-matches"
                               onClick={() => setExpandedAppId((prev) => (prev === app.id ? null : app.id))}
                               aria-expanded={isExpanded}
                               title={isExpanded ? "Hide matches" : "Show matches for this application"}
                             >
-                              <Zap size={12} /> Matches{matches.length > 0 && !isExpanded ? ` (${matches.length})` : ""}
+                              <Building size={12} />{matches.length > 0 ? ` (${matches.length})` : ""}
                               {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+                            </button>
+                            <button className="al-btn ab-view" onClick={() => onViewSummary(app.id, app)}>
+                              <Eye size={12} />
                             </button>
                             <button className="al-btn ab-del" onClick={() => setShowDeleteConfirm(app.id)} title="Delete">
                               <Trash2 size={12} />

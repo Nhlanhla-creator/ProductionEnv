@@ -1,12 +1,12 @@
 "use client"
-import { useState, useRef, useEffect } from "react"
-import { Eye, ChevronDown, Search, X, Trophy, TrendingUp, Calendar, DollarSign, FileText, Users, MapPin, GraduationCap, Briefcase, RefreshCw, BarChart3, Package, Star, MessageSquare, Send, Truck, Award } from "lucide-react"
+import { useState, useEffect } from "react"
+import { Eye, X, Trophy, Users, RefreshCw, Star, MessageSquare, Send } from "lucide-react"
 // REMOVED: import ProductServiceApplication from "../../smses/ProductApplication/ProductApplication"
 // REMOVED: import { SupplierTable } from "./supplier-table"
 import GroupedSupplierMatches from "./GroupedSupplierMatches"
 
 import { db, auth } from "../../firebaseConfig"
-import { collection, query, where, onSnapshot, doc, getDoc, updateDoc, arrayUnion, serverTimestamp, addDoc, getDocs } from "firebase/firestore"
+import { collection, query, where, doc, getDoc, addDoc, getDocs } from "firebase/firestore"
 
 // Text truncation component
 const TruncatedText = ({ text, maxLength = 40 }) => {

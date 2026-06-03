@@ -413,3 +413,73 @@
     font-size: 10px;
   }
 }
+
+.pipelineStage {
+  position: relative;
+}
+
+.stageTooltip {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 8px;
+  background-color: #333;
+  color: white;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 12px;
+  white-space: nowrap;
+  z-index: 10;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s ease, visibility 0.2s ease;
+  pointer-events: none;
+}
+
+/* Left-aligned tooltip for early stages (first 2) */
+.pipelineStage:first-child .stageTooltip,
+.pipelineStage:nth-child(2) .stageTooltip {
+  left: 0;
+  transform: translateX(0);
+}
+
+/* Right-aligned tooltip for last stages */
+.pipelineStage:last-child .stageTooltip,
+.pipelineStage:nth-last-child(2) .stageTooltip {
+  left: auto;
+  right: 0;
+  transform: translateX(0);
+}
+
+.pipelineStage:hover .stageTooltip {
+  opacity: 1;
+  visibility: visible;
+}
+
+/* Arrow positioning based on tooltip alignment */
+.stageTooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 5px;
+  border-style: solid;
+  border-color: #333 transparent transparent transparent;
+}
+
+/* Adjust arrow for left-aligned tooltips */
+.pipelineStage:first-child .stageTooltip::after,
+.pipelineStage:nth-child(2) .stageTooltip::after {
+  left: 12px;
+  transform: translateX(0);
+}
+
+/* Adjust arrow for right-aligned tooltips */
+.pipelineStage:last-child .stageTooltip::after,
+.pipelineStage:nth-last-child(2) .stageTooltip::after {
+  left: auto;
+  right: 12px;
+  transform: translateX(0);
+}

@@ -339,8 +339,9 @@ const SupplierMatchesTable = ({
                           }}
                           onMouseEnter={(e) => (e.currentTarget.style.transform = "translateY(-1px)")}
                           onMouseLeave={(e) => (e.currentTarget.style.transform = "")}
+                          title={`View details for ${supplierName(s)}`}
                         >
-                          <Eye size={12} /> View
+                          <Eye size={12} />
                         </button>
                         {onContact && (
                           <button
@@ -363,8 +364,9 @@ const SupplierMatchesTable = ({
                             }}
                             onMouseEnter={(e) => (e.currentTarget.style.transform = "translateY(-1px)")}
                             onMouseLeave={(e) => (e.currentTarget.style.transform = "")}
+                            title={`Contact ${supplierName(s)}`}
                           >
-                            <MessageSquare size={12} /> Contact
+                            <MessageSquare size={12} />
                           </button>
                         )}
                       </div>

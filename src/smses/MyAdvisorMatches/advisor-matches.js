@@ -3,16 +3,14 @@
 import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import { onAuthStateChanged } from "firebase/auth"
-import { auth } from "../../firebaseConfig"
+import { auth, db } from "../../firebaseConfig"
+import { collection, query, where, onSnapshot } from "firebase/firestore"  // Add this line
 import { AdvisorFlowPipeline } from "./advisor-flow-pipeline"
-import { AdvisorTable } from "./advisor-table"
-import { getDocs, collection, query, where, onSnapshot } from "firebase/firestore"
-import { db } from "../../firebaseConfig"
-import styles from "./advisor.module.css"
-import AdvisorTabbedTables from "./advisor-tabbed-tables";
+import styles from "./styles/advisor.module.css"
+import AdvisorTabbedTables from "./advisor-tabbed-tables"
 import { X, ArrowRight } from 'lucide-react'
-import Upsell from "../../components/Upsell/Upsell" // Import the Upsell component
-import useSubscriptionPlan from "../../hooks/useSubscriptionPlan" // Import the subscription hook
+import Upsell from "../../components/Upsell/Upsell"
+import useSubscriptionPlan from "../../hooks/useSubscriptionPlan"
 
 const onboardingSteps = [
   {
@@ -37,12 +35,11 @@ const onboardingSteps = [
   },
 ]
 
-// Consistent header styles with underline
 const headerStyle = {
   fontSize: 'clamp(1.2rem, 3vw, 1.5rem)',
-  color: '#3e2723', // Dark brown
+  color: '#3e2723',
   fontWeight: '600',
-  margin: '0 0 20px 0',
+  margin: '0 0 5px 0',
   fontFamily: 'inherit',
   paddingBottom: '8px',
 }
@@ -62,32 +59,74 @@ export default function SupportProgramsPage() {
     dealClosed: 0,
     withdrawn: 0,
   })
-  const [loading, setLoading] = useState(false)
-  const [applications, setApplications] = useState([])
-  const [successfulDeals, setSuccessfulDeals] = useState([])
-  
-  // Use subscription hook
+
+  const [applicationsCount, setApplicationsCount] = useState(0);
+  const [matchesCount, setMatchesCount] = useState(0);
+  const [pipelineStageCounts, setPipelineStageCounts] = useState({});
+
+  // Fetch applications count from advisoryApplicationsV2
+  useEffect(() => {
+    if (!user?.uid) return;
+
+    const q = query(
+      collection(db, "advisoryApplicationsV2"),
+      where("userId", "==", user.uid),
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setApplicationsCount(snapshot.size);
+    });
+
+    return () => unsubscribe();
+  }, [user?.uid]);
+
+  // Fetch matches from smseAdvisoryMatches and calculate stage counts
+  useEffect(() => {
+    if (!user?.uid) return;
+
+    const q = query(
+      collection(db, "smseAdvisoryMatches"),
+      where("smeId", "==", user.uid),
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const matches = snapshot.docs.map((doc) => doc.data());
+      setMatchesCount(matches.length);
+
+      // Calculate pipeline stage counts based on match status
+      const stageCounts = {
+        contacted: matches.filter((m) => m.status === "contacted").length,
+        evaluation: matches.filter(
+          (m) => m.status === "evaluation" || m.status === "review",
+        ).length,
+        negotiation: matches.filter(
+          (m) => m.status === "negotiation" || m.status === "feedback",
+        ).length,
+        termIssued: matches.filter(
+          (m) => m.status === "termIssued" || m.status === "Term Issued",
+        ).length,
+        dealClosed: matches.filter(
+          (m) =>
+            m.status === "dealClosed" ||
+            m.status === "Deal Closed" ||
+            m.status === "Deal Successful",
+        ).length,
+        withdrawn: matches.filter(
+          (m) =>
+            m.status === "withdrawn" ||
+            m.status === "Withdrawn" ||
+            m.status === "Declined",
+        ).length,
+      };
+
+      setPipelineStageCounts(stageCounts);
+    });
+
+    return () => unsubscribe();
+  }, [user?.uid]);
+
   const { currentPlan, subscriptionLoading } = useSubscriptionPlan()
   const navigate = useNavigate()
-
-  // Initialize filters state
-  const [filters, setFilters] = useState({})
-
-  const statusToStageId = {
-    "Contacted": "application",
-    "Pending": "review",
-    "Confirmed": "approved",
-    "Approved": "approved",
-    "Feedback": "feedback",
-    "TermIssued": "termIssued",
-    "Term Issued": "termIssued",
-    "DealClosed": "dealClosed",
-    "Deal Closed": "dealClosed",
-    "Deal Successful": "dealClosed",
-    "Withdrawn": "withdrawn",
-    "Declined": "withdrawn",
-    "Deal Declined": "withdrawn"
-  }
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
@@ -97,141 +136,15 @@ export default function SupportProgramsPage() {
     return () => unsubscribe()
   }, [])
 
-  useEffect(() => {
-    const fetchStageCounts = async () => {
-      if (!user) return
-
-      try {
-        const snapshot = await getDocs(
-          query(
-            collection(db, "SmeAdvisorApplications"),
-            where("smeId", "==", user.uid)
-          )
-        )
-
-        const counts = {
-          application: 0,
-          review: 0,
-          approved: 0,
-          feedback: 0,
-          termIssued: 0,
-          dealClosed: 0,
-          withdrawn: 0,
-        }
-
-        snapshot.forEach((doc) => {
-          const data = doc.data()
-          const status = data.status
-          const stageId = statusToStageId[status]
-
-          if (stageId && counts.hasOwnProperty(stageId)) {
-            counts[stageId]++
-          }
-        })
-
-        setStageCounts(counts)
-      } catch (error) {
-        console.error("Error fetching stage counts:", error)
-      }
-    }
-
-    if (user) {
-      fetchStageCounts()
-    }
-  }, [user])
-
-  useEffect(() => {
-    if (!user?.uid) {
-      setApplications([])
-      setSuccessfulDeals([])
-      setLoading(false)
-      return
-    }
-
-    setLoading(true)
-
-    // Query for ALL advisor applications
-    const applicationsQuery = query(
-      collection(db, "SmeAdvisorApplications"),
-      where("smeId", "==", user.uid)
-    )
-
-    // Query for SUCCESSFUL DEALS (Deal Successful status)
-    const successfulDealsQuery = query(
-      collection(db, "SmeAdvisorApplications"),
-      where("smeId", "==", user.uid),
-      where("status", "in", ["Deal Successful", "DealClosed", "Completed"])
-    )
-
-    const unsubscribeApplications = onSnapshot(
-      applicationsQuery,
-      (querySnapshot) => {
-        const apps = querySnapshot.docs.map(doc => {
-          const data = doc.data()
-          return {
-            id: doc.id,
-            ...data,
-            createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : null,
-            updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : null
-          }
-        })
-        setApplications(apps)
-      },
-      (err) => {
-        console.error("Error listening to advisor applications:", err)
-      }
-    )
-
-    const unsubscribeSuccessfulDeals = onSnapshot(
-      successfulDealsQuery,
-      (querySnapshot) => {
-        const deals = querySnapshot.docs.map(doc => {
-          const data = doc.data()
-          return {
-            id: doc.id,
-            ...data,
-            createdAt: data.createdAt?.toDate ? data.createdAt.toDate() : null,
-            updatedAt: data.updatedAt?.toDate ? data.updatedAt.toDate() : null,
-            // Add deal-specific properties
-            dealAmount: data.dealAmount || "Not specified",
-            dealType: data.dealType || "Advisory Contract",
-            completionDate: data.completionDate || data.updatedAt?.toDate ? data.updatedAt.toDate().toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
-            sector: data.advisorSector || "Not specified",
-            location: data.advisorLocation || "Not specified",
-            dealDuration: data.dealDuration || "12 months",
-            currentStatus: data.status,
-            contractValue: data.contractValue || data.dealAmount || "Not specified",
-            serviceDelivered: data.serviceDescription || "Advisory Services",
-            performanceRating: data.performanceRating || "4.5/5"
-          }
-        })
-        setSuccessfulDeals(deals)
-        setLoading(false)
-      },
-      (err) => {
-        console.error("Error listening to successful advisor deals:", err)
-        setLoading(false)
-      }
-    )
-
-    return () => {
-      unsubscribeApplications()
-      unsubscribeSuccessfulDeals()
-    }
-  }, [user])
-
   const getUserSpecificKey = (baseKey) => {
     const userId = user?.uid || "guest"
     return `${baseKey}_${userId}`
   }
 
-  // Check for popup display
   useEffect(() => {
     if (!authChecked) return
-
     const storageKey = getUserSpecificKey("hasSeenAdvisorPopup")
     const seenPopup = localStorage.getItem(storageKey) === "true"
-
     if (!seenPopup) {
       setShowWelcomePopup(true)
       localStorage.setItem(storageKey, "true")
@@ -251,50 +164,6 @@ export default function SupportProgramsPage() {
     }
   }
 
-  // Handle connection requested callback
-  const handleConnectionUpdate = () => {
-    // Refresh stage counts when a new connection is made
-    if (user) {
-      const fetchUpdatedCounts = async () => {
-        try {
-          const snapshot = await getDocs(
-            query(
-              collection(db, "SmeAdvisorApplications"),
-              where("smeId", "==", user.uid)
-            )
-          )
-
-          const counts = {
-            application: 0,
-            review: 0,
-            approved: 0,
-            feedback: 0,
-            termIssued: 0,
-            dealClosed: 0,
-            withdrawn: 0,
-          }
-
-          snapshot.forEach((doc) => {
-            const data = doc.data()
-            const status = data.status
-            const stageId = statusToStageId[status]
-
-            if (stageId && counts.hasOwnProperty(stageId)) {
-              counts[stageId]++
-            }
-          })
-
-          setStageCounts(counts)
-        } catch (error) {
-          console.error("Error updating stage counts:", error)
-        }
-      }
-
-      fetchUpdatedCounts()
-    }
-  }
-
-  // Responsive container styles
   const getContainerStyles = () => ({
     width: "100%",
     minHeight: "100vh",
@@ -307,68 +176,43 @@ export default function SupportProgramsPage() {
     backgroundColor: "#f8f9fa",
   })
 
-  // Combined loading check
   if (!authChecked || subscriptionLoading) {
     return (
       <div style={getContainerStyles()}>
-        <div
-          style={{
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            minHeight: '200px',
-            fontSize: 'clamp(1rem, 2vw, 1.2rem)',
-            color: '#666'
-          }}
-        >
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '200px', fontSize: 'clamp(1rem, 2vw, 1.2rem)', color: '#666' }}>
           <p>{subscriptionLoading ? "Checking subscription..." : "Loading..."}</p>
         </div>
       </div>
     )
   }
 
-  // Show Upsell for Basic plan users
-  if (currentPlan === "basic") {
-    return (
-      <Upsell
-        userType={"sme"}
-        title={"Advisor Matching"}
-        subtitle={"Discover and connect with experienced advisors who can guide your startup journey and provide mentorship."}
-        features={[
-          "Access to verified advisor database",
-          "Advisor expertise and industry analytics",
-          "Direct communication with mentors",
-          "Deal flow pipeline tracking",
-          "Advanced filtering by industry and experience"
-        ]}
-        variant={"center"}
-        expandedWidth={280}
-        collapsedWidth={80}
-        plans={["Standard", "Premium"]}
-        upgradeMessage={"Upgrade to Standard or Premium to access advisor matching features including direct mentor communication and expertise analytics."}
-        primaryLabel={"View Available Plans"}
-        onPrimary={() => navigate("/billing/subscriptions")}
-      />
-    )
-  }
+  // if (currentPlan === "basic") {
+  //   return (
+  //     <Upsell
+  //       userType={"sme"}
+  //       title={"Advisor Matching"}
+  //       subtitle={"Discover and connect with experienced advisors who can guide your startup journey and provide mentorship."}
+  //       features={[
+  //         "Access to verified advisor database",
+  //         "Advisor expertise and industry analytics",
+  //         "Direct communication with mentors",
+  //         "Deal flow pipeline tracking",
+  //         "Advanced filtering by industry and experience"
+  //       ]}
+  //       variant={"center"}
+  //       expandedWidth={280}
+  //       collapsedWidth={80}
+  //       plans={["Standard", "Premium"]}
+  //       upgradeMessage={"Upgrade to Standard or Premium to access advisor matching features including direct mentor communication and expertise analytics."}
+  //       primaryLabel={"View Available Plans"}
+  //       onPrimary={() => navigate("/billing/subscriptions")}
+  //     />
+  //   )
+  // }
 
-  // For Standard and Premium plans, show the regular advisor matches page
   return (
     <div style={getContainerStyles()} className={styles.pageContainer}>
-      {/* Global styles for consistent headers and animations */}
       <style>{`
-        :global(.${styles.sectionCard} h1),
-        :global(.${styles.sectionCard} h2),
-        :global(.${styles.sectionCard} h3),
-        :global(.${styles.sectionCard} h4),
-        :global(.${styles.sectionCard} h5),
-        :global(.${styles.sectionCard} h6) {
-          font-size: clamp(1.2rem, 3vw, 1.5rem) !important;
-          color: #3e2723 !important;
-          font-weight: 600 !important;
-          margin: 0 0 16px 0 !important;
-        }
-
         @keyframes fadeIn {
           from { opacity: 0; }
           to { opacity: 1; }
@@ -515,7 +359,6 @@ export default function SupportProgramsPage() {
           .button-container {
             flex-direction: column;
           }
-          
           .btn {
             flex: none;
             width: 100%;
@@ -533,33 +376,19 @@ export default function SupportProgramsPage() {
               <div className="popup-icon">
                 {onboardingSteps[currentOnboardingStep].icon}
               </div>
-              <h2 style={{
-                ...headerStyle,
-                marginBottom: '15px'
-              }}>
+              <h2 style={headerStyle}>
                 {onboardingSteps[currentOnboardingStep].title}
               </h2>
-              <p style={{
-                marginBottom: '15px',
-                color: '#3e2723',
-                lineHeight: '1.6',
-                margin: '0 0 15px 0',
-                fontSize: 'clamp(0.9rem, 2vw, 1rem)'
-              }}>
+              <p style={{ marginBottom: '15px', color: '#3e2723', lineHeight: '1.6', fontSize: 'clamp(0.9rem, 2vw, 1rem)' }}>
                 {onboardingSteps[currentOnboardingStep].content}
               </p>
               <div className="progress-dots">
                 {onboardingSteps.map((_, index) => (
-                  <div
-                    key={index}
-                    className={`progress-dot ${index === currentOnboardingStep ? 'active' : ''}`}
-                  />
+                  <div key={index} className={`progress-dot ${index === currentOnboardingStep ? 'active' : ''}`} />
                 ))}
               </div>
               <div className="button-container">
-                <button className="btn btn-secondary" onClick={closePopup}>
-                  Skip
-                </button>
+                <button className="btn btn-secondary" onClick={closePopup}>Skip</button>
                 <button className="btn btn-primary" onClick={handleNextStep}>
                   {currentOnboardingStep < onboardingSteps.length - 1 ? "Next" : "Get Started"} <ArrowRight size={16} />
                 </button>
@@ -569,66 +398,22 @@ export default function SupportProgramsPage() {
         </div>
       )}
 
-      <div
-        style={{
-          width: '100%',
-          maxWidth: '100%',
-          padding: '0',
-          margin: '0',
-          boxSizing: 'border-box'
-        }}
-        className={styles.contentWrapper}
-      >
-        {/* Pipeline section with compact styling */}
-        <div
-          style={{
-            width: '100%',
-            maxWidth: '100%',
-            padding: '5px 20px 2px 20px',
-            margin: '0 0 5px 0',
-            backgroundColor: 'rgba(255, 255, 255, 0.95)',
-            borderRadius: '8px',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-            boxSizing: 'border-box',
-            backdropFilter: 'blur(10px)'
-          }}
-          className={`${styles.sectionCard} ${styles.pipelineSection} ${styles.pipelineCard}`}
-        >
-          <div
-            style={{
-              width: '100%',
-              overflow: 'hidden'
-            }}
-            className={styles.sectionContent}
-          >
-            <h2 style={{ ...headerStyle, margin: '0 0 5px 0' }}>DealFlow Pipeline</h2>
-            <AdvisorFlowPipeline
-              primaryMatchCount={primaryMatchCount}
-              stageCounts={stageCounts}
+      <div style={{ width: '100%', maxWidth: '100%', padding: '0', margin: '0', boxSizing: 'border-box' }} className={styles.contentWrapper}>
+        {/* Pipeline section */}
+        <div style={{ width: '100%', maxWidth: '100%', padding: '5px 20px 2px 20px', margin: '0 0 5px 0', backgroundColor: 'rgba(255, 255, 255, 0.95)', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)', boxSizing: 'border-box', backdropFilter: 'blur(10px)' }} className={`${styles.sectionCard} ${styles.pipelineSection} ${styles.pipelineCard}`}>
+          <div style={{ width: '100%', overflow: 'hidden' }} className={styles.sectionContent}>
+            <h2 style={headerStyle}>DealFlow Pipeline</h2>
+            <AdvisorFlowPipeline 
+              applicationsCount={applicationsCount}
+              matchesCount={matchesCount}
+              stageCounts={pipelineStageCounts}
             />
           </div>
         </div>
-        <div
-          style={{
-            width: '100%',
-            maxWidth: '100%',
-            padding: '20px',
-            margin: '0 0 20px 0',
-            backgroundColor: 'rgba(255, 255, 255, 0.95)',
-            borderRadius: '8px',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
-            boxSizing: 'border-box',
-            backdropFilter: 'blur(10px)'
-          }}
-          className={`${styles.sectionCard} ${styles.tableSection} ${styles.tableCard}`}
-        >
-          <AdvisorTabbedTables
-            onCountChange={setPrimaryMatchCount}
-            onConnectionRequested={handleConnectionUpdate}
-            loading={false}
-            applications={applications}
-            successfulDeals={successfulDeals}
-          />
+        
+        {/* Matches section */}
+        <div style={{ width: '100%', maxWidth: '100%', padding: '20px', margin: '0 0 20px 0', backgroundColor: 'rgba(255, 255, 255, 0.95)', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.1)', boxSizing: 'border-box', backdropFilter: 'blur(10px)' }} className={`${styles.sectionCard} ${styles.tableSection} ${styles.tableCard}`}>
+          <AdvisorTabbedTables onConnectionRequested={() => {}} />
         </div>
       </div>
     </div>

@@ -9,7 +9,7 @@ import { auth } from "../../firebaseConfig"
 import { doc, setDoc, serverTimestamp, getDoc, query, where, onSnapshot } from "firebase/firestore"
 import emailjs from '@emailjs/browser';
 import { API_KEYS } from "../../API"
-import AdvisorDetailsModal from "./AdvisorDetailModal"
+import AdvisorDetailsModal from "./AdvisorDetailsModal"
 
 // Mock data for the advisor table
 const mockAdvisors = []

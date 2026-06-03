@@ -185,7 +185,7 @@ function Sidebar({
                 onClick={(e) => handleSubItemClick(subItem, e)}
               >
                 <div className={styles.submenuIcon}>{subItem.icon}</div>
-                <span className={`${styles.submenuLabel} truncate pr-1`}>{subItem.label}</span>
+                <span className={`${styles.submenuLabel} truncate`}>{subItem.label}</span>
               </div>
             ))}
           </div>

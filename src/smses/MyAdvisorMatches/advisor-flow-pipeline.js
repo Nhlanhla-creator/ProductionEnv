@@ -2,47 +2,47 @@
 
 import { useState, useEffect } from "react"
 import { Info } from 'lucide-react'
-import styles from "./advisorPipeline.module.css"
+import styles from "./styles/advisorPipeline.module.css"
 
-export function AdvisorFlowPipeline({ primaryMatchCount, stageCounts }) {
+export function AdvisorFlowPipeline({ applicationsCount = 0, matchesCount = 0, stageCounts = {} }) {
   const [stages, setStages] = useState([
     {
-      id: "initial",
-      name: "Matching",
+      id: "applications",
+      name: "Applications",
       count: 0,
-
+      description: "Advisory applications you've submitted",
       colorClass: styles.stageInitial,
       iconColor: "#8d6e63",
     },
     {
-      id: "application",
-      name: "Application",
+      id: "matches",
+      name: "Matches",
       count: 0,
-
+      description: "Advisors matched to your applications",
       colorClass: styles.stageApplication,
       iconColor: "#795548",
     },
     {
-      id: "review",
-      name: "Evaluation",
+      id: "contacted",
+      name: "Contacted",
       count: 0,
-
+      description: "Advisors you've reached out to",
       colorClass: styles.stageReview,
       iconColor: "#6d4c41",
     },
     {
-      id: "approved",
-      name: "Due Diligence",
+      id: "evaluation",
+      name: "Evaluation",
       count: 0,
-
+      description: "Advisors reviewing your request",
       colorClass: styles.stageApproved,
       iconColor: "#5d4037",
     },
     {
-      id: "feedback",
-      name: "Decision",
+      id: "negotiation",
+      name: "Negotiation",
       count: 0,
-
+      description: "Terms being discussed",
       colorClass: styles.stageFeedback,
       iconColor: "#4e342e",
     },
@@ -50,7 +50,7 @@ export function AdvisorFlowPipeline({ primaryMatchCount, stageCounts }) {
       id: "termIssued",
       name: "Term Issued",
       count: 0,
-
+      description: "Formal agreement sent",
       colorClass: styles.stageDeals,
       iconColor: "#3e2723",
     },
@@ -58,7 +58,7 @@ export function AdvisorFlowPipeline({ primaryMatchCount, stageCounts }) {
       id: "dealClosed",
       name: "Deal Closed",
       count: 0,
-
+      description: "Successful advisory agreement",
       colorClass: styles.stageDeals,
       iconColor: "#2e1b13",
     },
@@ -66,41 +66,28 @@ export function AdvisorFlowPipeline({ primaryMatchCount, stageCounts }) {
       id: "withdrawn",
       name: "Withdrawn/Declined",
       count: 0,
-
+      description: "Declined or withdrawn",
       colorClass: styles.stageWithdrawn,
       iconColor: "#1e0e09",
     }
   ])
 
-  const [totalConnections, setTotalConnections] = useState(8)
-
-  const calculateStageCounts = () => {
-    // You can replace this with actual data fetching logic
-    return {
-      initial: primaryMatchCount || 45,
-      application: 12,
-      review: 8,
-      approved: 5,
-      feedback: 3,
-      termIssued: 2,
-      dealClosed: 2,
-      withdrawn: 4,
-    };
-  };
-
   useEffect(() => {
     setStages((current) =>
       current.map((stage) => {
-        if (stage.id === "initial") {
-          return { ...stage, count: primaryMatchCount || 0 };
+        if (stage.id === "applications") {
+          return { ...stage, count: applicationsCount || 0 }
+        }
+        if (stage.id === "matches") {
+          return { ...stage, count: matchesCount || 0 }
         }
         if (stageCounts[stage.id] !== undefined) {
-          return { ...stage, count: stageCounts[stage.id] };
+          return { ...stage, count: stageCounts[stage.id] }
         }
-        return stage;
+        return stage
       })
-    );
-  }, [primaryMatchCount, stageCounts]);
+    )
+  }, [applicationsCount, matchesCount, stageCounts])
 
   return (
     <div className={styles.dealflowPipelineContainer}>

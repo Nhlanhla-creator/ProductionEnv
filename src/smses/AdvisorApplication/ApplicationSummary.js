@@ -1,13 +1,15 @@
 "use client"
 
 import { useState } from "react"
-import { ChevronDown, ChevronUp, Edit, ExternalLink, FileText, Target, Upload, CheckCircle, Circle } from "lucide-react"
+import { ChevronDown, ChevronUp, Edit, ExternalLink, FileText, Target, Upload, ArrowLeft } from "lucide-react"
 
-const ApplicationSummary = ({ formData, onEdit, documentSelections, existingUniversalDocs }) => {
+const ApplicationSummary = ({ formData, onEdit, onBack, documentSelections, existingUniversalDocs }) => {
   const [expandedSections, setExpandedSections] = useState({
     advisoryNeedsAssessment: false,
     documentUploads: true,
   })
+
+  const [editClicked, setEditClicked] = useState(false)
 
   const toggleSection = (section) => {
     setExpandedSections((prev) => ({
@@ -58,52 +60,43 @@ const ApplicationSummary = ({ formData, onEdit, documentSelections, existingUniv
     return arr.join(" • ")
   }
 
-  const formatAdvisors = (advisors) => {
-    if (!advisors || !advisors.length) return "None specified"
-    return advisors.map((advisor, index) => (
-      <div key={index} style={{ marginBottom: "16px", paddingBottom: "16px", borderBottom: index < advisors.length - 1 ? "1px solid rgba(200, 182, 166, 0.2)" : "none" }}>
-        <div style={{ fontWeight: "600", color: "#4a352f", marginBottom: "8px" }}>
-          {advisor.advisorName || `Advisor ${index + 1}`}
-        </div>
-        <div style={{ fontSize: "13px", color: "#7d5a50", lineHeight: "1.6" }}>
-          <div><strong>Role:</strong> {formatArray(advisor.advisoryRole)}</div>
-          <div><strong>Focus:</strong> {formatArray(advisor.supportFocus)}</div>
-          <div><strong>Expertise:</strong> {formatArray(advisor.functionalExpertise)}</div>
-        </div>
-      </div>
-    ))
-  }
-
   const handleEdit = () => {
-    if (onEdit) onEdit()
+    if (editClicked) return
+    setEditClicked(true)
+    onEdit?.()
+    setTimeout(() => setEditClicked(false), 1500)
   }
-// Business Plan (single)
-const getBusinessPlanUrl = () => {
-  if (documentSelections?.businessPlan === "existing") {
-    return existingUniversalDocs?.businessPlan
-  } else if (documentSelections?.businessPlan === "new") {
-    const uploadedFile = formData?.documentUploads?.businessPlan?.[0]
-    return typeof uploadedFile === 'string' ? uploadedFile : null
-  }
-  return null
-}
 
-// Financial Statements (ARRAY)
-const getFinancialStatements = () => {
-  if (documentSelections?.latestFinancials === "existing") {
-    return existingUniversalDocs?.financialStatements || []
-  } else if (documentSelections?.latestFinancials === "new") {
-    const newFiles = formData?.documentUploads?.latestFinancials || []
-    // Handle both string URLs and objects with url property
-    return newFiles
-      .filter(file => file && typeof file === 'string')
-      .map(url => ({ 
-        url: url, 
-        customName: "New Financial Statement" 
-      }))
+  const handleBack = () => {
+    if (onBack) onBack()
   }
-  return []
-}
+
+  // Business Plan (single)
+  const getBusinessPlanUrl = () => {
+    if (documentSelections?.businessPlan === "existing") {
+      return existingUniversalDocs?.businessPlan
+    } else if (documentSelections?.businessPlan === "new") {
+      const uploadedFile = formData?.documentUploads?.businessPlan?.[0]
+      return typeof uploadedFile === 'string' ? uploadedFile : null
+    }
+    return null
+  }
+
+  // Financial Statements (ARRAY)
+  const getFinancialStatements = () => {
+    if (documentSelections?.latestFinancials === "existing") {
+      return existingUniversalDocs?.financialStatements || []
+    } else if (documentSelections?.latestFinancials === "new") {
+      const newFiles = formData?.documentUploads?.latestFinancials || []
+      return newFiles
+        .filter(file => file && typeof file === 'string')
+        .map(url => ({ 
+          url: url, 
+          customName: "New Financial Statement" 
+        }))
+    }
+    return []
+  }
 
   return (
     <>
@@ -206,37 +199,72 @@ const getFinancialStatements = () => {
                 </p>
               </div>
 
-              <button
-                onClick={handleEdit}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                  padding: "12px 20px",
-                  background: "linear-gradient(135deg, #a67c52, #7d5a50)",
-                  color: "#faf7f2",
-                  border: "none",
-                  borderRadius: "12px",
-                  fontSize: "14px",
-                  fontWeight: "600",
-                  cursor: "pointer",
-                  transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-                  boxShadow: "0 4px 16px rgba(166, 124, 82, 0.3)",
-                  minWidth: "140px",
-                  justifyContent: "center",
-                  flexShrink: 0,
-                }}
-                onMouseEnter={(e) => {
-                  e.target.style.transform = "translateY(-2px)"
-                  e.target.style.boxShadow = "0 8px 24px rgba(166, 124, 82, 0.4)"
-                }}
-                onMouseLeave={(e) => {
-                  e.target.style.transform = "translateY(0)"
-                  e.target.style.boxShadow = "0 4px 16px rgba(166, 124, 82, 0.3)"
-                }}
-              >
-                <Edit size={16} /> Edit Application
-              </button>
+              <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
+                <button
+                  onClick={handleBack}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    padding: "12px 20px",
+                    background: "rgba(250, 247, 242, 0.9)",
+                    color: "#4a352f",
+                    border: "1px solid rgba(200, 182, 166, 0.4)",
+                    borderRadius: "12px",
+                    fontSize: "14px",
+                    fontWeight: "600",
+                    cursor: "pointer",
+                    transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+                    boxShadow: "0 4px 16px rgba(74, 53, 47, 0.05)",
+                    minWidth: "140px",
+                    justifyContent: "center",
+                    flexShrink: 0,
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.transform = "translateY(-2px)"
+                    e.currentTarget.style.boxShadow = "0 8px 24px rgba(74, 53, 47, 0.1)"
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = "translateY(0)"
+                    e.currentTarget.style.boxShadow = "0 4px 16px rgba(74, 53, 47, 0.05)"
+                  }}
+                >
+                  <ArrowLeft size={16} /> Back to Applications
+                </button>
+
+                <button
+                  onClick={handleEdit}
+                  disabled={editClicked}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
+                    padding: "12px 20px",
+                    background: "linear-gradient(135deg, #a67c52, #7d5a50)",
+                    color: "#faf7f2",
+                    border: "none",
+                    borderRadius: "12px",
+                    fontSize: "14px",
+                    fontWeight: "600",
+                    cursor: "pointer",
+                    transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
+                    boxShadow: "0 4px 16px rgba(166, 124, 82, 0.3)",
+                    minWidth: "140px",
+                    justifyContent: "center",
+                    flexShrink: 0,
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.transform = "translateY(-2px)"
+                    e.currentTarget.style.boxShadow = "0 8px 24px rgba(166, 124, 82, 0.4)"
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = "translateY(0)"
+                    e.currentTarget.style.boxShadow = "0 4px 16px rgba(166, 124, 82, 0.3)"
+                  }}
+                >
+                  <Edit size={16} /> Edit Application
+                </button>
+              </div>
             </div>
           </div>
 
@@ -321,10 +349,10 @@ const getFinancialStatements = () => {
                         letterSpacing: "0.5px",
                       }}
                     >
-                      Requested Advisors
+                      Advisory Role Required
                     </span>
                     <div>
-                      {formatAdvisors(formData?.advisoryNeedsAssessment?.advisors)}
+                      {formatArray(formData?.advisoryRole)}
                     </div>
                   </div>
 
@@ -337,13 +365,13 @@ const getFinancialStatements = () => {
                     }}
                   >
                     {[
-                      { label: "Time Commitment", value: formData?.advisoryNeedsAssessment?.timeCommitment },
-                      { label: "Compensation Type", value: formData?.advisoryNeedsAssessment?.compensationType },
-                      { label: "Compensation Amount", value: formData?.advisoryNeedsAssessment?.compensationAmount },
-                      { label: "Meeting Format", value: formData?.advisoryNeedsAssessment?.meetingFormat },
-                      { label: "Province", value: formData?.advisoryNeedsAssessment?.province || "Not applicable" },
-                      { label: "Start Date", value: formData?.advisoryNeedsAssessment?.startDate },
-                      { label: "Project Duration", value: formData?.advisoryNeedsAssessment?.projectDuration },
+                      { label: "Time Commitment", value: formData?.timeCommitment },
+                      { label: "Compensation Type", value: formData?.compensationType },
+                      { label: "Compensation Amount", value: formData?.compensationAmount },
+                      { label: "Meeting Format", value: formData?.meetingFormat },
+                      { label: "Location", value: formData?.location || "Not applicable" },
+                      { label: "Start Date", value: formData?.startDate },
+                      { label: "Project Duration", value: formData?.projectDuration },
                     ].map((item, i) => (
                       <div
                         key={i}
@@ -406,38 +434,38 @@ const getFinancialStatements = () => {
                     <div style={{ display: "grid", gap: "12px" }}>
                       <div>
                         <strong style={{ color: "#4a352f" }}>B-BBEE Level:</strong>{" "}
-                        <span style={{ color: "#7d5a50" }}>{formData?.advisoryNeedsAssessment?.bbeeLevel || "Not specified"}</span>
+                        <span style={{ color: "#7d5a50" }}>{formData?.bbeeLevel || "Not specified"}</span>
                       </div>
                       <div>
                         <strong style={{ color: "#4a352f" }}>Ownership Preferences:</strong>{" "}
-                        <span style={{ color: "#7d5a50" }}>{formatArray(formData?.advisoryNeedsAssessment?.ownershipPrefs)}</span>
+                        <span style={{ color: "#7d5a50" }}>{formatArray(formData?.ownershipPrefs)}</span>
                       </div>
                       <div>
                         <strong style={{ color: "#4a352f" }}>Sector Experience:</strong>{" "}
-                        <span style={{ color: "#7d5a50" }}>{formData?.advisoryNeedsAssessment?.sectorExperience || "Not specified"}</span>
+                        <span style={{ color: "#7d5a50" }}>{formData?.sectorExperienceRequired || "Not specified"}</span>
                       </div>
                       <div>
                         <strong style={{ color: "#4a352f" }}>Engagement Type:</strong>{" "}
-                        <span style={{ color: "#7d5a50" }}>{formData?.advisoryNeedsAssessment?.engagementType || "Not specified"}</span>
+                        <span style={{ color: "#7d5a50" }}>{formData?.engagementType || "Not specified"}</span>
                       </div>
                       <div>
                         <strong style={{ color: "#4a352f" }}>Delivery Mode:</strong>{" "}
-                        <span style={{ color: "#7d5a50" }}>{formatArray(formData?.advisoryNeedsAssessment?.deliveryModes)}</span>
+                        <span style={{ color: "#7d5a50" }}>{formatArray(formData?.deliveryModes)}</span>
                       </div>
                       <div>
                         <strong style={{ color: "#4a352f" }}>Location:</strong>{" "}
-                        <span style={{ color: "#7d5a50" }}>{formData?.advisoryNeedsAssessment?.location || "Not specified"}</span>
+                        <span style={{ color: "#7d5a50" }}>{formData?.location || "Not specified"}</span>
                       </div>
                       <div>
                         <strong style={{ color: "#4a352f" }}>Budget Range:</strong>{" "}
                         <span style={{ color: "#7d5a50" }}>
-                          {formData?.advisoryNeedsAssessment?.minBudget || "R 0"} - {formData?.advisoryNeedsAssessment?.maxBudget || "R 0"}
+                          {formData?.minBudget || "R 0"} - {formData?.maxBudget || "R 0"}
                         </span>
                       </div>
                       <div>
                         <strong style={{ color: "#4a352f" }}>ESD/CSR Program:</strong>{" "}
                         <span style={{ color: "#7d5a50" }}>
-                          {formData?.advisoryNeedsAssessment?.esdProgram === true ? "Yes" : formData?.advisoryNeedsAssessment?.esdProgram === false ? "No" : "Not specified"}
+                          {formData?.esdProgram === true ? "Yes" : formData?.esdProgram === false ? "No" : "Not specified"}
                         </span>
                       </div>
                     </div>
