@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { ChevronDown, ChevronUp, Plus, Trash2 } from "lucide-react"
+import { ChevronDown, ChevronUp } from "lucide-react"
 import FormField from "./FormField"
 import "./AdvisoryApplication.css"
 
@@ -84,6 +84,94 @@ const supportFocusOptions = [
     value: "other", 
     label: "Other",
     tooltip: "Select if you need a different support focus not listed"
+  },
+]
+
+const sectorExperienceOptions = [
+  { 
+    value: "agriculture", 
+    label: "Agriculture & Agribusiness",
+    tooltip: "Farming, food processing, agricultural technology"
+  },
+  { 
+    value: "manufacturing", 
+    label: "Manufacturing",
+    tooltip: "Production, assembly, industrial operations"
+  },
+  { 
+    value: "technology", 
+    label: "Technology & Software",
+    tooltip: "SaaS, hardware, IT services, software development"
+  },
+  { 
+    value: "financial-services", 
+    label: "Financial Services",
+    tooltip: "Banking, insurance, investment, fintech"
+  },
+  { 
+    value: "retail-ecommerce", 
+    label: "Retail & E-commerce",
+    tooltip: "Physical retail, online stores, consumer goods"
+  },
+  { 
+    value: "healthcare", 
+    label: "Healthcare & Life Sciences",
+    tooltip: "Medical services, pharmaceuticals, healthtech"
+  },
+  { 
+    value: "construction-realestate", 
+    label: "Construction & Real Estate",
+    tooltip: "Property development, construction, architecture"
+  },
+  { 
+    value: "energy-utilities", 
+    label: "Energy & Utilities",
+    tooltip: "Renewable energy, oil/gas, power generation"
+  },
+  { 
+    value: "logistics-transport", 
+    label: "Logistics & Transport",
+    tooltip: "Supply chain, shipping, fleet management"
+  },
+  { 
+    value: "hospitality-tourism", 
+    label: "Hospitality & Tourism",
+    tooltip: "Hotels, restaurants, travel services"
+  },
+  { 
+    value: "mining-resources", 
+    label: "Mining & Natural Resources",
+    tooltip: "Extraction, processing, resource management"
+  },
+  { 
+    value: "telecommunications", 
+    label: "Telecommunications",
+    tooltip: "Network services, connectivity, communications"
+  },
+  { 
+    value: "creative-media", 
+    label: "Creative & Media",
+    tooltip: "Marketing, advertising, content production"
+  },
+  { 
+    value: "professional-services", 
+    label: "Professional Services",
+    tooltip: "Consulting, legal, accounting, BPO"
+  },
+  { 
+    value: "education-training", 
+    label: "Education & Training",
+    tooltip: "Schools, training providers, edtech"
+  },
+  { 
+    value: "social-impact", 
+    label: "Social Impact / Non-profit",
+    tooltip: "NGOs, social enterprises, community organizations"
+  },
+  { 
+    value: "other", 
+    label: "Other",
+    tooltip: "Industry not listed above"
   },
 ]
 
@@ -207,16 +295,11 @@ const provinceOptions = [
 ]
 
 const bbeeLevels = ["Level 1", "Level 2", "Level 3", "Level 4", "Level 5", "Level 6", "Level 7", "Level 8", "Non-compliant"]
-
 const ownershipTypes = ["Black-owned", "Women-owned", "Youth-owned", "Disabled-owned", "None"]
-
 const engagementTypes = ["Once-off", "Ongoing", "Project-based", "Other"]
-
 const deliveryModes = ["On-site", "Remote", "Hybrid"]
-
 const africanCountries = ["South Africa", "Nigeria", "Kenya", "Ghana", "Egypt", "Morocco", "Tanzania", "Uganda", "Ethiopia", "Zimbabwe"]
 
-// Currency formatter function
 const formatCurrency = (value) => {
   if (!value) return '';
   const numericValue = value.replace(/[^\d]/g, '');
@@ -227,7 +310,6 @@ const formatCurrency = (value) => {
 // MultiSelect Dropdown Component
 function MultiSelect({ options, selected = [], onChange, label }) {
   const [isOpen, setIsOpen] = useState(false)
-
   const toggleDropdown = () => setIsOpen(!isOpen)
   const closeDropdown = () => setIsOpen(false)
 
@@ -286,17 +368,8 @@ function MultiSelect({ options, selected = [], onChange, label }) {
   )
 }
 
-// Rendering function for Advisory Needs Assessment
-const renderAdvisoryNeedsAssessment = (data = {}, updateFormData) => {
-  // Initialize advisors array if it doesn't exist
-  const advisors = data.advisors || [{
-    id: Date.now(),
-    advisorName: "",
-    advisoryRole: [],
-    supportFocus: [],
-    functionalExpertise: []
-  }]
-
+// Main component – single advisor only (no multi‑advisor array)
+const AdvisoryRequestOverview = (data = {}, updateFormData) => {
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target
     
@@ -313,39 +386,11 @@ const renderAdvisoryNeedsAssessment = (data = {}, updateFormData) => {
     }
   }
 
-  // Advisor handlers
-  const addAdvisor = () => {
-    const newAdvisors = [...advisors, {
-      id: Date.now(),
-      advisorName: "",
-      advisoryRole: [],
-      supportFocus: [],
-      functionalExpertise: []
-    }]
-    updateFormData("advisoryNeedsAssessment", { advisors: newAdvisors })
-  }
-
-  const removeAdvisor = (id) => {
-    if (advisors.length > 1) {
-      const newAdvisors = advisors.filter(advisor => advisor.id !== id)
-      updateFormData("advisoryNeedsAssessment", { advisors: newAdvisors })
-    }
-  }
-
-  const updateAdvisor = (id, field, value) => {
-    const newAdvisors = advisors.map(advisor => 
-      advisor.id === id ? { ...advisor, [field]: value } : advisor
-    )
-    updateFormData("advisoryNeedsAssessment", { advisors: newAdvisors })
-  }
-
-  // Matching preferences handlers
   const handleOwnershipChange = (type) => {
     const currentValues = data.ownershipPrefs || []
     const updatedValues = currentValues.includes(type)
       ? currentValues.filter((t) => t !== type)
       : [...currentValues, type]
-
     updateFormData("advisoryNeedsAssessment", { ownershipPrefs: updatedValues })
   }
 
@@ -354,7 +399,6 @@ const renderAdvisoryNeedsAssessment = (data = {}, updateFormData) => {
     const newValues = currentValues.includes(value)
       ? currentValues.filter(v => v !== value)
       : [...currentValues, value]
-    
     updateFormData("advisoryNeedsAssessment", { [field]: newValues })
   }
 
@@ -364,7 +408,6 @@ const renderAdvisoryNeedsAssessment = (data = {}, updateFormData) => {
 
   const handleMatchingChange = (e) => {
     const { name, value } = e.target
-    
     if (name === 'minBudget' || name === 'maxBudget') {
       const formattedValue = formatCurrency(value)
       updateFormData("advisoryNeedsAssessment", { [name]: formattedValue })
@@ -379,90 +422,55 @@ const renderAdvisoryNeedsAssessment = (data = {}, updateFormData) => {
     <div className="advisory-needs-container">
       <h2>Advisory Needs Assessment (Critical for Matching)</h2>
 
-      {/* Type of Support Needed */}
+      {/* Single Advisor Section – no add/remove buttons */}
       <div className="form-section">
-        <h3 style={{ marginBottom: "20px" }}>Type of Support Needed</h3>
-        
-        <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "20px" }}>
-          <button
-            type="button"
-            onClick={addAdvisor}
-            className="btn btn-primary"
-            style={{ 
-              display: "flex", 
-              alignItems: "center", 
-              gap: "8px",
-              padding: "10px 20px",
-              fontSize: "14px",
-              fontWeight: "500"
-            }}
-          >
-            <Plus size={16} /> Add Advisor
-          </button>
-        </div>
+        <h3 style={{ marginBottom: "20px" }}>Advisor Preferences</h3>
 
-        {advisors.map((advisor, index) => (
-          <div key={advisor.id} className="advisor-card" style={{ marginBottom: "20px", padding: "20px", border: "1px solid #e5e7eb", borderRadius: "8px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-              <h4 style={{ fontSize: "16px", fontWeight: "600" }}>Advisor {index + 1}</h4>
-              {advisors.length > 1 && (
-                <button
-                  type="button"
-                  onClick={() => removeAdvisor(advisor.id)}
-                  className="btn btn-danger"
-                  style={{ display: "flex", alignItems: "center", gap: "4px", padding: "6px 12px", fontSize: "13px" }}
-                >
-                  <Trash2 size={14} /> Remove
-                </button>
-              )}
-            </div>
+        {/* <FormField label="Advisor Name/Specification (optional)">
+          <input
+            type="text"
+            name="advisorName"
+            value={data.advisorName || ""}
+            onChange={handleChange}
+            placeholder="e.g., Financial Advisory Specialist"
+            className="form-input"
+          />
+        </FormField> */}
 
-            <FormField label="Advisor Name/Specification">
-              <input
-                type="text"
-                value={advisor.advisorName || ""}
-                onChange={(e) => updateAdvisor(advisor.id, "advisorName", e.target.value)}
-                placeholder="e.g., Financial Advisory Specialist"
-                className="form-input"
+        <div className="form-row">
+          <div className="form-column">
+            <FormField label="Advisory Role (Multi-select)">
+              <MultiSelect
+                options={advisoryRoleOptions}
+                selected={data.advisoryRole || []}
+                onChange={(value) => updateFormData("advisoryNeedsAssessment", { advisoryRole: value })}
+                label="Advisory Roles"
               />
             </FormField>
-
-            <div className="form-row">
-              <div className="form-column">
-                <FormField label="Advisory Role (Multi-select)">
-                  <MultiSelect
-                    options={advisoryRoleOptions}
-                    selected={advisor.advisoryRole || []}
-                    onChange={(value) => updateAdvisor(advisor.id, "advisoryRole", value)}
-                    label="Advisory Roles"
-                  />
-                </FormField>
-              </div>
-
-              <div className="form-column">
-                <FormField label="Support Focus (Multi-select)">
-                  <MultiSelect
-                    options={supportFocusOptions}
-                    selected={advisor.supportFocus || []}
-                    onChange={(value) => updateAdvisor(advisor.id, "supportFocus", value)}
-                    label="Support Focus Areas"
-                  />
-                </FormField>
-              </div>
-
-              <div className="form-column">
-                <FormField label="Functional Expertise (Multi-select)">
-                  <MultiSelect
-                    options={functionalExpertiseOptions}
-                    selected={advisor.functionalExpertise || []}
-                    onChange={(value) => updateAdvisor(advisor.id, "functionalExpertise", value)}
-                    label="Functional Expertise"
-                  />
-                </FormField>
-              </div>
-            </div>
           </div>
-        ))}
+
+          <div className="form-column">
+            <FormField label="Support Focus (Multi-select)">
+              <MultiSelect
+                options={supportFocusOptions}
+                selected={data.supportFocus || []}
+                onChange={(value) => updateFormData("advisoryNeedsAssessment", { supportFocus: value })}
+                label="Support Focus Areas"
+              />
+            </FormField>
+          </div>
+
+          <div className="form-column">
+            <FormField label="Functional Expertise (Multi-select)">
+              <MultiSelect
+                options={functionalExpertiseOptions}
+                selected={data.functionalExpertise || []}
+                onChange={(value) => updateFormData("advisoryNeedsAssessment", { functionalExpertise: value })}
+                label="Functional Expertise"
+              />
+            </FormField>
+          </div>
+        </div>
       </div>
 
       {/* Engagement Preferences Section */}
@@ -648,13 +656,12 @@ const renderAdvisoryNeedsAssessment = (data = {}, updateFormData) => {
           </div>
         </FormField>
 
-        <FormField label="Sector Experience Required">
-          <textarea
-            name="sectorExperience"
-            value={data.sectorExperience || ""}
-            onChange={handleMatchingChange}
-            className="form-textarea"
-            rows={3}
+        <FormField label="Sector Experience Required (Multi-select)">
+          <MultiSelect
+            options={sectorExperienceOptions}
+            selected={data.sectorExperienceRequired || []}
+            onChange={(value) => updateFormData("advisoryNeedsAssessment", { sectorExperienceRequired: value })}
+            label="Sector Experience"
           />
         </FormField>
 
@@ -790,4 +797,4 @@ const renderAdvisoryNeedsAssessment = (data = {}, updateFormData) => {
   )
 }
 
-export default renderAdvisoryNeedsAssessment
+export default AdvisoryRequestOverview

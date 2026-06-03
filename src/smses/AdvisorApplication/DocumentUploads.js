@@ -5,7 +5,7 @@ import FileUpload from "./FileUpload"
 import { FileText, ExternalLink, Eye, CheckCircle, Circle } from "lucide-react"
 import "./AdvisoryApplication.css"
 
-export const renderDocumentUploads = (data, updateFormData, existingUniversalDocs, documentSelections, onDocumentSelection) => {
+export const DocumentUploads = (data, updateFormData, existingUniversalDocs, documentSelections, onDocumentSelection) => {
 
   const handleFileChange = (name, files) => {
     updateFormData("documentUploads", { [name]: files })
@@ -265,7 +265,7 @@ export const renderDocumentUploads = (data, updateFormData, existingUniversalDoc
         </div>
       </div>
 
-      <div className="form-field">
+      {/* <div className="form-field mt-8">
         <FormField label="Current Board List (If any – else 'None')">
           <textarea
             name="currentBoardList"
@@ -276,7 +276,7 @@ export const renderDocumentUploads = (data, updateFormData, existingUniversalDoc
             rows={4}
           />
         </FormField>
-      </div>
+      </div> */}
     </>
   )
 }

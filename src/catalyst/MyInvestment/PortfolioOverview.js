@@ -802,7 +802,7 @@ const staticPieOptions = {
 // CORRECTED: Function to get financial year start month - FIXED PATH
 const getFinancialYearStartMonth = async (userId) => {
   try {
-    console.log('🔍 Fetching financial year start for user:', userId);
+    // console.log('🔍 Fetching financial year start for user:', userId);
     
     // CORRECTED: Look in MyuniversalProfiles collection instead of universalProfiles
     const myUniversalProfileRef = doc(db, "MyuniversalProfiles", userId);
@@ -810,12 +810,12 @@ const getFinancialYearStartMonth = async (userId) => {
     
     if (myUniversalProfileSnap.exists()) {
       const profileData = myUniversalProfileSnap.data();
-      console.log('📋 Full MyuniversalProfiles data:', profileData);
+      // console.log('📋 Full MyuniversalProfiles data:', profileData);
       
       // CORRECTED PATH: MyuniversalProfiles > formData > fundManageOverview > financialYearStart
       const financialYearStart = profileData.formData?.fundManageOverview?.financialYearStart;
       
-      console.log('📅 Financial year start found in MyuniversalProfiles:', financialYearStart);
+      // console.log('📅 Financial year start found in MyuniversalProfiles:', financialYearStart);
       
       if (financialYearStart) {
         // Convert month name to month number (0-11)
@@ -831,20 +831,20 @@ const getFinancialYearStartMonth = async (userId) => {
         );
         
         if (monthIndex !== -1) {
-          console.log(`✅ Financial year starts in month: ${monthIndex + 1} (${financialYearStart})`);
+          // console.log(`✅ Financial year starts in month: ${monthIndex + 1} (${financialYearStart})`);
           return monthIndex; // Return 0-11
         } else {
-          console.log('❌ Month name not recognized:', financialYearStart);
-          console.log('Available month names:', monthNames);
+          // console.log('❌ Month name not recognized:', financialYearStart);
+          // console.log('Available month names:', monthNames);
         }
       } else {
-        console.log('❌ No financialYearStart found in formData.fundManageOverview');
-        console.log('Available formData:', profileData.formData);
+        // console.log('❌ No financialYearStart found in formData.fundManageOverview');
+        // console.log('Available formData:', profileData.formData);
         
         // Try alternative paths
         const altFinancialYearStart = profileData.fundManageOverview?.financialYearStart;
         if (altFinancialYearStart) {
-          console.log('🔄 Found financialYearStart in alternative path:', altFinancialYearStart);
+          // console.log('🔄 Found financialYearStart in alternative path:', altFinancialYearStart);
           const monthNames = [
             'january', 'february', 'march', 'april', 'may', 'june',
             'july', 'august', 'september', 'october', 'november', 'december'
@@ -852,16 +852,16 @@ const getFinancialYearStartMonth = async (userId) => {
           const cleanedMonth = altFinancialYearStart.trim().toLowerCase();
           const monthIndex = monthNames.findIndex(month => month === cleanedMonth);
           if (monthIndex !== -1) {
-            console.log(`✅ Financial year starts in month: ${monthIndex + 1} (${altFinancialYearStart})`);
+            // console.log(`✅ Financial year starts in month: ${monthIndex + 1} (${altFinancialYearStart})`);
             return monthIndex;
           }
         }
       }
     } else {
-      console.log('❌ MyuniversalProfiles document does not exist for user:', userId);
+      // console.log('❌ MyuniversalProfiles document does not exist for user:', userId);
     }
     
-    console.log('⚠️ Using default financial year start: July (month 6)');
+    // console.log('⚠️ Using default financial year start: July (month 6)');
     return 6; // Default to July if not found
   } catch (error) {
     console.error('❌ Error fetching financial year start:', error);
@@ -878,21 +878,21 @@ const getQuarterFromDate = (date, financialYearStartMonth) => {
   // July (6) = Q1, August (7) = Q1, September (8) = Q1, October (9) = Q2, etc.
   const adjustedMonth = (month - financialYearStartMonth + 12) % 12;
   
-  console.log(`📅 Quarter calculation: Month ${month + 1}, Financial Start: ${financialYearStartMonth + 1}, Adjusted Month: ${adjustedMonth}`);
+  // console.log(`📅 Quarter calculation: Month ${month + 1}, Financial Start: ${financialYearStartMonth + 1}, Adjusted Month: ${adjustedMonth}`);
   
   if (adjustedMonth >= 0 && adjustedMonth <= 2) {
-    console.log(`✅ Quarter 1: Months ${financialYearStartMonth + 1}-${(financialYearStartMonth + 3) % 12 || 12}`);
+    // console.log(`✅ Quarter 1: Months ${financialYearStartMonth + 1}-${(financialYearStartMonth + 3) % 12 || 12}`);
     return 0; // Q1
   }
   if (adjustedMonth >= 3 && adjustedMonth <= 5) {
-    console.log(`✅ Quarter 2: Months ${(financialYearStartMonth + 3) % 12 + 1}-${(financialYearStartMonth + 6) % 12 || 12}`);
+    // console.log(`✅ Quarter 2: Months ${(financialYearStartMonth + 3) % 12 + 1}-${(financialYearStartMonth + 6) % 12 || 12}`);
     return 1; // Q2
   }
   if (adjustedMonth >= 6 && adjustedMonth <= 8) {
-    console.log(`✅ Quarter 3: Months ${(financialYearStartMonth + 6) % 12 + 1}-${(financialYearStartMonth + 9) % 12 || 12}`);
+    // console.log(`✅ Quarter 3: Months ${(financialYearStartMonth + 6) % 12 + 1}-${(financialYearStartMonth + 9) % 12 || 12}`);
     return 2; // Q3
   }
-  console.log(`✅ Quarter 4: Months ${(financialYearStartMonth + 9) % 12 + 1}-${(financialYearStartMonth) % 12 || 12}`);
+  // console.log(`✅ Quarter 4: Months ${(financialYearStartMonth + 9) % 12 + 1}-${(financialYearStartMonth) % 12 || 12}`);
   return 3; // Q4
 };
 
@@ -916,7 +916,7 @@ const fetchInvestorSuccessfulDeals = async () => {
     const currentUser = auth.currentUser;
     
     if (!currentUser) {
-      console.log("❌ No authenticated user");
+      // console.log("❌ No authenticated user");
       return {
         smeIds: [],
         applications: [],
@@ -924,7 +924,7 @@ const fetchInvestorSuccessfulDeals = async () => {
       };
     }
 
-    console.log('🔍 STEP 1: Fetching successful deals for investor:', currentUser.uid);
+    // console.log('🔍 STEP 1: Fetching successful deals for investor:', currentUser.uid);
     
     // STEP 1: Get all investorApplications where pipelineStage is "Deal Complete" AND funderId matches current user
     const q = query(
@@ -934,10 +934,10 @@ const fetchInvestorSuccessfulDeals = async () => {
     );
 
     const querySnapshot = await getDocs(q);
-    console.log('📊 STEP 1: Found successful deals (Deal Complete):', querySnapshot.docs.length);
+    // console.log('📊 STEP 1: Found successful deals (Deal Complete):', querySnapshot.docs.length);
     
     if (querySnapshot.empty) {
-      console.log('❌ STEP 1: No successful deals found');
+      // console.log('❌ STEP 1: No successful deals found');
       return {
         smeIds: [],
         applications: [],
@@ -953,13 +953,13 @@ const fetchInvestorSuccessfulDeals = async () => {
     
     querySnapshot.docs.forEach(doc => {
       const applicationData = doc.data();
-      console.log('📄 Successful deal data:', {
-        smeId: applicationData.smeId,
-        investmentAmount: applicationData.fundingDetails?.amountApproved,
-        pipelineStage: applicationData.pipelineStage,
-        funderId: applicationData.funderId,
-        approvedAt: applicationData.fundingDetails?.approvedAt
-      });
+      // console.log('📄 Successful deal data:', {
+      //   smeId: applicationData.smeId,
+      //   investmentAmount: applicationData.fundingDetails?.amountApproved,
+      //   pipelineStage: applicationData.pipelineStage,
+      //   funderId: applicationData.funderId,
+      //   approvedAt: applicationData.fundingDetails?.approvedAt
+      // });
       
       // Use the SME ID from the application
       const smeId = applicationData.smeId;
@@ -982,10 +982,10 @@ const fetchInvestorSuccessfulDeals = async () => {
     
     const uniqueSmeIds = [...new Set(smeIds)]; // Remove duplicates
     
-    console.log('🏢 STEP 1: Unique SME IDs from successful deals:', uniqueSmeIds);
-    console.log('💰 STEP 1: Total investment from successful deals:', totalInvestment);
-    console.log('📄 STEP 1: Number of successful applications:', applications.length);
-    console.log('🔍 STEP 1: SME Details:', smeDetails);
+    // console.log('🏢 STEP 1: Unique SME IDs from successful deals:', uniqueSmeIds);
+    // console.log('💰 STEP 1: Total investment from successful deals:', totalInvestment);
+    // console.log('📄 STEP 1: Number of successful applications:', applications.length);
+    // console.log('🔍 STEP 1: SME Details:', smeDetails);
     
     return {
       smeIds: uniqueSmeIds,
@@ -1009,10 +1009,10 @@ const fetchActiveSMEsData = async () => {
     const successfulDeals = await fetchInvestorSuccessfulDeals();
     const { smeIds, applications } = successfulDeals;
     
-    console.log('🔍 STEP 2: Processing SMEs from successful deals. Total SMEs:', smeIds.length);
+    // console.log('🔍 STEP 2: Processing SMEs from successful deals. Total SMEs:', smeIds.length);
     
     if (smeIds.length === 0) {
-      console.log('❌ STEP 2: No SMEs found in successful deals');
+      // console.log('❌ STEP 2: No SMEs found in successful deals');
       return {
         'Micro': 0,
         'Small': 0,
@@ -1032,39 +1032,39 @@ const fetchActiveSMEsData = async () => {
     // STEP 3: Fetch universal profiles for each SME from successful deals
     for (const smeId of smeIds) {
       try {
-        console.log('🔍 STEP 3: Fetching profile for SME from successful deal:', smeId);
+        // console.log('🔍 STEP 3: Fetching profile for SME from successful deal:', smeId);
         const universalProfileRef = doc(db, "universalProfiles", smeId);
         const universalProfileSnap = await getDoc(universalProfileRef);
         
         if (universalProfileSnap.exists()) {
           const profileData = universalProfileSnap.data();
-          console.log('📋 STEP 3: Profile data for successful deal SME', smeId, ':', {
-            entityOverview: profileData.entityOverview,
-            entitySize: profileData.entityOverview?.entitySize,
-            companyName: profileData.entityOverview?.tradingName || profileData.entityOverview?.registeredName
-          });
+          // console.log('📋 STEP 3: Profile data for successful deal SME', smeId, ':', {
+          //   entityOverview: profileData.entityOverview,
+          //   entitySize: profileData.entityOverview?.entitySize,
+          //   companyName: profileData.entityOverview?.tradingName || profileData.entityOverview?.registeredName
+          // });
           
           // STEP 4: Get entitySize from entityOverview
           const entitySize = profileData.entityOverview?.entitySize;
-          console.log('🏷️ STEP 4: Entity size found for successful deal:', entitySize);
+          // console.log('🏷️ STEP 4: Entity size found for successful deal:', entitySize);
           
           if (entitySize && entitySizeCount.hasOwnProperty(entitySize)) {
             entitySizeCount[entitySize]++;
-            console.log(`✅ STEP 4: Counted ${entitySize} from successful deal: ${entitySizeCount[entitySize]}`);
+            // console.log(`✅ STEP 4: Counted ${entitySize} from successful deal: ${entitySizeCount[entitySize]}`);
           } else {
-            console.log('❌ STEP 4: Invalid entity size for successful deal SME:', entitySize);
+            // console.log('❌ STEP 4: Invalid entity size for successful deal SME:', entitySize);
             entitySizeCount['Small']++;
           }
         } else {
-          console.log('❌ STEP 3: Profile does not exist for successful deal SME:', smeId);
+          // console.log('❌ STEP 3: Profile does not exist for successful deal SME:', smeId);
         }
       } catch (error) {
         console.error(`❌ STEP 3-4: Error processing successful deal SME ${smeId}:`, error);
       }
     }
     
-    console.log('📈 FINAL: Entity size counts from successful deals:', entitySizeCount);
-    console.log('📊 FINAL: Total successful SMEs processed:', smeIds.length);
+    // console.log('📈 FINAL: Entity size counts from successful deals:', entitySizeCount);
+    // console.log('📊 FINAL: Total successful SMEs processed:', smeIds.length);
     return entitySizeCount;
   } catch (error) {
     console.error('❌ ERROR: Failed to fetch active SMEs data from successful deals:', error);
@@ -1083,10 +1083,10 @@ const fetchAverageBIGScore = async () => {
     const successfulDeals = await fetchInvestorSuccessfulDeals();
     const { smeIds } = successfulDeals;
     
-    console.log('🔍 STEP 1: Fetching BIG scores from successful deals. Total SMEs:', smeIds.length);
+    // console.log('🔍 STEP 1: Fetching BIG scores from successful deals. Total SMEs:', smeIds.length);
     
     if (smeIds.length === 0) {
-      console.log('❌ STEP 1: No SMEs found in successful deals for BIG score calculation');
+      // console.log('❌ STEP 1: No SMEs found in successful deals for BIG score calculation');
       return {
         averageScore: 0,
         individualScores: [],
@@ -1108,7 +1108,7 @@ const fetchAverageBIGScore = async () => {
           const profileData = universalProfileSnap.data();
           const bigScore = profileData.bigScore;
           
-          console.log(`📊 STEP 2: BIG Score for successful deal SME ${smeId}:`, bigScore);
+          // console.log(`📊 STEP 2: BIG Score for successful deal SME ${smeId}:`, bigScore);
           
           if (typeof bigScore === 'number' && !isNaN(bigScore)) {
             totalScore += bigScore;
@@ -1118,9 +1118,9 @@ const fetchAverageBIGScore = async () => {
               score: bigScore,
               companyName: profileData.entityOverview?.tradingName || profileData.entityOverview?.registeredName || 'Unknown'
             });
-            console.log(`✅ STEP 2: Valid BIG score added from successful deal: ${bigScore}`);
+            // console.log(`✅ STEP 2: Valid BIG score added from successful deal: ${bigScore}`);
           } else {
-            console.log('❌ STEP 2: Invalid BIG score for successful deal SME:', smeId, bigScore);
+            // console.log('❌ STEP 2: Invalid BIG score for successful deal SME:', smeId, bigScore);
             // Use default score for invalid scores
             const defaultScore = 70;
             totalScore += defaultScore;
@@ -1133,7 +1133,7 @@ const fetchAverageBIGScore = async () => {
             });
           }
         } else {
-          console.log('❌ STEP 2: Profile does not exist for successful deal SME:', smeId);
+          // console.log('❌ STEP 2: Profile does not exist for successful deal SME:', smeId);
         }
       } catch (error) {
         console.error(`❌ STEP 2: Error fetching BIG score for successful deal SME ${smeId}:`, error);
@@ -1141,8 +1141,8 @@ const fetchAverageBIGScore = async () => {
     }
     
     const averageScore = count > 0 ? Math.round(totalScore / count) : 0;
-    console.log('📈 FINAL: Average BIG Score from successful deals:', averageScore + '%', 'from', count, 'SMEs');
-    console.log('🔍 FINAL: Individual BIG Scores:', individualScores);
+    // console.log('📈 FINAL: Average BIG Score from successful deals:', averageScore + '%', 'from', count, 'SMEs');
+    // console.log('🔍 FINAL: Individual BIG Scores:', individualScores);
     
     return {
       averageScore: averageScore,
@@ -1165,10 +1165,10 @@ const fetchFundingReadyPercentage = async () => {
     const successfulDeals = await fetchInvestorSuccessfulDeals();
     const { smeIds } = successfulDeals;
     
-    console.log('🔍 STEP 1: Calculating funding ready percentage from successful deals. Total SMEs:', smeIds.length);
+    // console.log('🔍 STEP 1: Calculating funding ready percentage from successful deals. Total SMEs:', smeIds.length);
     
     if (smeIds.length === 0) {
-      console.log('❌ STEP 1: No SMEs found in successful deals for funding ready calculation');
+      // console.log('❌ STEP 1: No SMEs found in successful deals for funding ready calculation');
       return {
         fundingReadyPercentage: 0,
         fundingReadyCount: 0,
@@ -1193,7 +1193,7 @@ const fetchFundingReadyPercentage = async () => {
           const bigScore = profileData.bigScore;
           const companyName = profileData.entityOverview?.tradingName || profileData.entityOverview?.registeredName || 'Unknown';
           
-          console.log(`📊 STEP 2: BIG Score for funding ready check SME ${smeId}:`, bigScore);
+          // console.log(`📊 STEP 2: BIG Score for funding ready check SME ${smeId}:`, bigScore);
           
           if (typeof bigScore === 'number' && !isNaN(bigScore)) {
             totalCount++;
@@ -1205,17 +1205,17 @@ const fetchFundingReadyPercentage = async () => {
                 companyName: companyName,
                 score: bigScore
               });
-              console.log(`✅ STEP 2: SME ${smeId} is funding ready with score: ${bigScore}%`);
+              // console.log(`✅ STEP 2: SME ${smeId} is funding ready with score: ${bigScore}%`);
             } else {
               notFundingReadySMEs.push({
                 smeId: smeId,
                 companyName: companyName,
                 score: bigScore
               });
-              console.log(`❌ STEP 2: SME ${smeId} is NOT funding ready with score: ${bigScore}%`);
+              // console.log(`❌ STEP 2: SME ${smeId} is NOT funding ready with score: ${bigScore}%`);
             }
           } else {
-            console.log('❌ STEP 2: Invalid BIG score for funding ready check SME:', smeId, bigScore);
+            // console.log('❌ STEP 2: Invalid BIG score for funding ready check SME:', smeId, bigScore);
             totalCount++;
             // Default to not funding ready if score is invalid
             notFundingReadySMEs.push({
@@ -1226,7 +1226,7 @@ const fetchFundingReadyPercentage = async () => {
             });
           }
         } else {
-          console.log('❌ STEP 2: Profile does not exist for funding ready check SME:', smeId);
+          // console.log('❌ STEP 2: Profile does not exist for funding ready check SME:', smeId);
         }
       } catch (error) {
         console.error(`❌ STEP 2: Error checking funding ready status for SME ${smeId}:`, error);
@@ -1235,14 +1235,14 @@ const fetchFundingReadyPercentage = async () => {
     
     const fundingReadyPercentage = totalCount > 0 ? Math.round((fundingReadyCount / totalCount) * 100) : 0;
     
-    console.log('📈 FINAL: Funding Ready Percentage from successful deals:', {
-      fundingReadyPercentage: fundingReadyPercentage + '%',
-      fundingReadyCount,
-      totalCount,
-      calculation: `${fundingReadyCount} out of ${totalCount} SMEs are funding ready (BIG Score >= 80%)`
-    });
-    console.log('✅ Funding Ready SMEs:', fundingReadySMEs);
-    console.log('❌ Not Funding Ready SMEs:', notFundingReadySMEs);
+    // console.log('📈 FINAL: Funding Ready Percentage from successful deals:', {
+    //   fundingReadyPercentage: fundingReadyPercentage + '%',
+    //   fundingReadyCount,
+    //   totalCount,
+    //   calculation: `${fundingReadyCount} out of ${totalCount} SMEs are funding ready (BIG Score >= 80%)`
+    // });
+    // console.log('✅ Funding Ready SMEs:', fundingReadySMEs);
+    // console.log('❌ Not Funding Ready SMEs:', notFundingReadySMEs);
     
     return {
       fundingReadyPercentage: fundingReadyPercentage,
@@ -1268,7 +1268,7 @@ const fetchPortfolioValueData = async () => {
   try {
     const currentUser = auth.currentUser;
     if (!currentUser) {
-      console.log('❌ No user logged in');
+      // console.log('❌ No user logged in');
       return {
         currentValue: 0,
         quarterlyData: [0, 0, 0, 0],
@@ -1282,16 +1282,16 @@ const fetchPortfolioValueData = async () => {
 
     // Get financial year start month - FIXED
     const financialYearStartMonth = await getFinancialYearStartMonth(currentUser.uid);
-    console.log(`📅 Using financial year starting in month: ${financialYearStartMonth + 1}`);
+    // console.log(`📅 Using financial year starting in month: ${financialYearStartMonth + 1}`);
     
     const successfulDeals = await fetchInvestorSuccessfulDeals();
     const { applications } = successfulDeals;
     
-    console.log('💰 STEP 1: Calculating portfolio value from successful deals with FINANCIAL YEAR allocation');
-    console.log('📊 STEP 1: Number of successful applications:', applications.length);
+    // console.log('💰 STEP 1: Calculating portfolio value from successful deals with FINANCIAL YEAR allocation');
+    // console.log('📊 STEP 1: Number of successful applications:', applications.length);
     
     if (applications.length === 0) {
-      console.log('❌ STEP 1: No successful deals found for portfolio value calculation');
+      // console.log('❌ STEP 1: No successful deals found for portfolio value calculation');
       return {
         currentValue: 0,
         quarterlyData: [0, 0, 0, 0],
@@ -1343,14 +1343,14 @@ const fetchPortfolioValueData = async () => {
               const approvalMonth = approvalDate.getMonth();
               const financialYearMonth = (approvalMonth - financialYearStartMonth + 12) % 12;
               
-              console.log(`📅 STEP 2: Processing application approved at:`, approvedAt, {
-                approvalYear,
-                approvalMonth: approvalMonth + 1,
-                financialYearStartMonth: financialYearStartMonth + 1,
-                financialYearMonth: financialYearMonth + 1,
-                quarter: quarter + 1,
-                investmentAmount
-              });
+              // console.log(`📅 STEP 2: Processing application approved at:`, approvedAt, {
+              //   approvalYear,
+              //   approvalMonth: approvalMonth + 1,
+              //   financialYearStartMonth: financialYearStartMonth + 1,
+              //   financialYearMonth: financialYearMonth + 1,
+              //   quarter: quarter + 1,
+              //   investmentAmount
+              // });
               
               // Add investment to the correct quarter
               quarterlyData[quarter] += investmentAmount;
@@ -1372,10 +1372,10 @@ const fetchPortfolioValueData = async () => {
                 });
               }
               
-              console.log(`✅ STEP 2: Allocated R${investmentAmount} to Financial Year Q${quarter + 1}, Month ${financialYearMonth + 1}, Year ${approvalYear}`);
+              // console.log(`✅ STEP 2: Allocated R${investmentAmount} to Financial Year Q${quarter + 1}, Month ${financialYearMonth + 1}, Year ${approvalYear}`);
               
             } else {
-              console.log('❌ STEP 2: Invalid approval date:', approvedAt);
+              // console.log('❌ STEP 2: Invalid approval date:', approvedAt);
               // If date is invalid, distribute evenly
               const equalAmount = investmentAmount / 4;
               quarterlyData.forEach((_, index) => {
@@ -1426,7 +1426,7 @@ const fetchPortfolioValueData = async () => {
             });
           }
         } else {
-          console.log('❌ STEP 2: No approvedAt date found for application, distributing evenly');
+          // console.log('❌ STEP 2: No approvedAt date found for application, distributing evenly');
           // If no approval date, distribute evenly across quarters and months
           const equalAmount = investmentAmount / 4;
           quarterlyData.forEach((_, index) => {
@@ -1463,7 +1463,7 @@ const fetchPortfolioValueData = async () => {
       .map(year => parseInt(year))
       .sort((a, b) => a - b);
     
-    console.log('📊 Investment years found:', investmentYears);
+    // console.log('📊 Investment years found:', investmentYears);
     
     if (investmentYears.length > 0) {
       // Only show current year if we have investments in current year
@@ -1515,7 +1515,7 @@ const fetchPortfolioValueData = async () => {
       investmentYears: investmentYears
     };
     
-    console.log('📈 FINAL: Portfolio value with accurate yearly data:', result);
+    // console.log('📈 FINAL: Portfolio value with accurate yearly data:', result);
     return result;
   } catch (error) {
     console.error('❌ ERROR: Failed to fetch portfolio value data from successful deals:', error);
@@ -1541,7 +1541,7 @@ const fetchAverageTimeToFund = async () => {
   try {
     const currentUser = auth.currentUser;
     if (!currentUser) {
-      console.log('❌ No user logged in');
+      // console.log('❌ No user logged in');
       return {
         averageDays: 0,
         timeToFundData: [0, 0, 0, 0],
@@ -1557,15 +1557,15 @@ const fetchAverageTimeToFund = async () => {
 
     // Get financial year start month - FIXED
     const financialYearStartMonth = await getFinancialYearStartMonth(currentUser.uid);
-    console.log(`📅 Using financial year starting in month: ${financialYearStartMonth + 1}`);
+    // console.log(`📅 Using financial year starting in month: ${financialYearStartMonth + 1}`);
     
     const successfulDeals = await fetchInvestorSuccessfulDeals();
     const { applications } = successfulDeals;
     
-    console.log('🔍 STEP 1: Calculating average time to fund from successful deals. Total applications:', applications.length);
+    // console.log('🔍 STEP 1: Calculating average time to fund from successful deals. Total applications:', applications.length);
     
     if (applications.length === 0) {
-      console.log('❌ STEP 1: No applications found for time to fund calculation');
+      // console.log('❌ STEP 1: No applications found for time to fund calculation');
       return {
         averageDays: 0,
         timeToFundData: [0, 0, 0, 0],
@@ -1595,10 +1595,10 @@ const fetchAverageTimeToFund = async () => {
         const applicationDateStr = application.applicationDate; // "2025-10-14"
         const approvalDateStr = application.fundingDetails?.approvedAt; // "2025-11-10T09:24:01.430Z"
         
-        console.log(`📅 STEP 2: Processing dates for application:`, {
-          applicationDate: applicationDateStr,
-          approvalDate: approvalDateStr
-        });
+        // console.log(`📅 STEP 2: Processing dates for application:`, {
+        //   applicationDate: applicationDateStr,
+        //   approvalDate: approvalDateStr
+        // });
         
         if (applicationDateStr && approvalDateStr) {
           try {
@@ -1608,10 +1608,10 @@ const fetchAverageTimeToFund = async () => {
             // Parse approval date (format: "2025-11-10T09:24:01.430Z")
             const approvalDate = new Date(approvalDateStr);
             
-            console.log(`📅 STEP 2: Parsed dates:`, {
-              applicationDate: applicationDate.toString(),
-              approvalDate: approvalDate.toString()
-            });
+            // console.log(`📅 STEP 2: Parsed dates:`, {
+            //   applicationDate: applicationDate.toString(),
+            //   approvalDate: approvalDate.toString()
+            // });
             
             if (!isNaN(applicationDate.getTime()) && !isNaN(approvalDate.getTime())) {
               // Calculate difference in days
@@ -1620,7 +1620,7 @@ const fetchAverageTimeToFund = async () => {
               
               const approvalYear = approvalDate.getFullYear();
               
-              console.log(`⏱️ STEP 2: Time to fund for application: ${daysDiff} days in year ${approvalYear}`);
+              // console.log(`⏱️ STEP 2: Time to fund for application: ${daysDiff} days in year ${approvalYear}`);
               
               if (daysDiff > 0 && daysDiff < 365) { // Reasonable validation
                 totalDays += daysDiff;
@@ -1664,9 +1664,9 @@ const fetchAverageTimeToFund = async () => {
                   });
                 }
                 
-                console.log(`✅ STEP 2: Allocated ${daysDiff} days to Financial Year Q${quarter + 1}, Month ${financialYearMonth + 1}, Year ${approvalYear}`);
+                // console.log(`✅ STEP 2: Allocated ${daysDiff} days to Financial Year Q${quarter + 1}, Month ${financialYearMonth + 1}, Year ${approvalYear}`);
               } else {
-                console.log('⚠️ STEP 2: Invalid day difference calculated:', daysDiff);
+                // console.log('⚠️ STEP 2: Invalid day difference calculated:', daysDiff);
                 // Use default and allocate to current quarter, month, and year
                 const defaultDays = 45;
                 totalDays += defaultDays;
@@ -1706,7 +1706,7 @@ const fetchAverageTimeToFund = async () => {
                 }
               }
             } else {
-              console.log('❌ STEP 2: Invalid date parsing for application');
+              // console.log('❌ STEP 2: Invalid date parsing for application');
               // Use default and allocate to current quarter, month, and year
               const defaultDays = 45;
               totalDays += defaultDays;
@@ -1784,7 +1784,7 @@ const fetchAverageTimeToFund = async () => {
             }
           }
         } else {
-          console.log('❌ STEP 2: Missing dates for application');
+          // console.log('❌ STEP 2: Missing dates for application');
           // Use default and allocate to current quarter, month, and year
           const defaultDays = 45;
           totalDays += defaultDays;
@@ -1851,7 +1851,7 @@ const fetchAverageTimeToFund = async () => {
       .map(year => parseInt(year))
       .sort((a, b) => a - b);
     
-    console.log('📊 Processing years found:', processingYears);
+    // console.log('📊 Processing years found:', processingYears);
     
     if (processingYears.length > 0) {
       processingYears.forEach(year => {
@@ -1870,19 +1870,19 @@ const fetchAverageTimeToFund = async () => {
     
     const averageDays = count > 0 ? Math.round(totalDays / count) : 0;
     
-    console.log('📈 FINAL: Average time to fund with accurate yearly data:', {
-      averageDays,
-      timeToFundData,
-      monthlyTimeToFundData,
-      yearlyTimeToFundData,
-      yearlyTimeToFundLabels,
-      totalSMEs: count,
-      quarterlyCounts: quarterlyProcessingTimes.map(q => q.length),
-      monthlyCounts: monthlyProcessingTimes.map(m => m.length),
-      processingYears,
-      financialYearStartMonth: financialYearStartMonth + 1,
-      allProcessingTimes
-    });
+    // console.log('📈 FINAL: Average time to fund with accurate yearly data:', {
+    //   averageDays,
+    //   timeToFundData,
+    //   monthlyTimeToFundData,
+    //   yearlyTimeToFundData,
+    //   yearlyTimeToFundLabels,
+    //   totalSMEs: count,
+    //   quarterlyCounts: quarterlyProcessingTimes.map(q => q.length),
+    //   monthlyCounts: monthlyProcessingTimes.map(m => m.length),
+    //   processingYears,
+    //   financialYearStartMonth: financialYearStartMonth + 1,
+    //   allProcessingTimes
+    // });
     
     return {
       averageDays,
@@ -2094,7 +2094,7 @@ const PortfolioOverview = ({ openPopup, downloadSectionAsPDF, currentUser }) => 
       const currentUser = auth.currentUser;
       
       if (!currentUser) {
-        console.log('❌ No current user found - cannot fetch data');
+        // console.log('❌ No current user found - cannot fetch data');
         const fallbackData = getFallbackDataBasedOnUser();
         setPortfolioData({
           activeSMEs: fallbackData.activeSMEs,
@@ -2108,7 +2108,7 @@ const PortfolioOverview = ({ openPopup, downloadSectionAsPDF, currentUser }) => 
         return;
       }
       
-      console.log('🚀 STARTING PORTFOLIO DATA FETCH FOR SUCCESSFUL DEALS - User:', currentUser.uid);
+      // console.log('🚀 STARTING PORTFOLIO DATA FETCH FOR SUCCESSFUL DEALS - User:', currentUser.uid);
       setPortfolioData(prev => ({ ...prev, loading: true }));
       
       try {
@@ -2124,23 +2124,23 @@ const PortfolioOverview = ({ openPopup, downloadSectionAsPDF, currentUser }) => 
         const totalSMEs = Object.values(activeSMEsData).reduce((a, b) => a + b, 0);
         const hasRealData = totalSMEs > 0 || portfolioValueData.currentValue > 0;
         
-        console.log('📊 SUCCESSFUL DEALS DATA FETCH COMPLETED:', {
-          hasRealData,
-          totalSMEs,
-          averageBIGScore: averageBIGScoreData.averageScore,
-          fundingReadyPercentage: fundingReadyPercentageData.fundingReadyPercentage,
-          portfolioValue: portfolioValueData.currentValue,
-          totalDeals: portfolioValueData.totalDeals,
-          totalInvestment: portfolioValueData.totalInvestment,
-          financialYearStartMonth: portfolioValueData.financialYearStartMonth,
-          timeToFund: timeToFundData.averageDays,
-          timeToFundSMEs: timeToFundData.totalSMEs,
-          investmentYears: portfolioValueData.investmentYears,
-          processingYears: timeToFundData.processingYears
-        });
+        // console.log('📊 SUCCESSFUL DEALS DATA FETCH COMPLETED:', {
+        //   hasRealData,
+        //   totalSMEs,
+        //   averageBIGScore: averageBIGScoreData.averageScore,
+        //   fundingReadyPercentage: fundingReadyPercentageData.fundingReadyPercentage,
+        //   portfolioValue: portfolioValueData.currentValue,
+        //   totalDeals: portfolioValueData.totalDeals,
+        //   totalInvestment: portfolioValueData.totalInvestment,
+        //   financialYearStartMonth: portfolioValueData.financialYearStartMonth,
+        //   timeToFund: timeToFundData.averageDays,
+        //   timeToFundSMEs: timeToFundData.totalSMEs,
+        //   investmentYears: portfolioValueData.investmentYears,
+        //   processingYears: timeToFundData.processingYears
+        // });
         
         if (hasRealData) {
-          console.log('✅ USING REAL DATA FROM SUCCESSFUL DEALS');
+          // console.log('✅ USING REAL DATA FROM SUCCESSFUL DEALS');
           setPortfolioData({
             activeSMEs: activeSMEsData,
             averageBIGScore: averageBIGScoreData,
@@ -2151,7 +2151,7 @@ const PortfolioOverview = ({ openPopup, downloadSectionAsPDF, currentUser }) => 
             usingFallback: false
           });
         } else {
-          console.log('⚠️ USING FALLBACK DATA - no successful deals found for this investor');
+          // console.log('⚠️ USING FALLBACK DATA - no successful deals found for this investor');
           const fallbackData = getFallbackDataBasedOnUser();
           setPortfolioData({
             activeSMEs: fallbackData.activeSMEs,

@@ -328,6 +328,7 @@ import CatalystMessages from "./catalyst/CatalystMessages/Messages"
 import BillingInfoCatalyst from "catalyst/CatalystBillingAndPayments/billing-info-catalyst"
 import CatalystSubscriptions from "catalyst/CatalystBillingAndPayments/catalyst-subscription"
 import BillingHistoryCatalyst from "catalyst/CatalystBillingAndPayments/billing-history-catalyst"
+import AdvisorApplicationManager from "smses/AdvisorApplication/AdvisorApplicationManager"
 
 // Initial Data States
 const initialFormData = {
@@ -1017,9 +1018,9 @@ function App() {
         <Route path="/applications/products-services" element={withProtection(ProductApplicationManager, {}, renderSMERoute)} />
         <Route path="/applications/product/:section" element={withProtection(ProductApplicationManager, {}, renderSMERoute)} />
         <Route path="/applications/product-application" element={<Navigate to="/applications/product" replace />} />
-        <Route path="/applications/advisory" element={withProtection(AdvisoryApplication, {}, renderSMERoute)} />
-        <Route path="/applications/advisors" element={withProtection(AdvisoryApplication, {}, renderSMERoute)} />
-        <Route path="/applications/advisory/:section" element={withProtection(AdvisoryApplication, {}, renderSMERoute)} />
+        <Route path="/applications/advisory" element={withProtection(AdvisorApplicationManager, {}, renderSMERoute)} />
+        <Route path="/applications/advisors" element={withProtection(AdvisorApplicationManager, {}, renderSMERoute)} />
+        <Route path="/applications/advisory/:section" element={withProtection(AdvisorApplicationManager, {}, renderSMERoute)} />
 
         {/* Intern Application Routes */}
         <Route path="/applications/intern" element={withProtection(InternApplication, {}, renderSMERoute)} />
