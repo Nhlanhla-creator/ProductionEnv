@@ -24,10 +24,8 @@ import {
   computePnlChartData,
   formatSmartNumber,
   getSmartUnit,
-  getDefaultRange,
 } from "../data_utils/financialUtils";
 
-// Default range helpers (same as other sections)
 const _now        = new Date();
 const _defaultTo  = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, "0")}`;
 const _defaultFrom = (() => {
@@ -52,10 +50,9 @@ const PerformanceEngine = ({
   const [showCalcModal, setShowCalcModal]   = useState(false);
   const [selectedCalc, setSelectedCalc]     = useState({ title: "", calculation: "" });
   const [currencyUnit] = useState("zar_million");
-const [showAnalysisModal, setShowAnalysisModal] = useState(false);
-const [selectedMetricForAnalysis, setSelectedMetricForAnalysis] = useState(null);
+  const [showAnalysisModal, setShowAnalysisModal] = useState(false);
+  const [selectedMetricForAnalysis, setSelectedMetricForAnalysis] = useState(null);
 
-  // Date range — default to last 12 months
   const [fromDate, setFromDate] = useState(_defaultFrom);
   const [toDate, setToDate]     = useState(_defaultTo);
 
@@ -71,21 +68,20 @@ const [selectedMetricForAnalysis, setSelectedMetricForAnalysis] = useState(null)
   } = usePerformanceEngineData(user);
 
   const getCurrentPerformanceMetrics = () => {
-  return {
-    sales: firebaseChartData.sales?.actual?.at(-1) ?? 0,
-    cogs: firebaseChartData.cogs?.actual?.at(-1) ?? 0,
-    opex: firebaseChartData.opex?.actual?.at(-1) ?? 0,
-    grossProfit: firebaseChartData.grossProfit?.actual?.at(-1) ?? 0,
-    grossProfitMargin: firebaseChartData.gpMargin?.actual?.at(-1) ?? 0,
-    netProfit: firebaseChartData.netProfit?.actual?.at(-1) ?? 0,
-    netProfitMargin: firebaseChartData.npMargin?.actual?.at(-1) ?? 0,
-    ebitda: firebaseChartData.ebitda?.actual?.at(-1) ?? 0,
+    return {
+      sales: firebaseChartData.sales?.actual?.at(-1) ?? 0,
+      cogs: firebaseChartData.cogs?.actual?.at(-1) ?? 0,
+      opex: firebaseChartData.opex?.actual?.at(-1) ?? 0,
+      grossProfit: firebaseChartData.grossProfit?.actual?.at(-1) ?? 0,
+      grossProfitMargin: firebaseChartData.gpMargin?.actual?.at(-1) ?? 0,
+      netProfit: firebaseChartData.netProfit?.actual?.at(-1) ?? 0,
+      netProfitMargin: firebaseChartData.npMargin?.actual?.at(-1) ?? 0,
+      ebitda: firebaseChartData.ebitda?.actual?.at(-1) ?? 0,
+    };
   };
-};
 
   const formatValue = makeFormatValue(currencyUnit);
 
-  // Reload when user or range changes
   useEffect(() => {
     if (user) {
       loadPnLData(fromDate, toDate, onUpdateChartData);
@@ -112,9 +108,10 @@ const [selectedMetricForAnalysis, setSelectedMetricForAnalysis] = useState(null)
         processor: computePnlChartData,
       });
 
-      // Build smart y-axis formatting (values are in millions)
       let trendFormatValue, yAxisLabel, yTickFmt;
-      if (isPercentage) {
+      
+      // Handle margin keys (gpMargin, npMargin)
+      if (dataKey === "gpMargin" || dataKey === "npMargin" || isPercentage) {
         trendFormatValue = (v) => `${parseFloat(v).toFixed(2)}%`;
         yAxisLabel       = "Percentage (%)";
         yTickFmt         = (v) => `${parseFloat(v).toFixed(1)}%`;
@@ -154,46 +151,45 @@ const [selectedMetricForAnalysis, setSelectedMetricForAnalysis] = useState(null)
     setShowCalcModal(true);
   };
 
-const renderKPI = (title, dataKey, isPercentage = false) => {
-  const data      = firebaseChartData[dataKey] || { actual: [], budget: [] };
-  const chartArr  = aggregateDataForView(data.actual,        viewMode, isPercentage);
-  const budgetArr = aggregateDataForView(data.budget || [],  viewMode, isPercentage);
-  const current   = chartArr.at(-1)  ?? 0;
-  const budget    = budgetArr.at(-1) ?? 0;
-  const calc      = CALCULATION_TEXTS.performance[dataKey] || "";
+  const renderKPI = (title, dataKey, isPercentage = false) => {
+    const data      = firebaseChartData[dataKey] || { actual: [], budget: [] };
+    const chartArr  = aggregateDataForView(data.actual,        viewMode, isPercentage);
+    const budgetArr = aggregateDataForView(data.budget || [],  viewMode, isPercentage);
+    const current   = chartArr.at(-1)  ?? 0;
+    const budget    = budgetArr.at(-1) ?? 0;
+    const calc      = CALCULATION_TEXTS.performance[dataKey] || "";
 
-  const unitLabel        = isPercentage ? "%" : getSmartUnit(current);
-  const formatCircleValue = isPercentage
-    ? (v) => parseFloat(v).toFixed(2)
-    : (v) => formatSmartNumber(v);
+    const unitLabel        = isPercentage ? "%" : getSmartUnit(current);
+    const formatCircleValue = isPercentage
+      ? (v) => parseFloat(v).toFixed(2)
+      : (v) => formatSmartNumber(v);
 
-  return (
-    <KPICard
-      key={dataKey}
-      title={title}
-      actualValue={current}
-      budgetValue={budget}
-      unit={currencyUnit}
-      isPercentage={isPercentage}
-      unitLabel={unitLabel}
-      formatCircleValue={formatCircleValue}
-      onEyeClick={() => openCalc(title, calc)}
-      onAddNotes={(notes) => setChartNotes((p) => ({ ...p, [dataKey]: notes }))}
-      onAnalysis={() => {
-        // Open performance-specific analysis modal
-        setSelectedMetricForAnalysis({
-          title: title,
-          key: dataKey,
-          value: current,
-        });
-        setShowAnalysisModal(true);
-      }}
-      onTrend={() => openTrend(title, dataKey, isPercentage)}
-      notes={chartNotes[dataKey]}
-      formatValue={formatValue}
-    />
-  );
-};
+    return (
+      <KPICard
+        key={dataKey}
+        title={title}
+        actualValue={current}
+        budgetValue={budget}
+        unit={currencyUnit}
+        isPercentage={isPercentage}
+        unitLabel={unitLabel}
+        formatCircleValue={formatCircleValue}
+        onEyeClick={() => openCalc(title, calc)}
+        onAddNotes={(notes) => setChartNotes((p) => ({ ...p, [dataKey]: notes }))}
+        onAnalysis={() => {
+          setSelectedMetricForAnalysis({
+            title: title,
+            key: dataKey,
+            value: current,
+          });
+          setShowAnalysisModal(true);
+        }}
+        onTrend={() => openTrend(title, dataKey, isPercentage)}
+        notes={chartNotes[dataKey]}
+        formatValue={formatValue}
+      />
+    );
+  };
 
   if (activeSection !== "performance-engine") return null;
 
@@ -225,8 +221,6 @@ const renderKPI = (title, dataKey, isPercentage = false) => {
         onAddData={!isInvestorView ? () => setShowModal(true) : null}
         showAddData={!isInvestorView}
         extraControls={extraControls}
-        // Range picker props forwarded so SectionControlsBar can render it if desired;
-        // for now the section inherits its own range state managed above.
         fromDate={fromDate}
         setFromDate={setFromDate}
         toDate={toDate}
@@ -235,21 +229,18 @@ const renderKPI = (title, dataKey, isPercentage = false) => {
         maxDate={_defaultTo}
       />
 
-      {/* Revenue & Cost */}
       <KpiGrid3>
         {renderKPI("Revenue",            "sales")}
         {renderKPI("COGS",               "cogs")}
         {renderKPI("Operating Expenses", "opex")}
       </KpiGrid3>
 
-      {/* Profitability */}
       <SectionHeading>Profitability Analysis</SectionHeading>
       <KpiGrid2>
         {renderKPI("Gross Profit", "grossProfit")}
         {renderKPI("Net Profit",   "netProfit")}
       </KpiGrid2>
 
-      {/* Margins */}
       <SectionHeading>Margin Analysis</SectionHeading>
       <KpiGrid2>
         {renderKPI("Gross Profit Margin", "gpMargin", true)}
@@ -285,20 +276,21 @@ const renderKPI = (title, dataKey, isPercentage = false) => {
           loading={trendLoading}
         />
       )}
+      
       {showAnalysisModal && selectedMetricForAnalysis && (
-  <PerformanceAnalysisModal
-    isOpen={showAnalysisModal}
-    onClose={() => {
-      setShowAnalysisModal(false);
-      setSelectedMetricForAnalysis(null);
-    }}
-    metricTitle={selectedMetricForAnalysis.title}
-    metricKey={selectedMetricForAnalysis.key}
-    metricValue={selectedMetricForAnalysis.value}
-    performanceData={getCurrentPerformanceMetrics()}
-    currentUser={user}
-  />
-)}
+        <PerformanceAnalysisModal
+          isOpen={showAnalysisModal}
+          onClose={() => {
+            setShowAnalysisModal(false);
+            setSelectedMetricForAnalysis(null);
+          }}
+          metricTitle={selectedMetricForAnalysis.title}
+          metricKey={selectedMetricForAnalysis.key}
+          metricValue={selectedMetricForAnalysis.value}
+          performanceData={getCurrentPerformanceMetrics()}
+          currentUser={user}
+        />
+      )}
     </div>
   );
 };

@@ -1,11 +1,12 @@
+// src/main_pages/InsightsPage.js
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import Header from './Header';
 import Footer from './Footer';
 import styled, { keyframes } from 'styled-components';
 import { FiMoreVertical, FiShare2, FiDownload } from 'react-icons/fi';
+import { fetchArticles } from '../services/articleService';
+import { db } from '../../src/firebaseConfig'; // For testing
 
-// Animation for the banner text
 const floatUp = keyframes`
   from {
     transform: translateY(100px);
@@ -17,7 +18,6 @@ const floatUp = keyframes`
   }
 `;
 
-// Styled components for animations
 const AnimatedHeroTitle = styled.h1`
   font-size: 3rem;
   font-weight: 800;
@@ -41,25 +41,6 @@ const AnimatedHeroSubtitle = styled.p`
   opacity: 0;
 `;
 
-const AnimatedButton = styled.button`
-  background-color: #9E6E3C;
-  color: #F2F0E6;
-  border: none;
-  padding: 0.75rem 1.5rem;
-  font-size: 1rem;
-  font-weight: 600;
-  border-radius: 0.375rem;
-  cursor: pointer;
-  transition: background-color 0.2s;
-  animation: ${floatUp} 1s ease-out forwards;
-  animation-delay: 0.9s;
-  opacity: 0;
-  
-  &:hover {
-    background-color: #754A2D;
-  }
-`;
-
 const ReadMoreButton = styled.button`
   background-color: transparent;
   color: #9E6E3C;
@@ -78,72 +59,91 @@ const ReadMoreButton = styled.button`
   }
 `;
 
+const CloseButton = styled.button`
+  background: none;
+  border: none;
+  font-size: 2rem;
+  cursor: pointer;
+  color: #9E6E3C;
+  position: absolute;
+  right: 20px;
+  top: 20px;
+  z-index: 10;
+  
+  &:hover {
+    color: #754A2D;
+  }
+`;
+
 const InsightsPage = () => {
-  const navigate = useNavigate();
-  // Color palette
-  const colors = {
-    brownDark: '#754A2D',
-    grayLight: '#D3D2CE',
-    brownBlack: '#372C27',
-    brownMedium: '#9E6E3C',
-    cream: '#F2F0E6',
-    beige: '#BCAE9C'
-  };
+  const [posts, setPosts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [activeCategory, setActiveCategory] = useState("All Posts");
+  const [likedPosts, setLikedPosts] = useState([]);
+  const [loaded, setLoaded] = useState(false);
+  const [openMenuId, setOpenMenuId] = useState(null);
+  const [selectedArticle, setSelectedArticle] = useState(null);
+  const [error, setError] = useState(null);
 
-  // Blog post data with images
-  const posts = [
-    {
-      id: 1,
-      title: "The Power of Data-Driven Culture: Transforming Organizations into Innovators",
-      excerpt: "In today's fast-moving business landscape, innovation has shifted from being a luxury to an absolute necessity. At the heart of this...",
-      writer: "BIG Marketplace",
-      date: "Oct 17, 2024",
-      readTime: "3 min read",
-      views: 1,
-      comments: 0,
-      liked: false,
-      category: "Business Strategy & Growth",
-      image: "https://images.unsplash.com/photo-1551288049-bebda4e38f71?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80",
-      authorImage: "https://randomuser.me/api/portraits/women/44.jpg",
-      articlePath: '/Article1'  // Added specific path for first article
-    },
-    {
-      id: 2,
-      title: "Predictive Maintenance in the Mining Industry: Game-Changer for Efficiency and Profitability.. or a cautionary tail?",
-      excerpt: "The mining industry, known for its colossal machinery and rugged operational environments, has traditionally been challenged by unplanned...",
-      writer: "BIG Marketplace",
-      date: "Oct 17, 2024",
-      readTime: "4 min read",
-      views: 1,
-      comments: 0,
-      liked: false,
-      category: "Market Access",
-      image: "https://images.unsplash.com/photo-1507679799987-c73779587ccf?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80",
-      authorImage: "https://randomuser.me/api/portraits/men/32.jpg",
-      articlePath: '/Article2'  // Added specific path for second article
-    }
-  ];
-
-  // Categories for filtering
   const categories = [
     "All Posts",
     "Business Strategy & Growth",
     "Funding & Capital Access",
     "Market Access",
-    "More"
+    "Technology & Innovation",
+    "Industry Trends"
   ];
-
-  // State management
-  const [activeCategory, setActiveCategory] = useState("All Posts");
-  const [likedPosts, setLikedPosts] = useState([]);
-  const [loaded, setLoaded] = useState(false);
-  const [openMenuId, setOpenMenuId] = useState(null);
 
   useEffect(() => {
     setLoaded(true);
+    loadArticles();
   }, []);
 
-  // Toggle like status for posts
+  // Test Firebase connection directly
+  useEffect(() => {
+    const testFirebase = async () => {
+      try {
+        console.log('Testing Firebase connection...');
+        const testSnapshot = await db.collection('articles').get();
+        console.log('Firebase test - articles collection size:', testSnapshot.size);
+        testSnapshot.forEach(doc => {
+          console.log('Article found - ID:', doc.id);
+          console.log('Article data:', doc.data());
+        });
+        if (testSnapshot.size === 0) {
+          console.log('No articles found in Firebase. Please add some articles manually.');
+        }
+      } catch (error) {
+        console.error('Firebase test error:', error);
+        setError('Failed to connect to database');
+      }
+    };
+    testFirebase();
+  }, []);
+
+  const loadArticles = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      console.log('Loading articles from service...');
+      const articles = await fetchArticles();
+      console.log('Articles loaded:', articles);
+      console.log('Number of articles:', articles.length);
+      
+      if (articles.length === 0) {
+        console.log('No articles returned from fetchArticles');
+        setError('No articles found. Please add some articles in the admin panel.');
+      } else {
+        setPosts(articles);
+      }
+    } catch (error) {
+      console.error('Error loading articles:', error);
+      setError('Failed to load articles. Please check your connection.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const toggleLike = (postId) => {
     setLikedPosts(prev => 
       prev.includes(postId) 
@@ -152,28 +152,70 @@ const InsightsPage = () => {
     );
   };
 
-  // Toggle menu
   const toggleMenu = (postId) => {
     setOpenMenuId(openMenuId === postId ? null : postId);
   };
 
-  // Handle read more navigation
-  const handleReadMore = (articlePath) => {
-    navigate(articlePath);
+  const handleReadMore = (article) => {
+    setSelectedArticle(article);
+    document.body.style.overflow = 'hidden';
   };
 
-  // Filter posts based on active category
+  const closeModal = () => {
+    setSelectedArticle(null);
+    document.body.style.overflow = 'auto';
+  };
+
+  const formatDate = (dateValue) => {
+    if (!dateValue) return 'Recent';
+    
+    // If it's a string
+    if (typeof dateValue === 'string') {
+      const date = new Date(dateValue);
+      if (!isNaN(date.getTime())) {
+        return date.toLocaleDateString('en-US', { 
+          month: 'short', 
+          day: 'numeric', 
+          year: 'numeric' 
+        });
+      }
+    }
+    
+    // If it's a Firebase timestamp
+    if (dateValue && typeof dateValue.toDate === 'function') {
+      const date = dateValue.toDate();
+      return date.toLocaleDateString('en-US', { 
+        month: 'short', 
+        day: 'numeric', 
+        year: 'numeric' 
+      });
+    }
+    
+    // If it has displayDate property
+    if (dateValue && dateValue.displayDate) {
+      const date = new Date(dateValue.displayDate);
+      if (!isNaN(date.getTime())) {
+        return date.toLocaleDateString('en-US', { 
+          month: 'short', 
+          day: 'numeric', 
+          year: 'numeric' 
+        });
+      }
+    }
+    
+    return 'Recent';
+  };
+
   const filteredPosts = activeCategory === "All Posts" 
     ? posts 
     : posts.filter(post => post.category === activeCategory);
 
   return (
     <div style={styles.app}>
-      {/* Header Component */}
       <Header />
       
       <main style={styles.mainContent}>
-        {/* Full-width Banner Section */}
+        {/* Hero Banner */}
         <div style={styles.fullWidthBanner}>
           <div style={styles.heroOverlay}></div>
           <div style={styles.heroContent}>
@@ -184,7 +226,6 @@ const InsightsPage = () => {
                   Actionable insights, expert analysis, and data-driven perspectives to help high-impact 
                   enterprises navigate challenges, seize opportunities, and lead with confidence.
                 </AnimatedHeroSubtitle>
-                <AnimatedButton>Explore Insights & Trends</AnimatedButton>
               </>
             )}
           </div>
@@ -211,98 +252,154 @@ const InsightsPage = () => {
               </div>
             </div>
             
-            <div style={styles.postsContainer}>
-              {filteredPosts.map((post) => (
-                <article key={post.id} style={styles.postCard}>
-                  <div style={styles.postLayout}>
-                    <div style={styles.postImageContainer}>
-                      <img 
-                        src={post.image} 
-                        alt={post.title} 
-                        style={styles.postImage}
-                      />
-                    </div>
-                    <div style={styles.postContent}>
-                      <div style={styles.postHeader}>
-                        <div style={styles.authorInfo}>
-                          <div style={styles.authorImageContainer}>
-                            <img 
-                              src={post.authorImage} 
-                              alt="Author" 
-                              style={styles.authorImage}
-                            />
-                          </div>
-                          <div style={styles.authorText}>
-                            <div style={styles.authorName}>{post.writer}</div>
-                            <div style={styles.postMeta}>
-                              <span style={styles.postMetaItem}>{post.date}</span>
-                              <span style={styles.postMetaItem}>•</span>
-                              <span style={styles.postMetaItem}>{post.readTime}</span>
-                            </div>
-                          </div>
-                        </div>
-                        <div style={styles.menuContainer}>
-                          <button 
-                            style={styles.menuButton}
-                            onClick={() => toggleMenu(post.id)}
-                          >
-                            <FiMoreVertical size={20} />
-                          </button>
-                          {openMenuId === post.id && (
-                            <div style={styles.dropdownMenu}>
-                              <button style={styles.menuItem}>
-                                <FiShare2 style={styles.menuIcon} />
-                                Share
-                              </button>
-                              <button style={styles.menuItem}>
-                                <FiDownload style={styles.menuIcon} />
-                                Download
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                      
-                      <h3 style={styles.postTitle}>{post.title}</h3>
-                      <p style={styles.postExcerpt}>{post.excerpt}</p>
-                      
-                      <ReadMoreButton onClick={() => handleReadMore(post.articlePath)}>
-                        Read More
-                      </ReadMoreButton>
-                      
-                      <div style={styles.postStats}>
-                        <span style={styles.statItem}>
-                          <span role="img" aria-label="views">👁️</span> {post.views} view{post.views !== 1 ? 's' : ''}
-                        </span>
-                        <span style={styles.statItem}>
-                          <span role="img" aria-label="comments">💬</span> {post.comments} comment{post.comments !== 1 ? 's' : ''}
-                        </span>
-                        <button 
-                          style={{
-                            ...styles.likeBtn,
-                            ...(likedPosts.includes(post.id) ? styles.likedBtn : {})
+            {error && (
+              <div style={styles.errorContainer}>
+                <p>{error}</p>
+                <button onClick={loadArticles} style={styles.retryButton}>
+                  Retry
+                </button>
+              </div>
+            )}
+            
+            {loading ? (
+              <div style={styles.loadingContainer}>
+                <div style={styles.spinner}></div>
+                <p>Loading insights...</p>
+              </div>
+            ) : filteredPosts.length === 0 ? (
+              <div style={styles.emptyContainer}>
+                <p>No articles found in this category.</p>
+                <p style={styles.emptySubtext}>Please add articles in the admin panel at /admin/articles</p>
+              </div>
+            ) : (
+              <div style={styles.postsContainer}>
+                {filteredPosts.map((post) => (
+                  <article key={post.id} style={styles.postCard}>
+                    <div style={styles.postLayout}>
+                      <div style={styles.postImageContainer}>
+                        <img 
+                          src={post.imageUrl || 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?ixlib=rb-1.2.1&auto=format&fit=crop&w=1352&q=80'} 
+                          alt={post.title} 
+                          style={styles.postImage}
+                          onError={(e) => {
+                            e.target.src = 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?ixlib=rb-1.2.1&auto=format&fit=crop&w=1352&q=80';
                           }}
-                          onClick={() => toggleLike(post.id)}
-                        >
-                          <span role="img" aria-label="like">❤️</span> {likedPosts.includes(post.id) ? 'Liked' : 'Like'}
-                        </button>
+                        />
+                      </div>
+                      <div style={styles.postContent}>
+                        <div style={styles.postHeader}>
+                          <div style={styles.authorInfo}>
+                            <div style={styles.authorImageContainer}>
+                              <img 
+                                src={post.authorImageUrl || "https://randomuser.me/api/portraits/women/44.jpg"} 
+                                alt="Author" 
+                                style={styles.authorImage}
+                                onError={(e) => {
+                                  e.target.src = "https://randomuser.me/api/portraits/women/44.jpg";
+                                }}
+                              />
+                            </div>
+                            <div style={styles.authorText}>
+                              <div style={styles.authorName}>{post.writer || 'BIG Marketplace'}</div>
+                              <div style={styles.postMeta}>
+                                <span style={styles.postMetaItem}>{formatDate(post)}</span>
+                                <span style={styles.postMetaItem}>•</span>
+                                <span style={styles.postMetaItem}>{post.readTime || '3 min read'}</span>
+                              </div>
+                            </div>
+                          </div>
+                          <div style={styles.menuContainer}>
+                            <button 
+                              style={styles.menuButton}
+                              onClick={() => toggleMenu(post.id)}
+                            >
+                              <FiMoreVertical size={20} />
+                            </button>
+                            {openMenuId === post.id && (
+                              <div style={styles.dropdownMenu}>
+                                <button style={styles.menuItem}>
+                                  <FiShare2 style={styles.menuIcon} />
+                                  Share
+                                </button>
+                                <button style={styles.menuItem}>
+                                  <FiDownload style={styles.menuIcon} />
+                                  Download
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                        
+                        <h3 style={styles.postTitle}>{post.title}</h3>
+                        <p style={styles.postExcerpt}>{post.excerpt}</p>
+                        
+                        <ReadMoreButton onClick={() => handleReadMore(post)}>
+                          Read More
+                        </ReadMoreButton>
+                        
+                        <div style={styles.postStats}>
+                          <span style={styles.statItem}>
+                            <span role="img" aria-label="views">👁️</span> {post.views || 0} view{post.views !== 1 ? 's' : ''}
+                          </span>
+                          <span style={styles.statItem}>
+                            <span role="img" aria-label="comments">💬</span> {post.comments || 0} comment{post.comments !== 1 ? 's' : ''}
+                          </span>
+                          <button 
+                            style={{
+                              ...styles.likeBtn,
+                              ...(likedPosts.includes(post.id) ? styles.likedBtn : {})
+                            }}
+                            onClick={() => toggleLike(post.id)}
+                          >
+                            <span role="img" aria-label="like">❤️</span> {likedPosts.includes(post.id) ? 'Liked' : 'Like'}
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </article>
-              ))}
-            </div>
+                  </article>
+                ))}
+              </div>
+            )}
           </section>
         </div>
       </main>
+
+      {/* Article Modal */}
+      {selectedArticle && (
+        <div style={styles.modalOverlay} onClick={closeModal}>
+          <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}>
+            <CloseButton onClick={closeModal}>×</CloseButton>
+            
+            <div style={styles.modalImageContainer}>
+              <img 
+                src={selectedArticle.imageUrl || 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?ixlib=rb-1.2.1&auto=format&fit=crop&w=1352&q=80'} 
+                alt={selectedArticle.title} 
+                style={styles.modalImage}
+              />
+              <div style={styles.modalImageOverlay}>
+                <h1 style={styles.modalTitle}>{selectedArticle.title}</h1>
+                <div style={styles.modalMeta}>
+                  <span>{selectedArticle.writer || 'BIG Marketplace'}</span>
+                  <span>•</span>
+                  <span>{formatDate(selectedArticle)}</span>
+                  <span>•</span>
+                  <span>{selectedArticle.readTime || '3 min read'}</span>
+                </div>
+              </div>
+            </div>
+            
+            <div style={styles.modalBody}>
+              <div dangerouslySetInnerHTML={{ __html: selectedArticle.content || selectedArticle.excerpt }} />
+            </div>
+          </div>
+        </div>
+      )}
       
-      {/* Footer Component */}
       <Footer />
     </div>
   );
 };
 
-// Styles (remain exactly the same as previous version)
 const styles = {
   app: {
     display: 'flex',
@@ -384,25 +481,73 @@ const styles = {
   categoryBtn: {
     padding: '0.5rem 1rem',
     backgroundColor: '#D3D2CE',
-    border: '1px solid #BCAE9C',
     borderRadius: '0.375rem',
     cursor: 'pointer',
-    transition: 'all 0.2s',
     fontSize: '0.875rem',
     color: '#372C27',
     border: 'none',
-    outline: 'none'
+    outline: 'none',
+    transition: 'all 0.2s'
   },
   activeCategoryBtn: {
     backgroundColor: '#9E6E3C',
     color: '#F2F0E6',
-    borderColor: '#9E6E3C'
   },
   postsContainer: {
     display: 'flex',
     flexDirection: 'column',
     gap: '2rem',
     width: '100%'
+  },
+  loadingContainer: {
+    textAlign: 'center',
+    padding: '60px',
+    color: '#9E6E3C',
+    fontSize: '1.2rem'
+  },
+  errorContainer: {
+    textAlign: 'center',
+    padding: '60px',
+    color: '#754A2D',
+    fontSize: '1.1rem',
+    backgroundColor: '#F2F0E6',
+    border: '1px solid #BCAE9C',
+    borderRadius: '8px',
+    margin: '20px 0'
+  },
+  emptyContainer: {
+    textAlign: 'center',
+    padding: '60px',
+    color: '#9E6E3C',
+    fontSize: '1.1rem',
+    backgroundColor: '#F2F0E6',
+    border: '1px solid #BCAE9C',
+    borderRadius: '8px',
+    margin: '20px 0'
+  },
+  emptySubtext: {
+    fontSize: '0.9rem',
+    marginTop: '10px',
+    color: '#BCAE9C'
+  },
+  retryButton: {
+    marginTop: '15px',
+    padding: '8px 20px',
+    backgroundColor: '#9E6E3C',
+    color: '#F2F0E6',
+    border: 'none',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    fontSize: '0.9rem'
+  },
+  spinner: {
+    width: '40px',
+    height: '40px',
+    margin: '0 auto 20px',
+    border: '3px solid #D3D2CE',
+    borderTop: '3px solid #9E6E3C',
+    borderRadius: '50%',
+    animation: 'spin 1s linear infinite'
   },
   postCard: {
     border: '1px solid #BCAE9C',
@@ -470,11 +615,13 @@ const styles = {
     fontSize: '1.5rem',
     fontWeight: 700,
     marginBottom: '1rem',
-    color: '#754A2D'
+    color: '#754A2D',
+    lineHeight: 1.3
   },
   postExcerpt: {
     color: '#372C27',
     marginBottom: '1rem',
+    lineHeight: 1.6
   },
   postMeta: {
     display: 'flex',
@@ -530,11 +677,7 @@ const styles = {
     borderRadius: '50%',
     display: 'flex',
     alignItems: 'center',
-    justifyContent: 'center',
-    transition: 'all 0.2s',
-    '&:hover': {
-      backgroundColor: 'rgba(158, 110, 60, 0.1)'
-    }
+    justifyContent: 'center'
   },
   dropdownMenu: {
     position: 'absolute',
@@ -558,13 +701,71 @@ const styles = {
     textAlign: 'left',
     color: '#372C27',
     cursor: 'pointer',
-    fontSize: '0.875rem',
-    '&:hover': {
-      backgroundColor: 'rgba(158, 110, 60, 0.1)'
-    }
+    fontSize: '0.875rem'
   },
   menuIcon: {
     color: '#9E6E3C'
+  },
+  // Modal styles
+  modalOverlay: {
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(55, 44, 39, 0.95)',
+    zIndex: 2000,
+    overflowY: 'auto',
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center'
+  },
+  modalContent: {
+    backgroundColor: '#F2F0E6',
+    width: '90%',
+    maxWidth: '1000px',
+    maxHeight: '90vh',
+    borderRadius: '12px',
+    overflowY: 'auto',
+    position: 'relative',
+    margin: '20px'
+  },
+  modalImageContainer: {
+    position: 'relative',
+    height: '400px',
+    overflow: 'hidden'
+  },
+  modalImage: {
+    width: '100%',
+    height: '100%',
+    objectFit: 'cover'
+  },
+  modalImageOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    background: 'linear-gradient(to top, rgba(55,44,39,0.9), transparent)',
+    padding: '40px',
+    color: '#F2F0E6'
+  },
+  modalTitle: {
+    fontSize: '2rem',
+    fontWeight: 800,
+    marginBottom: '1rem',
+    lineHeight: 1.2
+  },
+  modalMeta: {
+    display: 'flex',
+    gap: '0.75rem',
+    fontSize: '0.9rem',
+    color: '#BCAE9C'
+  },
+  modalBody: {
+    padding: '40px',
+    fontSize: '1.1rem',
+    lineHeight: 1.8,
+    color: '#372C27'
   },
   '@media (max-width: 768px)': {
     fullWidthBanner: {
@@ -593,8 +794,27 @@ const styles = {
     authorImageContainer: {
       width: '40px',
       height: '40px'
+    },
+    modalTitle: {
+      fontSize: '1.5rem'
+    },
+    modalBody: {
+      padding: '20px'
+    },
+    modalImageContainer: {
+      height: '250px'
     }
   }
 };
+
+// Add keyframe animation for spinner
+const styleSheet = document.createElement("style");
+styleSheet.textContent = `
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+`;
+document.head.appendChild(styleSheet);
 
 export default InsightsPage;

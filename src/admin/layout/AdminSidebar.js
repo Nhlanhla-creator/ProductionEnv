@@ -33,6 +33,7 @@ import {
   Bug,
   FlaskConical,
   BarChart3,
+  Newspaper,  // ADDED THIS ICON FOR ARTICLES
 } from "lucide-react";
 import styles from "./admin-sidebar.module.css";
 import { auth } from "../../firebaseConfig";
@@ -262,7 +263,14 @@ function AdminSidebar() {
         },
       ],
     },
-
+    // ==================== ADDED ARTICLE MANAGEMENT MENU ITEM ====================
+    {
+      id: "articles",
+      label: "Article Management",
+      icon: <Newspaper size={18} />,
+      route: "/admin/articles",
+    },
+    // ============================================================================
     {
       id: "qr-codes",
       label: "QR Codes",
