@@ -38,6 +38,7 @@ import {
   TrendingUp,
   TrendingDown,
 } from "lucide-react";
+import PeopleAnalysisModal from "../hooks/PeopleAnalysisModal";
 
 ChartJS.register(
   CategoryScale,
@@ -3995,6 +3996,8 @@ const ExecutionCapacity = ({ activeSection, user, isInvestorView }) => {
     }
   };
 
+  const [showAnalysisModal, setShowAnalysisModal] = useState(false);
+const [selectedMetricForAnalysis, setSelectedMetricForAnalysis] = useState(null);
   // Helper functions
   const formatValue = (value) => {
     const num = Number.parseFloat(value) || 0;
@@ -4074,225 +4077,237 @@ const ExecutionCapacity = ({ activeSection, user, isInvestorView }) => {
   };
 
   const renderKPICard = (
-    title,
-    data,
-    kpiKey,
-    unit = "",
-    isPercentage = false,
-    calculation = "",
-  ) => {
-    const monthIndex = 11; // Use last month
-    const currentValue =
-      Number.parseFloat(data[monthIndex >= 0 ? monthIndex : 0]) || 0;
-    const status = getStatus(currentValue.toString(), kpiKey);
+  title,
+  data,
+  kpiKey,
+  unit = "",
+  isPercentage = false,
+  calculation = "",
+) => {
+  const monthIndex = 11;
+  const currentValue = Number.parseFloat(data[monthIndex >= 0 ? monthIndex : 0]) || 0;
+  const status = getStatus(currentValue.toString(), kpiKey);
 
-    return (
+  const handleAIAnalysis = () => {
+    setSelectedMetricForAnalysis({
+      title: title,
+      key: kpiKey,
+      value: currentValue,
+      contextData: {
+        unit: isPercentage ? "percentage" : "number",
+        benchmark: kpiKey === "founderLoad" ? 2 : 
+                   kpiKey === "criticalFunctionsSinglePoint" ? 20 :
+                   kpiKey === "criticalRolesWith2IC" ? 80 :
+                   kpiKey === "spanOfControl" ? 6.5 : 50,
+        status: status.text,
+        timeRange: "Current Period",
+      },
+    });
+    setShowAnalysisModal(true);
+  };
+
+  return (
+    <div
+      style={{
+        backgroundColor: "#fdfcfb",
+        padding: "20px",
+        borderRadius: "8px",
+        boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+        marginBottom: "20px",
+        position: "relative",
+      }}
+    >
+      <EyeIcon onClick={() => handleCalculationClick(title, calculation)} />
+
       <div
         style={{
-          backgroundColor: "#fdfcfb",
-          padding: "20px",
-          borderRadius: "8px",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-          marginBottom: "20px",
-          position: "relative",
+          display: "flex",
+          alignItems: "center",
+          marginBottom: "15px",
         }}
       >
-        <EyeIcon onClick={() => handleCalculationClick(title, calculation)} />
-
         <div
           style={{
+            width: "100px",
+            height: "100px",
+            borderRadius: "50%",
+            border: "5px solid #f9a825",
             display: "flex",
             alignItems: "center",
-            marginBottom: "15px",
+            justifyContent: "center",
+            marginRight: "20px",
+            backgroundColor: "#fff9c4",
           }}
         >
-          <div
-            style={{
-              width: "100px",
-              height: "100px",
-              borderRadius: "50%",
-              border: "5px solid #f9a825",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              marginRight: "20px",
-              backgroundColor: "#fff9c4",
-            }}
-          >
-            <div style={{ textAlign: "center" }}>
-              <div
-                style={{
-                  fontSize: "16px",
-                  fontWeight: "700",
-                  color: "#5d4037",
-                }}
-              >
-                {isPercentage
-                  ? `${currentValue.toFixed(1)}%`
-                  : kpiKey === "spanOfControl"
-                    ? currentValue.toFixed(1)
-                    : kpiKey === "founderLoad"
-                      ? currentValue === 1
-                        ? "Low"
-                        : currentValue === 2
-                          ? "Med"
-                          : currentValue === 3
-                            ? "High"
-                            : currentValue === 4
-                              ? "Critical"
-                              : "Not Set"
-                      : currentValue.toFixed(1)}
-              </div>
-              <div style={{ fontSize: "11px", color: "#8d6e63" }}>Current</div>
-            </div>
-          </div>
-          <div style={{ flex: 1 }}>
-            <h4
-              style={{
-                color: "#5d4037",
-                marginBottom: "5px",
-                fontSize: "16px",
-              }}
-            >
-              {title}
-            </h4>
+          <div style={{ textAlign: "center" }}>
             <div
               style={{
-                display: "inline-block",
-                padding: "4px 8px",
-                backgroundColor: status.color,
-                color: status.textColor,
-                borderRadius: "4px",
-                fontSize: "11px",
-                fontWeight: "600",
-                marginTop: "5px",
+                fontSize: "16px",
+                fontWeight: "700",
+                color: "#5d4037",
               }}
             >
-              {status.text}
+              {isPercentage
+                ? `${currentValue.toFixed(1)}%`
+                : kpiKey === "spanOfControl"
+                  ? currentValue.toFixed(1)
+                  : kpiKey === "founderLoad"
+                    ? currentValue === 1
+                      ? "Low"
+                      : currentValue === 2
+                        ? "Med"
+                        : currentValue === 3
+                          ? "High"
+                          : currentValue === 4
+                            ? "Critical"
+                            : "Not Set"
+                    : currentValue.toFixed(1)}
             </div>
+            <div style={{ fontSize: "11px", color: "#8d6e63" }}>Current</div>
           </div>
         </div>
-
-        <div style={{ borderTop: "1px solid #e8ddd4", paddingTop: "15px" }}>
-          <div style={{ display: "flex", gap: "10px", marginBottom: "10px" }}>
-            <button
-              onClick={() =>
-                setExpandedNotes((prev) => ({
-                  ...prev,
-                  [kpiKey]: !prev[kpiKey],
-                }))
-              }
-              style={{
-                padding: "6px 12px",
-                backgroundColor: "#e8ddd4",
-                color: "#5d4037",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: "600",
-                fontSize: "12px",
-              }}
-            >
-              Add notes
-            </button>
-            <button
-              onClick={() =>
-                setExpandedNotes((prev) => ({
-                  ...prev,
-                  [`${kpiKey}_analysis`]: !prev[`${kpiKey}_analysis`],
-                }))
-              }
-              style={{
-                padding: "6px 12px",
-                backgroundColor: "#e8ddd4",
-                color: "#5d4037",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: "600",
-                fontSize: "12px",
-              }}
-            >
-              AI analysis
-            </button>
-            <button
-              onClick={() => openTrendModal(title, data, isPercentage)}
-              style={{
-                padding: "6px 12px",
-                backgroundColor: "#e8ddd4",
-                color: "#5d4037",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: "600",
-                fontSize: "12px",
-              }}
-            >
-              View trend
-            </button>
+        <div style={{ flex: 1 }}>
+          <h4
+            style={{
+              color: "#5d4037",
+              marginBottom: "5px",
+              fontSize: "16px",
+            }}
+          >
+            {title}
+          </h4>
+          <div
+            style={{
+              display: "inline-block",
+              padding: "4px 8px",
+              backgroundColor: status.color,
+              color: status.textColor,
+              borderRadius: "4px",
+              fontSize: "11px",
+              fontWeight: "600",
+              marginTop: "5px",
+            }}
+          >
+            {status.text}
           </div>
+        </div>
+      </div>
 
-          {expandedNotes[kpiKey] && (
-            <div style={{ marginBottom: "10px" }}>
-              <label
-                style={{
-                  fontSize: "12px",
-                  color: "#5d4037",
-                  fontWeight: "600",
-                  display: "block",
-                  marginBottom: "5px",
-                }}
-              >
-                Notes / Comments:
-              </label>
-              <textarea
-                value={kpiNotes[kpiKey] || ""}
-                onChange={(e) =>
-                  setKpiNotes((prev) => ({ ...prev, [kpiKey]: e.target.value }))
-                }
-                placeholder="Add notes or comments..."
-                style={{
-                  width: "100%",
-                  padding: "10px",
-                  borderRadius: "4px",
-                  border: "1px solid #e8ddd4",
-                  minHeight: "60px",
-                  fontSize: "13px",
-                }}
-              />
-            </div>
-          )}
+      <div style={{ borderTop: "1px solid #e8ddd4", paddingTop: "15px" }}>
+        <div style={{ display: "flex", gap: "10px", marginBottom: "10px" }}>
+          <button
+            onClick={() =>
+              setExpandedNotes((prev) => ({
+                ...prev,
+                [kpiKey]: !prev[kpiKey],
+              }))
+            }
+            style={{
+              padding: "6px 12px",
+              backgroundColor: "#e8ddd4",
+              color: "#5d4037",
+              border: "none",
+              borderRadius: "4px",
+              cursor: "pointer",
+              fontWeight: "600",
+              fontSize: "12px",
+            }}
+          >
+            Add notes
+          </button>
+          <button
+            onClick={handleAIAnalysis}
+            style={{
+              padding: "6px 12px",
+              backgroundColor: "#e8ddd4",
+              color: "#5d4037",
+              border: "none",
+              borderRadius: "4px",
+              cursor: "pointer",
+              fontWeight: "600",
+              fontSize: "12px",
+            }}
+          >
+            AI analysis
+          </button>
+          <button
+            onClick={() => openTrendModal(title, data, isPercentage)}
+            style={{
+              padding: "6px 12px",
+              backgroundColor: "#e8ddd4",
+              color: "#5d4037",
+              border: "none",
+              borderRadius: "4px",
+              cursor: "pointer",
+              fontWeight: "600",
+              fontSize: "12px",
+            }}
+          >
+            View trend
+          </button>
+        </div>
 
-          {expandedNotes[`${kpiKey}_analysis`] && (
-            <div
+        {expandedNotes[kpiKey] && (
+          <div style={{ marginBottom: "10px" }}>
+            <label
               style={{
-                backgroundColor: "#e3f2fd",
-                padding: "15px",
-                borderRadius: "6px",
-                border: "1px solid #90caf9",
+                fontSize: "12px",
+                color: "#5d4037",
+                fontWeight: "600",
+                display: "block",
+                marginBottom: "5px",
               }}
             >
-              <label
-                style={{
-                  fontSize: "12px",
-                  color: "#1565c0",
-                  fontWeight: "600",
-                  display: "block",
-                  marginBottom: "8px",
-                }}
-              >
-                AI Analysis:
-              </label>
-              <p
-                style={{
-                  fontSize: "13px",
-                  color: "#1565c0",
-                  lineHeight: "1.5",
-                  margin: 0,
-                }}
-              >
-                {kpiAnalysis[kpiKey] ||
-                  `Based on current ${title.toLowerCase()} of ${isPercentage ? `${currentValue.toFixed(1)}%` : currentValue.toFixed(1)}:
+              Notes / Comments:
+            </label>
+            <textarea
+              value={kpiNotes[kpiKey] || ""}
+              onChange={(e) =>
+                setKpiNotes((prev) => ({ ...prev, [kpiKey]: e.target.value }))
+              }
+              placeholder="Add notes or comments..."
+              style={{
+                width: "100%",
+                padding: "10px",
+                borderRadius: "4px",
+                border: "1px solid #e8ddd4",
+                minHeight: "60px",
+                fontSize: "13px",
+              }}
+            />
+          </div>
+        )}
+
+        {expandedNotes[`${kpiKey}_analysis`] && (
+          <div
+            style={{
+              backgroundColor: "#e3f2fd",
+              padding: "15px",
+              borderRadius: "6px",
+              border: "1px solid #90caf9",
+            }}
+          >
+            <label
+              style={{
+                fontSize: "12px",
+                color: "#1565c0",
+                fontWeight: "600",
+                display: "block",
+                marginBottom: "8px",
+              }}
+            >
+              AI Analysis:
+            </label>
+            <p
+              style={{
+                fontSize: "13px",
+                color: "#1565c0",
+                lineHeight: "1.5",
+                margin: 0,
+              }}
+            >
+              {kpiAnalysis[kpiKey] ||
+                `Based on current ${title.toLowerCase()} of ${isPercentage ? `${currentValue.toFixed(1)}%` : currentValue.toFixed(1)}:
                   \n\nThis metric indicates your ${title.toLowerCase()} position. ${status.text === "Critical" || status.text === "High Risk" ? "Immediate attention required." : "Monitor regularly."}
                   \n\nRecommended actions:
                   \n• ${
@@ -4308,13 +4323,51 @@ const ExecutionCapacity = ({ activeSection, user, isInvestorView }) => {
                   }
                   \n• Set improvement targets
                   \n• Track progress monthly`}
-              </p>
-            </div>
-          )}
-        </div>
+            </p>
+            <button
+              onClick={handleAIAnalysis}
+              style={{
+                marginTop: "10px",
+                padding: "6px 12px",
+                backgroundColor: "#1565c0",
+                color: "#fff",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontSize: "12px",
+              }}
+            >
+              Get Detailed AI Analysis →
+            </button>
+          </div>
+        )}
       </div>
-    );
-  };
+
+      {/* People Analysis Modal */}
+      {showAnalysisModal && selectedMetricForAnalysis && (
+        <PeopleAnalysisModal
+          isOpen={showAnalysisModal}
+          onClose={() => {
+            setShowAnalysisModal(false);
+            setSelectedMetricForAnalysis(null);
+          }}
+          kpiTitle={selectedMetricForAnalysis.title}
+          kpiKey={selectedMetricForAnalysis.key}
+          kpiValue={selectedMetricForAnalysis.value}
+          contextData={selectedMetricForAnalysis.contextData}
+          company={{
+            name: "Your Business",
+            stage: "Growth Stage",
+            industry: "General",
+          }}
+          currentUser={user}
+          section="execution-capacity"
+        />
+      )}
+    </div>
+  );
+};
+
 
   const renderFounderLoadTable = () => {
     return (
@@ -4904,394 +4957,425 @@ const Productivity = ({ activeSection, user, isInvestorView }) => {
       </div>
     );
   };
+  const [showAnalysisModal, setShowAnalysisModal] = useState(false);
+const [selectedMetricForAnalysis, setSelectedMetricForAnalysis] = useState(null);
 
-  const renderTripleCard = (
-    title,
-    dataKey,
-    unit = "number",
-    goodDirection = "up",
-    calculation = "",
-  ) => {
-    const monthIndex = new Date().getMonth(); // Current month
+const renderTripleCard = (
+  title,
+  dataKey,
+  unit = "number",
+  goodDirection = "up",
+  calculation = "",
+) => {
+  const monthIndex = new Date().getMonth();
 
-    let actualValue = 0;
-    let budgetValue = 0;
-    let formatFn = formatNumber;
+  let actualValue = 0;
+  let budgetValue = 0;
+  let formatFn = formatNumber;
 
-    if (dataKey === "revenuePerEmployee") {
-      actualValue =
-        parseFloat(productivityData.revenuePerEmployee?.actual?.[monthIndex]) ||
-        0;
-      budgetValue =
-        parseFloat(productivityData.revenuePerEmployee?.budget?.[monthIndex]) ||
-        0;
-      formatFn = formatValue;
-      unit = "currency";
-    } else if (dataKey === "laborCostPercentage") {
-      actualValue =
-        parseFloat(
-          productivityData.laborCostPercentage?.actual?.[monthIndex],
-        ) || 0;
-      budgetValue =
-        parseFloat(
-          productivityData.laborCostPercentage?.budget?.[monthIndex],
-        ) || 0;
-      formatFn = formatPercentage;
-      unit = "percentage";
-    } else if (dataKey === "salesVolumePerEmployee") {
-      actualValue =
-        parseFloat(
-          productivityData.salesVolumePerEmployee?.actual?.[monthIndex],
-        ) || 0;
-      budgetValue =
-        parseFloat(
-          productivityData.salesVolumePerEmployee?.budget?.[monthIndex],
-        ) || 0;
-      formatFn = formatNumber;
-    } else if (dataKey === "overtimeHours") {
-      actualValue =
-        parseFloat(productivityData.overtimeHours?.actual?.[monthIndex]) || 0;
-      budgetValue =
-        parseFloat(productivityData.overtimeHours?.budget?.[monthIndex]) || 0;
-      formatFn = formatHours;
-    }
+  if (dataKey === "revenuePerEmployee") {
+    actualValue = parseFloat(productivityData.revenuePerEmployee?.actual?.[monthIndex]) || 0;
+    budgetValue = parseFloat(productivityData.revenuePerEmployee?.budget?.[monthIndex]) || 0;
+    formatFn = formatValue;
+    unit = "currency";
+  } else if (dataKey === "laborCostPercentage") {
+    actualValue = parseFloat(productivityData.laborCostPercentage?.actual?.[monthIndex]) || 0;
+    budgetValue = parseFloat(productivityData.laborCostPercentage?.budget?.[monthIndex]) || 0;
+    formatFn = formatPercentage;
+    unit = "percentage";
+  } else if (dataKey === "salesVolumePerEmployee") {
+    actualValue = parseFloat(productivityData.salesVolumePerEmployee?.actual?.[monthIndex]) || 0;
+    budgetValue = parseFloat(productivityData.salesVolumePerEmployee?.budget?.[monthIndex]) || 0;
+    formatFn = formatNumber;
+  } else if (dataKey === "overtimeHours") {
+    actualValue = parseFloat(productivityData.overtimeHours?.actual?.[monthIndex]) || 0;
+    budgetValue = parseFloat(productivityData.overtimeHours?.budget?.[monthIndex]) || 0;
+    formatFn = formatHours;
+  }
 
-    const variance = actualValue - budgetValue;
-    const variancePercent =
-      budgetValue !== 0 ? (variance / Math.abs(budgetValue)) * 100 : 0;
+  const variance = actualValue - budgetValue;
+  const variancePercent = budgetValue !== 0 ? (variance / Math.abs(budgetValue)) * 100 : 0;
 
-    return (
+  const handleAIAnalysis = () => {
+    setSelectedMetricForAnalysis({
+      title: title,
+      key: dataKey,
+      value: actualValue,
+      contextData: {
+        unit: unit,
+        budgetValue: budgetValue,
+        variancePercent: variancePercent,
+        benchmark: dataKey === "revenuePerEmployee" ? 500000 :
+                   dataKey === "laborCostPercentage" ? 35 :
+                   dataKey === "salesVolumePerEmployee" ? 100 :
+                   dataKey === "overtimeHours" ? 10 : 50,
+        timeRange: "Current Month",
+      },
+    });
+    setShowAnalysisModal(true);
+  };
+
+  return (
+    <div
+      style={{
+        backgroundColor: "#fdfcfb",
+        padding: "20px",
+        borderRadius: "8px",
+        boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+        marginBottom: "20px",
+        position: "relative",
+        border: "1px solid #e8ddd4",
+      }}
+    >
+      {/* Eye Icon */}
       <div
+        onClick={() => handleCalculationClick(title, calculation)}
         style={{
+          position: "absolute",
+          top: "10px",
+          right: "10px",
+          cursor: "pointer",
+          width: "32px",
+          height: "32px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          borderRadius: "50%",
           backgroundColor: "#fdfcfb",
-          padding: "20px",
-          borderRadius: "8px",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-          marginBottom: "20px",
-          position: "relative",
-          border: "1px solid #e8ddd4",
+          boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
+          zIndex: 10,
+          border: `2px solid ${circleColors[0].border}`,
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.backgroundColor = "#e8ddd4";
+          e.currentTarget.style.transform = "scale(1.1)";
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.backgroundColor = "#fdfcfb";
+          e.currentTarget.style.transform = "scale(1)";
         }}
       >
-        {/* Eye Icon */}
-        <div
-          onClick={() => handleCalculationClick(title, calculation)}
-          style={{
-            position: "absolute",
-            top: "10px",
-            right: "10px",
-            cursor: "pointer",
-            width: "32px",
-            height: "32px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            borderRadius: "50%",
-            backgroundColor: "#fdfcfb",
-            boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
-            zIndex: 10,
-            border: `2px solid ${circleColors[0].border}`,
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = "#e8ddd4";
-            e.currentTarget.style.transform = "scale(1.1)";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = "#fdfcfb";
-            e.currentTarget.style.transform = "scale(1)";
-          }}
+        <svg
+          width="18"
+          height="18"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke={circleColors[0].border}
+          strokeWidth="2"
         >
-          <svg
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke={circleColors[0].border}
-            strokeWidth="2"
-          >
-            <circle cx="12" cy="12" r="2"></circle>
-            <circle cx="12" cy="12" r="5" strokeOpacity="0.5"></circle>
-            <path d="M22 12c0 5.52-4.48 10-10 10S2 17.52 2 12 6.48 2 12 2s10 4.48 10 10z"></path>
-          </svg>
-        </div>
+          <circle cx="12" cy="12" r="2"></circle>
+          <circle cx="12" cy="12" r="5" strokeOpacity="0.5"></circle>
+          <path d="M22 12c0 5.52-4.48 10-10 10S2 17.52 2 12 6.48 2 12 2s10 4.48 10 10z"></path>
+        </svg>
+      </div>
 
-        {/* Title */}
-        <h4
-          style={{
-            color: "#5d4037",
-            marginBottom: "20px",
-            fontSize: "16px",
-            textAlign: "center",
-            fontWeight: "600",
-          }}
-        >
-          {title}
-        </h4>
+      {/* Title */}
+      <h4
+        style={{
+          color: "#5d4037",
+          marginBottom: "20px",
+          fontSize: "16px",
+          textAlign: "center",
+          fontWeight: "600",
+        }}
+      >
+        {title}
+      </h4>
 
-        {/* Three Circles */}
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-around",
-            alignItems: "center",
-            marginBottom: "20px",
-          }}
-        >
-          {/* Actual Circle */}
-          <div style={{ textAlign: "center" }}>
-            <div
-              style={{
-                width: "80px",
-                height: "80px",
-                borderRadius: "50%",
-                border: `4px solid ${circleColors[0].border}`,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                margin: "0 auto 8px",
-                backgroundColor: circleColors[0].background,
-              }}
-            >
-              <div style={{ textAlign: "center" }}>
-                <div
-                  style={{
-                    fontSize: "14px",
-                    fontWeight: "700",
-                    color: circleColors[0].text,
-                  }}
-                >
-                  {formatFn(actualValue)}
-                </div>
-              </div>
-            </div>
-            <div
-              style={{ fontSize: "11px", color: "#5d4037", fontWeight: "500" }}
-            >
-              Actual
-            </div>
-          </div>
-
-          {/* Budget Circle */}
-          <div style={{ textAlign: "center" }}>
-            <div
-              style={{
-                width: "80px",
-                height: "80px",
-                borderRadius: "50%",
-                border: `4px solid ${circleColors[1].border}`,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                margin: "0 auto 8px",
-                backgroundColor: circleColors[1].background,
-              }}
-            >
-              <div style={{ textAlign: "center" }}>
-                <div
-                  style={{
-                    fontSize: "14px",
-                    fontWeight: "700",
-                    color: circleColors[1].text,
-                  }}
-                >
-                  {formatFn(budgetValue)}
-                </div>
-              </div>
-            </div>
-            <div
-              style={{ fontSize: "11px", color: "#5d4037", fontWeight: "500" }}
-            >
-              Budget
-            </div>
-          </div>
-
-          {/* Variance Circle */}
-          <div style={{ textAlign: "center" }}>
-            <div
-              style={{
-                width: "80px",
-                height: "80px",
-                borderRadius: "50%",
-                border: `4px solid ${circleColors[2].border}`,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                margin: "0 auto 8px",
-                backgroundColor: circleColors[2].background,
-              }}
-            >
-              <div style={{ textAlign: "center" }}>
-                <TrendArrow
-                  value={variancePercent}
-                  goodDirection={goodDirection}
-                />
-              </div>
-            </div>
-            <div
-              style={{ fontSize: "11px", color: "#5d4037", fontWeight: "500" }}
-            >
-              Variance
-            </div>
-          </div>
-        </div>
-
-        {/* Action Buttons */}
-        <div style={{ borderTop: "1px solid #e8ddd4", paddingTop: "15px" }}>
+      {/* Three Circles */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-around",
+          alignItems: "center",
+          marginBottom: "20px",
+        }}
+      >
+        {/* Actual Circle */}
+        <div style={{ textAlign: "center" }}>
           <div
             style={{
+              width: "80px",
+              height: "80px",
+              borderRadius: "50%",
+              border: `4px solid ${circleColors[0].border}`,
               display: "flex",
-              gap: "10px",
+              alignItems: "center",
               justifyContent: "center",
-              marginBottom: "10px",
+              margin: "0 auto 8px",
+              backgroundColor: circleColors[0].background,
             }}
           >
-            <button
-              onClick={() =>
-                setExpandedNotes((prev) => ({
-                  ...prev,
-                  [dataKey]: !prev[dataKey],
-                }))
-              }
-              style={{
-                padding: "6px 12px",
-                backgroundColor: "#e8ddd4",
-                color: "#5d4037",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: "600",
-                fontSize: "12px",
-              }}
-            >
-              Add notes
-            </button>
-            <button
-              onClick={() =>
-                setExpandedNotes((prev) => ({
-                  ...prev,
-                  [`${dataKey}_analysis`]: !prev[`${dataKey}_analysis`],
-                }))
-              }
-              style={{
-                padding: "6px 12px",
-                backgroundColor: "#e8ddd4",
-                color: "#5d4037",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: "600",
-                fontSize: "12px",
-              }}
-            >
-              AI analysis
-            </button>
-            <button
-              onClick={() => {
-                let dataArray = [];
-                if (dataKey === "revenuePerEmployee")
-                  dataArray = productivityData.revenuePerEmployee?.actual || [];
-                else if (dataKey === "laborCostPercentage")
-                  dataArray =
-                    productivityData.laborCostPercentage?.actual || [];
-                else if (dataKey === "salesVolumePerEmployee")
-                  dataArray =
-                    productivityData.salesVolumePerEmployee?.actual || [];
-                else if (dataKey === "overtimeHours")
-                  dataArray = productivityData.overtimeHours?.actual || [];
-                openTrendModal(title, dataArray, unit);
-              }}
-              style={{
-                padding: "6px 12px",
-                backgroundColor: "#e8ddd4",
-                color: "#5d4037",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: "600",
-                fontSize: "12px",
-              }}
-            >
-              View trend
-            </button>
-          </div>
-
-          {expandedNotes[dataKey] && (
-            <div style={{ marginBottom: "10px" }}>
-              <label
+            <div style={{ textAlign: "center" }}>
+              <div
                 style={{
-                  fontSize: "12px",
-                  color: "#5d4037",
-                  fontWeight: "600",
-                  display: "block",
-                  marginBottom: "5px",
+                  fontSize: "14px",
+                  fontWeight: "700",
+                  color: circleColors[0].text,
                 }}
               >
-                Notes / Comments:
-              </label>
-              <textarea
-                value={kpiNotes[dataKey] || ""}
-                onChange={(e) =>
-                  setKpiNotes((prev) => ({
-                    ...prev,
-                    [dataKey]: e.target.value,
-                  }))
-                }
-                placeholder="Add notes or comments..."
+                {formatFn(actualValue)}
+              </div>
+            </div>
+          </div>
+          <div
+            style={{ fontSize: "11px", color: "#5d4037", fontWeight: "500" }}
+          >
+            Actual
+          </div>
+        </div>
+
+        {/* Budget Circle */}
+        <div style={{ textAlign: "center" }}>
+          <div
+            style={{
+              width: "80px",
+              height: "80px",
+              borderRadius: "50%",
+              border: `4px solid ${circleColors[1].border}`,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              margin: "0 auto 8px",
+              backgroundColor: circleColors[1].background,
+            }}
+          >
+            <div style={{ textAlign: "center" }}>
+              <div
                 style={{
-                  width: "100%",
-                  padding: "10px",
-                  borderRadius: "4px",
-                  border: "1px solid #e8ddd4",
-                  minHeight: "60px",
-                  fontSize: "13px",
+                  fontSize: "14px",
+                  fontWeight: "700",
+                  color: circleColors[1].text,
                 }}
+              >
+                {formatFn(budgetValue)}
+              </div>
+            </div>
+          </div>
+          <div
+            style={{ fontSize: "11px", color: "#5d4037", fontWeight: "500" }}
+          >
+            Budget
+          </div>
+        </div>
+
+        {/* Variance Circle */}
+        <div style={{ textAlign: "center" }}>
+          <div
+            style={{
+              width: "80px",
+              height: "80px",
+              borderRadius: "50%",
+              border: `4px solid ${circleColors[2].border}`,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              margin: "0 auto 8px",
+              backgroundColor: circleColors[2].background,
+            }}
+          >
+            <div style={{ textAlign: "center" }}>
+              <TrendArrow
+                value={variancePercent}
+                goodDirection={goodDirection}
               />
             </div>
-          )}
+          </div>
+          <div
+            style={{ fontSize: "11px", color: "#5d4037", fontWeight: "500" }}
+          >
+            Variance
+          </div>
+        </div>
+      </div>
 
-          {expandedNotes[`${dataKey}_analysis`] && (
-            <div
+      {/* Action Buttons */}
+      <div style={{ borderTop: "1px solid #e8ddd4", paddingTop: "15px" }}>
+        <div
+          style={{
+            display: "flex",
+            gap: "10px",
+            justifyContent: "center",
+            marginBottom: "10px",
+          }}
+        >
+          <button
+            onClick={() =>
+              setExpandedNotes((prev) => ({
+                ...prev,
+                [dataKey]: !prev[dataKey],
+              }))
+            }
+            style={{
+              padding: "6px 12px",
+              backgroundColor: "#e8ddd4",
+              color: "#5d4037",
+              border: "none",
+              borderRadius: "4px",
+              cursor: "pointer",
+              fontWeight: "600",
+              fontSize: "12px",
+            }}
+          >
+            Add notes
+          </button>
+          <button
+            onClick={handleAIAnalysis}
+            style={{
+              padding: "6px 12px",
+              backgroundColor: "#e8ddd4",
+              color: "#5d4037",
+              border: "none",
+              borderRadius: "4px",
+              cursor: "pointer",
+              fontWeight: "600",
+              fontSize: "12px",
+            }}
+          >
+            AI analysis
+          </button>
+          <button
+            onClick={() => {
+              let dataArray = [];
+              if (dataKey === "revenuePerEmployee")
+                dataArray = productivityData.revenuePerEmployee?.actual || [];
+              else if (dataKey === "laborCostPercentage")
+                dataArray = productivityData.laborCostPercentage?.actual || [];
+              else if (dataKey === "salesVolumePerEmployee")
+                dataArray = productivityData.salesVolumePerEmployee?.actual || [];
+              else if (dataKey === "overtimeHours")
+                dataArray = productivityData.overtimeHours?.actual || [];
+              openTrendModal(title, dataArray, unit);
+            }}
+            style={{
+              padding: "6px 12px",
+              backgroundColor: "#e8ddd4",
+              color: "#5d4037",
+              border: "none",
+              borderRadius: "4px",
+              cursor: "pointer",
+              fontWeight: "600",
+              fontSize: "12px",
+            }}
+          >
+            View trend
+          </button>
+        </div>
+
+        {expandedNotes[dataKey] && (
+          <div style={{ marginBottom: "10px" }}>
+            <label
               style={{
-                backgroundColor: "#e3f2fd",
-                padding: "15px",
-                borderRadius: "6px",
-                border: "1px solid #90caf9",
+                fontSize: "12px",
+                color: "#5d4037",
+                fontWeight: "600",
+                display: "block",
+                marginBottom: "5px",
               }}
             >
-              <label
-                style={{
-                  fontSize: "12px",
-                  color: "#1565c0",
-                  fontWeight: "600",
-                  display: "block",
-                  marginBottom: "8px",
-                }}
-              >
-                AI Analysis:
-              </label>
-              <p
-                style={{
-                  fontSize: "13px",
-                  color: "#1565c0",
-                  lineHeight: "1.5",
-                  margin: 0,
-                }}
-              >
-                {kpiAnalysis[dataKey] ||
-                  `Based on current ${title.toLowerCase()}:
+              Notes / Comments:
+            </label>
+            <textarea
+              value={kpiNotes[dataKey] || ""}
+              onChange={(e) =>
+                setKpiNotes((prev) => ({
+                  ...prev,
+                  [dataKey]: e.target.value,
+                }))
+              }
+              placeholder="Add notes or comments..."
+              style={{
+                width: "100%",
+                padding: "10px",
+                borderRadius: "4px",
+                border: "1px solid #e8ddd4",
+                minHeight: "60px",
+                fontSize: "13px",
+              }}
+            />
+          </div>
+        )}
+
+        {expandedNotes[`${dataKey}_analysis`] && (
+          <div
+            style={{
+              backgroundColor: "#e3f2fd",
+              padding: "15px",
+              borderRadius: "6px",
+              border: "1px solid #90caf9",
+            }}
+          >
+            <label
+              style={{
+                fontSize: "12px",
+                color: "#1565c0",
+                fontWeight: "600",
+                display: "block",
+                marginBottom: "8px",
+              }}
+            >
+              AI Analysis:
+            </label>
+            <p
+              style={{
+                fontSize: "13px",
+                color: "#1565c0",
+                lineHeight: "1.5",
+                margin: 0,
+              }}
+            >
+              {kpiAnalysis[dataKey] ||
+                `Based on current ${title.toLowerCase()}:
                   \n\nActual: ${formatFn(actualValue)} vs Budget: ${formatFn(budgetValue)}
                   \nVariance: ${variancePercent > 0 ? "+" : ""}${variancePercent.toFixed(1)}%
                   \n\nRecommended actions:
                   \n• ${variancePercent > 0 ? "Exceeding budget - analyze what's working well" : "Below budget - investigate causes and adjust plans"}
                   \n• Review trends over past months
                   \n• Set improvement targets for next period`}
-              </p>
-            </div>
-          )}
-        </div>
+            </p>
+            <button
+              onClick={handleAIAnalysis}
+              style={{
+                marginTop: "10px",
+                padding: "6px 12px",
+                backgroundColor: "#1565c0",
+                color: "#fff",
+                border: "none",
+                borderRadius: "4px",
+                cursor: "pointer",
+                fontSize: "12px",
+              }}
+            >
+              Get Detailed AI Analysis →
+            </button>
+          </div>
+        )}
       </div>
-    );
-  };
 
+      {/* People Analysis Modal */}
+      {showAnalysisModal && selectedMetricForAnalysis && (
+        <PeopleAnalysisModal
+          isOpen={showAnalysisModal}
+          onClose={() => {
+            setShowAnalysisModal(false);
+            setSelectedMetricForAnalysis(null);
+          }}
+          kpiTitle={selectedMetricForAnalysis.title}
+          kpiKey={selectedMetricForAnalysis.key}
+          kpiValue={selectedMetricForAnalysis.value}
+          contextData={selectedMetricForAnalysis.contextData}
+          company={{
+            name: "Your Business",
+            stage: "Growth Stage",
+            industry: "General",
+          }}
+          currentUser={user}
+          section="productivity"
+        />
+      )}
+    </div>
+  );
+};
   if (activeSection !== "productivity") return null;
 
   return (
@@ -5678,402 +5762,239 @@ const CapabilityTraining = ({ activeSection, user, isInvestorView }) => {
     );
   };
 
-  const renderTripleCard = (
-    title,
-    dataKey,
-    unit = "number",
-    goodDirection = "up",
-    calculation = "",
-  ) => {
-    const monthIndex = new Date().getMonth(); // Current month
+  const [showAnalysisModal, setShowAnalysisModal] = useState(false);
+const [selectedMetricForAnalysis, setSelectedMetricForAnalysis] = useState(null);
 
-    let actualValue = 0;
-    let budgetValue = 0;
-    let formatFn = formatValue;
 
-    if (dataKey === "trainingSpendAmount") {
-      actualValue =
-        parseFloat(capabilityData.trainingSpendAmount?.actual?.[monthIndex]) ||
-        0;
-      budgetValue =
-        parseFloat(capabilityData.trainingSpendAmount?.budget?.[monthIndex]) ||
-        0;
-      formatFn = (val) => formatValue(val, "zar_million");
-      unit = "currency";
-    } else if (dataKey === "trainingSpendPercentage") {
-      actualValue =
-        parseFloat(
-          capabilityData.trainingSpendPercentage?.actual?.[monthIndex],
-        ) || 0;
-      budgetValue =
-        parseFloat(
-          capabilityData.trainingSpendPercentage?.budget?.[monthIndex],
-        ) || 0;
-      formatFn = formatPercentage;
-      unit = "percentage";
-    } else if (dataKey === "trainingFocus") {
-      const actualVal =
-        capabilityData.trainingFocus?.actual?.[monthIndex] || "";
-      const budgetVal =
-        capabilityData.trainingFocus?.budget?.[monthIndex] || "";
 
-      // Convert numeric values to labels for display
-      const getFocusLabel = (val) => {
-        if (val === "1") return "Technical";
-        if (val === "2") return "Leadership";
-        if (val === "3") return "Compliance";
-        return "Not Set";
-      };
+ const renderTripleCard = (
+  title,
+  dataKey,
+  unit = "number",
+  goodDirection = "up",
+  calculation = "",
+) => {
+  const monthIndex = new Date().getMonth();
 
-      actualValue = getFocusLabel(actualVal);
-      budgetValue = getFocusLabel(budgetVal);
-      formatFn = (val) => val;
-    }
+  let actualValue = 0;
+  let budgetValue = 0;
+  let formatFn = formatValue;
 
-    // For training focus, variance is not applicable
-    const showVariance = dataKey !== "trainingFocus";
-    const variance = showVariance ? actualValue - budgetValue : 0;
-    const variancePercent =
-      showVariance && budgetValue !== 0
-        ? (variance / Math.abs(budgetValue)) * 100
-        : 0;
+  if (dataKey === "trainingSpendAmount") {
+    actualValue = parseFloat(capabilityData.trainingSpendAmount?.actual?.[monthIndex]) || 0;
+    budgetValue = parseFloat(capabilityData.trainingSpendAmount?.budget?.[monthIndex]) || 0;
+    formatFn = (val) => formatValue(val, "zar_million");
+    unit = "currency";
+  } else if (dataKey === "trainingSpendPercentage") {
+    actualValue = parseFloat(capabilityData.trainingSpendPercentage?.actual?.[monthIndex]) || 0;
+    budgetValue = parseFloat(capabilityData.trainingSpendPercentage?.budget?.[monthIndex]) || 0;
+    formatFn = formatPercentage;
+    unit = "percentage";
+  } else if (dataKey === "trainingFocus") {
+    const actualVal = capabilityData.trainingFocus?.actual?.[monthIndex] || "";
+    const budgetVal = capabilityData.trainingFocus?.budget?.[monthIndex] || "";
 
-    return (
+    const getFocusLabel = (val) => {
+      if (val === "1") return "Technical";
+      if (val === "2") return "Leadership";
+      if (val === "3") return "Compliance";
+      return "Not Set";
+    };
+
+    actualValue = getFocusLabel(actualVal);
+    budgetValue = getFocusLabel(budgetVal);
+    formatFn = (val) => val;
+  }
+
+  const showVariance = dataKey !== "trainingFocus";
+  const variance = showVariance ? actualValue - budgetValue : 0;
+  const variancePercent = showVariance && budgetValue !== 0 ? (variance / Math.abs(budgetValue)) * 100 : 0;
+
+  // FIXED: handleAIAnalysis function now uses the parameters correctly
+  const handleAIAnalysis = () => {
+    setSelectedMetricForAnalysis({
+      title: title,
+      key: dataKey,
+      value: actualValue,
+      contextData: {
+        unit: unit,
+        budgetValue: budgetValue,
+        variancePercent: variancePercent,
+        benchmark: dataKey === "trainingSpendAmount" ? 50000 :
+                   dataKey === "trainingSpendPercentage" ? 3 :
+                   dataKey === "trainingFocus" ? 2 : 50,
+        timeRange: "Current Month",
+      },
+    });
+    setShowAnalysisModal(true);
+  };
+
+  return (
+    <div
+      style={{
+        backgroundColor: "#fdfcfb",
+        padding: "20px",
+        borderRadius: "8px",
+        boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+        marginBottom: "20px",
+        position: "relative",
+        border: "1px solid #e8ddd4",
+      }}
+    >
+      {/* Eye Icon */}
       <div
+        onClick={() => handleCalculationClick(title, calculation)}
         style={{
+          position: "absolute",
+          top: "10px",
+          right: "10px",
+          cursor: "pointer",
+          width: "32px",
+          height: "32px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          borderRadius: "50%",
           backgroundColor: "#fdfcfb",
-          padding: "20px",
-          borderRadius: "8px",
-          boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-          marginBottom: "20px",
-          position: "relative",
-          border: "1px solid #e8ddd4",
+          boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
+          zIndex: 10,
+          border: `2px solid ${circleColors[0].border}`,
         }}
       >
-        {/* Eye Icon */}
-        <div
-          onClick={() => handleCalculationClick(title, calculation)}
-          style={{
-            position: "absolute",
-            top: "10px",
-            right: "10px",
-            cursor: "pointer",
-            width: "32px",
-            height: "32px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            borderRadius: "50%",
-            backgroundColor: "#fdfcfb",
-            boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
-            zIndex: 10,
-            border: `2px solid ${circleColors[0].border}`,
-          }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.backgroundColor = "#e8ddd4";
-            e.currentTarget.style.transform = "scale(1.1)";
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = "#fdfcfb";
-            e.currentTarget.style.transform = "scale(1)";
-          }}
-        >
-          <svg
-            width="18"
-            height="18"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke={circleColors[0].border}
-            strokeWidth="2"
-          >
-            <circle cx="12" cy="12" r="2"></circle>
-            <circle cx="12" cy="12" r="5" strokeOpacity="0.5"></circle>
-            <path d="M22 12c0 5.52-4.48 10-10 10S2 17.52 2 12 6.48 2 12 2s10 4.48 10 10z"></path>
-          </svg>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={circleColors[0].border} strokeWidth="2">
+          <circle cx="12" cy="12" r="2"></circle>
+          <circle cx="12" cy="12" r="5" strokeOpacity="0.5"></circle>
+          <path d="M22 12c0 5.52-4.48 10-10 10S2 17.52 2 12 6.48 2 12 2s10 4.48 10 10z"></path>
+        </svg>
+      </div>
+
+      {/* Title */}
+      <h4 style={{ color: "#5d4037", marginBottom: "20px", fontSize: "16px", textAlign: "center", fontWeight: "600" }}>
+        {title}
+      </h4>
+
+      {/* Three Circles */}
+      <div style={{ display: "flex", justifyContent: "space-around", alignItems: "center", marginBottom: "20px" }}>
+        {/* Actual Circle */}
+        <div style={{ textAlign: "center" }}>
+          <div style={{
+            width: "80px", height: "80px", borderRadius: "50%",
+            border: `4px solid ${circleColors[0].border}`, display: "flex",
+            alignItems: "center", justifyContent: "center", margin: "0 auto 8px",
+            backgroundColor: circleColors[0].background,
+          }}>
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontSize: "14px", fontWeight: "700", color: circleColors[0].text }}>
+                {formatFn(actualValue)}
+              </div>
+            </div>
+          </div>
+          <div style={{ fontSize: "11px", color: "#5d4037", fontWeight: "500" }}>Actual</div>
         </div>
 
-        {/* Title */}
-        <h4
-          style={{
-            color: "#5d4037",
-            marginBottom: "20px",
-            fontSize: "16px",
-            textAlign: "center",
-            fontWeight: "600",
-          }}
-        >
-          {title}
-        </h4>
-
-        {/* Three Circles */}
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-around",
-            alignItems: "center",
-            marginBottom: "20px",
-          }}
-        >
-          {/* Actual Circle */}
-          <div style={{ textAlign: "center" }}>
-            <div
-              style={{
-                width: "80px",
-                height: "80px",
-                borderRadius: "50%",
-                border: `4px solid ${circleColors[0].border}`,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                margin: "0 auto 8px",
-                backgroundColor: circleColors[0].background,
-              }}
-            >
-              <div style={{ textAlign: "center" }}>
-                <div
-                  style={{
-                    fontSize: "14px",
-                    fontWeight: "700",
-                    color: circleColors[0].text,
-                  }}
-                >
-                  {formatFn(actualValue)}
-                </div>
+        {/* Budget Circle */}
+        <div style={{ textAlign: "center" }}>
+          <div style={{
+            width: "80px", height: "80px", borderRadius: "50%",
+            border: `4px solid ${circleColors[1].border}`, display: "flex",
+            alignItems: "center", justifyContent: "center", margin: "0 auto 8px",
+            backgroundColor: circleColors[1].background,
+          }}>
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontSize: "14px", fontWeight: "700", color: circleColors[1].text }}>
+                {formatFn(budgetValue)}
               </div>
             </div>
-            <div
-              style={{ fontSize: "11px", color: "#5d4037", fontWeight: "500" }}
-            >
-              Actual
-            </div>
           </div>
-
-          {/* Budget Circle */}
-          <div style={{ textAlign: "center" }}>
-            <div
-              style={{
-                width: "80px",
-                height: "80px",
-                borderRadius: "50%",
-                border: `4px solid ${circleColors[1].border}`,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                margin: "0 auto 8px",
-                backgroundColor: circleColors[1].background,
-              }}
-            >
-              <div style={{ textAlign: "center" }}>
-                <div
-                  style={{
-                    fontSize: "14px",
-                    fontWeight: "700",
-                    color: circleColors[1].text,
-                  }}
-                >
-                  {formatFn(budgetValue)}
-                </div>
-              </div>
-            </div>
-            <div
-              style={{ fontSize: "11px", color: "#5d4037", fontWeight: "500" }}
-            >
-              Budget
-            </div>
-          </div>
-
-          {/* Variance Circle */}
-          <div style={{ textAlign: "center" }}>
-            <div
-              style={{
-                width: "80px",
-                height: "80px",
-                borderRadius: "50%",
-                border: `4px solid ${circleColors[2].border}`,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                margin: "0 auto 8px",
-                backgroundColor: circleColors[2].background,
-              }}
-            >
-              <div style={{ textAlign: "center" }}>
-                {showVariance ? (
-                  <TrendArrow
-                    value={variancePercent}
-                    goodDirection={goodDirection}
-                  />
-                ) : (
-                  <span
-                    style={{ fontSize: "12px", color: circleColors[2].text }}
-                  >
-                    N/A
-                  </span>
-                )}
-              </div>
-            </div>
-            <div
-              style={{ fontSize: "11px", color: "#5d4037", fontWeight: "500" }}
-            >
-              Variance
-            </div>
-          </div>
+          <div style={{ fontSize: "11px", color: "#5d4037", fontWeight: "500" }}>Budget</div>
         </div>
 
-        {/* Action Buttons */}
-        <div style={{ borderTop: "1px solid #e8ddd4", paddingTop: "15px" }}>
-          <div
-            style={{
-              display: "flex",
-              gap: "10px",
-              justifyContent: "center",
-              marginBottom: "10px",
-            }}
-          >
-            <button
-              onClick={() =>
-                setExpandedNotes((prev) => ({
-                  ...prev,
-                  [dataKey]: !prev[dataKey],
-                }))
-              }
-              style={{
-                padding: "6px 12px",
-                backgroundColor: "#e8ddd4",
-                color: "#5d4037",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: "600",
-                fontSize: "12px",
-              }}
-            >
-              Add notes
-            </button>
-            <button
-              onClick={() =>
-                setExpandedNotes((prev) => ({
-                  ...prev,
-                  [`${dataKey}_analysis`]: !prev[`${dataKey}_analysis`],
-                }))
-              }
-              style={{
-                padding: "6px 12px",
-                backgroundColor: "#e8ddd4",
-                color: "#5d4037",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: "600",
-                fontSize: "12px",
-              }}
-            >
-              AI analysis
-            </button>
-            <button
-              onClick={() => {
-                let dataArray = [];
-                if (dataKey === "trainingSpendAmount")
-                  dataArray = capabilityData.trainingSpendAmount?.actual || [];
-                else if (dataKey === "trainingSpendPercentage")
-                  dataArray =
-                    capabilityData.trainingSpendPercentage?.actual || [];
-                else if (dataKey === "trainingFocus")
-                  dataArray = capabilityData.trainingFocus?.actual || [];
-                openTrendModal(title, dataArray, unit);
-              }}
-              style={{
-                padding: "6px 12px",
-                backgroundColor: "#e8ddd4",
-                color: "#5d4037",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: "600",
-                fontSize: "12px",
-              }}
-            >
-              View trend
-            </button>
+        {/* Variance Circle */}
+        <div style={{ textAlign: "center" }}>
+          <div style={{
+            width: "80px", height: "80px", borderRadius: "50%",
+            border: `4px solid ${circleColors[2].border}`, display: "flex",
+            alignItems: "center", justifyContent: "center", margin: "0 auto 8px",
+            backgroundColor: circleColors[2].background,
+          }}>
+            <div style={{ textAlign: "center" }}>
+              {showVariance ? (
+                <TrendArrow value={variancePercent} goodDirection={goodDirection} />
+              ) : (
+                <span style={{ fontSize: "12px", color: circleColors[2].text }}>N/A</span>
+              )}
+            </div>
           </div>
-
-          {expandedNotes[dataKey] && (
-            <div style={{ marginBottom: "10px" }}>
-              <label
-                style={{
-                  fontSize: "12px",
-                  color: "#5d4037",
-                  fontWeight: "600",
-                  display: "block",
-                  marginBottom: "5px",
-                }}
-              >
-                Notes / Comments:
-              </label>
-              <textarea
-                value={kpiNotes[dataKey] || ""}
-                onChange={(e) =>
-                  setKpiNotes((prev) => ({
-                    ...prev,
-                    [dataKey]: e.target.value,
-                  }))
-                }
-                placeholder="Add notes or comments..."
-                style={{
-                  width: "100%",
-                  padding: "10px",
-                  borderRadius: "4px",
-                  border: "1px solid #e8ddd4",
-                  minHeight: "60px",
-                  fontSize: "13px",
-                }}
-              />
-            </div>
-          )}
-
-          {expandedNotes[`${dataKey}_analysis`] && (
-            <div
-              style={{
-                backgroundColor: "#e3f2fd",
-                padding: "15px",
-                borderRadius: "6px",
-                border: "1px solid #90caf9",
-              }}
-            >
-              <label
-                style={{
-                  fontSize: "12px",
-                  color: "#1565c0",
-                  fontWeight: "600",
-                  display: "block",
-                  marginBottom: "8px",
-                }}
-              >
-                AI Analysis:
-              </label>
-              <p
-                style={{
-                  fontSize: "13px",
-                  color: "#1565c0",
-                  lineHeight: "1.5",
-                  margin: 0,
-                }}
-              >
-                {kpiAnalysis[dataKey] ||
-                  `Based on current ${title.toLowerCase()}:
-                  \n\nActual: ${formatFn(actualValue)} vs Budget: ${formatFn(budgetValue)}
-                  \n${showVariance ? `Variance: ${variancePercent > 0 ? "+" : ""}${variancePercent.toFixed(1)}%` : ""}
-                  \n\nRecommended actions:
-                  \n• ${variancePercent > 0 ? "Exceeding budget - consider reallocating excess" : "Below budget - identify barriers to investment"}
-                  \n• Compare against industry benchmarks
-                  \n• Link training outcomes to business results`}
-              </p>
-            </div>
-          )}
+          <div style={{ fontSize: "11px", color: "#5d4037", fontWeight: "500" }}>Variance</div>
         </div>
       </div>
-    );
-  };
+
+      {/* Action Buttons */}
+      <div style={{ borderTop: "1px solid #e8ddd4", paddingTop: "15px" }}>
+        <div style={{ display: "flex", gap: "10px", justifyContent: "center", marginBottom: "10px" }}>
+          <button onClick={() => setExpandedNotes(prev => ({ ...prev, [dataKey]: !prev[dataKey] }))}
+            style={{ padding: "6px 12px", backgroundColor: "#e8ddd4", color: "#5d4037", border: "none", borderRadius: "4px", cursor: "pointer", fontWeight: "600", fontSize: "12px" }}>
+            Add notes
+          </button>
+          <button onClick={handleAIAnalysis}
+            style={{ padding: "6px 12px", backgroundColor: "#e8ddd4", color: "#5d4037", border: "none", borderRadius: "4px", cursor: "pointer", fontWeight: "600", fontSize: "12px" }}>
+            AI analysis
+          </button>
+          <button onClick={() => {
+            let dataArray = [];
+            if (dataKey === "trainingSpendAmount") dataArray = capabilityData.trainingSpendAmount?.actual || [];
+            else if (dataKey === "trainingSpendPercentage") dataArray = capabilityData.trainingSpendPercentage?.actual || [];
+            else if (dataKey === "trainingFocus") dataArray = capabilityData.trainingFocus?.actual || [];
+            openTrendModal(title, dataArray, unit);
+          }} style={{ padding: "6px 12px", backgroundColor: "#e8ddd4", color: "#5d4037", border: "none", borderRadius: "4px", cursor: "pointer", fontWeight: "600", fontSize: "12px" }}>
+            View trend
+          </button>
+        </div>
+
+        {expandedNotes[dataKey] && (
+          <div style={{ marginBottom: "10px" }}>
+            <label style={{ fontSize: "12px", color: "#5d4037", fontWeight: "600", display: "block", marginBottom: "5px" }}>Notes / Comments:</label>
+            <textarea value={kpiNotes[dataKey] || ""} onChange={(e) => setKpiNotes(prev => ({ ...prev, [dataKey]: e.target.value }))}
+              placeholder="Add notes or comments..." style={{ width: "100%", padding: "10px", borderRadius: "4px", border: "1px solid #e8ddd4", minHeight: "60px", fontSize: "13px" }} />
+          </div>
+        )}
+
+        {expandedNotes[`${dataKey}_analysis`] && (
+          <div style={{ backgroundColor: "#e3f2fd", padding: "15px", borderRadius: "6px", border: "1px solid #90caf9" }}>
+            <label style={{ fontSize: "12px", color: "#1565c0", fontWeight: "600", display: "block", marginBottom: "8px" }}>AI Analysis:</label>
+            <p style={{ fontSize: "13px", color: "#1565c0", lineHeight: "1.5", margin: 0 }}>
+              {kpiAnalysis[dataKey] || `Based on current ${title.toLowerCase()}:
+                \n\nActual: ${formatFn(actualValue)} vs Budget: ${formatFn(budgetValue)}
+                \n${showVariance ? `Variance: ${variancePercent > 0 ? "+" : ""}${variancePercent.toFixed(1)}%` : ""}
+                \n\nRecommended actions:
+                \n• ${variancePercent > 0 ? "Exceeding budget - consider reallocating excess" : "Below budget - identify barriers to investment"}
+                \n• Compare against industry benchmarks
+                \n• Link training outcomes to business results`}
+            </p>
+            <button onClick={handleAIAnalysis} style={{ marginTop: "10px", padding: "6px 12px", backgroundColor: "#1565c0", color: "#fff", border: "none", borderRadius: "4px", cursor: "pointer", fontSize: "12px" }}>
+              Get Detailed AI Analysis →
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* People Analysis Modal */}
+      {showAnalysisModal && selectedMetricForAnalysis && (
+        <PeopleAnalysisModal
+          isOpen={showAnalysisModal}
+          onClose={() => { setShowAnalysisModal(false); setSelectedMetricForAnalysis(null); }}
+          kpiTitle={selectedMetricForAnalysis.title}
+          kpiKey={selectedMetricForAnalysis.key}
+          kpiValue={selectedMetricForAnalysis.value}
+          contextData={selectedMetricForAnalysis.contextData}
+          company={{ name: "Your Business", stage: "Growth Stage", industry: "General" }}
+          currentUser={user}
+          section="capability-training"
+        />
+      )}
+    </div>
+  );
+};
 
   const renderEmployeeTrackingTable = () => {
     // Calculate summary statistics
@@ -6933,6 +6854,10 @@ const StabilityContinuity = ({ activeSection, user, isInvestorView }) => {
     });
     setShowTrendModal(true);
   };
+  const [showAnalysisModal, setShowAnalysisModal] = useState(false);
+const [selectedMetricForAnalysis, setSelectedMetricForAnalysis] = useState(null);
+
+
 
   const renderTerminationTable = () => {
     const summary = calculateTerminationSummary();
@@ -7573,28 +7498,46 @@ const StabilityContinuity = ({ activeSection, user, isInvestorView }) => {
     );
   };
 
-  const renderKPICard = (
-    title,
-    dataKey,
-    isPercentage = false,
-    calculation = "",
-  ) => {
-    let data = [];
-    let currentValue = 0;
+const renderKPICard = (
+  title,
+  dataKey,
+  isPercentage = false,
+  calculation = "",
+) => {
+  let data = [];
+  let currentValue = 0;
 
-    if (dataKey === "overallTurnover") {
-      data = stabilityData.overallTurnover || [];
-      currentValue = Number.parseFloat(data[data.length - 1]) || 0;
-    } else if (dataKey === "workforceMovements") {
-      data = stabilityData.workforceMovements || [];
-      currentValue = Number.parseFloat(data[data.length - 1]) || 0;
-    } else if (dataKey === "criticalRoleTurnover") {
-      data = stabilityData.criticalRoleTurnover || [];
-      currentValue = Number.parseFloat(data[data.length - 1]) || 0;
-    } else if (dataKey === "contractorDependence") {
-      data = stabilityData.contractorDependence || [];
-      currentValue = Number.parseFloat(data[data.length - 1]) || 0;
-    }
+  if (dataKey === "overallTurnover") {
+    data = stabilityData.overallTurnover || [];
+    currentValue = Number.parseFloat(data[data.length - 1]) || 0;
+  } else if (dataKey === "workforceMovements") {
+    data = stabilityData.workforceMovements || [];
+    currentValue = Number.parseFloat(data[data.length - 1]) || 0;
+  } else if (dataKey === "criticalRoleTurnover") {
+    data = stabilityData.criticalRoleTurnover || [];
+    currentValue = Number.parseFloat(data[data.length - 1]) || 0;
+  } else if (dataKey === "contractorDependence") {
+    data = stabilityData.contractorDependence || [];
+    currentValue = Number.parseFloat(data[data.length - 1]) || 0;
+  }
+
+  // FIXED: handleAIAnalysis function now uses the parameters correctly
+  const handleAIAnalysis = () => {
+    setSelectedMetricForAnalysis({
+      title: title,
+      key: dataKey,
+      value: currentValue,
+      contextData: {
+        unit: "percentage",
+        benchmark: dataKey === "overallTurnover" ? 15 :
+                   dataKey === "criticalRoleTurnover" ? 10 :
+                   dataKey === "contractorDependence" ? 20 : 50,
+        timeRange: "Annual",
+      },
+    });
+    setShowAnalysisModal(true);
+  };
+
 
     return (
       <div
@@ -7679,26 +7622,21 @@ const StabilityContinuity = ({ activeSection, user, isInvestorView }) => {
             >
               Add notes
             </button>
-            <button
-              onClick={() =>
-                setExpandedNotes((prev) => ({
-                  ...prev,
-                  [`${dataKey}_analysis`]: !prev[`${dataKey}_analysis`],
-                }))
-              }
-              style={{
-                padding: "6px 12px",
-                backgroundColor: "#e8ddd4",
-                color: "#5d4037",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-                fontWeight: "600",
-                fontSize: "12px",
-              }}
-            >
-              AI analysis
-            </button>
+          <button
+  onClick={handleAIAnalysis}
+  style={{
+    padding: "6px 12px",
+    backgroundColor: "#e8ddd4",
+    color: "#5d4037",
+    border: "none",
+    borderRadius: "4px",
+    cursor: "pointer",
+    fontWeight: "600",
+    fontSize: "12px",
+  }}
+>
+  AI analysis
+</button>
             <button
               onClick={() => openTrendModal(title, dataKey, isPercentage)}
               style={{
