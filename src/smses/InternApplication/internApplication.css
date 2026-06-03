@@ -45,19 +45,25 @@
   --up-border-radius: 0.5rem;
   --up-box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
   --up-box-shadow-hover: 0 4px 8px rgba(0, 0, 0, 0.15);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen,
+    Ubuntu, Cantarell, sans-serif;
+
   color: var(--up-brown-900);
   line-height: 1.6;
   min-height: 100vh;
+
   background-image: url("../../assets/BiGBackround.png");
   background-size: cover;
   background-repeat: no-repeat;
   background-position: center;
+
+  width: 100%;
   max-width: 1200px;
-  margin: 0 auto;
-  padding: 2rem 1rem;
-  margin-top: 53px;
-  margin-left: 250px;
+
+  margin: 53px auto 0 auto; /* perfectly centers container */
+  padding: 2rem;
+  box-sizing: border-box;
 }
 
 /* Remove all blue styling from links */
@@ -323,7 +329,7 @@
   background-color: var(--up-white);
   border-radius: var(--up-border-radius);
   box-shadow: var(--up-box-shadow);
-  padding: 2rem;
+  padding: 1rem;
   margin-bottom: 2rem;
   border: 1px solid var(--up-brown-200);
   animation: fadeIn 0.3s ease-out;
@@ -849,20 +855,28 @@
 
 @media (max-width: 768px) {
   .intern-application {
-    padding: 0.75rem;
-    margin-left: 0;
+    width: 95%;
+    max-width: 1100px;
+
+    margin: 53px auto 0 auto;
+    padding: 2rem;
+    box-sizing: border-box;
   }
+
   .section-content {
     padding: 1.25rem;
   }
+
   .navigation-buttons,
   .form-actions {
     flex-direction: column;
   }
+
   .navigation-buttons .btn,
   .form-actions .btn {
     width: 100%;
   }
+
   .dynamic-list-item {
     flex-direction: column;
     align-items: stretch;
@@ -1823,4 +1837,3 @@ input[type="radio"]:focus {
     gap: 0.75rem;
   }
 }
-

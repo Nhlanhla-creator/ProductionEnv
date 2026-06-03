@@ -296,17 +296,16 @@ export default function InternApplication() {
     }
   }, [formData])
 
-  const getContainerStyle = () => ({
-    width: "100%",
-    minHeight: "100vh",
-    maxWidth: "100vw",
-    overflowX: "hidden",
-    padding: "0",
-    margin: "0",
-    boxSizing: "border-box",
-    position: "relative",
-    transition: "padding 0.3s ease",
-  })
+const getContainerStyle = () => ({
+  width: "90%",
+  maxWidth: "1200px",
+  minHeight: "100vh",
+  margin: "53px auto",
+  padding: "2rem",
+  boxSizing: "border-box",
+  position: "relative",
+  overflowX: "hidden",
+})
 
   if (!user) {
     return (
@@ -352,7 +351,7 @@ export default function InternApplication() {
   }
 
   return (
-    <div style={getContainerStyle()} className="intern-application">
+    <div  className="intern-application">
       {/* Save Status Indicator */}
       {saveStatus && (
         <div
