@@ -722,6 +722,7 @@ const RiskManagement = () => {
     { id: 'key-person-dependency', label: 'Key Person Risk' },
     { id: 'disaster-recovery', label: 'Disaster Recovery' }
   ];
+  
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh' }}>

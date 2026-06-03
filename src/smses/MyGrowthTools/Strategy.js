@@ -3509,9 +3509,9 @@ const StrategicGoals = ({
       overallCompletionRate:
         data.length > 0
           ? Math.round(
-              data.reduce((sum, m) => sum + (m.percentageCompletion || 0), 0) /
-                data.length,
-            )
+            data.reduce((sum, m) => sum + (m.percentageCompletion || 0), 0) /
+            data.length,
+          )
           : 0,
     };
   };
@@ -3531,21 +3531,21 @@ MILESTONES BY STATUS:
 
 MILESTONES BY GOAL DOMAIN:
 ${Object.keys(data.milestonesByDomain)
-  .map((domain) => {
-    const milestones = data.milestonesByDomain[domain];
-    const avgCompletion = data.avgCompletionByDomain[domain] || 0;
-    return `- ${domain}: ${milestones.length} milestones, ${avgCompletion}% avg completion`;
-  })
-  .join("\n")}
+        .map((domain) => {
+          const milestones = data.milestonesByDomain[domain];
+          const avgCompletion = data.avgCompletionByDomain[domain] || 0;
+          return `- ${domain}: ${milestones.length} milestones, ${avgCompletion}% avg completion`;
+        })
+        .join("\n")}
 
 MILESTONE DETAILS BY DOMAIN:
 ${Object.keys(data.milestonesByDomain)
-  .map((domain) => {
-    const milestones = data.milestonesByDomain[domain];
-    return `\n${domain}:
+        .map((domain) => {
+          const milestones = data.milestonesByDomain[domain];
+          return `\n${domain}:
   ${milestones.map((m) => `  • Goal: ${m.goal} - Goal Description: ${m.goalDescription || "Not provided"} - Milestone: ${m.milestoneDescription} - Status: ${m.status}, ${m.percentageCompletion}% complete, Owner: ${m.owner}, Target: ${m.targetDate}`).join("\n")}`;
-  })
-  .join("")}
+        })
+        .join("")}
 
 ANALYSIS REQUIREMENTS:
 
@@ -3959,7 +3959,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
               data={createChartData(
                 activeSubTab,
                 categories.find((c) => c.key === activeSubTab)?.color ||
-                  "#7d5a50",
+                "#7d5a50",
               )}
               options={chartOptions}
               data-growth-stage={activeSubTab}
@@ -4278,18 +4278,18 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
             filterStatus ||
             filterOwner ||
             filterDate) && (
-            <span style={{ fontSize: "12px", color: "#8d6e63" }}>
-              Showing {filteredMilestones.length} of{" "}
-              {
-                milestoneData.filter((m) =>
-                  activeSubTab === "all"
-                    ? true
-                    : m.growthStage === activeSubTab,
-                ).length
-              }{" "}
-              items
-            </span>
-          )}
+              <span style={{ fontSize: "12px", color: "#8d6e63" }}>
+                Showing {filteredMilestones.length} of{" "}
+                {
+                  milestoneData.filter((m) =>
+                    activeSubTab === "all"
+                      ? true
+                      : m.growthStage === activeSubTab,
+                  ).length
+                }{" "}
+                items
+              </span>
+            )}
         </div>
 
         {filteredMilestones.length === 0 ? (
@@ -4304,10 +4304,10 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
               filterStatus ||
               filterOwner ||
               filterDate) && (
-              <p style={{ marginTop: "10px", fontSize: "13px" }}>
-                Try clearing some filters to see more milestones.
-              </p>
-            )}
+                <p style={{ marginTop: "10px", fontSize: "13px" }}>
+                  Try clearing some filters to see more milestones.
+                </p>
+              )}
           </div>
         ) : (
           <div style={{ overflowX: "auto" }}>
@@ -5421,7 +5421,9 @@ const RiskManagement = ({ activeSection, currentUser, isInvestorView }) => {
   const [hoveredRiskType, setHoveredRiskType] = useState(null);
   const [selectedMonth, setSelectedMonth] = useState("");
   const [selectedYear, setSelectedYear] = useState("");
-
+  // Add these with the other state declarations
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
   // Table filter states - Reduced to essential ones
   const [filterRisk, setFilterRisk] = useState("");
   const [filterCategory, setFilterCategory] = useState("");
@@ -5975,24 +5977,24 @@ GOVERNANCE METRICS:
 
 RISK CATEGORY BREAKDOWN:
 ${Object.keys(data.avgScoresByCategory)
-  .map((category) => {
-    const cat = data.avgScoresByCategory[category];
-    return `- ${category}: ${cat.count} risks, Avg Risk Score: ${cat.avgRiskScore}, Controlled: ${cat.controlledRisks}/${cat.count}`;
-  })
-  .join("\n")}
+        .map((category) => {
+          const cat = data.avgScoresByCategory[category];
+          return `- ${category}: ${cat.count} risks, Avg Risk Score: ${cat.avgRiskScore}, Controlled: ${cat.controlledRisks}/${cat.count}`;
+        })
+        .join("\n")}
 
 TOP 5 HIGHEST RISK ITEMS:
 ${data.highRiskItems
-  .map(
-    (risk, i) =>
-      `  ${i + 1}. ${risk.riskSubCategory || "Unnamed Risk"} (${risk.riskNumber || "N/A"}) - Score: ${risk.riskScore} (Severity: ${risk.severity}, Likelihood: ${risk.likelihood}), Status: ${risk.mitigationStatus}, Owner: ${risk.owner || "Unassigned"}`,
-  )
-  .join("\n")}
+        .map(
+          (risk, i) =>
+            `  ${i + 1}. ${risk.riskSubCategory || "Unnamed Risk"} (${risk.riskNumber || "N/A"}) - Score: ${risk.riskScore} (Severity: ${risk.severity}, Likelihood: ${risk.likelihood}), Status: ${risk.mitigationStatus}, Owner: ${risk.owner || "Unassigned"}`,
+        )
+        .join("\n")}
 
 RISK STATUS DISTRIBUTION:
 ${Object.keys(data.risksByStatus)
-  .map((status) => `- ${status}: ${data.risksByStatus[status]}`)
-  .join("\n")}
+        .map((status) => `- ${status}: ${data.risksByStatus[status]}`)
+        .join("\n")}
 
 ANALYSIS REQUIREMENTS:
 
@@ -6138,25 +6140,76 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
     }
   };
 
-  const handleAIAnalysis = () => {
-    if (!showAIAnalysis) {
-      if (savedAnalysis) {
-        setAiAnalysis(savedAnalysis);
-        setShowAIAnalysis(true);
-      } else {
-        generateAIAnalysis();
-      }
+const handleAIAnalysis = () => {
+  if (!showAIAnalysis) {
+    if (savedAnalysis) {
+      setAiAnalysis(savedAnalysis);
+      setShowAIAnalysis(true);
     } else {
-      setShowAIAnalysis(!showAIAnalysis);
+      generateAIAnalysis();
     }
-  };
+  } else {
+    setShowAIAnalysis(!showAIAnalysis);
+  }
+};
 
-  const refreshAnalysis = async () => {
-    await generateAIAnalysis();
-  };
+const refreshAnalysis = async () => {
+  // Clear saved analysis state before regenerating
+  setSavedAnalysis("");
+  setAiAnalysis("");
+  await generateAIAnalysis();
+};
+
 
   const currentYear = new Date().getFullYear();
   const years = Array.from({ length: 5 }, (_, i) => currentYear + i);
+
+  // Add this inside the RiskManagement component, near the other handler functions
+
+  const handleSaveToNotes = async () => {
+    if (!currentUser || !aiAnalysis) return;
+
+    setIsSaving(true);
+    try {
+      const savedAnalysisRef = doc(
+        db,
+        `users/${currentUser.uid}/savedRiskAnalyses`,
+        `risk_analysis_${Date.now()}`
+      );
+
+      // Get risk summary for context
+      const allRisks = Object.values(riskData).flat();
+      const riskSummary = {
+        totalRisks: allRisks.length,
+        highRisks: allRisks.filter(r => (r.severity || 1) * (r.likelihood || 1) >= 16).length,
+        mediumRisks: allRisks.filter(r => {
+          const score = (r.severity || 1) * (r.likelihood || 1);
+          return score >= 9 && score < 16;
+        }).length,
+        lowRisks: allRisks.filter(r => (r.severity || 1) * (r.likelihood || 1) < 9).length,
+        uncontrolledRisks: allRisks.filter(r => r.mitigationStatus === "🔴 Uncontrolled").length,
+      };
+
+      await setDoc(savedAnalysisRef, {
+        type: "risk_analysis",
+        analysis: aiAnalysis,
+        riskSummary,
+        riskCategories: Object.keys(riskData).filter(cat => riskData[cat].length > 0),
+        generatedAt: new Date().toISOString(),
+        savedAt: new Date().toISOString(),
+        notes: "",
+      });
+
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
+    } catch (error) {
+      console.error("Error saving risk analysis:", error);
+      alert("Failed to save analysis");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
 
   return (
     <div
@@ -6667,16 +6720,16 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                     filterCategory ||
                     filterOwner ||
                     filterStatus) && (
-                    <span
-                      style={{
-                        fontSize: "12px",
-                        marginLeft: "10px",
-                        color: "#8d6e63",
-                      }}
-                    >
-                      (Showing {filtered.length} of {data.length} items)
-                    </span>
-                  )}
+                      <span
+                        style={{
+                          fontSize: "12px",
+                          marginLeft: "10px",
+                          color: "#8d6e63",
+                        }}
+                      >
+                        (Showing {filtered.length} of {data.length} items)
+                      </span>
+                    )}
                 </h4>
               </div>
 
@@ -6697,10 +6750,10 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                     filterCategory ||
                     filterOwner ||
                     filterStatus) && (
-                    <p style={{ marginTop: "10px", fontSize: "13px" }}>
-                      Try clearing some filters to see more items.
-                    </p>
-                  )}
+                      <p style={{ marginTop: "10px", fontSize: "13px" }}>
+                        Try clearing some filters to see more items.
+                      </p>
+                    )}
                 </div>
               ) : (
                 <div style={{ overflowX: "auto" }}>
@@ -6848,8 +6901,8 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                         const originalCategory =
                           category.id === "business-risk"
                             ? Object.keys(riskData).find((key) =>
-                                riskData[key].some((r) => r.id === item.id),
-                              )
+                              riskData[key].some((r) => r.id === item.id),
+                            )
                             : category.id;
                         const riskScore =
                           (item.severity || 1) * (item.likelihood || 1);
@@ -6890,7 +6943,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                                   fontSize: "12px",
                                   backgroundColor:
                                     isInvestorView ||
-                                    category.id === "business-risk"
+                                      category.id === "business-risk"
                                       ? "#f5f5f5"
                                       : "white",
                                 }}
@@ -6928,7 +6981,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                                   fontSize: "12px",
                                   backgroundColor:
                                     isInvestorView ||
-                                    category.id === "business-risk"
+                                      category.id === "business-risk"
                                       ? "#f5f5f5"
                                       : "white",
                                 }}
@@ -6961,7 +7014,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                                   resize: "vertical",
                                   backgroundColor:
                                     isInvestorView ||
-                                    category.id === "business-risk"
+                                      category.id === "business-risk"
                                       ? "#f5f5f5"
                                       : "white",
                                 }}
@@ -6997,7 +7050,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                                   textAlign: "center",
                                   backgroundColor:
                                     isInvestorView ||
-                                    category.id === "business-risk"
+                                      category.id === "business-risk"
                                       ? "#f5f5f5"
                                       : "white",
                                 }}
@@ -7033,7 +7086,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                                   textAlign: "center",
                                   backgroundColor:
                                     isInvestorView ||
-                                    category.id === "business-risk"
+                                      category.id === "business-risk"
                                       ? "#f5f5f5"
                                       : "white",
                                 }}
@@ -7085,7 +7138,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                                   fontSize: "12px",
                                   backgroundColor:
                                     isInvestorView ||
-                                    category.id === "business-risk"
+                                      category.id === "business-risk"
                                       ? "#f5f5f5"
                                       : "white",
                                 }}
@@ -7115,7 +7168,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                                   fontSize: "12px",
                                   backgroundColor:
                                     isInvestorView ||
-                                    category.id === "business-risk"
+                                      category.id === "business-risk"
                                       ? "#f5f5f5"
                                       : "white",
                                 }}
@@ -7158,7 +7211,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                                   resize: "vertical",
                                   backgroundColor:
                                     isInvestorView ||
-                                    category.id === "business-risk"
+                                      category.id === "business-risk"
                                       ? "#f5f5f5"
                                       : "white",
                                 }}
@@ -7190,7 +7243,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                                   fontSize: "12px",
                                   backgroundColor:
                                     isInvestorView ||
-                                    category.id === "business-risk"
+                                      category.id === "business-risk"
                                       ? "#f5f5f5"
                                       : "white",
                                 }}
@@ -7221,7 +7274,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                                   fontSize: "12px",
                                   backgroundColor:
                                     isInvestorView ||
-                                    category.id === "business-risk"
+                                      category.id === "business-risk"
                                       ? "#f5f5f5"
                                       : "white",
                                 }}
@@ -7267,6 +7320,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
         );
       })}
 
+      {/* AI Analysis Section */}
       {/* AI Analysis Section */}
       <div style={{ marginTop: "30px", marginBottom: "20px" }}>
         <div
@@ -7357,8 +7411,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
               marginLeft: "10px",
             }}
           >
-            Add risk items to generate AI analysis of your strategic risk
-            posture.
+            Add risk items to generate AI analysis of your strategic risk posture.
           </p>
         )}
 
@@ -7402,10 +7455,10 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                   }}
                 >
                   Analysis generated from{" "}
-                  {Object.values(riskData).flat().length} risk items in your
-                  register
+                  {Object.values(riskData).flat().length} risk items in your register
                 </p>
               </div>
+
               {savedAnalysis && (
                 <span
                   style={{
@@ -7462,28 +7515,60 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                     marginTop: "5px",
                   }}
                 >
-                  Evaluating risk scores, mitigation effectiveness, and
-                  governance maturity
+                  Evaluating risk scores, mitigation effectiveness, and governance maturity
                 </p>
               </div>
             ) : (
-              <div
-                style={{
-                  backgroundColor: "white",
-                  padding: "20px",
-                  borderRadius: "6px",
-                  border: "1px solid #e8d8cf",
-                  maxHeight: "400px",
-                  overflowY: "auto",
-                  fontSize: "14px",
-                  lineHeight: "1.6",
-                  color: "#5d4037",
-                  whiteSpace: "pre-wrap",
-                }}
-              >
-                {aiAnalysis ||
-                  "AI analysis will be generated based on your risk register data, identifying critical risks, evaluating mitigation effectiveness, and providing actionable recommendations to strengthen strategic risk control."}
-              </div>
+              <>
+                <div
+                  style={{
+                    backgroundColor: "white",
+                    padding: "20px",
+                    borderRadius: "6px",
+                    border: "1px solid #e8d8cf",
+                    maxHeight: "400px",
+                    overflowY: "auto",
+                    fontSize: "14px",
+                    lineHeight: "1.6",
+                    color: "#5d4037",
+                    whiteSpace: "pre-wrap",
+                  }}
+                >
+                  {aiAnalysis ||
+                    "AI analysis will be generated based on your risk register data, identifying critical risks, evaluating mitigation effectiveness, and providing actionable recommendations to strengthen strategic risk control."}
+                </div>
+
+                {/* Save Analysis Button */}
+                {!isInvestorView && aiAnalysis && (
+                  <div style={{ marginTop: "15px", textAlign: "right" }}>
+                    <button
+                      onClick={handleSaveToNotes}
+                      disabled={isSaving}
+                      style={{
+                        padding: "8px 16px",
+                        backgroundColor: isSaving ? "#a1887f" : "#7d5a50",
+                        color: "white",
+                        border: "none",
+                        borderRadius: "4px",
+                        cursor: isSaving ? "not-allowed" : "pointer",
+                        fontSize: "12px",
+                        fontWeight: "500",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "5px",
+                      }}
+                    >
+                      {isSaving ? (
+                        "Saving..."
+                      ) : saveSuccess ? (
+                        "✓ Saved!"
+                      ) : (
+                        "📌 Save Analysis to Notes"
+                      )}
+                    </button>
+                  </div>
+                )}
+              </>
             )}
 
             <div
@@ -8224,10 +8309,10 @@ const ChangeAdaptability = ({ activeSection, currentUser, isInvestorView }) => {
       overallDocumentationRate:
         totalAdjustments + totalPivots > 0
           ? Math.round(
-              ((adjustmentsWithDocs + pivotsWithDocs) /
-                (totalAdjustments + totalPivots)) *
-                100,
-            )
+            ((adjustmentsWithDocs + pivotsWithDocs) /
+              (totalAdjustments + totalPivots)) *
+            100,
+          )
           : 0,
 
       // Has data flags
@@ -8250,8 +8335,8 @@ CHANGE MANAGEMENT DATA:
    
    Reviews by Timeframe:
    ${Object.keys(data.reviewsByTimeframe)
-     .map((month) => `   - ${month}: ${data.reviewsByTimeframe[month]} reviews`)
-     .join("\n")}
+        .map((month) => `   - ${month}: ${data.reviewsByTimeframe[month]} reviews`)
+        .join("\n")}
 
 2. STRATEGIC ADJUSTMENTS:
    Total Adjustments Made: ${data.totalAdjustments}
@@ -8260,8 +8345,8 @@ CHANGE MANAGEMENT DATA:
    
    Top Adjustment Reasons:
    ${data.topAdjustmentReasons
-     .map((r, i) => `   ${i + 1}. "${r.reason}" (${r.count} occurrences)`)
-     .join("\n")}
+        .map((r, i) => `   ${i + 1}. "${r.reason}" (${r.count} occurrences)`)
+        .join("\n")}
 
 3. STRATEGIC PIVOTS:
    Total Pivots Executed: ${data.totalPivots}
@@ -8270,8 +8355,8 @@ CHANGE MANAGEMENT DATA:
    
    Top Pivot Themes:
    ${data.topPivotThemes
-     .map((t, i) => `   ${i + 1}. "${t.theme}" (${t.count} occurrences)`)
-     .join("\n")}
+        .map((t, i) => `   ${i + 1}. "${t.theme}" (${t.count} occurrences)`)
+        .join("\n")}
 
 4. ADAPTATION VELOCITY:
    Total Changes (Adjustments + Pivots): ${data.totalChanges}
@@ -8279,8 +8364,8 @@ CHANGE MANAGEMENT DATA:
    
    Changes by Month:
    ${Object.keys(data.changesByMonth)
-     .map((month) => `   - ${month}: ${data.changesByMonth[month]} changes`)
-     .join("\n")}
+        .map((month) => `   - ${month}: ${data.changesByMonth[month]} changes`)
+        .join("\n")}
 
 5. DOCUMENTATION HEALTH:
    Overall Documentation Rate: ${data.overallDocumentationRate}%
