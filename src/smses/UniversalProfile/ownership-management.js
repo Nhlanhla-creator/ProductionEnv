@@ -160,26 +160,43 @@ const DEFAULT_BUSINESS_LEADERSHIP = {
   decisionGovernance: "",
 };
 
-// Committee Membership Multi-Select Dropdown Component (FIXED - Working dropdown)
+// Committee Membership Multi-Select Dropdown Component (FIXED - No overlap with fixed positioning)
 const CommitteeMultiSelect = ({ selected = [], onChange, onCustomChange, customValue = "" }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0, width: 0 });
   const buttonRef = useRef(null);
   const dropdownRef = useRef(null);
   const safeSelected = Array.isArray(selected) ? selected : [];
 
-  // Handle click outside to close
+  // Handle click outside and reposition dropdown
   useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target) && 
-          buttonRef.current && !buttonRef.current.contains(event.target)) {
+    if (isOpen && buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      setDropdownPosition({
+        top: rect.bottom + window.scrollY,
+        left: rect.left + window.scrollX,
+        width: rect.width,
+      });
+      
+      // Handle click outside to close
+      const handleClickOutside = (event) => {
+        if (dropdownRef.current && !dropdownRef.current.contains(event.target) && 
+            buttonRef.current && !buttonRef.current.contains(event.target)) {
+          setIsOpen(false);
+        }
+      };
+      
+      // Handle scroll to close dropdown
+      const handleScroll = () => {
         setIsOpen(false);
-      }
-    };
-    
-    if (isOpen) {
+      };
+      
       document.addEventListener('mousedown', handleClickOutside);
+      window.addEventListener('scroll', handleScroll, true);
+      
       return () => {
         document.removeEventListener('mousedown', handleClickOutside);
+        window.removeEventListener('scroll', handleScroll, true);
       };
     }
   }, [isOpen]);
@@ -224,20 +241,21 @@ const CommitteeMultiSelect = ({ selected = [], onChange, onCustomChange, customV
         <span style={{ fontSize: '10px', marginLeft: '4px' }}>{isOpen ? '▲' : '▼'}</span>
       </div>
       
-      {/* Dropdown with absolute positioning relative to the button */}
+      {/* Portal-style dropdown that renders at body level to avoid overlapping */}
       {isOpen && (
         <div
           ref={dropdownRef}
           style={{
-            position: 'absolute',
-            top: '100%',
-            left: 0,
-            right: 0,
+            position: 'fixed',
+            top: `${dropdownPosition.top}px`,
+            left: `${dropdownPosition.left}px`,
+            width: `${dropdownPosition.width}px`,
+            minWidth: '280px',
             backgroundColor: 'white',
             border: '1px solid #ccc',
             borderRadius: '4px',
             marginTop: '2px',
-            zIndex: 9999,
+            zIndex: 99999,
             maxHeight: '300px',
             overflow: 'auto',
             boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
@@ -760,7 +778,7 @@ export default function OwnershipManagement({ data = { shareholders: [], directo
             <Plus className="w-4 h-4 mr-1" /> Add Director
           </button>
         </div>
-        <div className="overflow-x-auto" style={{ overflow: 'visible' }}>
+        <div className="overflow-x-auto">
           <table className="min-w-full bg-white border border-brown-200 rounded-lg">
             <thead>
               <tr className="bg-brown-50">
@@ -839,7 +857,7 @@ export default function OwnershipManagement({ data = { shareholders: [], directo
                       </div>
                     </div>
                   </td>
-                  <td className="px-4 py-2 border-b" style={{ position: 'relative' }}>
+                  <td className="px-4 py-2 border-b">
                     <CommitteeMultiSelect
                       selected={director.committeeMembership || []}
                       onChange={(val) => updateDirector(index, "committeeMembership", val)}

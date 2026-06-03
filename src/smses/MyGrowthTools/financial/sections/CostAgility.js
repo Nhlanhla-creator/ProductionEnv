@@ -38,8 +38,8 @@ const CostAgility = ({ activeSection, user, isInvestorView }) => {
   const [showCalcModal, setShowCalcModal]     = useState(false);
   const [selectedCalc, setSelectedCalc]       = useState({ title: "", calculation: "" });
   const [currencyUnit]                        = useState("zar_million");
-const [showAnalysisModal, setShowAnalysisModal] = useState(false);
-const [selectedMetricForAnalysis, setSelectedMetricForAnalysis] = useState(null);
+  const [showAnalysisModal, setShowAnalysisModal] = useState(false);
+  const [selectedMetricForAnalysis, setSelectedMetricForAnalysis] = useState(null);
 
   // Date range — default to last 12 months
   const [fromDate, setFromDate] = useState(_defaultFrom);
@@ -55,16 +55,16 @@ const [selectedMetricForAnalysis, setSelectedMetricForAnalysis] = useState(null)
   } = useCostAgilityData(user);
 
   const getCurrentCostMetrics = () => {
-  return {
-    fixedVariableRatio: firebaseChartData.fixedVariableRatio?.actual?.at(-1) ?? 0,
-    discretionaryPercentage: firebaseChartData.discretionaryPercentage?.actual?.at(-1) ?? 0,
-    lockInDuration: firebaseChartData.lockInDuration?.actual?.at(-1) ?? 0,
-    fixedCosts: firebaseChartData.fixedCosts?.actual?.at(-1) ?? 0,
-    variableCosts: firebaseChartData.variableCosts?.actual?.at(-1) ?? 0,
-    discretionaryCosts: firebaseChartData.discretionaryCosts?.actual?.at(-1) ?? 0,
-    semiVariableCosts: firebaseChartData.semiVariableCosts?.actual?.at(-1) ?? 0,
+    return {
+      fixedVariableRatio: firebaseChartData.fixedVariableRatio?.actual?.at(-1) ?? 0,
+      discretionaryPercentage: firebaseChartData.discretionaryPercentage?.actual?.at(-1) ?? 0,
+      lockInDuration: firebaseChartData.lockInDuration?.actual?.at(-1) ?? 0,
+      fixedCosts: firebaseChartData.fixedCosts?.actual?.at(-1) ?? 0,
+      variableCosts: firebaseChartData.variableCosts?.actual?.at(-1) ?? 0,
+      discretionaryCosts: firebaseChartData.discretionaryCosts?.actual?.at(-1) ?? 0,
+      semiVariableCosts: firebaseChartData.semiVariableCosts?.actual?.at(-1) ?? 0,
+    };
   };
-};
 
   const formatValue = makeFormatValue(currencyUnit);
 
@@ -93,8 +93,6 @@ const [selectedMetricForAnalysis, setSelectedMetricForAnalysis] = useState(null)
       });
 
       // Build smart y-axis formatting
-      // Cost Agility KPIs: fixedVariableRatio & discretionaryPercentage are %,
-      // lockInDuration is in months — treat as unitless scalar.
       let trendFormatValue, yAxisLabel, yTickFmt;
       if (isPercentage) {
         trendFormatValue = (v) => `${parseFloat(v).toFixed(2)}%`;
@@ -104,6 +102,21 @@ const [selectedMetricForAnalysis, setSelectedMetricForAnalysis] = useState(null)
         trendFormatValue = (v) => `${parseFloat(v).toFixed(1)} months`;
         yAxisLabel       = "Months";
         yTickFmt         = (v) => parseFloat(v).toFixed(1);
+      } else if (dataKey === "semiVariableCosts") {
+        // Semi-variable costs are currency values
+        const allVals    = [...(actual || []), ...(budget || [])].filter((v) => v !== null && !isNaN(v));
+        const maxAbs     = allVals.length ? Math.max(...allVals.map(Math.abs)) : 0;
+        const scaleUnit    = maxAbs >= 1_000 ? "R bn" : maxAbs >= 1 ? "R m" : "R k";
+        const scaleDivisor = maxAbs >= 1_000 ? 1_000   : maxAbs >= 1 ? 1    : 0.001;
+        trendFormatValue = (v) => {
+          const num = parseFloat(v) || 0;
+          const abs = Math.abs(num);
+          if (abs >= 1_000) return `R${(num / 1_000).toFixed(2)}bn`;
+          if (abs >= 1)     return `R${num.toFixed(2)}m`;
+          return `R${(num * 1_000).toFixed(2)}k`;
+        };
+        yAxisLabel = `Value (${scaleUnit})`;
+        yTickFmt   = (v) => (v / scaleDivisor).toFixed(2);
       } else {
         // Currency values stored in millions
         const allVals    = [...(actual || []), ...(budget || [])].filter((v) => v !== null && !isNaN(v));
@@ -141,59 +154,57 @@ const [selectedMetricForAnalysis, setSelectedMetricForAnalysis] = useState(null)
   };
 
   const KPI_CONFIG = [
-  {
-    dataKey:      "fixedVariableRatio",
-    title:        "Fixed/Variable Ratio",
-    unitLabel:    "%",
-    formatCircle: (v) => parseFloat(v).toFixed(2),
-  },
-  {
-    dataKey:      "discretionaryPercentage",
-    title:        "Discretionary Spend",
-    unitLabel:    "%",
-    formatCircle: (v) => parseFloat(v).toFixed(2),
-  },
-  {
-    dataKey:      "lockInDuration",
-    title:        "Cost Lock-in",
-    unitLabel:    "months",
-    formatCircle: (v) => parseFloat(v).toFixed(1),
-  },
-];
+    {
+      dataKey:      "fixedVariableRatio",
+      title:        "Fixed/Variable Ratio",
+      unitLabel:    "%",
+      formatCircle: (v) => parseFloat(v).toFixed(2),
+    },
+    {
+      dataKey:      "discretionaryPercentage",
+      title:        "Discretionary Spend",
+      unitLabel:    "%",
+      formatCircle: (v) => parseFloat(v).toFixed(2),
+    },
+    {
+      dataKey:      "lockInDuration",
+      title:        "Cost Lock-in",
+      unitLabel:    "months",
+      formatCircle: (v) => parseFloat(v).toFixed(1),
+    },
+  ];
 
   const renderKPI = ({ dataKey, title, unitLabel, formatCircle }) => {
-  const data    = firebaseChartData[dataKey] || { actual: [] };
-  const current = data.actual?.at(-1) ?? 0;
-  const calc    = CALCULATION_TEXTS.costAgility?.[dataKey] || "";
-  
-  return (
-    <KPICard
-      key={dataKey}
-      title={title}
-      actualValue={current}
-      budgetValue={0}
-      unit={currencyUnit}
-      unitLabel={unitLabel}
-      singleCircle
-      formatCircleValue={formatCircle}
-      onEyeClick={() => openCalc(title, calc)}
-      onAddNotes={(notes) => setChartNotes((p) => ({ ...p, [dataKey]: notes }))}
-      onAnalysis={() => {
-        // Open cost agility-specific analysis modal
-        setSelectedMetricForAnalysis({
-          title: title,
-          key: dataKey,
-          value: current,
-        });
-        setShowAnalysisModal(true);
-      }}
-      onTrend={() => openTrend(title, dataKey, unitLabel === "%")}
-      notes={chartNotes[dataKey]}
-      formatValue={formatValue}
-    />
-  );
-};
-
+    const data    = firebaseChartData[dataKey] || { actual: [] };
+    const current = data.actual?.at(-1) ?? 0;
+    const calc    = CALCULATION_TEXTS.costAgility?.[dataKey] || "";
+    
+    return (
+      <KPICard
+        key={dataKey}
+        title={title}
+        actualValue={current}
+        budgetValue={0}
+        unit={currencyUnit}
+        unitLabel={unitLabel}
+        singleCircle
+        formatCircleValue={formatCircle}
+        onEyeClick={() => openCalc(title, calc)}
+        onAddNotes={(notes) => setChartNotes((p) => ({ ...p, [dataKey]: notes }))}
+        onAnalysis={() => {
+          setSelectedMetricForAnalysis({
+            title: title,
+            key: dataKey,
+            value: current,
+          });
+          setShowAnalysisModal(true);
+        }}
+        onTrend={() => openTrend(title, dataKey, unitLabel === "%")}
+        notes={chartNotes[dataKey]}
+        formatValue={formatValue}
+      />
+    );
+  };
 
   if (activeSection !== "cost-agility") return null;
 
@@ -252,22 +263,20 @@ const [selectedMetricForAnalysis, setSelectedMetricForAnalysis] = useState(null)
         />
       )}
   
-{showAnalysisModal && selectedMetricForAnalysis && (
-  <CostAgilityAnalysisModal
-    isOpen={showAnalysisModal}
-    onClose={() => {
-      setShowAnalysisModal(false);
-      setSelectedMetricForAnalysis(null);
-    }}
-    metricTitle={selectedMetricForAnalysis.title}
-    metricKey={selectedMetricForAnalysis.key}
-    metricValue={selectedMetricForAnalysis.value}
-    costData={getCurrentCostMetrics()}
-    currentUser={user}
-  />
-)}
-
-
+      {showAnalysisModal && selectedMetricForAnalysis && (
+        <CostAgilityAnalysisModal
+          isOpen={showAnalysisModal}
+          onClose={() => {
+            setShowAnalysisModal(false);
+            setSelectedMetricForAnalysis(null);
+          }}
+          metricTitle={selectedMetricForAnalysis.title}
+          metricKey={selectedMetricForAnalysis.key}
+          metricValue={selectedMetricForAnalysis.value}
+          costData={getCurrentCostMetrics()}
+          currentUser={user}
+        />
+      )}
     </div>
   );
 };
