@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import "./FundingApplication.css"
-import { CheckCircle, ChevronRight, ChevronLeft, Save, X, ArrowRight } from "lucide-react"
+import { CheckCircle, ChevronRight, ChevronLeft, Save, X, ArrowRight, Eye } from "lucide-react"
 import { renderApplicationOverview } from "./ApplicationOverview"
 import { renderUseOfFunds } from "./UseOfFunds"
 import { renderEnterpriseReadiness } from "./EnterpriseReadiness"
@@ -136,13 +136,21 @@ const FundingApplication = () => {
   const [error, setError] = useState(null)
   const [validationModal, setValidationModal] = useState({ open: false, title: "", messages: [] })
   const [popupSeen, setPopupSeen] = useState(false)
-  const apiKey = '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';
+  const apiKey = API_KEYS.OPENAI;
   
   // New state for popups
   const [showWelcomePopup, setShowWelcomePopup] = useState(false)
   const [showCongratulationsPopup, setShowCongratulationsPopup] = useState(false)
   const [currentOnboardingStep, setCurrentOnboardingStep] = useState(0)
   const [isApiKeyLoading, setIsApiKeyLoading] = useState(true)
+  
+  // State for existing documents from universal profile (like Advisory)
+  const [existingUniversalDocs, setExistingUniversalDocs] = useState({
+    businessPlan: null,
+    pitchDeck: null,
+    financialStatements: [],
+    loading: true
+  })
   
   useEffect(() => {
     if (apiKey != null) {
@@ -151,16 +159,58 @@ const FundingApplication = () => {
   }, [apiKey])
 
 const getContainerStyles = () => ({
-   width: "100%",
+  width: "100%",
   minHeight: "100vh",
-  maxWidth: "100%",
-  overflowX: "visible",
-  overflowY: "visible",
+  maxWidth: "100vw",
+  overflowX: "hidden",
   boxSizing: "border-box",
   position: "relative",
-  flex: 1,
 })
 
+  // Fetch existing documents from universal profile (like Advisory)
+  useEffect(() => {
+    const fetchExistingDocuments = async () => {
+      const user = auth.currentUser
+      if (!user) {
+        setExistingUniversalDocs(prev => ({ ...prev, loading: false }))
+        return
+      }
+
+      try {
+        const universalProfileRef = doc(db, "universalProfiles", user.uid)
+        const profileSnap = await getDoc(universalProfileRef)
+
+        if (profileSnap.exists()) {
+          const profileData = profileSnap.data()
+          const documents = profileData.documents || {}
+
+          const businessPlanUrl = documents.businessPlan || null
+          const pitchDeckUrl = documents.pitchDeck || null
+          
+          let financialStatementsUrls = []
+          if (documents.financialStatements_multiple && Array.isArray(documents.financialStatements_multiple)) {
+            financialStatementsUrls = documents.financialStatements_multiple
+              .filter(doc => doc.url && doc.url !== "")
+              .map(doc => doc.url)
+          }
+
+          setExistingUniversalDocs({
+            businessPlan: businessPlanUrl,
+            pitchDeck: pitchDeckUrl,
+            financialStatements: financialStatementsUrls,
+            loading: false
+          })
+        } else {
+          setExistingUniversalDocs(prev => ({ ...prev, loading: false }))
+        }
+      } catch (error) {
+        console.error("Error fetching existing documents:", error)
+        setExistingUniversalDocs(prev => ({ ...prev, loading: false }))
+      }
+    }
+
+    fetchExistingDocuments()
+  }, [])
 
   useEffect(() => {
     const fetchPopupStatus = async () => {
@@ -824,6 +874,7 @@ const getContainerStyles = () => ({
           </div>
         )
       }
+      console.log(apiKey)
       if (!apiKey) {
         return (
           <div
@@ -869,8 +920,18 @@ const getContainerStyles = () => ({
       case "useOfFunds":
         return renderUseOfFunds(formData.useOfFunds, updateFormData)
       case "enterpriseReadiness":
-        return renderEnterpriseReadiness(formData.enterpriseReadiness, updateFormData, apiKey)
-
+        // Pass existingUniversalDocs like Advisory does
+        return renderEnterpriseReadiness(
+          formData.enterpriseReadiness, 
+          updateFormData, 
+          apiKey,
+          (response, score, label) => {
+            updateFormData("enterpriseReadiness", { 
+              aiEvaluation: { response, score, label, timestamp: new Date().toISOString() }
+            })
+          },
+          existingUniversalDocs
+        )
       case "guarantees":
         return renderGuarantees(formData.guarantees, updateFormData)
       case "growthPotential":
@@ -922,6 +983,7 @@ const getContainerStyles = () => ({
         : await uploadFilesAndReplaceWithURLs(formData, "full")
 
       const dataToSave = { ...uploaded }
+      
       const triggerRelevantSections = [
         "enterpriseReadiness",
         "financialOverview",
@@ -931,12 +993,9 @@ const getContainerStyles = () => ({
       ]
       if (section && triggerRelevantSections.includes(section)) {
         await setDoc(docRef, { triggerFundabilityEvaluation: true }, { merge: true })
-      }
-
-      if (section && triggerRelevantSections.includes(section)) {
         await setDoc(docRef, { triggerLegitimacyEvaluation: true }, { merge: true })
       }
-      // Only include submission status if specifically requested
+
       if (includingSubmissionStatus) {
         dataToSave.applicationSubmitted = applicationSubmitted
       }
@@ -1265,6 +1324,7 @@ The BIG Fundability Team
           margin: "0",
           boxSizing: "border-box",
         }}
+        className="funding-application-container"
       >
         <div
           className="loading-container"
@@ -1348,91 +1408,73 @@ The BIG Fundability Team
   }
 
   return (
-  <div
-    style={{
-      ...getContainerStyles(),
-      width: "100%",
-      minHeight: "100vh",
-      maxWidth: "100%",
-      overflowX: "visible",
-      padding: "0 20px",
-      margin: "0 auto",
-      boxSizing: "border-box",
-      display: "flex",
-      flexDirection: "column",
-      flex: 1,
-    }}
-    className="funding-application-container"
-  >
-
-    {validationModal.open && (
-      <div
-        style={{
-          position: "fixed",
-          top: 0,
-          left: 0,
-          width: "100vw",
-          height: "100vh",
-          backgroundColor: "rgba(0,0,0,0.5)",
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          zIndex: 9999,
-          padding: "20px",
-          boxSizing: "border-box",
-        }}
-      >
+    <div style={getContainerStyles()} className="funding-application-container">
+      {validationModal.open && (
         <div
           style={{
-            backgroundColor: "white",
-            borderRadius: "8px",
+            position: "fixed",
+            top: "0",
+            left: "0",
+            width: "100vw",
+            height: "100vh",
+            backgroundColor: "rgba(0, 0, 0, 0.5)",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: "9999",
             padding: "20px",
-            maxWidth: "90vw",
-            maxHeight: "90vh",
-            overflow: "auto",
-            position: "relative",
-            width: "100%",
-            maxWidth: "500px",
+            boxSizing: "border-box",
           }}
-          className="validation-popup"
+          className="popup-overlay"
         >
-          <button
-            onClick={() =>
-              setValidationModal({
-                open: false,
-                title: "",
-                messages: [],
-              })
-            }
+          <div
+            style={{
+              backgroundColor: "white",
+              borderRadius: "8px",
+              padding: "20px",
+              maxWidth: "90vw",
+              maxHeight: "90vh",
+              overflow: "auto",
+              position: "relative",
+              width: "100%",
+              maxWidth: "500px",
+            }}
+            className="validation-popup"
           >
-            <X size={24} />
-          </button>
-
-          <div className="popup-content">
-            <h2>{validationModal.title}</h2>
-
-            <ul>
-              {validationModal.messages.map((msg, idx) => (
-                <li key={idx}>{msg}</li>
-              ))}
-            </ul>
-
             <button
-              onClick={() =>
-                setValidationModal({
-                  open: false,
-                  title: "",
-                  messages: [],
-                })
-              }
+              style={{
+                position: "absolute",
+                top: "10px",
+                right: "10px",
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                padding: "5px",
+              }}
+              className="close-popup"
+              onClick={() => setValidationModal({ open: false, title: "", messages: [] })}
             >
-              Got it
+              <X size={24} />
             </button>
-
+            <div className="popup-content">
+              <h2 className="text-lg font-semibold">{validationModal.title}</h2>
+              <ul className="list-disc pl-5 mt-2 text-sm text-red-600">
+                {validationModal.messages.map((msg, idx) => (
+                  <li key={idx}>{msg}</li>
+                ))}
+              </ul>
+              <div className="mt-4 flex justify-end">
+                <button
+                  className="btn btn-primary"
+                  onClick={() => setValidationModal({ open: false, title: "", messages: [] })}
+                >
+                  Got it
+                </button>
+              </div>
+            </div>
           </div>
         </div>
-      </div>
-    )}
+      )}
 
       {/* Welcome Popup for first-time users */}
       {showWelcomePopup && (
@@ -1599,7 +1641,7 @@ The BIG Fundability Team
           width: "100%",
           textAlign: "center",
           margin: "20px 0",
-          fontSize: "clamp(1.2rem, 3vw, 2rem)",
+          fontSize: "clamp(1.5rem, 4vw, 2.5rem)",
           lineHeight: "1.2",
           wordBreak: "break-word",
         }}
@@ -1610,13 +1652,11 @@ The BIG Fundability Team
       <div
         style={{
           width: "100%",
-    maxWidth: "100%",
-    overflowX: "auto",
-    overflowY: "hidden",
-    padding: "10px 0",
-    margin: "20px 0",
-    boxSizing: "border-box",
-    WebkitOverflowScrolling: "touch",
+          maxWidth: "100%",
+          overflowX: "auto",
+          padding: "10px 0",
+          margin: "20px 0",
+          boxSizing: "border-box",
         }}
         className="profile-tracker"
       >
@@ -1637,10 +1677,10 @@ The BIG Fundability Team
               key={section.id}
               onClick={() => setActiveSection(section.id)}
               style={{
-                minWidth: "70px",
-                maxWidth: "100px",
+                minWidth: "80px",
+                maxWidth: "120px",
                 padding: "8px 6px",
-                fontSize: "clamp(0.6rem, 1vw, 0.75rem)",
+                fontSize: "clamp(0.7rem, 1.5vw, 0.9rem)",
                 lineHeight: "1.2",
                 textAlign: "center",
                 cursor: "pointer",
@@ -1683,17 +1723,14 @@ The BIG Fundability Team
       <div
         style={{
           width: "100%",
-    maxWidth: "100%",
-    minWidth: 0,
-    padding: "20px",
-    margin: "0 auto",
-    backgroundColor: "white",
-    borderRadius: "8px",
-    boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
-    boxSizing: "border-box",
-    overflowX: "auto",
-    overflowY: "visible",
-    flex: 1,
+          maxWidth: "100%",
+          padding: "20px",
+          margin: "0 auto",
+          backgroundColor: "white",
+          borderRadius: "8px",
+          boxShadow: "0 2px 4px rgba(0,0,0,0.1)",
+          boxSizing: "border-box",
+          overflow: "hidden",
         }}
         className="content-card"
       >
