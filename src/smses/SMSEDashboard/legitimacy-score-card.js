@@ -357,7 +357,9 @@ CRITICAL RULES:
   1. Confidence level (High/Medium/Low)
   2. Evidence citation (specific data points referenced)
 - If insufficient data exists, state: "Insufficient data to determine"
+- if score is reduced by any missing item, explicitly state which item caused the reduction and why based on legitimacy principles otherwise give point
 - All recommendations must map to specific, actionable steps`
+
 
       const combinedMessage = `${systemPrompt}
 
@@ -428,11 +430,25 @@ SCORING RUBRIC (use strictly):
 - 5 = Excellent/outstanding
 
 INDUSTRY CONTEXT RULES FOR DIGITAL PRESENCE:
-- Agriculture / Farming / Primary industry: Website + Facebook + WhatsApp/phone are the primary channels. Missing X (Twitter) or YouTube is NOT a gap — score based on relevant platforms only.
+- Agriculture / Farming / Primary industry: Website + Facebook + WhatsApp/phone are the PRIMARY channels. LinkedIn and Instagram are BONUS. X (Twitter) and YouTube are IRRELEVANT — missing them must NOT reduce the score. A business with Website + Facebook + WhatsApp in agriculture scores 5/5.
 - Construction / Trade / Property: Website + LinkedIn + Facebook are relevant. X and YouTube rarely apply.
 - Retail / Hospitality / Consumer: Instagram + Facebook + Website matter most.
 - Professional Services / Consulting / Technology: LinkedIn + Website + X are relevant.
-- RULE: Only score against the 3-4 platforms most relevant to the business industry. Missing irrelevant platforms must not reduce the score.
+- RULE: Score ONLY against the 2-3 platforms most relevant to the business industry. Missing irrelevant platforms must NEVER reduce the score. A business that covers all relevant platforms for its industry scores 5/5 regardless of missing irrelevant ones.
+
+INDUSTRY CONTEXT RULES FOR TRACK RECORD:
+- Startup stage (0-3 years): 2 named clients with revenue is a STRONG result — score 4-5, not 3. Early-stage businesses cannot reasonably have large client portfolios.
+- Growth stage (3-6 years): 3-5 clients expected for a 4/5. 2 clients = 3/5.
+- Scaling/Mature: Larger portfolios expected.
+- RULE: Always factor in operation stage when scoring. Penalising a 4-year startup for having 2 clients is incorrect — that is normal and healthy for the stage.
+
+INDUSTRY CONTEXT RULES FOR IDENTITY MARKERS:
+- A business email on the company domain (e.g. @khanyisaagri.co.za), a website, logo, physical address, and proof of address together constitute a PERFECT 5/5. Do not look for additional items beyond these five to justify a lower score.
+
+INDUSTRY CONTEXT RULES FOR THIRD-PARTY VALIDATION:
+- BBBEE + Company Registration + Tax Clearance + at least 1 industry accreditation + support letters = 5/5 base score. Do not penalise for missing optional items when all critical documents are present.
+- Startup stage businesses are NOT expected to have awards, media features, or multiple accreditations. Presence of BBBEE, registration, tax clearance, and any accreditation is outstanding for this stage.
+
 
 OUTPUT FORMAT - YOU MUST FOLLOW THIS EXACTLY:
 
@@ -526,9 +542,14 @@ If all claims are supported, respond with "VALIDATION PASSED". If unsupported cl
     evaluationData += `\n=== IDENTITY MARKERS ===\n`
     evaluationData += `Website: ${data?.contactDetails?.website || "Not provided"}\n`
     evaluationData += `Email: ${data?.contactDetails?.email || "Not provided"}\n`
-    evaluationData += `Company Logo: ${data?.entityOverview?.companyLogo?.length > 0 ? "Available" : "Not provided"}\n`
+    evaluationData += `Company Logo: ${data?.documents?.companyLogo || data?.entityOverview?.companyLogo ? "Available" : "Not provided"}\n`
     evaluationData += `Physical Address: ${data?.contactDetails?.physicalAddress || "Not provided"}\n`
-    evaluationData += `Proof of Address: ${data?.documents?.proofOfAddress?.length > 0 ? "Available" : "Not provided"}\n`
+   const proofOfAddressAvailable = !!(
+  data?.contactDetails?.proofOfAddress ||
+  data?.documents?.proofOfAddress?.[0]
+)
+evaluationData += `Proof of Address: ${proofOfAddressAvailable ? "Available" : "Not provided"}\n`
+
 
     // Digital Presence
     evaluationData += `\n=== DIGITAL PRESENCE ===\n`
@@ -558,7 +579,7 @@ If all claims are supported, respond with "VALIDATION PASSED". If unsupported cl
     // Simple count for the AI to use in scoring Digital Presence
     const socialPresentCount = Object.values(socialsNorm).filter(Boolean).length
     evaluationData += `Social Links Present (out of 6): ${socialPresentCount}\n`
-
+evaluationData += `WhatsApp Business: ${data?.contactDetails?.businessWhatsApp || data?.contactDetails?.whatsApp ? "Available" : "Not provided"}\n`
     // Keep your visibility hint
     evaluationData += `Online Visibility: ${socialsNorm["Website"] ? "Present" : "Limited"}\n`
 
@@ -580,49 +601,46 @@ If all claims are supported, respond with "VALIDATION PASSED". If unsupported cl
 
     evaluationData += `\n=== THIRD-PARTY VALIDATION ===\n`
 
-    // B-BBEE: single upload stored at documents.bbbeeCert or verification.bbbeeCert
-    const bbbeeAvailable = !!(
-      data?.documents?.bbbeeCert ||
-      data?.documents?.bbbeeCert_multiple?.some(d => d?.url) ||
-      data?.verification?.bbbeeCert?.url
-    )
-    evaluationData += `BBBEE Certificate: ${bbbeeAvailable ? "Available" : "Not provided"}\n`
+   const bbbeeAvailable = !!(
+  data?.documents?.bbbeeCert ||
+  data?.legalCompliance?.bbbeeCert
+)
+evaluationData += `BBBEE Certificate: ${bbbeeAvailable ? "Available" : "Not provided"}\n`
 
-    // Company Registration: single upload
-    const companyRegAvailable = !!(
-      data?.documents?.companyRegistrationCertificate ||
-      data?.documents?.companyReg ||
-      data?.verification?.companyRegistrationCertificate?.url ||
-      data?.verification?.companyReg?.url
-    )
-    evaluationData += `Company Registration: ${companyRegAvailable ? "Available" : "Not provided"}\n`
+const companyRegAvailable = !!(
+  data?.documents?.registrationCertificate?.[0] ||
+  data?.entityOverview?.registrationCertificate
+)
+evaluationData += `Company Registration: ${companyRegAvailable ? "Available" : "Not provided"}\n`
 
     // Tax Clearance: single upload
     const taxClearanceAvailable = !!(
-      data?.documents?.taxClearanceCertificate ||
-      data?.documents?.taxClearance ||
-      data?.verification?.taxClearanceCertificate?.url ||
-      data?.verification?.taxClearance?.url
-    )
-    evaluationData += `Tax Clearance Certificate: ${taxClearanceAvailable ? "Available" : "Not provided"}\n`
+  data?.documents?.taxClearanceCert?.[0] ||
+  data?.legalCompliance?.taxClearanceCert
+)
+evaluationData += `Tax Clearance Certificate: ${taxClearanceAvailable ? "Available" : "Not provided"}\n`
 
     // Industry Accreditations: multi-upload stored at documents.industryAccreditations_multiple
-    const accreditationDocs = data?.documents?.industryAccreditations_multiple ||
-      data?.documents?.industryAccreditationDocs_multiple || []
-    const accreditationCount = accreditationDocs.filter(d => d?.url).length
-    // Also check single upload fallback
-    const accreditationSingle = !!(data?.documents?.industryAccreditations || data?.documents?.industryAccreditationDocs)
-    const accreditationTotal = accreditationCount > 0 ? accreditationCount : (accreditationSingle ? 1 : 0)
-    evaluationData += `Industry Accreditations: ${accreditationTotal > 0 ? `${accreditationTotal} document(s) uploaded` : "Not provided"}\n`
+  const accreditationDocs = data?.documents?.industryAccreditationDocs_multiple || []
+const accreditationDocsCount = accreditationDocs.filter(d => d?.url).length
+const accreditationNames = data?.legalCompliance?.industryAccreditations || []
+const accreditationTotal = accreditationDocsCount > 0 
+  ? accreditationDocsCount 
+  : accreditationNames.length > 0 ? accreditationNames.length : 0
+evaluationData += `Industry Accreditations: ${accreditationTotal > 0 
+  ? `${accreditationTotal} document(s) — ${accreditationNames.join(", ") || "uploaded"}` 
+  : "Not provided"}\n`
 
     // Support Letters / Client References: multi-upload stored at documents.clientReferencesAndSupportLetters_multiple
-    const supportLetterDocs = data?.documents?.clientReferencesAndSupportLetters_multiple ||
-      data?.documents?.clientReferences_multiple ||
-      data?.documentUpload?.supportLetters || []
-    const supportLetterCount = Array.isArray(supportLetterDocs)
-      ? supportLetterDocs.filter(d => d?.url).length
-      : 0
-    evaluationData += `Support Letters: ${supportLetterCount > 0 ? `${supportLetterCount} document(s) uploaded` : "Not provided"}\n`
+    const supportLetterDocs = 
+  data?.documents?.["Client References & Support Letters_multiple"] ||
+  data?.documents?.clientReferencesAndSupportLetters_multiple || []
+const supportLetterCount = Array.isArray(supportLetterDocs)
+  ? supportLetterDocs.filter(d => d?.url).length
+  : 0
+evaluationData += `Support Letters: ${supportLetterCount > 0 
+  ? `${supportLetterCount} document(s) uploaded` 
+  : "Not provided"}\n`
 
     evaluationData += `Has Mentor: ${data?.enterpriseReadiness?.hasMentor || "Not specified"}\n`
 
@@ -650,25 +668,24 @@ If all claims are supported, respond with "VALIDATION PASSED". If unsupported cl
     return "#B71C1C" // Dark red
   }
 
-  const mapStageToCategory = (stage) => {
-    const s = (stage || "").toLowerCase()
-    if (["pre-seed", "preseed"].includes(s)) return "pre-seed"
-    if (["seed"].includes(s)) return "seed"
-    if (["series a", "seriesa"].includes(s)) return "seriesa"
-    if (["series b", "seriesb"].includes(s)) return "seriesb"
-    if (["early-growth", "growth", "scale-up"].includes(s)) return "growth"
-    return "maturity"
-  }
+ const mapStageToCategory = (stage) => {
+  const s = (stage || "").toLowerCase()
+  if (s === "startup")    return "startup"
+  if (s === "growth")     return "growth"
+  if (s === "scaling")    return "scaling"
+  if (s === "turnaround") return "turnaround"
+  if (s === "mature")     return "mature"
+  return "startup"
+}
 
   // UPDATED WEIGHTINGS: Team & leadership removed, others redistributed
-  const weightingsByStage = {
-    "pre-seed": { foundational: 36, digital: 29, track: 21, thirdParty: 14 },
-    "seed": { foundational: 36, digital: 29, track: 21, thirdParty: 14 },
-    "seriesa": { foundational: 36, digital: 29, track: 21, thirdParty: 14 },
-    "seriesb": { foundational: 36, digital: 29, track: 21, thirdParty: 14 },
-    "growth": { foundational: 36, digital: 29, track: 21, thirdParty: 14 },
-    "maturity": { foundational: 36, digital: 29, track: 21, thirdParty: 14 },
-  }
+const weightingsByStage = {
+  "startup":    { foundational: 35, digital: 25, track: 15, thirdParty: 25 },
+  "growth":     { foundational: 28, digital: 22, track: 25, thirdParty: 25 },
+  "scaling":    { foundational: 22, digital: 20, track: 30, thirdParty: 28 },
+  "turnaround": { foundational: 30, digital: 18, track: 28, thirdParty: 24 },
+  "mature":     { foundational: 18, digital: 17, track: 30, thirdParty: 35 },
+}
 
   const calculateLegitimacyScore = (data, aiEvaluationResult = "") => {
     console.log("Calculating legitimacy score with AI result:", !!aiEvaluationResult)
