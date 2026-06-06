@@ -2,7 +2,7 @@
 "use client"
 
 import React, { useState } from "react"
-import { ChevronDown, ChevronUp, AlertCircle, CheckCircle, TrendingUp, Shield, Users } from "lucide-react"
+import { ChevronDown, ChevronUp } from "lucide-react"
 
 // ============================================
 // CONSTANTS & OPTIONS
@@ -271,286 +271,10 @@ function MultiSelect({ options, selected, onChange, label }) {
 }
 
 // ============================================
-// COLLAPSIBLE DOCUMENT RATING SECTION
-// ============================================
-
-function CollapsibleRatingSection({ title, description, items, ratings, onRatingChange, color, icon: Icon, defaultOpen = false }) {
-  const [isOpen, setIsOpen] = useState(defaultOpen)
-  const [localRatings, setLocalRatings] = useState(ratings || {})
-  const [totalPercentage, setTotalPercentage] = useState(0)
-
-  React.useEffect(() => {
-    calculateTotal(localRatings)
-  }, [])
-
-  const calculateTotal = (newRatings) => {
-    const total = Object.values(newRatings).reduce((sum, val) => sum + (parseFloat(val) || 0), 0)
-    setTotalPercentage(total)
-    return total
-  }
-
-  const handleRatingChange = (itemName, value) => {
-    let newValue = parseFloat(value) || 0
-    newValue = Math.min(Math.max(newValue, 0), 100)
-    
-    const newRatings = { ...localRatings, [itemName]: newValue }
-    const newTotal = calculateTotal(newRatings)
-    
-    if (newTotal > 100) {
-      return
-    }
-    
-    setLocalRatings(newRatings)
-    if (onRatingChange) {
-      onRatingChange(title, newRatings, newTotal)
-    }
-  }
-
-  const distributeEvenly = () => {
-    const evenValue = 100 / items.length
-    const newRatings = {}
-    items.forEach(item => {
-      newRatings[item.name] = parseFloat(evenValue.toFixed(1))
-    })
-    setLocalRatings(newRatings)
-    calculateTotal(newRatings)
-    if (onRatingChange) {
-      onRatingChange(title, newRatings, 100)
-    }
-  }
-
-  const getPriorityColor = (percentage) => {
-    if (percentage >= 70) return "#1B5E20"
-    if (percentage >= 40) return "#FF9800"
-    return "#F44336"
-  }
-
-  const getRatedCount = () => {
-    return Object.values(localRatings).filter(r => r > 0).length
-  }
-
-  return (
-    <div style={{
-      marginBottom: "20px",
-      backgroundColor: "#fefcf8",
-      borderRadius: "12px",
-      border: `1px solid ${color}40`,
-      overflow: "hidden"
-    }}>
-      {/* Header - Click to toggle */}
-      <div 
-        onClick={() => setIsOpen(!isOpen)}
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          padding: "16px 20px",
-          backgroundColor: `${color}10`,
-          cursor: "pointer",
-          transition: "all 0.2s ease"
-        }}
-        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = `${color}20`}
-        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = `${color}10`}
-      >
-        <div style={{ display: "flex", alignItems: "center", gap: "12px", flex: 1 }}>
-          <div style={{ backgroundColor: color, padding: "8px", borderRadius: "10px", color: "white" }}>
-            {Icon && <Icon size={18} />}
-          </div>
-          <div>
-            <h3 style={{ margin: "0", fontSize: "16px", fontWeight: "700", color: "#5d4037" }}>{title}</h3>
-            <p style={{ margin: "4px 0 0", fontSize: "12px", color: "#8d6e63" }}>{description}</p>
-          </div>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
-          {!isOpen && (
-            <div style={{ 
-              display: "flex", 
-              gap: "12px", 
-              fontSize: "11px", 
-              color: "#8d6e63",
-              backgroundColor: "white",
-              padding: "4px 12px",
-              borderRadius: "20px"
-            }}>
-              <span>📄 {getRatedCount()}/{items.length} rated</span>
-              <span>📊 {totalPercentage.toFixed(0)}% total</span>
-            </div>
-          )}
-          {isOpen ? <ChevronUp size={20} color="#8d6e63" /> : <ChevronDown size={20} color="#8d6e63" />}
-        </div>
-      </div>
-
-      {isOpen && (
-        <div style={{ padding: "20px" }}>
-          <div style={{ marginBottom: "20px", padding: "12px", backgroundColor: "#f5f0ec", borderRadius: "8px" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px", flexWrap: "wrap", gap: "8px" }}>
-              <span style={{ fontSize: "13px", fontWeight: "600", color: "#5d4037" }}>Total Allocation</span>
-              <span style={{ fontSize: "14px", fontWeight: "700", color: totalPercentage === 100 ? "#1B5E20" : "#FF9800" }}>
-                {totalPercentage.toFixed(1)}% / 100%
-              </span>
-            </div>
-            <div style={{ width: "100%", height: "6px", backgroundColor: "#e0d5cf", borderRadius: "3px", overflow: "hidden" }}>
-              <div style={{ width: `${Math.min(totalPercentage, 100)}%`, height: "100%", backgroundColor: totalPercentage === 100 ? "#1B5E20" : "#FF9800", borderRadius: "3px", transition: "width 0.3s ease" }} />
-            </div>
-            {totalPercentage !== 100 && totalPercentage > 0 && (
-              <div style={{ marginTop: "8px" }}>
-                <button onClick={distributeEvenly} style={{ fontSize: "11px", color: "#8d6e63", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>
-                  Distribute remaining {Math.max(0, 100 - totalPercentage).toFixed(1)}% evenly
-                </button>
-              </div>
-            )}
-            {totalPercentage === 0 && (
-              <div style={{ marginTop: "8px" }}>
-                <button onClick={distributeEvenly} style={{ fontSize: "11px", color: "#8d6e63", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>
-                  Distribute 100% evenly across all items
-                </button>
-              </div>
-            )}
-          </div>
-
-          <div style={{ display: "flex", flexDirection: "column", gap: "12px", maxHeight: "500px", overflowY: "auto", paddingRight: "4px" }}>
-            {items.map((item, idx) => {
-              const rating = localRatings[item.name] || 0
-              const isExcluded = rating === 0
-              
-              return (
-                <div key={idx} style={{
-                  padding: "12px",
-                  backgroundColor: isExcluded ? "#faf5f0" : "white",
-                  borderRadius: "8px",
-                  border: `1px solid ${isExcluded ? "#e0d5cf" : "#e8ddd6"}`,
-                  transition: "all 0.2s ease"
-                }}>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: "12px", alignItems: "center" }}>
-                    <div style={{ flex: "2", minWidth: "180px" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
-                        <span style={{ fontWeight: "600", color: "#5d4037", fontSize: "13px" }}>{item.name}</span>
-                        {item.required && (
-                          <span style={{ backgroundColor: "#F44336", color: "white", fontSize: "9px", padding: "2px 6px", borderRadius: "4px", fontWeight: "600" }}>
-                            Required
-                          </span>
-                        )}
-                        {!isExcluded && rating > 0 && (
-                          <span style={{ backgroundColor: getPriorityColor(rating) + "20", color: getPriorityColor(rating), fontSize: "9px", padding: "2px 8px", borderRadius: "12px", fontWeight: "600" }}>
-                            {rating >= 70 ? "High Priority" : rating >= 40 ? "Medium Priority" : "Low Priority"}
-                          </span>
-                        )}
-                      </div>
-                      <p style={{ fontSize: "11px", color: "#8d6e63", margin: "4px 0 0" }}>{item.description}</p>
-                    </div>
-
-                    <div style={{ flex: "2", minWidth: "180px" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                        <span style={{ fontSize: "10px", color: "#8d6e63", minWidth: "25px" }}>0%</span>
-                        <input
-                          type="range"
-                          min="0"
-                          max="100"
-                          step="5"
-                          value={rating}
-                          onChange={(e) => handleRatingChange(item.name, e.target.value)}
-                          style={{
-                            flex: "1",
-                            height: "4px",
-                            borderRadius: "2px",
-                            WebkitAppearance: "none",
-                            background: `linear-gradient(to right, ${getPriorityColor(rating)} 0%, ${getPriorityColor(rating)} ${rating}%, #e0d5cf ${rating}%, #e0d5cf 100%)`,
-                            outline: "none"
-                          }}
-                        />
-                        <span style={{ fontSize: "10px", color: "#8d6e63", minWidth: "25px", textAlign: "right" }}>100%</span>
-                        <div style={{ minWidth: "55px", textAlign: "right" }}>
-                          <input
-                            type="number"
-                            value={rating}
-                            onChange={(e) => handleRatingChange(item.name, e.target.value)}
-                            min="0"
-                            max="100"
-                            step="5"
-                            style={{
-                              width: "55px",
-                              padding: "4px 6px",
-                              border: `1px solid ${isExcluded ? "#e0d5cf" : "#d2b48c"}`,
-                              borderRadius: "6px",
-                              fontSize: "11px",
-                              textAlign: "center",
-                              backgroundColor: "white",
-                              color: "#5d4037"
-                            }}
-                          />
-                          <span style={{ fontSize: "10px", marginLeft: "2px" }}>%</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <button
-                      onClick={() => handleRatingChange(item.name, rating === 0 ? 0 : 0)}
-                      style={{
-                        padding: "4px 10px",
-                        backgroundColor: isExcluded ? "#e0d5cf" : "#f5f2f0",
-                        border: "none",
-                        borderRadius: "4px",
-                        fontSize: "10px",
-                        color: "#8d6e63",
-                        cursor: "pointer",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "4px"
-                      }}
-                    >
-                      <AlertCircle size={10} />
-                      {isExcluded ? "Excluded" : "Skip/Exclude"}
-                    </button>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-
-          <div style={{
-            marginTop: "16px",
-            paddingTop: "12px",
-            borderTop: "1px solid #e8ddd6",
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            flexWrap: "wrap",
-            gap: "8px",
-            fontSize: "11px",
-            color: "#8d6e63"
-          }}>
-            <span>✅ {getRatedCount()} documents rated</span>
-            <span>⏭️ {items.length - getRatedCount()} documents skipped</span>
-            <span>📊 Total: {totalPercentage.toFixed(1)}%</span>
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ============================================
 // MAIN COMPONENT
 // ============================================
 
 export default function GeneralInvestmentPreference({ data = {}, updateData }) {
-  const [ratingsData, setRatingsData] = useState({
-    compliance: data.complianceRatings || {},
-    leadership: data.leadershipRatings || {},
-    capitalAppeal: data.capitalAppealRatings || {},
-    legitimacy: data.legitimacyRatings || {}
-  })
-
-  const handleRatingChange = (category, ratings, total) => {
-    const categoryKey = category.toLowerCase().replace(/\s+/g, '')
-    const newRatingsData = { ...ratingsData, [categoryKey]: ratings }
-    setRatingsData(newRatingsData)
-    updateData({ 
-      [`${categoryKey}Ratings`]: ratings,
-      [`${categoryKey}Total`]: total
-    })
-  }
-
   const handleChange = (e) => {
     const { name, value } = e.target
     updateData({ [name]: value })
@@ -584,50 +308,6 @@ export default function GeneralInvestmentPreference({ data = {}, updateData }) {
     updateData({ investmentFocus: selectedValues, investmentFocusSubtype: filteredSubtypes })
   }
 
-  // Document definitions for each category
-  const complianceDocuments = [
-    { name: "Company Registration Certificate", description: "CIPC registration document proving legal existence", required: true },
-    { name: "Tax Clearance Certificate", description: "SARS tax clearance showing financial compliance", required: true },
-    { name: "B-BBEE Certificate", description: "Valid B-BBEE certification for procurement", required: true },
-    { name: "Share Register", description: "Official share register showing ownership", required: true },
-    { name: "IDs of Directors & Shareholders", description: "Certified copies of ID documents", required: true },
-    { name: "Proof of Address", description: "Business address verification", required: true },
-    { name: "Bank Details Confirmation Letter", description: "Bank letter confirming business account", required: false },
-    { name: "COIDA Letter of Good Standing", description: "Compensation Fund compliance", required: false },
-    { name: "Industry Accreditations", description: "Sector-specific licenses and permits", required: false }
-  ]
-
-  const leadershipDocuments = [
-    { name: "Director CVs / Resumes", description: "Professional background and experience of directors", required: true },
-    { name: "Executive Team CVs", description: "Management team qualifications and experience", required: true },
-    { name: "LinkedIn Profiles", description: "Professional social media presence for leadership", required: false },
-    { name: "Professional Certifications", description: "Industry-specific qualifications and designations", required: false },
-    { name: "Board Meeting Minutes", description: "Records of governance and decision-making", required: false },
-    { name: "Organizational Chart", description: "Clear reporting structure and roles", required: false }
-  ]
-
-  const capitalAppealDocuments = [
-    { name: "Audited Financial Statements", description: "Verified financial performance data", required: true },
-    { name: "Business Plan", description: "Strategic roadmap and financial projections", required: true },
-    { name: "Pitch Deck", description: "Investment presentation and value proposition", required: true },
-    { name: "Financial Projections (3-5 years)", description: "Revenue, profit, and cash flow forecasts", required: true },
-    { name: "Credit Report", description: "Business credit history and score", required: false },
-    { name: "Management Accounts", description: "Recent financial performance updates", required: false },
-    { name: "Cap Table", description: "Ownership structure and equity distribution", required: false },
-    { name: "Due Diligence Reports", description: "Third-party verification of business", required: false }
-  ]
-
-  const legitimacyDocuments = [
-    { name: "Professional Website", description: "Business website with company information", required: true },
-    { name: "Business Email Domain", description: "Professional email (@company.com)", required: true },
-    { name: "Company Logo & Branding", description: "Professional visual identity", required: true },
-    { name: "LinkedIn Company Page", description: "Professional social media presence", required: false },
-    { name: "Client Testimonials/References", description: "Proof of commercial activity and client satisfaction", required: false },
-    { name: "Case Studies / Portfolio", description: "Examples of successful deliveries", required: false },
-    { name: "News/Press Mentions", description: "Media coverage and public recognition", required: false },
-    { name: "Google Business Profile", description: "Local business presence verification", required: false }
-  ]
-
   const inputStyle = { width: "100%", padding: "8px 12px", border: "1px solid #d2b48c", borderRadius: "6px", fontSize: "14px", outline: "none", backgroundColor: "white" }
   const labelStyle = { display: "block", fontWeight: "500", color: "#5d4037", marginBottom: "8px", fontSize: "14px" }
   const sectionStyle = { marginBottom: "32px", padding: "24px", backgroundColor: "#fefcf8", borderRadius: "12px", border: "1px solid #e8d5c4" }
@@ -635,61 +315,12 @@ export default function GeneralInvestmentPreference({ data = {}, updateData }) {
 
   return (
     <div style={{ padding: "24px", maxWidth: "1200px", margin: "0 auto" }}>
-      <h2 style={{ fontSize: "24px", fontWeight: "bold", color: "#5d4037", marginBottom: "8px" }}>Investment Requirements</h2>
+      <h2 style={{ fontSize: "24px", fontWeight: "bold", color: "#5d4037", marginBottom: "8px" }}>General Investment Preferences</h2>
       <p style={{ fontSize: "14px", color: "#8d6e63", marginBottom: "24px" }}>
-        Define what you require from SMEs and rate how important each document is for your investment decision.
-        <strong style={{ display: "block", marginTop: "8px" }}>Note: Total rating per section should not exceed 100%.</strong>
+        Define your investment preferences including fund structure, sector focus, geographic preferences, and exit strategies.
       </p>
 
-      {/* Section 1: Compliance Documents Rating */}
-      <CollapsibleRatingSection
-        title="Compliance Requirements"
-        description="Legal and regulatory documents SMEs must provide to prove business legitimacy"
-        items={complianceDocuments}
-        ratings={ratingsData.compliance}
-        onRatingChange={handleRatingChange}
-        color="#8D6E63"
-        icon={Shield}
-        defaultOpen={true}
-      />
-
-      {/* Section 2: Leadership Documents Rating */}
-      <CollapsibleRatingSection
-        title="Leadership & Management Requirements"
-        description="Documents proving the quality and capability of the SME's leadership team"
-        items={leadershipDocuments}
-        ratings={ratingsData.leadership}
-        onRatingChange={handleRatingChange}
-        color="#6D4C41"
-        icon={Users}
-        defaultOpen={false}
-      />
-
-      {/* Section 3: Capital Appeal Documents Rating */}
-      <CollapsibleRatingSection
-        title="Capital Appeal Requirements"
-        description="Financial and investment readiness documents that demonstrate return potential"
-        items={capitalAppealDocuments}
-        ratings={ratingsData.capitalAppeal}
-        onRatingChange={handleRatingChange}
-        color="#4CAF50"
-        icon={TrendingUp}
-        defaultOpen={false}
-      />
-
-      {/* Section 4: Legitimacy Documents Rating */}
-      <CollapsibleRatingSection
-        title="Legitimacy & Brand Requirements"
-        description="Market presence and brand credibility documents that build trust"
-        items={legitimacyDocuments}
-        ratings={ratingsData.legitimacy}
-        onRatingChange={handleRatingChange}
-        color="#2196F3"
-        icon={CheckCircle}
-        defaultOpen={false}
-      />
-
-      {/* Original Investment Preferences Sections */}
+      {/* Investment Preferences Section */}
       <div style={sectionStyle}>
         <h3 style={sectionTitleStyle}>Investment Preferences</h3>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px", marginBottom: "24px" }}>
@@ -759,7 +390,7 @@ export default function GeneralInvestmentPreference({ data = {}, updateData }) {
         </div>
       </div>
 
-      {/* Section 2: Exit Strategy & Liquidity Preferences */}
+      {/* Exit Strategy & Liquidity Preferences */}
       <div style={sectionStyle}>
         <h3 style={sectionTitleStyle}>Exit Strategy & Liquidity Preferences</h3>
         <p style={{ fontSize: "14px", color: "#8d6e63", marginBottom: "20px" }}>
@@ -821,7 +452,7 @@ export default function GeneralInvestmentPreference({ data = {}, updateData }) {
         </div>
       </div>
 
-      {/* Section 3: Historical Exit Performance */}
+      {/* Historical Exit Performance */}
       <div style={sectionStyle}>
         <h3 style={sectionTitleStyle}>Historical Exit Performance</h3>
         <p style={{ fontSize: "14px", color: "#8d6e63", marginBottom: "20px" }}>
@@ -855,7 +486,7 @@ export default function GeneralInvestmentPreference({ data = {}, updateData }) {
         </div>
       </div>
 
-      {/* Section 4: Reinvestment History */}
+      {/* Reinvestment History */}
       <div style={sectionStyle}>
         <h3 style={sectionTitleStyle}>Reinvestment History</h3>
         <p style={{ fontSize: "14px", color: "#8d6e63", marginBottom: "20px" }}>

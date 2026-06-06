@@ -7,6 +7,7 @@ import styles from "./InvestorUniversalProfile.module.css"
 import Instructions from "./Instructions"
 import EntityOverview from "./FundManageOverview"
 import ContactDetails from "./ContactDetails"
+import InvestmentRequirements from "./InvestmentRequirements"
 import OwnershipManagement from "./GeneralInvestmentPreference​"
 import ProductsServices from "./FundDetails​"
 import HowDidYouHear from "./ApplicationBrief​"
@@ -24,6 +25,7 @@ const sections = [
   { id: "instructions", label: "Instructions" },
   { id: "fundManageOverview", label: "Fund Manage\nOverview" },
   { id: "contactDetails", label: "Contact\nDetails" },
+  { id: "investmentRequirements", label: "Investment\nRequirements" },
   { id: "generalInvestmentPreference", label: "General Investment \nPreferences" },
   { id: "fundDetails", label: "Fund\nDetails" },
   { id: "applicationBrief", label: "Application\nBrief" },
@@ -33,6 +35,7 @@ const sections = [
 
 const sectionValidations = {
   fundManageOverview: (data) => validateFundManageOverview(data).length === 0,
+  investmentRequirements: () => true,
   generalInvestmentPreference: () => true,
   contactDetails: (data) => validateContactDetails(data).length === 0,
   fundDetails: () => true,
@@ -152,28 +155,110 @@ export default function UniversalProfile() {
       additionalServicesOther: "",
       howDidYouHear: "",
       howDidYouHearOther: "",
-      // ── Industry Associations ────────────────────────────────────────────
-      memberOfAssociation: "",        // "yes" | "no" | ""
-      industryAssociations: [],       // string[]
-      industryAssociationsOther: "",  // free-text when "Other" is selected
+      memberOfAssociation: "",
+      industryAssociations: [],
+      industryAssociationsOther: "",
+    },
+
+    investmentRequirements: {
+      businessStage: null,
+      complianceScores: {
+        registrationCertificate: 0,
+        taxClearance: 0,
+        bbbeeCertificate: 0,
+        shareRegister: 0,
+        directorIDs: 0,
+        addressProof: 0,
+        bankLetter: 0,
+        coidaCertificate: 0,
+        industryLicenses: 0
+      },
+      leadershipScores: {
+        ceoExperience: 0,
+        cfoExperience: 0,
+        ctoExperience: 0,
+        advisoryBoard: 0,
+        managementDepth: 0,
+        successionPlan: 0,
+        leadershipTrackRecord: 0,
+        industryExpertise: 0
+      },
+      capitalScores: {
+        runwayMonths: 0,
+        revenueGrowth: 0,
+        profitMargin: 0,
+        burnRate: 0,
+        customerConcentration: 0,
+        unitEconomics: 0,
+        fundingHistory: 0,
+        valuationReasonableness: 0
+      },
+      marketScores: {
+        tamSize: 0,
+        marketGrowth: 0,
+        competitivePosition: 0,
+        customerValidation: 0,
+        regulatoryRisk: 0,
+        marketTiming: 0,
+        distributionChannels: 0,
+        pricingPower: 0
+      },
+      productScores: {
+        mvpComplete: 0,
+        productMarketFit: 0,
+        technicalDebt: 0,
+        ipProtection: 0,
+        scalability: 0,
+        userGrowth: 0,
+        retentionRate: 0,
+        productRoadmap: 0
+      }
     },
 
     generalInvestmentPreference: {
       fundStructure: "",
       legalEntityFit: "",
       investmentStage: [],
-      investmentFocus: "",
-      investmentFocusSubtype: "",
+      investmentFocus: [],
+      investmentFocusSubtype: [],
       sectorFocus: [],
       sectorExclusions: [],
       geographicFocus: [],
       selectedProvinces: [],
       selectedCountries: [],
       riskAppetite: "",
+      preferredExitStrategy: [],
+      expectedExitTimeline: "",
+      expectedReturnMultiple: "",
+      targetIRR: "",
+      reinvestmentPolicy: "",
+      portfolioReinvestment: "",
+      numberOfExits: "",
+      averageExitMultiple: "",
+      averageTimeToExit: "",
+      bestExitMultiple: "",
+      reinvestmentRate: "",
+      numberOfReinvestments: "",
     },
 
     contactDetails: {
       sameAsPhysical: false,
+      businessTel: "",
+      businessEmail: "",
+      physicalAddress: "",
+      postalAddress: "",
+      primaryContactTitle: "",
+      primaryContactName: "",
+      primaryContactSurname: "",
+      primaryContactPosition: "",
+      primaryContactMobile: "",
+      primaryContactEmail: "",
+      secondaryContactTitle: "",
+      secondaryContactName: "",
+      secondaryContactSurname: "",
+      secondaryContactPosition: "",
+      secondaryContactMobile: "",
+      secondaryContactEmail: "",
     },
 
     legalCompliance: {},
@@ -209,6 +294,7 @@ export default function UniversalProfile() {
   const [completedSections, setCompletedSections] = useState({
     instructions: true,
     fundManageOverview: false,
+    investmentRequirements: false,
     generalInvestmentPreference: false,
     contactDetails: false,
     fundDetails: false,
@@ -336,6 +422,7 @@ export default function UniversalProfile() {
     switch (activeSection) {
       case "instructions": return <Instructions />
       case "fundManageOverview": return <EntityOverview {...commonProps} />
+      case "investmentRequirements": return <InvestmentRequirements {...commonProps} />
       case "generalInvestmentPreference": return <OwnershipManagement {...commonProps} />
       case "contactDetails": return <ContactDetails {...commonProps} />
       case "fundDetails": return <ProductsServices {...commonProps} />
@@ -390,7 +477,7 @@ export default function UniversalProfile() {
   const handleSaveAndContinue = async () => {
     const sectionData = formData[activeSection] || {}
     const isValid = sectionValidations[activeSection]?.(sectionData)
-    if (!isValid && activeSection !== "instructions") {
+    if (!isValid && activeSection !== "instructions" && activeSection !== "investmentRequirements") {
       let errors = []
       if (activeSection === "fundManageOverview") errors = validateFundManageOverview(sectionData)
       else if (activeSection === "contactDetails") errors = validateContactDetails(sectionData)

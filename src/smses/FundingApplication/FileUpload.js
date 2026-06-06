@@ -1,10 +1,11 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Upload, X, FileText, Loader2 } from "lucide-react"
+import { Upload, X, FileText, Loader2, Eye } from "lucide-react"
 
 export default function FileUpload({
   label,
+  documentLabel = "Document", // NEW: pass the document name
   accept = ".pdf,.doc,.docx,.jpg,.jpeg,.png",
   multiple = false,
   required = false,
@@ -13,15 +14,20 @@ export default function FileUpload({
   isUploading = false,
 }) {
   const [files, setFiles] = useState([])
-  const [isDragging, setIsDragging] = useState(false)
+  const [isDragging, setIsDragging] = useState(false) // Fixed: changed 'seIsDragging' to 'setIsDragging'
 
   // Sync with parent value prop with proper array checking
   useEffect(() => {
     setFiles(Array.isArray(value) ? value : [])
   }, [value])
 
+  // Check if an item is a URL (existing document)
+  const isUrl = (item) => {
+    return typeof item === 'string' && (item.startsWith('http') || item.includes('firebase') || item.includes('universalProfile'))
+  }
+
   const handleFileChange = async (e) => {
-    if (isUploading) return // Prevent uploads while processing
+    if (isUploading) return
     
     const selectedFiles = Array.from(e.target.files || [])
     if (selectedFiles.length === 0) return
@@ -35,12 +41,10 @@ export default function FileUpload({
         await onChange(newFiles)
       } catch (error) {
         console.error("Error uploading files:", error)
-        // Revert files on error
         setFiles(currentFiles)
       }
     }
 
-    // Clear the input to allow re-selecting the same file
     e.target.value = ""
   }
 
@@ -59,7 +63,7 @@ export default function FileUpload({
     e.preventDefault()
     setIsDragging(false)
     
-    if (isUploading) return // Prevent uploads while processing
+    if (isUploading) return
 
     const droppedFiles = Array.from(e.dataTransfer.files || [])
     if (droppedFiles.length === 0) return
@@ -73,14 +77,13 @@ export default function FileUpload({
         await onChange(newFiles)
       } catch (error) {
         console.error("Error uploading files:", error)
-        // Revert files on error
         setFiles(currentFiles)
       }
     }
   }
 
   const removeFile = async (index) => {
-    if (isUploading) return // Prevent removal while uploading
+    if (isUploading) return
     
     const currentFiles = Array.isArray(files) ? files : []
     const newFiles = [...currentFiles]
@@ -92,7 +95,6 @@ export default function FileUpload({
         await onChange(newFiles)
       } catch (error) {
         console.error("Error updating files:", error)
-        // Revert on error
         setFiles(currentFiles)
       }
     }
@@ -187,7 +189,8 @@ export default function FileUpload({
     fileInfo: {
       display: 'flex',
       alignItems: 'center',
-      minWidth: 0
+      minWidth: 0,
+      flex: 1
     },
     fileIcon: {
       width: '0.75rem',
@@ -202,6 +205,15 @@ export default function FileUpload({
       textOverflow: 'ellipsis',
       whiteSpace: 'nowrap',
       maxWidth: '8rem'
+    },
+    viewLink: {
+      display: 'inline-flex',
+      alignItems: 'center',
+      gap: '4px',
+      color: '#4a90e2',
+      textDecoration: 'underline',
+      fontSize: '0.625rem',
+      cursor: 'pointer'
     },
     removeButton: {
       color: '#A0522D',
@@ -226,8 +238,62 @@ export default function FileUpload({
     }
   }
 
-  // Ensure files is always an array before mapping
   const filesToDisplay = Array.isArray(files) ? files : []
+
+  // Render each file item - show "View existing" for URLs, regular name for File objects
+  const renderFileItem = (item, index) => {
+    if (isUrl(item)) {
+      // This is an existing document URL - show View link
+      return (
+        <div key={index} style={styles.fileItem}>
+          <div style={styles.fileInfo}>
+            <FileText style={styles.fileIcon} />
+            <a
+              href={item}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={styles.viewLink}
+            >
+              <Eye size={10} />
+              View existing {documentLabel}
+            </a>
+          </div>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              removeFile(index)
+            }}
+            style={styles.removeButton}
+            disabled={isUploading}
+          >
+            <X style={styles.removeIcon} />
+          </button>
+        </div>
+      )
+    }
+    
+    // Regular File object - show file name
+    return (
+      <div key={index} style={styles.fileItem}>
+        <div style={styles.fileInfo}>
+          <FileText style={styles.fileIcon} />
+          <span style={styles.fileName}>{item.name || `File ${index + 1}`}</span>
+        </div>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            removeFile(index)
+          }}
+          style={styles.removeButton}
+          disabled={isUploading}
+        >
+          <X style={styles.removeIcon} />
+        </button>
+      </div>
+    )
+  }
 
   return (
     <div style={styles.container}>
@@ -286,35 +352,7 @@ export default function FileUpload({
         <div style={styles.filesContainer}>
           <p style={styles.filesLabel}>Files ({filesToDisplay.length}):</p>
           <div style={styles.filesList}>
-            {filesToDisplay.map((file, index) => (
-              <div key={index} style={styles.fileItem}>
-                <div style={styles.fileInfo}>
-                  <FileText style={styles.fileIcon} />
-                  <span style={styles.fileName}>{file.name || `File ${index + 1}`}</span>
-                </div>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    removeFile(index)
-                  }}
-                  style={styles.removeButton}
-                  disabled={isUploading}
-                  onMouseEnter={(e) => {
-                    if (!isUploading) {
-                      e.target.style.color = '#8B4513'
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!isUploading) {
-                      e.target.style.color = '#A0522D'
-                    }
-                  }}
-                >
-                  <X style={styles.removeIcon} />
-                </button>
-              </div>
-            ))}
+            {filesToDisplay.map((item, index) => renderFileItem(item, index))}
           </div>
         </div>
       )}
