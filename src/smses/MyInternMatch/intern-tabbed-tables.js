@@ -109,7 +109,7 @@ const SuccessfulInternDealsTable = () => {
                 internApplicationData = applicationDoc.data()
               }
             } catch (error) {
-              console.log("[v0] Error fetching intern application:", error)
+              console.error("[v0] Error fetching intern application:", error)
             }
           }
 
@@ -121,7 +121,7 @@ const SuccessfulInternDealsTable = () => {
                 internProfileData = profileDoc.data()
               }
             } catch (error) {
-              console.log("[v0] Error fetching intern profile:", error)
+              console.error("[v0] Error fetching intern profile:", error)
             }
           }
 
@@ -181,7 +181,7 @@ const SuccessfulInternDealsTable = () => {
         }
 
         setDeals(dealsData)
-        console.log("[v0] Loaded successful intern deals:", dealsData.length)
+        // console.log("[v0] Loaded successful intern deals:", dealsData.length)
       } catch (error) {
         console.error("[v0] Error loading successful deals:", error)
       } finally {

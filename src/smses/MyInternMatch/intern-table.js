@@ -1479,7 +1479,7 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
       try {
         const user = auth.currentUser
         if (!user) {
-          console.log("No authenticated user")
+          // console.log("No authenticated user")
           setLoading(false)
           return
         }
@@ -1500,7 +1500,7 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
               const internId = applicationData.applicantId
 
               if (!internId) {
-                console.log(`Application ${applicationDoc.id} has no applicantId`)
+                // console.log(`Application ${applicationDoc.id} has no applicantId`)
                 return null
               }
 
@@ -1645,7 +1645,7 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
                 applicationUpdatedAt: applicationData.updatedAt || null,
               }
             } catch (docError) {
-              console.log(`Error processing application document ${applicationDoc.id}:`, docError)
+              // console.log(`Error processing application document ${applicationDoc.id}:`, docError)
               return null
             }
           }),
@@ -1932,7 +1932,7 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
       const internUid = applicationData.applicantId
 
       await updateDoc(docRef, updateData)
-      console.log("Document updated in internshipApplications")
+      // console.log("Document updated in internshipApplications")
 
       // Add to internCalendarEvents if applicable (e.g., for interviews)
       if (stageFields.showInterview && interviewDate && interviewTime && interviewLocation) {
@@ -1994,9 +1994,9 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
             internProfileData.contactDetails?.email ||
             internProfileData.email
 
-          console.log("Found intern email:", internEmail)
+          // console.log("Found intern email:", internEmail)
         } else {
-          console.log("No intern profile found for:", internUid)
+          // console.log("No intern profile found for:", internUid)
         }
       } catch (emailError) {
         console.error("Error fetching intern email:", emailError)
@@ -2005,7 +2005,7 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
       // Fallback to email from selectedInternForStage if profile email not found
       if (!internEmail) {
         internEmail = selectedInternForStage.profileEmail
-        console.log("Using profile email as fallback:", internEmail)
+        // console.log("Using profile email as fallback:", internEmail)
       }
 
       const subject = `Update: ${selectedStage} Stage for Your Application`
@@ -2080,7 +2080,7 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
       // Send email using EmailJS
       if (internEmail) {
         try {
-          console.log("Using EmailJS service to send email to intern...")
+          // console.log("Using EmailJS service to send email to intern...")
 
           const emailjsConfig = {
             serviceId: API_KEYS.SERVICE_ID_MESSAGES,
@@ -2088,7 +2088,7 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
             publicKey: API_KEYS.PUBLIC_KEY_ID_MESSAGES,
           }
 
-          console.log("Using EmailJS config:", emailjsConfig)
+          // console.log("Using EmailJS config:", emailjsConfig)
 
           if (!window.emailjs) {
             emailjs.init(emailjsConfig.publicKey)
@@ -2154,7 +2154,7 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
             attachments_count: termSheetFile ? "1" : "0",
           }
 
-          console.log("Sending email to intern with EmailJS...", templateParams)
+          // console.log("Sending email to intern with EmailJS...", templateParams)
 
           const response = await window.emailjs.send(
             emailjsConfig.serviceId,
@@ -2163,7 +2163,7 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
             emailjsConfig.publicKey,
           )
 
-          console.log("Email sent successfully to intern!", response)
+          // console.log("Email sent successfully to intern!", response)
 
           setNotification({
             type: "success",
@@ -2217,9 +2217,9 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
         return
       }
 
-      console.log("Starting intern request for:", intern.internName)
-      console.log("SME User ID:", user.uid)
-      console.log("Intern object:", intern)
+      // console.log("Starting intern request for:", intern.internName)
+      // console.log("SME User ID:", user.uid)
+      // console.log("Intern object:", intern)
       const internId = intern.internId
       const sponsorId = effectiveUserId
 
@@ -2227,7 +2227,7 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
       try {
         const smeDoc = await getDoc(doc(db, "universalProfiles", sponsorId))
         smeData = smeDoc.exists() ? smeDoc.data() : {}
-        console.log("SME data retrieved:", smeData)
+        // console.log("SME data retrieved:", smeData)
       } catch (smeError) {
         console.warn("Could not retrieve SME profile:", smeError)
       }
@@ -2235,7 +2235,7 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
       try {
         const smeDoc = await getDoc(doc(db, "internApplications", sponsorId))
         internshipInformation = smeDoc.exists() ? smeDoc.data() : {}
-        console.log("SME data retrieved:", internshipInformation)
+        // console.log("SME data retrieved:", internshipInformation)
       } catch (smeError) {
         console.warn("Could not retrieve SME profile:", smeError)
       }
@@ -2244,7 +2244,7 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
       try {
         const internDoc = await getDoc(doc(db, "internProfiles", intern.internId))
         internData = internDoc.exists() ? internDoc.data() : {}
-        console.log("Intern data retrieved:", internData)
+        // console.log("Intern data retrieved:", internData)
       } catch (internError) {
         console.warn("Could not retrieve intern profile:", internError)
       }
@@ -2263,7 +2263,7 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
         const evaluationDoc = await getDoc(doc(db, "internEvaluations", intern.internId))
         if (evaluationDoc.exists()) {
           const evalData = evaluationDoc.data()
-          console.log("Evaluation data retrieved:", evalData)
+          // console.log("Evaluation data retrieved:", evalData)
 
           evaluationScores = {
             academic: evalData.scores?.academic || 0,
@@ -2275,7 +2275,7 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
             updatedAt: evalData.scores?.updatedAt || null,
           }
         } else {
-          console.log("No evaluation scores found for intern:", intern.internId)
+          // console.log("No evaluation scores found for intern:", intern.internId)
         }
       } catch (evaluationError) {
         console.warn("Could not retrieve evaluation scores:", evaluationError)
@@ -2284,15 +2284,15 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
 
       const requestDocId = `${sponsorId}_${internId}`
 
-      console.log("Request document ID:", requestDocId)
-      console.log("Sponsor ID:", sponsorId)
-      console.log("Intern ID:", internId)
+      // console.log("Request document ID:", requestDocId)
+      // console.log("Sponsor ID:", sponsorId)
+      // console.log("Intern ID:", internId)
 
       const internFormData = internData.formData || {}
       const internProfile = internData.entityOverview || {}
 
       const matchResult = calculateMatchScore(internData, smeData)
-      console.log("Match result with breakdown:", matchResult)
+      // console.log("Match result with breakdown:", matchResult)
 
       const requestData = {
         applicantId: internId,
@@ -2452,7 +2452,7 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
 
       await setDoc(doc(db, "internshipApplications", requestDocId), requestData, { merge: true })
 
-      console.log("Intern request successfully saved to Firestore")
+      // console.log("Intern request successfully saved to Firestore")
 
       setStatuses((prev) => ({ ...prev, [intern.id]: "Requested" }))
 
@@ -2470,7 +2470,7 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
               internProfileData.contactDetails?.email ||
               internProfileData.email
 
-            console.log("Found intern email for request:", internEmail)
+            // console.log("Found intern email for request:", internEmail)
           }
         } catch (emailError) {
           console.error("Error fetching intern email for request:", emailError)
@@ -2481,7 +2481,7 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
         }
 
         if (internEmail) {
-          console.log("Sending internship request email to intern...")
+          // console.log("Sending internship request email to intern...")
 
           const emailjsConfig = {
             serviceId: API_KEYS.SERVICE_ID_MESSAGES,
@@ -2517,7 +2517,7 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
             attachments_count: "0",
           }
 
-          console.log("Sending internship request email to intern...")
+          // console.log("Sending internship request email to intern...")
 
           const response = await window.emailjs.send(
             emailjsConfig.serviceId,
@@ -2526,7 +2526,7 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
             emailjsConfig.publicKey,
           )
 
-          console.log("Internship request email sent successfully!", response)
+          // console.log("Internship request email sent successfully!", response)
         }
       } catch (emailError) {
         console.error("Internship request email failed:", emailError)
@@ -2534,7 +2534,7 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
 
       const dispatchNotification = () => {
         const notificationMessage = `New internship request from ${requestData.sponsorName} for ${requestData.role}!`
-        console.log("Dispatching intern notification:", notificationMessage)
+        // console.log("Dispatching intern notification:", notificationMessage)
 
         const event = new CustomEvent("newNotification", {
           detail: {
@@ -2550,7 +2550,7 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
 
         setTimeout(() => {
           window.dispatchEvent(event)
-          console.log("Intern notification event dispatched")
+          // console.log("Intern notification event dispatched")
         }, 100)
       }
 

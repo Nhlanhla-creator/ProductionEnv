@@ -134,7 +134,7 @@ const Calendar = () => {
         });
 
         setMatchesList(Array.from(recipientsMap.values()));
-        console.log(`Loaded ${recipientsMap.size} unique recipients for calendar`);
+        // console.log(`Loaded ${recipientsMap.size} unique recipients for calendar`);
 
       } catch (error) {
         console.error("Error fetching recipients for calendar:", error);

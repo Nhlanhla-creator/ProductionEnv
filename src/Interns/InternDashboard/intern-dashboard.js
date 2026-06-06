@@ -20,26 +20,7 @@ export default function InternDashboard() {
   const [loading, setLoading] = useState(true)
   const [profileData, setProfileData] = useState(null)
   const [triggerRefresh, setTriggerRefresh] = useState(false)
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const apiKey = API_KEYS.OPENAI
-  // Add sidebar state detection
-  useEffect(() => {
-    const checkSidebarState = () => {
-      setIsSidebarCollapsed(document.body.classList.contains("sidebar-collapsed"));
-    }
-
-    // Check initial state
-    checkSidebarState();
-
-    // Watch for changes
-    const observer = new MutationObserver(checkSidebarState);
-    observer.observe(document.body, {
-      attributes: true,
-      attributeFilter: ["class"],
-    });
-
-    return () => observer.disconnect();
-  }, []);
 
   // Calculate BIG Intern Score whenever component scores change
   useEffect(() => {
@@ -117,10 +98,7 @@ export default function InternDashboard() {
       style={{
         minHeight: "100vh",
         background: `linear-gradient(135deg, #faf7f2 0%, #f5f0e1 100%)`,
-        padding: "40px 20px 20px 20px",
-        marginLeft: isSidebarCollapsed ? "100px" : "260px",
-        marginTop: "40px",
-        transition: "margin-left 0.3s ease"
+        padding: "20px",
       }}
     >
       <div
@@ -318,12 +296,6 @@ export default function InternDashboard() {
      
       {/* Responsive Styles */}
       <style>{`
-        @media (max-width: 1400px) {
-          .dashboard-container {
-            margin-left: ${isSidebarCollapsed ? '80px' : '200px'};
-          }
-        }
-
         @media (max-width: 1200px) {
           .dashboard-container {
             margin-left: 0;

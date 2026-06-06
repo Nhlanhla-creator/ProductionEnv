@@ -250,7 +250,7 @@ const ApplicationsList = ({ onViewSummary, onEditApplication, onCreateNew, embed
                 {applications.map((app) => {
                   const { label, color, bg, Icon } = getStatusBadge(app)
                   const isExpanded = expandedAppId === app.id
-                  console.log(app)
+                  
                   return (
                     <Fragment key={app.id}>
                       <tr>

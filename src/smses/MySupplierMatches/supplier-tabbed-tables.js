@@ -511,7 +511,7 @@ const SuccessfulSupplierDealsTable = ({ acceptedSuppliers }) => {
   }
 
   const handleSubmitReview = (supplierId, rating, comment) => {
-    console.log(`Review submitted for supplier ${supplierId}: ${rating} stars - ${comment}`)
+    // console.log(`Review submitted for supplier ${supplierId}: ${rating} stars - ${comment}`)
   }
 
   const getStatusColor = (status) => {
@@ -772,12 +772,12 @@ const SupplierTabbedTables = ({
 
   // Reset active tab when defaultActiveTab prop changes
   useEffect(() => {
-    console.log("Default active tab changed to:", defaultActiveTab)
+    // console.log("Default active tab changed to:", defaultActiveTab)
     setActiveTab(defaultActiveTab)
   }, [defaultActiveTab])
 
   const handleNewRequest = () => {
-    console.log("Starting new request from tabbed tables")
+    // console.log("Starting new request from tabbed tables")
 
     // Switch to application tab
     setActiveTab("application")
@@ -792,7 +792,7 @@ const SupplierTabbedTables = ({
   }
 
   const handleTabChange = (tab) => {
-    console.log("Changing tab to:", tab)
+    // console.log("Changing tab to:", tab)
     setActiveTab(tab)
   }
 

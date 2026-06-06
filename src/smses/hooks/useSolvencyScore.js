@@ -25,7 +25,7 @@ export const useSolvencyScore = (user) => {
   const calculateAndSaveSolvencyScore = useCallback(
     async (balanceSheetData, solvencyData, liquidityData = null, year = null) => {
       if (!user) {
-        console.log("â No user provided to calculateAndSaveSolvencyScore");
+        // console.log("â No user provided to calculateAndSaveSolvencyScore");
         return null;
       }
 
@@ -33,8 +33,8 @@ export const useSolvencyScore = (user) => {
       setError(null);
 
       try {
-        console.log("ð Calculating solvency score for year:", year);
-        console.log("ð Using liquidity data:", !!liquidityData);
+        // console.log("ð Calculating solvency score for year:", year);
+        // console.log("ð Using liquidity data:", !!liquidityData);
 
         // Validate data
         if (!solvencyData || !solvencyData.nav) {
@@ -51,15 +51,15 @@ export const useSolvencyScore = (user) => {
           liquidityData
         );
 
-        console.log("â Calculated score breakdown:", {
-          overallScore: scoreData.overallScore,
-          nav: scoreData.rawMetrics.nav,
-          equityRatio: scoreData.rawMetrics.equityRatio,
-          freeCashFlowScore: scoreData.breakdown.freeCashFlowScore,
-          actualFreeCashFlow: scoreData.rawMetrics.actualFreeCashFlow,
-          monthsRunway: scoreData.rawMetrics.monthsRunway,
-          usedActualFCF: scoreData.sourceData.usedActualFCF,
-        });
+        // console.log("â Calculated score breakdown:", {
+        //   overallScore: scoreData.overallScore,
+        //   nav: scoreData.rawMetrics.nav,
+        //   equityRatio: scoreData.rawMetrics.equityRatio,
+        //   freeCashFlowScore: scoreData.breakdown.freeCashFlowScore,
+        //   actualFreeCashFlow: scoreData.rawMetrics.actualFreeCashFlow,
+        //   monthsRunway: scoreData.rawMetrics.monthsRunway,
+        //   usedActualFCF: scoreData.sourceData.usedActualFCF,
+        // });
 
         // Save to Firebase
         const docRef = doc(
@@ -99,14 +99,14 @@ export const useSolvencyScore = (user) => {
 
         await setDoc(docRef, docToSave);
 
-        console.log("â Solvency score saved successfully to:", docRef.path);
-        console.log("ð Saved data with FCF integration:", {
-          overall: scoreData.overallScore,
-          nav: scoreData.rawMetrics.nav,
-          equityRatio: scoreData.rawMetrics.equityRatio,
-          freeCashFlowScore: scoreData.breakdown.freeCashFlowScore,
-          usedActualFCF: scoreData.sourceData.usedActualFCF,
-        });
+        // console.log("â Solvency score saved successfully to:", docRef.path);
+        // console.log("ð Saved data with FCF integration:", {
+        //   overall: scoreData.overallScore,
+        //   nav: scoreData.rawMetrics.nav,
+        //   equityRatio: scoreData.rawMetrics.equityRatio,
+        //   freeCashFlowScore: scoreData.breakdown.freeCashFlowScore,
+        //   usedActualFCF: scoreData.sourceData.usedActualFCF,
+        // });
 
         setSolvencyScore(scoreData.overallScore);
         setSolvencyScoreBreakdown(scoreData);
@@ -128,7 +128,7 @@ export const useSolvencyScore = (user) => {
    */
   const loadLatestSolvencyScore = useCallback(async () => {
   if (!user) {
-    console.log("â No user provided to loadLatestSolvencyScore");
+    // console.log("â No user provided to loadLatestSolvencyScore");
     return null;
   }
 
@@ -136,14 +136,14 @@ export const useSolvencyScore = (user) => {
   setError(null);
 
   try {
-    console.log("ð Loading solvency score for user:", user.uid);
+    // console.log("ð Loading solvency score for user:", user.uid);
 
     const currentYear = new Date().getFullYear();
     const docRef = doc(db, "users", user.uid, "solvencyScores", currentYear.toString());
     let docSnap = await getDoc(docRef);
 
     if (!docSnap.exists()) {
-      console.log("â ï¸ No score for current year, trying previous year");
+      // console.log("â ï¸ No score for current year, trying previous year");
       const docRef2 = doc(db, "users", user.uid, "solvencyScores", (currentYear - 1).toString());
       docSnap = await getDoc(docRef2);
     }
@@ -165,18 +165,18 @@ export const useSolvencyScore = (user) => {
         rawScores: data.rawMetrics || {},
       };
       
-      console.log("â Loaded solvency score:", {
-        overall: result.overallScore,
-        nav: result.rawMetrics?.nav,
-        equityRatio: result.rawMetrics?.equityRatio,
-      });
+      // console.log("â Loaded solvency score:", {
+      //   overall: result.overallScore,
+      //   nav: result.rawMetrics?.nav,
+      //   equityRatio: result.rawMetrics?.equityRatio,
+      // });
 
       setSolvencyScore(result.overallScore);
       setSolvencyScoreBreakdown(result);
       return result;
     }
 
-    console.log("â ï¸ No solvency score found for user");
+    // console.log("â ï¸ No solvency score found for user");
     return null;
   } catch (e) {
     console.error("â Error loading solvency score:", e);
@@ -193,12 +193,12 @@ export const useSolvencyScore = (user) => {
   const loadSolvencyScoreHistory = useCallback(
     async (limit_count = 5) => {
       if (!user) {
-        console.log("â No user provided to loadSolvencyScoreHistory");
+        // console.log("â No user provided to loadSolvencyScoreHistory");
         return [];
       }
 
       try {
-        console.log("ð Loading solvency score history...");
+        // console.log("ð Loading solvency score history...");
 
         const q = query(
           collection(db, "users", user.uid, "solvencyScores"),
@@ -212,7 +212,7 @@ export const useSolvencyScore = (user) => {
           ...doc.data(),
         }));
 
-        console.log(`â Loaded ${results.length} historical solvency scores`);
+        // console.log(`â Loaded ${results.length} historical solvency scores`);
         return results;
       } catch (e) {
         console.error("â Error loading solvency score history:", e);
@@ -239,19 +239,19 @@ export const useSolvencyScore = (user) => {
         );
 
         const docSnap = await getDoc(docRef);
-        console.log("ð DEBUG - Document path:", docRef.path);
-        console.log("ð DEBUG - Document exists:", docSnap.exists());
+        // console.log("ð DEBUG - Document path:", docRef.path);
+        // console.log("ð DEBUG - Document exists:", docSnap.exists());
         
         if (docSnap.exists()) {
           const data = docSnap.data();
-          console.log("ð DEBUG - Overall Score:", data.overallScore);
-          console.log("ð DEBUG - NAV:", data.rawMetrics?.nav);
-          console.log("ð DEBUG - Equity Ratio:", data.rawMetrics?.equityRatio);
-          console.log("ð DEBUG - Free Cash Flow Score:", data.componentScores?.freeCashFlowScore);
-          console.log("ð DEBUG - Used Actual FCF:", data.liquidityIntegration?.usedActualFCF);
-          console.log("ð DEBUG - Actual FCF Value:", data.liquidityIntegration?.actualFreeCashFlow);
-          console.log("ð DEBUG - Months Runway:", data.liquidityIntegration?.monthsRunway);
-          console.log("ð DEBUG - Full Document:", data);
+          // console.log("ð DEBUG - Overall Score:", data.overallScore);
+          // console.log("ð DEBUG - NAV:", data.rawMetrics?.nav);
+          // console.log("ð DEBUG - Equity Ratio:", data.rawMetrics?.equityRatio);
+          // console.log("ð DEBUG - Free Cash Flow Score:", data.componentScores?.freeCashFlowScore);
+          // console.log("ð DEBUG - Used Actual FCF:", data.liquidityIntegration?.usedActualFCF);
+          // console.log("ð DEBUG - Actual FCF Value:", data.liquidityIntegration?.actualFreeCashFlow);
+          // console.log("ð DEBUG - Months Runway:", data.liquidityIntegration?.monthsRunway);
+          // console.log("ð DEBUG - Full Document:", data);
         }
         return docSnap;
       } catch (e) {

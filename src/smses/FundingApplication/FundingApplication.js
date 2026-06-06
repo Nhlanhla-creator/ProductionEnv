@@ -538,7 +538,7 @@ const getContainerStyles = () => ({
     try {
       const userId = auth.currentUser?.uid
       if (!userId) {
-        console.log("User not logged in, skipping Firebase data retrieval")
+        // console.log("User not logged in, skipping Firebase data retrieval")
         setIsLoading(false)
         return
       }
@@ -548,7 +548,7 @@ const getContainerStyles = () => ({
 
       if (docSnap.exists()) {
         const firebaseData = docSnap.data()
-        console.log("Retrieved data from Firebase:", firebaseData)
+        // console.log("Retrieved data from Firebase:", firebaseData)
 
         // Check onboarding status from Firebase
         const hasSeenOnboarding = firebaseData.fundingApplicationOnboardingSeen === true
@@ -626,7 +626,7 @@ const getContainerStyles = () => ({
           setShowSummary(true)
         }
       } else {
-        console.log("No previous data found in Firebase")
+        // console.log("No previous data found in Firebase")
         // If no Firebase data exists, show onboarding for new users
         setShowWelcomePopup(true)
       }
@@ -1208,7 +1208,7 @@ The BIG Fundability Team
         createdAt: new Date().toISOString(),
       })
 
-      console.log(`Evaluation message sent successfully to ${userName} (${userId})`)
+      // console.log(`Evaluation message sent successfully to ${userName} (${userId})`)
       return { success: true, combinedScore: combined }
     } catch (error) {
       console.error("Error in sendBIGEvaluationMessage:", error)

@@ -849,7 +849,7 @@ const handleUpdateRole = async (memberId, newRole) => {
   }
 
   return (
-    <div className="settingsContainer" style={getContainerStyles()}>
+    <div style={getContainerStyles()}>
       <div style={{ marginBottom: "1rem" }}>
         <h1
           style={{

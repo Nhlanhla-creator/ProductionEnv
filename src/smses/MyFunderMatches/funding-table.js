@@ -904,9 +904,9 @@ export const FundingTable = ({ filters = {}, onInsightsData, onPrimaryMatchCount
           const bigScoreData = bigEvalData.scores?.bigScore;
           setBigScore(bigScoreData);
 
-          console.log(`BigScore loaded: ${bigScoreData}%`);
+          // console.log(`BigScore loaded: ${bigScoreData}%`);
         } else {
-          console.log("No BigScore evaluation found");
+          // console.log("No BigScore evaluation found");
           setBigScore(0);
         }
       } catch (error) {
@@ -1781,12 +1781,12 @@ export const FundingTable = ({ filters = {}, onInsightsData, onPrimaryMatchCount
           bigScore: bigScore,
           applicationLink: `https://www.bigmarketplace.africa/funder/applications`
         });
-        console.log("✅ Funding application notification email sent to funder");
+        // console.log("✅ Funding application notification email sent to funder");
       } catch (emailError) {
         console.error("Failed to send funding application notification:", emailError);
       }
     } else {
-      console.log("⚠️ No funder email found, skipping email notification");
+      // console.log("⚠️ No funder email found, skipping email notification");
     }
     // ========== END EMAIL NOTIFICATION ==========
 
@@ -1927,7 +1927,7 @@ const submitApplication = async (funder) => {
 
     const dispatchNotification = () => {
       const notificationMessage = `Application to ${funder.name} submitted successfully`
-      console.log("Dispatching notification:", notificationMessage)
+      // console.log("Dispatching notification:", notificationMessage)
 
       const event = new CustomEvent("newNotification", {
         detail: {
@@ -1942,7 +1942,7 @@ const submitApplication = async (funder) => {
 
       setTimeout(() => {
         window.dispatchEvent(event)
-        console.log("Notification event dispatched")
+        // console.log("Notification event dispatched")
       }, 100)
     }
 
@@ -1967,7 +1967,7 @@ const submitApplication = async (funder) => {
           applicationId: `${funder.funderId}_${effectiveUserId}`,
           dashboardLink: "https://www.bigmarketplace.africa/my-applications"
         });
-        console.log("✅ Application confirmation email sent to SME");
+        // console.log("✅ Application confirmation email sent to SME");
       } catch (emailError) {
         console.error("Failed to send confirmation email:", emailError);
       }
@@ -2008,7 +2008,7 @@ const submitApplication = async (funder) => {
           bigScore: currentBusiness.bigScore || 0,
           applicationLink: "https://www.bigmarketplace.africa/funder/applications"
         });
-        console.log("✅ Funding application notification email sent to funder");
+        // console.log("✅ Funding application notification email sent to funder");
       } catch (emailError) {
         console.error("Failed to send funder notification:", emailError);
       }
@@ -2592,11 +2592,11 @@ const submitApplication = async (funder) => {
       }))
 
       if (nextStage === "Deal Complete" && onDealComplete) {
-        console.log("[v0] Deal completed, switching to successful deals tab")
+        // console.log("[v0] Deal completed, switching to successful deals tab")
         onDealComplete()
       }
 
-      console.log(`Updated ${funder.name} from ${currentStage} to ${nextStage}`)
+      // console.log(`Updated ${funder.name} from ${currentStage} to ${nextStage}`)
     } catch (error) {
       console.error("Error updating pipeline stage:", error)
     }

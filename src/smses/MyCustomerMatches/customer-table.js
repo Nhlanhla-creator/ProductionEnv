@@ -695,7 +695,7 @@ export function CustomerTable() {
         }
       })
 
-      console.log("Fetched supplier ratings:", averageRatings)
+      // console.log("Fetched supplier ratings:", averageRatings)
       setSupplierRatings(averageRatings)
       return averageRatings // Return the data so it can be used immediately
 
@@ -855,7 +855,7 @@ export function CustomerTable() {
           ...doc.data(),
         }))
         setUniversalProfiles(profilesData)
-        console.log("Fetched universal profiles:", profilesData.length); // Debug log
+        // console.log("Fetched universal profiles:", profilesData.length); // Debug log
         return profilesData
       } catch (error) {
         console.error("Error fetching universal profiles:", error)
@@ -1419,7 +1419,7 @@ export function CustomerTable() {
         return;
       }
 
-      console.log("Updating status to:", newStatus, "for application:", applicationId);
+      // console.log("Updating status to:", newStatus, "for application:", applicationId);
 
       // Prepare the update data
       const updateData = {
@@ -1450,7 +1450,7 @@ export function CustomerTable() {
       const applicationRef = doc(db, "supplierApplications", applicationId);
       await updateDoc(applicationRef, updateData);
       
-      console.log("Firestore update successful");
+      // console.log("Firestore update successful");
 
       // Update local state immediately
       setApplications(prevApplications => 
@@ -2159,7 +2159,7 @@ export function CustomerTable() {
                   <div style={statusButtonsContainer}>
                     <button
                       onClick={async () => {
-                        console.log("Pending button clicked for:", selectedApplication.id);
+                        // console.log("Pending button clicked for:", selectedApplication.id);
                         await handleStatusChange(selectedApplication.id, "Pending");
                         // Refresh the modal data after status change
                         const updatedApp = applications.find(app => app.id === selectedApplication.id);
@@ -2177,7 +2177,7 @@ export function CustomerTable() {
                     </button>
                     <button
                       onClick={async () => {
-                        console.log("Shortlisted button clicked for:", selectedApplication.id);
+                        // console.log("Shortlisted button clicked for:", selectedApplication.id);
                         await handleStatusChange(selectedApplication.id, "Shortlisted");
                         const updatedApp = applications.find(app => app.id === selectedApplication.id);
                         if (updatedApp) {
@@ -2194,7 +2194,7 @@ export function CustomerTable() {
                     </button>
                     <button
                       onClick={async () => {
-                        console.log("Proposal/Quote button clicked for:", selectedApplication.id);
+                        // console.log("Proposal/Quote button clicked for:", selectedApplication.id);
                         await handleStatusChange(selectedApplication.id, "Proposal/Quote");
                         const updatedApp = applications.find(app => app.id === selectedApplication.id);
                         if (updatedApp) {
@@ -2213,7 +2213,7 @@ export function CustomerTable() {
                     </button>
                     <button
                       onClick={async () => {
-                        console.log("Accepted button clicked for:", selectedApplication.id);
+                        // console.log("Accepted button clicked for:", selectedApplication.id);
                         await handleStatusChange(selectedApplication.id, "Accepted");
                         const updatedApp = applications.find(app => app.id === selectedApplication.id);
                         if (updatedApp) {
@@ -2230,7 +2230,7 @@ export function CustomerTable() {
                     </button>
                     <button
                       onClick={async () => {
-                        console.log("Rejected button clicked for:", selectedApplication.id);
+                        // console.log("Rejected button clicked for:", selectedApplication.id);
                         await handleStatusChange(selectedApplication.id, "Rejected");
                         const updatedApp = applications.find(app => app.id === selectedApplication.id);
                         if (updatedApp) {

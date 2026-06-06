@@ -54,38 +54,18 @@ const AdvisorSettings = () => {
       show: false,
       roles: [],
     });
-    const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
-   const [showPassword, setShowPassword] = useState({
+    
+    const [showPassword, setShowPassword] = useState({
       current: false,
       new: false,
       confirm: false,
     });
   
-    useEffect(() => {
-      const checkSidebarState = () => {
-        setIsSidebarCollapsed(document.body.classList.contains("sidebar-collapsed"))
-      }
-  
-      // Check initial state
-      checkSidebarState()
-  
-      // Watch for changes
-      const observer = new MutationObserver(checkSidebarState)
-      observer.observe(document.body, {
-        attributes: true,
-        attributeFilter: ["class"],
-      })
-  
-      return () => observer.disconnect()
-    }, [])
-  
     const getContainerStyles = () => ({
       backgroundColor: colors.backgroundBrown,
       minHeight: "100vh",
-      padding: "2rem",
-      marginLeft: isSidebarCollapsed ? "100px" : "270px",
+      padding: "20px",
       fontFamily: "'Inter', system-ui, -apple-system, sans-serif",
-      transition: "margin-left 0.3s ease",
       boxSizing: "border-box",
     })
   
@@ -396,14 +376,13 @@ const AdvisorSettings = () => {
     };
   
     return (
-      <div className="settingsContainer" style={getContainerStyles()}>
+      <div style={getContainerStyles()}>
         <div style={{ marginBottom: "1rem" }}>
           <h1
             style={{
               fontSize: "2.5rem",
               fontWeight: "700",
               margin: 0,
-              marginTop: "3rem",
               color: colors.textBrown,
               letterSpacing: "-0.025em",
             }}

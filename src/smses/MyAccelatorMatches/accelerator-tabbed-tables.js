@@ -181,12 +181,12 @@ const SuccessfulAcceleratorDealsTable = () => {
       try {
         const user = auth.currentUser
         if (!user) {
-          console.log("No user logged in")
+          // console.log("No user logged in")
           setLoading(false)
           return
         }
 
-        console.log("🔍 Fetching deals for SME user:", user.uid)
+        // console.log("🔍 Fetching deals for SME user:", user.uid)
 
         // FIXED: Include "Exit" status in successful deals
         const dealsQuery = query(
@@ -196,15 +196,15 @@ const SuccessfulAcceleratorDealsTable = () => {
         )
 
         const dealsSnapshot = await getDocs(dealsQuery)
-        console.log("📊 Found deals count (including Exit):", dealsSnapshot.size)
+        // console.log("📊 Found deals count (including Exit):", dealsSnapshot.size)
         
         // Log each deal for debugging
         dealsSnapshot.docs.forEach((doc, index) => {
-          console.log(`Deal ${index + 1}:`, doc.id, doc.data())
+          // console.log(`Deal ${index + 1}:`, doc.id, doc.data())
         })
 
         if (dealsSnapshot.empty) {
-          console.log("No deals found")
+          // console.log("No deals found")
           setDeals([])
           setLoading(false)
           return
@@ -223,14 +223,14 @@ const SuccessfulAcceleratorDealsTable = () => {
           const voucherData = { id: doc.id, ...doc.data(), receivedAt: doc.data().createdAt }
           initialVouchers.push(voucherData)
         })
-        console.log("🎫 Found vouchers count:", initialVouchers.length)
+        // console.log("🎫 Found vouchers count:", initialVouchers.length)
 
         // Process deals
         const completedDealsArray = []
 
         for (const docSnap of dealsSnapshot.docs) {
           const dealData = docSnap.data()
-          console.log("Processing deal:", docSnap.id, dealData)
+          // console.log("Processing deal:", docSnap.id, dealData)
           
           // Get catalyst details
           let catalystName = dealData.acceleratorName || "Unknown Catalyst"
@@ -301,14 +301,14 @@ const SuccessfulAcceleratorDealsTable = () => {
           })
         }
 
-        console.log("✅ Processed deals:", completedDealsArray.length)
+        // console.log("✅ Processed deals:", completedDealsArray.length)
         setDeals(completedDealsArray)
         setAllVouchers(initialVouchers)
         setLoading(false)
         
         // Set up real-time listener for new vouchers
         const unsubscribeVouchers = onSnapshot(vouchersQuery, async (snapshot) => {
-          console.log("🔄 Vouchers updated, refreshing deals...")
+          // console.log("🔄 Vouchers updated, refreshing deals...")
           const updatedVouchers = []
           snapshot.docs.forEach(doc => {
             const voucherData = { id: doc.id, ...doc.data(), receivedAt: doc.data().createdAt }

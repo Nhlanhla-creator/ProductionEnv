@@ -571,12 +571,20 @@ function App() {
   // ─── Advisor Layout ───────────────────────────────────────────────────────────
   const AdvisorLayout = ({ children }) => {
     const location = useLocation()
+    const [collapsed, setCollapsed] = useState(true)
+    useEffect(() => {
+      const check = () => setCollapsed(document.body.classList.contains("sidebar-collapsed"))
+      check()
+      const obs = new MutationObserver(check)
+      obs.observe(document.body, { attributes: true, attributeFilter: ["class"] })
+      return () => obs.disconnect()
+    }, [])
     return (
       <div className="app-layout">
         <AdvisorSidebar companyName={companyName} />
-        <div className="main-content">
+        <div className={`${styles.mainContent} ${collapsed ? styles.sidebarCollapsed : styles.sidebarExpanded}`}>
           <AdvisorHeader companyName={companyName} profileImage={profileImage} setProfileImage={setProfileImage} />
-          <div className="page-content">{children}</div>
+          <div>{children}</div>
         </div>
       </div>
     )
@@ -585,12 +593,20 @@ function App() {
   // ─── Intern Layout ────────────────────────────────────────────────────────────
   const InternLayout = ({ children }) => {
     const location = useLocation()
+    const [collapsed, setCollapsed] = useState(true)
+    useEffect(() => {
+      const check = () => setCollapsed(document.body.classList.contains("sidebar-collapsed"))
+      check()
+      const obs = new MutationObserver(check)
+      obs.observe(document.body, { attributes: true, attributeFilter: ["class"] })
+      return () => obs.disconnect()
+    }, [])
     return (
       <div className="app-layout">
         <InternSidebar companyName={companyName} />
-        <div className="main-content">
+        <div className={`${styles.mainContent} ${collapsed ? styles.sidebarCollapsed : styles.sidebarExpanded}`}>
           <InternHeader companyName={companyName} profileImage={profileImage} setProfileImage={setProfileImage} />
-          <div className="page-content">{children}</div>
+          <div>{children}</div>
         </div>
       </div>
     )
@@ -599,10 +615,18 @@ function App() {
   // ─── Program Sponsor Layout ───────────────────────────────────────────────────
   const ProgramSponsorLayout = ({ children }) => {
     const location = useLocation()
+    const [collapsed, setCollapsed] = useState(true)
+    useEffect(() => {
+      const check = () => setCollapsed(document.body.classList.contains("sidebar-collapsed"))
+      check()
+      const obs = new MutationObserver(check)
+      obs.observe(document.body, { attributes: true, attributeFilter: ["class"] })
+      return () => obs.disconnect()
+    }, [])
     return (
       <div className="app-layout">
         <ProgramSponsorSidebar companyName={companyName} />
-        <div className="main-content">
+        <div className={`${styles.mainContent} ${collapsed ? styles.sidebarCollapsed : styles.sidebarExpanded}`}>
           <ProgramSponsorHeader companyName={companyName} profileImage={profileImage} setProfileImage={setProfileImage} />
           <div>{children}</div>
         </div>

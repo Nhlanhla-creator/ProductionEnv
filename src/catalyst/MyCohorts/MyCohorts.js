@@ -157,7 +157,7 @@ function MyCohorts() {
       const currentUser = auth.currentUser
       
       if (!currentUser) {
-        console.log("No authenticated user")
+        // console.log("No authenticated user")
         setLoading(false)
         return
       }
@@ -176,7 +176,7 @@ function MyCohorts() {
       )
 
       const querySnapshot = await getDocs(q)
-      console.log("Found successful support deals (including Exit):", querySnapshot.docs.length)
+      // console.log("Found successful support deals (including Exit):", querySnapshot.docs.length)
 
       const cohortsData = await Promise.all(
         querySnapshot.docs.map(async (docSnap) => {
@@ -289,7 +289,7 @@ function MyCohorts() {
   }
 
   const handleGenerateVoucher = (cohort, type) => {
-    console.log("🎫 Generating voucher for SME:", cohort)
+    // console.log("🎫 Generating voucher for SME:", cohort)
     setSelectedCohort(cohort)
     setVoucherType(type)
     setShowVoucherModal(true)
@@ -331,14 +331,14 @@ function MyCohorts() {
     try {
       const smeUserId = selectedCohort?.smeId
       
-      console.log("🔍 Generating voucher for SME:", {
-        cohortId: selectedCohort?.id,
-        smeUserId: smeUserId,
-        smeName: selectedCohort?.smeName,
-        expirationDays: expirationDays,
-        expirationMinutes: expirationMinutes,
-        isTestMode: isTestMode
-      })
+      // console.log("🔍 Generating voucher for SME:", {
+      //   cohortId: selectedCohort?.id,
+      //   smeUserId: smeUserId,
+      //   smeName: selectedCohort?.smeName,
+      //   expirationDays: expirationDays,
+      //   expirationMinutes: expirationMinutes,
+      //   isTestMode: isTestMode
+      // })
 
       if (!smeUserId) {
         console.error("❌ No SME user ID found in cohort:", selectedCohort)
@@ -352,7 +352,7 @@ function MyCohorts() {
       if (isTestMode && expirationMinutes) {
         // TEST MODE: Add minutes
         expiresAt.setMinutes(expiresAt.getMinutes() + expirationMinutes)
-        console.log(`⏰ TEST MODE: Voucher expires in ${expirationMinutes} minutes at ${expiresAt.toLocaleString()}`)
+        // console.log(`⏰ TEST MODE: Voucher expires in ${expirationMinutes} minutes at ${expiresAt.toLocaleString()}`)
       } else if (expirationDays) {
         // Normal mode: Add days
         expiresAt.setDate(expiresAt.getDate() + expirationDays)
@@ -389,14 +389,14 @@ function MyCohorts() {
       const vouchersRef = collection(db, "vouchers")
       const docRef = await addDoc(vouchersRef, voucherData)
       
-      console.log("✅ Voucher saved to Firebase:", {
-        id: docRef.id,
-        smeId: voucherData.smeId,
-        code: voucherData.code,
-        type: voucherData.type,
-        expiresAt: voucherData.expiresAt,
-        isTestMode: isTestMode
-      })
+      // console.log("✅ Voucher saved to Firebase:", {
+      //   id: docRef.id,
+      //   smeId: voucherData.smeId,
+      //   code: voucherData.code,
+      //   type: voucherData.type,
+      //   expiresAt: voucherData.expiresAt,
+      //   isTestMode: isTestMode
+      // })
       
       setGeneratedVoucher({
         ...voucherData,

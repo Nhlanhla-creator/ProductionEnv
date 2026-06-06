@@ -80,7 +80,7 @@ export function SupportDealFlowPipeline({ onStageClick, smeOverrides = [] }) {
   }, [mergedEnriched])
 
   const handleStageClick = (stage) => {
-    console.log("Matches rendered", enriched);
+    // console.log("Matches rendered", enriched);
     if (!stage?.id) return;
     if (onStageClick) onStageClick(stage.id === "all" ? null : stage.id);
   };
