@@ -5,22 +5,58 @@ import { barrierOptions } from "./applicationOptions"
 import "./FundingApplication.css"
 
 import React, { useState } from 'react';
-import mammoth from 'mammoth';
 import { useEffect } from 'react';
 import { db, auth } from '../../firebaseConfig'
-import { doc, setDoc, getDoc } from "firebase/firestore"
-import { collection, query, where, getDocs, addDoc } from "firebase/firestore"
+import { doc, getDoc } from "firebase/firestore"
 import PitchDeckGPT from './PitchdeckAi';
-// ChatGPT API function - replace YOUR_API_KEY with your actual OpenAI API key
 import GPT from "./AiBusinessPlan"
 import FinancialsGPT from "./FinancialsAI"
 import CreditGPT from './aiCreditReport';
+import { Eye } from "lucide-react"
 
 // Component for Enterprise Readiness
 const EnterpriseReadiness = ({ data = {}, updateData, apiKey}) => {
-  const [filesToEvaluate, setFilesToEvaluate] = useState([]);
-  const [showEvaluation, setShowEvaluation] = useState(false);
   const [aiEvaluation, setAiEvaluation] = useState(null);
+  const [existingUniversalDocs, setExistingUniversalDocs] = useState({
+    businessPlan: null,
+    pitchDeck: null,
+    financialStatements: [],
+    loading: true
+  });
+
+  // Fetch existing documents from universal profile
+  useEffect(() => {
+    const fetchExistingDocs = async () => {
+      const user = auth.currentUser;
+      if (!user) {
+        setExistingUniversalDocs(prev => ({ ...prev, loading: false }));
+        return;
+      }
+
+      try {
+        const profileRef = doc(db, "universalProfiles", user.uid);
+        const profileSnap = await getDoc(profileRef);
+        
+        if (profileSnap.exists()) {
+          const documents = profileSnap.data().documents || {};
+          
+          setExistingUniversalDocs({
+            businessPlan: documents.businessPlan || null,
+            pitchDeck: documents.pitchDeck || null,
+            financialStatements: documents.financialStatements_multiple?.filter(doc => doc.url) || [],
+            loading: false
+          });
+        } else {
+          setExistingUniversalDocs(prev => ({ ...prev, loading: false }));
+        }
+      } catch (error) {
+        console.error("Error fetching existing docs:", error);
+        setExistingUniversalDocs(prev => ({ ...prev, loading: false }));
+      }
+    };
+    
+    fetchExistingDocs();
+  }, []);
 
   const handleAiResponse = (response, score, label) => {
     const evaluationData = {
@@ -44,13 +80,14 @@ const EnterpriseReadiness = ({ data = {}, updateData, apiKey}) => {
   return renderEnterpriseReadiness(
     data.enterpriseReadiness || {},
     (section, newData) => updateFormData(section, newData),
-    apiKey, // Pass apiKey as third parameter
-    handleAiResponse // Pass the function as fourth parameter
+    apiKey,
+    handleAiResponse,
+    existingUniversalDocs
   )
 }
 
 // Rendering function for Enterprise Readiness
-export const renderEnterpriseReadiness = (data, updateFormData, apiKey, handleAiResponse) => {
+export const renderEnterpriseReadiness = (data, updateFormData, apiKey, handleAiResponse, existingUniversalDocs) => {
   const handleChange = (e) => {
     const { name, value, type, checked } = e.target
     updateFormData("enterpriseReadiness", { [name]: type === "checkbox" ? checked : value })
@@ -73,8 +110,75 @@ export const renderEnterpriseReadiness = (data, updateFormData, apiKey, handleAi
     updateFormData("enterpriseReadiness", { [name]: files })
   }
 
-  // Check if "other" is selected in barriers
   const isOtherBarrierSelected = (data.barriers || []).includes("other")
+
+  // Helper function to get document to display (priority: application > universal)
+  const getDocumentToDisplay = (appFiles, universalUrl, docLabel) => {
+    // Priority 1: Check if there's already a document saved in this application
+    const appDocument = appFiles?.find(f => typeof f === 'string' || f?.url)
+    if (appDocument) {
+      const url = typeof appDocument === 'string' ? appDocument : appDocument.url
+      return { type: 'application', url, label: `This application's ${docLabel}` }
+    }
+    
+    // Priority 2: Check universal profile
+    if (universalUrl) {
+      return { type: 'universal', url: universalUrl, label: `${docLabel} from your profile` }
+    }
+    
+    return null
+  }
+
+  // Helper function to get financial document to display
+  const getFinancialDocumentToDisplay = (appFiles, universalUrls) => {
+    // Priority 1: Application documents
+    const appDocument = appFiles?.find(f => typeof f === 'string' || f?.url)
+    if (appDocument) {
+      const url = typeof appDocument === 'string' ? appDocument : appDocument.url
+      return { type: 'application', url, label: "This application's Financial Statement" }
+    }
+    
+    // Priority 2: Universal profile documents
+    if (universalUrls && universalUrls.length > 0) {
+      return { type: 'universal', urls: universalUrls, label: "Financial Statements from your profile" }
+    }
+    
+    return null
+  }
+
+  const renderViewLink = (url, label, isUniversal = true) => {
+    if (!url) return null;
+    return (
+      <div style={{ 
+        marginBottom: "12px", 
+        padding: "8px 12px", 
+        backgroundColor: isUniversal ? "#f0f7ff" : "#e8f5e9",
+        borderRadius: "6px",
+        border: `1px solid ${isUniversal ? "#4a90e2" : "#4caf50"}`
+      }}>
+        <a
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "6px",
+            color: isUniversal ? "#4a90e2" : "#2e7d32",
+            textDecoration: "underline",
+            fontSize: "13px",
+            fontWeight: "500"
+          }}
+        >
+          <Eye size={14} />
+          {label}
+        </a>
+        <div style={{ fontSize: "11px", color: isUniversal ? "#4a90e2" : "#2e7d32", marginTop: "4px" }}>
+          {isUniversal ? "✓ This document is from your profile hub. Upload new to replace it." : "✓ This document is attached to this application."}
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div className="enterprise-readiness-container">
@@ -110,12 +214,25 @@ export const renderEnterpriseReadiness = (data, updateFormData, apiKey, handleAi
             </div>
             {data.hasBusinessPlan === "yes" && (
               <div className="conditional-field">
+                {/* Show document based on priority */}
+                {(() => {
+                  const doc = getDocumentToDisplay(data.businessPlanFile, existingUniversalDocs?.businessPlan, "Business Plan")
+                  if (doc) {
+                    const isUniversal = doc.type === 'universal'
+                    return renderViewLink(doc.url, doc.label, isUniversal)
+                  }
+                  return null
+                })()}
+                
+                <div style={{ marginTop: "8px", marginBottom: "8px", fontSize: "12px", color: "#666", borderTop: "1px dashed #ccc", paddingTop: "8px" }}>
+                  <strong>Need to update?</strong> Upload a new file below:
+                </div>
+                
                 <FileUpload
                   label="Upload Business Plan"
                   accept=".pdf,.doc,.docx"
-                  required
                   onChange={(files) => handleFileChange("businessPlanFile", files)}
-                  value={data.businessPlanFile || []}
+                  value={data.businessPlanFile?.filter(f => f instanceof File) || []}
                 />
                 {Array.isArray(data.businessPlanFile) &&
                   data.businessPlanFile.length > 0 &&
@@ -198,12 +315,36 @@ export const renderEnterpriseReadiness = (data, updateFormData, apiKey, handleAi
           placeholder="Please specify the period of your financials"
         />
         
+        {/* Show financial document based on priority */}
+        {(() => {
+          const doc = getFinancialDocumentToDisplay(data.financialsFile, existingUniversalDocs?.financialStatements?.map(d => d.url))
+          if (doc) {
+            if (doc.type === 'application') {
+              return renderViewLink(doc.url, doc.label, false)
+            } else if (doc.type === 'universal' && doc.urls) {
+              return (
+                <div style={{ marginBottom: "12px" }}>
+                  {doc.urls.map((url, idx) => (
+                    <div key={idx} style={{ marginBottom: "8px" }}>
+                      {renderViewLink(url, `${doc.label} ${idx + 1}`, true)}
+                    </div>
+                  ))}
+                </div>
+              )
+            }
+          }
+          return null
+        })()}
+        
+        <div style={{ marginTop: "8px", marginBottom: "8px", fontSize: "12px", color: "#666", borderTop: "1px dashed #ccc", paddingTop: "8px" }}>
+          <strong>Need to update?</strong> Upload new files below:
+        </div>
+        
         <FileUpload
           label="Upload Financials"
           accept=".pdf,.xlsx,.xls,.doc,.docx"
-          required
           onChange={(files) => handleFileChange("financialsFile", files)}
-          value={data.financialsFile || []}
+          value={data.financialsFile?.filter(f => f instanceof File) || []}
         />
 
         {Array.isArray(data.financialsFile) &&
@@ -255,12 +396,25 @@ export const renderEnterpriseReadiness = (data, updateFormData, apiKey, handleAi
             </div>
             {data.hasPitchDeck === "yes" && (
               <div className="conditional-field">
+                {/* Show document based on priority */}
+                {(() => {
+                  const doc = getDocumentToDisplay(data.pitchDeckFile, existingUniversalDocs?.pitchDeck, "Pitch Deck")
+                  if (doc) {
+                    const isUniversal = doc.type === 'universal'
+                    return renderViewLink(doc.url, doc.label, isUniversal)
+                  }
+                  return null
+                })()}
+                
+                <div style={{ marginTop: "8px", marginBottom: "8px", fontSize: "12px", color: "#666", borderTop: "1px dashed #ccc", paddingTop: "8px" }}>
+                  <strong>Need to update?</strong> Upload a new file below:
+                </div>
+                
                 <FileUpload
                   label="Upload Pitch Deck"
                   accept=".pdf,.ppt,.pptx"
-                  required
                   onChange={(files) => handleFileChange("pitchDeckFile", files)}
-                  value={data.pitchDeckFile || []}
+                  value={data.pitchDeckFile?.filter(f => f instanceof File) || []}
                 />
                 {Array.isArray(data.pitchDeckFile) &&
                   data.pitchDeckFile.length > 0 &&
@@ -321,7 +475,7 @@ export const renderEnterpriseReadiness = (data, updateFormData, apiKey, handleAi
         </div>
       </div>
 
-      {/* Credit Report Section - MOVED FROM FINANCIAL OVERVIEW */}
+      {/* Credit Report Section */}
       <div className="section-divider">
         <h3>Credit Information</h3>
       </div>
@@ -375,7 +529,6 @@ export const renderEnterpriseReadiness = (data, updateFormData, apiKey, handleAi
   data.creditReportDocs.length > 0 && (
     <CreditGPT
       files={data.creditReportDocs.filter(file => 
-        // Only pass files that are new (File objects) and not from Firebase
         file instanceof File && 
         !(file?.url && file.url.startsWith("https://firebasestorage.googleapis.com"))
       )}
@@ -483,17 +636,61 @@ export const renderEnterpriseReadiness = (data, updateFormData, apiKey, handleAi
                 <span>No</span>
               </label>
             </div>
-            {data.hasGuarantees === "yes" && (
-              <div className="conditional-field">
-                <FileUpload
-                  label="Upload Guarantee/Contract"
-                  accept=".pdf,.doc,.docx"
-                  required
-                  onChange={(files) => handleFileChange("guaranteeFile", files)}
-                  value={data.guaranteeFile || []}
-                />
+                    {data.hasGuarantees === "yes" && (
+            <div className="conditional-field">
+              {/* Show document based on priority */}
+              {(() => {
+                // Priority 1: Check application document
+                const appDocument = data.guaranteeFile?.find(f => typeof f === 'string' || f?.url)
+                if (appDocument) {
+                  const url = typeof appDocument === 'string' ? appDocument : appDocument.url
+                  const label = "This application's Guarantee/Contract"
+                  return (
+                    <div style={{ 
+                      marginBottom: "12px", 
+                      padding: "8px 12px", 
+                      backgroundColor: "#e8f5e9",
+                      borderRadius: "6px",
+                      border: "1px solid #4caf50"
+                    }}>
+                      <a
+                        href={url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        style={{
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "6px",
+                          color: "#2e7d32",
+                          textDecoration: "underline",
+                          fontSize: "13px",
+                          fontWeight: "500"
+                        }}
+                      >
+                        <Eye size={14} />
+                        {label}
+                      </a>
+                      <div style={{ fontSize: "11px", color: "#2e7d32", marginTop: "4px" }}>
+                        ✓ This document is attached to this application. Upload new to replace it.
+                      </div>
+                    </div>
+                  )
+                }
+                return null
+              })()}
+              
+              <div style={{ marginTop: "8px", marginBottom: "8px", fontSize: "12px", color: "#666", borderTop: "1px dashed #ccc", paddingTop: "8px" }}>
+                <strong>Need to add or update?</strong> Upload a file below:
               </div>
-            )}
+              
+              <FileUpload
+                label="Upload Guarantee/Contract"
+                accept=".pdf,.doc,.docx"
+                onChange={(files) => handleFileChange("guaranteeFile", files)}
+                value={data.guaranteeFile?.filter(f => f instanceof File) || []}
+              />
+            </div>
+          )}
           </FormField>
         </div>
       </div>

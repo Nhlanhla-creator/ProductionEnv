@@ -1,12 +1,13 @@
 import { useState, useEffect } from "react"
-import { ChevronDown, ChevronUp, Edit, Printer, Check, Star, Shield, TrendingUp, User, Mail, Building, Briefcase, FileText, CheckSquare } from 'lucide-react'
+import { ChevronDown, ChevronUp, Edit, Printer, Check, Star, Shield, TrendingUp, User, Mail, Building, Briefcase, FileText, CheckSquare, Target, Award, DollarSign, Users } from 'lucide-react'
 import { createPortal } from 'react-dom'
-import {documentsList} from "./DocumentUpload"
+import { documentsList } from "./DocumentUpload"
 import VerificationScoreCard from './VerificationScoreCard'
 
 const InvestorProfileSummary = ({ data, onEdit }) => {
   const [expanded, setExpanded] = useState({
     fundManageOverview: false,
+    investmentRequirements: false,
     generalInvestmentPreference: false,
     contactDetails: false,
     fundDetails: false,
@@ -17,20 +18,16 @@ const InvestorProfileSummary = ({ data, onEdit }) => {
 
   const toggle = (key) => setExpanded((prev) => ({ ...prev, [key]: !prev[key] }))
 
-const formatFiles = (files) => {
-  if (!files) return "None"
-  
-  // Handle object with file URLs (your current structure)
-  if (typeof files === 'object' && !Array.isArray(files)) {
-    const fileCount = Object.values(files).filter(url => !!url).length
-    return fileCount > 0 ? `${fileCount} file(s) uploaded` : "None"
+  const formatFiles = (files) => {
+    if (!files) return "None"
+    if (typeof files === 'object' && !Array.isArray(files)) {
+      const fileCount = Object.values(files).filter(url => !!url).length
+      return fileCount > 0 ? `${fileCount} file(s) uploaded` : "None"
+    }
+    const filesArray = Array.isArray(files) ? files : []
+    if (!filesArray.length) return "None"
+    return filesArray.map((file) => (typeof file === "string" ? file : file.name)).join(", ")
   }
-  
-  // Handle array of files (previous structure)
-  const filesArray = Array.isArray(files) ? files : []
-  if (!filesArray.length) return "None"
-  return filesArray.map((file) => (typeof file === "string" ? file : file.name)).join(", ")
-}
 
   const formatArray = (arr) => {
     if (!arr || !arr.length) return "None specified"
@@ -44,116 +41,142 @@ const formatFiles = (files) => {
   }
 
   const handleNavigate = () => {
-    // Add your navigation logic here
+    // Add navigation logic here
   }
 
-const renderDocsStatus = () => {
-  // Use the same documents list as the upload component
-  // const documentsList = [
-  //   { id: 'registrationDocs', label: 'Company Registration Documents', required: true },
-  //   { id: 'idOffund', label: 'ID of Fund Lead', required: true },
-  //   { id: 'fundMandate', label: 'Investment Mandate/Programme Brochures', required: true },
-  // ]
+  const renderDocsStatus = () => {
+    return documentsList
+      .filter((doc) => doc.required)
+      .map((doc, idx) => {
+        const fileUrl = data?.documentUpload?.[doc.id]
+        const isUploaded = !!fileUrl
 
-  return documentsList
-    .filter((doc) => doc.required)
-    .map((doc, idx) => {
-      // Get the uploaded file URL from your data structure
-      const fileUrl = data?.documentUpload?.[doc.id]
-      const isUploaded = !!fileUrl // Check if URL exists
-
-      return (
-        <div key={idx} style={{
-          background: 'rgba(250, 247, 242, 0.8)',
-          borderRadius: '12px',
-          padding: '20px',
-          border: '1px solid rgba(200, 182, 166, 0.2)',
-          transition: 'all 0.3s ease'
-        }}
-          onMouseEnter={(e) => {
-            e.currentTarget.style.transform = 'translateY(-1px)'
-            e.currentTarget.style.boxShadow = '0 4px 16px rgba(74, 53, 47, 0.08)'
+        return (
+          <div key={idx} style={{
+            background: 'rgba(250, 247, 242, 0.8)',
+            borderRadius: '12px',
+            padding: '20px',
+            border: '1px solid rgba(200, 182, 166, 0.2)',
+            transition: 'all 0.3s ease'
           }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.transform = 'translateY(0)'
-            e.currentTarget.style.boxShadow = 'none'
-          }}>
-          <span style={{
-            display: "block",
-            fontSize: "13px",
-            color: "#7d5a50",
-            marginBottom: "8px",
-            fontWeight: '600',
-            textTransform: 'uppercase',
-            letterSpacing: '0.5px'
-          }}>
-            {doc.label}
-          </span>
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '8px',
-            marginBottom: isUploaded ? '8px' : '0'
-          }}>
-            {isUploaded ? (
-              <>
-                <Check size={16} color="#a67c52" />
-                <span style={{ color: '#4a352f', fontWeight: '500' }}>Uploaded</span>
-              </>
-            ) : (
-              <span style={{ color: '#7d5a50', fontStyle: 'italic' }}>Not uploaded</span>
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = 'translateY(-1px)'
+              e.currentTarget.style.boxShadow = '0 4px 16px rgba(74, 53, 47, 0.08)'
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = 'translateY(0)'
+              e.currentTarget.style.boxShadow = 'none'
+            }}>
+            <span style={{
+              display: "block",
+              fontSize: "13px",
+              color: "#7d5a50",
+              marginBottom: "8px",
+              fontWeight: '600',
+              textTransform: 'uppercase',
+              letterSpacing: '0.5px'
+            }}>
+              {doc.label}
+            </span>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              marginBottom: isUploaded ? '8px' : '0'
+            }}>
+              {isUploaded ? (
+                <>
+                  <Check size={16} color="#a67c52" />
+                  <span style={{ color: '#4a352f', fontWeight: '500' }}>Uploaded</span>
+                </>
+              ) : (
+                <span style={{ color: '#7d5a50', fontStyle: 'italic' }}>Not uploaded</span>
+              )}
+            </div>
+
+            {isUploaded && (
+              <div style={{
+                marginTop: '8px',
+                padding: '8px',
+                backgroundColor: 'rgba(166, 124, 82, 0.1)',
+                borderRadius: '6px'
+              }}>
+                <span style={{
+                  fontSize: "12px",
+                  color: "#7d5a50",
+                  fontWeight: "500",
+                  display: "block",
+                  marginBottom: "4px"
+                }}>
+                  Uploaded file:
+                </span>
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  fontSize: '11px',
+                  color: '#4a352f',
+                  marginBottom: '2px'
+                }}>
+                  <FileText size={12} />
+                  <span>{doc.label}</span>
+                </div>
+                <a 
+                  href={fileUrl} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  style={{
+                    fontSize: '11px',
+                    color: '#a67c52',
+                    textDecoration: 'underline',
+                    marginTop: '4px',
+                    display: 'inline-block'
+                  }}
+                >
+                  View/Download File
+                </a>
+              </div>
             )}
           </div>
+        )
+      })
+  }
 
-          {/* Show uploaded file information */}
-          {isUploaded && (
-            <div style={{
-              marginTop: '8px',
-              padding: '8px',
-              backgroundColor: 'rgba(166, 124, 82, 0.1)',
-              borderRadius: '6px'
-            }}>
-              <span style={{
-                fontSize: "12px",
-                color: "#7d5a50",
-                fontWeight: "500",
-                display: "block",
-                marginBottom: "4px"
-              }}>
-                Uploaded file:
-              </span>
-              <div style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                fontSize: '11px',
-                color: '#4a352f',
-                marginBottom: '2px'
-              }}>
-                <FileText size={12} />
-                <span>{doc.label}</span>
-              </div>
-              {/* Optional: Add a download link */}
-              <a 
-                href={fileUrl} 
-                target="_blank" 
-                rel="noopener noreferrer"
-                style={{
-                  fontSize: '11px',
-                  color: '#a67c52',
-                  textDecoration: 'underline',
-                  marginTop: '4px',
-                  display: 'inline-block'
-                }}
-              >
-                View/Download File
-              </a>
-            </div>
-          )}
-        </div>
-      )
-    })
-}
+  // Helper function to get category average score
+  const getCategoryAverage = (scores) => {
+    if (!scores) return 0
+    const values = Object.values(scores)
+    if (values.length === 0) return 0
+    return Math.round(values.reduce((sum, val) => sum + (val || 0), 0) / values.length)
+  }
+
+  const investmentReqs = data?.investmentRequirements || {}
+  const businessStage = investmentReqs.businessStage || "Not selected"
+  const stageDisplay = businessStage === "pre-seed" ? "Pre-Seed Business" : businessStage === "startup" ? "Startup Business" : businessStage
+
+  const complianceAvg = getCategoryAverage(investmentReqs.complianceScores)
+  const leadershipAvg = getCategoryAverage(investmentReqs.leadershipScores)
+  const capitalAvg = getCategoryAverage(investmentReqs.capitalScores)
+  const marketAvg = getCategoryAverage(investmentReqs.marketScores)
+  const productAvg = getCategoryAverage(investmentReqs.productScores)
+  const overallAvg = Math.round((complianceAvg + leadershipAvg + capitalAvg + marketAvg + productAvg) / 5)
+
+  const getScoreColor = (score) => {
+    if (score >= 80) return "#1B5E20"
+    if (score >= 60) return "#4CAF50"
+    if (score >= 40) return "#FF9800"
+    if (score >= 20) return "#FF5722"
+    return "#F44336"
+  }
+
+  const getScoreLabel = (score) => {
+    if (score >= 80) return "High Priority"
+    if (score >= 60) return "Moderate-High"
+    if (score >= 40) return "Moderate"
+    if (score >= 20) return "Low"
+    return "Minimal"
+  }
+
   return (
     <>
       <style>{`
@@ -188,7 +211,6 @@ const renderDocsStatus = () => {
           to { transform: rotate(360deg); }
         }
         
-        /* Responsive sidebar adjustments */
         @media (max-width: 1024px) {
           .investor-profile-container {
             padding-left: 24px !important;
@@ -208,7 +230,6 @@ const renderDocsStatus = () => {
             gap: 16px !important;
           }
         }
-        
       `}</style>
 
       <div
@@ -236,7 +257,6 @@ const renderDocsStatus = () => {
             position: 'relative',
             overflow: 'hidden'
           }}>
-            {/* Background decoration */}
             <div style={{
               position: 'absolute',
               top: '-50%',
@@ -258,10 +278,8 @@ const renderDocsStatus = () => {
                 zIndex: 2
               }}>
 
-              {/* Verification Score */}
               <VerificationScoreCard profileData={data} />
 
-              {/* Title */}
               <div style={{ textAlign: 'center' }}>
                 <h1 style={{
                   background: 'linear-gradient(135deg, #4a352f, #7d5a50)',
@@ -284,13 +302,11 @@ const renderDocsStatus = () => {
                 </p>
               </div>
 
-              {/* Action Buttons */}
               <div style={{
                 display: "flex",
                 gap: "12px",
                 flexDirection: 'column'
               }}>
-
                 <button
                   onClick={handleEdit}
                   style={{
@@ -425,6 +441,182 @@ const renderDocsStatus = () => {
               )}
             </div>
 
+            {/* Investment Requirements Section */}
+            <div style={{
+              background: 'linear-gradient(135deg, rgba(250, 247, 242, 0.9), rgba(245, 240, 225, 0.9))',
+              backdropFilter: 'blur(20px)',
+              borderRadius: "20px",
+              overflow: "hidden",
+              border: "1px solid rgba(200, 182, 166, 0.3)",
+              boxShadow: "0 16px 32px rgba(74, 53, 47, 0.08)",
+              transition: 'all 0.3s ease'
+            }}>
+              <div
+                onClick={() => toggle("investmentRequirements")}
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  padding: "20px 28px",
+                  background: expanded.investmentRequirements
+                    ? 'linear-gradient(135deg, #7d5a50, #4a352f)'
+                    : 'linear-gradient(135deg, #e6d7c3, #c8b6a6)',
+                  cursor: "pointer",
+                  transition: 'all 0.3s ease'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                  <Target size={24} color={expanded.investmentRequirements ? "#faf7f2" : "#4a352f"} />
+                  <h2 style={{
+                    margin: 0,
+                    fontSize: "20px",
+                    fontWeight: "700",
+                    color: expanded.investmentRequirements ? "#faf7f2" : "#4a352f"
+                  }}>
+                    Investment Requirements & Scoring
+                  </h2>
+                </div>
+                {expanded.investmentRequirements ?
+                  <ChevronUp size={24} color="#faf7f2" /> :
+                  <ChevronDown size={24} color="#4a352f" />
+                }
+              </div>
+
+              {expanded.investmentRequirements && (
+                <div style={{
+                  padding: "28px",
+                  background: 'linear-gradient(135deg, rgba(250, 247, 242, 0.8), rgba(240, 230, 217, 0.6))',
+                  animation: 'slideDown 0.3s ease-out'
+                }}>
+                  {/* Business Stage */}
+                  <div style={{
+                    background: 'rgba(166, 124, 82, 0.1)',
+                    borderRadius: '12px',
+                    padding: '16px',
+                    marginBottom: '24px',
+                    border: '1px solid rgba(166, 124, 82, 0.2)'
+                  }}>
+                    <span style={{
+                      display: "block",
+                      fontSize: "13px",
+                      color: "#7d5a50",
+                      marginBottom: "4px",
+                      fontWeight: '600',
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.5px'
+                    }}>
+                      Business Stage
+                    </span>
+                    <span style={{
+                      fontSize: "18px",
+                      color: "#4a352f",
+                      fontWeight: "700"
+                    }}>
+                      {stageDisplay}
+                    </span>
+                  </div>
+
+                  {/* Overall Score Card */}
+                  <div style={{
+                    background: `linear-gradient(135deg, ${getScoreColor(overallAvg)}15, ${getScoreColor(overallAvg)}08)`,
+                    borderRadius: '16px',
+                    padding: '24px',
+                    marginBottom: '24px',
+                    textAlign: 'center',
+                    border: `2px solid ${getScoreColor(overallAvg)}30`
+                  }}>
+                    <div style={{ fontSize: '14px', color: '#7d5a50', marginBottom: '8px' }}>Overall Investment Priority Score</div>
+                    <div style={{ fontSize: '48px', fontWeight: '800', color: getScoreColor(overallAvg) }}>{overallAvg}</div>
+                    <div style={{ fontSize: '16px', fontWeight: '600', color: getScoreColor(overallAvg) }}>{getScoreLabel(overallAvg)} Priority</div>
+                    <div style={{
+                      marginTop: '16px',
+                      width: '100%',
+                      height: '8px',
+                      backgroundColor: '#e0d5cf',
+                      borderRadius: '4px',
+                      overflow: 'hidden'
+                    }}>
+                      <div style={{
+                        width: `${overallAvg}%`,
+                        height: '100%',
+                        backgroundColor: getScoreColor(overallAvg),
+                        borderRadius: '4px'
+                      }} />
+                    </div>
+                  </div>
+
+                  {/* Category Scores Grid */}
+                  <div style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
+                    gap: "16px",
+                    marginBottom: "24px"
+                  }}>
+                    {[
+                      { label: "Compliance", score: complianceAvg, icon: "📋" },
+                      { label: "Leadership", score: leadershipAvg, icon: "👥" },
+                      { label: "Capital", score: capitalAvg, icon: "💰" },
+                      { label: "Market", score: marketAvg, icon: "📊" },
+                      { label: "Product", score: productAvg, icon: "⚙️" }
+                    ].map((cat, idx) => (
+                      <div key={idx} style={{
+                        background: 'rgba(250, 247, 242, 0.8)',
+                        borderRadius: '12px',
+                        padding: '16px',
+                        textAlign: 'center',
+                        border: '1px solid rgba(200, 182, 166, 0.2)'
+                      }}>
+                        <div style={{ fontSize: '24px', marginBottom: '8px' }}>{cat.icon}</div>
+                        <div style={{ fontSize: '13px', fontWeight: '600', color: '#7d5a50', marginBottom: '4px' }}>{cat.label}</div>
+                        <div style={{ fontSize: '28px', fontWeight: '700', color: getScoreColor(cat.score) }}>{cat.score}</div>
+                        <div style={{ fontSize: '11px', color: getScoreColor(cat.score) }}>{getScoreLabel(cat.score)}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Detailed Scores */}
+                  <details style={{ marginTop: '16px' }}>
+                    <summary style={{
+                      cursor: 'pointer',
+                      color: '#a67c52',
+                      fontWeight: '600',
+                      fontSize: '14px',
+                      padding: '8px'
+                    }}>
+                      View Detailed Score Breakdown
+                    </summary>
+                    <div style={{ marginTop: '16px' }}>
+                      {investmentReqs.complianceScores && Object.keys(investmentReqs.complianceScores).length > 0 && (
+                        <div style={{ marginBottom: '20px' }}>
+                          <h4 style={{ color: '#5d4037', marginBottom: '12px' }}>Compliance Details</h4>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' }}>
+                            {Object.entries(investmentReqs.complianceScores).map(([key, val]) => (
+                              <div key={key} style={{ background: 'rgba(250, 247, 242, 0.6)', borderRadius: '8px', padding: '8px 12px' }}>
+                                <span style={{ fontSize: '11px', color: '#8d6e63' }}>{key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase())}</span>
+                                <div style={{ fontSize: '16px', fontWeight: '600', color: getScoreColor(val) }}>{val}</div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </details>
+
+                  <div style={{
+                    marginTop: '20px',
+                    padding: '12px',
+                    backgroundColor: '#f5f0ec',
+                    borderRadius: '8px',
+                    fontSize: '12px',
+                    color: '#8d6e63',
+                    textAlign: 'center'
+                  }}>
+                    💡 These scores represent your investment priorities. Higher scores indicate higher importance for investment decisions.
+                  </div>
+                </div>
+              )}
+            </div>
+
             {/* Investment Preferences */}
             <div style={{
               background: 'linear-gradient(135deg, rgba(250, 247, 242, 0.9), rgba(245, 240, 225, 0.9))',
@@ -443,7 +635,7 @@ const renderDocsStatus = () => {
                   alignItems: "center",
                   padding: "20px 28px",
                   background: expanded.generalInvestmentPreference
-                    ? 'linear-gradient(135deg, #7d5a50, #4a352f)'
+                    ? 'linear-gradient(135deg, #a67c52, #7d5a50)'
                     : 'linear-gradient(135deg, #e6d7c3, #c8b6a6)',
                   cursor: "pointer",
                   transition: 'all 0.3s ease'
