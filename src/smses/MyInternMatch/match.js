@@ -55,7 +55,7 @@ export default function InternMatchesPage() {
   
   // Use subscription hook
   const { currentPlan, subscriptionLoading } = useSubscriptionPlan()
-  console.log("Current subscription plan:", currentPlan)
+  // console.log("Current subscription plan:", currentPlan)
   const navigate = useNavigate() 
 
   // Initialize filters and stage filter state

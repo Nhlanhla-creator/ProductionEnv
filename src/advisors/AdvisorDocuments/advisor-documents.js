@@ -15,28 +15,9 @@ const MyDocuments = () => {
   const [filter, setFilter] = useState("all")
   const [searchTerm, setSearchTerm] = useState("")
   const [uploadingFiles, setUploadingFiles] = useState({})
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
-
+  
   // Sort documents alphabetically by label
   const sortedDocuments = [...documentsList].sort((a, b) => a.label.localeCompare(b.label))
-
-  useEffect(() => {
-    const checkSidebarState = () => {
-      setIsSidebarCollapsed(document.body.classList.contains("sidebar-collapsed"))
-    }
-
-    // Check initial state
-    checkSidebarState()
-
-    // Watch for changes
-    const observer = new MutationObserver(checkSidebarState)
-    observer.observe(document.body, {
-      attributes: true,
-      attributeFilter: ["class"],
-    })
-
-    return () => observer.disconnect()
-  }, [])
 
   useEffect(() => {
     const auth = getAuth()
@@ -149,18 +130,18 @@ const handleDeleteFile = async (docLabel, fileIndex) => {
     // Scan and delete from all folder locations
     for (const folderPath of foldersToCheck) {
       try {
-        console.log("Checking folder:", folderPath)
+        // console.log("Checking folder:", folderPath)
         const folderRef = ref(storage, folderPath)
         const fileList = await listAll(folderRef)
         
-        console.log(`Found ${fileList.items.length} file(s) in ${folderPath}`)
+        // console.log(`Found ${fileList.items.length} file(s) in ${folderPath}`)
         
         // Delete all files in the folder
         for (const itemRef of fileList.items) {
           try {
-            console.log("Deleting file:", itemRef.name, "Full path:", itemRef.fullPath)
+            // console.log("Deleting file:", itemRef.name, "Full path:", itemRef.fullPath)
             await deleteObject(itemRef)
-            console.log("✓ Successfully deleted:", itemRef.fullPath)
+            // console.log("✓ Successfully deleted:", itemRef.fullPath)
             totalDeleted++
           } catch (deleteErr) {
             console.error("✗ Failed to delete:", itemRef.fullPath, deleteErr)
@@ -181,7 +162,6 @@ const handleDeleteFile = async (docLabel, fileIndex) => {
           try {
             const fileRef = ref(storage, path)
             await deleteObject(fileRef)
-            console.log(`✓ Deleted using URL path:`, path)
             totalDeleted++
           } catch (err) {
             if (err.code !== 'storage/object-not-found') {
@@ -207,7 +187,7 @@ const handleDeleteFile = async (docLabel, fileIndex) => {
     const updatedSnap = await getDoc(docRef)
     if (updatedSnap.exists()) setProfileData(updatedSnap.data())
     
-    console.log(`Total files deleted from storage: ${totalDeleted}`)
+    // console.log(`Total files deleted from storage: ${totalDeleted}`)
     
     if (totalDeleted > 0) {
       alert(`File deleted successfully! (${totalDeleted} file(s) removed from storage)`)
@@ -252,19 +232,19 @@ const handleDeleteAllFiles = async (docLabel) => {
     // Delete from all possible folder locations
     for (const folderPath of foldersToCheck) {
       try {
-        console.log("Checking folder:", folderPath)
+        // console.log("Checking folder:", folderPath)
         const folderRef = ref(storage, folderPath)
         const fileList = await listAll(folderRef)
         
         filesFound += fileList.items.length
-        console.log(`Found ${fileList.items.length} file(s) in ${folderPath}`)
+        // console.log(`Found ${fileList.items.length} file(s) in ${folderPath}`)
         
         // Delete each file in the folder
         for (const itemRef of fileList.items) {
           try {
-            console.log("Deleting file:", itemRef.name, "Full path:", itemRef.fullPath)
+            // console.log("Deleting file:", itemRef.name, "Full path:", itemRef.fullPath)
             await deleteObject(itemRef)
-            console.log("✓ Successfully deleted:", itemRef.fullPath)
+            // console.log("✓ Successfully deleted:", itemRef.fullPath)
             totalDeleted++
           } catch (deleteErr) {
             console.error("✗ Failed to delete:", itemRef.fullPath, deleteErr)
@@ -289,7 +269,7 @@ const handleDeleteAllFiles = async (docLabel) => {
             try {
               const fileRef = ref(storage, path)
               await deleteObject(fileRef)
-              console.log(`✓ Deleted using URL path:`, path)
+              // console.log(`✓ Deleted using URL path:`, path)
               totalDeleted++
             } catch (err) {
               // File already deleted or doesn't exist
@@ -315,7 +295,7 @@ const handleDeleteAllFiles = async (docLabel) => {
     const updatedSnap = await getDoc(docRef)
     if (updatedSnap.exists()) setProfileData(updatedSnap.data())
     
-    console.log(`Total files found: ${filesFound}, Total deleted: ${totalDeleted}`)
+    // console.log(`Total files found: ${filesFound}, Total deleted: ${totalDeleted}`)
     
     if (totalDeleted > 0) {
       alert(`Successfully deleted ${totalDeleted} file(s) from storage and removed all references from database!`)
@@ -451,7 +431,7 @@ const handleDeleteAllFiles = async (docLabel) => {
     fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
     minHeight: "100vh",
     backgroundColor: "#faf8f6",
-    padding: `70px 20px 20px ${isSidebarCollapsed ? "100px" : "280px"}`,
+    padding: `20px`,
     margin: "0",
     width: "100%",
     boxSizing: "border-box",

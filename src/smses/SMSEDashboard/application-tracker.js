@@ -135,13 +135,13 @@ export function ApplicationTracker({ styles, userId }) {
               advisoryApplied = true;
             }
             
-            console.log("📋 Advisory - status:", data.status);
-            console.log("📋 Advisory - completedSections:", data.completedSections);
-            console.log("📋 Advisory - submittedAt:", data.submittedAt);
-            console.log("✅ Advisory - Applied:", advisoryApplied);
+            // console.log("📋 Advisory - status:", data.status);
+            // console.log("📋 Advisory - completedSections:", data.completedSections);
+            // console.log("📋 Advisory - submittedAt:", data.submittedAt);
+            // console.log("✅ Advisory - Applied:", advisoryApplied);
           } else {
             // Document doesn't exist - not applied
-            console.log("📋 Advisory - No application found");
+            // console.log("📋 Advisory - No application found");
             advisoryApplied = false;
           }
         } catch (err) {
@@ -185,13 +185,13 @@ export function ApplicationTracker({ styles, userId }) {
               internApplied = true;
             }
             
-            console.log("📋 Intern - status:", data.status);
-            console.log("📋 Intern - completedSections:", data.completedSections);
-            console.log("📋 Intern - submittedAt:", data.submittedAt);
-            console.log("✅ Intern - Applied:", internApplied);
+            // console.log("📋 Intern - status:", data.status);
+            // console.log("📋 Intern - completedSections:", data.completedSections);
+            // console.log("📋 Intern - submittedAt:", data.submittedAt);
+            // console.log("✅ Intern - Applied:", internApplied);
           } else {
             // Document doesn't exist - not applied
-            console.log("📋 Intern - No application found");
+            // console.log("📋 Intern - No application found");
             internApplied = false;
           }
         } catch (err) {
@@ -218,7 +218,7 @@ export function ApplicationTracker({ styles, userId }) {
         });
 
         setTrackerSteps(updatedSteps);
-        console.log("🎯 Final tracker steps:", updatedSteps);
+        // console.log("🎯 Final tracker steps:", updatedSteps);
 
       } catch (err) {
         console.error("❌ Application status fetch failed:", err);

@@ -699,28 +699,6 @@ export default function AdvisorProfileSummary({ data, onEdit }) {
     declarationConsent: false,
   })
 
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
-
-  useEffect(() => {
-    const observer = new MutationObserver((mutations) => {
-      mutations.forEach((mutation) => {
-        if (mutation.type === "attributes" && mutation.attributeName === "class") {
-          const isCollapsed = document.body.classList.contains("sidebar-collapsed")
-          setIsSidebarCollapsed(isCollapsed)
-        }
-      })
-    })
-
-    observer.observe(document.body, {
-      attributes: true,
-      attributeFilter: ["class"],
-    })
-
-    setIsSidebarCollapsed(document.body.classList.contains("sidebar-collapsed"))
-
-    return () => observer.disconnect()
-  }, [])
-
   const toggle = (key) => setExpanded((prev) => ({ ...prev, [key]: !prev[key] }))
 
   const formatArray = (arr) => {
@@ -802,8 +780,7 @@ export default function AdvisorProfileSummary({ data, onEdit }) {
           fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
           minHeight: "100vh",
           background: "linear-gradient(135deg, #faf7f2 0%, #f5f0e1 50%, #f0e6d9 100%)",
-          padding: `24px 24px 24px ${isSidebarCollapsed ? "104px" : "304px"}`,
-          marginTop: "60px",
+          padding: `20px`,
           transition: "padding 0.3s ease",
         }}
       >

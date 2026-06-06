@@ -60,7 +60,7 @@ export function BigScoreCard({
         if (evaluationSnap.exists()) {
           const savedBigScore = evaluationSnap.data()?.scores?.bigScore
           if (savedBigScore !== undefined && savedBigScore !== null) {
-            console.log("Loaded saved BIG Score from DB:", savedBigScore)
+            // console.log("Loaded saved BIG Score from DB:", savedBigScore)
             savedBigScoreRef.current = savedBigScore
           }
         }
@@ -101,7 +101,7 @@ export function BigScoreCard({
     
     // FIX 4: Only update state if score actually changed
     if (lastCalculatedScoreRef.current !== newBigScore) {
-      console.log(`Score calculated: ${lastCalculatedScoreRef.current} → ${newBigScore}`)
+      // console.log(`Score calculated: ${lastCalculatedScoreRef.current} → ${newBigScore}`)
       lastCalculatedScoreRef.current = newBigScore
       
       // Update UI display immediately
@@ -131,30 +131,30 @@ export function BigScoreCard({
     
     // Case 1: First save (no saved score yet)
     if (savedScore === null) {
-      console.log(`[SAVE DECISION] First save detected - saving ${newScore} immediately`)
+      // console.log(`[SAVE DECISION] First save detected - saving ${newScore} immediately`)
       executeSave(newScore)
       return
     }
     
     // Case 2: Score improved
     if (newScore > savedScore) {
-      console.log(`[SAVE DECISION] Score improved: ${savedScore} → ${newScore} - saving immediately`)
+      // console.log(`[SAVE DECISION] Score improved: ${savedScore} → ${newScore} - saving immediately`)
       executeSave(newScore)
       return
     }
     
     // Case 3: Score decreased - delay save
     if (newScore < savedScore) {
-      console.log(`[SAVE DECISION] Score decreased: ${savedScore} → ${newScore} - delaying 5s`)
+      // console.log(`[SAVE DECISION] Score decreased: ${savedScore} → ${newScore} - delaying 5s`)
       
       // Set timeout to save after 5 seconds
       pendingSaveTimeoutRef.current = setTimeout(() => {
         // Check if user is still on this score after 5 seconds
         if (lastCalculatedScoreRef.current === newScore && newScore < savedBigScoreRef.current) {
-          console.log(`[SAVE EXECUTION] Delayed save executed for score: ${newScore}`)
+          // console.log(`[SAVE EXECUTION] Delayed save executed for score: ${newScore}`)
           executeSave(newScore)
         } else if (lastCalculatedScoreRef.current > newScore) {
-          console.log(`[SAVE EXECUTION] Delayed save cancelled - score improved to ${lastCalculatedScoreRef.current}`)
+          // console.log(`[SAVE EXECUTION] Delayed save cancelled - score improved to ${lastCalculatedScoreRef.current}`)
         }
         pendingSaveTimeoutRef.current = null
       }, 5000)
@@ -163,7 +163,7 @@ export function BigScoreCard({
     
     // Case 4: Score unchanged
     if (newScore === savedScore) {
-      console.log(`[SAVE DECISION] Score unchanged at ${newScore} - skipping save`)
+      // console.log(`[SAVE DECISION] Score unchanged at ${newScore} - skipping save`)
       return
     }
   }
@@ -171,13 +171,13 @@ export function BigScoreCard({
  const executeSave = async (bigScoreValue) => {
   // Prevent multiple simultaneous saves
   if (isSavingRef.current) {
-    console.log("[SAVE] Save already in progress - skipping")
+    // console.log("[SAVE] Save already in progress - skipping")
     return
   }
   
   // Don't save if we already have this exact score saved
   if (savedBigScoreRef.current === bigScoreValue) {
-    console.log(`[SAVE] Score ${bigScoreValue} already saved - skipping`)
+    // console.log(`[SAVE] Score ${bigScoreValue} already saved - skipping`)
     return
   }
   
@@ -237,7 +237,7 @@ export function BigScoreCard({
       bigScoreUpdatedAt: now,
     })
     
-    console.log(`[SAVE SUCCESS] BIG Score ${bigScoreValue} saved to database`)
+    // console.log(`[SAVE SUCCESS] BIG Score ${bigScoreValue} saved to database`)
     
     // Update saved score ref
     savedBigScoreRef.current = bigScoreValue

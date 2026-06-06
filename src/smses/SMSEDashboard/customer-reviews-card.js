@@ -41,7 +41,7 @@ export function CustomerReviewsCard({ styles }) {
                   userData.entityOverview?.registeredName ||
                   userData.registeredName;
 
-                console.log(registeredName);
+                // console.log(registeredName);
 
                 if (registeredName) {
                   // Step 2: Use registeredName to fetch reviews

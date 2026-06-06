@@ -56,8 +56,7 @@ export default function AdvisorDashboardPage() {
   const [showWelcomePopup, setShowWelcomePopup] = useState(false)
   const [currentOnboardingStep, setCurrentOnboardingStep] = useState(0)
   const [loading, setLoading] = useState(false)
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
-
+  
   // Initialize filters and stage filter state
   const [filters, setFilters] = useState({
     location: "",
@@ -79,24 +78,6 @@ export default function AdvisorDashboardPage() {
       setAuthChecked(true)
     })
     return () => unsubscribe()
-  }, [])
-
-  useEffect(() => {
-    const checkSidebarState = () => {
-      setIsSidebarCollapsed(document.body.classList.contains("sidebar-collapsed"))
-    }
-
-    // Check initial state
-    checkSidebarState()
-
-    // Watch for changes
-    const observer = new MutationObserver(checkSidebarState)
-    observer.observe(document.body, {
-      attributes: true,
-      attributeFilter: ["class"],
-    })
-
-    return () => observer.disconnect()
   }, [])
 
   const getUserSpecificKey = (baseKey) => {
@@ -126,7 +107,7 @@ export default function AdvisorDashboardPage() {
     minHeight: "100vh",
     maxWidth: "100vw",
     overflowX: "hidden",
-    padding: `70px 20px 20px ${isSidebarCollapsed ? "100px" : "280px"}`,
+    padding: `20px`,
     margin: "0",
     boxSizing: "border-box",
     position: "relative",

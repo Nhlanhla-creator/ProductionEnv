@@ -113,7 +113,7 @@ export function InternDealflowPage({ profiles }) {
   //   setCount(count)
   // }, [profiles])
 
-  console.log(profiles)
+  // console.log(profiles)
   const calculateStageCounts = (applications) => {
     const counts = {};
 

@@ -420,7 +420,7 @@ if (!stageFilter) { setSmes(mapped); onSMEsLoaded?.(mapped); return }
   // ── Filter helpers ─────────────────────────────────────────────────────────
   const handleFilterChange = (key, value) => setLocalFilters((prev) => ({ ...prev, [key]: value }))
   const clearFilters = () => setLocalFilters({ location: "", matchScore: 50, minFunding: "", maxFunding: "", instruments: [], stages: [], sectors: [], supportTypes: [], smeType: "", sortBy: "" })
-  const applyFilters = () => { console.log("Applying filters:", localFilters); setShowFilters(false) }
+  const applyFilters = () => { setShowFilters(false) }
 
   const functions = getFunctions();
 // ── Stage update ───────────────────────────────────────────────────────────
@@ -619,7 +619,7 @@ if (smeEmail) {
     
     const result = await response.json();
     if (result.data?.success) {
-      console.log("✅ Stage update email sent to SME");
+      // console.log("✅ Stage update email sent to SME");
     } else {
       console.error("Email sending failed:", result);
     }
@@ -660,7 +660,7 @@ useEffect(() => {
       })
       
       setSentNDAs(sentMap)
-      console.log("Loaded sent NDAs:", sentMap)
+      // console.log("Loaded sent NDAs:", sentMap)
     } catch (error) {
       console.error("Error loading sent NDAs:", error)
     }
@@ -929,13 +929,13 @@ const handleShareNDA = async (sme) => {
     const user = auth.currentUser
     if (!user) throw new Error("User not authenticated")
 
-    console.log("Sharing NDA for SME:", sme.id, sme.name)
-    console.log("Current user UID:", user.uid)
+    // console.log("Sharing NDA for SME:", sme.id, sme.name)
+    // console.log("Current user UID:", user.uid)
 
     const ndaDocRef = doc(db, "ndas", user.uid)
     const ndaDoc = await getDoc(ndaDocRef)
     
-    console.log("NDA document exists:", ndaDoc.exists())
+    // console.log("NDA document exists:", ndaDoc.exists())
     
     if (!ndaDoc.exists()) {
       setNotification({ 
@@ -946,8 +946,8 @@ const handleShareNDA = async (sme) => {
     }
 
     const ndaData = ndaDoc.data()
-    console.log("NDA document data:", ndaData)
-    console.log("PDF URL:", ndaData.pdfUrl)
+    // console.log("NDA document data:", ndaData)
+    // console.log("PDF URL:", ndaData.pdfUrl)
 
     if (!ndaData.pdfUrl) {
       console.error("No pdfUrl found in NDA document. Available fields:", Object.keys(ndaData))
@@ -987,7 +987,7 @@ const handleShareNDA = async (sme) => {
     
     if (existingShare.empty) {
       await addDoc(collection(db, "shared_nda"), shareData)
-      console.log("Created new share record for SME:", sme.id)
+      // console.log("Created new share record for SME:", sme.id)
     } else {
       const shareDoc = existingShare.docs[0]
       await updateDoc(doc(db, "shared_nda", shareDoc.id), {
@@ -995,7 +995,7 @@ const handleShareNDA = async (sme) => {
         updatedAt: serverTimestamp(),
         sharedAt: serverTimestamp()
       })
-      console.log("Updated existing share record for SME:", sme.id)
+      // console.log("Updated existing share record for SME:", sme.id)
     }
 
     await addDoc(collection(db, "messages"), {

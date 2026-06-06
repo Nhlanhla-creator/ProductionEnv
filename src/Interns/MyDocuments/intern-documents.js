@@ -35,26 +35,6 @@ const InternDocuments = () => {
   const [searchTerm, setSearchTerm] = useState("");
   const [loading, setLoading] = useState(true);
   const [uploadingFiles, setUploadingFiles] = useState({});
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-
-  // Add sidebar state detection
-  useEffect(() => {
-    const checkSidebarState = () => {
-      setIsSidebarCollapsed(document.body.classList.contains("sidebar-collapsed"));
-    }
-
-    // Check initial state
-    checkSidebarState();
-
-    // Watch for changes
-    const observer = new MutationObserver(checkSidebarState);
-    observer.observe(document.body, {
-      attributes: true,
-      attributeFilter: ["class"],
-    });
-
-    return () => observer.disconnect();
-  }, []);
 
   useEffect(() => {
     const auth = getAuth();
@@ -348,9 +328,7 @@ const InternDocuments = () => {
           fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
           minHeight: "100vh",
           backgroundColor: "#faf8f6",
-          padding: "24px",
-          paddingLeft: isSidebarCollapsed ? "100px" : "280px",
-          marginTop: "60px",
+          padding: "20px",
           width: "100%",
           boxSizing: "border-box",
           overflowX: "hidden",
@@ -358,7 +336,6 @@ const InternDocuments = () => {
         }}
       >
         <div className="sidebar-space" style={{
-          width: isSidebarCollapsed ? "100px" : "280px",
           height: "100vh",
           position: "fixed",
           left: "0",

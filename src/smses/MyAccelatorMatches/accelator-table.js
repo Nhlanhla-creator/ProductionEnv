@@ -479,7 +479,7 @@ export function AcceleratorTable({ filters, onApplicationSubmitted }) {
   // Function to send email notification to catalyst
   const sendCatalystEmailNotification = async (catalystId, smeData, accelerator) => {
     try {
-      console.log("🔄 Sending catalyst email notification...");
+      // console.log("🔄 Sending catalyst email notification...");
 
       const emailjsConfig = {
         serviceId: API_KEYS.SERVICE_ID_MESSAGES,
@@ -487,7 +487,7 @@ export function AcceleratorTable({ filters, onApplicationSubmitted }) {
         publicKey: API_KEYS.PUBLIC_KEY_ID_MESSAGES
       };
 
-      console.log("📧 Using Feedback config:", emailjsConfig);
+      // console.log("📧 Using Feedback config:", emailjsConfig);
 
       if (!window.emailjs) {
         emailjs.init(emailjsConfig.publicKey);
@@ -496,7 +496,7 @@ export function AcceleratorTable({ filters, onApplicationSubmitted }) {
 
       // Fetch catalyst email from catalystProfiles > formData > contactDetails > businessEmail
       let catalystEmail = null;
-      console.log("📋 Fetching catalyst email for:", catalystId);
+      // console.log("📋 Fetching catalyst email for:", catalystId);
 
       try {
         const catalystProfileRef = doc(db, "catalystProfiles", catalystId);
@@ -504,20 +504,20 @@ export function AcceleratorTable({ filters, onApplicationSubmitted }) {
 
         if (catalystProfileSnap.exists()) {
           const profileData = catalystProfileSnap.data();
-          console.log("📄 catalystProfiles data:", profileData);
+          // console.log("📄 catalystProfiles data:", profileData);
 
           catalystEmail = profileData.formData?.contactDetails?.businessEmail;
 
           if (catalystEmail) {
-            console.log("✅ Found catalyst email:", catalystEmail);
+            // console.log("✅ Found catalyst email:", catalystEmail);
           } else {
-            console.log("❌ No business email found in catalyst profile");
+            // console.log("❌ No business email found in catalyst profile");
             catalystEmail = profileData.formData?.contactDetails?.email ||
               profileData.email ||
               profileData.contactEmail;
           }
         } else {
-          console.log("❌ No document in catalystProfiles for:", catalystId);
+          // console.log("❌ No document in catalystProfiles for:", catalystId);
         }
       } catch (fetchError) {
         console.error("❌ Error fetching catalyst email:", fetchError);
@@ -528,7 +528,7 @@ export function AcceleratorTable({ filters, onApplicationSubmitted }) {
         catalystEmail = "support@bigmarketplace.africa";
       }
 
-      console.log("📧 Final recipient email:", catalystEmail);
+      // console.log("📧 Final recipient email:", catalystEmail);
 
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(catalystEmail)) {
@@ -565,7 +565,7 @@ export function AcceleratorTable({ filters, onApplicationSubmitted }) {
         attachments_count: "0"
       };
 
-      console.log("📨 Sending catalyst email with Feedback service...", templateParams);
+      // console.log("📨 Sending catalyst email with Feedback service...", templateParams);
 
       const response = await window.emailjs.send(
         emailjsConfig.serviceId,
@@ -574,7 +574,7 @@ export function AcceleratorTable({ filters, onApplicationSubmitted }) {
         emailjsConfig.publicKey
       );
 
-      console.log("✅ Catalyst email sent successfully!", response);
+      // console.log("✅ Catalyst email sent successfully!", response);
       return true;
 
     } catch (emailError) {
@@ -833,7 +833,7 @@ export function AcceleratorTable({ filters, onApplicationSubmitted }) {
       const accelSelectedCountries = cleanString(acceleratorGeoData.selectedCountries) || []
       const accelSelectedProvinces = cleanString(acceleratorGeoData.selectedProvinces) || []
 
-      console.log(accelSelectedCountries)
+      // console.log(accelSelectedCountries)
 
       if (accelGeoFocus.includes("global")) return true
       if (
@@ -1205,8 +1205,8 @@ export function AcceleratorTable({ filters, onApplicationSubmitted }) {
  const handleViewClick = async (accelerator) => {
   try {
     const user = auth.currentUser
-    console.log("Current user UID:", user.uid)
-    console.log("Catalyst ID:", accelerator.originalCatalystId || accelerator.id)
+    // console.log("Current user UID:", user.uid)
+    // console.log("Catalyst ID:", accelerator.originalCatalystId || accelerator.id)
     
     // Query shared_nda for this specific relationship
     const sharedNDAQuery = query(
@@ -1227,13 +1227,13 @@ export function AcceleratorTable({ filters, onApplicationSubmitted }) {
     if (!snapshot.empty) {
       const ndaDoc = snapshot.docs[0]
       const ndaData = ndaDoc.data()
-      console.log("Found NDA data:", ndaData)
+      // console.log("Found NDA data:", ndaData)
       
       ndaUrl = ndaData.ndaUrl
       ndaStatus = ndaData.status
       ndaSharedDate = ndaData.sharedAt?.toDate?.() || ndaData.sharedAt
     } else {
-      console.log("No NDA found for this relationship")
+      // console.log("No NDA found for this relationship")
     }
     
     // Set catalyst details with NDA info

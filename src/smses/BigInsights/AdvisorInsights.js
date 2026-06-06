@@ -95,7 +95,7 @@ export function AdvisorInsights() {
     const fetchData = async () => {
       try {
         setLoading(true);
-        console.log("Starting data fetch from Firebase...");
+        // console.log("Starting data fetch from Firebase...");
         
         // Fetch advisor applications
         const advisorApplicationsQuery = query(collection(db, "AdvisorApplications"));
@@ -108,7 +108,7 @@ export function AdvisorInsights() {
           });
         });
         setAdvisorApplicationsData(applications);
-        console.log("Fetched", applications.length, "advisor applications");
+        // console.log("Fetched", applications.length, "advisor applications");
 
         // Fetch advisor profiles
         const advisorProfilesQuery = query(collection(db, "advisorProfiles"));
@@ -121,7 +121,7 @@ export function AdvisorInsights() {
           });
         });
         setAdvisorProfilesData(profiles);
-        console.log("Fetched", profiles.length, "advisor profiles");
+        // console.log("Fetched", profiles.length, "advisor profiles");
 
         // Fetch advisory matches
         const advisoryMatchesQuery = query(collection(db, "AdvisoryMatches"));
@@ -134,7 +134,7 @@ export function AdvisorInsights() {
           });
         });
         setAdvisoryMatchesData(matches);
-        console.log("Fetched", matches.length, "advisory matches");
+        // console.log("Fetched", matches.length, "advisory matches");
 
         // Fetch universal profiles for hasAdvisoryStructure data
         const universalProfilesQuery = query(collection(db, "universalProfiles"));
@@ -147,7 +147,7 @@ export function AdvisorInsights() {
           });
         });
         setUniversalProfilesData(universalProfiles);
-        console.log("Fetched", universalProfiles.length, "universal profiles");
+        // console.log("Fetched", universalProfiles.length, "universal profiles");
         
         // Fetch SME Advisor Applications for most requested skills
         const smeAdvisorApplicationsQuery = query(collection(db, "SmeAdvisorApplications"));
@@ -160,10 +160,10 @@ export function AdvisorInsights() {
           });
         });
         setSmeAdvisorApplicationsData(smeApplications);
-        console.log("Fetched", smeApplications.length, "SME advisor applications");
+        // console.log("Fetched", smeApplications.length, "SME advisor applications");
         
         setLoading(false);
-        console.log("All data fetched successfully");
+        // console.log("All data fetched successfully");
       } catch (error) {
         console.error("Error fetching data:", error);
         setLoading(false);
@@ -186,7 +186,7 @@ export function AdvisorInsights() {
       "Subject-Matter Expert": 0
     };
     
-    console.log("Processing governance type distribution for", advisorApplicationsData.length, "applications");
+    // console.log("Processing governance type distribution for", advisorApplicationsData.length, "applications");
     
     // Count governance types from applications
     advisorApplicationsData.forEach(application => {
@@ -214,13 +214,13 @@ export function AdvisorInsights() {
           } else if (normalizedType.includes("subject") || normalizedType.includes("matter") || normalizedType.includes("expert")) {
             governanceTypes["Subject-Matter Expert"] += 1;
           } else {
-            console.log("Unknown advisor engagement type:", type);
+            // console.log("Unknown advisor engagement type:", type);
           }
         }
       });
     });
     
-    console.log("Governance type distribution:", governanceTypes);
+    // console.log("Governance type distribution:", governanceTypes);
     return governanceTypes;
   };
 
@@ -234,7 +234,7 @@ export function AdvisorInsights() {
       "Digital Transformation": 0
     };
     
-    console.log("Processing most requested advisory support for", advisorProfilesData.length, "advisor profiles");
+    // console.log("Processing most requested advisory support for", advisorProfilesData.length, "advisor profiles");
     
     // Count advisory support types from advisor profiles
     advisorProfilesData.forEach(profile => {
@@ -260,13 +260,13 @@ export function AdvisorInsights() {
                     normalizedType.includes("tech") || normalizedType.includes("transformation")) {
             supportTypes["Digital Transformation"] += 1;
           } else {
-            console.log("Unknown advisory support type:", type);
+            // console.log("Unknown advisory support type:", type);
           }
         }
       });
     });
     
-    console.log("Most requested advisory support:", supportTypes);
+    // console.log("Most requested advisory support:", supportTypes);
     return supportTypes;
   };
 
@@ -287,7 +287,7 @@ export function AdvisorInsights() {
       stageData[stage] = { total: 0, count: 0, avg: 0 };
     });
     
-    console.log("Processing average BIG score by stage for", advisoryMatchesData.length, "matches");
+    // console.log("Processing average BIG score by stage for", advisoryMatchesData.length, "matches");
     
     // Calculate average BIG score for each stage
     advisoryMatchesData.forEach(match => {
@@ -320,7 +320,7 @@ export function AdvisorInsights() {
       }
     });
     
-    console.log("Average BIG score by stage:", result);
+    // console.log("Average BIG score by stage:", result);
     return result;
   };
 
@@ -329,7 +329,7 @@ export function AdvisorInsights() {
     let hasAdvisoryBoard = 0;
     let noAdvisoryBoard = 0;
     
-    console.log("Processing SMEs with advisory boards for", universalProfilesData.length, "profiles");
+    // console.log("Processing SMEs with advisory boards for", universalProfilesData.length, "profiles");
     
     universalProfilesData.forEach(profile => {
       // Check if the profile has the legalCompliance field and hasAdvisoryStructure
@@ -351,7 +351,7 @@ export function AdvisorInsights() {
       "Has No Advisory Board": total > 0 ? Math.round((noAdvisoryBoard / total) * 100) : 0
     };
     
-    console.log("SMEs with advisory boards:", result);
+    // console.log("SMEs with advisory boards:", result);
     return result;
   };
 
@@ -367,7 +367,7 @@ export function AdvisorInsights() {
       "Governance": { total: 0, count: 0, avg: 0 }
     };
     
-    console.log("Processing top advisor categories for", advisorProfilesData.length, "profiles");
+    // console.log("Processing top advisor categories for", advisorProfilesData.length, "profiles");
     
     // Calculate average conversion for each functional expertise
     advisorProfilesData.forEach(profile => {
@@ -409,7 +409,7 @@ export function AdvisorInsights() {
             functionalExpertise["Governance"].total += conversionRate;
             functionalExpertise["Governance"].count += 1;
           } else {
-            console.log("Unknown functional expertise:", exp);
+            // console.log("Unknown functional expertise:", exp);
           }
         }
       });
@@ -426,7 +426,7 @@ export function AdvisorInsights() {
       }
     });
     
-    console.log("Top advisor categories by conversion:", result);
+    // console.log("Top advisor categories by conversion:", result);
     return result;
   };
 
@@ -438,7 +438,7 @@ export function AdvisorInsights() {
       "Township-based": 0
     };
     
-    console.log("Processing impact focus for", advisorProfilesData.length, "advisor profiles");
+    // console.log("Processing impact focus for", advisorProfilesData.length, "advisor profiles");
     
     // Count impact focus types from advisor profiles
     advisorProfilesData.forEach(profile => {
@@ -459,13 +459,13 @@ export function AdvisorInsights() {
                     normalizedFocus.includes("underserved") || normalizedFocus.includes("community")) {
             impactFocusTypes["Township-based"] += 1;
           } else {
-            console.log("Unknown impact focus:", focus);
+            // console.log("Unknown impact focus:", focus);
           }
         }
       });
     });
     
-    console.log("Impact focus of advisors:", impactFocusTypes);
+    // console.log("Impact focus of advisors:", impactFocusTypes);
     return impactFocusTypes;
   };
 
@@ -483,7 +483,7 @@ export function AdvisorInsights() {
       "Northern Cape": 0
     };
     
-    console.log("Processing advisor region distribution for", advisorProfilesData.length, "profiles");
+    // console.log("Processing advisor region distribution for", advisorProfilesData.length, "profiles");
     
     // Count provinces from advisor profiles
     advisorProfilesData.forEach(profile => {
@@ -524,14 +524,14 @@ export function AdvisorInsights() {
                   normalizedProvince.includes("northern")) {
           provinces["Northern Cape"] += 1;
         } else if (province && province.trim() !== "") {
-          console.log("Unknown province:", province);
+          // console.log("Unknown province:", province);
         }
       }
     });
     
     // Don't generate random values - keep zeros for provinces with no data
     // This ensures all provinces are displayed even with zero counts
-    console.log("Advisor region distribution:", provinces);
+    // console.log("Advisor region distribution:", provinces);
     return provinces;
   };
 
@@ -545,7 +545,7 @@ export function AdvisorInsights() {
       "Mature": 0
     };
     
-    console.log("Processing advisor requests by SME stage for", advisorProfilesData.length, "profiles");
+    // console.log("Processing advisor requests by SME stage for", advisorProfilesData.length, "profiles");
     
     // Count SME stages from advisor profiles
     advisorProfilesData.forEach(profile => {
@@ -567,13 +567,13 @@ export function AdvisorInsights() {
           } else if (normalizedStage.includes("mature") || normalizedStage.includes("established")) {
             smeStages["Mature"] += 1;
           } else {
-            console.log("Unknown SME stage:", stage);
+            // console.log("Unknown SME stage:", stage);
           }
         }
       });
     });
     
-    console.log("Advisor requests by SME stage:", smeStages);
+    // console.log("Advisor requests by SME stage:", smeStages);
     return smeStages;
   };
 
@@ -584,7 +584,7 @@ export function AdvisorInsights() {
     let withoutAdvisorsTotal = 0;
     let withoutAdvisorsCount = 0;
     
-    console.log("Processing average BIG score with/without advisors for", universalProfilesData.length, "profiles");
+    // console.log("Processing average BIG score with/without advisors for", universalProfilesData.length, "profiles");
     
     universalProfilesData.forEach(profile => {
       // Check if the profile has enterpriseReadiness and hasAdvisors field
@@ -625,7 +625,7 @@ export function AdvisorInsights() {
       "Without Advisors": withoutAdvisorsCount > 0 ? Math.round(withoutAdvisorsTotal / withoutAdvisorsCount) : 0
     };
     
-    console.log("Average BIG score with/without advisors:", result);
+    // console.log("Average BIG score with/without advisors:", result);
     return result;
   };
 
@@ -637,7 +637,7 @@ export function AdvisorInsights() {
       "Ongoing": 0
     };
     
-    console.log("Processing project duration distribution for", advisorApplicationsData.length, "applications");
+    // console.log("Processing project duration distribution for", advisorApplicationsData.length, "applications");
     
     // Count duration categories from advisor applications
     advisorApplicationsData.forEach(application => {
@@ -659,12 +659,12 @@ export function AdvisorInsights() {
         } else if (normalizedDuration === "ongoing") {
           durationCategories["Ongoing"] += 1;
         } else if (projectDuration && projectDuration.trim() !== "") {
-          console.log("Unknown project duration:", projectDuration);
+          // console.log("Unknown project duration:", projectDuration);
         }
       }
     });
     
-    console.log("Project duration distribution:", durationCategories);
+    // console.log("Project duration distribution:", durationCategories);
     return durationCategories;
   };
 
@@ -676,7 +676,7 @@ export function AdvisorInsights() {
       "Great Matches (80%+)": 0
     };
     
-    console.log("Processing appointment success rate for", advisoryMatchesData.length, "matches");
+    // console.log("Processing appointment success rate for", advisoryMatchesData.length, "matches");
     
     let totalMatches = 0;
     
@@ -707,7 +707,7 @@ export function AdvisorInsights() {
       });
     }
     
-    console.log("Appointment success rate:", matchCategories);
+    // console.log("Appointment success rate:", matchCategories);
     return matchCategories;
   };
 
@@ -721,7 +721,7 @@ export function AdvisorInsights() {
       statusData[status] = { total: 0, count: 0, avg: 0 };
     });
     
-    console.log("Processing BIG score by status for", advisorApplicationsData.length, "applications");
+    // console.log("Processing BIG score by status for", advisorApplicationsData.length, "applications");
     
     // Calculate average BIG score for each status
     advisorApplicationsData.forEach(application => {
@@ -754,7 +754,7 @@ export function AdvisorInsights() {
       }
     });
     
-    console.log("BIG score by status:", result);
+    // console.log("BIG score by status:", result);
     return result;
   };
 
@@ -763,7 +763,7 @@ export function AdvisorInsights() {
     let totalMatchPercentage = 0;
     let count = 0;
     
-    console.log("Calculating connection rate for", advisoryMatchesData.length, "matches");
+    // console.log("Calculating connection rate for", advisoryMatchesData.length, "matches");
     
     advisoryMatchesData.forEach(match => {
       if (match.matchPercentage !== undefined && match.matchPercentage !== null) {
@@ -778,7 +778,7 @@ export function AdvisorInsights() {
     });
     
     const connectionRate = count > 0 ? Math.round(totalMatchPercentage / count) : 75;
-    console.log("Connection rate:", connectionRate);
+    // console.log("Connection rate:", connectionRate);
     return connectionRate;
   };
 
@@ -787,7 +787,7 @@ export function AdvisorInsights() {
     let totalBigScore = 0;
     let count = 0;
     
-    console.log("Calculating average BIG score of advisors for", smeAdvisorApplicationsData.length, "SME advisor applications");
+    // console.log("Calculating average BIG score of advisors for", smeAdvisorApplicationsData.length, "SME advisor applications");
     
     smeAdvisorApplicationsData.forEach(application => {
       if (application.bigScore !== undefined && application.bigScore !== null) {
@@ -802,7 +802,7 @@ export function AdvisorInsights() {
     });
     
     const avgBigScore = count > 0 ? Math.round(totalBigScore / count) : 75;
-    console.log("Average BIG score of advisors:", avgBigScore);
+    // console.log("Average BIG score of advisors:", avgBigScore);
     return avgBigScore;
   };
 

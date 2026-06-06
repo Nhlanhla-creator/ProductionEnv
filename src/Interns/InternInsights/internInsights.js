@@ -28,7 +28,6 @@ function useDeepCompareMemo(value) {
 
 // Function to calculate exact days difference between two dates
 function calculateExactDaysDifference(startDate, endDate) {
-  console.log("Calculating days difference between:", startDate, "and", endDate);
   
   const start = new Date(startDate);
   const end = new Date(endDate);
@@ -39,14 +38,11 @@ function calculateExactDaysDifference(startDate, endDate) {
   const timeDiff = endUTC - startUTC;
   const daysDiff = timeDiff / (1000 * 60 * 60 * 24);
   
-  console.log(`Date difference: ${start.toDateString()} to ${end.toDateString()} = ${daysDiff} days`);
-  
   return Math.max(0, daysDiff);
 }
 
 export function Insights() {
   const [activeTab, setActiveTab] = useState("pipeline-conversion");
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [internsData, setInternsData] = useState([]);
   const [internApplicationsData, setInternApplicationsData] = useState([]);
   const [internshipRequestsData, setInternshipRequestsData] = useState([]);
@@ -55,22 +51,6 @@ export function Insights() {
   const [loading, setLoading] = useState(true);
   const charts = useRef([]);
   const prevActiveTab = useRef();
-
-  useEffect(() => {
-    const checkSidebarState = () => {
-      setIsSidebarCollapsed(document.body.classList.contains("sidebar-collapsed"));
-    }
-
-    checkSidebarState();
-
-    const observer = new MutationObserver(checkSidebarState);
-    observer.observe(document.body, {
-      attributes: true,
-      attributeFilter: ["class"],
-    });
-
-    return () => observer.disconnect();
-  }, []);
 
   // Fetch all data from Firebase
   useEffect(() => {
@@ -209,8 +189,6 @@ export function Insights() {
       "Hybrid": 0
     };
     
-    console.log("Processing internship type breakdown for", internApplicationsData.length, "applications");
-    
     internApplicationsData.forEach(application => {
       if (application.internshipRequest && application.internshipRequest.locationFlexibility) {
         const locationFlexibility = application.internshipRequest.locationFlexibility;
@@ -218,8 +196,6 @@ export function Insights() {
         const options = Array.isArray(locationFlexibility) 
           ? locationFlexibility 
           : [locationFlexibility];
-        
-        console.log("Application ID:", application.id, "Location flexibility:", options);
         
         options.forEach(option => {
           if (typeof option === 'string') {
@@ -229,13 +205,10 @@ export function Insights() {
             
             if (normalizedOption === "remote") {
               typeCounts["Remote"] += 1;
-              console.log("Added to Remote:", application.id);
             } else if (normalizedOption === "hybrid") {
               typeCounts["Hybrid"] += 1;
-              console.log("Added to Hybrid:", application.id);
             } else if (normalizedOption === "in-person" || normalizedOption === "in person") {
               typeCounts["In-Person"] += 1;
-              console.log("Added to In-Person:", application.id);
             } else {
               console.log("Unknown location option:", option, "in application:", application.id);
             }
@@ -246,7 +219,6 @@ export function Insights() {
       }
     });
     
-    console.log("Internship type counts:", typeCounts);
     return typeCounts;
   };
 
@@ -264,46 +236,46 @@ export function Insights() {
       "Other": 0
     };
     
-    console.log("Processing departmental intern demand for", internApplicationsData.length, "applications");
+    // console.log("Processing departmental intern demand for", internApplicationsData.length, "applications");
     
     internApplicationsData.forEach(application => {
       if (application.internshipRequest && application.internshipRequest.internRoles && 
           Array.isArray(application.internshipRequest.internRoles)) {
         
-        console.log("Processing internRoles for application:", application.id, application.internshipRequest.internRoles);
+        // console.log("Processing internRoles for application:", application.id, application.internshipRequest.internRoles);
         
         application.internshipRequest.internRoles.forEach(roleObj => {
           if (roleObj && roleObj.role) {
             const role = roleObj.role;
-            console.log("Processing role:", role);
+            // console.log("Processing role:", role);
             
             if (["Data Science", "IT Support", "Software Development", "Quality Assurance", "Software Engineering"].includes(role)) {
               departmentCounts["IT"] += 1;
-              console.log("Added to IT:", role);
+              // console.log("Added to IT:", role);
             } else if (["Business Analysis", "Project Management", "Operations"].includes(role)) {
               departmentCounts["Business"] += 1;
-              console.log("Added to Business:", role);
+              // console.log("Added to Business:", role);
             } else if (["Human Resources"].includes(role)) {
               departmentCounts["HR"] += 1;
-              console.log("Added to HR:", role);
+              // console.log("Added to HR:", role);
             } else if (["Legal"].includes(role)) {
               departmentCounts["Legal"] += 1;
-              console.log("Added to Legal:", role);
+              // console.log("Added to Legal:", role);
             } else if (["Finance", "Accounting"].includes(role)) {
               departmentCounts["Finance"] += 1;
-              console.log("Added to Finance:", role);
+              // console.log("Added to Finance:", role);
             } else if (["Engineering"].includes(role)) {
               departmentCounts["Engineering"] += 1;
-              console.log("Added to Engineering:", role);
+              // console.log("Added to Engineering:", role);
             } else if (["Graphic Design"].includes(role)) {
               departmentCounts["Design"] += 1;
-              console.log("Added to Design:", role);
+              // console.log("Added to Design:", role);
             } else if (["Marketing"].includes(role)) {
               departmentCounts["Marketing"] += 1;
-              console.log("Added to Marketing:", role);
+              // console.log("Added to Marketing:", role);
             } else {
               departmentCounts["Other"] += 1;
-              console.log("Added to Other:", role);
+              // console.log("Added to Other:", role);
             }
           } else {
             console.log("Role object missing role property:", roleObj);
@@ -314,7 +286,6 @@ export function Insights() {
       }
     });
     
-    console.log("Departmental demand counts:", departmentCounts);
     return departmentCounts;
   };
 
@@ -327,18 +298,18 @@ export function Insights() {
       "Offer Rejected": 0
     };
     
-    console.log("Processing match-to-offer conversion for", internApplicationsData.length, "applications");
+    // console.log("Processing match-to-offer conversion for", internApplicationsData.length, "applications");
     
     internApplicationsData.forEach(application => {
       conversionData["Applied"] += 1;
       
       if (application.bigInternScore && application.bigInternScore >= 70) {
         conversionData["Matched"] += 1;
-        console.log("Matched application (score >= 70):", application.id, "Score:", application.bigInternScore);
+        // console.log("Matched application (score >= 70):", application.id, "Score:", application.bigInternScore);
       }
       
       if (application.status) {
-        console.log("Application ID:", application.id, "Status:", application.status);
+        // console.log("Application ID:", application.id, "Status:", application.status);
         
         let statusValue = application.status;
         if (typeof application.status === 'object') {
@@ -349,19 +320,19 @@ export function Insights() {
         
         if (normalizedStatus === "accepted") {
           conversionData["Offer Accepted"] += 1;
-          console.log("Found Accepted application:", application.id);
+          // console.log("Found Accepted application:", application.id);
         } else if (normalizedStatus === "rejected") {
           conversionData["Offer Rejected"] += 1;
-          console.log("Found Rejected application:", application.id);
+          // console.log("Found Rejected application:", application.id);
         } else {
-          console.log("Unknown status:", application.status, "for application:", application.id);
+          // console.log("Unknown status:", application.status, "for application:", application.id);
         }
       } else {
-        console.log("No status found for application:", application.id);
+        // console.log("No status found for application:", application.id);
       }
     });
     
-    console.log("Conversion data:", conversionData);
+    // console.log("Conversion data:", conversionData);
     return conversionData;
   };
 
@@ -374,7 +345,7 @@ export function Insights() {
       "71-100%": 0
     };
     
-    console.log("Processing bigInternScore distribution for", internEvaluationsData.length, "evaluations");
+    // console.log("Processing bigInternScore distribution for", internEvaluationsData.length, "evaluations");
     
     internEvaluationsData.forEach(evaluation => {
       if (evaluation.scores && evaluation.scores.bigInternScore) {
@@ -390,13 +361,13 @@ export function Insights() {
           scoreDistribution["71-100%"] += 1;
         }
         
-        console.log("Evaluation ID:", evaluation.id, "Score:", score);
+        // console.log("Evaluation ID:", evaluation.id, "Score:", score);
       } else {
-        console.log("No bigInternScore found in evaluation:", evaluation.id);
+        // console.log("No bigInternScore found in evaluation:", evaluation.id);
       }
     });
     
-    console.log("Score distribution:", scoreDistribution);
+    // console.log("Score distribution:", scoreDistribution);
     return scoreDistribution;
   };
 
@@ -411,7 +382,7 @@ export function Insights() {
       5: 0
     };
     
-    console.log("Processing rating distribution for", internshipRatingsData.length, "ratings");
+    // console.log("Processing rating distribution for", internshipRatingsData.length, "ratings");
     
     internshipRatingsData.forEach(rating => {
       if (rating.rating !== undefined && rating.rating !== null) {
@@ -419,12 +390,12 @@ export function Insights() {
         
         if (ratingValue >= 0 && ratingValue <= 5) {
           ratingDistribution[ratingValue] += 1;
-          console.log("Rating ID:", rating.id, "Rating:", ratingValue);
+          // console.log("Rating ID:", rating.id, "Rating:", ratingValue);
         } else {
-          console.log("Invalid rating value:", ratingValue, "in rating:", rating.id);
+          // console.log("Invalid rating value:", ratingValue, "in rating:", rating.id);
         }
       } else {
-        console.log("No rating found in rating:", rating.id);
+        // console.log("No rating found in rating:", rating.id);
       }
     });
     
@@ -432,7 +403,7 @@ export function Insights() {
     const ratingPercentages = {};
     
     if (totalRatings === 0) {
-      console.log("No rating data found, using mock data for chart structure");
+      // console.log("No rating data found, using mock data for chart structure");
       return {
         0: 3.0,
         1: 7.0,
@@ -448,8 +419,8 @@ export function Insights() {
       ratingPercentages[i] = percentage > 0 ? percentage : 0.1;
     }
     
-    console.log("Rating distribution:", ratingDistribution);
-    console.log("Rating percentages:", ratingPercentages);
+    // console.log("Rating distribution:", ratingDistribution);
+    // console.log("Rating percentages:", ratingPercentages);
     return ratingPercentages;
   };
 
@@ -463,43 +434,43 @@ export function Insights() {
       "Other": 0
     };
     
-    console.log("Processing interns placed per program for", internsData.length, "intern profiles");
+    // console.log("Processing interns placed per program for", internsData.length, "intern profiles");
     
     internsData.forEach(intern => {
       if (intern.formData && intern.formData.programAffiliation && intern.formData.programAffiliation.programType) {
         const programType = intern.formData.programAffiliation.programType;
-        console.log("Intern ID:", intern.id, "Program Type:", programType);
+        // console.log("Intern ID:", intern.id, "Program Type:", programType);
         
         if (typeof programType === 'string') {
           const normalizedType = programType.toLowerCase().trim();
           
           if (normalizedType.includes("seta")) {
             programCounts["SETA Program"] += 1;
-            console.log("Added to SETA Program:", intern.id);
+            // console.log("Added to SETA Program:", intern.id);
           } else if (normalizedType.includes("yes")) {
             programCounts["YES Program"] += 1;
-            console.log("Added to YES Program:", intern.id);
+            // console.log("Added to YES Program:", intern.id);
           } else if (normalizedType.includes("graduate")) {
             programCounts["Graduate Program"] += 1;
-            console.log("Added to Graduate Program:", intern.id);
+            // console.log("Added to Graduate Program:", intern.id);
           } else if (normalizedType.includes("skill")) {
             programCounts["Skills Development"] += 1;
-            console.log("Added to Skills Development:", intern.id);
+            // console.log("Added to Skills Development:", intern.id);
           } else {
             programCounts["Other"] += 1;
-            console.log("Added to Other:", intern.id, "Program Type:", programType);
+            // console.log("Added to Other:", intern.id, "Program Type:", programType);
           }
         } else {
-          console.log("Program type is not a string:", programType, "for intern:", intern.id);
+          // console.log("Program type is not a string:", programType, "for intern:", intern.id);
           programCounts["Other"] += 1;
         }
       } else {
-        console.log("No program type found for intern:", intern.id);
+        // console.log("No program type found for intern:", intern.id);
         programCounts["Other"] += 1;
       }
     });
     
-    console.log("Program counts:", programCounts);
+    // console.log("Program counts:", programCounts);
     return programCounts;
   };
 
@@ -510,8 +481,8 @@ export function Insights() {
       "Contacted/Interview": { totalDays: 0, count: 0 }
     };
     
-    console.log("=== CALCULATING AVERAGE RESPONSE TIME BY STATUS ===");
-    console.log("Total applications to process:", internApplicationsData.length);
+    // console.log("=== CALCULATING AVERAGE RESPONSE TIME BY STATUS ===");
+    // console.log("Total applications to process:", internApplicationsData.length);
 
     let processedCount = 0;
     let skippedCount = 0;
@@ -532,57 +503,57 @@ export function Insights() {
           const daysDiff = calculateExactDaysDifference(submittedDate, updatedDate);
           
           if (daysDiff >= 0) {
-            console.log(`Application ${application.id}:`);
-            console.log(`  Status: ${normalizedStatus}`);
-            console.log(`  Submitted: ${submittedDate.toDateString()}`);
-            console.log(`  Updated: ${updatedDate.toDateString()}`);
-            console.log(`  Days Difference: ${daysDiff} days`);
+            // console.log(`Application ${application.id}:`);
+            // console.log(`  Status: ${normalizedStatus}`);
+            // console.log(`  Submitted: ${submittedDate.toDateString()}`);
+            // console.log(`  Updated: ${updatedDate.toDateString()}`);
+            // console.log(`  Days Difference: ${daysDiff} days`);
             
             if (normalizedStatus === "accepted") {
               statusResponseTimes["Accepted"].totalDays += daysDiff;
               statusResponseTimes["Accepted"].count += 1;
-              console.log(`  → Added to ACCEPTED: ${daysDiff} days`);
+              // console.log(`  → Added to ACCEPTED: ${daysDiff} days`);
             } else if (normalizedStatus === "contacted/interview") {
               statusResponseTimes["Contacted/Interview"].totalDays += daysDiff;
               statusResponseTimes["Contacted/Interview"].count += 1;
-              console.log(`  → Added to CONTACTED/INTERVIEW: ${daysDiff} days`);
+              // console.log(`  → Added to CONTACTED/INTERVIEW: ${daysDiff} days`);
             }
             
             processedCount++;
           } else {
-            console.log(`Application ${application.id}: Invalid negative day difference: ${daysDiff}`);
+            // console.log(`Application ${application.id}: Invalid negative day difference: ${daysDiff}`);
             skippedCount++;
           }
         } else {
-          console.log(`Application ${application.id}: Skipped (wrong status): ${normalizedStatus}`);
+          // console.log(`Application ${application.id}: Skipped (wrong status): ${normalizedStatus}`);
           skippedCount++;
         }
       } else {
-        console.log(`Application ${application.id}: Missing dates - submittedAt: ${application.submittedAt}, updatedAt: ${application.updatedAt}`);
+        // console.log(`Application ${application.id}: Missing dates - submittedAt: ${application.submittedAt}, updatedAt: ${application.updatedAt}`);
         skippedCount++;
       }
     });
 
-    console.log(`=== PROCESSING COMPLETE ===`);
-    console.log(`Processed: ${processedCount}, Skipped: ${skippedCount}`);
-    console.log("Accepted applications:", statusResponseTimes["Accepted"].count);
-    console.log("Contacted/Interview applications:", statusResponseTimes["Contacted/Interview"].count);
+    // console.log(`=== PROCESSING COMPLETE ===`);
+    // console.log(`Processed: ${processedCount}, Skipped: ${skippedCount}`);
+    // console.log("Accepted applications:", statusResponseTimes["Accepted"].count);
+    // console.log("Contacted/Interview applications:", statusResponseTimes["Contacted/Interview"].count);
 
     const responseTimeData = {};
     Object.keys(statusResponseTimes).forEach(status => {
       const data = statusResponseTimes[status];
       responseTimeData[status] = data.count > 0 ? Math.round((data.totalDays / data.count) * 10) / 10 : 0;
-      console.log(`${status}: ${data.count} applications, total ${data.totalDays} days, average ${responseTimeData[status]} days`);
+      // console.log(`${status}: ${data.count} applications, total ${data.totalDays} days, average ${responseTimeData[status]} days`);
     });
 
     const totalDays = statusResponseTimes["Accepted"].totalDays + statusResponseTimes["Contacted/Interview"].totalDays;
     const totalCount = statusResponseTimes["Accepted"].count + statusResponseTimes["Contacted/Interview"].count;
     responseTimeData["Overall Average"] = totalCount > 0 ? Math.round((totalDays / totalCount) * 10) / 10 : 0;
 
-    console.log("FINAL AVERAGE RESPONSE TIME DATA:", responseTimeData);
+    // console.log("FINAL AVERAGE RESPONSE TIME DATA:", responseTimeData);
     
     if (totalCount === 0) {
-      console.log("No valid applications found, returning mock data for chart");
+      // console.log("No valid applications found, returning mock data for chart");
       return {
         "Accepted": 15.5,
         "Contacted/Interview": 28.3,
@@ -606,7 +577,7 @@ export function Insights() {
     }
 
     const averageRating = totalRatings > 0 ? totalWeightedRating / totalRatings : 0;
-    console.log("Overall average rating calculated:", averageRating);
+    // console.log("Overall average rating calculated:", averageRating);
     
     return Math.round(averageRating * 10) / 10;
   };
@@ -618,7 +589,7 @@ export function Insights() {
     const offerAccepted = conversionData["Offer Accepted"];
     
     const conversionRate = applied > 0 ? (offerAccepted / applied) * 100 : 0;
-    console.log("Conversion rate calculated:", conversionRate, "% (", offerAccepted, "/", applied, ")");
+    // console.log("Conversion rate calculated:", conversionRate, "% (", offerAccepted, "/", applied, ")");
     
     return Math.round(conversionRate * 10) / 10;
   };
@@ -1320,8 +1291,7 @@ export function Insights() {
     return (
       <div style={{ 
         paddingTop: '40px', 
-        paddingLeft: isSidebarCollapsed ? '100px' : '280px',
-        paddingRight: '20px',
+        padding: '20px',
         minHeight: '100vh',
         backgroundColor: '#fafafa',
         boxSizing: 'border-box',
@@ -1338,8 +1308,7 @@ export function Insights() {
   return (
     <div style={{ 
       paddingTop: '40px', 
-      paddingLeft: isSidebarCollapsed ? '100px' : '280px',
-      paddingRight: '20px',
+      padding: '20px',
       minHeight: '100vh',
       backgroundColor: '#fafafa',
       boxSizing: 'border-box',
