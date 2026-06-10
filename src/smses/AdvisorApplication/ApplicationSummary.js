@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { ChevronDown, ChevronUp, Edit, ExternalLink, FileText, Target, Upload, ArrowLeft } from "lucide-react"
+import { ChevronDown, ChevronUp, Edit, ExternalLink, FileText, Target, Upload, ChevronLeft } from "lucide-react"
 
 const ApplicationSummary = ({ formData, onEdit, onBack, documentSelections, existingUniversalDocs }) => {
   const [expandedSections, setExpandedSections] = useState({
@@ -136,6 +136,16 @@ const ApplicationSummary = ({ formData, onEdit, onBack, documentSelections, exis
             maxWidth: "none",
           }}
         >
+          {/* Back */}
+            {(
+              <button onClick={handleBack}
+                style={{ display:"flex", alignItems:"center", gap:7, padding:"10px 0", marginBottom:14, background:"none", border:"none", color:"#a67c52", cursor:"pointer", fontSize:14, fontWeight:500 }}
+                onMouseEnter={(e) => { e.currentTarget.style.color="#7d5a50" }}
+                onMouseLeave={(e) => { e.currentTarget.style.color="#a67c52" }}
+              >
+                <ChevronLeft size={19} /> Back to Applications
+              </button>
+            )}
           {/* Header */}
           <div
             style={{
@@ -161,7 +171,6 @@ const ApplicationSummary = ({ formData, onEdit, onBack, documentSelections, exis
                 borderRadius: "50%",
               }}
             />
-
             <div
               style={{
                 display: "flex",
@@ -199,40 +208,7 @@ const ApplicationSummary = ({ formData, onEdit, onBack, documentSelections, exis
                 </p>
               </div>
 
-              <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
-                <button
-                  onClick={handleBack}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                    padding: "12px 20px",
-                    background: "rgba(250, 247, 242, 0.9)",
-                    color: "#4a352f",
-                    border: "1px solid rgba(200, 182, 166, 0.4)",
-                    borderRadius: "12px",
-                    fontSize: "14px",
-                    fontWeight: "600",
-                    cursor: "pointer",
-                    transition: "all 0.3s cubic-bezier(0.4, 0, 0.2, 1)",
-                    boxShadow: "0 4px 16px rgba(74, 53, 47, 0.05)",
-                    minWidth: "140px",
-                    justifyContent: "center",
-                    flexShrink: 0,
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.transform = "translateY(-2px)"
-                    e.currentTarget.style.boxShadow = "0 8px 24px rgba(74, 53, 47, 0.1)"
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.transform = "translateY(0)"
-                    e.currentTarget.style.boxShadow = "0 4px 16px rgba(74, 53, 47, 0.05)"
-                  }}
-                >
-                  <ArrowLeft size={16} /> Back to Applications
-                </button>
-
-                <button
+              <button
                   onClick={handleEdit}
                   disabled={editClicked}
                   style={{
@@ -264,7 +240,6 @@ const ApplicationSummary = ({ formData, onEdit, onBack, documentSelections, exis
                 >
                   <Edit size={16} /> Edit Application
                 </button>
-              </div>
             </div>
           </div>
 

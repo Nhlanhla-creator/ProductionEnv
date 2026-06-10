@@ -638,7 +638,6 @@ const tabStyle = {
 const activeTabStyle = {
     color: "white",
     borderBottomColor: "white",
-    background: "rgba(255, 255, 255, 0.1)",
 }
 
 const modalBodyStyle = {

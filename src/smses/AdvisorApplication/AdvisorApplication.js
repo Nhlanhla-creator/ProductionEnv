@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { CheckCircle, ChevronRight, X, ArrowRight } from "lucide-react"
+import { CheckCircle, ChevronRight, X, ArrowRight, ChevronLeft } from "lucide-react"
 import "./AdvisoryApplication.css"
 import AnalysisProgressOverlay from "./AnalysisProgressOverlay"
 import AdvisoryRequestOverview from "./AdvisoryRequestOverview"
@@ -46,7 +46,7 @@ const CONTAINER_STYLE = {
 export default function AdvisorApplication({
   applicationId = null,
   isNew = false,
-  onNavigateBack,
+  onBack,  // ← Renamed from onNavigateBack to match Intern pattern
   onNavigateToMatches,
   onAnalysisComplete,
 }) {
@@ -65,11 +65,6 @@ export default function AdvisorApplication({
       setShowWelcomePopup(true)
     }
   }, [app.isLoading])
-
-  // Sync summary view when a submitted app is loaded
-  useEffect(() => {
-    if (app.isSubmitted) setShowSummary(true)
-  }, [app.isSubmitted])
 
   const closeValidation = () => setValidationModal({ open: false, title: "", messages: [] })
 
@@ -99,18 +94,18 @@ export default function AdvisorApplication({
     window.scrollTo(0, 0)
   }
 
-  const handleDiscardChanges = () => {
+  const handleBack = () => {
     if (app.hasUnsavedChanges) {
       setShowDiscardConfirm(true)
     } else {
-      onNavigateBack?.()
+      onBack?.()
     }
   }
 
   const confirmDiscard = async () => {
     setShowDiscardConfirm(false)
     await app.discardChanges()
-    onNavigateBack?.()
+    onBack?.()
   }
 
   const handleSubmitApplication = async () => {
@@ -139,6 +134,12 @@ export default function AdvisorApplication({
     }
   }
 
+  const handleEditFromSummary = () => {
+    setShowSummary(false)
+    setActiveSection("advisoryNeedsAssessment")
+    window.scrollTo(0, 0)
+  }
+
   const renderSection = () => {
     switch (activeSection) {
       case "advisoryNeedsAssessment":
@@ -160,8 +161,8 @@ export default function AdvisorApplication({
     return (
       <ApplicationSummary
         formData={app.formData}
-        onEdit={() => setShowSummary(false)}
-        onBack={onNavigateBack}
+        onEdit={handleEditFromSummary}
+        onBack={onBack}
         documentSelections={app.documentSelections}
         existingUniversalDocs={app.existingUniversalDocs}
       />
@@ -234,6 +235,30 @@ export default function AdvisorApplication({
         </Modal>
       )}
 
+      {/* Back Button - Matching Intern style */}
+      {onBack && (
+        <button 
+          onClick={handleBack}
+          style={{ 
+            display: "flex", 
+            alignItems: "center", 
+            gap: 7, 
+            padding: "10px 0", 
+            marginBottom: 14, 
+            background: "none", 
+            border: "none", 
+            color: "#a67c52", 
+            cursor: "pointer", 
+            fontSize: 14, 
+            fontWeight: 500 
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.color = "#7d5a50" }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = "#a67c52" }}
+        >
+          <ChevronLeft size={19} /> Back to Applications
+        </button>
+      )}
+
       <div style={{ textAlign: "center", marginBottom: "30px", padding: "0 20px" }} className="application-header">
         <h1 style={{ fontSize: "clamp(1.5rem, 4vw, 2.5rem)", lineHeight: "1.2", margin: "0 0 10px 0" }}>
           Advisory Matching Application
@@ -287,7 +312,7 @@ export default function AdvisorApplication({
         >
           <button
             type="button"
-            onClick={handleDiscardChanges}
+            onClick={handleBack}
             style={{
               display: "flex",
               alignItems: "center",

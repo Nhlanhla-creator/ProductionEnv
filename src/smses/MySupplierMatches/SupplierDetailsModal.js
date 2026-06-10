@@ -623,25 +623,24 @@ const tabsContainerStyle = {
     padding: "0 24px",
 }
 
-const tabStyle = {
-    display: "flex",
-    alignItems: "center",
-    gap: "8px",
-    padding: "12px 16px",
-    background: "none",
-    border: "none",
-    color: "rgba(255, 255, 255, 0.8)",
-    cursor: "pointer",
-    fontSize: "14px",
-    fontWeight: "500",
-    borderBottom: "3px solid transparent",
-    transition: "all 0.2s ease",
+const tabStyle = { 
+    display: "flex", 
+    alignItems: "center", 
+    gap: "8px", 
+    padding: "12px 16px", 
+    background: "none", 
+    border: "none", 
+    color: "rgba(255,255,255,0.6)",
+    cursor: "pointer", 
+    fontSize: "14px", 
+    fontWeight: "500", 
+    borderBottom: "3px solid transparent",  // Default: no underline
+    transition: "all 0.2s ease" 
 }
 
-const activeTabStyle = {
+const activeTabStyle = { 
     color: "white",
-    borderBottomColor: "white",
-    background: "rgba(255, 255, 255, 0.1)",
+    borderBottom: "3px solid white"  // Override with underline
 }
 
 const modalBodyStyle = {

@@ -7,11 +7,19 @@ import { Brain, Check } from "lucide-react"
  * Prevents user navigation while analysis is in-flight.
  */
 const AnalysisProgressOverlay = ({ progress, isComplete = false }) => {
-  if (!progress) return null
+  // Show overlay if progress exists OR if analysis just completed
+  if (!progress && !isComplete) return null
 
-  const { current = 0, total = null } = progress
+  const { current = 0, total = null, stage = "analyzing" } = progress || {}
   const percentage = total ? Math.round((current / total) * 100) : 0
   const isLoading = !isComplete && total !== null
+
+  const stageLabel = {
+    secondary: "Evaluating metrics",
+    primary: "AI semantic analysis",
+    saving: "Saving results",
+    analyzing: "Analyzing advisors",
+  }[stage] || "Analyzing"
 
   return (
     <div
@@ -110,21 +118,22 @@ const AnalysisProgressOverlay = ({ progress, isComplete = false }) => {
             color: "#1a1a1a",
           }}
         >
-          {isComplete ? "Analysis Complete!" : "Analyzing Advisors"}
+          {isComplete ? "Analysis Complete!" : "Analyzing Interns"}
         </h2>
 
-        {/* Subtitle */}
+        {/* Subtitle/Stage */}
         <p
           style={{
             margin: "0 0 1.5rem 0",
             fontSize: "0.95rem",
             color: "#666",
             lineHeight: 1.5,
+            minHeight: "1.5em",
           }}
         >
           {isComplete
-            ? "Your advisor matches are ready."
-            : "Finding the best advisor matches for your request. This may take a moment."}
+            ? "Your intern matches are ready."
+            : stageLabel}
         </p>
 
         {/* Progress bar and counter */}
@@ -139,7 +148,9 @@ const AnalysisProgressOverlay = ({ progress, isComplete = false }) => {
                 fontSize: "0.875rem",
               }}
             >
-              <span style={{ color: "#666" }}>Analyzing advisors</span>
+              <span style={{ color: "#666" }}>
+                {stage === "secondary" ? "Evaluating" : stage === "primary" ? "AI Analyzing" : "Saving"}
+              </span>
               <span
                 style={{
                   fontWeight: 600,
@@ -213,7 +224,7 @@ const AnalysisProgressOverlay = ({ progress, isComplete = false }) => {
           margin: 0,
         }}
       >
-        {isComplete ? "Redirecting..." : "Analysis in progress"}
+        {isComplete ? "Redirecting..." : `${stageLabel}...`}
       </p>
     </div>
   )

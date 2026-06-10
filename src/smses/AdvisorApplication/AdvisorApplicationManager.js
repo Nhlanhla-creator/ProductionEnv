@@ -32,8 +32,7 @@ const AdvisorApplicationManager = ({ embedded = false, onNavigateToMatches }) =>
   // Authentication state
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   
-  // Force edit mode (skip auto-summary even if application is submitted)
-  const [forceEdit, setForceEdit] = useState(false)
+  // ❌ REMOVE THIS LINE - const [forceEdit, setForceEdit] = useState(false)
 
   // Loading state for summary view
   const [loadingSummary, setLoadingSummary] = useState(false)
@@ -138,7 +137,7 @@ const AdvisorApplicationManager = ({ embedded = false, onNavigateToMatches }) =>
   const handleViewSummary = async (applicationId, basicApplicationData) => {
     // Set applicationId first, then load full data
     setSelectedApplicationId(applicationId)
-    setForceEdit(false)
+    // ❌ REMOVE - setForceEdit(false)
     
     // Load full application data from Firebase
     const fullData = await loadApplicationData(applicationId)
@@ -160,7 +159,7 @@ const AdvisorApplicationManager = ({ embedded = false, onNavigateToMatches }) =>
   const handleEditApplication = (applicationId) => {
     setSelectedApplicationId(applicationId)
     setSelectedApplicationData(null)
-    setForceEdit(true) // Skip auto-summary in AdvisorApplication
+    // ❌ REMOVE - setForceEdit(true)
     setCurrentView('edit')
   }
 
@@ -171,7 +170,7 @@ const AdvisorApplicationManager = ({ embedded = false, onNavigateToMatches }) =>
   const handleCreateNew = () => {
     setSelectedApplicationId(null)
     setSelectedApplicationData(null)
-    setForceEdit(false)
+    // ❌ REMOVE - setForceEdit(false)
     setCurrentView('edit')
   }
 
@@ -184,7 +183,7 @@ const AdvisorApplicationManager = ({ embedded = false, onNavigateToMatches }) =>
     setCurrentView('list')
     setSelectedApplicationId(null)
     setSelectedApplicationData(null)
-    setForceEdit(false)
+    // ❌ REMOVE - setForceEdit(false)
   }
 
   /**
@@ -193,7 +192,7 @@ const AdvisorApplicationManager = ({ embedded = false, onNavigateToMatches }) =>
    * Transitions: summary -> edit
    */
   const handleEditFromSummary = () => {
-    setForceEdit(true)
+    // ❌ REMOVE - setForceEdit(true)
     setCurrentView('edit')
   }
 
@@ -252,8 +251,8 @@ const AdvisorApplicationManager = ({ embedded = false, onNavigateToMatches }) =>
         embedded={embedded}
         applicationId={selectedApplicationId}
         isNew={selectedApplicationId === null}
-        forceEdit={forceEdit}
-        onNavigateBack={handleBackToList}
+        // ❌ REMOVE - forceEdit={forceEdit}
+        onBack={handleBackToList}  // ← Changed from onNavigateBack
         onNavigateToMatches={onNavigateToMatches || handleBackToList}
         onAnalysisComplete={handleAnalysisComplete}
         onAnalysisProgress={handleAnalysisProgress}

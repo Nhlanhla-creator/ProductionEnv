@@ -113,3 +113,16 @@
 .unauthorized-page button:hover {
   background-color: #A0522D;
 }
+
+@keyframes shimmer-slow {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+
+* > th {
+  color: white !important;
+}

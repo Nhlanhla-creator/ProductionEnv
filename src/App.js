@@ -90,7 +90,7 @@ import InternProgramAffiliation from "./Interns/UniversalProfileIntern/ProgramAf
 import InternRequiredDocuments from "./Interns/UniversalProfileIntern/RequiredDocuments"
 import InternDeclarationConsent from "./Interns/UniversalProfileIntern/Declaration&Consent"
 // Intern Application Components
-import InternApplication from "./smses/InternApplication/internapplication"
+import InternApplicationManager from "./smses/InternApplication/InternApplicationManager"
 import InternJobOverview from "./smses/InternApplication/JobOverview"
 import InternInternshipRequest from "./smses/InternApplication/InternshipRequest"
 import InternMatchingAgreement from "./smses/InternApplication/MatchingAgreement"
@@ -416,10 +416,6 @@ function App() {
   const [showSummary, setShowSummary] = useState(false)
   const companyName = "Acme Inc"
   const { user, loading } = useAuth()
-
-  if (loading) {
-    return <SkeletonLoader />
-  }
 
   const updateFormData = (section, data) => {
     setFormData((prev) => ({ ...prev, [section]: { ...prev[section], ...data } }))
@@ -1051,9 +1047,9 @@ function App() {
         <Route path="/applications/advisory/:section" element={withProtection(AdvisorApplicationManager, {}, renderSMERoute)} />
 
         {/* Intern Application Routes */}
-        <Route path="/applications/intern" element={withProtection(InternApplication, {}, renderSMERoute)} />
-        <Route path="/applications/interns" element={withProtection(InternApplication, {}, renderSMERoute)} />
-        <Route path="/applications/intern/:section" element={withProtection(InternApplication, {}, renderSMERoute)} />
+        <Route path="/applications/intern" element={withProtection(InternApplicationManager, {}, renderSMERoute)} />
+        <Route path="/applications/interns" element={withProtection(InternApplicationManager, {}, renderSMERoute)} />
+        <Route path="/applications/intern/:section" element={withProtection(InternApplicationManager, {}, renderSMERoute)} />
         <Route path="/applications/intern/instructions" element={withProtection(Instructions, {}, renderSMERoute)} />
         <Route path="/applications/intern/job-overview" element={withProtection(InternJobOverview, {}, renderSMERoute)} />
         <Route path="/applications/intern/internship-request" element={withProtection(InternInternshipRequest, {}, renderSMERoute)} />

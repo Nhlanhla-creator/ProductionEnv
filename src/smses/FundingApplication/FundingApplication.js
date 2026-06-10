@@ -1377,7 +1377,7 @@ The BIG Fundability Team
           minHeight: "100vh",
           maxWidth: "100vw",
           overflowX: "hidden",
-          padding: "0",
+          padding: "20px",
           margin: "0",
           boxSizing: "border-box",
         }}
