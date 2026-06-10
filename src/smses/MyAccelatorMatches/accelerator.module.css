@@ -1422,12 +1422,14 @@
   word-break: break-word;
   hyphens: auto;
   -webkit-line-clamp: var(--max-lines, 3);
+  line-clamp: var(--max-lines);
   white-space: normal;
 }
 
 .truncatedText.expanded {
   display: block;
   -webkit-line-clamp: none;
+  line-clamp: none;
   max-height: none;
 }
 

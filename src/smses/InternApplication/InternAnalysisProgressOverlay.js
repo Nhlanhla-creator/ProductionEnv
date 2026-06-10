@@ -3,22 +3,22 @@
 import { Brain, Check } from "lucide-react"
 
 /**
- * AnalysisProgressOverlay — full-screen overlay showing real-time AI analysis progress.
- * Prevents user navigation while analysis is in-flight.
+ * InternAnalysisProgressOverlay — full-screen overlay showing simulated
+ * intern matching analysis progress. Prevents user navigation while analysis is in-flight.
+ *
+ * Accepts simulated progress from a client-side count of complete interns.
  */
-const AnalysisProgressOverlay = ({ progress, isComplete = false }) => {
-  // Show overlay if progress exists OR if analysis just completed
+const InternAnalysisProgressOverlay = ({ progress, isComplete = false }) => {
   if (!progress && !isComplete) return null
 
   const { current = 0, total = null, stage = "analyzing" } = progress || {}
   const percentage = total ? Math.round((current / total) * 100) : 0
-  const isLoading = !isComplete && total !== null
 
   const stageLabel = {
-    secondary: "Evaluating metrics",
+    secondary: "Evaluating intern metrics",
     primary: "AI semantic analysis",
-    saving: "Saving results",
-    analyzing: "Analyzing advisors",
+    saving: "Saving match results",
+    analyzing: "Analyzing interns",
   }[stage] || "Analyzing"
 
   return (
@@ -230,4 +230,4 @@ const AnalysisProgressOverlay = ({ progress, isComplete = false }) => {
   )
 }
 
-export default AnalysisProgressOverlay
+export default InternAnalysisProgressOverlay

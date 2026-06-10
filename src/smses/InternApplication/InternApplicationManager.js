@@ -2,17 +2,17 @@
 
 import { useState, useEffect } from "react"
 import { doc, getDoc } from "firebase/firestore"
-import ApplicationsList from "./ApplicationsList"
-import AdvisorApplication from "./AdvisorApplication"
+import InternApplicationsList from "./InternApplicationsList"
+import InternApplication from "./internapplication"
 import ApplicationSummary from "./ApplicationSummary"
 import { auth, db } from "../../firebaseConfig"
 
 /**
- * AdvisorApplicationManager
+ * InternApplicationManager
  * 
- * Manages the complete advisor application lifecycle with robust navigation:
- * - List: View all advisor applications
- * - Edit: Create or edit an advisor application
+ * Manages the complete intern application lifecycle with robust navigation:
+ * - List: View all internship applications
+ * - Edit: Create or edit an internship application
  * - Summary: Review application details before submission
  * 
  * Navigation Flow:
@@ -21,7 +21,7 @@ import { auth, db } from "../../firebaseConfig"
  * summary -> edit
  * edit -> back to list OR back to summary
  */
-const AdvisorApplicationManager = ({ embedded = false, onNavigateToMatches }) => {
+const InternApplicationManager = ({ embedded = false, onNavigateToMatches }) => {
   // View management
   const [currentView, setCurrentView] = useState('list')
   
@@ -32,7 +32,8 @@ const AdvisorApplicationManager = ({ embedded = false, onNavigateToMatches }) =>
   // Authentication state
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   
-  // ❌ REMOVE THIS LINE - const [forceEdit, setForceEdit] = useState(false)
+  // Force edit mode (skip auto-summary even if application is submitted)
+  const [forceEdit, setForceEdit] = useState(false)
 
   // Loading state for summary view
   const [loadingSummary, setLoadingSummary] = useState(false)
@@ -52,73 +53,24 @@ const AdvisorApplicationManager = ({ embedded = false, onNavigateToMatches }) =>
   const loadApplicationData = async (applicationId) => {
     try {
       setLoadingSummary(true)
-      const docRef = doc(db, "advisoryApplicationsV2", applicationId)
+      const docRef = doc(db, "internApplicationsV2", applicationId)
       const docSnap = await getDoc(docRef)
       
       if (docSnap.exists()) {
         const data = docSnap.data()
         
-        // Fetch existing universal docs if needed
-        let existingUniversalDocs = {
-          businessPlan: null,
-          financialStatements: [],
-          loading: false
-        }
-        
-        try {
-          if (data.userId) {
-            const universalProfileRef = doc(db, "universalProfiles", data.userId)
-            const profileSnap = await getDoc(universalProfileRef)
-            if (profileSnap.exists()) {
-              const profileData = profileSnap.data()
-              const documents = profileData.documents || {}
-              existingUniversalDocs.businessPlan = documents.businessPlan || null
-              
-              if (documents.financialStatements_multiple && Array.isArray(documents.financialStatements_multiple)) {
-                existingUniversalDocs.financialStatements = documents.financialStatements_multiple
-                  .filter(doc => doc.url && doc.url !== "")
-                  .map(doc => ({ url: doc.url, customName: doc.customName || "Financial Statement" }))
-              }
-            }
-          }
-        } catch (err) {
-          console.error("Error loading universal documents:", err)
-        }
-        
-        // Return flattened structure - all fields at top level
+        // Return flattened structure
         return {
           formData: {
-            // Top-level advisory fields (previously nested in advisoryNeedsAssessment)
-            advisoryRole: data.advisoryRole || [],
-            functionalExpertise: data.functionalExpertise || [],
-            supportFocus: data.supportFocus || [],
-            sectorExperienceRequired: data.sectorExperienceRequired || "",
-            compensationType: data.compensationType || "",
-            timeCommitment: data.timeCommitment || "",
-            engagementType: data.engagementType || "",
-            meetingFormat: data.meetingFormat || "",
-            location: data.location || "",
-            projectDuration: data.projectDuration || "",
-            bbeeLevel: data.bbeeLevel || "",
-            esdProgram: data.esdProgram || false,
-            ownershipPrefs: data.ownershipPrefs || [],
-            compensationAmount: data.compensationAmount || "",
-            maxBudget: data.maxBudget || "",
-            minBudget: data.minBudget || "",
-            deliveryModes: data.deliveryModes || [],
-            matchingStartDate: data.matchingStartDate || "",
-            startDate: data.startDate || "",
-            // Document uploads
-            documentUploads: data.documentUploads?.originalUploads || {}
+            instructions: data.instructions || {},
+            jobOverview: data.jobOverview || {},
+            internshipRequest: data.internshipRequest || {},
+            matchingAgreement: data.matchingAgreement || {},
           },
-          documentSelections: {
-            businessPlan: data.documentUploads?.businessPlanSource || "existing",
-            latestFinancials: data.documentUploads?.latestFinancialsSource || "existing"
-          },
-          existingUniversalDocs: existingUniversalDocs,
+          completedSections: data.completedSections || {},
           status: data.status,
           userId: data.userId,
-          userEmail: data.userEmail
+          userEmail: data.userEmail,
         }
       }
       return null
@@ -135,9 +87,8 @@ const AdvisorApplicationManager = ({ embedded = false, onNavigateToMatches }) =>
    * Transitions: list -> summary
    */
   const handleViewSummary = async (applicationId, basicApplicationData) => {
-    // Set applicationId first, then load full data
     setSelectedApplicationId(applicationId)
-    // ❌ REMOVE - setForceEdit(false)
+    setForceEdit(false)
     
     // Load full application data from Firebase
     const fullData = await loadApplicationData(applicationId)
@@ -159,7 +110,7 @@ const AdvisorApplicationManager = ({ embedded = false, onNavigateToMatches }) =>
   const handleEditApplication = (applicationId) => {
     setSelectedApplicationId(applicationId)
     setSelectedApplicationData(null)
-    // ❌ REMOVE - setForceEdit(true)
+    setForceEdit(true) // Skip auto-summary in InternApplication
     setCurrentView('edit')
   }
 
@@ -170,7 +121,7 @@ const AdvisorApplicationManager = ({ embedded = false, onNavigateToMatches }) =>
   const handleCreateNew = () => {
     setSelectedApplicationId(null)
     setSelectedApplicationData(null)
-    // ❌ REMOVE - setForceEdit(false)
+    setForceEdit(false)
     setCurrentView('edit')
   }
 
@@ -183,7 +134,7 @@ const AdvisorApplicationManager = ({ embedded = false, onNavigateToMatches }) =>
     setCurrentView('list')
     setSelectedApplicationId(null)
     setSelectedApplicationData(null)
-    // ❌ REMOVE - setForceEdit(false)
+    setForceEdit(false)
   }
 
   /**
@@ -192,7 +143,7 @@ const AdvisorApplicationManager = ({ embedded = false, onNavigateToMatches }) =>
    * Transitions: summary -> edit
    */
   const handleEditFromSummary = () => {
-    // ❌ REMOVE - setForceEdit(true)
+    setForceEdit(true)
     setCurrentView('edit')
   }
 
@@ -205,22 +156,6 @@ const AdvisorApplicationManager = ({ embedded = false, onNavigateToMatches }) =>
     if (onNavigateToMatches) {
       onNavigateToMatches()
     }
-  }
-
-  /**
-   * Handle analysis progress updates during submission
-   */
-  const handleAnalysisProgress = (progress) => {
-    // Placeholder for future analysis progress UI
-    console.log("Analysis progress:", progress)
-  }
-
-  /**
-   * Handle analysis completion
-   */
-  const handleAnalysisComplete = async (applicationId) => {
-    // Placeholder for post-analysis logic
-    console.log("Analysis complete for:", applicationId)
   }
 
   // Authentication guard
@@ -236,7 +171,7 @@ const AdvisorApplicationManager = ({ embedded = false, onNavigateToMatches }) =>
   // Render based on current view
   if (currentView === 'list') {
     return (
-      <ApplicationsList
+      <InternApplicationsList
         onViewSummary={handleViewSummary}
         onEditApplication={handleEditApplication}
         onCreateNew={handleCreateNew}
@@ -247,26 +182,48 @@ const AdvisorApplicationManager = ({ embedded = false, onNavigateToMatches }) =>
 
   if (currentView === 'edit') {
     return (
-      <AdvisorApplication
-        embedded={embedded}
+      <InternApplication
         applicationId={selectedApplicationId}
         isNew={selectedApplicationId === null}
-        // ❌ REMOVE - forceEdit={forceEdit}
-        onBack={handleBackToList}  // ← Changed from onNavigateBack
-        onNavigateToMatches={onNavigateToMatches || handleBackToList}
-        onAnalysisComplete={handleAnalysisComplete}
-        onAnalysisProgress={handleAnalysisProgress}
+        onBack={handleBackToList}
+        onSubmitted={handleApplicationSubmitted}
       />
     )
   }
 
   if (currentView === 'summary') {
+    const getSummaryData = () => {
+      const formData = selectedApplicationData?.formData || {}
+      return {
+        internshipTitle: formData.jobOverview?.internshipTitle,
+        department: formData.jobOverview?.department,
+        briefDescription: formData.jobOverview?.briefDescription,
+        keyTasks: formData.jobOverview?.keyTasks,
+        learningOutcomes: formData.jobOverview?.learningOutcomes,
+        preferredSkills: formData.jobOverview?.preferredSkills,
+        numberOfInterns: formData.internshipRequest?.numberOfInterns,
+        internRolesText: formData.internshipRequest?.internRolesText,
+        internType: formData.internshipRequest?.internType,
+        hoursPerWeek: formData.internshipRequest?.hoursPerWeek,
+        startDate: formData.internshipRequest?.startDate,
+        duration: formData.internshipRequest?.duration,
+        stipendOffered: formData.internshipRequest?.stipendOffered,
+        stipendAmount: formData.internshipRequest?.stipendAmount,
+        equityOrIncentives: formData.internshipRequest?.equityOrIncentives,
+        reportingDepartment: formData.internshipRequest?.reportingDepartment,
+        workDescription: formData.internshipRequest?.workDescription,
+        canRotate: formData.internshipRequest?.canRotate,
+        writtenEvaluation: formData.matchingAgreement?.writtenEvaluation,
+        mentorshipSupport: formData.matchingAgreement?.mentorshipSupport,
+        codeOfConduct: formData.matchingAgreement?.codeOfConduct,
+        consentDeclaration: formData.matchingAgreement?.consentDeclaration,
+      }
+    }
+
     return (
       <ApplicationSummary
-        formData={selectedApplicationData?.formData}
+        formData={getSummaryData()}
         applicationId={selectedApplicationId}
-        documentSelections={selectedApplicationData?.documentSelections}
-        existingUniversalDocs={selectedApplicationData?.existingUniversalDocs}
         onEdit={handleEditFromSummary}
         onBack={handleBackToList}
       />
@@ -275,7 +232,7 @@ const AdvisorApplicationManager = ({ embedded = false, onNavigateToMatches }) =>
 
   // Fallback to list view
   return (
-    <ApplicationsList
+    <InternApplicationsList
       onViewSummary={handleViewSummary}
       onEditApplication={handleEditApplication}
       onCreateNew={handleCreateNew}
@@ -284,4 +241,4 @@ const AdvisorApplicationManager = ({ embedded = false, onNavigateToMatches }) =>
   )
 }
 
-export default AdvisorApplicationManager
+export default InternApplicationManager

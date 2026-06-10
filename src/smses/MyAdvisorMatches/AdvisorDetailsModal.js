@@ -3,9 +3,8 @@
 import { useState, useEffect, useRef } from "react"
 import { createPortal } from "react-dom"
 import {
-    Building, Users, Mail, MapPin, Shield,
-    Award, Calendar, DollarSign, Globe, X, ExternalLink, Brain, Settings2, Percent
-} from "lucide-react"
+    Building, Users, Mail, MapPin, 
+    Award, DollarSign, X} from "lucide-react"
 import { doc, getDoc } from "firebase/firestore"
 import { db } from "../../firebaseConfig"
 
@@ -405,9 +404,26 @@ const locationStyle = { display: "flex", alignItems: "center", gap: "4px", fontS
 const matchScoreStyle = { display: "flex", alignItems: "center", gap: "4px", background: "#2E7D32", padding: "4px 12px", borderRadius: "20px", fontSize: "14px", fontWeight: "500" }
 const closeButtonStyle = { background: "rgba(255,255,255,0.2)", border: "none", borderRadius: "8px", padding: "8px", color: "white", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" }
 const tabsContainerStyle = { display: "flex", background: "rgba(255,255,255,0.1)", padding: "0 24px" }
-const tabStyle = { display: "flex", alignItems: "center", gap: "8px", padding: "12px 16px", background: "none", border: "none", color: "rgba(255,255,255,0.8)", cursor: "pointer", fontSize: "14px", fontWeight: "500", borderBottom: "3px solid transparent", transition: "all 0.2s ease" }
-const activeTabStyle = { color: "white", borderBottomColor: "white", background: "rgba(255,255,255,0.1)" }
 
+const tabStyle = { 
+    display: "flex", 
+    alignItems: "center", 
+    gap: "8px", 
+    padding: "12px 16px", 
+    background: "none", 
+    border: "none", 
+    color: "rgba(255,255,255,0.6)",
+    cursor: "pointer", 
+    fontSize: "14px", 
+    fontWeight: "500", 
+    borderBottom: "3px solid transparent",  // Default: no underline
+    transition: "all 0.2s ease" 
+}
+
+const activeTabStyle = { 
+    color: "white",
+    borderBottom: "3px solid white"  // Override with underline
+}
 const modalBodyStyle = { 
     flex: 1, 
     overflowY: "auto", 
