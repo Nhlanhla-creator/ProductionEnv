@@ -81,12 +81,13 @@ const [pisCalculation, setPisCalculation] = useState(() => {
     const checklist = profileData.legalCompliance.complianceChecklist;
 
     // Define all 17 policy items
-    const policyItems = [
-      "employmentContract", "nda", "mou", "suppliercontract",
-      "codeOfConduct", "leavePolicy", "disciplinaryPolicy", "healthSafetyPolicy", "privacyPolicy",
-      "remoteWorkPolicy", "conflictInterestPolicy", "ipProtection", "socialMediaPolicy",
-      "expensePolicy", "overtimePolicy", "terminationPolicy", "performancePolicy"
-    ];
+  const policyItems = [
+  "employmentContract","nda","mou","suppliercontract","codeOfConduct",
+  "leavePolicy","disciplinaryPolicy","healthSafetyPolicy","privacyPolicy",
+  "remoteWorkPolicy","conflictInterestPolicy","ipProtection","socialMediaPolicy",
+  "expensePolicy","overtimePolicy","terminationPolicy","performancePolicy",
+  "ethicsPolicy","whistleblowingPolicy"  // ← these exist in Firestore, add them
+];
 
     // Count how many policies are checked (true)
     const completedCount = policyItems.filter(item => checklist[item]).length;
@@ -315,32 +316,46 @@ setPisCalculation(pisCalc);
      const prompt = buildGovernancePrompt(profileData, pisCalc, stage, recommendation);
 
       const result = await sendMessageToChatGPT(prompt);
-      const parsed = parseAiEvaluation(result);
+  const parsed = parseAiEvaluation(result);
+ 
+  setPisScore(parsed.pis);
+ 
+  // Filter empty placeholder director (index 0 has no name in Firestore)
+  const profileWithCleanDirs = {
+    ...profileData,
+    ownershipManagement: {
+      ...profileData?.ownershipManagement,
+      directors: (profileData?.ownershipManagement?.directors || [])
+        .filter((d) => d?.name && d.name.trim() !== ""),
+    },
+  };
+ 
+  const localScores = calculateGovernanceScore(profileWithCleanDirs);
+  setGovernanceScore(localScores.overall);
+  setScoreBreakdown(localScores.categories);
+  setGovernanceStage(localScores.stage);            // use deterministic stage
+  setGovernanceRecommendation(parsed.recommendation);
+  setAiEvaluationResult(parsed.analysis);
+  setShowDetailedAnalysis(true);
+ 
+  // Save to Firestore
+  const userId = auth?.currentUser?.uid;
+  if (userId) {
+    const aiEvalRef = doc(db, "aiGovernanceEvaluation", userId);
+    await setDoc(aiEvalRef, {
+      result:           parsed.analysis,
+      pisScore:         parsed.pis,
+      governanceScore:  localScores.overall,        // store deterministic score
+      governanceStage:  localScores.stage,
+      timestamp:        new Date(),
+      profileSnapshot:  profileData,
+      pisCalculation:   parsed.pisCalculation,
+    }, { merge: true });
+  }
+ 
+  if (onScoreUpdate) onScoreUpdate(localScores.overall);
 
-      setPisScore(parsed.pis);
-     const localScores = calculateGovernanceScore(profileData);
-setGovernanceScore(localScores.overall);
-setScoreBreakdown(localScores.categories);
-      setGovernanceStage(parsed.stage);
-      setGovernanceRecommendation(parsed.recommendation);
-      setAiEvaluationResult(parsed.analysis);
-      setShowDetailedAnalysis(true);
 
-      // Save to Firestore
-      const userId = auth?.currentUser?.uid;
-      if (userId) {
-        const aiEvalRef = doc(db, "aiGovernanceEvaluation", userId);
-        await setDoc(aiEvalRef, {
-          result: parsed.analysis,
-          pisScore: parsed.pis,
-          governanceScore: parsed.govScore,
-          timestamp: new Date(),
-          profileSnapshot: profileData,
-          pisCalculation: parsed.pisCalculation
-        }, { merge: true });
-      }
-
-      if (onScoreUpdate) onScoreUpdate(parsed.govScore);
     } catch (error) {
       console.error('AI Evaluation error:', error);
       setEvaluationError(`Failed to get AI evaluation: ${error.message}`);
@@ -349,58 +364,118 @@ setScoreBreakdown(localScores.categories);
     }
   };
 
-  const prepareDataForAiEvaluation = (data) => {
-    let evaluationData = '=== BUSINESS DATA ===\n';
-
-    // PIS Calculation Components
-    const pisCalc = calculatePIS();
-    evaluationData += `Employees: ${pisCalc.employees}\n`;
-    evaluationData += `Annual Turnover: R ${pisCalc.turnover.toLocaleString()}\n`;
-    evaluationData += `Liabilities: R ${pisCalc.liabilities.toLocaleString()}\n`;
-    evaluationData += `Shareholders: ${pisCalc.shareholders}\n\n`;
-
-    // Governance Factors
-    evaluationData += '=== GOVERNANCE FACTORS ===\n';
-    evaluationData += `Directors: ${data?.ownershipManagement?.directors?.length || 0}\n`;
-    evaluationData += `Has Advisors: ${data?.enterpriseReadiness?.hasAdvisors === 'yes' ? 'Yes' : 'No'}\n`;
-    evaluationData += `Audited Financials: ${data?.enterpriseReadiness?.hasAuditedFinancials === 'yes' ? 'Yes' : 'No'}\n`;
-    evaluationData += `BB-BEE Level: ${data?.legalCompliance?.bbbeeLevel || 'Not provided'}\n`;
-    evaluationData += `Board Meetings: ${data?.enterpriseReadiness?.advisorsMeetingFrequency || 'Not specified'}\n`;
-
-    // Policies Data
-    evaluationData += '=== POLICIES STATUS ===\n';
-    const policiesData = calculatePoliciesScore();
-    evaluationData += `Policies Completion: ${policiesData.score}%\n`;
-    evaluationData += `Completed Policies: ${policiesData.completed}/${policiesData.total}\n`;
-
-    return evaluationData;
-  };
+ const prepareDataForAiEvaluation = (data) => {
+  let out = "=== BUSINESS DATA ===\n";
+ 
+  const pisCalc = calculatePIS();
+  out += `Employees: ${pisCalc.employees}\n`;
+  out += `Annual Turnover: R ${pisCalc.turnover.toLocaleString()}\n`;
+  out += `Liabilities: R ${pisCalc.liabilities.toLocaleString()}\n`;
+  out += `Shareholders: ${pisCalc.shareholders}\n\n`;
+ 
+  out += "=== GOVERNANCE FACTORS ===\n";
+  const validDirs = (data?.ownershipManagement?.directors || [])
+    .filter((d) => d?.name && d.name.trim() !== "");
+  out += `Directors (valid): ${validDirs.length}\n`;
+  out += `Has Advisors: ${data?.enterpriseReadiness?.hasAdvisors === "yes" ? "Yes" : "No"}\n`;
+  // enterpriseReadiness.hasAuditedFinancials IS "yes" ✅
+  out += `Audited Financials (Enterprise): ${data?.enterpriseReadiness?.hasAuditedFinancials === "yes" ? "Yes" : "No"}\n`;
+  // financialsAudited stores "audited_reviewed" NOT "yes"
+  out += `Financials Preparation: ${
+    data?.financialOverview?.financialsAudited === "audited_reviewed"
+      ? "Audited/reviewed"
+      : data?.financialOverview?.financialsAudited === "internally_prepared"
+      ? "Internally prepared"
+      : "None"
+  }\n`;
+  out += `BB-BEE Level: ${data?.legalCompliance?.bbbeeLevel || "Not provided"}\n`;
+  // advisorsMeetingFrequency stores "Monthly" — lowercase for display
+  out += `Advisor Meeting Frequency: ${(data?.enterpriseReadiness?.advisorsMeetingFrequency || "Not specified").toLowerCase()}\n`;
+ 
+  out += "\n=== POLICIES STATUS ===\n";
+  // CORRECT PATH: governance.governanceChecklist
+  const checklist = data?.governance?.governanceChecklist || {};
+  const policyItems = [
+    "employmentContract","nda","mou","suppliercontract","customerAgreements",
+    "codeOfConduct","ethicsPolicy","whistleblowingPolicy","leavePolicy",
+    "disciplinaryPolicy","healthSafetyPolicy","privacyPolicy",
+    "remoteWorkPolicy","conflictInterestPolicy","ipProtection","socialMediaPolicy",
+    "expensePolicy","overtimePolicy","terminationPolicy","performancePolicy",
+  ];
+  const completed = policyItems.filter((k) => checklist[k] === true).length;
+  out += `Policies Completion: ${Math.round((completed / policyItems.length) * 100)}%\n`;
+  out += `Completed Policies: ${completed}/${policyItems.length}\n`;
+ 
+  out += "\n=== STRATEGIC CLARITY ===\n";
+  const sc = data?.governance?.strategicClarity || {};
+  out += `Strategic Direction: ${sc.strategicDirection || "none"}\n`;
+  out += `Planning Depth: ${sc.planningDepth || "none"}\n`;
+  out += `Market Strategy: ${sc.marketStrategy || "unclear"}\n`;
+  out += `Execution Roadmap: ${sc.executionRoadmap || "no_roadmap"}\n`;
+  out += `Decision-Making: ${sc.decisionMaking || "informal_reactive"}\n`;
+ 
+  out += "\n=== RISK MANAGEMENT ===\n";
+  const rm = data?.governance?.riskManagement || {};
+  out += `Risk Identification: ${rm.riskIdentification || "none"}\n`;
+  out += `Risk Assessment: ${rm.riskAssessment || "none"}\n`;
+  out += `Business Continuity: ${rm.businessContinuity || "none"}\n`;
+  out += `Crisis Preparedness: ${rm.crisisPreparedness || "none"}\n`;
+ 
+  out += "\n=== TRANSPARENCY ===\n";
+  const tr = data?.governance?.transparencyReporting || {};
+  out += `Reporting Frequency: ${tr.reportingFrequency || "ad_hoc_none"}\n`;
+  // STRING field inside transparencyReporting sub-object
+  out += `Performance Review: ${tr.performanceReviewCycle || "ad_hoc_none"}\n`;
+  out += `KPI Monitoring: ${tr.kpiMonitoring || "no_structured_tracking"}\n`;
+  out += `Audit & Assurance: ${tr.auditAndAssurance || "none"}\n`;
+  out += `Data Governance: ${tr.dataGovernance || "no_formal_approach"}\n`;
+ 
+  return out;
+};
 
   // Load saved evaluation if exists
-  useEffect(() => {
-    const userId = auth?.currentUser?.uid;
-    if (!userId) return;
-
-    const loadSavedEvaluation = async () => {
-      const aiEvalRef = doc(db, "aiGovernanceEvaluation", userId);
-      const docSnap = await getDoc(aiEvalRef);
-
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        if (data.result) {
-          const parsed = parseAiEvaluation(data.result);
-          setPisScore(data.pisScore || 0);
-          setGovernanceScore(data.governanceScore || 0);
-          setAiEvaluationResult(data.result);
-          setGovernanceStage(parsed.stage);
-          setGovernanceRecommendation(parsed.recommendation);
-          setScoreBreakdown(parsed.breakdown);
-        }
+ useEffect(() => {
+  const userId = auth?.currentUser?.uid;
+  if (!userId) return;
+ 
+  const loadSavedEvaluation = async () => {
+    const aiEvalRef = doc(db, "aiGovernanceEvaluation", userId);
+    const docSnap   = await getDoc(aiEvalRef);
+ 
+    if (docSnap.exists()) {
+      const data = docSnap.data();
+ 
+      // Always recalculate from live profileData so score reflects latest edits
+      if (profileData) {
+        const cleanProfile = {
+          ...profileData,
+          ownershipManagement: {
+            ...profileData?.ownershipManagement,
+            directors: (profileData?.ownershipManagement?.directors || [])
+              .filter((d) => d?.name && d.name.trim() !== ""),
+          },
+        };
+        const localScores = calculateGovernanceScore(cleanProfile);
+        setGovernanceScore(localScores.overall);
+        setScoreBreakdown(localScores.categories);
+        setGovernanceStage(localScores.stage);
+      } else {
+        // Fallback to stored value if profileData not yet available
+        setGovernanceScore(data.governanceScore || 0);
       }
-    };
-
-    loadSavedEvaluation();
-  }, [auth?.currentUser?.uid]);
+ 
+      if (data.result) {
+        const parsed = parseAiEvaluation(data.result);
+        setPisScore(data.pisScore || 0);
+        setAiEvaluationResult(data.result);
+        setGovernanceRecommendation(parsed.recommendation);
+        setScoreBreakdown(prev => prev.length > 0 ? prev : parsed.breakdown);
+      }
+    }
+  };
+ 
+  loadSavedEvaluation();
+}, [auth?.currentUser?.uid, profileData]);  // re-run when profileData arrives
 
   // Trigger evaluation when profile data changes or manual trigger
   useEffect(() => {

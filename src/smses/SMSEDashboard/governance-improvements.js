@@ -2,7 +2,10 @@
 // IMPROVED GOVERNANCE SCORING SYSTEM
 // Fixes: hallucination, score ceiling, data-bound recommendations
 // ============================================================
-
+const lookup = (map, value, fallback = 0) => map[value] ?? fallback;
+ 
+const pct5 = (raw) => Math.round((raw / 5) * 100); // 0-5 score → 0-100 %
+ 
 // ─────────────────────────────────────────────────────────────
 // 1. EXTRACT ALL AVAILABLE DATA FROM YOUR UNIVERSAL PROFILE
 //    This becomes the "source of truth" for the AI prompt
@@ -253,184 +256,245 @@ const fromChecklist = (checklistKey, fallbackField) =>
 // 2. IMPROVED SCORING FUNCTIONS
 //    Each category scores ONLY what you actually collect
 // ─────────────────────────────────────────────────────────────
-const scoreStrategicPlanning = (summary) => {
-  let score = 0;
-  const maxScore = 100;
-  const breakdown = [];
-
-  // Business plan exists (25 pts)
-  if (summary.enterprise.hasBusinessPlan === "yes") { 
-    score += 25; breakdown.push("✓ Business plan"); 
-  } else breakdown.push("✗ Business plan missing");
-
-  // Stakeholder Communication Methods - governance.stakeholderCommunicationMethods (15 pts)
-  const stakeholderComms = summary.governance.stakeholderCommunicationMethods;
-  if (stakeholderComms && stakeholderComms.trim().length > 3) { 
-    score += 15; breakdown.push("✓ Stakeholder communication methods defined"); 
-  } else breakdown.push("✗ Stakeholder communication methods not provided");
-
-  // Performance Review & KPI Process - governance.performanceReviewProcess + performanceReviewCycle (15 pts)
-  const perfProcess = summary.governance.performanceReviewProcess;
-  const perfCycle = summary.governance.performanceReviewCycle;
-  if (perfProcess && perfProcess.trim().length > 3) { 
-    score += 10; breakdown.push("✓ Performance review process defined"); 
-  } else breakdown.push("✗ Performance review process missing");
-  if (perfCycle && perfCycle !== "Not provided") { 
-    score += 5; breakdown.push(`✓ Review cycle: ${perfCycle}`); 
-  } else breakdown.push("✗ Review cycle not set");
-
-  // Compliance Monitoring & Risk Management - governance.complianceProcedures (20 pts)
-  const compliance = summary.governance.complianceProcedures;
-  if (compliance && compliance.trim().length > 10) { 
-    score += 20; breakdown.push("✓ Compliance & risk procedures documented"); 
-  } else breakdown.push("✗ Compliance procedures not documented");
-
-  // Data Management & Privacy Policies - governance.dataManagementPolicies (15 pts)
-  const dataPolicy = summary.governance.dataManagementPolicies;
-  if (dataPolicy && dataPolicy.trim().length > 3) { 
-    score += 15; breakdown.push("✓ Data management policies defined"); 
-  } else breakdown.push("✗ Data management policies missing");
-
-  // Growth potential flags active (10 pts)
-  const growthPct = summary.growth.activeCount / summary.growth.total;
-  const growthPts = Math.round(growthPct * 10);
-  score += growthPts;
-  breakdown.push(`Growth potential: ${summary.growth.activeCount}/${summary.growth.total} flags (${growthPts}/10 pts)`);
-
-  return { score: Math.min(score, maxScore), maxScore, breakdown };
-};
-
-const scoreRiskManagement = (summary) => {
-  let score = 0;
-  const maxScore = 100;
-  const breakdown = [];
-
-  // Has advisors + meeting frequency (20 pts)
-  if (summary.enterprise.hasAdvisors === "yes") {
-    score += 10; breakdown.push("✓ Has advisors");
-    if (["weekly", "monthly", "bi-weekly"].includes(summary.enterprise.advisorsMeetingFrequency?.toLowerCase())) {
-      score += 10; breakdown.push("✓ Advisors meet regularly");
-    } else breakdown.push("✗ Advisor meeting frequency not set");
-  } else breakdown.push("✗ No advisors");
-
-  // Compliance procedures documented (15 pts)
-  if (summary.governance.complianceProcedures) { score += 15; breakdown.push("✓ Compliance procedures documented"); }
-  else breakdown.push("✗ Compliance procedures missing");
-
-  // Has guarantees (15 pts)
-  if (summary.enterprise.hasGuarantees === "yes") { score += 15; breakdown.push("✓ Guarantees in place"); }
-  else breakdown.push("✗ No guarantees");
-
-  // Conflict resolution (15 pts)
-  if (summary.governance.hasConflictResolution === "Yes") { score += 15; breakdown.push("✓ Conflict resolution policy"); }
-  else breakdown.push("✗ No conflict resolution policy");
-
-  // Whistleblowing policy (10 pts)
-  if (summary.governance.hasWhistleblowingPolicy === "Yes") { score += 10; breakdown.push("✓ Whistleblowing policy"); }
-  else breakdown.push("✗ No whistleblowing policy");
-
-  // Data management policies documented (10 pts)
-  if (summary.ownership.dataManagementPolicies) { score += 10; breakdown.push("✓ Data management policies"); }
-  else breakdown.push("✗ Data management policies missing");
-
-  // Credit report available (15 pts)
-  if (summary.financial.hasCreditReport === "yes") { score += 15; breakdown.push("✓ Credit report available"); }
-  else breakdown.push("✗ No credit report");
-
-  return { score: Math.min(score, maxScore), maxScore, breakdown };
-};
-
-const scoreTransparencyReporting = (summary) => {
-  let score = 0;
-  const maxScore = 100;
-  const breakdown = [];
-
-  // Audited financials (20 pts)
-  if (summary.financial.financialsAudited === "yes") { score += 20; breakdown.push("✓ Financials audited"); }
-  else breakdown.push("✗ Financials not audited");
-
-  // Books up to date (15 pts)
-  if (summary.financial.booksUpToDate === "yes") { score += 15; breakdown.push("✓ Books up to date"); }
-  else breakdown.push("✗ Books not up to date");
-
-  // Accounting software (10 pts)
-  if (summary.financial.hasAccountingSoftware === "yes") { score += 10; breakdown.push("✓ Accounting software"); }
-  else breakdown.push("✗ No accounting software");
-
-  // Stakeholder reporting frequency (15 pts)
-  const freq = summary.governance.stakeholderReportingFrequency?.[0];
-  if (["monthly", "quarterly", "bi-annually", "annually"].includes(freq)) {
-    score += 15; breakdown.push(`✓ Stakeholder reporting: ${freq}`);
-  } else breakdown.push("✗ Stakeholder reporting frequency not set");
-
-  // Performance review cycle documented (10 pts)
-  if (summary.ownership.performanceReviewCycle) { score += 10; breakdown.push("✓ Performance review cycle"); }
-  else breakdown.push("✗ No performance review cycle");
-
-  // Ethics training (15 pts)
-  if (summary.governance.lastEthicsTrainingDate) { score += 10; breakdown.push("✓ Ethics training recorded"); }
-  if (summary.governance.ethicsTrainingFrequency) { score += 5; breakdown.push("✓ Ethics training frequency set"); }
-
-  // Company profile verified (15 pts)
-  if (summary.docStatuses.companyProfile === "verified") { score += 15; breakdown.push("✓ Company profile verified"); }
-  else breakdown.push("✗ Company profile not verified");
-
-  return { score: Math.min(score, maxScore), maxScore, breakdown };
-};
-
-const scorePoliciesDocumentation = (summary) => {
-  // This one is straightforward: % of 17 policies completed
-  const score = summary.policies.score;
-  const maxScore = 100;
-  const breakdown = [
-    `Completed ${summary.policies.completedCount}/${summary.policies.total} policies`,
-    ...(summary.policies.missing.length > 0
-      ? [`Missing: ${summary.policies.missing.join(", ")}`]
-      : ["✓ All policies complete"])
-  ];
-  return { score, maxScore, breakdown, completed: summary.policies.completedCount, total: summary.policies.total };
-};
-
-const calculateGovernanceScore = (profileData) => {
-  const summary = buildProfileSummary(profileData);
-  
-  // Calculate PIS for board score
-  const pisCalc = (() => {
-    const employees = parseInt(profileData?.entityOverview?.employeeCount) || 0;
-    const turnoverRaw = profileData?.financialOverview?.annualRevenue || '0';
-    const turnover = parseFloat(turnoverRaw.toString().replace(/[R,\s]/g, '')) || 0;
-    const liabilitiesRaw = profileData?.financialOverview?.existingDebt || '0';
-    const liabilities = parseFloat(liabilitiesRaw.toString().replace(/[R,\s]/g, '')) || 0;
-    const shareholders = profileData?.ownershipManagement?.shareholders?.length || 1;
-    return {
-      totalPIS: employees + (turnover/1000000) + (liabilities/1000000) + shareholders
-    };
-  })();
-  
-  const strategic = scoreStrategicPlanning(summary);
-  const risk = scoreRiskManagement(summary);
-  const transparency = scoreTransparencyReporting(summary);
-  const policies = scorePoliciesDocumentation(summary);
-  const board = scoreBoardStructure(profileData, pisCalc);
-  
-  // All categories now have equal weight (20% each since we have 5 categories)
-  const overall = Math.round(
-    (strategic.score + risk.score + transparency.score + policies.score + board.score) / 5
+const scoreStrategicPlanning = (profileData) => {
+  const sc = profileData?.governance?.strategicClarity || {};
+ 
+  // strategicDirection: "documented_shared" | "informal" | "none"
+  const dirScore = lookup(
+    { documented_shared: 5, informal: 2, none: 0 },
+    sc.strategicDirection
   );
+ 
+  // planningDepth: "3_4_selected" | "1_2_selected" | "none"
+  const planScore = lookup(
+    { "3_4_selected": 5, "1_2_selected": 3, none: 0 },
+    sc.planningDepth
+  );
+ 
+  // marketStrategy: "clearly_defined" | "partially_defined" | "unclear"
+  const mktScore = lookup(
+    { clearly_defined: 5, partially_defined: 3, unclear: 0 },
+    sc.marketStrategy
+  );
+ 
+  // executionRoadmap: "detailed_roadmap" | "high_level_plan" | "no_roadmap"
+  const roadScore = lookup(
+    { detailed_roadmap: 5, high_level_plan: 3, no_roadmap: 0 },
+    sc.executionRoadmap
+  );
+ 
+  // decisionMaking: "structured_data_driven" | "semi_structured" | "informal_reactive"
+  const decScore = lookup(
+    { structured_data_driven: 5, semi_structured: 3, informal_reactive: 0 },
+    sc.decisionMaking
+  );
+ 
+  // adaptability: "structured_review" | "some_adjustment" | "reactive_none"
+  const adaptScore = lookup(
+    { structured_review: 5, some_adjustment: 3, reactive_none: 0 },
+    sc.adaptability
+  );
+ 
+  const raw = (dirScore + planScore + mktScore + roadScore + decScore + adaptScore) / 6;
+  return { score: pct5(raw), max: 100 };
+};
 
+const scoreRiskManagement = (profileData) => {
+  const rm = profileData?.governance?.riskManagement || {};
+ 
+  // riskIdentification: "documented_risk_register" | "informal_awareness" | "no_structured_identification"
+  const identScore = lookup(
+    { documented_risk_register: 5, informal_awareness: 2, no_structured_identification: 0 },
+    rm.riskIdentification
+  );
+ 
+  // riskAssessment: "structured_assessment" | "basic_informal" | "no_formal_assessment"
+  const assessScore = lookup(
+    { structured_assessment: 5, basic_informal: 2, no_formal_assessment: 0 },
+    rm.riskAssessment
+  );
+ 
+  // riskMitigation: "defined_mitigation_plans" | "some_mitigation_actions" | "no_clear_approach"
+  const mitScore = lookup(
+    { defined_mitigation_plans: 5, some_mitigation_actions: 2, no_clear_approach: 0 },
+    rm.riskMitigation
+  );
+ 
+  // businessContinuity: "formal_documented_plan" | "partial_informal_plan" | "none"
+  const bcpScore = lookup(
+    { formal_documented_plan: 5, partial_informal_plan: 2, none: 0 },
+    rm.businessContinuity
+  );
+ 
+  // crisisPreparedness: "clear_response_protocols" | "some_readiness" | "reactive_unprepared"
+  const crisisScore = lookup(
+    { clear_response_protocols: 5, some_readiness: 2, reactive_unprepared: 0 },
+    rm.crisisPreparedness
+  );
+ 
+  // riskOwnership: "clear_ownership" | "shared_unclear" | "no_ownership_defined"
+  const ownScore = lookup(
+    { clear_ownership: 5, shared_unclear: 2, no_ownership_defined: 0 },
+    rm.riskOwnership
+  );
+ 
+  const raw = (identScore + assessScore + mitScore + bcpScore + crisisScore + ownScore) / 6;
+  return { score: pct5(raw), max: 100 };
+};
+ 
+const scoreTransparencyReporting = (profileData) => {
+  const tr = profileData?.governance?.transparencyReporting || {};
+ 
+  // reportingFrequency: "monthly" | "quarterly" | "ad_hoc_none"
+  const freqScore = lookup(
+    { monthly: 5, quarterly: 4, ad_hoc_none: 0 },
+    tr.reportingFrequency
+  );
+ 
+  // performanceReviewCycle: "monthly" | "quarterly_biannual" | "ad_hoc_none"
+  // STRING — read directly from transparencyReporting sub-object
+  const perfScore = lookup(
+    { monthly: 5, quarterly_biannual: 3, ad_hoc_none: 0 },
+    tr.performanceReviewCycle
+  );
+ 
+  // kpiMonitoring: "defined_kpis_tracked" | "some_kpis_tracked" | "no_structured_tracking"
+  const kpiScore = lookup(
+    { defined_kpis_tracked: 5, some_kpis_tracked: 3, no_structured_tracking: 0 },
+    tr.kpiMonitoring
+  );
+ 
+  // stakeholderCommunication: "structured_reports" | "informal_updates" | "minimal"
+  const stakScore = lookup(
+    { structured_reports: 5, informal_updates: 2, minimal: 0 },
+    tr.stakeholderCommunication
+  );
+ 
+  // complianceAndRisk: "formal_risk_register_audits" | "partial_some_controls" | "none"
+  const compScore = lookup(
+    { formal_risk_register_audits: 5, partial_some_controls: 2, none: 0 },
+    tr.complianceAndRisk
+  );
+ 
+  // dataGovernance: "formal_popia_aligned" | "basic_controls" | "no_formal_approach"
+  const dataScore = lookup(
+    { formal_popia_aligned: 5, basic_controls: 2, no_formal_approach: 0 },
+    tr.dataGovernance
+  );
+ 
+  // auditAndAssurance: "regular_internal_external" | "occasional_audits" | "none"
+  const auditScore = lookup(
+    { regular_internal_external: 5, occasional_audits: 2, none: 0 },
+    tr.auditAndAssurance
+  );
+ 
+  const raw = (freqScore + perfScore + kpiScore + stakScore + compScore + dataScore + auditScore) / 7;
+  return { score: pct5(raw), max: 100 };
+};
+ 
+ 
+const POLICY_ITEMS = [
+  // Agreements (5)
+  "employmentContract", "nda", "mou", "suppliercontract", "customerAgreements",
+  // Policy Essentials (7)
+  "codeOfConduct", "ethicsPolicy", "whistleblowingPolicy", "leavePolicy",
+  "disciplinaryPolicy", "healthSafetyPolicy", "privacyPolicy",
+  // Specialised Policies (8)
+  "remoteWorkPolicy", "conflictInterestPolicy", "ipProtection", "socialMediaPolicy",
+  "expensePolicy", "overtimePolicy", "terminationPolicy", "performancePolicy",
+];
+ 
+
+
+const scorePoliciesDocumentation = (profileData) => {
+  const checklist = profileData?.governance?.governanceChecklist || {};
+  const completed = POLICY_ITEMS.filter((k) => checklist[k] === true).length;
+  const score = Math.round((completed / POLICY_ITEMS.length) * 100);
+ 
+  // hasConflictResolution: "Yes" | "No"  ← capital Y (from Governance.jsx select)
+  const conflictBonus = profileData?.governance?.hasConflictResolution === "Yes" ? 5 : 0;
+  // ethicsTrainingFrequency: "Weekly"|"Monthly"|"Quarterly"|"Bi-annually"|"Annually"|"As needed"|"None"
+  const ethicsBonus = lookup(
+    { Weekly: 5, Monthly: 5, Quarterly: 4, "Bi-annually": 3, Annually: 2, "As needed": 1, None: 0 },
+    profileData?.governance?.ethicsTrainingFrequency,
+    0
+  );
+ 
+  // Blend: 80% policy checklist + 10% conflict resolution + 10% ethics training
+  const blended = Math.round(score * 0.8 + conflictBonus * 0.1 * 20 + ethicsBonus * 0.1 * 20);
+ 
   return {
-    overall,
-    categories: [
-      { name: "Strategic Planning", ...strategic, color: "#8D6E63", weight: 20 },
-      { name: "Risk Management", ...risk, color: "#6D4C41", weight: 20 },
-      { name: "Transparency and Reporting", ...transparency, color: "#A67C52", weight: 20 },
-      { name: "Policies & Documentation", ...policies, color: "#5D4037", weight: 20 },
-      { name: "Board Structure", ...board, color: "#4E342E", weight: 20 },
-    ],
-    summary,
+    score: Math.min(100, blended),
+    max: 100,
+    completed,
+    total: POLICY_ITEMS.length,
   };
 };
 
+
+
+const calculateGovernanceScore = (profileData) => {
+ 
+  // ── PIS ──────────────────────────────────────────────────────────────────
+  const pisCalc = (() => {
+    const employees   = parseInt(profileData?.entityOverview?.employeeCount) || 0;
+    const turnover    = parseFloat((profileData?.financialOverview?.annualRevenue  || "0").toString().replace(/[R,\s]/g, "")) || 0;
+    const liabilities = parseFloat((profileData?.financialOverview?.existingDebt   || "0").toString().replace(/[R,\s]/g, "")) || 0;
+    const shareholders = profileData?.ownershipManagement?.shareholders?.length || 1;
+    return { totalPIS: employees + turnover / 1_000_000 + liabilities / 1_000_000 + shareholders };
+  })();
+ 
+  // ── Stage normalisation ───────────────────────────────────────────────────
+  // entityOverview.operationStage stores "Startup" (capital S) — always lowercase
+  const rawStage = (profileData?.entityOverview?.operationStage || "startup").toLowerCase();
+  const stage = ["startup","growth","scaling","turnaround","mature"].includes(rawStage)
+    ? rawStage : "startup";
+ 
+  // ── Rubric-aligned weights per stage ─────────────────────────────────────
+  // Maps rubric columns to your 5 scorer categories:
+  //   4.1 Advisory + 4.2 Board Comp → board
+  //   4.3 Committees                → risk
+  //   4.4 Ownership & Accountability→ strategic
+  //   4.5 Transparency              → transparency
+  //   (no rubric column)            → policies (flat 20%)
+  const WEIGHTS = {
+    startup:    { strategic: 25, risk: 10, transparency: 15, policies: 20, board: 30 },
+    turnaround: { strategic: 25, risk: 10, transparency: 15, policies: 20, board: 30 },
+    growth:     { strategic: 25, risk: 15, transparency: 15, policies: 20, board: 25 },
+    scaling:    { strategic: 20, risk: 25, transparency: 15, policies: 20, board: 20 },
+    mature:     { strategic: 20, risk: 25, transparency: 15, policies: 20, board: 20 },
+  };
+  const w = WEIGHTS[stage];
+ 
+  // ── Run all scorers ───────────────────────────────────────────────────────
+  const strategic    = scoreStrategicPlanning(profileData);
+  const risk         = scoreRiskManagement(profileData);
+  const transparency = scoreTransparencyReporting(profileData);
+  const policies     = scorePoliciesDocumentation(profileData);
+  const board        = scoreBoardStructure(profileData, pisCalc);
+ 
+  // ── Weighted overall ──────────────────────────────────────────────────────
+  const overall = Math.round(
+    strategic.score    * (w.strategic    / 100) +
+    risk.score         * (w.risk         / 100) +
+    transparency.score * (w.transparency / 100) +
+    policies.score     * (w.policies     / 100) +
+    board.score        * (w.board        / 100)
+  );
+ 
+  return {
+    overall,
+    stage,
+    pisTotal: parseFloat(pisCalc.totalPIS.toFixed(2)),
+    categories: [
+      { name: "Strategic Planning",         ...strategic,    color: "#8D6E63", weight: w.strategic    },
+      { name: "Risk Management",            ...risk,         color: "#6D4C41", weight: w.risk         },
+      { name: "Transparency and Reporting", ...transparency, color: "#A67C52", weight: w.transparency },
+      { name: "Policies & Documentation",   ...policies,     color: "#5D4037", weight: w.policies     },
+      { name: "Board Structure",            ...board,        color: "#4E342E", weight: w.board        },
+    ],
+  };
+};
 
 // ─────────────────────────────────────────────────────────────
 // 3. IMPROVED AI PROMPT
@@ -446,294 +510,271 @@ const calculateGovernanceScore = (profileData) => {
  */
 
 const buildGovernancePrompt = (profileData, pisCalc, stage, recommendation) => {
-  const gov = profileData?.governance || {};
-  const govChecklist = gov?.governanceChecklist || {};
-  const enterprise = profileData?.enterpriseReadiness || {};
-  const ownership = profileData?.ownershipManagement || {};
-  const financial = profileData?.financialOverview || {};
-  const legal = profileData?.legalCompliance || {};
-
-  // ── Policies count ────────────────────────────────────────────────────────
-  const policyItems = [
-    "employmentContract", "nda", "mou", "suppliercontract",
-    "codeOfConduct", "leavePolicy", "disciplinaryPolicy", "healthSafetyPolicy",
-    "privacyPolicy", "remoteWorkPolicy", "conflictInterestPolicy", "ipProtection",
-    "socialMediaPolicy", "expensePolicy", "overtimePolicy", "terminationPolicy",
-    "performancePolicy", "ethicsPolicy", "whistleblowingPolicy",
-  ];
-  const completedPolicies = policyItems.filter(p => govChecklist[p] === true).length;
-  const totalPolicies = policyItems.length;
-
-  // ── Director count ────────────────────────────────────────────────────────
-  const directorCount = ownership?.directors?.length || 0;
-
-  // ── Helper: fromChecklist ─────────────────────────────────────────────────
-  const fromChecklist = (checklistKey, fallbackField) =>
-    govChecklist[checklistKey] === true ? "Yes" :
-    govChecklist[checklistKey] === false ? "No" :
-    fallbackField || "Not provided";
-
-  // ── Build data block ──────────────────────────────────────────────────────
-  const dataBlock = `
-=== PIS CALCULATION ===
-Employees: ${pisCalc.employees}
-Annual Turnover: R ${pisCalc.turnover?.toLocaleString() || 0}
-Liabilities: R ${pisCalc.liabilities?.toLocaleString() || 0}
-Shareholders: ${pisCalc.shareholders}
-Total PIS: ${pisCalc.totalPIS}
-Stage: ${stage}
-Recommendation: ${recommendation}
-
-=== STRATEGIC PLANNING ===
-Has Business Plan: ${enterprise.hasBusinessPlan === "yes" ? "Yes" : "No"}
-Has Pitch Deck: ${enterprise.hasPitchDeck === "yes" ? "Yes" : "No"}
-Has MVP: ${enterprise.hasMvp === "yes" ? "Yes" : "No"}
-Has Traction: ${enterprise.hasTraction === "yes" ? "Yes" : "No"}
-Has Paying Customers: ${enterprise.hasPayingCustomers === "yes" ? "Yes" : "No"}
-Funding Strategy Defined: ${profileData?.useOfFunds?.amountRequested ? "Yes" : "No"}
-Stakeholder Communication Methods: ${gov.stakeholderCommunicationMethods || ownership.shareholders?.[0]?.stakeholderCommunicationMethods || "Not provided"}
-Performance Review Process: ${gov.performanceReviewProcess || ownership.performanceReviewProcess || "Not provided"}
-Performance Review Cycle: ${Array.isArray(gov.performanceReviewCycle) ? gov.performanceReviewCycle[0] : gov.performanceReviewCycle || ownership.performanceReviewCycle || "Not provided"}
-
-=== RISK MANAGEMENT ===
-Has Advisors: ${enterprise.hasAdvisors === "yes" ? "Yes" : "No"}
-Advisors Meeting Frequency: ${enterprise.advisorsMeetingFrequency || "Not specified"}
-Compliance Procedures: ${gov.complianceProcedures || ownership.complianceProcedures || "Not provided"}
-Has Conflict Resolution: ${fromChecklist("conflictInterestPolicy", legal.hasConflictResolution)}
-Whistleblowing Policy: ${fromChecklist("whistleblowingPolicy", gov.hasWhistleblowingPolicy)}
-Data Management Policies: ${gov.dataManagementPolicies || ownership.dataManagementPolicies || "Not provided"}
-Has Credit Report: ${financial.hasCreditReport === "yes" ? "Yes" : "No"}
-Guarantees Present: ${profileData?.guarantees ? Object.values(profileData.guarantees).filter(v => v === "yes").length + " types confirmed" : "Not provided"}
-
-=== TRANSPARENCY & REPORTING ===
-Audited Financials: ${enterprise.hasAuditedFinancials === "yes" ? "Yes" : "No"}
-Books Up To Date: ${financial.booksUpToDate === "yes" ? "Yes" : "No"}
-Has Accounting Software: ${financial.hasAccountingSoftware === "yes" ? "Yes" : "No"}
-Stakeholder Reporting Frequency: ${Array.isArray(gov.stakeholderReportingFrequency) ? gov.stakeholderReportingFrequency[0] : gov.stakeholderReportingFrequency || "Not provided"}
-Performance Review Cycle: ${Array.isArray(gov.performanceReviewCycle) ? gov.performanceReviewCycle[0] : gov.performanceReviewCycle || "Not provided"}
-Ethics Training Frequency: ${gov.ethicsTrainingFrequency || "Not provided"}
-Company Profile Document: ${profileData?.documents?.companyProfile ? "Uploaded" : "Not uploaded"}
-
-=== POLICIES & DOCUMENTATION ===
-Policies Completed: ${completedPolicies}/${totalPolicies}
-Ethics Policy: ${fromChecklist("ethicsPolicy", gov.hasEthicsPolicy)}
-Code of Conduct: ${govChecklist.codeOfConduct ? "Yes" : "No"}
-Privacy Policy: ${govChecklist.privacyPolicy ? "Yes" : "No"}
-Health & Safety Policy: ${govChecklist.healthSafetyPolicy ? "Yes" : "No"}
-Employment Contract: ${govChecklist.employmentContract ? "Yes" : "No"}
-NDA: ${govChecklist.nda ? "Yes" : "No"}
-Conflict of Interest Policy: ${govChecklist.conflictInterestPolicy ? "Yes" : "No"}
-Disciplinary Policy: ${govChecklist.disciplinaryPolicy ? "Yes" : "No"}
-IP Protection: ${govChecklist.ipProtection ? "Yes" : "No"}
-Leave Policy: ${govChecklist.leavePolicy ? "Yes" : "No"}
-
-=== BOARD STRUCTURE ===
-Director Count: ${directorCount}
-Has Advisory Structure: ${fromChecklist("advisoryStructure", legal.hasAdvisoryStructure || gov.hasAdvisoryStructure)}
-PIS Total: ${pisCalc.totalPIS}
-Stage: ${stage}
-`.trim();
-
-  // ── System rules block ────────────────────────────────────────────────────
-  const systemRules = `
-STRICT DATA RULES — FOLLOW WITHOUT EXCEPTION:
-- Only reference data explicitly provided in the INPUT DATA below
-- If a field says "Not provided" or "Not specified" — state this in your evidence and reduce confidence to Low
-- NEVER invent, assume, or infer missing operational details
-- NEVER fabricate benchmarks, comparisons, or market data
-- For every score you give, cite the exact field(s) from the input that justify it
-- If data is insufficient to score a category fairly, state "Insufficient data" and score conservatively
-`.trim();
-
-  // ── Scoring rubric ────────────────────────────────────────────────────────
-  const scoringRubric = `
-SCORING RUBRIC (apply strictly, 0–100 per category):
-- 0–20   = No evidence or critically missing data
-- 21–40  = Minimal evidence, major gaps
-- 41–60  = Partial — some elements present but significant gaps remain
-- 61–80  = Good — most elements present, minor improvements needed
-- 81–100 = Strong — comprehensive evidence, well-documented
-`.trim();
-
-  // ── Improvement rules ─────────────────────────────────────────────────────
-  const improvementRules = `
-IMPROVEMENT ACTIONS FORMAT — CRITICAL:
-
-For each category, split improvements into TWO parts:
-
-PART 1 — PLATFORM ACTIONS (always list first, format as):
-→ [Section Name]: [specific action to take on the platform]
-
-PLATFORM SECTION MAPPINGS:
-Strategic Planning:
-  → Governance section: update stakeholder communication methods, performance review process
-  → Enterprise Readiness section: confirm business plan, pitch deck, MVP, paying customers
-  → Use of Funds section: define funding strategy and instruments
-
-Risk Management:
-  → Governance section: document compliance procedures, data management policies
-  → Enterprise Readiness section: add advisor details, set meeting frequency
-  → Legal & Compliance section: add conflict resolution procedures
-  → Financial Overview section: confirm credit report status
-
-Transparency & Reporting:
-  → Governance section: set stakeholder reporting frequency, ethics training frequency
-  → Financial Overview section: enable accounting software, mark books as up to date
-  → Enterprise Readiness section: confirm audited financials, upload audited financials doc
-  → Document Uploads section: upload company profile
-
-Policies & Documentation:
-  → Governance section → Governance Checklist: tick off missing policies
-    (focus on: ${policyItems.filter(p => !govChecklist[p]).slice(0, 5).join(", ") || "all policies completed"})
-
-Board Structure:
-  → Ownership & Management section: add additional directors to meet governance requirements
-  → Legal & Compliance section: formalise advisory structure
-
-PART 2 — GENERAL GUIDANCE (after platform actions, max 2 tips):
-Format: 💡 [real-world guidance sentence]
-
-PERFECT SCORE RULE:
-If a category scores 81–100: write ONLY:
-✅ This area is well covered — keep records current and maintain what you have.
-Then add ONE optional 💡 maintenance tip only if genuinely useful. Do NOT list platform actions.
-`.trim();
-
-  // ── Output format ─────────────────────────────────────────────────────────
-  const outputFormat = `
-OUTPUT FORMAT — follow exactly:
-
+  const sc  = profileData?.governance?.strategicClarity      || {};
+  const rm  = profileData?.governance?.riskManagement        || {};
+  const tr  = profileData?.governance?.transparencyReporting || {};
+  const bl  = profileData?.ownershipManagement?.businessLeadership || {};
+ 
+  const checklist = profileData?.governance?.governanceChecklist || {};
+  const completedPolicies = POLICY_ITEMS.filter((k) => checklist[k] === true).length;
+ 
+  const allDirs   = profileData?.ownershipManagement?.directors || [];
+  const directors = allDirs.filter((d) => d?.name && d.name.trim() !== "");
+  const committeeTypes = directors.flatMap((d) => d.committeeMembership || []);
+ 
+  // Financial fields — correct option values
+  const financialsAudited =
+    profileData?.financialOverview?.financialsAudited === "audited_reviewed"
+      ? "Audited / independently reviewed"
+      : profileData?.financialOverview?.financialsAudited === "internally_prepared"
+      ? "Internally prepared"
+      : "None";
+ 
+  const booksStatus = {
+    fully_up_to_date: "Fully up to date",
+    partially:        "Partially up to date",
+    no:               "Not up to date",
+  }[profileData?.financialOverview?.booksUpToDate] || "Unknown";
+ 
+  const mgmtAccounts = {
+    monthly:      "Monthly",
+    occasionally: "Occasionally",
+    none:         "None",
+  }[profileData?.financialOverview?.hasManagementAccounts] || "None";
+ 
+  const meetFreq = (profileData?.enterpriseReadiness?.advisorsMeetingFrequency || "").toLowerCase();
+ 
+  return `
+You are a senior governance analyst evaluating an SME for investment readiness.
+Assess governance maturity across 5 categories. Use ONLY the data provided.
+Respond strictly in the structured format below.
+ 
+=== BUSINESS CONTEXT ===
+Company: ${profileData?.entityOverview?.registeredName || "Unknown"}
+Operation Stage: ${profileData?.entityOverview?.operationStage || "Unknown"}
+Years in Operation: ${profileData?.entityOverview?.yearsInOperation || "Unknown"}
+Sector: ${(profileData?.entityOverview?.economicSectors || []).join(", ") || "Unknown"}
+Legal Structure: ${profileData?.entityOverview?.legalStructure || "Unknown"}
+ 
+=== PUBLIC INTEREST SCORE (PIS) ===
+Employees: ${pisCalc.employees ?? 0}
+Annual Turnover (R millions): ${((pisCalc.turnover ?? 0) / 1_000_000).toFixed(2)}
+Liabilities (R millions): ${((pisCalc.liabilities ?? 0) / 1_000_000).toFixed(2)}
+Shareholders: ${pisCalc.shareholders ?? 1}
+PIS Total: ${pisCalc.totalPIS?.toFixed(2) ?? 0}
+Governance Stage: ${stage} — ${recommendation}
+ 
+=== 1. STRATEGIC PLANNING ===
+Strategic Direction: ${sc.strategicDirection || "none"}
+Planning Depth: ${sc.planningDepth || "none"}
+Market Strategy: ${sc.marketStrategy || "unclear"}
+Execution Roadmap: ${sc.executionRoadmap || "no_roadmap"}
+Decision-Making: ${sc.decisionMaking || "informal_reactive"}
+Adaptability: ${sc.adaptability || "reactive_none"}
+Has Business Plan: ${profileData?.enterpriseReadiness?.hasBusinessPlan === "yes" ? "Yes" : "No"}
+Has Pitch Deck: ${profileData?.enterpriseReadiness?.hasPitchDeck === "yes" ? "Yes" : "No"}
+Has MVP: ${profileData?.enterpriseReadiness?.hasMvp === "yes" ? "Yes" : "No"}
+ 
+=== 2. RISK MANAGEMENT ===
+Risk Identification: ${rm.riskIdentification || "none"}
+Risk Assessment: ${rm.riskAssessment || "no_formal_assessment"}
+Risk Mitigation: ${rm.riskMitigation || "no_clear_approach"}
+Business Continuity: ${rm.businessContinuity || "none"}
+Crisis Preparedness: ${rm.crisisPreparedness || "reactive_unprepared"}
+Risk Ownership: ${rm.riskOwnership || "no_ownership_defined"}
+ 
+=== 3. TRANSPARENCY & REPORTING ===
+Reporting Frequency: ${tr.reportingFrequency || "ad_hoc_none"}
+Performance Review Cycle: ${tr.performanceReviewCycle || "ad_hoc_none"}
+KPI Monitoring: ${tr.kpiMonitoring || "no_structured_tracking"}
+Stakeholder Communication: ${tr.stakeholderCommunication || "minimal"}
+Compliance & Risk Processes: ${tr.complianceAndRisk || "none"}
+Data Governance: ${tr.dataGovernance || "no_formal_approach"}
+Audit & Assurance: ${tr.auditAndAssurance || "none"}
+Has Audited Financials (Enterprise Readiness): ${profileData?.enterpriseReadiness?.hasAuditedFinancials === "yes" ? "Yes" : "No"}
+Financials Preparation: ${financialsAudited}
+Books Up To Date: ${booksStatus}
+Management Accounts: ${mgmtAccounts}
+ 
+=== 4. POLICIES & DOCUMENTATION ===
+Governance Checklist: ${completedPolicies} of ${POLICY_ITEMS.length} policies in place
+Conflict Resolution Procedures: ${profileData?.governance?.hasConflictResolution || "No"}
+Ethics Training Frequency: ${profileData?.governance?.ethicsTrainingFrequency || "None"}
+Last Ethics Training: ${profileData?.governance?.lastEthicsTrainingDate || "Not recorded"}
+ 
+=== 5. BOARD STRUCTURE ===
+Directors (valid): ${directors.length}
+Director Names: ${directors.map((d) => d.name).join(", ") || "None"}
+Exec/Non-Exec Mix: ${directors.map((d) => `${d.name} (${d.execType || "Unknown"})`).join(", ") || "None"}
+Committees: ${committeeTypes.length > 0 ? committeeTypes.join(", ") : "None"}
+Has Advisors: ${profileData?.enterpriseReadiness?.hasAdvisors === "yes" ? "Yes" : "No"}
+Advisor Meeting Regularity: ${profileData?.enterpriseReadiness?.advisorsMeetRegularly === "yes" ? "Yes" : "No"}
+Advisor Meeting Frequency: ${meetFreq || "Not specified"}
+Has Mentor: ${profileData?.enterpriseReadiness?.hasMentor === "yes" ? "Yes" : "No"}
+Decision Governance: ${bl.decisionGovernance || "Unknown"}
+Openness to Advice: ${bl.opennessToAdvice || "Unknown"}
+BB-BEE Level: ${profileData?.legalCompliance?.bbbeeLevel || "Not provided"}
+ 
+=== RESPONSE FORMAT (follow exactly) ===
+ 
 ### 1. Strategic Planning
-**Score:** [0–100]
-**Evidence:** [Cite exact fields: e.g., "Business Plan = Yes, Pitch Deck = Yes, Stakeholder Communication = [value]"]
-**Confidence:** [High | Medium | Low]
-**Confidence Rationale:** [One sentence explaining why this confidence level was chosen based on data completeness]
-**Rationale:** [2–3 sentences explaining how the provided data justifies this score]
-**How to Improve:**
-[Platform actions and/or maintenance message per the rules above]
-
+Score: X/5
+Confidence: High | Medium | Low
+Confidence Rationale: (one sentence)
+Evidence: (one sentence citing specific data)
+Assessment: (2-3 sentences)
+How to Improve:
+- (action 1)
+- (action 2)
+ 
 ### 2. Risk Management
-**Score:** [0–100]
-**Evidence:** [Cite exact fields]
-**Confidence:** [High | Medium | Low]
-**Confidence Rationale:** [One sentence]
-**Rationale:** [2–3 sentences]
-**How to Improve:**
-[Platform actions and/or maintenance message]
-
-### 3. Transparency & Reporting
-**Score:** [0–100]
-**Evidence:** [Cite exact fields]
-**Confidence:** [High | Medium | Low]
-**Confidence Rationale:** [One sentence]
-**Rationale:** [2–3 sentences]
-**How to Improve:**
-[Platform actions and/or maintenance message]
-
+Score: X/5
+Confidence: High | Medium | Low
+Confidence Rationale: (one sentence)
+Evidence: (one sentence)
+Assessment: (2-3 sentences)
+How to Improve:
+- (action 1)
+- (action 2)
+ 
+### 3. Transparency and Reporting
+Score: X/5
+Confidence: High | Medium | Low
+Confidence Rationale: (one sentence)
+Evidence: (one sentence)
+Assessment: (2-3 sentences)
+How to Improve:
+- (action 1)
+- (action 2)
+ 
 ### 4. Policies & Documentation
-**Score:** ${completedPolicies >= totalPolicies ? "100 (calculated from checklist)" : `[calculated from ${completedPolicies}/${totalPolicies} policies completed]`}
-**Evidence:** Policies completed: ${completedPolicies}/${totalPolicies}
-**Confidence:** ${completedPolicies === totalPolicies ? "High" : completedPolicies >= totalPolicies * 0.7 ? "Medium" : "Low"}
-**Confidence Rationale:** [One sentence based on checklist completeness]
-**Rationale:** [2–3 sentences]
-**How to Improve:**
-[Platform actions and/or maintenance message]
-
+Score: X/5
+Confidence: High | Medium | Low
+Confidence Rationale: (one sentence)
+Evidence: (one sentence)
+Assessment: (2-3 sentences)
+How to Improve:
+- (action 1)
+- (action 2)
+ 
 ### 5. Board Structure
-**Score:** [0–100 — calculated from Director Count = ${directorCount} and PIS = ${pisCalc.totalPIS}]
-**Evidence:** Director Count = ${directorCount}, PIS = ${pisCalc.totalPIS}, Stage = ${stage}
-**Confidence:** ${directorCount > 0 ? "High" : "Low"}
-**Confidence Rationale:** [One sentence]
-**Rationale:** [2–3 sentences referencing PIS stage thresholds]
-**How to Improve:**
-[Platform actions and/or maintenance message]
-
-### Overall Governance Assessment
-**Overall Governance Score = (Score1 × 0.20) + (Score2 × 0.20) + (Score3 × 0.20) + (Score4 × 0.20) + (Score5 × 0.20) = [X]%
-**Overall Confidence:** [High | Medium | Low]
-**Evidence Summary:** [2–3 sentences summarising the key data points that most influenced the overall score]
-**Governance Stage:** ${stage}
-**Recommendation:** ${recommendation}
-**Final Analysis:** [3–4 sentence overall summary referencing specific data points. End with the single most impactful action this business should take.]
-`.trim();
-
-  // ── Final assembled prompt ────────────────────────────────────────────────
-  return `You are a senior governance analyst evaluating a South African business for investment and funder readiness.
-
-${systemRules}
-
-${scoringRubric}
-
-${improvementRules}
-
-INPUT DATA:
-${dataBlock}
-
-INSTRUCTIONS:
-Evaluate this business across 5 governance categories. Use ONLY the data provided.
-Each category is weighted equally at 20%.
-
-${outputFormat}`;
+Score: X/5
+Confidence: High | Medium | Low
+Confidence Rationale: (one sentence)
+Evidence: (one sentence)
+Assessment: (2-3 sentences)
+How to Improve:
+- (action 1)
+- (action 2)
+ 
+### Overall Assessment
+PIS Score: ${pisCalc.totalPIS?.toFixed(2)}
+Governance Stage: ${stage}
+Governance Recommendation: ${recommendation}
+Overall Governance Score: [weighted average]%
+Summary: (3-4 sentences on overall governance maturity and investment readiness)
+`;
 };
 
-const scoreBoardStructure = (profileData, pisCalc) => {
-  let score = 0;
-  const maxScore = 100;
-  const breakdown = [];
-  
-  const directors = profileData?.ownershipManagement?.directors || [];
+
+
+ const scoreBoardStructure = (profileData, pisCalc) => {
+  // Filter out the empty placeholder director at index 0
+  const allDirs = profileData?.ownershipManagement?.directors || [];
+  const directors = allDirs.filter((d) => d?.name && d.name.trim() !== "");
   const directorCount = directors.length;
-  
-  // Calculate PIS if not provided
-  const pisTotal = pisCalc?.totalPIS || (() => {
-    const employees = parseInt(profileData?.entityOverview?.employeeCount) || 0;
-    const turnoverRaw = profileData?.financialOverview?.annualRevenue || '0';
-    const turnover = parseFloat(turnoverRaw.toString().replace(/[R,\s]/g, '')) || 0;
-    const liabilitiesRaw = profileData?.financialOverview?.existingDebt || '0';
-    const liabilities = parseFloat(liabilitiesRaw.toString().replace(/[R,\s]/g, '')) || 0;
-    const shareholders = profileData?.ownershipManagement?.shareholders?.length || 1;
-    return employees + (turnover/1000000) + (liabilities/1000000) + shareholders;
-  })();
-  
-  breakdown.push(`Directors: ${directorCount}`);
-  breakdown.push(`PIS Score: ${pisTotal.toFixed(2)}`);
-  
-  // Scoring logic based on your requirements
-  if (directorCount >= 2) {
-    score = 100;
-    breakdown.push("✓ Full score: 2+ directors");
-  } else if (pisTotal < 100) {
-    score = 100;
-    breakdown.push("✓ Full score: PIS < 100 (exempt from board requirements)");
-  } else if (pisTotal > 350) {
-    score = 0;
-    breakdown.push("✗ 0 points: PIS > 350 requires formal board structure");
-    breakdown.push("→ Recommendation: Appoint at least 2 directors");
+ 
+  const bl = profileData?.ownershipManagement?.businessLeadership || {};
+ 
+  // ── Advisory signals ─────────────────────────────────────────────────────
+  // hasAdvisors: "yes" | "no"  ✅ confirmed correct format
+  const hasAdvisors = profileData?.enterpriseReadiness?.hasAdvisors === "yes";
+  // advisorsMeetRegularly: "yes" | "no" ✅
+  const advisorsMeetRegularly = profileData?.enterpriseReadiness?.advisorsMeetRegularly === "yes";
+  // advisorsMeetingFrequency: "Monthly" — MUST lowercase before test
+  const meetFreq = (profileData?.enterpriseReadiness?.advisorsMeetingFrequency || "").toLowerCase();
+  const advisorMeetScore = /monthly/.test(meetFreq) ? 5 : /quarterly/.test(meetFreq) ? 4 : /annually/.test(meetFreq) ? 2 : 0;
+ 
+  // ── Committee signals ─────────────────────────────────────────────────────
+  // committeeMembership is an array of strings on each director: ["Audit Committee", ...]
+  const committeeTypes = directors.flatMap((d) => d.committeeMembership || []);
+  const hasAnyCommittee = committeeTypes.length > 0;
+  const hasAuditCommittee = committeeTypes.some((c) => c.includes("Audit"));
+  const hasRiskCommittee = committeeTypes.some((c) => c.includes("Risk"));
+  const committeeScore = (hasAuditCommittee ? 2 : 0) + (hasRiskCommittee ? 2 : 0) + (hasAnyCommittee ? 1 : 0);
+ 
+  // ── exec/non-exec mix ─────────────────────────────────────────────────────
+  // execType: "Executive" | "Non-Executive"  ← capital E/N from select
+  const hasNonExec = directors.some((d) => d.execType === "Non-Executive");
+  const hasExec = directors.some((d) => d.execType === "Executive");
+  const mixScore = hasNonExec && hasExec ? 5 : hasNonExec || hasExec ? 3 : 0;
+ 
+  // ── Business leadership ───────────────────────────────────────────────────
+  // decisionGovernance: "founder_all"|"founder_with_team"|"management_founder_oversight"|"board_led"
+  const decGovScore = lookup(
+    { founder_all: 1, founder_with_team: 3, management_founder_oversight: 4, board_led: 5 },
+    bl.decisionGovernance
+  );
+ 
+  // opennessToAdvice: "very_open"|"open_evaluate"|"sometimes_open"|"prefer_own"
+  // NOTE: form stores "open_evaluate" NOT "open"
+  const opennessScore = lookup(
+    { very_open: 5, open_evaluate: 4, sometimes_open: 2, prefer_own: 0 },
+    bl.opennessToAdvice
+  );
+ 
+  // ── PIS-stage board requirement ───────────────────────────────────────────
+  const pis = pisCalc?.totalPIS ?? 0;
+  let pisStageScore;
+  if (pis < 100) {
+    // Advisors Stage: having advisors is sufficient
+    pisStageScore = hasAdvisors ? (advisorsMeetRegularly ? 5 : 3) : 0;
+  } else if (pis < 350) {
+    // Emerging Board Stage: needs directors + advisors
+    pisStageScore =
+      directorCount >= 2 ? 5 : directorCount === 1 ? 3 : hasAdvisors ? 2 : 0;
   } else {
-    // Between 100 and 350
-    score = 50;
-    breakdown.push("✓ Partial score: PIS between 100-350");
-    breakdown.push("→ Recommendation: Consider appointing additional directors");
+    // Full Board Stage: needs formal board with committees
+    pisStageScore =
+      directorCount >= 4 && hasAnyCommittee
+        ? 5
+        : directorCount >= 3
+        ? 4
+        : directorCount >= 2
+        ? 2
+        : 1;
   }
-  
-  // Add director details for transparency
-  if (directors.length > 0) {
-    directors.forEach((director, index) => {
-      breakdown.push(`  Director ${index + 1}: ${director.name} (${director.position || 'Position not specified'})`);
-    });
-  } else {
-    breakdown.push("  No directors appointed");
-  }
-  
-  return { 
-    score, 
-    maxScore, 
-    breakdown,
-    directorCount,
-    pisTotal
-  };
+ 
+  // ── Director count raw score ──────────────────────────────────────────────
+  const dirCountScore =
+    directorCount === 0 ? 0
+    : directorCount === 1 ? 1
+    : directorCount === 2 ? 2
+    : directorCount === 3 ? 3
+    : directorCount === 4 ? 4
+    : 5;
+ 
+  // ── Weighted composite (all sub-scores are 0-5) ───────────────────────────
+  const composite =
+    pisStageScore * 0.30 +
+    dirCountScore * 0.15 +
+    mixScore      * 0.15 +
+    decGovScore   * 0.15 +
+    committeeScore * 0.10 +  // max raw 5
+    opennessScore  * 0.10 +
+    (hasAdvisors ? advisorMeetScore : 0) * 0.05;
+ 
+  return { score: pct5(composite), max: 100 };
 };
-
+ 
+ 
+// ─────────────────────────────────────────────────────────────────────────────
+// 6. MAIN ENTRY: calculateGovernanceScore
+//    Stage-aware weighted overall across 5 categories.
+//    operationStage: "Startup"|"Growth"|"Scaling"|"Turnaround"|"Mature"
+//    Normalised to lowercase before lookup.
+// ─────────────────────────────────────────────────────────────────────────────
+ 
 // ─────────────────────────────────────────────────────────────
 // EXPORT — replace your existing functions with these
 // ─────────────────────────────────────────────────────────────
