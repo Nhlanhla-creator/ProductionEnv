@@ -116,7 +116,7 @@ export default function InternMatchesTable({
   const rows = useMemo(() => {
     const allRows = matches || [];
     return allRows
-      .filter(m => (m.finalScore || 0) >= 50)
+      .filter(m => (m.finalScore || 0) > 0)
       .sort((a, b) => (b.finalScore || 0) - (a.finalScore || 0));
   }, [matches]);
 

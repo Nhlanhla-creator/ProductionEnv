@@ -950,11 +950,22 @@ const InternTabbedTables = ({
       where("status", "in", ["Accepted", "Confirmed", "Confirmed/Term Sheet Sign", "Completed"]),
     )
 
+    // get and set applications count for My Matches tab
+    const unsubscribeMatches = onSnapshot(query(
+      collection(db, "internshipApplications"),
+      where("sponsorId", "==", user.uid),
+    ), (querySnapshot) => {
+      setMyMatchesCount(querySnapshot.docs.length)
+    })
+
     const unsubscribe = onSnapshot(q, (querySnapshot) => {
       setSuccessfulDealsCount(querySnapshot.docs.length)
     })
 
-    return () => unsubscribe()
+    return () => {
+      unsubscribeMatches()
+      unsubscribe()
+    }
   }, [])
 
   const tabStyle = (isActive) => ({
@@ -1008,7 +1019,7 @@ const InternTabbedTables = ({
           }}
         >
           <Users size={18} style={{ flexShrink: 0, display: "block" }} />
-          <span style={{ whiteSpace: "nowrap", lineHeight: "1", display: "block" }}>My Matches</span>
+          <span style={{ whiteSpace: "nowrap", lineHeight: "1", display: "block" }}>Applications Received</span>
           <span
             style={{
               backgroundColor: currentActiveTab === "my-matches" ? "rgba(255, 255, 255, 0.2)" : "rgba(93, 64, 55, 0.1)",
@@ -1089,7 +1100,7 @@ const InternTabbedTables = ({
               filters={filters}
               stageFilter={stageFilter}
               onDealComplete={onDealComplete}
-              matchesCount={setMyMatchesCount}
+              matchesCount={myMatchesCount}
               profileMatchesCount={setProfileMatchesCount}
             />
           </div>

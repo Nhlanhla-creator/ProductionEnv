@@ -20,7 +20,7 @@ export const QA_COLUMNS = [
 // OPTION LISTS
 // ============================================================================
 
-export const DASHBOARD_OPTIONS   = ['SMSE', 'Investor', 'Advisor', 'Catalyst', 'All'];
+export const DASHBOARD_OPTIONS   = ['SMSE', 'Investor', 'Advisor', 'Catalyst', 'Intern', 'All'];
 export const CATEGORY_OPTIONS    = ['Security', 'Unit Tests', 'Integration Tests', 'E2E Tests', 'Performance Tests', 'Test Data'];
 export const STATUS_OPTIONS      = ['Pass', 'Fail', 'Not started', 'In progress', 'Blocked'];
 export const ACTION_STATUS_OPTIONS = ['Done', 'Not started', 'In progress'];
@@ -50,6 +50,7 @@ export const DASHBOARD_COLORS = {
   'Investor': '#8b5cf6',
   'Advisor':  '#ec4899',
   'Catalyst': '#f59e0b',
+  'Intern':   '#2d30ea',
   'All':      '#10b981',
 };
 
@@ -59,6 +60,7 @@ export const DASHBOARD_CODE_MAP = {
   'Investor': 'ID',
   'Advisor':  'AD',
   'Catalyst': 'CD',
+  'Intern':   'XD',
   'All':      'D',
 };
 

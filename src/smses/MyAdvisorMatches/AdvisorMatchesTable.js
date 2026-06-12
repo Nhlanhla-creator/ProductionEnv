@@ -122,7 +122,7 @@ const AdvisorMatchesTable = ({
 
   const rows = useMemo(() => {
     const allRows = advisors || [];
-    return allRows.filter(advisor => (advisor.finalScore || 0) >= 50);
+    return allRows.filter(advisor => (advisor.finalScore || 0) > 0);
   }, [advisors]);
 
   const handleView = (advisor) => {

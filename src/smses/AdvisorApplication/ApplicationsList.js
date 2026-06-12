@@ -217,6 +217,24 @@ const ApplicationsList = ({ onViewSummary, onEditApplication, onCreateNew, embed
           >
             <Plus size={16} /> Create New Application
           </button>
+          {/* <button
+            onClick={async () => {
+              if (!window.confirm("⚠️ Clear ALL match results? This cannot be undone.")) return
+              try {
+                const res = await fetch("http://localhost:8000/api/advisors/clear-matches", { method: "DELETE" })
+                const data = await res.json()
+                alert(`Cleared ${data.deletedCount || 0} match result(s)`)
+                const user = auth.currentUser
+                if (user) fetchApplications(user.uid)
+              } catch (err) {
+                alert("Failed to clear: " + err.message)
+              }
+            }}
+            style={{ display:"flex", alignItems:"center", gap:5, padding:"6px 12px", background:"#dc2626", color:"#fff", border:"none", borderRadius:8, fontSize:11, fontWeight:600, cursor:"pointer", opacity:0.85 }}
+            title="TEMP: Clear all match results"
+          >
+            🗑 Clear Matches
+          </button> */}
         </div>
 
         {/* EMPTY */}

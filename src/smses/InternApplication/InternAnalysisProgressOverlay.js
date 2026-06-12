@@ -1,25 +1,44 @@
 "use client"
 
-import { Brain, Check } from "lucide-react"
+import { Check, Loader2, Search } from "lucide-react"
 
 /**
  * InternAnalysisProgressOverlay — full-screen overlay showing simulated
  * intern matching analysis progress. Prevents user navigation while analysis is in-flight.
  *
- * Accepts simulated progress from a client-side count of complete interns.
+ * progress shape:
+ *   { stage: "gettingReady" | "searching" | "wrappingUp", internsCount?: number }
+ *
+ * isComplete — when true, shows success checkmark and "Analysis Complete!"
+ *
+ * Stage → Display mapping:
+ *   gettingReady → title="Getting Things Ready"    subtitle="Found {n} interns"
+ *   searching    → title="Searching For Matches"    subtitle="Analyzing {n} interns"
+ *   wrappingUp  → title="Almost There"             subtitle="Wrapping things up"
  */
 const InternAnalysisProgressOverlay = ({ progress, isComplete = false }) => {
   if (!progress && !isComplete) return null
 
-  const { current = 0, total = null, stage = "analyzing" } = progress || {}
-  const percentage = total ? Math.round((current / total) * 100) : 0
+  const { stage = "gettingReady", internsCount = 0 } = progress || {}
 
-  const stageLabel = {
-    secondary: "Evaluating intern metrics",
-    primary: "AI semantic analysis",
-    saving: "Saving match results",
-    analyzing: "Analyzing interns",
-  }[stage] || "Analyzing"
+  const stageConfig = {
+    gettingReady: {
+      title: "Getting Things Ready",
+      subtitle: internsCount ? `Found ${internsCount} interns` : "Preparing data",
+    },
+    searching: {
+      title: "Searching For Matches",
+      subtitle: internsCount ? `Analyzing ${internsCount} interns` : "Analyzing interns",
+    },
+    wrappingUp: {
+      title: "Almost There",
+      subtitle: "Wrapping things up",
+    },
+  }
+
+  const { title, subtitle } = isComplete
+    ? { title: "Analysis Complete!", subtitle: "Your intern matches are ready." }
+    : stageConfig[stage] || stageConfig.gettingReady
 
   return (
     <div
@@ -47,6 +66,10 @@ const InternAnalysisProgressOverlay = ({ progress, isComplete = false }) => {
         @keyframes pulse {
           0%, 100% { opacity: 1; }
           50% { opacity: 0.7; }
+        }
+        @keyframes scaleIn {
+          from { transform: scale(0); }
+          to { transform: scale(1); }
         }
       `}</style>
 
@@ -84,12 +107,6 @@ const InternAnalysisProgressOverlay = ({ progress, isComplete = false }) => {
               }}
             >
               <Check size={36} color="white" />
-              <style>{`
-                @keyframes scaleIn {
-                  from { transform: scale(0); }
-                  to { transform: scale(1); }
-                }
-              `}</style>
             </div>
           ) : (
             <div
@@ -104,7 +121,7 @@ const InternAnalysisProgressOverlay = ({ progress, isComplete = false }) => {
                 animation: "spin 1.5s linear infinite",
               }}
             >
-              <Brain size={36} color="white" />
+              <Loader2 size={36} color="white" />
             </div>
           )}
         </div>
@@ -118,10 +135,10 @@ const InternAnalysisProgressOverlay = ({ progress, isComplete = false }) => {
             color: "#1a1a1a",
           }}
         >
-          {isComplete ? "Analysis Complete!" : "Analyzing Interns"}
+          {title}
         </h2>
 
-        {/* Subtitle/Stage */}
+        {/* Subtitle */}
         <p
           style={{
             margin: "0 0 1.5rem 0",
@@ -131,70 +148,8 @@ const InternAnalysisProgressOverlay = ({ progress, isComplete = false }) => {
             minHeight: "1.5em",
           }}
         >
-          {isComplete
-            ? "Your intern matches are ready."
-            : stageLabel}
+          {subtitle}
         </p>
-
-        {/* Progress bar and counter */}
-        {!isComplete && total !== null && (
-          <>
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: "0.75rem",
-                fontSize: "0.875rem",
-              }}
-            >
-              <span style={{ color: "#666" }}>
-                {stage === "secondary" ? "Evaluating" : stage === "primary" ? "AI Analyzing" : "Saving"}
-              </span>
-              <span
-                style={{
-                  fontWeight: 600,
-                  color: "#a67c52",
-                }}
-              >
-                {current} of {total}
-              </span>
-            </div>
-
-            {/* Progress bar */}
-            <div
-              style={{
-                width: "100%",
-                height: 8,
-                background: "#e0e0e0",
-                borderRadius: 4,
-                overflow: "hidden",
-                marginBottom: "1.5rem",
-              }}
-            >
-              <div
-                style={{
-                  height: "100%",
-                  width: `${percentage}%`,
-                  background: "linear-gradient(90deg, #a67c52, #7d5a50)",
-                  borderRadius: 4,
-                  transition: "width 0.3s ease",
-                }}
-              />
-            </div>
-
-            {/* Percentage */}
-            <p
-              style={{
-                margin: "0 0 1rem 0",
-                fontSize: "0.875rem",
-                color: "#999",
-              }}
-            >
-              {percentage}% complete
-            </p>
-          </>
-        )}
 
         {/* Status message */}
         {!isComplete && (
@@ -224,7 +179,7 @@ const InternAnalysisProgressOverlay = ({ progress, isComplete = false }) => {
           margin: 0,
         }}
       >
-        {isComplete ? "Redirecting..." : `${stageLabel}...`}
+        {isComplete ? "Redirecting..." : `${subtitle}...`}
       </p>
     </div>
   )

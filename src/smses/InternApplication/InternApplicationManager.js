@@ -38,6 +38,9 @@ const InternApplicationManager = ({ embedded = false, onNavigateToMatches }) => 
   // Loading state for summary view
   const [loadingSummary, setLoadingSummary] = useState(false)
 
+  // Refresh trigger for the list (incremented after submit to re-fetch data)
+  const [listRefreshKey, setListRefreshKey] = useState(0)
+
   // Monitor authentication state
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged((user) => {
@@ -131,6 +134,18 @@ const InternApplicationManager = ({ embedded = false, onNavigateToMatches }) => 
    * Transitions: edit -> list OR summary -> list
    */
   const handleBackToList = () => {
+    console.log("(2) Arrived at app manager...")
+    setCurrentView('list')
+    setSelectedApplicationId(null)
+    setSelectedApplicationData(null)
+    setForceEdit(false)
+  }
+
+  /**
+   * Handle navigation back to list after submission — also triggers list refresh
+   */
+  const handleBackToListAfterSubmit = () => {
+    setListRefreshKey((k) => k + 1)
     setCurrentView('list')
     setSelectedApplicationId(null)
     setSelectedApplicationData(null)
@@ -149,10 +164,10 @@ const InternApplicationManager = ({ embedded = false, onNavigateToMatches }) => 
 
   /**
    * Handle application submission completion
-   * Automatically navigates back to list
+   * Automatically navigates back to list with refresh trigger
    */
   const handleApplicationSubmitted = () => {
-    handleBackToList()
+    handleBackToListAfterSubmit()
     if (onNavigateToMatches) {
       onNavigateToMatches()
     }
@@ -176,6 +191,7 @@ const InternApplicationManager = ({ embedded = false, onNavigateToMatches }) => 
         onEditApplication={handleEditApplication}
         onCreateNew={handleCreateNew}
         embedded={embedded}
+        refreshTrigger={listRefreshKey}
       />
     )
   }
@@ -237,6 +253,7 @@ const InternApplicationManager = ({ embedded = false, onNavigateToMatches }) => 
       onEditApplication={handleEditApplication}
       onCreateNew={handleCreateNew}
       embedded={embedded}
+      refreshTrigger={listRefreshKey}
     />
   )
 }
