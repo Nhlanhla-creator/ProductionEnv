@@ -59,9 +59,7 @@
   background-position: center;
 
   width: 100%;
-  max-width: 1200px;
-
-  margin: 53px auto 0 auto; /* perfectly centers container */
+  margin: 0 auto; /* perfectly centers container */
   padding: 2rem;
   box-sizing: border-box;
 }

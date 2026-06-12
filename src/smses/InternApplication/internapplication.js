@@ -7,8 +7,9 @@ import JobOverview from "./JobOverview"
 import InternshipRequest from "./InternshipRequest"
 import MatchingAgreement from "./MatchingAgreement"
 import ApplicationSummary from "./ApplicationSummary"
+import InternAnalysisProgressOverlay from "./InternAnalysisProgressOverlay"
 import { db, auth } from "../../firebaseConfig"
-import { getDoc, doc, updateDoc, setDoc, serverTimestamp } from "firebase/firestore"
+import { getDoc, getDocs, doc, updateDoc, addDoc, collection, serverTimestamp } from "firebase/firestore"
 import { onAuthStateChanged } from "firebase/auth"
 import "./internApplication.css"
 
@@ -19,7 +20,7 @@ export const sections = [
   { id: "matchingAgreement", label: "Matching Agreement" },
 ]
 
-export default function InternApplication() {
+export default function InternApplication({ applicationId: propApplicationId, isNew, onBack, onSubmitted }) {
   const [activeSection, setActiveSection] = useState("instructions")
   const [user, setUser] = useState(null)
   const [formData, setFormData] = useState({
@@ -40,6 +41,11 @@ export default function InternApplication() {
   const [saveStatus, setSaveStatus] = useState("")
   const [validationModal, setValidationModal] = useState({ open: false, title: "", messages: [] })
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [localApplicationId, setLocalApplicationId] = useState(propApplicationId)
+  const [analysisProgress, setAnalysisProgress] = useState(null)
+  const [analysisComplete, setAnalysisComplete] = useState(false)
+
+  const applicationId = localApplicationId || propApplicationId
 
   const sectionValidations = {
     instructions: () => true,
@@ -56,8 +62,8 @@ export default function InternApplication() {
   }, [])
 
   useEffect(() => {
-    if (user) loadApplication()
-  }, [user])
+    if (user && applicationId) loadApplication()
+  }, [user, applicationId])
 
   useEffect(() => {
     const checkSidebarState = () => {
@@ -75,9 +81,10 @@ export default function InternApplication() {
   }, [])
 
   const loadApplication = async () => {
+    if (!applicationId) return
     setIsLoading(true)
     try {
-      const ref = doc(db, "internApplications", user.uid)
+      const ref = doc(db, "internApplicationsV2", applicationId)
       const snap = await getDoc(ref)
       if (snap.exists()) {
         const data = snap.data()
@@ -100,88 +107,33 @@ export default function InternApplication() {
     }
   }
 
-  const saveToFirebase = useCallback(
-    async (sectionData, sectionName) => {
-      if (!user) return
-      try {
-        setSaveStatus("saving")
-        const ref = doc(db, "internApplications", user.uid)
-
-        const updateData = {
-          [sectionName]: sectionData,
-          lastUpdated: serverTimestamp(),
-          userId: user.uid,
-          userEmail: user.email,
-          status: applicationSubmitted ? "submitted" : "in_progress",
-        }
-
-        await updateDoc(ref, updateData).catch(async (err) => {
-          if (err.code === "not-found") {
-            await setDoc(ref, {
-              ...updateData,
-              createdAt: serverTimestamp(),
-              completedSections: completedSections,
-            })
-          } else throw err
-        })
-
-        setSaveStatus("saved")
-        setTimeout(() => setSaveStatus(""), 2000)
-      } catch (err) {
-        console.error("Save error:", err)
-        setSaveStatus("error")
-        setTimeout(() => setSaveStatus(""), 3000)
-      }
-    },
-    [user, applicationSubmitted, completedSections],
-  )
-
   const markSectionAsCompleted = useCallback(
     async (section) => {
       const updated = { ...completedSections, [section]: true }
       setCompletedSections(updated)
-      if (user) {
+      if (user && applicationId) {
         try {
-          const ref = doc(db, "internApplications", user.uid)
+          const ref = doc(db, "internApplicationsV2", applicationId)
           await updateDoc(ref, {
             completedSections: updated,
             lastUpdated: serverTimestamp(),
-          }).catch(async (err) => {
-            if (err.code === "not-found") {
-              await setDoc(ref, {
-                completedSections: updated,
-                createdAt: serverTimestamp(),
-                lastUpdated: serverTimestamp(),
-                userId: user.uid,
-                userEmail: user.email,
-                status: "in_progress",
-                ...formData,
-              })
-            } else throw err
           })
         } catch (error) {
           console.error("Error updating completed sections:", error)
         }
       }
     },
-    [user, completedSections, formData],
+    [user, completedSections, applicationId],
   )
 
   const updateFormData = useCallback(
     (section, data) => {
       setFormData((prev) => {
         const updated = { ...prev[section], ...data }
-        const newFormData = { ...prev, [section]: updated }
-
-        // Save to Firebase
-        if (user) {
-          saveToFirebase(updated, section)
-        }
-
-        return newFormData
+        return { ...prev, [section]: updated }
       })
     },
-    [user, saveToFirebase],
+    [], // only updates local state, no Firebase writes
   )
 
   const navigateToNextSection = useCallback(() => {
@@ -201,42 +153,145 @@ export default function InternApplication() {
   }, [activeSection])
 
   const handleSaveAndContinue = useCallback(async () => {
-    await markSectionAsCompleted(activeSection)
-    navigateToNextSection()
-  }, [activeSection, markSectionAsCompleted, navigateToNextSection])
+    const sectionData = formData[activeSection]
+    if (!user) return
+    try {
+      setSaveStatus("saving")
+
+      const baseData = {
+        [activeSection]: sectionData,
+        lastUpdated: serverTimestamp(),
+        userId: user.uid,
+        userEmail: user.email,
+        status: "in_progress",
+      }
+
+      if (applicationId) {
+        const ref = doc(db, "internApplicationsV2", applicationId)
+        await updateDoc(ref, baseData)
+      } else if (isNew) {
+        const ref = collection(db, "internApplicationsV2")
+        const docRef = await addDoc(ref, {
+          ...baseData,
+          createdAt: serverTimestamp(),
+          completedSections: completedSections,
+        })
+        setLocalApplicationId(docRef.id)
+      }
+
+      await markSectionAsCompleted(activeSection)
+      setSaveStatus("saved")
+      setTimeout(() => setSaveStatus(""), 2000)
+      navigateToNextSection()
+    } catch (err) {
+      console.error("Save error:", err)
+      setSaveStatus("error")
+      setTimeout(() => setSaveStatus(""), 3000)
+    }
+  }, [activeSection, formData, user, applicationId, isNew, completedSections, markSectionAsCompleted, navigateToNextSection])
 
   const handleSubmitApplication = useCallback(async () => {
+    if (!user) return
     try {
-      const ref = doc(db, "internApplications", user.uid)
+      setSaveStatus("saving")
+
+      // Save current section first
+      const sectionData = formData[activeSection]
+      const baseData = {
+        [activeSection]: sectionData,
+        lastUpdated: serverTimestamp(),
+        userId: user.uid,
+        userEmail: user.email,
+      }
+
+      let currentId = applicationId
+      if (currentId) {
+        await updateDoc(doc(db, "internApplicationsV2", currentId), baseData)
+      } else if (isNew) {
+        const docRef = await addDoc(collection(db, "internApplicationsV2"), {
+          ...baseData,
+          createdAt: serverTimestamp(),
+          completedSections: completedSections,
+        })
+        currentId = docRef.id
+        setLocalApplicationId(docRef.id)
+      }
+
+      if (!currentId) return
+
+      // Submit — only write section data + metadata, NOT flat redundant fields
+      const ref = doc(db, "internApplicationsV2", currentId)
       await updateDoc(ref, {
-        ...formData,
+        [activeSection]: sectionData,
         completedSections,
         status: "submitted",
         submittedAt: serverTimestamp(),
         lastUpdated: serverTimestamp(),
-      }).catch(async (err) => {
-        if (err.code === "not-found") {
-          await setDoc(ref, {
-            ...formData,
-            completedSections,
-            status: "submitted",
-            submittedAt: serverTimestamp(),
-            createdAt: serverTimestamp(),
-            lastUpdated: serverTimestamp(),
-            userId: user.uid,
-            userEmail: user.email,
-          })
-        } else throw err
       })
 
       setApplicationSubmitted(true)
-      setShowSummary(true)
+
+      // STEP 1: Count intern profiles
+      let internsCount = 0
+      try {
+        const snapshot = await getDocs(collection(db, "internProfiles"))
+        internsCount = snapshot.size
+      } catch (err) {
+        console.error("Error counting interns:", err)
+      }
+
+      // STEP 2: Show "Getting Things Ready" for 3 seconds
+      setAnalysisProgress({ stage: "gettingReady", internsCount })
+      await new Promise((r) => setTimeout(r, 5000))
+
+      // STEP 3: Show "Searching For Matches" and start the fetch
+      setAnalysisProgress({ stage: "searching", internsCount })
+
+      const controller = new AbortController()
+      const fetchPromise = fetch("http://localhost:8000/api/interns/analyze-matches", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ applicationId: currentId }),
+        signal: controller.signal,
+      })
+
+      // STEP 4: Race — if fetch takes >10s, switch to "Almost There"
+      const tenSecondTimer = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("timeout")), 15000)
+      )
+
+      try {
+        await Promise.race([fetchPromise, tenSecondTimer])
+        // Fetch completed within 10s — proceed directly to complete state
+        clearTimeout(controller._timeoutId)
+      } catch (raceErr) {
+        if (raceErr.message === "timeout") {
+          // 10s elapsed — show "Almost There", then wait for the actual fetch
+          setAnalysisProgress({ stage: "wrappingUp" })
+          // Abort after 30s total from here (40s overall)
+          const abortTimer = setTimeout(() => controller.abort(), 30000)
+          controller._timeoutId = abortTimer
+          await fetchPromise.catch(() => {})
+          clearTimeout(abortTimer)
+        }
+        // else fetch completed or aborted — continue
+      }
+
+      setAnalysisComplete(true)
+
+      // After 1.5s, navigate back to list so match data refreshes
+      setTimeout(() => {
+        setAnalysisProgress(null)
+        setAnalysisComplete(false)
+        if (onSubmitted) onSubmitted()
+      }, 1500)
     } catch (error) {
       console.error("Error submitting application:", error)
       setSaveStatus("error")
       setTimeout(() => setSaveStatus(""), 3000)
+      setAnalysisProgress(null)
     }
-  }, [formData, completedSections, user])
+  }, [formData, completedSections, user, applicationId, onSubmitted, activeSection, isNew])
 
   const handleEditApplication = useCallback(() => {
     setShowSummary(false)
@@ -347,11 +402,17 @@ const getContainerStyle = () => ({
   }
 
   if (showSummary) {
-    return <ApplicationSummary formData={getSummaryData()} onEdit={handleEditApplication} />
+    return <ApplicationSummary formData={getSummaryData()} onEdit={handleEditApplication} onBack={onBack} />
   }
 
   return (
     <div  className="intern-application">
+      {/* Analysis Progress Overlay */}
+      <InternAnalysisProgressOverlay
+        progress={analysisProgress}
+        isComplete={analysisComplete}
+      />
+
       {/* Save Status Indicator */}
       {saveStatus && (
         <div
@@ -475,6 +536,30 @@ const getContainerStyle = () => ({
         </div>
       )}
 
+      {/* Back Button - Matching Intern style */}
+      {onBack && (
+        <button 
+          onClick={onBack}
+          style={{ 
+            display: "flex", 
+            alignItems: "center", 
+            gap: 7, 
+            padding: "10px 0", 
+            marginBottom: 14, 
+            background: "none", 
+            border: "none", 
+            color: "#a67c52", 
+            cursor: "pointer", 
+            fontSize: 14, 
+            fontWeight: 500 
+          }}
+          onMouseEnter={(e) => { e.currentTarget.style.color = "#7d5a50" }}
+          onMouseLeave={(e) => { e.currentTarget.style.color = "#a67c52" }}
+        >
+          <ChevronLeft size={19} /> Back to Applications
+        </button>
+      )}
+
       {/* Application Header */}
       <div
         style={{
@@ -560,21 +645,15 @@ const getContainerStyle = () => ({
           <button
             onClick={navigateToPreviousSection}
             style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-              padding: "12px 16px",
-              fontSize: "clamp(0.8rem, 2vw, 1rem)",
-              backgroundColor: "#6c757d",
-              color: "white",
-              border: "none",
-              borderRadius: "6px",
-              cursor: "pointer",
-              transition: "all 0.3s ease",
-              minWidth: "120px",
-              justifyContent: "center",
-            }}
-            className="btn-nav-secondary"
+                display: "flex",
+                alignItems: "center",
+                gap: "5px",
+                padding: "10px 15px",
+                fontSize: "clamp(0.8rem, 2vw, 1rem)",
+                minWidth: "140px",
+                justifyContent: "center",
+              }}
+              className="btn btn-primary"
           >
             <ChevronLeft size={18} />
             <span>Previous</span>
@@ -595,21 +674,15 @@ const getContainerStyle = () => ({
           <button
             onClick={handleSaveAndContinue}
             style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-              padding: "12px 16px",
-              fontSize: "clamp(0.8rem, 2vw, 1rem)",
-              backgroundColor: "#007bff",
-              color: "white",
-              border: "none",
-              borderRadius: "6px",
-              cursor: "pointer",
-              transition: "all 0.3s ease",
-              minWidth: "150px",
-              justifyContent: "center",
-            }}
-            className="btn-nav-primary"
+                display: "flex",
+                alignItems: "center",
+                gap: "5px",
+                padding: "10px 15px",
+                fontSize: "clamp(0.8rem, 2vw, 1rem)",
+                minWidth: "140px",
+                justifyContent: "center",
+              }}
+              className="btn btn-primary"
           >
             <Save size={18} />
             <span>Save & Continue</span>
@@ -619,21 +692,15 @@ const getContainerStyle = () => ({
           <button
             onClick={handleSubmitApplication}
             style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-              padding: "12px 16px",
-              fontSize: "clamp(0.8rem, 2vw, 1rem)",
-              backgroundColor: "#28a745",
-              color: "white",
-              border: "none",
-              borderRadius: "6px",
-              cursor: "pointer",
-              transition: "all 0.3s ease",
-              minWidth: "160px",
-              justifyContent: "center",
-            }}
-            className="btn-nav-submit"
+                display: "flex",
+                alignItems: "center",
+                gap: "5px",
+                padding: "10px 15px",
+                fontSize: "clamp(0.8rem, 2vw, 1rem)",
+                minWidth: "140px",
+                justifyContent: "center",
+              }}
+              className="btn btn-primary"
           >
             <Send size={18} />
             <span>Submit Application</span>

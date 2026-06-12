@@ -20,7 +20,7 @@ import InternMatchesTable from "../MyInternMatch/InternMatchesTable"
  * - onCreateNew: () => void
  * - embedded: boolean
  */
-const InternApplicationsList = ({ onViewSummary, onEditApplication, onCreateNew, embedded = false }) => {
+const InternApplicationsList = ({ onViewSummary, onEditApplication, onCreateNew, embedded = false, refreshTrigger }) => {
   const [applications, setApplications] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -37,6 +37,13 @@ const InternApplicationsList = ({ onViewSummary, onEditApplication, onCreateNew,
     })
     return () => unsubscribe()
   }, [])
+
+  // Re-fetch when refreshTrigger changes (e.g., after submitting an application)
+  useEffect(() => {
+    const user = auth.currentUser
+    if (user) fetchApplications(user.uid)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshTrigger])
 
   const fetchMatchCounts = async (userId, appIds) => {
     try {
@@ -210,12 +217,32 @@ const InternApplicationsList = ({ onViewSummary, onEditApplication, onCreateNew,
               Internship Applications &bull; {applications.length} {applications.length === 1 ? "Application" : "Applications"}
             </p>
           </div>
-          <button onClick={onCreateNew} style={{ display:"flex", alignItems:"center", gap:7, padding:"10px 20px", background:"linear-gradient(135deg,#a67c52,#7d5a50)", color:"#faf7f2", border:"none", borderRadius:10, fontSize:13, fontWeight:600, cursor:"pointer", boxShadow:"0 4px 14px rgba(166,124,82,0.3)", transition:"all 0.22s" }}
-            onMouseEnter={(e) => { e.currentTarget.style.transform="translateY(-2px)"; e.currentTarget.style.boxShadow="0 7px 20px rgba(166,124,82,0.4)" }}
-            onMouseLeave={(e) => { e.currentTarget.style.transform=""; e.currentTarget.style.boxShadow="0 4px 14px rgba(166,124,82,0.3)" }}
-          >
-            <Plus size={16} /> Create New Internship
-          </button>
+          <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+            <button onClick={onCreateNew} style={{ display:"flex", alignItems:"center", gap:7, padding:"10px 20px", background:"linear-gradient(135deg,#a67c52,#7d5a50)", color:"#faf7f2", border:"none", borderRadius:10, fontSize:13, fontWeight:600, cursor:"pointer", boxShadow:"0 4px 14px rgba(166,124,82,0.3)", transition:"all 0.22s" }}
+              onMouseEnter={(e) => { e.currentTarget.style.transform="translateY(-2px)"; e.currentTarget.style.boxShadow="0 7px 20px rgba(166,124,82,0.4)" }}
+              onMouseLeave={(e) => { e.currentTarget.style.transform=""; e.currentTarget.style.boxShadow="0 4px 14px rgba(166,124,82,0.3)" }}
+            >
+              <Plus size={16} /> Create New Internship
+            </button>
+            {/* <button
+              onClick={async () => {
+                if (!window.confirm("⚠️ Clear ALL match results? This cannot be undone.")) return
+                try {
+                  const res = await fetch("http://localhost:8000/api/interns/clear-matches", { method: "DELETE" })
+                  const data = await res.json()
+                  alert(`Cleared ${data.deletedCount || 0} match result(s)`)
+                  const user = auth.currentUser
+                  if (user) fetchApplications(user.uid)
+                } catch (err) {
+                  alert("Failed to clear: " + err.message)
+                }
+              }}
+              style={{ display:"flex", alignItems:"center", gap:5, padding:"6px 12px", background:"#dc2626", color:"#fff", border:"none", borderRadius:8, fontSize:11, fontWeight:600, cursor:"pointer", opacity:0.85 }}
+              title="TEMP: Clear all match results"
+            >
+              🗑 Clear Matches
+            </button> */}
+          </div>
         </div>
 
         {/* EMPTY */}

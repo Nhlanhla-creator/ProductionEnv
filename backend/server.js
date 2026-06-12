@@ -45,8 +45,9 @@ app.use((req, res, next) => {
 const paymentRoutes = require("./routes/peachPayments");
 
 const tenderRoutes = require("./routes/tenders");
-const supplierMatchingRoutes = require("./routes/supplierMatching");
-const advisorMatchingRoutes = require("./routes/advisorMatching");
+// const supplierMatchingRoutes = require("./routes/supplierMatching");
+// const advisorMatchingRoutes = require("./routes/advisorMatching");
+// const internMatchingRoutes = require("./routes/internMatching");
 
 
 
@@ -219,17 +220,22 @@ app.use("/api/tenders", (req, res, next) => {
 }, tenderRoutes.router);
 
 // Supplier matching AI route (local dev/testing path)
-app.use("/api/suppliers", (req, res, next) => {
-  res.setHeader('x-vercel-protection-bypass', '1');
-  next();
-}, supplierMatchingRoutes);
+// app.use("/api/suppliers", (req, res, next) => {
+//   res.setHeader('x-vercel-protection-bypass', '1');
+//   next();
+// }, supplierMatchingRoutes);
 
-// Advisor matching AI route (local dev/testing path)
-app.use("/api/advisors", (req, res, next) => {
-  res.setHeader('x-vercel-protection-bypass', '1');
-  next();
-}, advisorMatchingRoutes);
+// // Advisor matching AI route (local dev/testing path)
+// app.use("/api/advisors", (req, res, next) => {
+//   res.setHeader('x-vercel-protection-bypass', '1');
+//   next();
+// }, advisorMatchingRoutes);
 
+// // Intern matching AI route (local)
+// app.use("/api/interns", (req, res, next) => {
+//   res.setHeader('x-vercel-protection-bypass', '1');
+//   next();
+// }, internMatchingRoutes);
 
 
 // ==================== EXISTING ROUTES ====================

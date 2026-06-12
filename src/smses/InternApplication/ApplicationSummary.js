@@ -1,9 +1,9 @@
 "use client"
 
 import { useState } from "react"
-import { ChevronDown, ChevronUp, Edit, User, Briefcase, Handshake } from "lucide-react"
+import { ChevronDown, ChevronUp, ChevronLeft, Edit, User, Briefcase, Handshake } from "lucide-react"
 
-const ApplicationSummary = ({ formData, onEdit }) => {
+const ApplicationSummary = ({ formData, applicationId, onEdit, onBack }) => {
   const [expandedSections, setExpandedSections] = useState({
     internshipRequest: false,
     jobOverview: false,
@@ -26,8 +26,9 @@ const ApplicationSummary = ({ formData, onEdit }) => {
     if (onEdit) onEdit()
   }
 
-  const handleNavigate = () => {
-    // Add your navigation logic here
+  const handleBack = () => {
+    console.log("(1) Click works...")
+    if (onBack) onBack()
   }
 
   return (
@@ -70,6 +71,16 @@ const ApplicationSummary = ({ formData, onEdit }) => {
             margin: "0",
           }}
         >
+          {/* Back */}
+          {(
+            <button onClick={handleBack}
+              style={{ display:"flex", alignItems:"center", gap:7, padding:"10px 0", marginBottom:14, background:"none", border:"none", color:"#a67c52", cursor:"pointer", fontSize:14, fontWeight:500 }}
+              onMouseEnter={(e) => { e.currentTarget.style.color="#7d5a50" }}
+              onMouseLeave={(e) => { e.currentTarget.style.color="#a67c52" }}
+            >
+              <ChevronLeft size={19} /> Back to Applications
+            </button>
+          )}
           {/* Header */}
           <div
             style={{

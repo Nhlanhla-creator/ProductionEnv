@@ -2808,7 +2808,7 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
   const currentStageFields = getStageFields(selectedStage)
 
   return (
-    <div style={{ padding: "20px", width: "100%", maxWidth: "100vw", overflowX: "hidden" }}>
+    <div style={{ width: "100%", maxWidth: "100vw", overflowX: "hidden" }}>
 
       {/* Company Member Banner */}
       {isCompanyMember && (
@@ -2851,10 +2851,8 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
         </div>
       )}
 
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}></div>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-
-        <h2 style={{ fontSize: "20px", fontWeight: "bold" }}>Intern Applications</h2>
+        <h2 style={{ fontSize: "20px", fontWeight: "bold", margin: 0 }}>Intern Applications</h2>
         <button
           onClick={() => setShowFilters(true)}
           style={{
