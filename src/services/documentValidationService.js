@@ -5,9 +5,10 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
  * @param {string} documentLabel - The type of document (e.g., "CV", "Company Registration Certificate")
  * @param {File} file - The file to validate
  * @param {string} registeredName - The registered company name (optional for CVs)
+ * @param {string} downloadURL - The Firebase Storage URL of the uploaded file
  * @returns {Promise<Object>} Validation result
  */
-export const validateDocument = async (documentLabel, file, registeredName = "") => {
+export const validateDocument = async (documentLabel, file, registeredName = "", downloadURL) => {
   try {
     const functions = getFunctions();
     const validateMyDocument = httpsCallable(functions, 'validateMyDocument');
@@ -20,10 +21,11 @@ export const validateDocument = async (documentLabel, file, registeredName = "")
       documentLabel,
       base64File,
       mimeType: file.type,
-      registeredName
+      registeredName,
+      documentUrl: downloadURL  // Make sure this matches the parameter name
     });
     
-    // Return the validation result
+    // Return the validation result 
     return result.data.validationResult;
     
   } catch (error) {
@@ -62,10 +64,11 @@ export const validateCompanyDocument = async (documentLabel, file, registeredNam
 /**
  * Validates a CV (skips company name check)
  * @param {File} file - The CV file to validate
+ * @param {string} downloadURL - The Firebase Storage URL of the uploaded file
  * @returns {Promise<Object>} Validation result
  */
-export const validateCV = async (file) => {
-  return validateDocument("CV", file, ""); // Empty string for CVs
+export const validateCV = async (file, downloadURL) => {
+  return validateDocument("CV", file, "", downloadURL);
 };
 
 // Helper function to convert File to base64
