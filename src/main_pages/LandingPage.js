@@ -1,348 +1,395 @@
 "use client"
-
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Link } from "react-router-dom"
 import Header from "./Header"
 import Footer from "./Footer"
 import {
-  FaArrowRight,
-  FaUsers,
-  FaUserTie,
-  FaHandHoldingHeart,
-  FaChevronRight,
-  FaLightbulb,
-  FaHandshake,
-  FaTimes,
-  FaPaperPlane,
-  FaCheck,
-  FaBullseye,
-  FaChartBar,
-  FaExclamationTriangle,
-  FaDesktop,
-  FaClock
+  FaUsers, FaUserTie, FaHandHoldingHeart, FaChevronRight,
+  FaChevronDown, FaChevronUp, FaLightbulb, FaHandshake,
+  FaCheck, FaBullseye, FaShieldAlt, FaLock, FaRocket,
+  FaStar, FaQuoteLeft, FaChartLine, FaBuilding, FaChartBar,
+  FaTrophy, FaCommentDots, FaHome, FaUser, FaClipboardList,
+  FaHeart, FaCog, FaFileAlt, FaEnvelope, FaCalendarAlt,
+  FaBell, FaSearch, FaCreditCard, FaArrowUp
 } from "react-icons/fa"
-import { MdCorporateFare, MdTrendingUp } from "react-icons/md"
+import { MdCorporateFare, MdVerified, MdSmartphone, MdDashboard, MdTrendingUp, MdGroup } from "react-icons/md"
 import "./LandingPage.css"
 import { useNavigate } from "react-router-dom"
 import Chatbox from "./Chatbox"
 
-const images = {
-  heroBg: "https://www.shutterstock.com/image-photo/group-business-people-outlines-lit-600nw-2145032061.jpg",
-  ecosystem:
-    "https://images.unsplash.com/photo-1551288049-bebda4e38f71?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80",
-  scoreMeter:
-    "https://images.unsplash.com/photo-1581093450021-4a7360e9a7e0?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80",
-  pathway:
-    "https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80",
-  africaMap:
-    "https://images.unsplash.com/photo-1526778548025-fa2f459cd5c1?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80",
-  testimonial1: "https://randomuser.me/api/portraits/women/44.jpg",
-  testimonial2: "https://randomuser.me/api/portraits/men/32.jpg",
-  testimonial3: "https://randomuser.me/api/portraits/women/68.jpg",
-  bigScore: "https://images.unsplash.com/photo-1551288049-bebda4e38f71?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80",
-  trustImage: "https://images.unsplash.com/photo-1552664730-d307ca884978?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80",
-  collaboration: "https://images.unsplash.com/photo-1522071820081-009f0129c71c?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80"
+const C = {
+  dark:"#1C1410", sidebar:"#2E2218", primary:"#7C4D2A", secondary:"#A0703E",
+  amber:"#D4894A", light:"#F5F0E8", cream:"#FAF7F2", white:"#FFFFFF",
+  border:"#EAE2D8", muted:"#7A6A5E", neutral:"#CDC3B8", accent:"#C4B09A",
+  green:"#1E7A47", greenBg:"#E4F4EB", orange:"#E8831A", orangeBg:"#FEF3E8",
+  red:"#BE3B2A", redBg:"#FDE8E5", blue:"#1D5FAA", blueBg:"#E6EFF9",
+  card:"#FFFFFF", pageBg:"#F0EBE2",
 }
 
-const colors = {
-  primary: "#754A2D",
-  secondary: "#9E6E3C",
-  dark: "#372C27",
-  light: "#F2F0E6",
-  neutral: "#D3D2CE",
-  accent: "#BCAE9C",
-  scoreBg: "#F8F4EF",
-}
-
-// Countdown Timer Component - Made fully responsive
-const CountdownTimer = ({ isMobile = false, onCountdownEnd }) => {
-  const [timeLeft, setTimeLeft] = useState({
-    days: 0,
-    hours: 0,
-    minutes: 0,
-    seconds: 0
-  })
-
-  useEffect(() => {
-    const calculateTimeLeft = () => {
-      // Set the target date to October 1, 2025
-      const targetDate = new Date('October 1, 2025 00:00:00')
-      const now = new Date()
-      const difference = targetDate - now
-
-      if (difference > 0) {
-        setTimeLeft({
-          days: Math.floor(difference / (1000 * 60 * 60 * 24)),
-          hours: Math.floor((difference / (1000 * 60 * 60)) % 24),
-          minutes: Math.floor((difference / 1000 / 60) % 60),
-          seconds: Math.floor((difference / 1000) % 60)
-        })
-      } else {
-        // Countdown has ended
-        setTimeLeft({
-          days: 0,
-          hours: 0,
-          minutes: 0,
-          seconds: 0
-        })
-        onCountdownEnd()
-      }
-    }
-
-    const timer = setInterval(calculateTimeLeft, 1000)
-    calculateTimeLeft() // Initial calculation
-
-    return () => clearInterval(timer)
+const CountdownTimer = ({ isMobile, onCountdownEnd }) => {
+  const [t, setT] = useState({ d:0,h:0,m:0,s:0 })
+  const calc = useCallback(() => {
+    const diff = new Date("October 1, 2025 00:00:00") - new Date()
+    if (diff > 0) setT({ d:Math.floor(diff/86400000),h:Math.floor((diff/3600000)%24),m:Math.floor((diff/60000)%60),s:Math.floor((diff/1000)%60) })
+    else { setT({d:0,h:0,m:0,s:0}); onCountdownEnd?.() }
   }, [onCountdownEnd])
-
+  useEffect(() => { calc(); const id=setInterval(calc,1000); return ()=>clearInterval(id) }, [calc])
+  const Box=({val,lbl})=>(
+    <div style={{textAlign:"center"}}>
+      <div style={{background:"rgba(255,255,255,0.15)",backdropFilter:"blur(8px)",border:"1px solid rgba(255,255,255,0.25)",color:"#fff",borderRadius:10,fontWeight:800,fontSize:isMobile?"1.1rem":"1.5rem",minWidth:isMobile?48:62,padding:"10px 12px",letterSpacing:"0.02em"}}>{String(val).padStart(2,"0")}</div>
+      <div style={{fontSize:"0.58rem",marginTop:5,color:"rgba(255,255,255,0.6)",fontWeight:700,letterSpacing:"0.14em",textTransform:"uppercase"}}>{lbl}</div>
+    </div>
+  )
   return (
-    <div style={{ 
-      display: 'flex', 
-      justifyContent: 'center', 
-      gap: isMobile ? '8px' : '15px', 
-      marginTop: '15px',
-      flexWrap: 'wrap'
-    }}>
-      <div style={{ textAlign: 'center' }}>
-        <div style={{
-          backgroundColor: colors.primary,
-          color: colors.light,
-          padding: isMobile ? '6px 8px' : '8px 12px',
-          borderRadius: '6px',
-          fontWeight: '700',
-          fontSize: isMobile ? '1rem' : '1.2rem',
-          minWidth: isMobile ? '45px' : '60px'
-        }}>
-          {timeLeft.days}
-        </div>
-        <div style={{ 
-          fontSize: isMobile ? '0.6rem' : '0.7rem', 
-          marginTop: '5px', 
-          color: colors.dark 
-        }}>
-          DAYS
+    <div style={{display:"flex",gap:10,alignItems:"flex-start",flexWrap:"wrap",justifyContent:"center"}}>
+      <Box val={t.d} lbl="Days"/><span style={{color:"rgba(255,255,255,0.4)",fontSize:"1.5rem",marginTop:8}}>:</span>
+      <Box val={t.h} lbl="Hrs"/><span style={{color:"rgba(255,255,255,0.4)",fontSize:"1.5rem",marginTop:8}}>:</span>
+      <Box val={t.m} lbl="Min"/><span style={{color:"rgba(255,255,255,0.4)",fontSize:"1.5rem",marginTop:8}}>:</span>
+      <Box val={t.s} lbl="Sec"/>
+    </div>
+  )
+}
+
+const RegModal = ({ onClose, isMobile }) => (
+  <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.7)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:2000,backdropFilter:"blur(4px)"}}>
+    <div style={{background:C.white,borderRadius:20,padding:isMobile?"24px":"40px",maxWidth:480,width:"92%",boxShadow:"0 32px 80px rgba(0,0,0,0.3)",position:"relative"}}>
+      <button onClick={onClose} style={{position:"absolute",top:16,right:18,background:"none",border:"none",fontSize:"1.4rem",cursor:"pointer",color:C.muted,lineHeight:1,width:32,height:32,display:"flex",alignItems:"center",justifyContent:"center",borderRadius:8}}>x</button>
+      <div style={{width:56,height:56,borderRadius:16,background:C.orangeBg,border:`2px solid ${C.orange}40`,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:16}}><FaRocket size={22} color={C.orange}/></div>
+      <h2 style={{fontSize:"1.35rem",fontWeight:800,color:C.dark,margin:"0 0 8px"}}>Launching October 1, 2025</h2>
+      <p style={{fontSize:"0.88rem",color:C.muted,lineHeight:1.6,marginBottom:20}}>Join thousands of African businesses growing smarter on BIG Marketplace.</p>
+      <CountdownTimer isMobile={isMobile}/>
+      <div style={{display:"flex",gap:10,marginTop:24,flexDirection:isMobile?"column":"row"}}>
+        <button onClick={onClose} style={{flex:1,background:"transparent",color:C.muted,border:`1.5px solid ${C.border}`,padding:"11px 20px",borderRadius:50,cursor:"pointer",fontSize:"0.87rem",fontWeight:600}}>Close</button>
+        <Link to="/HowItWorks" onClick={onClose} style={{flex:1,background:C.primary,color:"#fff",padding:"11px 20px",borderRadius:50,fontSize:"0.87rem",fontWeight:700,textDecoration:"none",display:"inline-block",textAlign:"center"}}>Explore Demo</Link>
+      </div>
+    </div>
+  </div>
+)
+
+const ScoreRing = ({ pct=61, size=110 }) => {
+  const r=(size/2)-10, circ=2*Math.PI*r, dash=(pct/100)*circ
+  return (
+    <div style={{position:"relative",width:size,height:size,flexShrink:0}}>
+      <svg width={size} height={size} style={{transform:"rotate(-90deg)"}}>
+        <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth={9}/>
+        <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={C.orange} strokeWidth={9} strokeLinecap="round" strokeDasharray={`${dash} ${circ-dash}`}/>
+      </svg>
+      <div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
+        <span style={{fontSize:"1.3rem",fontWeight:900,color:"#fff",lineHeight:1}}>{pct}%</span>
+        <span style={{fontSize:"0.5rem",color:"rgba(255,255,255,0.55)",marginTop:2,textTransform:"uppercase",letterSpacing:"0.08em"}}>Score</span>
+      </div>
+    </div>
+  )
+}
+
+const HeroScoreWidget = () => (
+  <div style={{background:"rgba(255,255,255,0.06)",backdropFilter:"blur(20px)",border:"1px solid rgba(255,255,255,0.14)",borderRadius:20,padding:"24px",minWidth:320,maxWidth:360,flexShrink:0}}>
+    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20}}>
+      <div>
+        <div style={{fontSize:"0.7rem",color:"rgba(255,255,255,0.55)",fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:4}}>Your BIG Score</div>
+        <div style={{fontSize:"2.2rem",fontWeight:900,color:"#fff",lineHeight:1}}>61<span style={{fontSize:"1rem",fontWeight:500,color:"rgba(255,255,255,0.5)"}}>/100</span></div>
+        <div style={{marginTop:6,display:"inline-flex",alignItems:"center",gap:5,background:C.orange+"33",border:`1px solid ${C.orange}55`,borderRadius:20,padding:"3px 10px"}}>
+          <span style={{width:6,height:6,borderRadius:"50%",background:C.orange,display:"inline-block"}}/>
+          <span style={{fontSize:"0.68rem",fontWeight:700,color:C.orange}}>Progressing</span>
         </div>
       </div>
-      
-      <div style={{ textAlign: 'center' }}>
-        <div style={{
-          backgroundColor: colors.primary,
-          color: colors.light,
-          padding: isMobile ? '6px 8px' : '8px 12px',
-          borderRadius: '6px',
-          fontWeight: '700',
-          fontSize: isMobile ? '1rem' : '1.2rem',
-          minWidth: isMobile ? '45px' : '60px'
-        }}>
-          {timeLeft.hours}
+      <ScoreRing pct={61} size={100}/>
+    </div>
+    {[
+      {label:"Compliance",  pct:29, color:C.red},
+      {label:"Legitimacy",  pct:90, color:C.green},
+      {label:"Leadership",  pct:72, color:C.orange},
+      {label:"Governance",  pct:90, color:C.green},
+      {label:"Capital Appeal",pct:65,color:C.orange},
+    ].map(d=>(
+      <div key={d.label} style={{marginBottom:9}}>
+        <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+          <span style={{fontSize:"0.72rem",color:"rgba(255,255,255,0.7)",fontWeight:500}}>{d.label}</span>
+          <span style={{fontSize:"0.72rem",fontWeight:700,color:d.color}}>{d.pct}%</span>
         </div>
-        <div style={{ 
-          fontSize: isMobile ? '0.6rem' : '0.7rem', 
-          marginTop: '5px', 
-          color: colors.dark 
-        }}>
-          HOURS
+        <div style={{height:5,background:"rgba(255,255,255,0.1)",borderRadius:3,overflow:"hidden"}}>
+          <div style={{width:`${d.pct}%`,height:"100%",background:d.color,borderRadius:3}}/>
         </div>
       </div>
-      
-      <div style={{ textAlign: 'center' }}>
-        <div style={{
-          backgroundColor: colors.primary,
-          color: colors.light,
-          padding: isMobile ? '6px 8px' : '8px 12px',
-          borderRadius: '6px',
-          fontWeight: '700',
-          fontSize: isMobile ? '1rem' : '1.2rem',
-          minWidth: isMobile ? '45px' : '60px'
-        }}>
-          {timeLeft.minutes}
-        </div>
-        <div style={{ 
-          fontSize: isMobile ? '0.6rem' : '0.7rem', 
-          marginTop: '5px', 
-          color: colors.dark 
-        }}>
-          MINUTES
+    ))}
+  </div>
+)
+
+const SMSESidebar = ({ active="score" }) => {
+  const items=[
+    {id:"home",   icon:<FaHome size={14}/>,          label:"Home"},
+    {id:"profile",icon:<FaUser size={14}/>,           label:"My Profile"},
+    {id:"score",  icon:<FaChartBar size={14}/>,       label:"My BIG Score"},
+    {id:"apps",   icon:<FaClipboardList size={14}/>,  label:"My Applications"},
+    {id:"matches",icon:<FaHeart size={14}/>,           label:"My Matches"},
+    {id:"growth", icon:<MdTrendingUp size={14}/>,     label:"My Growth Suite"},
+    {id:"insights",icon:<FaChartLine size={14}/>,     label:"BIG Insights"},
+    {id:"docs",   icon:<FaFileAlt size={14}/>,        label:"My Documents"},
+    {id:"msgs",   icon:<FaEnvelope size={14}/>,       label:"My Messages"},
+    {id:"cal",    icon:<FaCalendarAlt size={14}/>,    label:"My Calendar"},
+  ]
+  return (
+    <div style={{width:200,flexShrink:0,background:C.sidebar,borderRadius:"12px 0 0 12px",padding:"16px 10px",display:"flex",flexDirection:"column",gap:2}}>
+      <div style={{display:"flex",alignItems:"center",gap:10,padding:"8px 10px",marginBottom:12}}>
+        <div style={{width:34,height:34,borderRadius:10,background:C.primary,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,color:"#fff",fontSize:"0.9rem"}}>A</div>
+        <div>
+          <div style={{color:"#fff",fontWeight:700,fontSize:"0.82rem",lineHeight:1.2}}>Amara Holdings</div>
+          <div style={{color:C.accent,fontSize:"0.63rem",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.06em"}}>SMSE Dashboard</div>
         </div>
       </div>
-      
-      <div style={{ textAlign: 'center' }}>
-        <div style={{
-          backgroundColor: colors.primary,
-          color: colors.light,
-          padding: isMobile ? '6px 8px' : '8px 12px',
-          borderRadius: '6px',
-          fontWeight: '700',
-          fontSize: isMobile ? '1rem' : '1.2rem',
-          minWidth: isMobile ? '45px' : '60px'
-        }}>
-          {timeLeft.seconds}
+      {items.map(it=>(
+        <div key={it.id} style={{display:"flex",alignItems:"center",gap:9,padding:"8px 10px",borderRadius:8,background:it.id===active?"rgba(255,255,255,0.12)":"transparent",color:it.id===active?"#fff":C.accent,fontSize:"0.78rem",fontWeight:it.id===active?700:500,cursor:"pointer",transition:"background 0.15s"}}>
+          <span style={{opacity:it.id===active?1:0.7}}>{it.icon}</span>{it.label}
         </div>
-        <div style={{ 
-          fontSize: isMobile ? '0.6rem' : '0.7rem', 
-          marginTop: '5px', 
-          color: colors.dark 
-        }}>
-          SECONDS
+      ))}
+    </div>
+  )
+}
+
+const InvestorSidebar = ({ active="matches" }) => {
+  const items=[
+    {id:"home",     icon:<FaHome size={14}/>,         label:"Home"},
+    {id:"profile",  icon:<FaUser size={14}/>,          label:"My Profile"},
+    {id:"matches",  icon:<FaHeart size={14}/>,          label:"My Matches"},
+    {id:"cohorts",  icon:<MdGroup size={14}/>,          label:"My Cohorts"},
+    {id:"portfolio",icon:<FaChartBar size={14}/>,      label:"My Portfolio"},
+    {id:"insights", icon:<FaChartLine size={14}/>,     label:"BIG Insights"},
+    {id:"docs",     icon:<FaFileAlt size={14}/>,       label:"My Documents"},
+    {id:"msgs",     icon:<FaEnvelope size={14}/>,      label:"My Messages"},
+    {id:"cal",      icon:<FaCalendarAlt size={14}/>,   label:"My Calendar"},
+    {id:"billing",  icon:<FaCreditCard size={14}/>,    label:"Billing & Payments"},
+  ]
+  return (
+    <div style={{width:200,flexShrink:0,background:C.sidebar,borderRadius:"12px 0 0 12px",padding:"16px 10px",display:"flex",flexDirection:"column",gap:2}}>
+      <div style={{display:"flex",alignItems:"center",gap:10,padding:"8px 10px",marginBottom:12}}>
+        <div style={{width:34,height:34,borderRadius:10,background:C.green,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,color:"#fff",fontSize:"0.9rem"}}>N</div>
+        <div>
+          <div style={{color:"#fff",fontWeight:700,fontSize:"0.82rem",lineHeight:1.2}}>Nomvula Capital</div>
+          <div style={{color:C.accent,fontSize:"0.63rem",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.06em"}}>Investor Portal</div>
+        </div>
+      </div>
+      {items.map(it=>(
+        <div key={it.id} style={{display:"flex",alignItems:"center",gap:9,padding:"8px 10px",borderRadius:8,background:it.id===active?"rgba(255,255,255,0.12)":"transparent",color:it.id===active?"#fff":C.accent,fontSize:"0.78rem",fontWeight:it.id===active?700:500,cursor:"pointer",transition:"background 0.15s"}}>
+          <span style={{opacity:it.id===active?1:0.7}}>{it.icon}</span>{it.label}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+const SMSEDashboard = () => {
+  const [bdOpen,setBdOpen]=useState(false)
+  const subScores=[
+    {label:"Compliance score",  dot:C.red,   pct:29, weight:32,color:C.red},
+    {label:"Legitimacy score",  dot:C.green, pct:90, weight:13,color:C.green},
+    {label:"Leadership score",  dot:C.orange,pct:72, weight:10,color:C.orange},
+    {label:"Governance score",  dot:C.green, pct:90, weight:13,color:C.green},
+    {label:"Capital appeal score",dot:C.orange,pct:65,weight:32,color:C.orange},
+  ]
+  return (
+    <div style={{display:"flex",borderRadius:14,overflow:"hidden",boxShadow:"0 8px 40px rgba(28,20,16,0.18)",border:`1px solid ${C.border}`,width:"100%"}}>
+      <SMSESidebar active="score"/>
+      <div style={{flex:1,background:"#F5F0E8",minWidth:0}}>
+        <div style={{background:C.white,borderBottom:`1px solid ${C.border}`,padding:"10px 18px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+          <div style={{display:"flex",alignItems:"center",gap:12}}>
+            <div style={{display:"flex",alignItems:"center",gap:7}}>
+              <div style={{width:28,height:28,borderRadius:8,background:C.primary,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,color:"#fff",fontSize:"0.85rem"}}>B</div>
+              <div style={{fontWeight:800,fontSize:"0.9rem",color:C.dark,letterSpacing:"-0.01em"}}>BIG <span style={{color:C.primary}}>Marketplace</span></div>
+            </div>
+            <div style={{width:1,height:20,background:C.border}}/>
+            <div>
+              <span style={{fontSize:"0.8rem",color:C.muted}}>Welcome back, <strong style={{color:C.dark}}>Amara Holdings</strong></span>
+              <div style={{fontSize:"0.65rem",color:C.muted}}>Monday, June 15, 2026</div>
+            </div>
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <button style={{background:C.amber+"22",color:C.secondary,border:`1px solid ${C.amber}44`,borderRadius:20,padding:"5px 12px",fontSize:"0.7rem",fontWeight:700,cursor:"pointer"}}>Feedback</button>
+            <button style={{background:C.primary,color:"#fff",border:"none",borderRadius:20,padding:"5px 12px",fontSize:"0.7rem",fontWeight:700,cursor:"pointer"}}>Book Session</button>
+            <FaBell size={14} color={C.muted}/>
+          </div>
+        </div>
+        <div style={{display:"flex",gap:0,borderBottom:`1px solid ${C.border}`}}>
+          <button style={{flex:1,padding:"10px",background:C.sidebar,color:"#fff",border:"none",fontSize:"0.8rem",fontWeight:700,cursor:"pointer"}}>BIG Score</button>
+          <button style={{flex:1,padding:"10px",background:"transparent",color:C.muted,border:"none",fontSize:"0.8rem",fontWeight:500,cursor:"pointer",borderLeft:`1px solid ${C.border}`}}>Improve My BIG Score</button>
+        </div>
+        <div style={{padding:"14px 16px",background:C.white,borderBottom:`1px solid ${C.border}`}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+            <span style={{fontSize:"0.85rem",fontWeight:700,color:C.dark,borderBottom:`2px solid ${C.amber}`,paddingBottom:2}}>Application Tracker</span>
+            <span style={{fontSize:"0.68rem",color:C.muted}}>Track your application status across different opportunities</span>
+          </div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:8}}>
+            {[{label:"Funding & Support",ok:true},{label:"Products & Services",ok:true},{label:"Advisory/Board Member",ok:false},{label:"Intern",ok:true}].map(item=>(
+              <div key={item.label} style={{background:item.ok?C.greenBg:C.redBg,border:`1px solid ${item.ok?C.green:C.red}30`,borderRadius:8,padding:"10px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                <span style={{fontSize:"0.69rem",fontWeight:600,color:C.dark,lineHeight:1.3,flex:1}}>{item.label}</span>
+                <div style={{flexShrink:0,textAlign:"center"}}>
+                  <div style={{width:18,height:18,borderRadius:"50%",background:item.ok?C.green:C.red,display:"flex",alignItems:"center",justifyContent:"center",margin:"0 auto 2px"}}>{item.ok?<FaCheck size={8} color="#fff"/>:<span style={{color:"#fff",fontSize:"0.6rem",fontWeight:900}}>x</span>}</div>
+                  <span style={{fontSize:"0.58rem",fontWeight:700,color:item.ok?C.green:C.red,whiteSpace:"nowrap"}}>{item.ok?"Applied":"Not Applied"}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12,padding:"14px 16px"}}>
+          <div style={{background:C.white,borderRadius:12,padding:"16px",boxShadow:`0 2px 8px rgba(0,0,0,0.06)`,border:`1px solid ${C.border}`}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}}>
+              <div>
+                <div style={{fontSize:"0.75rem",color:C.muted,fontWeight:700,marginBottom:4}}>BIG Score</div>
+                <div style={{fontSize:"0.68rem",color:C.muted}}>Overall business assessment</div>
+              </div>
+              <button style={{background:C.sidebar+"18",color:C.muted,border:"none",borderRadius:6,padding:"3px 8px",fontSize:"0.62rem",cursor:"pointer",display:"flex",alignItems:"center",gap:3}}><FaCommentDots size={9}/> Help</button>
+            </div>
+            <div style={{display:"flex",justifyContent:"center",marginBottom:12}}>
+              <div style={{position:"relative",width:80,height:80}}>
+                <svg width={80} height={80} style={{transform:"rotate(-90deg)"}}>
+                  <circle cx={40} cy={40} r={32} fill="none" stroke="#ECE5DE" strokeWidth={8}/>
+                  <circle cx={40} cy={40} r={32} fill="none" stroke={C.orange} strokeWidth={8} strokeLinecap="round" strokeDasharray={`${0.61*2*Math.PI*32} ${2*Math.PI*32}`}/>
+                </svg>
+                <div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
+                  <span style={{fontSize:"1.1rem",fontWeight:900,color:C.dark,lineHeight:1}}>61%</span>
+                </div>
+              </div>
+            </div>
+            <div style={{textAlign:"center",marginBottom:12}}>
+              <span style={{background:C.orange,color:"#fff",fontSize:"0.6rem",fontWeight:800,padding:"3px 10px",borderRadius:20,letterSpacing:"0.05em"}}>PROGRESSING</span>
+            </div>
+            <div style={{display:"flex",gap:6}}>
+              <button onClick={()=>setBdOpen(o=>!o)} style={{flex:1,background:C.sidebar,color:"#fff",border:"none",borderRadius:7,padding:"7px 0",fontSize:"0.65rem",fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:3}}>Score breakdown {bdOpen?<FaChevronUp size={8}/>:<FaChevronDown size={8}/>}</button>
+              <button style={{flex:1,background:C.orangeBg,color:C.orange,border:`1px solid ${C.orange}44`,borderRadius:7,padding:"7px 0",fontSize:"0.65rem",fontWeight:700,cursor:"pointer"}}>Improve score</button>
+            </div>
+            {bdOpen&&(
+              <div style={{marginTop:10,borderTop:`1px solid ${C.border}`,paddingTop:10}}>
+                {subScores.map((s,i)=>(
+                  <div key={s.label} style={{marginBottom:8}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:3}}>
+                      <div style={{display:"flex",alignItems:"center",gap:5}}>
+                        <span style={{width:7,height:7,borderRadius:"50%",background:s.dot,flexShrink:0}}/>
+                        <span style={{fontSize:"0.65rem",fontWeight:600,color:C.dark}}>{s.label}</span>
+                      </div>
+                      <span style={{fontSize:"0.62rem",color:s.color,fontWeight:700}}>{s.pct}%</span>
+                    </div>
+                    <div style={{height:4,background:"#EDE8E3",borderRadius:3,overflow:"hidden"}}><div style={{width:`${s.pct}%`,height:"100%",background:s.color,borderRadius:3}}/></div>
+                    <div style={{fontSize:"0.58rem",color:C.muted,marginTop:1}}>{s.pct}% x {s.weight}% wt = {Math.round(s.pct*s.weight/100)}%</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <div style={{background:C.white,borderRadius:12,padding:"16px",boxShadow:`0 2px 8px rgba(0,0,0,0.06)`,border:`1px solid ${C.border}`}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+              <div><div style={{fontSize:"0.75rem",color:C.muted,fontWeight:700,marginBottom:2}}>Customer Reviews</div><div style={{fontSize:"0.65rem",color:C.muted}}>Client Feedback and Ratings</div></div>
+              <FaCommentDots size={14} color={C.muted}/>
+            </div>
+            <div style={{background:C.cream,borderRadius:10,padding:"14px",marginBottom:12,display:"flex",alignItems:"center",gap:14}}>
+              <span style={{fontSize:"2rem",fontWeight:900,color:C.dark}}>2</span>
+              <div>
+                <div style={{display:"flex",gap:2,marginBottom:4}}>{[1,2,3,4].map(i=><FaStar key={i} size={12} color="#F59E0B"/>)}<FaStar size={12} color={C.border}/></div>
+                <div style={{fontSize:"0.7rem",fontWeight:700,color:C.secondary}}>4.0 Commended</div>
+                <div style={{fontSize:"0.6rem",color:C.muted}}>Reviews</div>
+              </div>
+            </div>
+            <button style={{width:"100%",background:C.green,color:"#fff",border:"none",borderRadius:8,padding:"8px",fontSize:"0.7rem",fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:5}}><FaStar size={10}/> Great Feedback</button>
+          </div>
+          <div style={{background:C.sidebar,borderRadius:12,padding:"16px",boxShadow:`0 2px 8px rgba(0,0,0,0.06)`}}>
+            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+              <FaFileAlt size={14} color={C.accent}/>
+              <div><div style={{color:"#fff",fontWeight:700,fontSize:"0.78rem"}}>BIG Score Summary Analysis</div><div style={{color:C.accent,fontSize:"0.62rem"}}>05/06/2026</div></div>
+            </div>
+            <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:10}}>
+              <span style={{width:7,height:7,borderRadius:"50%",background:"#FF6B9D"}}/>
+              <span style={{color:"#fff",fontSize:"0.7rem",fontWeight:700,textTransform:"uppercase",letterSpacing:"0.06em"}}>Top 3 Priorities</span>
+            </div>
+            {[{t:"Overall Readiness",d:"Address fundamental business readiness..."},{t:"Leadership Development",d:"Enhance leadership team capabilities..."},{t:"Governance Structure",d:"Strengthen your governance framew..."}].map(p=>(
+              <div key={p.t} style={{background:"rgba(255,255,255,0.1)",borderRadius:8,padding:"8px",marginBottom:6}}>
+                <div style={{color:"#fff",fontSize:"0.7rem",fontWeight:700,marginBottom:2}}>{p.t}</div>
+                <div style={{color:C.accent,fontSize:"0.62rem",lineHeight:1.4}}>{p.d}</div>
+              </div>
+            ))}
+            <button style={{width:"100%",background:"rgba(255,255,255,0.12)",color:"#fff",border:"none",borderRadius:8,padding:"8px",fontSize:"0.7rem",fontWeight:700,cursor:"pointer",marginTop:4,display:"flex",alignItems:"center",justifyContent:"center",gap:5}}><FaFileAlt size={10}/> View Full Summary</button>
+          </div>
         </div>
       </div>
     </div>
   )
 }
 
-const RegistrationModal = ({ onClose, navigate, isMobile }) => {
+const InvestorDashboard = () => {
+  const stages=[
+    {label:"Matches",n:27,bg:C.primary},{label:"Application",n:4,bg:C.sidebar},
+    {label:"Evaluation",n:0,bg:C.sidebar},{label:"Due Diligence",n:0,bg:C.sidebar},
+    {label:"Decision",n:0,bg:C.sidebar},{label:"Terms Issue",n:1,bg:C.sidebar},
+    {label:"Deals Closed",n:2,bg:C.green},{label:"Withdrawn/Declined",n:1,bg:C.red},
+  ]
+  const rows=[
+    {name:"yale",  loc:"South Africa",sector:"Banking, Finance & Insurance",stage:"Growth/pe",funding:"R10,000,000",equity:"Equity",support:"Network Access",date:"2025-09-22",match:80,score:21},
+    {name:"ivory", loc:"South Africa",sector:"Information Technology (it)",  stage:"Growth/pe",funding:"R800,000",  equity:"Equity",support:"Network Access",date:"2025-10-03",match:99,score:69},
+    {name:"CO_OPS",loc:"South Africa",sector:"Information Technology (it)",  stage:"Growth/pe",funding:"R5,000,000",equity:"Conv. Notes, Grants, Debt",support:"Incubation",date:"2026-03-23",match:100,score:61},
+  ]
+  const Bar=({pct,color})=>(
+    <div style={{display:"flex",alignItems:"center",gap:5}}>
+      <div style={{width:44,height:5,background:"#EDE8E3",borderRadius:3,overflow:"hidden"}}><div style={{width:`${pct}%`,height:"100%",background:color,borderRadius:3}}/></div>
+      <span style={{fontSize:"0.68rem",fontWeight:800,color}}>{pct}%</span>
+    </div>
+  )
   return (
-    <div
-      style={{
-        position: "fixed",
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        backgroundColor: "rgba(0,0,0,0.7)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        zIndex: 1000,
-      }}
-    >
-      <div
-        style={{
-          backgroundColor: "white",
-          borderRadius: "8px",
-          padding: isMobile ? "20px" : "30px",
-          maxWidth: isMobile ? "90%" : "600px",
-          width: "90%",
-          boxShadow: "0 5px 20px rgba(0,0,0,0.3)",
-          position: "relative",
-        }}
-      >
-        <button
-          onClick={onClose}
-          style={{
-            position: "absolute",
-            top: "15px",
-            right: "15px",
-            background: "none",
-            border: "none",
-            fontSize: "1.5rem",
-            cursor: "pointer",
-            color: colors.dark,
-          }}
-        >
-          ×
-        </button>
-
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            marginBottom: "20px",
-          }}
-        >
-          <FaClock size={isMobile ? 24 : 32} color={colors.secondary} style={{ marginRight: "15px" }} />
-          <h2
-            style={{
-              fontSize: isMobile ? "1.2rem" : "1.5rem",
-              color: colors.primary,
-              margin: 0,
-            }}
-          >
-            Registrations Open October 1, 2025
-          </h2>
+    <div style={{display:"flex",borderRadius:14,overflow:"hidden",boxShadow:"0 8px 40px rgba(28,20,16,0.18)",border:`1px solid ${C.border}`,width:"100%"}}>
+      <InvestorSidebar active="matches"/>
+      <div style={{flex:1,background:"#F5F0E8",minWidth:0}}>
+        <div style={{background:C.white,borderBottom:`1px solid ${C.border}`,padding:"10px 18px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+          <div style={{display:"flex",alignItems:"center",gap:12}}>
+            <div style={{display:"flex",alignItems:"center",gap:7}}>
+              <div style={{width:28,height:28,borderRadius:8,background:C.primary,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,color:"#fff",fontSize:"0.85rem"}}>B</div>
+              <div style={{fontWeight:800,fontSize:"0.9rem",color:C.dark,letterSpacing:"-0.01em"}}>BIG <span style={{color:C.primary}}>Marketplace</span></div>
+            </div>
+            <div style={{width:1,height:20,background:C.border}}/>
+            <div>
+              <span style={{fontSize:"0.8rem",color:C.muted}}>Welcome back, <strong style={{color:C.dark}}>Nomvula Capital</strong></span>
+              <div style={{fontSize:"0.65rem",color:C.muted}}>Monday, June 15, 2026</div>
+            </div>
+          </div>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <button style={{background:C.amber+"22",color:C.secondary,border:`1px solid ${C.amber}44`,borderRadius:20,padding:"5px 12px",fontSize:"0.7rem",fontWeight:700,cursor:"pointer"}}>Feedback</button>
+            <button style={{background:C.primary,color:"#fff",border:"none",borderRadius:20,padding:"5px 12px",fontSize:"0.7rem",fontWeight:700,cursor:"pointer"}}>Book Session</button>
+            <div style={{position:"relative"}}><FaBell size={14} color={C.muted}/><div style={{position:"absolute",top:-4,right:-4,width:14,height:14,background:C.red,borderRadius:"50%",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"0.5rem",color:"#fff",fontWeight:900}}>5</div></div>
+          </div>
         </div>
-
-        <div
-          style={{
-            backgroundColor: `${colors.light}80`,
-            padding: "15px",
-            borderRadius: "4px",
-            marginBottom: "20px",
-          }}
-        >
-          <p
-            style={{
-              margin: 0,
-              fontSize: isMobile ? "0.85rem" : "0.95rem",
-              lineHeight: "1.6",
-              color: colors.dark,
-            }}
-          >
-            We're excited that you're interested in joining the BIG Marketplace! Our platform will be open for registrations starting October 1, 2025.
-          </p>
-        </div>
-
-        <p
-          style={{
-            fontSize: isMobile ? "0.8rem" : "0.9rem",
-            lineHeight: "1.6",
-            color: colors.dark,
-            marginBottom: "25px",
-          }}
-        >
-          Countdown to registration:
-        </p>
-
-        <CountdownTimer isMobile={isMobile} />
-
-        <p
-          style={{
-            fontSize: isMobile ? "0.8rem" : "0.9rem",
-            lineHeight: "1.6",
-            color: colors.dark,
-            marginBottom: "25px",
-            fontStyle: "italic",
-          }}
-        >
-          In the meantime, feel free to explore our demo and learn more about how BIG Marketplace works.
-        </p>
-
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "flex-end",
-            gap: "10px",
-            flexDirection: isMobile ? "column" : "row",
-          }}
-        >
-          <button
-            onClick={onClose}
-            style={{
-              backgroundColor: "transparent",
-              color: colors.dark,
-              border: `1px solid ${colors.dark}`,
-              padding: "10px 25px",
-              borderRadius: "4px",
-              cursor: "pointer",
-              fontSize: "0.9rem",
-              fontWeight: "600",
-              transition: "all 0.3s ease",
-              width: isMobile ? "100%" : "auto",
-            }}
-          >
-            Close
-          </button>
-          <Link
-            to="/HowItWorks"
-            style={{
-              backgroundColor: colors.primary,
-              color: "white",
-              border: "none",
-              padding: "10px 25px",
-              borderRadius: "4px",
-              cursor: "pointer",
-              fontSize: "0.9rem",
-              fontWeight: "600",
-              transition: "all 0.3s ease",
-              textDecoration: "none",
-              display: "inline-block",
-              textAlign: "center",
-              width: isMobile ? "100%" : "auto",
-            }}
-            onClick={onClose}
-          >
-            View Demo
-          </Link>
+        <div style={{padding:"14px 16px 0"}}>
+          <h3 style={{fontSize:"1rem",fontWeight:800,color:C.dark,margin:"0 0 12px"}}>DealFlow Pipeline</h3>
+          <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:14}}>
+            {stages.map(s=>(
+              <div key={s.label} style={{background:s.bg,borderRadius:10,padding:"8px 12px",textAlign:"center",minWidth:72,flex:"0 0 auto"}}>
+                <div style={{color:"rgba(255,255,255,0.6)",fontSize:"0.58rem",fontWeight:700,marginBottom:3,whiteSpace:"nowrap"}}>{s.label}</div>
+                <div style={{color:"#fff",fontSize:"1.2rem",fontWeight:900}}>{s.n}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{display:"flex",borderBottom:`1px solid ${C.border}`,marginBottom:0}}>
+            <div style={{padding:"8px 14px",background:C.primary,color:"#fff",fontSize:"0.78rem",fontWeight:700,display:"flex",alignItems:"center",gap:6,cursor:"pointer",borderRadius:"8px 8px 0 0"}}><FaUsers size={11}/> My Matches</div>
+            <div style={{padding:"8px 14px",color:C.muted,fontSize:"0.78rem",fontWeight:600,display:"flex",alignItems:"center",gap:5,cursor:"pointer"}}><FaTrophy size={11} color={C.amber}/> Successful Deals <span style={{background:C.green,color:"#fff",fontSize:"0.58rem",borderRadius:20,padding:"1px 6px",fontWeight:900}}>2</span></div>
+          </div>
+          <div style={{background:C.white,borderRadius:"0 8px 8px 8px",border:`1px solid ${C.border}`,overflowX:"auto",marginBottom:14}}>
+            <table style={{width:"100%",borderCollapse:"collapse",fontSize:"0.68rem",tableLayout:"auto"}}>
+              <thead><tr style={{background:C.cream}}>
+                {["SMSE Name","Location","Sector","Stage","Funding Required","Equity Offered","Guarantees","Support Required","Application Date","% Match","Big Score"].map(h=>(
+                  <th key={h} style={{padding:"8px 9px",textAlign:"left",color:C.muted,fontWeight:700,borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap",fontSize:"0.63rem"}}>{h}</th>
+                ))}
+              </tr></thead>
+              <tbody>{rows.map((row,i)=>(
+                <tr key={row.name} style={{background:i%2===0?C.white:C.cream,borderBottom:`1px solid ${C.border}`}}>
+                  <td style={{padding:"8px 9px"}}><span style={{color:C.primary,fontWeight:700,cursor:"pointer",textDecoration:"underline",textUnderlineOffset:2}}>{row.name}</span></td>
+                  <td style={{padding:"8px 9px",color:C.dark,whiteSpace:"nowrap"}}>{row.loc}</td>
+                  <td style={{padding:"8px 9px",color:C.dark}}>{row.sector}</td>
+                  <td style={{padding:"8px 9px",color:C.dark,whiteSpace:"nowrap"}}>{row.stage}</td>
+                  <td style={{padding:"8px 9px",color:C.dark,whiteSpace:"nowrap"}}>{row.funding}</td>
+                  <td style={{padding:"8px 9px",color:C.dark}}>{row.equity}</td>
+                  <td style={{padding:"8px 9px"}}><span style={{color:C.primary,textDecoration:"underline",cursor:"pointer",fontSize:"0.65rem"}}>View guarantees</span></td>
+                  <td style={{padding:"8px 9px",color:C.dark}}>{row.support}</td>
+                  <td style={{padding:"8px 9px",color:C.dark,whiteSpace:"nowrap"}}>{row.date}</td>
+                  <td style={{padding:"8px 9px"}}><Bar pct={row.match} color={C.green}/></td>
+                  <td style={{padding:"8px 9px"}}><Bar pct={row.score} color={C.primary}/></td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>
@@ -350,1683 +397,345 @@ const RegistrationModal = ({ onClose, navigate, isMobile }) => {
 }
 
 const LandingPage = () => {
-  const navigate = useNavigate()
+  const navigate=useNavigate()
+  const [showScroll,setShowScroll]=useState(false)
+  const [showModal,setShowModal]=useState(false)
+  const [winW,setWinW]=useState(window.innerWidth)
+  const [regOpen,setRegOpen]=useState(false)
+  const [activeTab,setActiveTab]=useState("smse")
 
-  const [showScroll, setShowScroll] = useState(false)
-  const [expandedAbout, setExpandedAbout] = useState(false)
-  const [showRegistrationModal, setShowRegistrationModal] = useState(false)
-  const [windowWidth, setWindowWidth] = useState(window.innerWidth)
-  const [isRegistrationOpen, setIsRegistrationOpen] = useState(false)
+  useEffect(()=>{ const r=()=>setWinW(window.innerWidth); window.addEventListener("resize",r); return ()=>window.removeEventListener("resize",r) },[])
+  useEffect(()=>{ const s=()=>setShowScroll(window.scrollY>400); window.addEventListener("scroll",s); return ()=>window.removeEventListener("scroll",s) },[])
 
-  useEffect(() => {
-    const handleResize = () => {
-      setWindowWidth(window.innerWidth)
-    }
+  const mobile=winW<=768
+  const go=()=>regOpen?navigate("/loginRegister"):setShowModal(true)
 
-    window.addEventListener("resize", handleResize)
-    return () => window.removeEventListener("resize", handleResize)
-  }, [])
-
-  const checkScrollTop = () => {
-    if (!showScroll && window.pageYOffset > 400) {
-      setShowScroll(true)
-    } else if (showScroll && window.pageYOffset <= 400) {
-      setShowScroll(false)
-    }
-  }
-
-  useEffect(() => {
-    window.addEventListener("scroll", checkScrollTop)
-    return () => window.removeEventListener("scroll", checkScrollTop)
-  }, [])
-
-  const scrollTop = () => {
-    window.scrollTo({ top: 0, behavior: "smooth" })
-  }
-
-  const handleCountdownEnd = () => {
-    setIsRegistrationOpen(true)
-  }
-
-  const handleLoginClick = () => {
-    if (isRegistrationOpen) {
-      navigate("/loginRegister")
-    } else {
-      setShowRegistrationModal(true)
-    }
-  }
-
-  const handleGetStartedClick = () => {
-    if (isRegistrationOpen) {
-      navigate("/loginRegister")
-    } else {
-      setShowRegistrationModal(true)
-    }
-  }
-
-  const isMobile = windowWidth <= 768
-
-  // Benefit card data for consistent structure
-  const benefitCards = [
-    {
-      title: "SMSEs",
-      icon: <FaUsers size={24} color={colors.primary} />,
-      color: colors.primary,
-      tagline: "Be Seen. Be Matched. Grow.",
-      description: "Get matched with the right funders, service providers, and strategic support — all through one universal profile and your BIG Score.",
-      howItWorksLink: "/HowItWorksSMSE",
-      tooltip: "SMSEs = Small, Medium and Social Enterprises."
-    },
-    {
-      title: "Investors",
-      icon: <FaUserTie size={24} color={colors.secondary}  />,
-      color: colors.secondary,
-      tagline: "Discover. Verify. Invest.",
-      description: "Access verified, investment-ready SMEs with transparent scoring, compliance checks, and predictive insights",
-      howItWorksLink: "/HowItWorksInvestors",
-      tooltip: "Investors include venture capitalists, angel investors, impact investors, and other funding institutions looking for investment-ready businesses."
-    },
-    {
-      title: "Corporates",
-      icon: <MdCorporateFare size={24} color={colors.dark} />,
-      color: colors.dark,
-      tagline: "Source. Partner. Amplify impact.",
-      description: "Accelerate CSI & ESD impact by sourcing verified SMSEs that align with your goals.",
-      howItWorksLink: "/HowItWorksCorporates",
-      tooltip: "Corporates include large companies looking for suppliers, partners, or investment opportunities through their CSI, ESD or procurement programs."
-    },
-    {
-      title: "Catalysts",
-      icon: <FaHandHoldingHeart size={24} color={colors.primary} />,
-      color: colors.accent,
-      tagline: "Accelerate.Mentor. Fund. Track.",
-      description: "Whether you're an incubator, accelerator, or donor — support high-potential SMEs and monitor cohort outcomes via the BIG Score.",
-      howItWorksLink: "/HowItWorksCatalysts",
-      tooltip: "Support partners include incubators, accelerators, development agencies and other organizations that support SMSE growth."
-    },
-    {
-      title: "Advisors",
-      icon: <FaUserTie size={24} color={colors.primary}/>,
-      color: "#5A5A5A",
-      tagline: "Guide. Mentor. Get Recognized.",
-      description: "Connect with businesses that need your expertise and grow your advisory practice.",
-      howItWorksLink: "/HowItWorksAdvisors",
-      tooltip: "Join as a strategic advisor or board candidate. Get matched to businesses that need your skills — and get recognized."
-    },
-    {
-      title: "Interns",
-      icon: <FaUsers size={24} color="#A8A8A8" />, // Silver color
-      color: "#A8A8A8", // Light gray
-      tagline: "Learn. Grow. Get Experience.",
-      description: "Gain valuable experience by working with high-potential SMEs and building your professional network.",
-      howItWorksLink: "/HowItWorksInterns",
-      tooltip: "Students and recent graduates looking to gain practical experience with African businesses."
-    }
+  const benefits=[
+    {title:"SMSEs",     icon:<FaUsers size={18}/>,             color:C.primary,   tagline:"Be Seen. Be Matched. Grow.",        desc:"Get matched with funders, service providers, and strategic support through one universal profile.",   link:"/HowItWorksSMSE",      tip:"Small, Medium and Social Enterprises."},
+    {title:"Investors", icon:<FaUserTie size={18}/>,           color:C.secondary, tagline:"Discover. Verify. Invest.",          desc:"Access verified, investment-ready SMEs with transparent scoring and predictive insights.",              link:"/HowItWorksInvestors", tip:"VCs, angel investors, and impact investors."},
+    {title:"Corporates",icon:<MdCorporateFare size={18}/>,     color:"#4A3728",   tagline:"Source. Partner. Amplify Impact.",   desc:"Accelerate CSI and ESD impact by sourcing verified SMSEs that align with your strategic goals.",          link:"/HowItWorksCorporates",tip:"Large companies sourcing via CSI or ESD."},
+    {title:"Catalysts", icon:<FaHandHoldingHeart size={18}/>,  color:"#8B6914",   tagline:"Accelerate. Mentor. Fund. Track.",   desc:"Support high-potential SMEs and monitor cohort outcomes via the BIG Score.",                            link:"/HowItWorksCatalysts", tip:"Incubators, accelerators, and development agencies."},
+    {title:"Advisors",  icon:<FaUserTie size={18}/>,           color:"#5A5A5A",   tagline:"Guide. Mentor. Get Recognised.",     desc:"Connect with businesses that need your expertise and grow your advisory practice.",                       link:"/HowItWorksAdvisors",  tip:"Strategic advisors matched to businesses."},
+    {title:"Interns",   icon:<FaUsers size={18}/>,             color:"#8A8A8A",   tagline:"Learn. Grow. Get Experience.",       desc:"Gain practical experience working with high-potential SMEs and build your professional network.",          link:"/HowItWorksInterns",   tip:"Students and graduates seeking practical experience."},
   ]
+  const steps=[
+    {n:"01",icon:<FaUser size={18}/>,     title:"Create Your Profile",    desc:"Sign up, upload your business details, and get verified across all key areas."},
+    {n:"02",icon:<FaChartBar size={18}/>, title:"Receive Your BIG Score", desc:"Our AI evaluates your business across five weighted dimensions."},
+    {n:"03",icon:<FaHandshake size={18}/>,title:"Unlock Opportunities",   desc:"Connect with funders, partners, and support programmes matched to your stage."},
+    {n:"04",icon:<FaChartLine size={18}/>,title:"Grow Your Business",     desc:"Track progress, improve your score, and scale with expert support."},
+  ]
+  const testimonials=[
+    {name:"Sipho M.", role:"Manufacturing Business", img:"https://randomuser.me/api/portraits/men/45.jpg",   stars:5, quote:"BIG Marketplace gave us credibility and connected us with the right investors. It is a complete game changer for African SMEs."},
+    {name:"Lebo K.",  role:"Agri Business Founder",  img:"https://randomuser.me/api/portraits/women/32.jpg", stars:5, quote:"The BIG Score helped us understand our strengths and gave us the confidence to grow and apply for funding."},
+    {name:"Thabo D.", role:"Impact Investor",         img:"https://randomuser.me/api/portraits/men/68.jpg",   stars:5, quote:"As an investor, I trust the data. BIG helps me find businesses with real verified potential."},
+  ]
+  const partners=["ABSA","Seda","SANBI","Standard Bank","AWS","Google for Startups"]
+
+  const css=`
+    *{box-sizing:border-box}
+    .lp-a{background:linear-gradient(135deg,${C.amber},${C.secondary});color:#fff;border:none;border-radius:12px;padding:14px 32px;font-size:0.95rem;font-weight:800;cursor:pointer;font-family:inherit;transition:opacity 0.2s,transform 0.14s;letter-spacing:0.01em;box-shadow:0 4px 16px rgba(200,132,58,0.35)}
+    .lp-a:hover{opacity:0.9;transform:translateY(-1px)}
+    .lp-w{background:rgba(255,255,255,0.1);color:#fff;border:1px solid rgba(255,255,255,0.25);border-radius:12px;padding:14px 32px;font-size:0.95rem;font-weight:600;cursor:pointer;font-family:inherit;transition:all 0.2s;text-decoration:none;display:inline-block;backdrop-filter:blur(8px)}
+    .lp-w:hover{background:rgba(255,255,255,0.18)}
+    .lp-b{background:${C.primary};color:#fff;border:none;border-radius:12px;padding:13px 30px;font-size:0.93rem;font-weight:700;cursor:pointer;font-family:inherit;transition:background 0.2s,transform 0.14s}
+    .lp-b:hover{background:#5A3420;transform:translateY(-1px)}
+    .lp-g{background:${C.green};color:#fff;border:none;border-radius:12px;padding:13px 30px;font-size:0.93rem;font-weight:700;cursor:pointer;font-family:inherit;transition:background 0.2s,transform 0.14s}
+    .lp-g:hover{background:#155A34;transform:translateY(-1px)}
+    .ben-card{background:${C.card};border-radius:16px;padding:22px 18px;border:1px solid ${C.border};display:flex;flex-direction:column;transition:transform 0.22s,box-shadow 0.22s,border-color 0.22s;position:relative;overflow:hidden}
+    .ben-card:hover{transform:translateY(-6px);box-shadow:0 20px 48px rgba(28,20,16,0.14);border-color:${C.neutral}}
+    .ben-card .tip{visibility:hidden;opacity:0;position:absolute;bottom:calc(100%+8px);left:50%;transform:translateX(-50%);background:${C.dark};color:#fff;font-size:0.72rem;padding:7px 12px;border-radius:10px;transition:opacity 0.18s;z-index:30;pointer-events:none;max-width:200px;white-space:normal;text-align:center;line-height:1.4}
+    .ben-card:hover .tip{visibility:visible;opacity:1}
+    .step-card{background:${C.card};border-radius:20px;padding:28px 22px;border:1px solid ${C.border};position:relative;transition:box-shadow 0.2s,transform 0.2s}
+    .step-card:hover{box-shadow:0 12px 32px rgba(28,20,16,0.1);transform:translateY(-3px)}
+    .tc{background:${C.card};border-radius:16px;padding:24px;border:1px solid ${C.border};transition:transform 0.22s,box-shadow 0.22s}
+    .tc:hover{transform:translateY(-4px);box-shadow:0 16px 40px rgba(28,20,16,0.1)}
+    .pb{background:${C.card};border:1.5px solid ${C.border};border-radius:10px;padding:10px 20px;font-size:0.8rem;font-weight:700;color:${C.dark};transition:all 0.2s;cursor:default}
+    .pb:hover{border-color:${C.secondary};color:${C.primary};background:${C.cream}}
+    .tab-b{flex:1;padding:11px 14px;border:none;font-size:0.85rem;font-weight:700;cursor:pointer;font-family:inherit;transition:all 0.2s;border-radius:0}
+    .stat-chip{background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);border-radius:12px;padding:16px 20px;backdrop-filter:blur(8px)}
+    @media(max-width:768px){.hero-r{flex-direction:column!important}.g2,.g3,.g4,.g6{grid-template-columns:1fr!important}}
+    @media(prefers-reduced-motion:reduce){*{transition-duration:0.01ms!important}}
+  `
 
   return (
-    <div
-      className="landing-page"
-      style={{
-        backgroundColor: colors.light,
-        fontFamily: "'Neue Haas Grotesk Text Pro', sans-serif",
-        overflowX: "hidden",
-        position: "relative",
-      }}
-    >
-      <style>
-        {`
-          .benefit-card {
-            position: relative;
-          }
-          .benefit-card .tooltip {
-            visibility: hidden;
-            opacity: 0;
-            width: 100%;
-            background-color: ${colors.dark};
-            color: #fff;
-            text-align: center;
-            border-radius: 4px;
-            padding: 10px;
-            position: absolute;
-            z-index: 1;
-            bottom: 100%;
-            left: 0;
-            transition: all 0.3s ease;
-            font-size: 0.8rem;
-            box-shadow: 0 3px 10px rgba(0,0,0,0.2);
-          }
-          .benefit-card:hover .tooltip {
-            visibility: visible;
-            opacity: 1;
-          }
-        `}
-      </style>
+    <div style={{background:C.light,fontFamily:"'Inter','Neue Haas Grotesk Text Pro',sans-serif",overflowX:"hidden"}}>
+      <style>{css}</style>
+      {showModal&&<RegModal onClose={()=>setShowModal(false)} isMobile={mobile}/>}
+      {mobile&&<div style={{background:C.primary,color:"#fff",padding:"8px 16px",textAlign:"center",fontSize:"0.74rem",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}><MdSmartphone/> Best viewed on a desktop or laptop.</div>}
+      <Header onLoginClick={go}/>
 
-      {showRegistrationModal && <RegistrationModal onClose={() => setShowRegistrationModal(false)} navigate={navigate} isMobile={isMobile} />}
-
-      {/* Desktop View Recommendation Notice */}
-      {isMobile && (
-        <div
-          style={{
-            backgroundColor: colors.primary,
-            color: colors.light,
-            padding: "10px 15px",
-            textAlign: "center",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            gap: "10px",
-            position: "sticky",
-            top: 0,
-            zIndex: 1000,
-          }}
-        >
-          <FaDesktop />
-          <span>For the best experience, we recommend viewing this website on a laptop or desktop computer.</span>
-        </div>
-      )}
-
-      <Header onLoginClick={handleLoginClick} />
-
-      {/* Hero Section */}
-      <section
-        style={{
-          background: `linear-gradient(90deg, ${colors.dark} 0%, rgba(55, 44, 39, 0.7) 50%, rgba(55, 44, 39, 0.15) 100%), url(${images.heroBg})`,
-          backgroundSize: "cover",
-          backgroundPosition: "center",
-          padding: isMobile ? "30px 15px" : "40px 20px",
-          color: colors.light,
-          position: "relative",
-          minHeight: isMobile ? "60vh" : "55vh",
-          display: "flex",
-          flexDirection: "column",
-          justifyContent: "center",
-        }}
-      >
-        <div
-          style={{
-            maxWidth: "1200px",
-            margin: "0 auto",
-            width: "100%",
-            position: "relative",
-            height: "100%",
-          }}
-        >
-          {/* Updated Registration Notice with Countdown */}
-          <div
-            style={{
-              position: isMobile ? "relative" : "absolute",
-              bottom: isMobile ? "10px" : "40px",
-              right: isMobile ? "0" : "-130px",
-              backgroundColor: isRegistrationOpen ? "rgba(34, 197, 94, 0.2)" : "rgba(223, 34, 34, 0.2)",
-              padding: isMobile ? "8px 12px" : "10px 15px",
-              borderRadius: "6px",
-              maxWidth: isMobile ? "100%" : "350px",
-              boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
-              borderLeft: `3px solid ${isRegistrationOpen ? "#22c55e" : "#ff4d4d"}`,
-              zIndex: 5,
-              marginTop: isMobile ? "20px" : "0",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                marginBottom: "5px",
-              }}
-            >
-              <FaClock
-                style={{
-                  color: "white",
-                  marginRight: "8px",
-                  fontSize: isMobile ? "0.8rem" : "1rem",
-                }}
-              />
-              <span
-                style={{
-                  color: "white",
-                  fontSize: isMobile ? "15px" : "17px",
-                  fontWeight: "600",
-                }}
-              >
-                {isRegistrationOpen ? "Registrations Now Open!" : "Registrations Open October 1, 2025"}
-              </span>
-            </div>
-            {!isRegistrationOpen ? (
-              <>
-                <p
-                  style={{
-                    margin: "5px 0 0 0",
-                    color: "white",
-                    fontSize: isMobile ? "0.7rem" : "0.8rem",
-                    lineHeight: "1.3",
-                  }}
-                >
-                  Countdown to registration:
-                </p>
-                <CountdownTimer isMobile={isMobile} onCountdownEnd={handleCountdownEnd} />
-              </>
-            ) : (
-              <p
-                style={{
-                  margin: "5px 0 0 0",
-                  color: "white",
-                  fontSize: isMobile ? "0.7rem" : "0.8rem",
-                  lineHeight: "1.3",
-                }}
-              >
-                Join BIG Marketplace today and start growing your business!
+      <section style={{background:`linear-gradient(105deg, rgba(28,20,16,0.94) 0%, rgba(61,42,26,0.88) 50%, rgba(28,20,16,0.75) 100%), url("https://images.unsplash.com/photo-1556761175-4b46a572b786?auto=format&fit=crop&w=1600&q=80")`,backgroundSize:"cover",backgroundPosition:"center top",padding:mobile?"44px 20px 52px":"68px 40px 76px",color:"#fff",position:"relative",overflow:"hidden",minHeight:mobile?"auto":520,display:"flex",alignItems:"center"}}>
+        <div style={{position:"absolute",top:"-15%",right:"0%",width:"400px",height:"400px",borderRadius:"50%",background:"rgba(212,137,74,0.07)",pointerEvents:"none"}}/>
+        <div style={{position:"absolute",bottom:"-8%",left:"25%",width:"260px",height:"260px",borderRadius:"50%",background:"rgba(124,77,42,0.1)",pointerEvents:"none"}}/>
+        <div style={{maxWidth:1200,margin:"0 auto",width:"100%",position:"relative",zIndex:1}}>
+          <div className="hero-r" style={{display:"flex",gap:mobile?40:64,alignItems:"center",justifyContent:"space-between"}}>
+            <div style={{flex:"1 1 520px",maxWidth:mobile?"100%":580}}>
+              <div style={{display:"inline-flex",alignItems:"center",gap:8,background:"rgba(212,137,74,0.18)",border:"1px solid rgba(212,137,74,0.35)",borderRadius:30,padding:"6px 16px 6px 10px",marginBottom:24,fontSize:"0.75rem",fontWeight:700,color:C.amber}}>
+                <span style={{width:7,height:7,borderRadius:"50%",background:C.amber,animation:"pulse 2s infinite"}}/>
+                {regOpen?"Registration Open — Join Now":"Platform Launching October 1, 2025"}
+              </div>
+              <h1 style={{fontSize:mobile?"clamp(2.2rem,9vw,3rem)":"3.8rem",fontWeight:900,lineHeight:1.08,margin:"0 0 20px",letterSpacing:"-0.02em"}}>
+                Africa's Trust<br/>
+                <span style={{background:`linear-gradient(90deg, ${C.amber}, #E8A060)`,WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",backgroundClip:"text"}}>Infrastructure</span>
+                <br/>for Growth.
+              </h1>
+              <p style={{fontSize:mobile?"1rem":"1.15rem",margin:"0 0 32px",color:"rgba(255,255,255,0.72)",lineHeight:1.7,maxWidth:500}}>
+                BIG Marketplace connects African SMEs to funders, partners, and opportunities through one AI-powered credibility score.
               </p>
-            )}
+              <div style={{display:"flex",gap:14,flexWrap:"wrap",marginBottom:40}}>
+                <button className="lp-a" onClick={go}>{regOpen?"Join Now — It's Free":"Get Your BIG Score"}</button>
+                <Link to="/HowItWorks" className="lp-w">See How It Works</Link>
+              </div>
+              <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
+                {[[<MdVerified size={15}/>,"AI-Powered Scoring"],[<FaShieldAlt size={13}/>,"Verified Businesses"],[<FaLock size={12}/>,"POPIA Compliant"]].map(([ic,tx])=>(
+                  <div key={tx} style={{display:"flex",alignItems:"center",gap:7,background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.14)",borderRadius:10,padding:"7px 14px"}}>
+                    <span style={{color:C.amber,display:"flex"}}>{ic}</span>
+                    <span style={{fontSize:"0.76rem",color:"rgba(255,255,255,0.8)",fontWeight:600}}>{tx}</span>
+                  </div>
+                ))}
+              </div>
+              {!regOpen&&<div style={{marginTop:28}}><p style={{fontSize:"0.75rem",color:"rgba(255,255,255,0.5)",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.1em",marginBottom:12}}>Launching in</p><CountdownTimer isMobile={mobile} onCountdownEnd={()=>setRegOpen(true)}/></div>}
+            </div>
+            <div style={{flex:"0 0 auto",width:mobile?"100%":"380px"}}>
+              {mobile?null:<HeroScoreWidget/>}
+            </div>
           </div>
 
-          <div style={{ textAlign: "left" }}>
-            <h1
-              style={{
-                fontSize: isMobile ? "clamp(1.8rem, 8vw, 2.5rem)" : "2.5rem",
-                fontWeight: "600",
-                lineHeight: "1.2",
-                textShadow: "2px 2px 4px rgba(0,0,0,0.3)",
-                margin: "0 0 20px 0",
-                maxWidth: "100%",
-              }}
-            >
-              Grow Bold. Fund Smart. Scale Fast.
-            </h1>
+        </div>
+      </section>
 
-            <p
-              style={{
-                fontSize: isMobile ? "clamp(1rem, 5vw, 1.3rem)" : "1.5rem",
-                margin: "0 0 20px 0",
-                opacity: 0.9,
-              }}
-            >
-              Africa's AI-powered platform connecting high-growth businesses to funders, services, and strategic support—through one universal profile and the trusted BIG Score.
-            </p>
-
-            <div
-              style={{
-                display: "flex",
-                gap: "15px",
-                flexWrap: "wrap",
-                marginBottom: "20px",
-              }}
-            >
-              <button
-                onClick={handleGetStartedClick}
-                style={{
-                  backgroundColor: colors.secondary,
-                  color: colors.light,
-                  padding: isMobile ? "10px 20px" : "12px 30px",
-                  borderRadius: "50px",
-                  fontWeight: "700",
-                  textDecoration: "none",
-                  transition: "all 0.3s ease",
-                  border: "none",
-                  cursor: "pointer",
-                  fontSize: isMobile ? "clamp(0.8rem, 3.5vw, 0.9rem)" : "inherit",
-                }}
-              >
-                {isRegistrationOpen ? "Join Now" : "Get Matched Now"}
-              </button>
-              <Link
-                to="/HowItWorks"
-                style={{
-                  backgroundColor: "transparent",
-                  color: colors.light,
-                  border: `2px solid ${colors.secondary}`,
-                  padding: isMobile ? "10px 20px" : "12px 30px",
-                  borderRadius: "50px",
-                  fontWeight: "600",
-                  textDecoration: "none",
-                  transition: "all 0.3s ease",
-                  fontSize: isMobile ? "clamp(0.8rem, 3.5vw, 0.9rem)" : "inherit",
-                  display: "inline-block",
-                }}
-              >
-                See Demo
-              </Link>
-            </div>
-
-            <div
-              style={{
-                marginBottom: "20px",
-              }}
-            >
-              <h2
-                style={{
-                  fontSize: isMobile ? "clamp(1.5rem, 6vw, 2rem)" : "2.1rem",
-                  fontWeight: "900",
-                  lineHeight: "1.2",
-                  margin: "0 0 10px 0",
-                }}
-              >
-                <span style={{ color: colors.primary }}>BIG</span> on Ideas.{" "}
-                <span style={{ color: colors.primary }}>BIG</span> on Growth.{" "}
-                <span style={{ color: colors.primary }}>BIG</span> on Impact.
-              </h2>
-            </div>
-
-            <p
-              style={{
-                fontSize: isMobile ? "clamp(0.9rem, 4vw, 1rem)" : "1rem",
-                margin: "0",
-                fontWeight: "500",
-              }}
-            >
-              Used by investors, funders, and corporates to assess trust and readiness.
-            </p>
+      <section style={{padding:mobile?"48px 20px":"72px 40px",background:C.white}}>
+        <div style={{maxWidth:1100,margin:"0 auto"}}>
+          <div style={{textAlign:"center",marginBottom:52}}>
+            <p style={{color:C.secondary,fontWeight:700,fontSize:"0.74rem",letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:10}}>Simple by design</p>
+            <h2 style={{fontSize:mobile?"1.7rem":"2.2rem",fontWeight:800,color:C.dark,margin:0,letterSpacing:"-0.01em"}}>Four steps to unlocking growth</h2>
+          </div>
+          <div className="g4" style={{display:"grid",gridTemplateColumns:mobile?"1fr":"repeat(4,1fr)",gap:20}}>
+            {steps.map((s,i)=>(
+              <div key={s.n} className="step-card">
+                {i<3&&!mobile&&<div style={{position:"absolute",top:38,right:-14,fontSize:"1.2rem",color:C.neutral,zIndex:1,fontWeight:300}}>→</div>}
+                <div style={{fontSize:"2.2rem",fontWeight:900,color:C.primary,lineHeight:1,marginBottom:16,letterSpacing:"-0.03em",opacity:0.35}}>{s.n}</div>
+                <div style={{width:44,height:44,borderRadius:14,background:`${C.primary}12`,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:14,color:C.primary}}>{s.icon}</div>
+                <h3 style={{fontSize:"0.95rem",fontWeight:800,color:C.dark,margin:"0 0 8px",letterSpacing:"-0.01em"}}>{s.title}</h3>
+                <p style={{fontSize:"0.82rem",color:C.muted,lineHeight:1.6,margin:0}}>{s.desc}</p>
+              </div>
+            ))}
           </div>
         </div>
       </section>
 
-      {/* Purpose Section - Now with light background (swapped from Who Benefits) */}
-      <section
-        style={{
-          padding: "50px 20px",
-          position: "relative",
-          backgroundColor: colors.light,
-        }}
-      >
-        <div
-          style={{
-            position: "absolute",
-            top: 0,
-            left: 0,
-            right: 0,
-            height: "20px",
-            background: `linear-gradient(to right, ${colors.primary}, ${colors.secondary})`,
-            clipPath: "polygon(0 0, 100% 0, 100% 70%, 0 100%)",
-          }}
-        ></div>
-
-        <div
-          style={{
-            maxWidth: "1200px",
-            margin: "0 auto",
-            position: "relative",
-            zIndex: 1,
-          }}
-        >
-          <h2
-            style={{
-              fontSize: isMobile ? "1.8rem" : "2.2rem",
-              fontWeight: "700",
-              marginBottom: "40px",
-              textAlign: "center",
-              color: colors.dark,
-              textTransform: "uppercase",
-            }}
-          >
-            OUR PURPOSE: BUILDING AFRICA'S TRUST ECONOMY
-          </h2>
-
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit, minmax(300px, 1fr))",
-              gap: "25px",
-              marginBottom: "30px",
-            }}
-          >
-            {/* Vision */}
-            <div
-              style={{
-                backgroundColor: "white",
-                borderRadius: "8px",
-                padding: "25px",
-                textAlign: "center",
-                boxShadow: "0 5px 20px rgba(0,0,0,0.1)",
-                borderTop: `4px solid ${colors.primary}`,
-              }}
-            >
-              <div
-                style={{
-                  backgroundColor: `${colors.primary}20`,
-                  width: "60px",
-                  height: "60px",
-                  borderRadius: "50%",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  margin: "0 auto 15px",
-                  border: `2px solid ${colors.primary}`,
-                }}
-              >
-                <FaBullseye size={24} color={colors.primary} />
+      <section style={{padding:mobile?"48px 20px":"72px 40px",background:C.pageBg}}>
+        <div style={{maxWidth:1100,margin:"0 auto"}}>
+          <div style={{display:"grid",gridTemplateColumns:mobile?"1fr":"1fr 1fr 1fr",gap:20,marginBottom:40}}>
+            {[
+              {icon:<FaBullseye size={18}/>,color:C.primary,  title:"Our Vision",  body:"To corporatise Africa's boldest SMEs — giving every high-potential business the credibility to compete globally."},
+              {icon:<FaHandshake size={18}/>,color:C.secondary,title:"Our Mission", body:"To connect Africa's boldest businesses to the capital, connections, and credibility they need to grow."},
+              {icon:<FaLightbulb size={18}/>,color:C.amber,   title:"Our Promise", body:"To make growth accessible — not accidental — for Africa's most promising enterprises."},
+            ].map(c=>(
+              <div key={c.title} style={{background:C.white,borderRadius:18,padding:"28px 22px",boxShadow:`0 2px 16px rgba(28,20,16,0.06)`,border:`1px solid ${C.border}`}}>
+                <div style={{width:48,height:48,borderRadius:14,background:`${c.color}12`,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:16,color:c.color}}>{c.icon}</div>
+                <h3 style={{fontSize:"0.95rem",fontWeight:800,color:C.dark,textTransform:"uppercase",letterSpacing:"0.04em",margin:"0 0 10px"}}>{c.title}</h3>
+                <p style={{fontSize:"0.85rem",lineHeight:1.65,color:C.muted,margin:0}}>{c.body}</p>
               </div>
-              <h3
-                style={{
-                  fontSize: "1.3rem",
-                  fontWeight: "700",
-                  marginBottom: "12px",
-                  color: colors.dark,
-                  textTransform: "uppercase",
-                }}
-              >
-                Our Vision
-              </h3>
-              <p
-                style={{
-                  fontSize: "0.9rem",
-                  lineHeight: "1.6",
-                  color: colors.dark,
-                }}
-              >
-                <strong>To corporatise Africa's boldest SMEs.</strong>
-              </p>
-            </div>
-
-            {/* Mission */}
-            <div
-              style={{
-                backgroundColor: "white",
-                borderRadius: "8px",
-                padding: "25px",
-                textAlign: "center",
-                boxShadow: "0 5px 20px rgba(0,0,0,0.1)",
-                borderTop: `4px solid ${colors.secondary}`,
-              }}
-            >
-              <div
-                style={{
-                  backgroundColor: `${colors.secondary}20`,
-                  width: "60px",
-                  height: "60px",
-                  borderRadius: "50%",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  margin: "0 auto 15px",
-                  border: `2px solid ${colors.secondary}`,
-                }}
-              >
-                <FaHandshake size={24} color={colors.secondary} />
-              </div>
-              <h3
-                style={{
-                  fontSize: "1.3rem",
-                  fontWeight: "700",
-                  marginBottom: "12px",
-                  color: colors.dark,
-                  textTransform: "uppercase",
-                }}
-              >
-                Our Mission
-              </h3>
-              <p
-                style={{
-                  fontSize: "0.9rem",
-                  lineHeight: "1.6",
-                  color: colors.dark,
-                }}
-              >
-                <strong>To give Africa's boldest businesses the credibility, connections, and capital they need — and a seat at every table that matters.</strong>
-              </p>
-            </div>
-
-            {/* Promise */}
-            <div
-              style={{
-                backgroundColor: "white",
-                borderRadius: "8px",
-                padding: "25px",
-                textAlign: "center",
-                boxShadow: "0 5px 20px rgba(0,0,0,0.1)",
-                borderTop: `4px solid ${colors.accent}`,
-              }}
-            >
-              <div
-                style={{
-                  backgroundColor: `${colors.accent}20`,
-                  width: "60px",
-                  height: "60px",
-                  borderRadius: "50%",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  margin: "0 auto 15px",
-                  border: `2px solid ${colors.accent}`,
-                }}
-              >
-                <FaLightbulb size={24} color={colors.accent} />
-              </div>
-              <h3
-                style={{
-                  fontSize: "1.3rem",
-                  fontWeight: "700",
-                  marginBottom: "12px",
-                  color: colors.dark,
-                  textTransform: "uppercase",
-                }}
-              >
-                Our Promise
-              </h3>
-              <p
-                style={{
-                  fontSize: "0.9rem",
-                  lineHeight: "1.6",
-                  color: colors.dark,
-                }}
-              >
-                <strong>To make growth accessible — not accidental — for Africa's most promising enterprises.</strong>
-              </p>
-            </div>
+            ))}
           </div>
-
-          <div style={{ textAlign: "center" }}>
-            <p
-              style={{
-                fontSize: isMobile ? "1rem" : "1.1rem",
-                fontWeight: "600",
-                marginBottom: "25px",
-                color: colors.primary,
-                textTransform: "uppercase",
-              }}
-            >
-              We're building a continent-wide trust economy. Join us.
-            </p>
-
-            <button
-              onClick={handleGetStartedClick}
-              style={{
-                backgroundColor: colors.primary,
-                color: colors.light,
-                padding: "12px 30px",
-                borderRadius: "50px",
-                fontWeight: "700",
-                textDecoration: "none",
-                display: "inline-block",
-                transition: "all 0.3s ease",
-                textTransform: "uppercase",
-                border: "none",
-                cursor: "pointer",
-              }}
-            >
-              {isRegistrationOpen ? "Register Now" : "Be BIG. Join the Movement"}
-            </button>
+          <div style={{textAlign:"center"}}>
+            <p style={{fontSize:"0.9rem",fontWeight:600,color:C.primary,marginBottom:20}}>Building a continent-wide trust economy — one BIG Score at a time.</p>
+            <button className="lp-b" onClick={go}>{regOpen?"Register Now":"Join the Movement"}</button>
           </div>
         </div>
-
-        <div
-          style={{
-            position: "absolute",
-            bottom: 0,
-            left: 0,
-            right: 0,
-            height: "20px",
-            background: `linear-gradient(to right, ${colors.primary}, ${colors.secondary})`,
-            clipPath: "polygon(0 30%, 100% 0, 100% 100%, 0 100%)",
-          }}
-        ></div>
       </section>
 
-      {/* Who Benefits Section - Now with dark background (swapped from Purpose) */}
-      <section
-        style={{
-          padding: "50px 20px",
-          position: "relative",
-          background: `linear-gradient(135deg, ${colors.dark} 0%, ${colors.primary} 100%), url(${images.africaMap})`,
-          backgroundSize: "cover",
-          backgroundPosition: "center",
-          color: colors.light,
-        }}
-      >
-        <div
-          style={{
-            position: "absolute",
-            top: 0,
-            left: 0,
-            right: 0,
-            height: "20px",
-            background: `linear-gradient(to right, ${colors.secondary}, ${colors.accent})`,
-            clipPath: isMobile ? "none" : "polygon(0 0, 100% 0, 100% 70%, 0 100%)",
-          }}
-        ></div>
-
-        <div
-          style={{
-            maxWidth: "1200px",
-            margin: "0 auto",
-            position: "relative",
-            zIndex: 1,
-          }}
-        >
-          <h2
-            style={{
-              textAlign: "center",
-              fontSize: isMobile ? "1.8rem" : "2.2rem",
-              fontWeight: "700",
-              marginBottom: isMobile ? "30px" : "50px",
-              color: colors.light,
-              textTransform: "uppercase",
-            }}
-          >
-            Who Benefits From <span style={{ color: colors.secondary }}>BIG</span>?
-          </h2>
-
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: isMobile ? "1fr" : "repeat(auto-fit, minmax(180px, 1fr))",
-              gap: "15px",
-            }}
-          >
-            {benefitCards.map((card, index) => (
-              <div
-                key={index}
-                className="benefit-card"
-                style={{
-                  backgroundColor: "rgba(255,255,255,0.9)",
-                  borderRadius: "8px",
-                  padding: isMobile ? "15px" : "20px",
-                  textAlign: "center",
-                  boxShadow: "0 5px 15px rgba(0,0,0,0.1)",
-                  borderTop: `4px solid ${card.color}`,
-                  transition: "transform 0.3s ease",
-                  display: "flex",
-                  flexDirection: "column",
-                  height: "100%",
-                }}
-              >
-                <div className="tooltip">
-                  {card.tooltip}
-                </div>
-                <div
-                  style={{
-                    backgroundColor: `${card.color}20`,
-                    width: "50px",
-                    height: "50px",
-                    borderRadius: "50%",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    margin: "0 auto 10px",
-                    border: `2px solid ${card.color}`,
-                  }}
-                >
-                  {card.icon}
-                </div>
-                <h3
-                  style={{
-                    fontSize: isMobile ? "1rem" : "1.1rem",
-                    fontWeight: "700",
-                    marginBottom: "8px",
-                    color: colors.dark,
-                    textTransform: "uppercase",
-                  }}
-                >
-                  {card.title}
-                </h3>
-                <p
-                  style={{
-                    fontSize: isMobile ? "0.8rem" : "0.9rem",
-                    fontWeight: "600",
-                    color: card.color,
-                    marginBottom: "8px",
-                    textTransform: "uppercase",
-                  }}
-                >
-                  {card.tagline}
-                </p>
-                <p
-                  style={{
-                    fontSize: isMobile ? "0.7rem" : "0.75rem",
-                    color: colors.dark,
-                    marginBottom: "12px",
-                    flexGrow: 1,
-                  }}
-                >
-                  {card.description}
-                </p>
-                <div style={{ marginTop: "auto" }}>
-                  <Link
-                    to={card.howItWorksLink}
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      color: card.color,
-                      fontWeight: "600",
-                      textDecoration: "none",
-                      transition: "all 0.3s ease",
-                      marginBottom: "8px",
-                      textTransform: "uppercase",
-                      fontSize: isMobile ? "0.7rem" : "0.8rem",
-                    }}
-                  >
-                    How It Works <FaChevronRight style={{ marginLeft: "5px", fontSize: "0.7rem" }} />
-                  </Link>
-                  <button
-                    onClick={handleGetStartedClick}
-                    style={{
-                      backgroundColor: card.color,
-                      color: card.color === colors.dark || card.color === colors.primary ? colors.light : colors.dark,
-                      padding: "6px 15px",
-                      borderRadius: "50px",
-                      fontWeight: "600",
-                      textDecoration: "none",
-                      display: "inline-block",
-                      transition: "all 0.3s ease",
-                      textTransform: "uppercase",
-                      border: "none",
-                      cursor: "pointer",
-                      fontSize: isMobile ? "0.7rem" : "0.8rem",
-                      width: "100%",
-                    }}
-                  >
-                    {isRegistrationOpen ? "Join Now" : "Get Started"}
-                  </button>
+      <section style={{padding:mobile?"48px 20px":"72px 40px",background:C.dark}}>
+        <div style={{maxWidth:1100,margin:"0 auto"}}>
+          <div style={{textAlign:"center",marginBottom:48}}>
+            <p style={{color:C.accent,fontWeight:700,fontSize:"0.74rem",letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:10}}>Multi-sided ecosystem</p>
+            <h2 style={{fontSize:mobile?"1.7rem":"2.2rem",fontWeight:800,color:"#fff",margin:0,letterSpacing:"-0.01em"}}>Who benefits from <span style={{color:C.amber}}>BIG</span>?</h2>
+          </div>
+          <div className="g6" style={{display:"grid",gridTemplateColumns:mobile?"1fr":"repeat(3,1fr)",gap:14}}>
+            {benefits.map((c,i)=>(
+              <div key={i} className="ben-card" style={{borderLeft:`3px solid ${c.color}`}}>
+                <div className="tip">{c.tip}</div>
+                <div style={{width:40,height:40,borderRadius:12,background:`${c.color}1A`,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:12,color:c.color}}>{c.icon}</div>
+                <h3 style={{fontSize:"0.92rem",fontWeight:800,color:C.dark,margin:"0 0 4px"}}>{c.title}</h3>
+                <p style={{fontSize:"0.7rem",fontWeight:700,color:c.color,textTransform:"uppercase",margin:"0 0 10px",letterSpacing:"0.04em"}}>{c.tagline}</p>
+                <p style={{fontSize:"0.78rem",color:C.muted,margin:"0 0 16px",lineHeight:1.55,flexGrow:1}}>{c.desc}</p>
+                <div style={{marginTop:"auto",display:"flex",gap:8}}>
+                  <Link to={c.link} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",background:`${c.color}12`,color:c.color,fontWeight:700,textDecoration:"none",fontSize:"0.72rem",padding:"8px 10px",borderRadius:8,gap:4,border:`1px solid ${c.color}28`}}>How It Works <FaChevronRight size={9}/></Link>
+                  <button onClick={go} style={{flex:1,background:c.color,color:"#fff",border:"none",borderRadius:8,padding:"8px 10px",fontSize:"0.72rem",fontWeight:700,cursor:"pointer",fontFamily:"inherit",transition:"opacity 0.2s"}} onMouseOver={e=>{e.currentTarget.style.opacity="0.85"}} onMouseOut={e=>{e.currentTarget.style.opacity="1"}}>{regOpen?"Join Now":"Get Started"}</button>
                 </div>
               </div>
             ))}
           </div>
         </div>
-
-        <div
-          style={{
-            position: "absolute",
-            bottom: 0,
-            left: 0,
-            right: 0,
-            height: "20px",
-            background: `linear-gradient(to right, ${colors.accent}, ${colors.neutral})`,
-            clipPath: isMobile ? "none" : "polygon(0 30%, 100% 0, 100% 100%, 0 100%)",
-          }}
-        ></div>
       </section>
 
-      {/* What is BIG Marketplace Section */}
-      <section
-        style={{
-          padding: "50px 20px",
-          position: "relative",
-          background: `linear-gradient(135deg, ${colors.neutral} 0%, ${colors.light} 100%)`,
-        }}
-      >
-        <div
-          style={{
-            position: "absolute",
-            top: 0,
-            left: 0,
-            right: 0,
-            height: "20px",
-            background: `linear-gradient(to right, ${colors.secondary}, ${colors.primary})`,
-            clipPath: "polygon(0 0, 100% 0, 100% 100%, 0 70%)",
-          }}
-        ></div>
-
-        <div
-          style={{
-            maxWidth: "1200px",
-            margin: "0 auto",
-            position: "relative",
-            zIndex: 1,
-          }}
-        >
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
-              gap: "40px",
-              alignItems: "center",
-            }}
-          >
-            <div>
-              <h2
-                style={{
-                  fontSize: "2.2rem",
-                  fontWeight: "700",
-                  marginBottom: "15px",
-                  color: colors.dark,
-                  textTransform: "uppercase",
-                }}
-              >
-                MEET BIG MARKETPLACE — AFRICA'S TRUST LAYER FOR GROWTH
-              </h2>
-              <p
-                style={{
-                  fontSize: "1.1rem",
-                  marginBottom: "25px",
-                  color: colors.dark,
-                  textTransform: "uppercase",
-                }}
-              >
-                One profile. One score. Many doors.
-              </p>
-
-              <div style={{ marginBottom: "25px" }}>
-                <div style={{ display: "flex", alignItems: "center", marginBottom: "12px" }}>
-                  <FaCheck style={{ color: colors.primary, marginRight: "10px" }} />
-                  <span style={{ color: colors.dark }}>
-                    <strong>Get matched</strong> to funders, service providers, and strategic support that fit your growth stage.
-                  </span>
+      <section style={{padding:mobile?"48px 20px":"72px 40px",background:C.cream}}>
+        <div style={{maxWidth:1100,margin:"0 auto"}}>
+          <div style={{textAlign:"center",marginBottom:48}}>
+            <p style={{color:C.secondary,fontWeight:700,fontSize:"0.74rem",letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:10}}>Your credibility engine</p>
+            <h2 style={{fontSize:mobile?"1.7rem":"2.2rem",fontWeight:800,color:C.dark,margin:0,letterSpacing:"-0.01em"}}>The <span style={{color:C.primary}}>BIG</span> Score — explained</h2>
+            <p style={{fontSize:"0.92rem",color:C.muted,maxWidth:500,margin:"14px auto 0",lineHeight:1.7}}>Five weighted dimensions, one trusted number that tells the full story of your business to every stakeholder that matters.</p>
+          </div>
+          <div className="g2" style={{display:"grid",gridTemplateColumns:mobile?"1fr":"1fr 1fr",gap:24}}>
+            <div style={{background:C.white,borderRadius:20,padding:"30px 26px",border:`1px solid ${C.border}`}}>
+              <div style={{width:48,height:48,borderRadius:14,background:`${C.primary}12`,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:18,color:C.primary}}><FaChartBar size={20}/></div>
+              <h3 style={{fontSize:"1rem",fontWeight:800,color:C.dark,margin:"0 0 8px"}}>Five Score Dimensions</h3>
+              <p style={{fontSize:"0.84rem",color:C.muted,lineHeight:1.6,marginBottom:20}}>Each dimension is weighted to reflect what matters most to funders:</p>
+              {[
+                {label:"Compliance",    pct:29,weight:32,color:C.red,   dot:C.red},
+                {label:"Legitimacy",    pct:90,weight:13,color:C.green, dot:C.green},
+                {label:"Leadership",    pct:72,weight:10,color:C.orange,dot:C.orange},
+                {label:"Governance",    pct:90,weight:13,color:C.green, dot:C.green},
+                {label:"Capital Appeal",pct:65,weight:32,color:C.amber, dot:C.amber},
+              ].map(d=>(
+                <div key={d.label} style={{marginBottom:13}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:5}}>
+                    <div style={{display:"flex",alignItems:"center",gap:8}}><span style={{width:9,height:9,borderRadius:"50%",background:d.dot,flexShrink:0}}/><span style={{fontSize:"0.82rem",fontWeight:700,color:C.dark}}>{d.label}</span></div>
+                    <span style={{fontSize:"0.72rem",color:C.muted,fontFamily:"monospace"}}>{d.pct}% x {d.weight}% = {Math.round(d.pct*d.weight/100)}%</span>
+                  </div>
+                  <div style={{height:7,background:C.border,borderRadius:4,overflow:"hidden"}}><div style={{height:"100%",width:`${d.pct}%`,background:d.color,borderRadius:4}}/></div>
                 </div>
-                <div style={{ display: "flex", alignItems: "center", marginBottom: "12px" }}>
-                  <FaCheck style={{ color: colors.primary, marginRight: "10px" }} />
-                  <span style={{ color: colors.dark }}>
-                    <strong>See your BIG Score</strong> — and what to improve — before applying.
-                  </span>
-                </div>
-                <div style={{ display: "flex", alignItems: "center", marginBottom: "12px" }}>
-                  <FaCheck style={{ color: colors.primary, marginRight: "10px" }} />
-                  <span style={{ color: colors.dark }}>
-                    <strong>Boost trust and traction</strong> with verified compliance and investor-grade profiling.
-                  </span>
-                </div>
+              ))}
+            </div>
+            <div style={{background:C.white,borderRadius:20,padding:"30px 26px",border:`1px solid ${C.border}`}}>
+              <div style={{width:48,height:48,borderRadius:14,background:`${C.secondary}12`,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:18,color:C.secondary}}><FaRocket size={18}/></div>
+              <h3 style={{fontSize:"1rem",fontWeight:800,color:C.dark,margin:"0 0 8px"}}>What Your Score Unlocks</h3>
+              <p style={{fontSize:"0.84rem",color:C.muted,lineHeight:1.6,marginBottom:20}}>A higher BIG Score opens doors matched to your stage and potential:</p>
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:20}}>
+                {[{label:"Funding Access",icon:<FaChartLine size={14}/>,color:C.primary},{label:"Strategic Partners",icon:<FaHandshake size={14}/>,color:C.secondary},{label:"Compliance Trust",icon:<FaShieldAlt size={14}/>,color:C.green},{label:"Expert Advisors",icon:<FaLightbulb size={14}/>,color:C.amber}].map(u=>(
+                  <div key={u.label} style={{background:`${u.color}0C`,borderRadius:12,padding:"16px 14px",display:"flex",flexDirection:"column",alignItems:"center",textAlign:"center",gap:8,border:`1px solid ${u.color}20`}}>
+                    <span style={{color:u.color}}>{u.icon}</span>
+                    <span style={{fontSize:"0.75rem",fontWeight:700,color:u.color}}>{u.label}</span>
+                  </div>
+                ))}
               </div>
-
-              <p
-                style={{
-                  fontSize: "1rem",
-                  marginBottom: "25px",
-                  color: colors.dark,
-                }}
-              >
-                Whether you're a bold SME, a funder, a support partner, or a corporate leader — <strong>BIG Marketplace connects you to who (and what) you need to grow faster, smarter, and with less risk.</strong>
-              </p>
-
-              {!expandedAbout && (
-                <button
-                  onClick={() => setExpandedAbout(true)}
-                  style={{
-                    backgroundColor: "transparent",
-                    border: "none",
-                    color: colors.primary,
-                    fontWeight: "600",
-                    cursor: "pointer",
-                    display: "inline-flex",
-                    alignItems: "center",
-                    fontSize: "0.9rem",
-                    textTransform: "uppercase",
-                  }}
-                  >
-                  Learn More <FaChevronRight style={{ marginLeft: "5px" }} />
-                </button>
-              )}
-
-              {expandedAbout && (
-                <div
-                  style={{
-                    backgroundColor: "rgba(255,255,255,0.7)",
-                    padding: "15px",
-                    borderRadius: "8px",
-                    marginBottom: "15px",
-                  }}
-                >
-                  <p
-                    style={{
-                      fontSize: "0.9rem",
-                      lineHeight: "1.6",
-                      color: colors.dark,
-                      marginBottom: "12px",
-                    }}
-                  >
-                    BIG Marketplace was founded to solve one problem: Africa's SMEs lack trust, not potential. We
-                    combine data, partnerships, and technology to create a fair, transparent ecosystem where:
-                  </p>
-                  <ul
-                    style={{
-                      listStyleType: "disc",
-                      paddingLeft: "20px",
-                      marginBottom: "12px",
-                    }}
-                  >
-                    <li style={{ marginBottom: "6px" }}>SMSEs prove their credibility.</li>
-                    <li style={{ marginBottom: "6px" }}>
-                      Funders find verified opportunities.
-                    </li>
-                    <li style={{ marginBottom: "6px" }}>Corporates maximize impact.</li>
-                  </ul>
-                </div>
-              )}
+              <div style={{background:C.pageBg,borderRadius:12,padding:"14px 16px",borderLeft:`3px solid ${C.primary}`}}>
+                <p style={{fontSize:"0.83rem",color:C.dark,margin:0,lineHeight:1.55}}><strong>Score too low?</strong> We guide you to accelerators, mentors, and incubators — BIG never shuts a door.</p>
+              </div>
             </div>
-
-            <div
-              style={{
-                backgroundColor: "white",
-                borderRadius: "8px",
-                padding: "15px",
-                boxShadow: "0 5px 20px rgba(0,0,0,0.1)",
-                textAlign: "center",
-              }}
-            >
-              <img
-                src={images.ecosystem || "/placeholder.svg"}
-                alt="BIG Marketplace Ecosystem"
-                style={{
-                  width: "100%",
-                  height: "auto",
-                  borderRadius: "4px",
-                }}
-              />
-              <p
-                style={{
-                  fontSize: "0.8rem",
-                  color: colors.dark,
-                  marginTop: "10px",
-                  fontStyle: "italic",
-                  textTransform: "uppercase",
-                }}
-              >
-                The BIG Marketplace ecosystem connects verified businesses to funders, support partners, corporates, and strategic advisors — all in one place.
-              </p>
-            </div>
+          </div>
+          <div style={{textAlign:"center",marginTop:28}}>
+            <Link to="/BigScorePage" style={{display:"inline-flex",alignItems:"center",gap:10,background:C.primary,color:"#FFFFFF",padding:"15px 36px",borderRadius:12,fontWeight:800,textDecoration:"none",fontSize:"0.95rem",letterSpacing:"0.01em",boxShadow:"0 4px 16px rgba(124,77,42,0.4)"}} onMouseOver={e=>{e.currentTarget.style.background="#5A3420"}} onMouseOut={e=>{e.currentTarget.style.background=C.primary}}>See How Your Score Is Calculated <FaChevronRight size={13}/></Link>
           </div>
         </div>
-
-        <div
-          style={{
-            position: "absolute",
-            bottom: 0,
-            left: 0,
-            right: 0,
-            height: "20px",
-            background: `linear-gradient(to right, ${colors.dark}, ${colors.accent})`,
-            clipPath: "polygon(0 0, 100% 30%, 100% 100%, 0 100%)",
-          }}
-        ></div>
       </section>
 
-      {/* BIG Score Section - Clean and Consistent */}
-      <section
-        style={{
-          padding: "60px 20px",
-          position: "relative",
-          backgroundColor: colors.scoreBg,
-          backgroundImage:
-            "radial-gradient(circle at 10% 20%, rgba(188, 174, 156, 0.1) 0%, rgba(188, 174, 156, 0.05) 90%)",
-        }}
-      >
-        <div
-          style={{
-            position: "absolute",
-            top: 0,
-            left: 0,
-            right: 0,
-            height: "20px",
-            background: `linear-gradient(to right, ${colors.accent}, ${colors.neutral})`,
-            clipPath: "polygon(0 0, 100% 0, 100% 70%, 0 100%)",
-          }}
-        ></div>
-
-        <div
-          style={{
-            maxWidth: "1200px",
-            margin: "0 auto",
-            position: "relative",
-            zIndex: 1,
-          }}
-        >
-          <div
-            style={{
-              textAlign: "center",
-              marginBottom: "40px",
-            }}
-          >
-            <h2
-              style={{
-                fontSize: "2.2rem",
-                fontWeight: "700",
-                marginBottom: "15px",
-                color: colors.dark,
-                textTransform: "uppercase",
-              }}
-            >
-              THE <span style={{ color: colors.primary }}>BIG</span> YOUR BUSINESS CREDIBILITY ENGINE
-            </h2>
-            <p
-              style={{
-                fontSize: "1rem",
-                color: colors.dark,
-                maxWidth: "800px",
-                margin: "0 auto",
-                textTransform: "uppercase",
-              }}
-            >
-              A COMPREHENSIVE AI-Driven score THAT EVALUATES YOUR BUSINESS ACROSS MULTIPLE DIMENSIONS
-            </p>
+      <section style={{padding:mobile?"48px 20px":"72px 40px",background:C.white}}>
+        <div style={{maxWidth:1280,margin:"0 auto"}}>
+          <div style={{textAlign:"center",marginBottom:36}}>
+            <p style={{color:C.secondary,fontWeight:700,fontSize:"0.74rem",letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:10}}>See the platform in action</p>
+            <h2 style={{fontSize:mobile?"1.7rem":"2.2rem",fontWeight:800,color:C.dark,margin:0,letterSpacing:"-0.01em"}}>Real dashboards. Real results.</h2>
+            <p style={{fontSize:"0.9rem",color:C.muted,marginTop:12,lineHeight:1.65}}>One platform built for every stakeholder in the African growth ecosystem.</p>
+          </div>
+          <div style={{display:"flex",background:C.pageBg,borderRadius:14,padding:4,maxWidth:380,margin:"0 auto 32px",border:`1px solid ${C.border}`}}>
+            {[{id:"smse",label:"SMSE Dashboard"},{id:"investor",label:"Investor Portal"}].map(tab=>(
+              <button key={tab.id} className="tab-b" onClick={()=>setActiveTab(tab.id)} style={{borderRadius:11,background:activeTab===tab.id?C.primary:"transparent",color:activeTab===tab.id?"#fff":C.muted,fontWeight:activeTab===tab.id?800:600}}>{tab.label}</button>
+            ))}
           </div>
 
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
-              gap: "30px",
-              marginBottom: "30px",
-            }}
-          >
-            <div
-              style={{
-                backgroundColor: "white",
-                borderRadius: "8px",
-                padding: "25px",
-                boxShadow: "0 5px 15px rgba(0,0,0,0.05)",
-                borderTop: `4px solid ${colors.primary}`,
-                textAlign: "center",
-              }}
-            >
-              <div
-                style={{
-                  backgroundColor: `${colors.primary}20`,
-                  width: "60px",
-                  height: "60px",
-                  borderRadius: "50%",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  margin: "0 auto 15px",
-                  border: `2px solid ${colors.primary}`,
-                }}
-              >
-                <FaChartBar size={24} color={colors.primary} />
+          {activeTab==="smse"&&(
+            <div style={{display:"grid",gridTemplateColumns:mobile?"1fr":"300px 1fr",gap:32,alignItems:"start"}}>
+              <div>
+                <h3 style={{fontSize:"1.05rem",fontWeight:800,color:C.dark,margin:"0 0 10px",letterSpacing:"-0.01em"}}>Track your business credibility in real time</h3>
+                <p style={{fontSize:"0.88rem",color:C.muted,lineHeight:1.7,marginBottom:18}}>Your SMSE dashboard gives you full visibility into your BIG Score, application tracker, customer reviews, and AI-generated priority actions.</p>
+                {["Full five-dimension score breakdown with weighted calculations","Application tracker across funding, services, advisory, and internships","Customer review panel with star ratings","AI priority analysis with top 3 improvement actions"].map(item=>(
+                  <div key={item} style={{display:"flex",alignItems:"flex-start",gap:10,marginBottom:10}}>
+                    <div style={{width:20,height:20,borderRadius:8,background:`${C.primary}14`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1,color:C.primary}}><FaCheck size={9}/></div>
+                    <span style={{fontSize:"0.86rem",color:C.dark,lineHeight:1.5}}>{item}</span>
+                  </div>
+                ))}
+                <div style={{marginTop:20}}><button className="lp-b" onClick={go}>{regOpen?"Get Started":"Create Your SMSE Profile"}</button></div>
               </div>
-              <h3
-                style={{
-                  fontSize: "1.3rem",
-                  fontWeight: "700",
-                  marginBottom: "12px",
-                  color: colors.dark,
-                  textTransform: "uppercase",
-                }}
-              >
-                How It Works
-              </h3>
-              <p
-                style={{
-                  fontSize: "0.9rem",
-                  color: colors.dark,
-                  marginBottom: "15px",
-                }}
-              >
-                The BIG Score combines data across four core areas to evaluate how investment-ready your business is:
-              </p>
-              <ul
-                style={{
-                  listStyleType: "none",
-                  padding: 0,
-                  margin: "0 0 15px 0",
-                  textAlign: "left",
-                }}
-              >
-                <li style={{ marginBottom: "8px", display: "flex", alignItems: "flex-start" }}>
-                  <FaCheck style={{ color: colors.primary, marginRight: "8px", flexShrink: 0, marginTop: "3px" }} />
-                  <span style={{ fontSize: "0.85rem" }}>Financial health: Revenue trends, profitability</span>
-                </li>
-                <li style={{ marginBottom: "8px", display: "flex", alignItems: "flex-start" }}>
-                  <FaCheck style={{ color: colors.primary, marginRight: "8px", flexShrink: 0, marginTop: "3px" }} />
-                  <span style={{ fontSize: "0.85rem" }}>Operational maturity: Systems, processes</span>
-                </li>
-                <li style={{ marginBottom: "8px", display: "flex", alignItems: "flex-start" }}>
-                  <FaCheck style={{ color: colors.primary, marginRight: "8px", flexShrink: 0, marginTop: "3px" }} />
-                  <span style={{ fontSize: "0.85rem" }}>Compliance status: Legal, regulatory</span>
-                </li>
-                <li style={{ display: "flex", alignItems: "flex-start" }}>
-                  <FaCheck style={{ color: colors.primary, marginRight: "8px", flexShrink: 0, marginTop: "3px" }} />
-                  <span style={{ fontSize: "0.85rem" }}>Growth potential: Market opportunity</span>
-                </li>
-              </ul>
+              {!mobile&&<SMSEDashboard/>}
             </div>
+          )}
+          {activeTab==="investor"&&(
+            <div style={{display:"grid",gridTemplateColumns:mobile?"1fr":"280px 1fr",gap:32,alignItems:"start"}}>
+              <div>
+                <h3 style={{fontSize:"1.05rem",fontWeight:800,color:C.dark,margin:"0 0 10px",letterSpacing:"-0.01em"}}>A complete deal pipeline for every investor</h3>
+                <p style={{fontSize:"0.88rem",color:C.muted,lineHeight:1.7,marginBottom:18}}>Track every deal from first match to close across 8 pipeline stages, with BIG Score and match percentage side by side.</p>
+                {["27+ matched SMEs ready in your pipeline","All 8 deal stages from Matches through to Closed","Track % Match and BIG Score for every business","Filter by funding required, equity, sector, and stage"].map(item=>(
+                  <div key={item} style={{display:"flex",alignItems:"flex-start",gap:10,marginBottom:10}}>
+                    <div style={{width:20,height:20,borderRadius:8,background:`${C.green}14`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1,color:C.green}}><FaCheck size={9}/></div>
+                    <span style={{fontSize:"0.86rem",color:C.dark,lineHeight:1.5}}>{item}</span>
+                  </div>
+                ))}
+                <div style={{marginTop:20}}><button className="lp-g" onClick={go}>{regOpen?"Access Investor Portal":"Apply as an Investor"}</button></div>
+              </div>
+              {!mobile&&<InvestorDashboard/>}
+            </div>
+          )}
+          {mobile&&(activeTab==="smse"?<SMSEDashboard/>:<InvestorDashboard/>)}
+        </div>
+      </section>
 
-            <div
-              style={{
-                backgroundColor: "white",
-                borderRadius: "8px",
-                padding: "25px",
-                boxShadow: "0 5px 15px rgba(0,0,0,0.05)",
-                borderTop: `4px solid ${colors.secondary}`,
-                textAlign: "center",
-              }}
-            >
-              <div
-                style={{
-                  backgroundColor: `${colors.secondary}20`,
-                  width: "60px",
-                  height: "60px",
-                  borderRadius: "50%",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  margin: "0 auto 15px",
-                  border: `2px solid ${colors.secondary}`,
-                }}
-              >
-                <MdTrendingUp size={24} color={colors.secondary} />
-              </div>
-              <h3
-                style={{
-                  fontSize: "1.3rem",
-                  fontWeight: "700",
-                  marginBottom: "12px",
-                  color: colors.dark,
-                  textTransform: "uppercase",
-                }}
-              >
-                What It Unlocks
-              </h3>
-              <p
-                style={{
-                  fontSize: "0.9rem",
-                  color: colors.dark,
-                  marginBottom: "15px",
-                }}
-              >
-                Your BIG Score opens doors to opportunities matched to your business's current stage and potential.
-              </p>
-              <div
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "1fr 1fr",
-                  gap: "10px",
-                  marginBottom: "15px",
-                }}
-              >
-                <div
-                  style={{
-                    backgroundColor: `${colors.primary}1A`,
-                    padding: "10px",
-                    borderRadius: "4px",
-                    textAlign: "center",
-                  }}
-                >
-                  <div
-                    style={{
-                      color: colors.primary,
-                      fontSize: "0.8rem",
-                      fontWeight: "600",
-                      textTransform: "uppercase",
-                    }}
-                  >
-                    Funding
-                  </div>
-                </div>
-                <div
-                  style={{
-                    backgroundColor: `${colors.primary}1A`,
-                    padding: "10px",
-                    borderRadius: "4px",
-                    textAlign: "center",
-                  }}
-                >
-                  <div
-                    style={{
-                      color: colors.primary,
-                      fontSize: "0.8rem",
-                      fontWeight: "600",
-                      textTransform: "uppercase"
-                    }}
-                  >
-                    Partnerships
-                  </div>
-                </div>
-                <div
-                  style={{
-                    backgroundColor: `${colors.primary}1A`,
-                    padding: "10px",
-                    borderRadius: "4px",
-                    textAlign: "center",
-                  }}
-                >
-                  <div
-                    style={{
-                      color: colors.primary,
-                      fontSize: "0.8rem",
-                      fontWeight: "600",
-                      textTransform: "uppercase"
-                    }}
-                  >
-                    Compliance Confidence
-                  </div>
-                </div>
-                <div
-                  style={{
-                    backgroundColor: `${colors.dark}10`,
-                    padding: "10px",
-                    borderRadius: "4px",
-                    textAlign: "center",
-                  }}
-                >
-                  <div
-                    style={{
-                      color: colors.primary,
-                      fontSize: "0.8rem",
-                      fontWeight: "600",
-                      textTransform: "uppercase"
-                    }}
-                  >
-                    Strategic Guidance
-                  </div>
-                </div>
-              </div>
-            </div>
+      <section style={{padding:mobile?"48px 20px":"72px 40px",background:C.pageBg}}>
+        <div style={{maxWidth:1100,margin:"0 auto"}}>
+          <div style={{textAlign:"center",marginBottom:44}}>
+            <p style={{color:C.secondary,fontWeight:700,fontSize:"0.74rem",letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:10}}>Proven across Africa</p>
+            <h2 style={{fontSize:mobile?"1.7rem":"2.2rem",fontWeight:800,color:C.dark,margin:0,letterSpacing:"-0.01em"}}>Trusted by founders and investors</h2>
           </div>
-
-          <div
-            style={{
-              textAlign: "center",
-            }}
-          >
-            <Link
-              to="/BigScorePage"
-              style={{
-                backgroundColor: colors.primary,
-                color: colors.light,
-                padding: "12px 30px",
-                borderRadius: "50px",
-                fontWeight: "600",
-                textDecoration: "none",
-                display: "inline-block",
-                transition: "all 0.3s ease",
-                textTransform: "uppercase",
-              }}
-            >
-              SEE HOW YOUR SCORE IS CALCULATED
-            </Link>
+          <div className="g3" style={{display:"grid",gridTemplateColumns:mobile?"1fr":"repeat(3,1fr)",gap:20,marginBottom:40}}>
+            {testimonials.map(t=>(
+              <div key={t.name} className="tc">
+                <div style={{display:"flex",gap:2,marginBottom:14}}>{Array(t.stars).fill(0).map((_,i)=><FaStar key={i} size={14} color="#F59E0B"/>)}</div>
+                <p style={{fontSize:"0.88rem",color:C.dark,lineHeight:1.7,margin:"0 0 20px"}}>"{t.quote}"</p>
+                <div style={{display:"flex",alignItems:"center",gap:12,paddingTop:16,borderTop:`1px solid ${C.border}`}}>
+                  <img src={t.img} alt={t.name} style={{width:40,height:40,borderRadius:12,objectFit:"cover",border:`2px solid ${C.border}`}}/>
+                  <div><div style={{fontSize:"0.86rem",fontWeight:700,color:C.dark}}>{t.name}</div><div style={{fontSize:"0.74rem",color:C.muted}}>{t.role}</div></div>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div style={{textAlign:"center"}}>
+            <p style={{fontSize:"0.72rem",color:C.muted,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.12em",marginBottom:16}}>Our Partners</p>
+            <div style={{display:"flex",flexWrap:"wrap",gap:10,justifyContent:"center"}}>{partners.map(p=><div key={p} className="pb">{p}</div>)}</div>
           </div>
         </div>
-
-        <div
-          style={{
-            position: "absolute",
-            bottom: 0,
-            left: 0,
-            right: 0,
-            height: "20px",
-            background: `linear-gradient(to right, ${colors.secondary}, ${colors.primary})`,
-            clipPath: "polygon(0 30%, 100% 0, 100% 100%, 0 100%)",
-          }}
-        ></div>
       </section>
 
-      {/* Don't Qualify Section */}
-      <section
-        style={{
-          padding: "50px 20px",
-          position: "relative",
-          backgroundColor: colors.light,
-        }}
-      >
-        <div
-          style={{
-            position: "absolute",
-            top: 0,
-            left: 0,
-            right: 0,
-            height: "20px",
-            background: `linear-gradient(to right, ${colors.primary}, ${colors.secondary})`,
-            clipPath: "polygon(0 0, 100% 0, 100% 100%, 0 70%)",
-          }}
-        ></div>
-
-        <div
-          style={{
-            maxWidth: "1000px",
-            margin: "0 auto",
-            position: "relative",
-            zIndex: 1,
-          }}
-        >
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
-              gap: "40px",
-              alignItems: "center",
-            }}
-          >
-            <div
-              style={{
-                backgroundColor: "white",
-                borderRadius: "8px",
-                padding: "15px",
-                boxShadow: "0 5px 20px rgba(0,0,0,0.1)",
-              }}
-            >
-              <img
-                src={images.pathway || "/placeholder.svg"}
-                alt="Pathway to Success"
-                style={{
-                  width: "100%",
-                  height: "auto",
-                }}
-              />
-            </div>
-
-            <div>
-              <h2
-                style={{
-                  fontSize: "2.2rem",
-                  fontWeight: "700",
-                  marginBottom: "15px",
-                  color: colors.dark,
-                  textTransform: "uppercase",
-                }}
-              >
-                Don't Qualify Yet? We've Got You.
-              </h2>
-              <p
-                style={{
-                  fontSize: "1.2rem",
-                  fontWeight: "600",
-                  marginBottom: "15px",
-                  color: colors.primary,
-                  textTransform: "uppercase",
-                }}
-              >
-                BIG Doesn't Shut Doors — It Shows You Where To Go.
-              </p>
-              <p
-                style={{
-                  fontSize: "1rem",
-                  lineHeight: "1.6",
-                  marginBottom: "15px",
-                  color: colors.dark,
-                }}
-              >
-                If your score is low, we'll guide you to:
-              </p>
-              <ul
-                style={{
-                  listStyleType: "disc",
-                  paddingLeft: "20px",
-                  marginBottom: "15px",
-                }}
-              >
-                <li style={{ marginBottom: "6px" }}>Accelerators to refine your model.</li>
-                <li style={{ marginBottom: "6px" }}>Mentors to fix compliance gaps.</li>
-                <li style={{ marginBottom: "6px" }}>Incubators to prep for funding.</li>
-              </ul>
-              <p
-                style={{
-                  fontSize: "1.1rem",
-                  fontWeight: "600",
-                  color: colors.primary,
-                  marginBottom: "25px",
-                  textTransform: "uppercase",
-                }}
-              >
-                BIG Is More Than A Marketplace. It's A Pathway.
-              </p>
-            </div>
+      <section style={{padding:mobile?"48px 20px":"72px 40px",background:C.white}}>
+        <div style={{maxWidth:1100,margin:"0 auto"}}>
+          <div style={{textAlign:"center",marginBottom:44}}>
+            <h2 style={{fontSize:mobile?"1.7rem":"2.2rem",fontWeight:800,color:C.dark,margin:0,letterSpacing:"-0.01em"}}>Why trust <span style={{color:C.primary}}>BIG</span> Marketplace</h2>
           </div>
-        </div>
-
-        <div
-          style={{
-            position: "absolute",
-            bottom: 0,
-            left: 0,
-            right: 0,
-            height: "20px",
-            background: `linear-gradient(to right, ${colors.accent}, ${colors.neutral})`,
-            clipPath: "polygon(0 0, 100% 30%, 100% 100%, 0 100%)",
-          }}
-        ></div>
-      </section>
-
-      {/* Why Trust Us Section - Compact */}
-      <section
-        style={{
-          padding: "40px 20px",
-          position: "relative",
-          backgroundColor: colors.light,
-        }}
-      >
-        <div
-          style={{
-            position: "absolute",
-            top: 0,
-            left: 0,
-            right: 0,
-            height: "20px",
-            background: `linear-gradient(to right, ${colors.primary}, ${colors.secondary})`,
-            clipPath: "polygon(0 0, 100% 0, 100% 70%, 0 100%)",
-          }}
-        ></div>
-
-        <div
-          style={{
-            maxWidth: "1000px",
-            margin: "0 auto",
-            position: "relative",
-            zIndex: 1,
-          }}
-        >
-          <h2
-            style={{
-              fontSize: "2rem",
-              fontWeight: "700",
-              marginBottom: "30px",
-              color: colors.dark,
-              textAlign: "center",
-              textTransform: "uppercase",
-            }}
-          >
-            WHY TRUST <span style={{ color: colors.primary }}>BIG</span> MARKETPLACE
-          </h2>
-          
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr",
-              gap: "30px",
-              alignItems: "center",
-            }}
-          >
-            <div>
-              <p
-                style={{
-                  fontSize: "1rem",
-                  lineHeight: "1.6",
-                  color: colors.dark,
-                  marginBottom: "25px",
-                  textAlign: "center",
-                }}
-              >
-                BIG Marketplace is built on more than technology — it's built on insight, experience, and deep collaboration across Africa's growth ecosystem.
-              </p>
-
-              <div style={{ marginBottom: "20px" }}>
-                <div style={{ display: "flex", alignItems: "flex-start", marginBottom: "15px" }}>
-                  <div style={{ flexShrink: 0, marginRight: "15px" }}>
-                    <div
-                      style={{
-                        backgroundColor: `${colors.primary}20`,
-                        width: "36px",
-                        height: "36px",
-                        borderRadius: "50%",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        border: `1px solid ${colors.primary}`,
-                      }}
-                    >
-                      <FaUsers size={14} color={colors.primary} />
-                    </div>
-                  </div>
-                  <div>
-                    <h4
-                      style={{
-                        fontSize: "1rem",
-                        fontWeight: "600",
-                        marginBottom: "5px",
-                        color: colors.primary,
-                      }}
-                    >
-                      Built With, Not Just For
-                    </h4>
-                    <p
-                      style={{
-                        fontSize: "0.9rem",
-                        lineHeight: "1.5",
-                        color: colors.dark,
-                      }}
-                    >
-                      Before writing code, we consulted 30+ stakeholders to design a platform grounded in African entrepreneurs' realities.
-                    </p>
-                  </div>
-                </div>
-
-                <div style={{ display: "flex", alignItems: "flex-start", marginBottom: "15px" }}>
-                  <div style={{ flexShrink: 0, marginRight: "15px" }}>
-                    <div
-                      style={{
-                        backgroundColor: `${colors.secondary}20`,
-                        width: "36px",
-                        height: "36px",
-                        borderRadius: "50%",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        border: `1px solid ${colors.secondary}`,
-                      }}
-                    >
-                      <FaChartBar size={14} color={colors.secondary} />
-                    </div>
-                  </div>
-                  <div>
-                    <h4
-                      style={{
-                        fontSize: "1rem",
-                        fontWeight: "600",
-                        marginBottom: "5px",
-                        color: colors.secondary,
-                      }}
-                    >
-                      Decades of Expertise
-                    </h4>
-                    <p
-                      style={{
-                        fontSize: "0.9rem",
-                        lineHeight: "1.5",
-                        color: colors.dark,
-                      }}
-                    >
-                      Our team brings decades of experience in SME growth, finance, and innovation.
-                    </p>
-                  </div>
-                </div>
-
-                <div style={{ display: "flex", alignItems: "flex-start" }}>
-                  <div style={{ flexShrink: 0, marginRight: "15px" }}>
-                    <div
-                      style={{
-                        backgroundColor: `${colors.accent}20`,
-                        width: "36px",
-                        height: "36px",
-                        borderRadius: "50%",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        border: `1px solid ${colors.accent}`,
-                      }}
-                    >
-                      <FaHandshake size={14} color={colors.accent} />
-                    </div>
-                  </div>
-                  <div>
-                    <h4
-                      style={{
-                        fontSize: "1rem",
-                        fontWeight: "600",
-                        marginBottom: "5px",
-                        color: colors.accept,
-                      }}
-                    >
-                      Solving for More
-                    </h4>
-                    <p
-                      style={{
-                        fontSize: "0.9rem",
-                        lineHeight: "1.5",
-                        color: colors.dark,
-                      }}
-                    >
-                      We're not just solving for access - we're solving for readiness, trust, and scale.
-                    </p>
-                  </div>
-                </div>
+          <div className="g3" style={{display:"grid",gridTemplateColumns:mobile?"1fr":"repeat(3,1fr)",gap:20}}>
+            {[
+              {icon:<FaUsers size={18}/>,    color:C.primary,   title:"Built With, Not Just For",  body:"Before writing code, we consulted 30+ stakeholders to design a platform grounded in African entrepreneurs realities."},
+              {icon:<FaBuilding size={18}/>, color:C.secondary, title:"Decades of Expertise",       body:"Our team brings decades of combined experience in SME growth, finance, and innovation across Africa."},
+              {icon:<FaHandshake size={18}/>,color:C.amber,     title:"Solving for More",           body:"We are not just solving for access — we are solving for readiness, trust, and scale across the continent."},
+            ].map(c=>(
+              <div key={c.title} style={{background:C.cream,borderRadius:18,padding:"24px 20px",border:`1px solid ${C.border}`}}>
+                <div style={{width:44,height:44,borderRadius:14,background:`${c.color}14`,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:14,color:c.color}}>{c.icon}</div>
+                <h3 style={{fontSize:"0.94rem",fontWeight:800,color:C.dark,margin:"0 0 8px"}}>{c.title}</h3>
+                <p style={{fontSize:"0.84rem",color:C.muted,lineHeight:1.6,margin:0}}>{c.body}</p>
               </div>
-            </div>
-
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1fr",
-                gap: "15px",
-              }}
-            >
-              <img
-                src={images.trustImage}
-                alt="Trust and Collaboration"
-                style={{
-                  width: "100%",
-                  height: "auto",
-                  borderRadius: "8px",
-                  maxHeight: "200px",
-                  objectFit: "cover",
-                }}
-              />
-              <img
-                src={images.collaboration}
-                alt="Stakeholder Collaboration"
-                style={{
-                  width: "100%",
-                  height: "auto",
-                  borderRadius: "8px",
-                  maxHeight: "200px",
-                  objectFit: "cover",
-                }}
-              />
-            </div>
+            ))}
           </div>
         </div>
-
-        <div
-          style={{
-            position: "absolute",
-            bottom: 0,
-            left: 0,
-            right: 0,
-            height: "20px",
-            background: `linear-gradient(to right, ${colors.accent}, ${colors.neutral})`,
-            clipPath: "polygon(0 30%, 100% 0, 100% 100%, 0 100%)",
-          }}
-        ></div>
       </section>
 
-      {/* Scroll to top button */}
-      {showScroll && (
-        <button
-          onClick={scrollTop}
-          style={{
-            position: "fixed",
-            bottom: isMobile ? "20px" : "30px",
-            right: isMobile ? "20px" : "30px",
-            backgroundColor: colors.primary,
-            color: "white",
-            width: isMobile ? "40px" : "50px",
-            height: isMobile ? "40px" : "50px",
-            borderRadius: "50%",
-            border: "none",
-            cursor: "pointer",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            boxShadow: "0 2px 10px rgba(0,0,0,0.2)",
-            zIndex: 100,
-          }}
-        >
-          <FaArrowRight style={{ transform: "rotate(-90deg)" }} />
+      <section style={{padding:mobile?"56px 20px":"80px 40px",background:`linear-gradient(135deg, ${C.dark} 0%, #3D2A1A 100%)`,textAlign:"center",position:"relative",overflow:"hidden"}}>
+        <div style={{position:"absolute",top:"-30%",left:"50%",transform:"translateX(-50%)",width:"600px",height:"600px",borderRadius:"50%",background:"rgba(212,137,74,0.06)",pointerEvents:"none"}}/>
+        <div style={{maxWidth:600,margin:"0 auto",position:"relative",zIndex:1}}>
+          <h2 style={{fontSize:mobile?"1.7rem":"2.4rem",fontWeight:900,color:"#fff",margin:"0 0 14px",letterSpacing:"-0.02em",lineHeight:1.15}}>Ready to build your<br/>business credibility?</h2>
+          <p style={{fontSize:"0.95rem",color:"rgba(255,255,255,0.6)",lineHeight:1.7,marginBottom:32}}>Join a trusted ecosystem designed to help African businesses grow, connect, and succeed.</p>
+          <div style={{display:"flex",gap:14,justifyContent:"center",flexWrap:"wrap"}}>
+            <button className="lp-a" onClick={go}>{regOpen?"Get Started — It's Free":"Join the Movement"}</button>
+            <Link to="/HowItWorks" className="lp-w">See the Platform</Link>
+          </div>
+        </div>
+      </section>
+
+      {showScroll&&(
+        <button onClick={()=>window.scrollTo({top:0,behavior:"smooth"})} style={{position:"fixed",bottom:mobile?20:28,right:mobile?20:28,width:44,height:44,borderRadius:12,background:C.primary,color:"#fff",border:"none",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 4px 20px rgba(28,20,16,0.28)",zIndex:100,fontSize:"1.1rem",transition:"background 0.2s"}} onMouseOver={e=>{e.currentTarget.style.background="#5A3420"}} onMouseOut={e=>{e.currentTarget.style.background=C.primary}}>
+          <FaArrowUp size={15}/>
         </button>
       )}
-
-      {/* Include the Chatbox component */}
-      <Chatbox />
-
-      <Footer />
+      <Chatbox/>
+      <Footer/>
     </div>
   )
 }
-
 export default LandingPage

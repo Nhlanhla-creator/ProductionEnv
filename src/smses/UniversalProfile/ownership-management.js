@@ -3,9 +3,9 @@ import { Plus, Trash2 } from 'lucide-react'
 import FormField from "./form-field"
 import FileUpload from "./file-upload"
 import './UniversalProfile.css';
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { db, auth, storage } from '../../firebaseConfig';
-import { doc, setDoc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, getDoc, updateDoc, serverTimestamp, collection, addDoc, deleteDoc, getDocs  } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { validateCV } from '../../services/documentValidationService';
 
@@ -160,46 +160,10 @@ const DEFAULT_BUSINESS_LEADERSHIP = {
   decisionGovernance: "",
 };
 
-// Committee Membership Multi-Select Dropdown Component (FIXED - No overlap with fixed positioning)
+// Committee Membership Multi-Select Dropdown Component
 const CommitteeMultiSelect = ({ selected = [], onChange, onCustomChange, customValue = "" }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, left: 0, width: 0 });
-  const buttonRef = useRef(null);
-  const dropdownRef = useRef(null);
   const safeSelected = Array.isArray(selected) ? selected : [];
-
-  // Handle click outside and reposition dropdown
-  useEffect(() => {
-    if (isOpen && buttonRef.current) {
-      const rect = buttonRef.current.getBoundingClientRect();
-      setDropdownPosition({
-        top: rect.bottom + window.scrollY,
-        left: rect.left + window.scrollX,
-        width: rect.width,
-      });
-      
-      // Handle click outside to close
-      const handleClickOutside = (event) => {
-        if (dropdownRef.current && !dropdownRef.current.contains(event.target) && 
-            buttonRef.current && !buttonRef.current.contains(event.target)) {
-          setIsOpen(false);
-        }
-      };
-      
-      // Handle scroll to close dropdown
-      const handleScroll = () => {
-        setIsOpen(false);
-      };
-      
-      document.addEventListener('mousedown', handleClickOutside);
-      window.addEventListener('scroll', handleScroll, true);
-      
-      return () => {
-        document.removeEventListener('mousedown', handleClickOutside);
-        window.removeEventListener('scroll', handleScroll, true);
-      };
-    }
-  }, [isOpen]);
 
   const toggleOption = (value) => {
     const newSelected = safeSelected.includes(value)
@@ -209,9 +173,8 @@ const CommitteeMultiSelect = ({ selected = [], onChange, onCustomChange, customV
   };
 
   return (
-    <div style={{ position: 'relative', width: '100%' }}>
+    <div style={{ position: 'relative' }}>
       <div
-        ref={buttonRef}
         onClick={() => setIsOpen(!isOpen)}
         style={{
           border: '1px solid #ccc',
@@ -224,11 +187,10 @@ const CommitteeMultiSelect = ({ selected = [], onChange, onCustomChange, customV
           minHeight: '32px',
           backgroundColor: 'white',
           fontSize: '12px',
-          width: '100%',
         }}
       >
         {safeSelected.length > 0 ? (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2px', flex: 1 }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '2px' }}>
             {safeSelected.map((val) => (
               <span key={val} style={{ backgroundColor: '#e0e0e0', padding: '1px 6px', borderRadius: '10px', fontSize: '11px' }}>
                 {val === "Other" ? (customValue || "Other") : committeeMembershipOptions.find(o => o.value === val)?.label || val}
@@ -236,98 +198,47 @@ const CommitteeMultiSelect = ({ selected = [], onChange, onCustomChange, customV
             ))}
           </div>
         ) : (
-          <span style={{ color: '#999', fontSize: '12px', flex: 1 }}>Select committees</span>
+          <span style={{ color: '#999', fontSize: '12px' }}>Select committees</span>
         )}
-        <span style={{ fontSize: '10px', marginLeft: '4px' }}>{isOpen ? '▲' : '▼'}</span>
+        <span style={{ fontSize: '10px' }}>{isOpen ? '▲' : '▼'}</span>
       </div>
-      
-      {/* Portal-style dropdown that renders at body level to avoid overlapping */}
       {isOpen && (
-        <div
-          ref={dropdownRef}
-          style={{
-            position: 'fixed',
-            top: `${dropdownPosition.top}px`,
-            left: `${dropdownPosition.left}px`,
-            width: `${dropdownPosition.width}px`,
-            minWidth: '280px',
-            backgroundColor: 'white',
-            border: '1px solid #ccc',
-            borderRadius: '4px',
-            marginTop: '2px',
-            zIndex: 99999,
-            maxHeight: '300px',
-            overflow: 'auto',
-            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-          }}
-        >
+        <div style={{
+          position: 'absolute', top: '100%', left: 0, right: 0, backgroundColor: 'white',
+          border: '1px solid #ccc', borderRadius: '4px', marginTop: '2px', zIndex: 1000,
+          maxHeight: '250px', overflow: 'auto', boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+        }}>
           <div style={{ padding: '4px' }}>
             {committeeMembershipOptions.map((option) => (
               <div
                 key={option.value}
                 onClick={() => toggleOption(option.value)}
                 style={{
-                  padding: '8px 12px',
-                  cursor: 'pointer',
-                  fontSize: '12px',
+                  padding: '6px 8px', cursor: 'pointer', fontSize: '12px',
                   backgroundColor: safeSelected.includes(option.value) ? '#f0f0f0' : 'white',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
-                  borderRadius: '4px',
-                  transition: 'background-color 0.2s',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = '#f5f5f5';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = safeSelected.includes(option.value) ? '#f0f0f0' : 'white';
+                  display: 'flex', alignItems: 'center', gap: '6px',
                 }}
               >
-                <input 
-                  type="checkbox" 
-                  checked={safeSelected.includes(option.value)} 
-                  onChange={() => {}} 
-                  style={{ cursor: 'pointer', margin: 0 }}
-                />
+                <input type="checkbox" checked={safeSelected.includes(option.value)} onChange={() => {}} style={{ cursor: 'pointer' }} />
                 <span>{option.label}</span>
               </div>
             ))}
           </div>
           {safeSelected.includes("Other") && (
-            <div style={{ padding: '8px', borderTop: '1px solid #eee' }}>
+            <div style={{ padding: '4px 8px', borderTop: '1px solid #eee' }}>
               <input
                 type="text"
                 placeholder="Specify committee"
                 value={customValue}
                 onChange={(e) => onCustomChange(e.target.value)}
-                style={{ 
-                  width: '100%', 
-                  padding: '6px 8px', 
-                  border: '1px solid #ccc', 
-                  borderRadius: '4px', 
-                  fontSize: '12px',
-                  outline: 'none',
-                }}
+                className="w-full px-2 py-1 border border-brown-300 rounded-md text-xs"
                 onClick={(e) => e.stopPropagation()}
               />
             </div>
           )}
-          <div style={{ padding: '8px', borderTop: '1px solid #ccc', backgroundColor: '#f9f9f9' }}>
-            <button 
-              type="button" 
-              onClick={() => setIsOpen(false)}
-              style={{
-                width: '100%',
-                padding: '6px',
-                backgroundColor: '#8B4513',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer',
-                fontSize: '12px',
-              }}
-            >
+          <div style={{ padding: '4px 8px', borderTop: '1px solid #ccc' }}>
+            <button type="button" onClick={() => setIsOpen(false)}
+              style={{ width: '100%', padding: '6px', backgroundColor: '#8B4513', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '12px' }}>
               Done
             </button>
           </div>
@@ -371,7 +282,7 @@ export default function OwnershipManagement({ data = { shareholders: [], directo
       console.error("Error syncing to Growth Suite:", error);
     }
   };
-
+  
   const handleDeleteCV = async (type, index) => {
     const confirmDelete = window.confirm(`Are you sure you want to delete this ${type}'s CV?`);
     if (!confirmDelete) return;
@@ -379,22 +290,55 @@ export default function OwnershipManagement({ data = { shareholders: [], directo
     try {
       const userId = auth.currentUser?.uid;
       if (!userId) return;
+      
+      // Get the CV URL before deleting
+      let cvUrl = null;
+      if (type === 'director') {
+        cvUrl = formData.directors[index]?.cv?.url;
+      } else if (type === 'executive') {
+        cvUrl = formData.executives[index]?.cv?.url;
+      }
+      
+      // Delete from universalProfiles cv_multiple
       const profileRef = doc(db, "universalProfiles", userId);
       const profileSnap = await getDoc(profileRef);
       const existingData = profileSnap.exists() ? profileSnap.data() : {};
       const existingCVs = existingData.documents?.cv_multiple || [];
-      const updatedCVs = existingCVs.filter(cv => {
-        if (type === 'director') return !(cv.directorIndex === index && cv.source === "ownership_management");
-        if (type === 'executive') return !(cv.executiveIndex === index && cv.source === "ownership_management");
-        return true;
-      });
+      
+      let updatedCVs;
+      if (type === 'director') {
+        updatedCVs = existingCVs.filter(cv => !(cv.directorIndex === index && cv.source === "ownership_management"));
+      } else {
+        updatedCVs = existingCVs.filter(cv => !(cv.executiveIndex === index && cv.source === "ownership_management"));
+      }
+      
       await updateDoc(profileRef, {
         [`documents.cv_multiple`]: updatedCVs,
         [`documents.cv_multiple_updated`]: serverTimestamp(),
         [`documents.cv_count`]: updatedCVs.length
       });
-      if (type === 'director') updateDirector(index, "cv", null);
-      else if (type === 'executive') updateExecutive(index, "cv", null);
+      
+      // ========== NEW: Delete from userCVData subcollection ==========
+      if (cvUrl) {
+        const cvDataRef = collection(db, 'userCVData', userId, 'cvs');
+        const querySnapshot = await getDocs(cvDataRef);
+        querySnapshot.forEach(async (cvDoc) => {
+          const cvDocData = cvDoc.data();
+          if (cvDocData.documentUrl === cvUrl) {
+            await deleteDoc(doc(db, 'userCVData', userId, 'cvs', cvDoc.id));
+            console.log(`Deleted CV data for ${type} ${index}`);
+          }
+        });
+      }
+      // ========== END: Delete from userCVData ==========
+      
+      // Update local state
+      if (type === 'director') {
+        updateDirector(index, "cv", null);
+      } else if (type === 'executive') {
+        updateExecutive(index, "cv", null);
+      }
+      
     } catch (error) {
       console.error("Error deleting CV:", error);
       alert('Failed to delete CV. Please try again.');
@@ -403,69 +347,230 @@ export default function OwnershipManagement({ data = { shareholders: [], directo
     }
   };
 
-  const handleDirectorCVUpload = async (index, file) => {
-    if (!file) return;
-    setUploadingCVs(prev => ({ ...prev, director: { ...prev.director, [index]: true } }));
-    setIsUploadOverlayVisible(true);
-    try {
-      const userId = auth.currentUser?.uid;
-      if (!userId) return;
-      const validationResult = await validateCV(file);
-      if (!validationResult.isValid) { alert(`CV validation failed: ${validationResult.message}`); return; }
-      const timestamp = Date.now();
-      const storageRef = ref(storage, `directors/cv/${userId}/${index}_${timestamp}_${file.name}`);
-      const uploadResult = await uploadBytes(storageRef, file);
-      const downloadURL = await getDownloadURL(uploadResult.ref);
-      updateDirector(index, "cv", { name: file.name, url: downloadURL, uploadedAt: new Date().toISOString(), status: validationResult.status, message: validationResult.message, isValid: validationResult.isValid });
-      const profileRef = doc(db, "universalProfiles", userId);
-      const profileSnap = await getDoc(profileRef);
-      const existingData = profileSnap.exists() ? profileSnap.data() : {};
-      const existingCVs = existingData.documents?.cv_multiple || [];
-      const cvData = { url: downloadURL, status: validationResult.status, message: validationResult.message, isValid: validationResult.isValid, uploadedAt: new Date().toISOString(), directorIndex: index, directorName: formData.directors[index]?.name || `Director ${index + 1}`, source: "ownership_management", documentType: "CV", role: "Director", roleLabel: `Director ${index + 1}`, personName: formData.directors[index]?.name || `Director ${index + 1}`, fileName: file.name };
-      const existingIndex = existingCVs.findIndex(cv => cv.directorIndex === index && cv.source === "ownership_management");
-      const updatedCVs = existingIndex >= 0 ? existingCVs.map((cv, i) => i === existingIndex ? cvData : cv) : [...existingCVs, cvData];
-      await updateDoc(profileRef, { [`documents.cv_multiple`]: updatedCVs, [`documents.cv_multiple_updated`]: serverTimestamp(), [`documents.cv_count`]: updatedCVs.length });
-      if (validationResult.message && validationResult.message !== "Document verified") alert(`CV uploaded: ${validationResult.message}`);
-    } catch (error) {
-      console.error("Error uploading director CV:", error);
-      alert("Failed to upload CV. Please check your connection and try again.");
-    } finally {
-      setUploadingCVs(prev => ({ ...prev, director: { ...prev.director, [index]: false } }));
-      setIsUploadOverlayVisible(false);
-    }
-  };
 
-  const handleExecutiveCVUpload = async (index, file) => {
-    if (!file) return;
-    setUploadingCVs(prev => ({ ...prev, executive: { ...prev.executive, [index]: true } }));
-    setIsUploadOverlayVisible(true);
-    try {
-      const userId = auth.currentUser?.uid;
-      if (!userId) return;
-      const validationResult = await validateCV(file);
-      if (!validationResult.isValid) { alert(`CV validation failed: ${validationResult.message}`); return; }
-      const timestamp = Date.now();
-      const storageRef = ref(storage, `executives/cv/${userId}/${index}_${timestamp}_${file.name}`);
-      const uploadResult = await uploadBytes(storageRef, file);
-      const downloadURL = await getDownloadURL(uploadResult.ref);
-      updateExecutive(index, "cv", { name: file.name, url: downloadURL, uploadedAt: new Date().toISOString(), status: validationResult.status, message: validationResult.message, isValid: validationResult.isValid });
-      const profileRef = doc(db, "universalProfiles", userId);
-      const profileSnap = await getDoc(profileRef);
-      const existingData = profileSnap.exists() ? profileSnap.data() : {};
-      const existingCVs = existingData.documents?.cv_multiple || [];
-      const cvData = { url: downloadURL, status: validationResult.status, message: validationResult.message, isValid: validationResult.isValid, uploadedAt: new Date().toISOString(), executiveIndex: index, executiveName: formData.executives[index]?.name || `Executive ${index + 1}`, source: "ownership_management", documentType: "CV", role: "Executive", roleLabel: `Executive ${index + 1}`, personName: formData.executives[index]?.name || `Executive ${index + 1}`, fileName: file.name };
-      const existingIndex = existingCVs.findIndex(cv => cv.executiveIndex === index && cv.source === "ownership_management");
-      const updatedCVs = existingIndex >= 0 ? existingCVs.map((cv, i) => i === existingIndex ? cvData : cv) : [...existingCVs, cvData];
-      await updateDoc(profileRef, { [`documents.cv_multiple`]: updatedCVs, [`documents.cv_multiple_updated`]: serverTimestamp(), [`documents.cv_count`]: updatedCVs.length });
-      if (validationResult.message && validationResult.message !== "Document verified") alert(`CV uploaded: ${validationResult.message}`);
-    } catch (error) {
-      console.error("Error uploading executive CV:", error);
-      alert("Failed to upload CV. Please check your connection and try again.");
-    } finally {
-      setUploadingCVs(prev => ({ ...prev, executive: { ...prev.executive, [index]: false } }));
-      setIsUploadOverlayVisible(false);
+const handleDirectorCVUpload = async (index, file) => {
+  if (!file) return;
+  setUploadingCVs(prev => ({ ...prev, director: { ...prev.director, [index]: true } }));
+  setIsUploadOverlayVisible(true);
+  try {
+    const userId = auth.currentUser?.uid;
+    if (!userId) return;
+    
+    // Upload to Firebase Storage
+    const timestamp = Date.now();
+    const storageRef = ref(storage, `directors/cv/${userId}/${index}_${timestamp}_${file.name}`);
+    const uploadResult = await uploadBytes(storageRef, file);
+    const downloadURL = await getDownloadURL(uploadResult.ref);
+    
+    // Validate CV with AI (pass the download URL)
+    const validationResult = await validateCV(file, downloadURL);
+    
+    if (!validationResult.isValid && validationResult.status !== "verified") { 
+      alert(`CV validation failed: ${validationResult.message}`); 
+      return; 
     }
-  };
+    
+    // Update local state
+    updateDirector(index, "cv", { 
+      name: file.name, 
+      url: downloadURL, 
+      uploadedAt: new Date().toISOString(), 
+      status: validationResult.status, 
+      message: validationResult.message, 
+      isValid: validationResult.isValid 
+    });
+    
+    // Save to universalProfiles cv_multiple
+    const profileRef = doc(db, "universalProfiles", userId);
+    const profileSnap = await getDoc(profileRef);
+    const existingData = profileSnap.exists() ? profileSnap.data() : {};
+    const existingCVs = existingData.documents?.cv_multiple || [];
+    
+    const cvData = { 
+      url: downloadURL, 
+      status: validationResult.status, 
+      message: validationResult.message, 
+      isValid: validationResult.isValid, 
+      uploadedAt: new Date().toISOString(), 
+      directorIndex: index, 
+      directorName: formData.directors[index]?.name || `Director ${index + 1}`, 
+      source: "ownership_management", 
+      documentType: "CV", 
+      role: "Director", 
+      roleLabel: `Director ${index + 1}`, 
+      personName: formData.directors[index]?.name || `Director ${index + 1}`, 
+      fileName: file.name 
+    };
+    
+    const existingIndex = existingCVs.findIndex(cv => cv.directorIndex === index && cv.source === "ownership_management");
+    const updatedCVs = existingIndex >= 0 ? existingCVs.map((cv, i) => i === existingIndex ? cvData : cv) : [...existingCVs, cvData];
+    
+    await updateDoc(profileRef, { 
+      [`documents.cv_multiple`]: updatedCVs, 
+      [`documents.cv_multiple_updated`]: serverTimestamp(), 
+      [`documents.cv_count`]: updatedCVs.length 
+    });
+    
+    // ========== NEW: Save extracted CV data to userCVData subcollection ==========
+    if (validationResult.extractedCVData) {
+      const cvDataRef = collection(db, 'userCVData', userId, 'cvs');
+      const existingCVsData = await getDocs(cvDataRef);
+      const cvNumber = existingCVsData.size + 1;
+      
+      const cvDataToSave = {
+        cvId: crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}_${index}`,
+        cvNumber: cvNumber,
+        customName: `Director: ${formData.directors[index]?.name || `Director ${index + 1}`}`,
+        personName: formData.directors[index]?.name || null,
+        email: validationResult.extractedCVData.email || null,
+        phone: validationResult.extractedCVData.phone || null,
+        skills: validationResult.extractedCVData.skills || [],
+        experience: validationResult.extractedCVData.experience || [],
+        education: validationResult.extractedCVData.education || [],
+        certifications: validationResult.extractedCVData.certifications || [],
+        yearsOfExperience: validationResult.extractedCVData.yearsOfExperience || null,
+        currentRole: validationResult.extractedCVData.currentRole || null,
+        currentCompany: validationResult.extractedCVData.currentCompany || null,
+        industry: validationResult.extractedCVData.industry || null,
+        languages: validationResult.extractedCVData.languages || [],
+        documentUrl: downloadURL,
+        uploadedAt: new Date().toISOString(),
+        lastValidatedAt: new Date().toISOString(),
+        status: validationResult.status,
+        source: "ownership_management",
+        role: "Director",
+        roleIndex: index,
+        personName: formData.directors[index]?.name || `Director ${index + 1}`
+      };
+      
+      await addDoc(cvDataRef, cvDataToSave);
+      console.log(`CV data saved to userCVData/${userId}/cvs for director ${index}`);
+    }
+    // ========== END: Save extracted CV data ==========
+    
+    if (validationResult.message && validationResult.message !== "Document verified") {
+      alert(`CV uploaded: ${validationResult.message}`);
+    }
+  } catch (error) {
+    console.error("Error uploading director CV:", error);
+    alert("Failed to upload CV. Please check your connection and try again.");
+  } finally {
+    setUploadingCVs(prev => ({ ...prev, director: { ...prev.director, [index]: false } }));
+    setIsUploadOverlayVisible(false);
+  }
+};
+
+const handleExecutiveCVUpload = async (index, file) => {
+  if (!file) return;
+  setUploadingCVs(prev => ({ ...prev, executive: { ...prev.executive, [index]: true } }));
+  setIsUploadOverlayVisible(true);
+  try {
+    const userId = auth.currentUser?.uid;
+    if (!userId) return;
+    
+    // Upload to Firebase Storage
+    const timestamp = Date.now();
+    const storageRef = ref(storage, `executives/cv/${userId}/${index}_${timestamp}_${file.name}`);
+    const uploadResult = await uploadBytes(storageRef, file);
+    const downloadURL = await getDownloadURL(uploadResult.ref);
+    
+    // Validate CV with AI (pass the download URL)
+    const validationResult = await validateCV(file, downloadURL);
+    
+    if (!validationResult.isValid && validationResult.status !== "verified") { 
+      alert(`CV validation failed: ${validationResult.message}`); 
+      return; 
+    }
+    
+    // Update local state
+    updateExecutive(index, "cv", { 
+      name: file.name, 
+      url: downloadURL, 
+      uploadedAt: new Date().toISOString(), 
+      status: validationResult.status, 
+      message: validationResult.message, 
+      isValid: validationResult.isValid 
+    });
+    
+    // Save to universalProfiles cv_multiple
+    const profileRef = doc(db, "universalProfiles", userId);
+    const profileSnap = await getDoc(profileRef);
+    const existingData = profileSnap.exists() ? profileSnap.data() : {};
+    const existingCVs = existingData.documents?.cv_multiple || [];
+    
+    const cvData = { 
+      url: downloadURL, 
+      status: validationResult.status, 
+      message: validationResult.message, 
+      isValid: validationResult.isValid, 
+      uploadedAt: new Date().toISOString(), 
+      executiveIndex: index, 
+      executiveName: formData.executives[index]?.name || `Executive ${index + 1}`, 
+      source: "ownership_management", 
+      documentType: "CV", 
+      role: "Executive", 
+      roleLabel: `Executive ${index + 1}`, 
+      personName: formData.executives[index]?.name || `Executive ${index + 1}`, 
+      fileName: file.name 
+    };
+    
+    const existingIndex = existingCVs.findIndex(cv => cv.executiveIndex === index && cv.source === "ownership_management");
+    const updatedCVs = existingIndex >= 0 ? existingCVs.map((cv, i) => i === existingIndex ? cvData : cv) : [...existingCVs, cvData];
+    
+    await updateDoc(profileRef, { 
+      [`documents.cv_multiple`]: updatedCVs, 
+      [`documents.cv_multiple_updated`]: serverTimestamp(), 
+      [`documents.cv_count`]: updatedCVs.length 
+    });
+    
+    // ========== NEW: Save extracted CV data to userCVData subcollection ==========
+    if (validationResult.extractedCVData) {
+      const cvDataRef = collection(db, 'userCVData', userId, 'cvs');
+      const existingCVsData = await getDocs(cvDataRef);
+      const cvNumber = existingCVsData.size + 1;
+      
+      const cvDataToSave = {
+        cvId: crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}_${index}`,
+        cvNumber: cvNumber,
+        customName: `Executive: ${formData.executives[index]?.name || `Executive ${index + 1}`}`,
+        personName: formData.executives[index]?.name || null,
+        email: validationResult.extractedCVData.email || null,
+        phone: validationResult.extractedCVData.phone || null,
+        skills: validationResult.extractedCVData.skills || [],
+        experience: validationResult.extractedCVData.experience || [],
+        education: validationResult.extractedCVData.education || [],
+        certifications: validationResult.extractedCVData.certifications || [],
+        yearsOfExperience: validationResult.extractedCVData.yearsOfExperience || null,
+        currentRole: validationResult.extractedCVData.currentRole || null,
+        currentCompany: validationResult.extractedCVData.currentCompany || null,
+        industry: validationResult.extractedCVData.industry || null,
+        languages: validationResult.extractedCVData.languages || [],
+        documentUrl: downloadURL,
+        uploadedAt: new Date().toISOString(),
+        lastValidatedAt: new Date().toISOString(),
+        status: validationResult.status,
+        source: "ownership_management",
+        role: "Executive",
+        roleIndex: index,
+        personName: formData.executives[index]?.name || `Executive ${index + 1}`
+      };
+      
+      await addDoc(cvDataRef, cvDataToSave);
+      console.log(`CV data saved to userCVData/${userId}/cvs for executive ${index}`);
+    }
+    // ========== END: Save extracted CV data ==========
+    
+    if (validationResult.message && validationResult.message !== "Document verified") {
+      alert(`CV uploaded: ${validationResult.message}`);
+    }
+  } catch (error) {
+    console.error("Error uploading executive CV:", error);
+    alert("Failed to upload CV. Please check your connection and try again.");
+  } finally {
+    setUploadingCVs(prev => ({ ...prev, executive: { ...prev.executive, [index]: false } }));
+    setIsUploadOverlayVisible(false);
+  }
+};
 
   useEffect(() => {
     const loadOwnershipManagement = async () => {
@@ -566,19 +671,20 @@ export default function OwnershipManagement({ data = { shareholders: [], directo
     const newDirectors = [...formData.directors];
     newDirectors[index] = { ...newDirectors[index], [field]: value };
     if (field === "position" && value !== "Other") newDirectors[index].customPosition = "";
-    
     const linkedShareholderId = newDirectors[index].linkedShareholderId;
-    if (linkedShareholderId !== null && linkedShareholderId < formData.shareholders.length) {
+    if (linkedShareholderId !== null) {
       const newShareholders = [...formData.shareholders];
-      if (field === "name") newShareholders[linkedShareholderId].name = value;
-      if (field === "nationality") newShareholders[linkedShareholderId].country = value;
-      if (field === "linkedin") newShareholders[linkedShareholderId].linkedin = value;
-      if (field === "race") newShareholders[linkedShareholderId].race = value;
-      if (field === "gender") newShareholders[linkedShareholderId].gender = value;
-      if (field === "isYouth") newShareholders[linkedShareholderId].isYouth = value;
-      if (field === "isDisabled") newShareholders[linkedShareholderId].isDisabled = value;
-      updateFormData({ ...formData, directors: newDirectors, shareholders: newShareholders });
-      return;
+      if (linkedShareholderId < newShareholders.length) {
+        if (field === "name") newShareholders[linkedShareholderId].name = value;
+        if (field === "nationality") newShareholders[linkedShareholderId].country = value;
+        if (field === "linkedin") newShareholders[linkedShareholderId].linkedin = value;
+        if (field === "race") newShareholders[linkedShareholderId].race = value;
+        if (field === "gender") newShareholders[linkedShareholderId].gender = value;
+        if (field === "isYouth") newShareholders[linkedShareholderId].isYouth = value;
+        if (field === "isDisabled") newShareholders[linkedShareholderId].isDisabled = value;
+        updateFormData({ ...formData, directors: newDirectors, shareholders: newShareholders });
+        return;
+      }
     }
     updateFormData({ ...formData, directors: newDirectors });
   };
@@ -609,6 +715,7 @@ export default function OwnershipManagement({ data = { shareholders: [], directo
     updateFormData({ ...formData, executives: (formData.executives || []).filter((_, i) => i !== index) });
   };
 
+  // ─── Business Leadership handler ────────────────────────────────────────────
   const updateBusinessLeadership = (field, value) => {
     const updated = { ...formData, businessLeadership: { ...(formData.businessLeadership || DEFAULT_BUSINESS_LEADERSHIP), [field]: value } };
     updateFormData(updated);
@@ -792,55 +899,28 @@ export default function OwnershipManagement({ data = { shareholders: [], directo
                 <tr key={index} className={`${index % 2 === 0 ? "bg-white" : "bg-brown-50"} ${director.linkedShareholderId !== null ? "border-l-4 border-l-blue-400" : ""}`}>
                   <td className="px-4 py-2 border-b">
                     <div className="flex items-center space-x-2">
-                      <input 
-                        type="text" 
-                        value={director.name || ""} 
-                        onChange={(e) => updateDirector(index, "name", e.target.value)} 
-                        className="flex-1 px-2 py-1 border border-brown-300 rounded-md focus:outline-none focus:ring-1 focus:ring-brown-500" 
-                      />
-                      {director.linkedShareholderId !== null && <span className="text-xs text-blue-600" title="Linked to shareholder - edits will sync to shareholder">🔗 Syncs</span>}
+                      <input type="text" value={director.name || ""} onChange={(e) => updateDirector(index, "name", e.target.value)} className="flex-1 px-2 py-1 border border-brown-300 rounded-md focus:outline-none focus:ring-1 focus:ring-brown-500" disabled={director.linkedShareholderId !== null} />
+                      {director.linkedShareholderId !== null && <span className="text-xs text-blue-600" title="Linked to shareholder">🔗</span>}
                     </div>
                   </td>
                   <td className="px-4 py-2 border-b">
                     <div className="space-y-1">
-                      <select 
-                        value={director.position || ""} 
-                        onChange={(e) => updateDirector(index, "position", e.target.value)} 
-                        className="w-full px-2 py-1 border border-brown-300 rounded-md focus:outline-none focus:ring-1 focus:ring-brown-500"
-                      >
+                      <select value={director.position || ""} onChange={(e) => updateDirector(index, "position", e.target.value)} className="w-full px-2 py-1 border border-brown-300 rounded-md focus:outline-none focus:ring-1 focus:ring-brown-500">
                         <option value="">Select Position</option>
                         {positionOptions.map((pos) => <option key={pos} value={pos}>{pos}</option>)}
                       </select>
-                      {director.position === "Other" && (
-                        <input 
-                          type="text" 
-                          placeholder="Specify position" 
-                          value={director.customPosition || ""} 
-                          onChange={(e) => updateDirector(index, "customPosition", e.target.value)} 
-                          className="w-full px-2 py-1 border border-brown-300 rounded-md focus:outline-none focus:ring-1 focus:ring-brown-500 text-sm" 
-                        />
-                      )}
+                      {director.position === "Other" && <input type="text" placeholder="Specify position" value={director.customPosition || ""} onChange={(e) => updateDirector(index, "customPosition", e.target.value)} className="w-full px-2 py-1 border border-brown-300 rounded-md focus:outline-none focus:ring-1 focus:ring-brown-500 text-sm" />}
                     </div>
                   </td>
                   <td className="px-4 py-2 border-b">
-                    <select 
-                      value={director.nationality || ""} 
-                      onChange={(e) => updateDirector(index, "nationality", e.target.value)} 
-                      className="w-full px-2 py-1 border border-brown-300 rounded-md focus:outline-none focus:ring-1 focus:ring-brown-500"
-                    >
+                    <select value={director.nationality || ""} onChange={(e) => updateDirector(index, "nationality", e.target.value)} className="w-full px-2 py-1 border border-brown-300 rounded-md focus:outline-none focus:ring-1 focus:ring-brown-500" disabled={director.linkedShareholderId !== null}>
                       <option value="">Select</option>
                       {africanCountries.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                     </select>
                   </td>
                   <td className="px-4 py-2 border-b">
                     <div className="space-y-2">
-                      <input 
-                        type="text" 
-                        placeholder="LinkedIn URL" 
-                        value={director.linkedin || ""} 
-                        onChange={(e) => updateDirector(index, "linkedin", e.target.value)} 
-                        className="w-full px-2 py-1 border border-brown-300 rounded-md focus:outline-none focus:ring-1 focus:ring-brown-500" 
-                      />
+                      <input type="text" placeholder="LinkedIn URL" value={director.linkedin || ""} onChange={(e) => updateDirector(index, "linkedin", e.target.value)} className="w-full px-2 py-1 border border-brown-300 rounded-md focus:outline-none focus:ring-1 focus:ring-brown-500" disabled={director.linkedShareholderId !== null} />
                       <div className="flex items-center space-x-2">
                         {director.cv ? (
                           <>
@@ -857,6 +937,7 @@ export default function OwnershipManagement({ data = { shareholders: [], directo
                       </div>
                     </div>
                   </td>
+                  {/* Committee Membership Multi-Select */}
                   <td className="px-4 py-2 border-b">
                     <CommitteeMultiSelect
                       selected={director.committeeMembership || []}
@@ -866,59 +947,27 @@ export default function OwnershipManagement({ data = { shareholders: [], directo
                     />
                   </td>
                   <td className="px-4 py-2 border-b">
-                    <select 
-                      value={director.execType || ""} 
-                      onChange={(e) => updateDirector(index, "execType", e.target.value)} 
-                      className="w-full px-2 py-1 border border-brown-300 rounded-md focus:outline-none focus:ring-1 focus:ring-brown-500"
-                    >
+                    <select value={director.execType || ""} onChange={(e) => updateDirector(index, "execType", e.target.value)} className="w-full px-2 py-1 border border-brown-300 rounded-md focus:outline-none focus:ring-1 focus:ring-brown-500">
                       <option value="">Select</option>
                       {execOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                     </select>
                   </td>
                   <td className="px-4 py-2 border-b">
-                    <select 
-                      value={director.race || ""} 
-                      onChange={(e) => updateDirector(index, "race", e.target.value)} 
-                      className="w-full px-2 py-1 border border-brown-300 rounded-md focus:outline-none focus:ring-1 focus:ring-brown-500"
-                    >
+                    <select value={director.race || ""} onChange={(e) => updateDirector(index, "race", e.target.value)} className="w-full px-2 py-1 border border-brown-300 rounded-md focus:outline-none focus:ring-1 focus:ring-brown-500" disabled={director.linkedShareholderId !== null}>
                       <option value="">Select</option>
                       {raceOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                     </select>
                   </td>
                   <td className="px-4 py-2 border-b">
-                    <select 
-                      value={director.gender || ""} 
-                      onChange={(e) => updateDirector(index, "gender", e.target.value)} 
-                      className="w-full px-2 py-1 border border-brown-300 rounded-md focus:outline-none focus:ring-1 focus:ring-brown-500"
-                    >
+                    <select value={director.gender || ""} onChange={(e) => updateDirector(index, "gender", e.target.value)} className="w-full px-2 py-1 border border-brown-300 rounded-md focus:outline-none focus:ring-1 focus:ring-brown-500" disabled={director.linkedShareholderId !== null}>
                       <option value="">Select</option>
                       {genderOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
                     </select>
                   </td>
-                  <td className="px-4 py-2 border-b text-center">
-                    <input 
-                      type="checkbox" 
-                      checked={director.isYouth || false} 
-                      onChange={(e) => updateDirector(index, "isYouth", e.target.checked)} 
-                      className="h-4 w-4 text-brown-600 focus:ring-brown-500 border-brown-300 rounded" 
-                    />
-                  </td>
-                  <td className="px-4 py-2 border-b text-center">
-                    <input 
-                      type="checkbox" 
-                      checked={director.isDisabled || false} 
-                      onChange={(e) => updateDirector(index, "isDisabled", e.target.checked)} 
-                      className="h-4 w-4 text-brown-600 focus:ring-brown-500 border-brown-300 rounded" 
-                    />
-                  </td>
+                  <td className="px-4 py-2 border-b text-center"><input type="checkbox" checked={director.isYouth || false} onChange={(e) => updateDirector(index, "isYouth", e.target.checked)} className="h-4 w-4 text-brown-600 focus:ring-brown-500 border-brown-300 rounded" disabled={director.linkedShareholderId !== null} /></td>
+                  <td className="px-4 py-2 border-b text-center"><input type="checkbox" checked={director.isDisabled || false} onChange={(e) => updateDirector(index, "isDisabled", e.target.checked)} className="h-4 w-4 text-brown-600 focus:ring-brown-500 border-brown-300 rounded" disabled={director.linkedShareholderId !== null} /></td>
                   <td className="px-4 py-2 border-b">
-                    <button 
-                      type="button" 
-                      onClick={() => removeDirector(index)} 
-                      className={`text-red-500 hover:text-red-700 ${director.linkedShareholderId !== null ? 'opacity-30 cursor-not-allowed' : ''}`} 
-                      disabled={director.linkedShareholderId !== null} 
-                      title={director.linkedShareholderId !== null ? "Uncheck 'Also Director' in shareholder table to remove" : "Remove director"}
-                    >
+                    <button type="button" onClick={() => removeDirector(index)} className={`text-red-500 hover:text-red-700 ${director.linkedShareholderId !== null ? 'opacity-30 cursor-not-allowed' : ''}`} disabled={director.linkedShareholderId !== null} title={director.linkedShareholderId !== null ? "Uncheck 'Also Director' in shareholder table to remove" : "Remove director"}>
                       <Trash2 className="w-4 h-4" />
                     </button>
                   </td>
@@ -1009,7 +1058,7 @@ export default function OwnershipManagement({ data = { shareholders: [], directo
         </div>
       </div>
 
-      {/* Business Leadership – Profile Assessment */}
+      {/* ─── Business Leadership – Profile Assessment ─────────────────────────── */}
       <div className="mb-8">
         <div className="mb-4">
           <h3 className="text-lg font-semibold text-brown-700">Business Leadership – Profile Assessment</h3>
