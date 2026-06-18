@@ -435,8 +435,8 @@ const LandingPage = () => {
     *{box-sizing:border-box}
     .lp-a{background:linear-gradient(135deg,${C.amber},${C.secondary});color:#fff;border:none;border-radius:12px;padding:14px 32px;font-size:0.95rem;font-weight:800;cursor:pointer;font-family:inherit;transition:opacity 0.2s,transform 0.14s;letter-spacing:0.01em;box-shadow:0 4px 16px rgba(200,132,58,0.35)}
     .lp-a:hover{opacity:0.9;transform:translateY(-1px)}
-    .lp-w{background:rgba(255,255,255,0.1);color:#fff;border:1px solid rgba(255,255,255,0.25);border-radius:12px;padding:14px 32px;font-size:0.95rem;font-weight:600;cursor:pointer;font-family:inherit;transition:all 0.2s;text-decoration:none;display:inline-block;backdrop-filter:blur(8px)}
-    .lp-w:hover{background:rgba(255,255,255,0.18)}
+    .lp-w{background:${C.white};color:${C.dark};border:2px solid ${C.dark};border-radius:12px;padding:14px 32px;font-size:0.95rem;font-weight:700;cursor:pointer;font-family:inherit;transition:all 0.2s;text-decoration:none;display:inline-block}
+    .lp-w:hover{background:${C.dark};color:${C.white};border-color:${C.dark}}
     .lp-b{background:${C.primary};color:#fff;border:none;border-radius:12px;padding:13px 30px;font-size:0.93rem;font-weight:700;cursor:pointer;font-family:inherit;transition:background 0.2s,transform 0.14s}
     .lp-b:hover{background:#5A3420;transform:translateY(-1px)}
     .lp-g{background:${C.green};color:#fff;border:none;border-radius:12px;padding:13px 30px;font-size:0.93rem;font-weight:700;cursor:pointer;font-family:inherit;transition:background 0.2s,transform 0.14s}
@@ -453,6 +453,9 @@ const LandingPage = () => {
     .pb:hover{border-color:${C.secondary};color:${C.primary};background:${C.cream}}
     .tab-b{flex:1;padding:11px 14px;border:none;font-size:0.85rem;font-weight:700;cursor:pointer;font-family:inherit;transition:all 0.2s;border-radius:0}
     .stat-chip{background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);border-radius:12px;padding:16px 20px;backdrop-filter:blur(8px)}
+    .vm-card{background:${C.white};border-radius:8px;padding:25px;text-align:center;box-shadow:0 5px 20px rgba(0,0,0,0.1);transition:transform 0.3s ease,box-shadow 0.3s ease}
+    .vm-card:hover{transform:translateY(-3px);box-shadow:0 8px 30px rgba(0,0,0,0.15)}
+    .vm-icon-wrap{width:60px;height:60px;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 15px;border:2px solid}
     @media(max-width:768px){.hero-r{flex-direction:column!important}.g2,.g3,.g4,.g6{grid-template-columns:1fr!important}}
     @media(prefers-reduced-motion:reduce){*{transition-duration:0.01ms!important}}
   `
@@ -464,6 +467,7 @@ const LandingPage = () => {
       {mobile&&<div style={{background:C.primary,color:"#fff",padding:"8px 16px",textAlign:"center",fontSize:"0.74rem",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}><MdSmartphone/> Best viewed on a desktop or laptop.</div>}
       <Header onLoginClick={go}/>
 
+      {/* HERO SECTION */}
       <section style={{background:`linear-gradient(105deg, rgba(28,20,16,0.94) 0%, rgba(61,42,26,0.88) 50%, rgba(28,20,16,0.75) 100%), url("https://images.unsplash.com/photo-1556761175-4b46a572b786?auto=format&fit=crop&w=1600&q=80")`,backgroundSize:"cover",backgroundPosition:"center top",padding:mobile?"44px 20px 52px":"68px 40px 76px",color:"#fff",position:"relative",overflow:"hidden",minHeight:mobile?"auto":520,display:"flex",alignItems:"center"}}>
         <div style={{position:"absolute",top:"-15%",right:"0%",width:"400px",height:"400px",borderRadius:"50%",background:"rgba(212,137,74,0.07)",pointerEvents:"none"}}/>
         <div style={{position:"absolute",bottom:"-8%",left:"25%",width:"260px",height:"260px",borderRadius:"50%",background:"rgba(124,77,42,0.1)",pointerEvents:"none"}}/>
@@ -504,48 +508,65 @@ const LandingPage = () => {
         </div>
       </section>
 
-      <section style={{padding:mobile?"48px 20px":"72px 40px",background:C.white}}>
-        <div style={{maxWidth:1100,margin:"0 auto"}}>
-          <div style={{textAlign:"center",marginBottom:52}}>
-            <p style={{color:C.secondary,fontWeight:700,fontSize:"0.74rem",letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:10}}>Simple by design</p>
-            <h2 style={{fontSize:mobile?"1.7rem":"2.2rem",fontWeight:800,color:C.dark,margin:0,letterSpacing:"-0.01em"}}>Four steps to unlocking growth</h2>
-          </div>
-          <div className="g4" style={{display:"grid",gridTemplateColumns:mobile?"1fr":"repeat(4,1fr)",gap:20}}>
-            {steps.map((s,i)=>(
-              <div key={s.n} className="step-card">
-                {i<3&&!mobile&&<div style={{position:"absolute",top:38,right:-14,fontSize:"1.2rem",color:C.neutral,zIndex:1,fontWeight:300}}>→</div>}
-                <div style={{fontSize:"2.2rem",fontWeight:900,color:C.primary,lineHeight:1,marginBottom:16,letterSpacing:"-0.03em",opacity:0.35}}>{s.n}</div>
-                <div style={{width:44,height:44,borderRadius:14,background:`${C.primary}12`,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:14,color:C.primary}}>{s.icon}</div>
-                <h3 style={{fontSize:"0.95rem",fontWeight:800,color:C.dark,margin:"0 0 8px",letterSpacing:"-0.01em"}}>{s.title}</h3>
-                <p style={{fontSize:"0.82rem",color:C.muted,lineHeight:1.6,margin:0}}>{s.desc}</p>
+      {/* VISION MISSION SECTION - Redesigned to match the design from the second code */}
+      <section style={{padding:mobile?"48px 20px":"72px 40px",background:C.pageBg,position:"relative"}}>
+        <div style={{position:"absolute",top:0,left:0,right:0,height:"20px",background:`linear-gradient(to right, ${C.primary}, ${C.secondary})`,clipPath:"polygon(0 0, 100% 0, 100% 70%, 0 100%)"}}/>
+        <div style={{maxWidth:1100,margin:"0 auto",position:"relative",zIndex:1}}>
+          <h2 style={{fontSize:mobile?"1.8rem":"2.2rem",fontWeight:700,marginBottom:"40px",textAlign:"center",color:C.dark,textTransform:"uppercase"}}>
+            OUR PURPOSE: BUILDING AFRICA'S TRUST ECONOMY
+          </h2>
+          <div style={{display:"grid",gridTemplateColumns:mobile?"1fr":"repeat(auto-fit, minmax(300px, 1fr))",gap:"25px",marginBottom:"30px"}}>
+            {/* Vision */}
+            <div className="vm-card" style={{borderTop:`4px solid ${C.primary}`}}>
+              <div className="vm-icon-wrap" style={{backgroundColor:`${C.primary}20`,borderColor:C.primary}}>
+                <FaBullseye size={24} color={C.primary} />
               </div>
-            ))}
-          </div>
-        </div>
-      </section>
+              <h3 style={{fontSize:"1.3rem",fontWeight:700,marginBottom:"12px",color:C.dark,textTransform:"uppercase"}}>
+                Our Vision
+              </h3>
+              <p style={{fontSize:"0.9rem",lineHeight:"1.6",color:C.dark}}>
+                <strong>To corporatise Africa's boldest SMEs.</strong>
+              </p>
+            </div>
 
-      <section style={{padding:mobile?"48px 20px":"72px 40px",background:C.pageBg}}>
-        <div style={{maxWidth:1100,margin:"0 auto"}}>
-          <div style={{display:"grid",gridTemplateColumns:mobile?"1fr":"1fr 1fr 1fr",gap:20,marginBottom:40}}>
-            {[
-              {icon:<FaBullseye size={18}/>,color:C.primary,  title:"Our Vision",  body:"To corporatise Africa's boldest SMEs — giving every high-potential business the credibility to compete globally."},
-              {icon:<FaHandshake size={18}/>,color:C.secondary,title:"Our Mission", body:"To connect Africa's boldest businesses to the capital, connections, and credibility they need to grow."},
-              {icon:<FaLightbulb size={18}/>,color:C.amber,   title:"Our Promise", body:"To make growth accessible — not accidental — for Africa's most promising enterprises."},
-            ].map(c=>(
-              <div key={c.title} style={{background:C.white,borderRadius:18,padding:"28px 22px",boxShadow:`0 2px 16px rgba(28,20,16,0.06)`,border:`1px solid ${C.border}`}}>
-                <div style={{width:48,height:48,borderRadius:14,background:`${c.color}12`,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:16,color:c.color}}>{c.icon}</div>
-                <h3 style={{fontSize:"0.95rem",fontWeight:800,color:C.dark,textTransform:"uppercase",letterSpacing:"0.04em",margin:"0 0 10px"}}>{c.title}</h3>
-                <p style={{fontSize:"0.85rem",lineHeight:1.65,color:C.muted,margin:0}}>{c.body}</p>
+            {/* Mission */}
+            <div className="vm-card" style={{borderTop:`4px solid ${C.secondary}`}}>
+              <div className="vm-icon-wrap" style={{backgroundColor:`${C.secondary}20`,borderColor:C.secondary}}>
+                <FaHandshake size={24} color={C.secondary} />
               </div>
-            ))}
+              <h3 style={{fontSize:"1.3rem",fontWeight:700,marginBottom:"12px",color:C.dark,textTransform:"uppercase"}}>
+                Our Mission
+              </h3>
+              <p style={{fontSize:"0.9rem",lineHeight:"1.6",color:C.dark}}>
+                <strong>To give Africa's boldest businesses the credibility, connections, and capital they need — and a seat at every table that matters.</strong>
+              </p>
+            </div>
+
+            {/* Promise */}
+            <div className="vm-card" style={{borderTop:`4px solid ${C.accent}`}}>
+              <div className="vm-icon-wrap" style={{backgroundColor:`${C.accent}20`,borderColor:C.accent}}>
+                <FaLightbulb size={24} color={C.accent} />
+              </div>
+              <h3 style={{fontSize:"1.3rem",fontWeight:700,marginBottom:"12px",color:C.dark,textTransform:"uppercase"}}>
+                Our Promise
+              </h3>
+              <p style={{fontSize:"0.9rem",lineHeight:"1.6",color:C.dark}}>
+                <strong>To make growth accessible — not accidental — for Africa's most promising enterprises.</strong>
+              </p>
+            </div>
           </div>
+
           <div style={{textAlign:"center"}}>
-            <p style={{fontSize:"0.9rem",fontWeight:600,color:C.primary,marginBottom:20}}>Building a continent-wide trust economy — one BIG Score at a time.</p>
-            <button className="lp-b" onClick={go}>{regOpen?"Register Now":"Join the Movement"}</button>
+            <p style={{fontSize:mobile?"1rem":"1.1rem",fontWeight:600,marginBottom:"25px",color:C.primary,textTransform:"uppercase"}}>
+              We're building a continent-wide trust economy. Join us.
+            </p>
+            <button className="lp-b" onClick={go}>{regOpen?"Register Now":"Be BIG. Join the Movement"}</button>
           </div>
         </div>
+        <div style={{position:"absolute",bottom:0,left:0,right:0,height:"20px",background:`linear-gradient(to right, ${C.primary}, ${C.secondary})`,clipPath:"polygon(0 30%, 100% 0, 100% 100%, 0 100%)"}}/>
       </section>
 
+      {/* WHO BENEFITS FROM BIG SECTION */}
       <section style={{padding:mobile?"48px 20px":"72px 40px",background:C.dark}}>
         <div style={{maxWidth:1100,margin:"0 auto"}}>
           <div style={{textAlign:"center",marginBottom:48}}>
@@ -570,106 +591,28 @@ const LandingPage = () => {
         </div>
       </section>
 
-      <section style={{padding:mobile?"48px 20px":"72px 40px",background:C.cream}}>
-        <div style={{maxWidth:1100,margin:"0 auto"}}>
-          <div style={{textAlign:"center",marginBottom:48}}>
-            <p style={{color:C.secondary,fontWeight:700,fontSize:"0.74rem",letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:10}}>Your credibility engine</p>
-            <h2 style={{fontSize:mobile?"1.7rem":"2.2rem",fontWeight:800,color:C.dark,margin:0,letterSpacing:"-0.01em"}}>The <span style={{color:C.primary}}>BIG</span> Score — explained</h2>
-            <p style={{fontSize:"0.92rem",color:C.muted,maxWidth:500,margin:"14px auto 0",lineHeight:1.7}}>Five weighted dimensions, one trusted number that tells the full story of your business to every stakeholder that matters.</p>
-          </div>
-          <div className="g2" style={{display:"grid",gridTemplateColumns:mobile?"1fr":"1fr 1fr",gap:24}}>
-            <div style={{background:C.white,borderRadius:20,padding:"30px 26px",border:`1px solid ${C.border}`}}>
-              <div style={{width:48,height:48,borderRadius:14,background:`${C.primary}12`,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:18,color:C.primary}}><FaChartBar size={20}/></div>
-              <h3 style={{fontSize:"1rem",fontWeight:800,color:C.dark,margin:"0 0 8px"}}>Five Score Dimensions</h3>
-              <p style={{fontSize:"0.84rem",color:C.muted,lineHeight:1.6,marginBottom:20}}>Each dimension is weighted to reflect what matters most to funders:</p>
-              {[
-                {label:"Compliance",    pct:29,weight:32,color:C.red,   dot:C.red},
-                {label:"Legitimacy",    pct:90,weight:13,color:C.green, dot:C.green},
-                {label:"Leadership",    pct:72,weight:10,color:C.orange,dot:C.orange},
-                {label:"Governance",    pct:90,weight:13,color:C.green, dot:C.green},
-                {label:"Capital Appeal",pct:65,weight:32,color:C.amber, dot:C.amber},
-              ].map(d=>(
-                <div key={d.label} style={{marginBottom:13}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:5}}>
-                    <div style={{display:"flex",alignItems:"center",gap:8}}><span style={{width:9,height:9,borderRadius:"50%",background:d.dot,flexShrink:0}}/><span style={{fontSize:"0.82rem",fontWeight:700,color:C.dark}}>{d.label}</span></div>
-                    <span style={{fontSize:"0.72rem",color:C.muted,fontFamily:"monospace"}}>{d.pct}% x {d.weight}% = {Math.round(d.pct*d.weight/100)}%</span>
-                  </div>
-                  <div style={{height:7,background:C.border,borderRadius:4,overflow:"hidden"}}><div style={{height:"100%",width:`${d.pct}%`,background:d.color,borderRadius:4}}/></div>
-                </div>
-              ))}
-            </div>
-            <div style={{background:C.white,borderRadius:20,padding:"30px 26px",border:`1px solid ${C.border}`}}>
-              <div style={{width:48,height:48,borderRadius:14,background:`${C.secondary}12`,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:18,color:C.secondary}}><FaRocket size={18}/></div>
-              <h3 style={{fontSize:"1rem",fontWeight:800,color:C.dark,margin:"0 0 8px"}}>What Your Score Unlocks</h3>
-              <p style={{fontSize:"0.84rem",color:C.muted,lineHeight:1.6,marginBottom:20}}>A higher BIG Score opens doors matched to your stage and potential:</p>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:20}}>
-                {[{label:"Funding Access",icon:<FaChartLine size={14}/>,color:C.primary},{label:"Strategic Partners",icon:<FaHandshake size={14}/>,color:C.secondary},{label:"Compliance Trust",icon:<FaShieldAlt size={14}/>,color:C.green},{label:"Expert Advisors",icon:<FaLightbulb size={14}/>,color:C.amber}].map(u=>(
-                  <div key={u.label} style={{background:`${u.color}0C`,borderRadius:12,padding:"16px 14px",display:"flex",flexDirection:"column",alignItems:"center",textAlign:"center",gap:8,border:`1px solid ${u.color}20`}}>
-                    <span style={{color:u.color}}>{u.icon}</span>
-                    <span style={{fontSize:"0.75rem",fontWeight:700,color:u.color}}>{u.label}</span>
-                  </div>
-                ))}
-              </div>
-              <div style={{background:C.pageBg,borderRadius:12,padding:"14px 16px",borderLeft:`3px solid ${C.primary}`}}>
-                <p style={{fontSize:"0.83rem",color:C.dark,margin:0,lineHeight:1.55}}><strong>Score too low?</strong> We guide you to accelerators, mentors, and incubators — BIG never shuts a door.</p>
-              </div>
-            </div>
-          </div>
-          <div style={{textAlign:"center",marginTop:28}}>
-            <Link to="/BigScorePage" style={{display:"inline-flex",alignItems:"center",gap:10,background:C.primary,color:"#FFFFFF",padding:"15px 36px",borderRadius:12,fontWeight:800,textDecoration:"none",fontSize:"0.95rem",letterSpacing:"0.01em",boxShadow:"0 4px 16px rgba(124,77,42,0.4)"}} onMouseOver={e=>{e.currentTarget.style.background="#5A3420"}} onMouseOut={e=>{e.currentTarget.style.background=C.primary}}>See How Your Score Is Calculated <FaChevronRight size={13}/></Link>
-          </div>
-        </div>
-      </section>
-
+      {/* FOUR STEPS TO UNLOCKING GROWTH SECTION */}
       <section style={{padding:mobile?"48px 20px":"72px 40px",background:C.white}}>
-        <div style={{maxWidth:1280,margin:"0 auto"}}>
-          <div style={{textAlign:"center",marginBottom:36}}>
-            <p style={{color:C.secondary,fontWeight:700,fontSize:"0.74rem",letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:10}}>See the platform in action</p>
-            <h2 style={{fontSize:mobile?"1.7rem":"2.2rem",fontWeight:800,color:C.dark,margin:0,letterSpacing:"-0.01em"}}>Real dashboards. Real results.</h2>
-            <p style={{fontSize:"0.9rem",color:C.muted,marginTop:12,lineHeight:1.65}}>One platform built for every stakeholder in the African growth ecosystem.</p>
+        <div style={{maxWidth:1100,margin:"0 auto"}}>
+          <div style={{textAlign:"center",marginBottom:52}}>
+            <p style={{color:C.secondary,fontWeight:700,fontSize:"0.74rem",letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:10}}>Simple by design</p>
+            <h2 style={{fontSize:mobile?"1.7rem":"2.2rem",fontWeight:800,color:C.dark,margin:0,letterSpacing:"-0.01em"}}>Four steps to unlocking growth</h2>
           </div>
-          <div style={{display:"flex",background:C.pageBg,borderRadius:14,padding:4,maxWidth:380,margin:"0 auto 32px",border:`1px solid ${C.border}`}}>
-            {[{id:"smse",label:"SMSE Dashboard"},{id:"investor",label:"Investor Portal"}].map(tab=>(
-              <button key={tab.id} className="tab-b" onClick={()=>setActiveTab(tab.id)} style={{borderRadius:11,background:activeTab===tab.id?C.primary:"transparent",color:activeTab===tab.id?"#fff":C.muted,fontWeight:activeTab===tab.id?800:600}}>{tab.label}</button>
+          <div className="g4" style={{display:"grid",gridTemplateColumns:mobile?"1fr":"repeat(4,1fr)",gap:20}}>
+            {steps.map((s,i)=>(
+              <div key={s.n} className="step-card">
+                {i<3&&!mobile&&<div style={{position:"absolute",top:38,right:-14,fontSize:"1.2rem",color:C.neutral,zIndex:1,fontWeight:300}}>→</div>}
+                <div style={{fontSize:"2.2rem",fontWeight:900,color:C.primary,lineHeight:1,marginBottom:16,letterSpacing:"-0.03em",opacity:0.35}}>{s.n}</div>
+                <div style={{width:44,height:44,borderRadius:14,background:`${C.primary}12`,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:14,color:C.primary}}>{s.icon}</div>
+                <h3 style={{fontSize:"0.95rem",fontWeight:800,color:C.dark,margin:"0 0 8px",letterSpacing:"-0.01em"}}>{s.title}</h3>
+                <p style={{fontSize:"0.82rem",color:C.muted,lineHeight:1.6,margin:0}}>{s.desc}</p>
+              </div>
             ))}
           </div>
-
-          {activeTab==="smse"&&(
-            <div style={{display:"grid",gridTemplateColumns:mobile?"1fr":"300px 1fr",gap:32,alignItems:"start"}}>
-              <div>
-                <h3 style={{fontSize:"1.05rem",fontWeight:800,color:C.dark,margin:"0 0 10px",letterSpacing:"-0.01em"}}>Track your business credibility in real time</h3>
-                <p style={{fontSize:"0.88rem",color:C.muted,lineHeight:1.7,marginBottom:18}}>Your SMSE dashboard gives you full visibility into your BIG Score, application tracker, customer reviews, and AI-generated priority actions.</p>
-                {["Full five-dimension score breakdown with weighted calculations","Application tracker across funding, services, advisory, and internships","Customer review panel with star ratings","AI priority analysis with top 3 improvement actions"].map(item=>(
-                  <div key={item} style={{display:"flex",alignItems:"flex-start",gap:10,marginBottom:10}}>
-                    <div style={{width:20,height:20,borderRadius:8,background:`${C.primary}14`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1,color:C.primary}}><FaCheck size={9}/></div>
-                    <span style={{fontSize:"0.86rem",color:C.dark,lineHeight:1.5}}>{item}</span>
-                  </div>
-                ))}
-                <div style={{marginTop:20}}><button className="lp-b" onClick={go}>{regOpen?"Get Started":"Create Your SMSE Profile"}</button></div>
-              </div>
-              {!mobile&&<SMSEDashboard/>}
-            </div>
-          )}
-          {activeTab==="investor"&&(
-            <div style={{display:"grid",gridTemplateColumns:mobile?"1fr":"280px 1fr",gap:32,alignItems:"start"}}>
-              <div>
-                <h3 style={{fontSize:"1.05rem",fontWeight:800,color:C.dark,margin:"0 0 10px",letterSpacing:"-0.01em"}}>A complete deal pipeline for every investor</h3>
-                <p style={{fontSize:"0.88rem",color:C.muted,lineHeight:1.7,marginBottom:18}}>Track every deal from first match to close across 8 pipeline stages, with BIG Score and match percentage side by side.</p>
-                {["27+ matched SMEs ready in your pipeline","All 8 deal stages from Matches through to Closed","Track % Match and BIG Score for every business","Filter by funding required, equity, sector, and stage"].map(item=>(
-                  <div key={item} style={{display:"flex",alignItems:"flex-start",gap:10,marginBottom:10}}>
-                    <div style={{width:20,height:20,borderRadius:8,background:`${C.green}14`,display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,marginTop:1,color:C.green}}><FaCheck size={9}/></div>
-                    <span style={{fontSize:"0.86rem",color:C.dark,lineHeight:1.5}}>{item}</span>
-                  </div>
-                ))}
-                <div style={{marginTop:20}}><button className="lp-g" onClick={go}>{regOpen?"Access Investor Portal":"Apply as an Investor"}</button></div>
-              </div>
-              {!mobile&&<InvestorDashboard/>}
-            </div>
-          )}
-          {mobile&&(activeTab==="smse"?<SMSEDashboard/>:<InvestorDashboard/>)}
         </div>
       </section>
 
+      {/* TESTIMONIALS SECTION */}
       <section style={{padding:mobile?"48px 20px":"72px 40px",background:C.pageBg}}>
         <div style={{maxWidth:1100,margin:"0 auto"}}>
           <div style={{textAlign:"center",marginBottom:44}}>
@@ -695,6 +638,7 @@ const LandingPage = () => {
         </div>
       </section>
 
+      {/* WHY TRUST BIG SECTION */}
       <section style={{padding:mobile?"48px 20px":"72px 40px",background:C.white}}>
         <div style={{maxWidth:1100,margin:"0 auto"}}>
           <div style={{textAlign:"center",marginBottom:44}}>
@@ -716,6 +660,7 @@ const LandingPage = () => {
         </div>
       </section>
 
+      {/* CTA SECTION */}
       <section style={{padding:mobile?"56px 20px":"80px 40px",background:`linear-gradient(135deg, ${C.dark} 0%, #3D2A1A 100%)`,textAlign:"center",position:"relative",overflow:"hidden"}}>
         <div style={{position:"absolute",top:"-30%",left:"50%",transform:"translateX(-50%)",width:"600px",height:"600px",borderRadius:"50%",background:"rgba(212,137,74,0.06)",pointerEvents:"none"}}/>
         <div style={{maxWidth:600,margin:"0 auto",position:"relative",zIndex:1}}>

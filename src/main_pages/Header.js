@@ -1,10 +1,15 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 
 const Header = ({ onLoginClick }) => {
   const navigate = useNavigate();
+  const location = useLocation();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const [isHowItWorksOpen, setIsHowItWorksOpen] = useState(false);
+  const [isVisible, setIsVisible] = useState(true);
+  const [lastScrollY, setLastScrollY] = useState(0);
+  const dropdownRef = useRef(null);
 
   // Check if device is mobile on mount and resize
   useEffect(() => {
@@ -30,6 +35,18 @@ const Header = ({ onLoginClick }) => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsHowItWorksOpen(false);
+      }
+    };
+    
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   // Prevent body scroll when mobile menu is open
   useEffect(() => {
     if (isMobileMenuOpen) {
@@ -43,15 +60,31 @@ const Header = ({ onLoginClick }) => {
     };
   }, [isMobileMenuOpen]);
 
+  // Handle header visibility on scroll - ALWAYS VISIBLE
+  useEffect(() => {
+    const handleScroll = () => {
+      const currentScrollY = window.scrollY;
+      
+      // Only hide when scrolling down significantly, but always show at top
+      if (currentScrollY > 100 && currentScrollY > lastScrollY) {
+        setIsVisible(false);
+      } else {
+        setIsVisible(true);
+      }
+      
+      setLastScrollY(currentScrollY);
+    };
+
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [lastScrollY]);
+
   const handleLoginClick = () => {
-    // First close mobile menu if open
     setIsMobileMenuOpen(false);
-    
-    // If parent component provided a handler, use it
+    setIsHowItWorksOpen(false);
     if (onLoginClick) {
       onLoginClick();
     } else {
-      // Otherwise, navigate directly to loginRegister page
       navigate('/loginRegister');
     }
   };
@@ -64,53 +97,75 @@ const Header = ({ onLoginClick }) => {
       navigate(path);
     }
     setIsMobileMenuOpen(false);
+    setIsHowItWorksOpen(false);
   };
 
-  // Improved styles with proper desktop layout
+  // How It Works dropdown items - from Landing Page "Who benefits from BIG?"
+  const howItWorksItems = [
+    { label: 'For SMSEs', path: '/HowItWorksSMSE' },
+    { label: 'For Investors', path: '/HowItWorksInvestors' },
+    { label: 'For Corporates', path: '/HowItWorksCorporates' },
+    { label: 'For Catalysts', path: '/HowItWorksCatalysts' },
+    { label: 'For Advisors', path: '/HowItWorksAdvisors' },
+    { label: 'For Interns', path: '/HowItWorksInterns' },
+  ];
+
+  // Navigation items - Home first, then How It Works (dropdown), then the rest
+  const navItems = [
+    { label: 'Home', path: '/' },
+    { label: 'BIG Score', path: '/BigScorePage' },
+    { label: 'CSI @BIG', path: '/CharmSchool' },
+    { label: 'Insights', path: '/InsightsPage' },
+    { label: 'Contact Us', path: '/ContactPage' },
+  ];
+
   const styles = {
     header: {
       display: 'flex',
       justifyContent: 'space-between',
       alignItems: 'center',
-      padding: isMobile ? '0.8rem 1rem' : '1rem 2rem',
+      padding: isMobile ? '0.7rem 1rem' : '0.85rem 2rem',
       backgroundColor: '#FFFFFF',
       boxShadow: '0 2px 10px rgba(0, 0, 0, 0.08)',
-      position: 'sticky',
+      position: 'fixed',
       top: 0,
+      left: 0,
+      right: 0,
       zIndex: 100,
       width: '100%',
-      minHeight: isMobile ? '60px' : '80px',
+      minHeight: isMobile ? '60px' : '72px',
+      transform: isVisible ? 'translateY(0)' : 'translateY(-100%)',
+      transition: 'transform 0.3s ease-in-out, box-shadow 0.3s ease',
     },
     logoContainer: {
       flex: '0 0 auto',
       zIndex: 101,
     },
     logo: {
-      width: isMobile ? (window.innerWidth <= 480 ? '140px' : '160px') : '250px',
+      width: isMobile ? (window.innerWidth <= 480 ? '130px' : '150px') : '210px',
       height: 'auto',
-      maxHeight: isMobile ? (window.innerWidth <= 480 ? '40px' : '50px') : '80px',
+      maxHeight: isMobile ? (window.innerWidth <= 480 ? '38px' : '45px') : '65px',
       cursor: 'pointer',
       transition: 'all 0.3s ease',
     },
-    // New desktop navigation container - takes up middle space
     desktopNavContainer: {
       display: isMobile ? 'none' : 'flex',
       flex: '1 1 auto',
       justifyContent: 'center',
       alignItems: 'center',
-      margin: '0 2rem',
+      margin: '0 1.5rem',
     },
     nav: {
       display: 'flex',
-      gap: window.innerWidth <= 1024 ? '0.8rem' : '1.2rem',
+      gap: window.innerWidth <= 1024 ? '0.5rem' : '0.8rem',
       alignItems: 'center',
       justifyContent: 'center',
     },
     navButton: {
-      minWidth: window.innerWidth <= 1024 ? '90px' : '110px',
-      padding: window.innerWidth <= 1024 ? '0.5rem 0.8rem' : '0.6rem 1rem',
+      minWidth: window.innerWidth <= 1024 ? '80px' : '95px',
+      padding: window.innerWidth <= 1024 ? '0.4rem 0.7rem' : '0.5rem 1rem',
       textAlign: 'center',
-      fontSize: window.innerWidth <= 1024 ? '0.9rem' : '1rem',
+      fontSize: window.innerWidth <= 1024 ? '0.82rem' : '0.9rem',
       whiteSpace: 'nowrap',
       backgroundColor: '#5D432C',
       color: 'white',
@@ -119,18 +174,79 @@ const Header = ({ onLoginClick }) => {
       fontWeight: '600',
       cursor: 'pointer',
       transition: 'all 0.3s ease',
+      letterSpacing: '0.2px',
     },
-    // Separate container for login button on desktop
+    dropdownButton: {
+      minWidth: window.innerWidth <= 1024 ? '80px' : '95px',
+      padding: window.innerWidth <= 1024 ? '0.4rem 0.7rem' : '0.5rem 1rem',
+      textAlign: 'center',
+      fontSize: window.innerWidth <= 1024 ? '0.82rem' : '0.9rem',
+      whiteSpace: 'nowrap',
+      backgroundColor: '#5D432C',
+      color: 'white',
+      border: 'none',
+      borderRadius: '5px',
+      fontWeight: '600',
+      cursor: 'pointer',
+      transition: 'all 0.3s ease',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: '5px',
+      letterSpacing: '0.2px',
+    },
+    dropdownArrow: {
+      fontSize: '0.55rem',
+      transition: 'transform 0.3s ease',
+    },
+    dropdownArrowOpen: {
+      transform: 'rotate(180deg)',
+    },
+    dropdownMenu: {
+      position: 'absolute',
+      top: 'calc(100% + 6px)',
+      left: '50%',
+      transform: 'translateX(-50%)',
+      backgroundColor: '#FFFFFF',
+      borderRadius: '8px',
+      boxShadow: '0 8px 30px rgba(0, 0, 0, 0.12)',
+      padding: '6px 0',
+      minWidth: '200px',
+      zIndex: 200,
+      opacity: 0,
+      visibility: 'hidden',
+      transition: 'all 0.25s ease',
+      border: '1px solid #EAE2D8',
+    },
+    dropdownMenuOpen: {
+      opacity: 1,
+      visibility: 'visible',
+    },
+    dropdownItem: {
+      padding: '8px 18px',
+      fontSize: '0.82rem',
+      fontWeight: '500',
+      color: '#372C27',
+      cursor: 'pointer',
+      transition: 'all 0.15s ease',
+      border: 'none',
+      background: 'transparent',
+      width: '100%',
+      textAlign: 'left',
+      display: 'block',
+      fontFamily: 'inherit',
+      letterSpacing: '0.2px',
+    },
     desktopLoginContainer: {
       display: isMobile ? 'none' : 'flex',
       flex: '0 0 auto',
       alignItems: 'center',
     },
     loginButton: {
-      minWidth: '140px',
-      padding: '0.6rem 1.2rem',
+      minWidth: '120px',
+      padding: '0.5rem 1.2rem',
       textAlign: 'center',
-      fontSize: '1rem',
+      fontSize: '0.9rem',
       backgroundColor: '#A78B71',
       color: 'white',
       border: 'none',
@@ -139,6 +255,7 @@ const Header = ({ onLoginClick }) => {
       cursor: 'pointer',
       transition: 'all 0.3s',
       whiteSpace: 'nowrap',
+      letterSpacing: '0.2px',
     },
     mobileMenuButton: {
       display: isMobile ? 'flex' : 'none',
@@ -188,40 +305,87 @@ const Header = ({ onLoginClick }) => {
     },
     mobileNavButton: {
       width: '100%',
-      padding: '0.8rem 1rem',
-      margin: '0.3rem 0',
+      padding: '0.7rem 1rem',
+      margin: '0.25rem 0',
       textAlign: 'center',
-      fontSize: '1rem',
+      fontSize: '0.95rem',
       backgroundColor: '#5D432C',
       color: 'white',
       border: 'none',
-      borderRadius: '8px',
+      borderRadius: '6px',
       fontWeight: '600',
       cursor: 'pointer',
       transition: 'all 0.3s',
+      letterSpacing: '0.3px',
+    },
+    mobileDropdownHeader: {
+      width: '100%',
+      padding: '0.7rem 1rem',
+      margin: '0.25rem 0',
+      textAlign: 'center',
+      fontSize: '0.95rem',
+      backgroundColor: '#5D432C',
+      color: 'white',
+      border: 'none',
+      borderRadius: '6px',
+      fontWeight: '600',
+      cursor: 'pointer',
+      transition: 'all 0.3s',
+      display: 'flex',
+      justifyContent: 'center',
+      alignItems: 'center',
+      gap: '6px',
+      fontFamily: 'inherit',
+      letterSpacing: '0.3px',
+    },
+    mobileDropdownItems: {
+      paddingLeft: '0',
+      overflow: 'hidden',
+      maxHeight: 0,
+      transition: 'max-height 0.3s ease',
+    },
+    mobileDropdownItemsOpen: {
+      maxHeight: '400px',
+    },
+    mobileDropdownItem: {
+      width: '100%',
+      padding: '0.55rem 1rem',
+      margin: '0.1rem 0',
+      textAlign: 'center',
+      fontSize: '0.88rem',
+      backgroundColor: '#F5F0E8',
+      color: '#372C27',
+      border: 'none',
+      borderRadius: '4px',
+      fontWeight: '500',
+      cursor: 'pointer',
+      transition: 'all 0.2s ease',
+      fontFamily: 'inherit',
+      letterSpacing: '0.2px',
     },
     mobileLoginButton: {
       width: '100%',
-      padding: '0.8rem 1rem',
-      margin: '0.5rem 0',
-      marginTop: '1rem',
+      padding: '0.7rem 1rem',
+      margin: '0.3rem 0',
+      marginTop: '0.8rem',
       textAlign: 'center',
-      fontSize: '1rem',
+      fontSize: '0.95rem',
       backgroundColor: '#A78B71',
       color: 'white',
       border: 'none',
-      borderRadius: '8px',
+      borderRadius: '6px',
       fontWeight: '600',
       cursor: 'pointer',
       transition: 'all 0.3s',
+      letterSpacing: '0.3px',
     },
     closeButton: {
       position: 'absolute',
-      top: '1rem',
-      right: '1rem',
+      top: '0.8rem',
+      right: '0.8rem',
       background: 'none',
       border: 'none',
-      fontSize: '1.5rem',
+      fontSize: '1.4rem',
       cursor: 'pointer',
       color: '#5D432C',
       width: '30px',
@@ -229,7 +393,12 @@ const Header = ({ onLoginClick }) => {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-    }
+    },
+    divider: {
+      height: '1px',
+      backgroundColor: '#EAE2D8',
+      margin: '0.4rem 0',
+    },
   };
 
   return (
@@ -244,250 +413,367 @@ const Header = ({ onLoginClick }) => {
               src="/logo.png"
               alt="Brown Ivory Group Logo"
               style={styles.logo}
-              width="250"
-              height="80"
+              width="210"
+              height="65"
               loading="lazy"
             />
           </picture>
         </div>
 
-        {/* Desktop Navigation - Center */}
+        {/* Desktop Navigation */}
         <div style={styles.desktopNavContainer}>
           <nav style={styles.nav}>
-            <button 
-              className="nav-button"
+            {/* Home - First */}
+            <button
+              className="nav-btn"
               onClick={() => handleNavigation('/')}
               style={styles.navButton}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = '#372C27';
+                e.currentTarget.style.transform = 'translateY(-1px)';
+                e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = '#5D432C';
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = 'none';
+              }}
             >
               Home
             </button>
-            
-            <button 
-              className="nav-button"
-              onClick={() => handleNavigation('/HowItWorks')}
-              style={styles.navButton}
-            >
-              How it works
-            </button>
-            
-            <button 
-              className="nav-button"
-              onClick={() => handleNavigation('/BigScorePage')}
-              style={styles.navButton}
-            >
-              BIG score
-            </button>
-            <button 
-              className="nav-button"
-              onClick={() => handleNavigation('/CharmSchool')}
-              style={styles.navButton}
-            >
-              CSI @BIG
-            </button>
-            
-            <button 
-              className="nav-button"
-              onClick={() => handleNavigation('/InsightsPage')}
-              style={styles.navButton}
-            >
-              Insights
-            </button>
 
-            
-            <button 
-              className="nav-button"
-              onClick={() => handleNavigation('/FAQPage')}
-              style={styles.navButton}
+            {/* How It Works Dropdown - Second (next to Home) */}
+            <div 
+              ref={dropdownRef}
+              style={{ position: 'relative' }}
+              onMouseEnter={() => setIsHowItWorksOpen(true)}
+              onMouseLeave={() => setIsHowItWorksOpen(false)}
             >
-              FAQs
-            </button>
+              <button
+                className="nav-btn dropdown-btn"
+                style={{
+                  ...styles.dropdownButton,
+                  backgroundColor: isHowItWorksOpen ? '#372C27' : '#5D432C',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = '#372C27';
+                  e.currentTarget.style.transform = 'translateY(-1px)';
+                  e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
+                }}
+                onMouseLeave={(e) => {
+                  if (!isHowItWorksOpen) {
+                    e.currentTarget.style.backgroundColor = '#5D432C';
+                  }
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = 'none';
+                }}
+              >
+                How It Works
+                <span style={{
+                  ...styles.dropdownArrow,
+                  transform: isHowItWorksOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                }}>▼</span>
+              </button>
 
-            <button 
-              className="nav-button"
-              onClick={() => handleNavigation('/ContactPage')}
-              style={styles.navButton}
-            >
-              Contact Us
-            </button>
+              <div style={{
+                ...styles.dropdownMenu,
+                ...(isHowItWorksOpen ? styles.dropdownMenuOpen : {}),
+              }}>
+                {howItWorksItems.map((item) => (
+                  <button
+                    key={item.label}
+                    style={styles.dropdownItem}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = '#F5F0E8';
+                      e.currentTarget.style.color = '#754A2D';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = 'transparent';
+                      e.currentTarget.style.color = '#372C27';
+                    }}
+                    onClick={() => handleNavigation(item.path)}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Remaining Nav Items */}
+            {navItems.slice(1).map((item) => (
+              <button
+                key={item.label}
+                className="nav-btn"
+                onClick={() => handleNavigation(item.path)}
+                style={styles.navButton}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = '#372C27';
+                  e.currentTarget.style.transform = 'translateY(-1px)';
+                  e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = '#5D432C';
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = 'none';
+                }}
+              >
+                {item.label}
+              </button>
+            ))}
           </nav>
         </div>
 
-        {/* Desktop Login Button - Right Side */}
+        {/* Desktop Login Button */}
         <div style={styles.desktopLoginContainer}>
-          <button 
-            className="login-button"
+          <button
+            className="login-btn"
             onClick={handleLoginClick}
             style={styles.loginButton}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = '#8a6d52';
+              e.currentTarget.style.transform = 'translateY(-1px)';
+              e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.12)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = '#A78B71';
+              e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.boxShadow = 'none';
+            }}
           >
             Login/Register
           </button>
         </div>
 
         {/* Mobile Menu Button */}
-        <button 
+        <button
           style={styles.mobileMenuButton}
           onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
           aria-label="Toggle mobile menu"
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = '#372C27';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = '#5D432C';
+          }}
         >
           {isMobileMenuOpen ? '✕' : '☰'}
         </button>
       </header>
 
+      {/* Add padding to body to account for fixed header */}
+      <div style={{ height: isMobile ? '60px' : '72px' }} />
+
       {/* Mobile Menu Overlay */}
-      <div 
+      <div
         style={styles.mobileMenuOverlay}
         onClick={() => setIsMobileMenuOpen(false)}
       />
 
       {/* Mobile Menu */}
       <div style={styles.mobileMenu}>
-        <button 
+        <button
           style={styles.closeButton}
           onClick={() => setIsMobileMenuOpen(false)}
           aria-label="Close mobile menu"
+          onMouseEnter={(e) => {
+            e.currentTarget.style.color = '#754A2D';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.color = '#5D432C';
+          }}
         >
           ✕
         </button>
-        
-        <button 
+
+        {/* Home - First in mobile */}
+        <button
           style={styles.mobileNavButton}
           onClick={() => handleNavigation('/')}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = '#372C27';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = '#5D432C';
+          }}
         >
           Home
         </button>
-        
-        <button 
-          style={styles.mobileNavButton}
-          onClick={() => handleNavigation('/HowItWorks')}
-        >
-          How it works
-        </button>
-        
-        <button 
-          style={styles.mobileNavButton}
-          onClick={() => handleNavigation('/BigScorePage')}
-        >
-          BIG score
-        </button>
-        
-        <button 
-          style={styles.mobileNavButton}
-          onClick={() => handleNavigation('/CharmSchool')}
-        >
-          CSI @BIG
-        </button>
-        
-        <button 
-          style={styles.mobileNavButton}
-          onClick={() => handleNavigation('/InsightsPage')}
-        >
-          Insights
-        </button>
-        
-        <button 
-          style={styles.mobileNavButton}
-          onClick={() => handleNavigation('/FAQPage')}
-        >
-          FAQs
-        </button>
-        
-        <button 
-          style={styles.mobileNavButton}
-          onClick={() => handleNavigation('/ContactPage')}
-        >
-          Contact Us
-        </button>
-        
-        <button 
+
+        {/* How It Works - Second in mobile */}
+        <div>
+          <button
+            style={styles.mobileDropdownHeader}
+            onClick={() => {
+              const items = document.getElementById('mobileDropdownItems');
+              if (items) {
+                const isOpen = items.style.maxHeight === '400px';
+                items.style.maxHeight = isOpen ? '0' : '400px';
+              }
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = '#372C27';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = '#5D432C';
+            }}
+          >
+            How It Works ▼
+          </button>
+          <div id="mobileDropdownItems" style={styles.mobileDropdownItems}>
+            {howItWorksItems.map((item) => (
+              <button
+                key={item.label}
+                style={styles.mobileDropdownItem}
+                onClick={() => handleNavigation(item.path)}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = '#EAE2D8';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = '#F5F0E8';
+                }}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Remaining Nav Items */}
+        {navItems.slice(1).map((item) => (
+          <button
+            key={item.label}
+            style={styles.mobileNavButton}
+            onClick={() => handleNavigation(item.path)}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = '#372C27';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = '#5D432C';
+            }}
+          >
+            {item.label}
+          </button>
+        ))}
+
+        <div style={styles.divider} />
+
+        <button
           style={styles.mobileLoginButton}
           onClick={handleLoginClick}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = '#8a6d52';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = '#A78B71';
+          }}
         >
           Login/Register
         </button>
       </div>
 
-      {/* Enhanced CSS Styles */}
+      {/* CSS Styles */}
       <style>{`
-        .nav-button {
-          background-color: #5D432C;
-          color: white;
-          border: none;
-          border-radius: 5px;
-          font-weight: 600;
-          cursor: pointer;
+        /* Header fixed at top */
+        header {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          z-index: 100;
+          transition: transform 0.3s ease-in-out, box-shadow 0.3s ease;
+        }
+
+        /* Desktop nav button hover states */
+        .nav-btn {
+          transition: all 0.3s ease;
+          font-family: 'Inter', 'Neue Haas Grotesk Text Pro', sans-serif;
+        }
+
+        .nav-btn:active {
+          transform: scale(0.97);
+        }
+
+        /* Login button */
+        .login-btn {
+          transition: all 0.3s ease;
+          font-family: 'Inter', 'Neue Haas Grotesk Text Pro', sans-serif;
+        }
+
+        .login-btn:active {
+          transform: scale(0.97);
+        }
+
+        /* Mobile menu button */
+        button[aria-label="Toggle mobile menu"] {
           transition: all 0.3s ease;
         }
-        
-        .nav-button:hover {
-          background-color: #372C27;
-          transform: translateY(-1px);
-          box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-        }
-        
-        .nav-button:active {
-          transform: translateY(0);
-        }
-        
-        .login-button:hover {
-          background-color: #8a6d52;
-          transform: translateY(-1px);
-          box-shadow: 0 2px 8px rgba(0,0,0,0.15);
-        }
-        
-        .login-button:active {
-          transform: translateY(0);
+
+        button[aria-label="Toggle mobile menu"]:active {
+          transform: scale(0.95);
         }
 
-        /* Mobile menu button hover effect */
-        button[aria-label="Toggle mobile menu"]:hover {
-          background-color: #372C27;
-          transform: scale(1.05);
+        /* Dropdown items */
+        .dropdown-item {
+          transition: all 0.15s ease;
         }
 
-        /* Mobile menu items hover effects */
-        button[style*="background-color: #5D432C"]:hover {
-          background-color: #372C27;
-          transform: scale(1.02);
+        /* Mobile menu scroll */
+        #mobileDropdownItems {
+          transition: max-height 0.3s ease;
+          overflow: hidden;
         }
 
-        button[style*="background-color: #A78B71"]:hover {
-          background-color: #8a6d52;
-          transform: scale(1.02);
-        }
-
-        /* Responsive breakpoints for better desktop layout */
-        @media (max-width: 1200px) {
-          .nav-button {
-            font-size: 0.9rem;
-            padding: 0.5rem 0.8rem;
-            min-width: 90px;
-          }
-          
-          .login-button {
-            font-size: 0.9rem;
-            padding: 0.5rem 1rem;
-            min-width: 130px;
-          }
-        }
-        
-        @media (max-width: 1024px) {
-          .nav-button {
-            font-size: 0.85rem;
-            padding: 0.45rem 0.7rem;
-            min-width: 85px;
-          }
-          
-          .login-button {
-            font-size: 0.85rem;
-            padding: 0.45rem 0.9rem;
-            min-width: 120px;
-          }
-        }
-        
+        /* Mobile menu items */
         @media (max-width: 768px) {
-          /* Mobile-specific styles are handled in JavaScript */
-          body.menu-open {
-            overflow: hidden;
+          button[style*="mobileNavButton"]:active {
+            transform: scale(0.97);
+          }
+          
+          button[style*="mobileLoginButton"]:active {
+            transform: scale(0.97);
+          }
+        }
+
+        /* Accessibility */
+        @media (prefers-reduced-motion: reduce) {
+          * {
+            animation-duration: 0.01ms !important;
+            animation-iteration-count: 1 !important;
+            transition-duration: 0.01ms !important;
+          }
+        }
+
+        /* Large screens */
+        @media (min-width: 1400px) {
+          header {
+            padding: 1rem 3rem !important;
+          }
+          
+          .nav-btn {
+            padding: 0.6rem 1.2rem !important;
+            font-size: 1rem !important;
+            min-width: 105px !important;
+          }
+          
+          .login-btn {
+            padding: 0.6rem 1.4rem !important;
+            font-size: 1rem !important;
+            min-width: 140px !important;
+          }
+        }
+
+        /* Small desktop screens */
+        @media (max-width: 1024px) {
+          .nav-btn {
+            font-size: 0.78rem !important;
+            padding: 0.35rem 0.6rem !important;
+            min-width: 75px !important;
+          }
+          
+          .login-btn {
+            font-size: 0.78rem !important;
+            padding: 0.35rem 0.9rem !important;
+            min-width: 110px !important;
           }
         }
 
@@ -500,46 +786,6 @@ const Header = ({ onLoginClick }) => {
         @media (max-width: 360px) {
           header {
             padding: 0.5rem 0.6rem !important;
-          }
-        }
-
-        /* Smooth transitions for all interactive elements */
-        * {
-          -webkit-tap-highlight-color: transparent;
-        }
-
-        button {
-          -webkit-appearance: none;
-          -moz-appearance: none;
-          appearance: none;
-        }
-
-        /* Accessibility improvements */
-        @media (prefers-reduced-motion: reduce) {
-          * {
-            animation-duration: 0.01ms !important;
-            animation-iteration-count: 1 !important;
-            transition-duration: 0.01ms !important;
-          }
-        }
-
-        /* Better spacing for larger screens */
-        @media (min-width: 1400px) {
-          header {
-            padding: 1rem 3rem !important;
-          }
-          
-          .nav-button {
-            gap: 1.5rem;
-            min-width: 120px;
-            padding: 0.7rem 1.2rem;
-            font-size: 1.1rem;
-          }
-          
-          .login-button {
-            min-width: 160px;
-            padding: 0.7rem 1.5rem;
-            font-size: 1.1rem;
           }
         }
       `}</style>
