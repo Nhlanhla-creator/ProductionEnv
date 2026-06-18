@@ -7,8 +7,6 @@ const Header = ({ onLoginClick }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [isHowItWorksOpen, setIsHowItWorksOpen] = useState(false);
-  const [isVisible, setIsVisible] = useState(true);
-  const [lastScrollY, setLastScrollY] = useState(0);
   const dropdownRef = useRef(null);
 
   // Check if device is mobile on mount and resize
@@ -59,25 +57,6 @@ const Header = ({ onLoginClick }) => {
       document.body.style.overflow = 'unset';
     };
   }, [isMobileMenuOpen]);
-
-  // Handle header visibility on scroll - ALWAYS VISIBLE
-  useEffect(() => {
-    const handleScroll = () => {
-      const currentScrollY = window.scrollY;
-      
-      // Only hide when scrolling down significantly, but always show at top
-      if (currentScrollY > 100 && currentScrollY > lastScrollY) {
-        setIsVisible(false);
-      } else {
-        setIsVisible(true);
-      }
-      
-      setLastScrollY(currentScrollY);
-    };
-
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, [lastScrollY]);
 
   const handleLoginClick = () => {
     setIsMobileMenuOpen(false);
@@ -134,8 +113,6 @@ const Header = ({ onLoginClick }) => {
       zIndex: 100,
       width: '100%',
       minHeight: isMobile ? '60px' : '72px',
-      transform: isVisible ? 'translateY(0)' : 'translateY(-100%)',
-      transition: 'transform 0.3s ease-in-out, box-shadow 0.3s ease',
     },
     logoContainer: {
       flex: '0 0 auto',
@@ -680,7 +657,6 @@ const Header = ({ onLoginClick }) => {
           left: 0;
           right: 0;
           z-index: 100;
-          transition: transform 0.3s ease-in-out, box-shadow 0.3s ease;
         }
 
         /* Desktop nav button hover states */
