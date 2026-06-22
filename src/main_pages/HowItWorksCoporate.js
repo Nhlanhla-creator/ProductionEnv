@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FaBullseye, FaUsers, FaHandHoldingUsd } from 'react-icons/fa';
+import { FaBullseye, FaUsers, FaHandHoldingUsd, FaArrowRight } from 'react-icons/fa';
 import Header from './Header';
 import Footer from './Footer';
 
@@ -11,330 +11,343 @@ const HowItWorksCorporates = () => {
     navigate('/login');
   };
 
+  const colors = {
+    dark: '#1C1410',
+    primary: '#7C4D2A',
+    secondary: '#A0703E',
+    amber: '#D4894A',
+    light: '#F5F0E8',
+    cream: '#FAF7F2',
+    white: '#FFFFFF',
+    border: '#EAE2D8',
+    muted: '#7A6A5E',
+    neutral: '#CDC3B8',
+    accent: '#C4B09A',
+    green: '#1E7A47',
+    orange: '#E8831A',
+    red: '#BE3B2A',
+    blue: '#1D5FAA',
+    warmGray: '#9E8D7B'
+  };
+
   return (
-    <div style={styles.appContainer}>
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
+      minHeight: '100vh',
+      background: colors.light,
+      fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
+    }}>
       <Header />
       
-      <div style={styles.container}>
-        {/* Hero Section */}
-        <section style={styles.heroSection}>
-          <div style={styles.heroContent}>
-            <h1 style={styles.mainTitle}>How BIG Works for Corporates</h1>
-            <p style={styles.subTitle}>Source. Partner. Amplify Impact.</p>
+      <div style={{
+        maxWidth: '1200px',
+        margin: '0 auto',
+        padding: '20px',
+        flex: '1',
+        width: '100%',
+      }}>
+        {/* Hero Section - Stretched Image */}
+        <section style={{
+          position: 'relative',
+          borderRadius: '20px',
+          overflow: 'hidden',
+          marginBottom: '50px',
+          minHeight: '380px',
+          background: `linear-gradient(135deg, ${colors.dark} 0%, rgba(28,20,16,0.92) 100%)`,
+          display: 'flex',
+          alignItems: 'center',
+          padding: '40px 50px',
+        }}>
+          <div style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundImage: 'url(https://images.unsplash.com/photo-1521791136064-7986c2920216?w=1400&h=500&fit=crop&crop=center)',
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            opacity: 0.25,
+            zIndex: 0,
+          }} />
+          
+          <div style={{
+            position: 'absolute',
+            top: -50,
+            right: -50,
+            width: 300,
+            height: 300,
+            borderRadius: '50%',
+            background: `radial-gradient(circle, ${colors.amber}20, transparent)`,
+            pointerEvents: 'none',
+          }} />
+
+          <div style={{
+            position: 'relative',
+            zIndex: 1,
+            maxWidth: '650px',
+          }}>
+            <div style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '10px',
+              background: `${colors.amber}25`,
+              border: `1px solid ${colors.amber}50`,
+              borderRadius: '30px',
+              padding: '6px 16px 6px 10px',
+              marginBottom: '20px',
+            }}>
+              <span style={{
+                width: 8,
+                height: 8,
+                borderRadius: '50%',
+                background: colors.amber,
+                display: 'inline-block',
+              }} />
+              <span style={{
+                color: colors.amber,
+                fontSize: '0.75rem',
+                fontWeight: 700,
+                letterSpacing: '0.08em',
+                textTransform: 'uppercase',
+              }}>
+                For Corporates
+              </span>
+            </div>
+            
+            <h1 style={{
+              fontSize: 'clamp(2rem, 4.5vw, 3rem)',
+              fontWeight: 900,
+              color: colors.white,
+              margin: '0 0 16px',
+              lineHeight: 1.1,
+              letterSpacing: '-0.02em',
+            }}>
+              How <span style={{ color: colors.amber }}>BIG</span> Works <br />
+              for Corporates
+            </h1>
+            
+            <p style={{
+              fontSize: '1.05rem',
+              color: 'rgba(255,255,255,0.7)',
+              lineHeight: 1.7,
+              margin: '0 0 28px',
+              maxWidth: '500px',
+            }}>
+              Source Smart. Partner Deep. Amplify Real Impact. Connect with verified SMEs aligned to your ESD and CSI goals.
+            </p>
+
+            <div style={{
+              display: 'flex',
+              gap: '16px',
+              flexWrap: 'wrap',
+            }}>
+              <button
+                onClick={handleButtonClick}
+                style={{
+                  background: `linear-gradient(135deg, ${colors.amber}, ${colors.secondary})`,
+                  color: colors.white,
+                  border: 'none',
+                  borderRadius: '50px',
+                  padding: '14px 36px',
+                  fontSize: '0.95rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                  transition: 'all 0.3s ease',
+                  boxShadow: `0 4px 20px ${colors.amber}40`,
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                  e.currentTarget.style.boxShadow = `0 8px 30px ${colors.amber}50`;
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = `0 4px 20px ${colors.amber}40`;
+                }}
+              >
+                Explore SMEs
+                <FaArrowRight size={14} />
+              </button>
+            </div>
           </div>
         </section>
 
-        {/* Steps Section */}
-        <div style={styles.contentContainer}>
-          <h2 style={styles.contentTitle}>Meet Your CSI Goals in 3 Steps</h2>
-          <p style={styles.videoTitle}>Explainer Video: "Strategic Partnerships"</p>
-          
-          <div style={styles.stepsContainer}>
-            {/* Step 1 */}
-            <div style={styles.stepCard}>
-              <div style={styles.stepCircle}>
-                <div style={styles.stepNumber}>1</div>
-                <div style={styles.stepIcon}><FaBullseye size={32} /></div>
-              </div>
-              <h3 style={styles.stepTitle}>Define Goals</h3>
-              <ul style={styles.stepDetails}>
-                <li style={styles.listItem}>
-                  <span style={styles.customBullet}>✓</span>
-                  <span style={styles.listText}>Select focus areas (women-led, green businesses, etc.)</span>
-                </li>
-                <li style={styles.listItem}>
-                  <span style={styles.customBullet}>✓</span>
-                  <span style={styles.listText}>Set measurable impact targets</span>
-                </li>
-                <li style={styles.listItem}>
-                  <span style={styles.customBullet}>✓</span>
-                  <span style={styles.listText}>Choose priority industries</span>
-                </li>
-                <li style={styles.listItem}>
-                  <span style={styles.customBullet}>✓</span>
-                  <span style={styles.listText}>Align with your corporate objectives</span>
-                </li>
-              </ul>
-              <p style={styles.stepSubtext}>🎯 Strategic clarity for maximum impact</p>
-            </div>
-
-            {/* Step 2 */}
-            <div style={styles.stepCard}>
-              <div style={styles.stepCircle}>
-                <div style={styles.stepNumber}>2</div>
-                <div style={styles.stepIcon}><FaUsers size={32} /></div>
-              </div>
-              <h3 style={styles.stepTitle}>Access Vetted SMEs</h3>
-              <ul style={styles.stepDetails}>
-                <li style={styles.listItem}>
-                  <span style={styles.customBullet}>✓</span>
-                  <span style={styles.listText}>BIG Score verification for compliance and potential</span>
-                </li>
-                <li style={styles.listItem}>
-                  <span style={styles.customBullet}>✓</span>
-                  <span style={styles.listText}>Impact alignment with your corporate objectives</span>
-                </li>
-                <li style={styles.listItem}>
-                  <span style={styles.customBullet}>✓</span>
-                  <span style={styles.listText}>Dashboard for tracking SME progress and metrics</span>
-                </li>
-                <li style={styles.listItem}>
-                  <span style={styles.customBullet}>✓</span>
-                  <span style={styles.listText}>Filter by transformation indicators</span>
-                </li>
-              </ul>
-              <p style={styles.stepSubtext}>🔍 Find your perfect SME partners</p>
-            </div>
-
-            {/* Step 3 */}
-            <div style={styles.stepCard}>
-              <div style={styles.stepCircle}>
-                <div style={styles.stepNumber}>3</div>
-                <div style={styles.stepIcon}><FaHandHoldingUsd size={32} /></div>
-              </div>
-              <h3 style={styles.stepTitle}>Partner or Fund</h3>
-              <ul style={styles.stepDetails}>
-                <li style={styles.listItem}>
-                  <span style={styles.customBullet}>✓</span>
-                  <span style={styles.listText}>Sponsor accelerator programs for high-potential SMEs</span>
-                </li>
-                <li style={styles.listItem}>
-                  <span style={styles.customBullet}>✓</span>
-                  <span style={styles.listText}>Direct contracts with qualified suppliers</span>
-                </li>
-                <li style={styles.listItem}>
-                  <span style={styles.customBullet}>✓</span>
-                  <span style={styles.listText}>Supplier development initiatives</span>
-                </li>
-                <li style={styles.listItem}>
-                  <span style={styles.customBullet}>✓</span>
-                  <span style={styles.listText}>Track impact metrics and ROI</span>
-                </li>
-              </ul>
-              <p style={styles.stepSubtext}>🤝 Scale your impact sustainably</p>
-            </div>
+        {/* Rest of the content stays the same... */}
+        <div style={{ marginBottom: '50px' }}>
+          <div style={{ textAlign: 'center', marginBottom: '40px' }}>
+            <p style={{
+              color: colors.secondary,
+              fontWeight: 700,
+              fontSize: '0.75rem',
+              letterSpacing: '0.14em',
+              textTransform: 'uppercase',
+              marginBottom: '8px',
+            }}>
+              Your Corporate Journey
+            </p>
+            <h2 style={{
+              fontSize: 'clamp(1.5rem, 3vw, 2.2rem)',
+              fontWeight: 800,
+              color: colors.dark,
+              margin: 0,
+              letterSpacing: '-0.01em',
+            }}>
+              Meet Your CSI Goals in <span style={{ color: colors.primary }}>3 Simple Steps</span>
+            </h2>
           </div>
+          
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+            gap: '20px',
+          }}>
+            {[
+              {
+                icon: <FaBullseye size={26} />,
+                number: '01',
+                title: 'Define Goals',
+                description: 'Set your strategic objectives and impact targets.',
+                details: ['Select focus areas', 'Set measurable targets', 'Choose industries', 'Align with objectives'],
+                subtext: '🎯 Strategic clarity for maximum impact',
+                color: colors.primary,
+              },
+              {
+                icon: <FaUsers size={26} />,
+                number: '02',
+                title: 'Access Vetted SMEs',
+                description: 'Find verified businesses aligned with your goals.',
+                details: ['BIG Score verification', 'Impact alignment', 'Track progress', 'Filter by indicators'],
+                subtext: '🔍 Find your perfect SME partners',
+                color: colors.secondary,
+              },
+              {
+                icon: <FaHandHoldingUsd size={26} />,
+                number: '03',
+                title: 'Partner or Fund',
+                description: 'Deploy capital and track impact metrics.',
+                details: ['Sponsor accelerators', 'Direct contracts', 'Supplier development', 'Track ROI'],
+                subtext: '🤝 Scale your impact sustainably',
+                color: colors.amber,
+              },
+            ].map((step, index) => (
+              <div
+                key={index}
+                style={{
+                  background: colors.white,
+                  borderRadius: '16px',
+                  padding: '24px 20px',
+                  border: `1px solid ${colors.border}`,
+                  transition: 'all 0.3s ease',
+                  position: 'relative',
+                  cursor: 'default',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = 'translateY(-6px)';
+                  e.currentTarget.style.boxShadow = '0 12px 40px rgba(28,20,16,0.12)';
+                  e.currentTarget.style.borderColor = step.color;
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = 'none';
+                  e.currentTarget.style.borderColor = colors.border;
+                }}
+              >
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'flex-start',
+                  marginBottom: '14px',
+                }}>
+                  <div style={{
+                    width: '50px',
+                    height: '50px',
+                    borderRadius: '12px',
+                    background: `${step.color}15`,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: step.color,
+                  }}>
+                    {step.icon}
+                  </div>
+                  <span style={{
+                    fontSize: '1.8rem',
+                    fontWeight: 900,
+                    color: `${step.color}20`,
+                    lineHeight: 1,
+                  }}>
+                    {step.number}
+                  </span>
+                </div>
+                
+                <h3 style={{
+                  fontSize: '1.05rem',
+                  fontWeight: 800,
+                  color: colors.dark,
+                  margin: '0 0 6px',
+                  letterSpacing: '-0.01em',
+                }}>
+                  {step.title}
+                </h3>
+                
+                <p style={{
+                  fontSize: '0.82rem',
+                  color: colors.muted,
+                  lineHeight: 1.5,
+                  margin: '0 0 14px',
+                }}>
+                  {step.description}
+                </p>
 
-          <button 
-            style={styles.ctaButton}
-            onClick={handleButtonClick}
-          >
-            Explore SMEs
-            <div style={styles.ctaSubtext}>Connect with verified businesses today</div>
-          </button>
+                <ul style={{
+                  listStyle: 'none',
+                  padding: 0,
+                  margin: '0 0 14px',
+                  textAlign: 'left',
+                }}>
+                  {step.details.map((detail, i) => (
+                    <li key={i} style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      fontSize: '0.8rem',
+                      color: colors.muted,
+                      padding: '3px 0',
+                    }}>
+                      <span style={{
+                        color: step.color,
+                        fontWeight: 700,
+                      }}>✓</span>
+                      {detail}
+                    </li>
+                  ))}
+                </ul>
+
+                <p style={{
+                  fontSize: '0.78rem',
+                  color: colors.muted,
+                  fontStyle: 'italic',
+                  margin: 0,
+                  paddingTop: '10px',
+                  borderTop: `1px solid ${colors.border}`,
+                }}>
+                  {step.subtext}
+                </p>
+              </div>
+            ))}
+          </div>
         </div>
+
+       
       </div>
 
       <Footer />
     </div>
   );
-};
-
-// Color palette matching header/footer
-const colors = {
-  darkBrown: '#372C27',
-  mediumBrown: '#754A2D',
-  lightBrown: '#9E6E3C',
-  cream: '#F2F0E6',
-  lightGray: '#BCAE9C',
-  white: '#FFFFFF',
-  accent: '#E8A87C',
-  warmGray: '#9E8D7B'
-};
-
-const styles = {
-  appContainer: {
-    display: 'flex',
-    flexDirection: 'column',
-    minHeight: '100vh',
-    backgroundImage: 'linear-gradient(rgba(55, 44, 39, 0.21), rgba(55, 44, 39, 0.36)), url(/background10.jpg)',
-    backgroundSize: 'cover',
-  },
-  container: {
-    fontFamily: "'Arial', sans-serif",
-    maxWidth: '1200px',
-    margin: '0 auto',
-    padding: '20px',
-    backgroundColor: colors.cream,
-    color: colors.darkBrown,
-    flex: '1',
-  },
-  heroSection: {
-    height: '300px',
-    marginBottom: '40px',
-    borderRadius: '10px',
-    overflow: 'hidden',
-    backgroundImage: 'linear-gradient(rgba(55, 44, 39, 0.8), rgba(55, 44, 39, 0.8)), url(https://images.unsplash.com/photo-1521791136064-7986c2920216?ixlib=rb-1.2.1&auto=format&fit=crop&w=1350&q=80)',
-    backgroundSize: 'cover',
-    backgroundPosition: 'center',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    textAlign: 'center',
-    boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
-  },
-  heroContent: {
-    padding: '20px',
-    maxWidth: '800px'
-  },
-  mainTitle: {
-    fontSize: '2.5rem',
-    fontWeight: 'bold',
-    color: colors.white,
-    marginBottom: '20px',
-    textShadow: '2px 2px 4px rgba(0,0,0,0.3)'
-  },
-  subTitle: {
-    fontSize: '1.3rem',
-    color: colors.lightGray,
-    marginBottom: '30px',
-    textShadow: '1px 1px 2px rgba(0,0,0,0.2)'
-  },
-  contentContainer: {
-    marginBottom: '60px',
-    textAlign: 'center'
-  },
-  contentTitle: {
-    fontSize: '2rem',
-    fontWeight: 'bold',
-    color: colors.mediumBrown,
-    marginBottom: '20px',
-    position: 'relative',
-    paddingBottom: '15px',
-    ':after': {
-      content: '""',
-      position: 'absolute',
-      bottom: 0,
-      left: '50%',
-      transform: 'translateX(-50%)',
-      width: '80px',
-      height: '3px',
-      backgroundColor: colors.accent,
-      borderRadius: '3px'
-    }
-  },
-  videoTitle: {
-    fontSize: '1.2rem',
-    color: colors.lightBrown,
-    marginBottom: '40px',
-    fontStyle: 'italic'
-  },
-  stepsContainer: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    flexWrap: 'nowrap',
-    gap: '20px',
-    marginBottom: '50px',
-    overflowX: 'auto',
-    paddingBottom: '20px',
-    scrollbarWidth: 'none',
-    ':-webkit-scrollbar': {
-      display: 'none'
-    }
-  },
-  stepCard: {
-    flex: '0 0 calc(33.33% - 20px)',
-    minWidth: '300px',
-    backgroundColor: colors.white,
-    padding: '25px',
-    borderRadius: '15px',
-    boxShadow: '0 5px 20px rgba(0,0,0,0.08)',
-    textAlign: 'center',
-    transition: 'transform 0.3s ease, box-shadow 0.3s ease',
-    ':hover': {
-      transform: 'translateY(-10px)',
-      boxShadow: '0 15px 30px rgba(0,0,0,0.15)'
-    }
-  },
-  stepCircle: {
-    width: '100px',
-    height: '100px',
-    borderRadius: '50%',
-    backgroundColor: colors.mediumBrown,
-    margin: '0 auto 25px',
-    display: 'flex',
-    flexDirection: 'column',
-    justifyContent: 'center',
-    alignItems: 'center',
-    color: colors.white,
-    position: 'relative',
-    boxShadow: '0 5px 15px rgba(117, 74, 45, 0.3)',
-    transition: 'all 0.3s ease'
-  },
-  stepNumber: {
-    fontSize: '1.2rem',
-    fontWeight: 'bold',
-    marginBottom: '5px'
-  },
-  stepIcon: {
-    color: colors.white
-  },
-  stepTitle: {
-    fontSize: '1.3rem',
-    color: colors.mediumBrown,
-    marginBottom: '20px',
-    fontWeight: '600',
-    minHeight: '60px',
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  stepDetails: {
-    textAlign: 'left',
-    paddingLeft: '0',
-    listStyleType: 'none',
-    marginBottom: '20px',
-    minHeight: '220px'
-  },
-  listItem: {
-    display: 'flex',
-    alignItems: 'flex-start',
-    marginBottom: '12px',
-    lineHeight: '1.5'
-  },
-  customBullet: {
-    color: colors.accent,
-    marginRight: '10px',
-    fontSize: '1.1rem',
-    flexShrink: 0
-  },
-  listText: {
-    flex: 1,
-    fontSize: '0.9rem'
-  },
-  stepSubtext: {
-    fontSize: '0.9rem',
-    color: colors.warmGray,
-    fontStyle: 'italic',
-    textAlign: 'left',
-    paddingLeft: '20px'
-  },
-  ctaButton: {
-    padding: '15px 40px',
-    backgroundColor: colors.lightBrown,
-    color: colors.white,
-    border: 'none',
-    borderRadius: '50px',
-    fontSize: '1.1rem',
-    fontWeight: 'bold',
-    cursor: 'pointer',
-    transition: 'all 0.3s ease',
-    boxShadow: '0 4px 8px rgba(158, 110, 60, 0.3)',
-    ':hover': {
-      backgroundColor: colors.mediumBrown,
-      transform: 'translateY(-3px)',
-      boxShadow: '0 6px 12px rgba(117, 74, 45, 0.4)'
-    },
-    ':active': {
-      transform: 'translateY(1px)'
-    }
-  },
-  ctaSubtext: {
-    fontSize: '0.8rem',
-    fontStyle: 'italic',
-    marginTop: '5px',
-    fontWeight: 'normal'
-  }
 };
 
 export default HowItWorksCorporates;

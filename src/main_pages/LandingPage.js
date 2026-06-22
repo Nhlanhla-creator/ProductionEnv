@@ -10,9 +10,12 @@ import {
   FaStar, FaQuoteLeft, FaChartLine, FaBuilding, FaChartBar,
   FaTrophy, FaCommentDots, FaHome, FaUser, FaClipboardList,
   FaHeart, FaCog, FaFileAlt, FaEnvelope, FaCalendarAlt,
-  FaBell, FaSearch, FaCreditCard, FaArrowUp
+  FaBell, FaSearch, FaCreditCard, FaArrowUp, FaQuestionCircle,
+  FaInfoCircle, FaMoneyBillWave, FaTools, FaGraduationCap,
+  FaTruck, FaUniversity, FaSyncAlt, FaUserCheck, FaRocketchat,
+  FaFileContract, FaReceipt, FaGlobe, FaIndustry, FaExternalLinkAlt
 } from "react-icons/fa"
-import { MdCorporateFare, MdVerified, MdSmartphone, MdDashboard, MdTrendingUp, MdGroup } from "react-icons/md"
+import { MdCorporateFare, MdVerified, MdSmartphone, MdDashboard, MdTrendingUp, MdGroup, MdAdd, MdRemove } from "react-icons/md"
 import "./LandingPage.css"
 import { useNavigate } from "react-router-dom"
 import Chatbox from "./Chatbox"
@@ -396,6 +399,507 @@ const InvestorDashboard = () => {
   )
 }
 
+// ====================== FAQ SECTION COMPONENT ======================
+const FAQSection = ({ isMobile }) => {
+  const [activeTab, setActiveTab] = useState('general')
+  const [openQuestion, setOpenQuestion] = useState(null)
+
+  const faqData = {
+    general: [
+      {
+        question: "What is BIG Marketplace Africa?",
+        answer: "BIG Marketplace Africa is a comprehensive platform that connects SMEs with investors, advisors, catalysts, interns, and other businesses. We use our proprietary BIG Score to create intelligent matches between stakeholders, simplifying connections and driving business growth across Africa."
+      },
+      {
+        question: "Who can register on the platform?",
+        answer: "The following stakeholders can register: SMEs, Investors/Funders, Advisors (Experts and Consultants), Graduates (for Internship roles), Catalysts (Accelerators, Incubators), Program Sponsors, Corporates, and Suppliers/Service Providers."
+      },
+      {
+        question: "Can SMEs become advisors on the platform?",
+        answer: "No, SMEs cannot register as advisors. SMEs are the primary beneficiaries who receive advice, funding, and support. However, SMEs can register as suppliers to other businesses, offer services to other SMEs, or purchase from other SMEs as customers."
+      },
+      {
+        question: "Is registration free?",
+        answer: "Yes, we offer a free Basic plan for all users. We also have Standard and Premium subscription plans with additional features, plus various add-ons for specific needs."
+      },
+      {
+        question: "Can I update my profile later?",
+        answer: "Yes. You can edit your profile, update documents, and modify your preferences anytime through your dashboard."
+      },
+      {
+        question: "How do I contact support?",
+        answer: "For all technical, billing, or policy-related inquiries: support@bigmarketplace.africa"
+      }
+    ],
+    funding: [
+      {
+        question: "How does funding matching work?",
+        answer: "Our platform uses intelligent matching similar to dating apps: Investors set their investment criteria, SMEs complete their profiles and get a BIG Score, our algorithm matches investors with the most compatible SMEs, and highest matches appear at the top of investor dashboards."
+      },
+      {
+        question: "What type of funding can I apply for?",
+        answer: "SMEs can apply for various funding types: Equity Investment, Debt Financing, Grants, and Growth funding opportunities."
+      },
+      {
+        question: "How long does funding matching take?",
+        answer: "Initial matching happens instantly. Feedback on specific applications typically takes 2–4 weeks, depending on profile completeness and investor response times."
+      },
+      {
+        question: "What documents do I need for funding applications?",
+        answer: "Typically required: Business registration documents, Financial summaries or revenue reports, Pitch deck or business plan, Compliance certificates, and Growth strategy documentation."
+      },
+      {
+        question: "How does the BIG Score impact funding success?",
+        answer: "The BIG Score significantly improves funding success by providing data-driven legitimacy assessment, enhancing investor confidence, reducing due diligence time, and highlighting growth potential and compliance readiness."
+      }
+    ],
+    stakeholders: [
+      {
+        section: "Advisors",
+        questions: [
+          {
+            question: "How do SMEs connect with advisors?",
+            answer: "SMEs can apply for advisory services through their dashboard. Our matching system connects them with qualified advisors based on business needs, industry expertise, and BIG Score compatibility."
+          },
+          {
+            question: "What types of advisory services are available?",
+            answer: "Advisors provide expertise in business strategy, financial management, marketing, operations, technology, legal matters, and more."
+          },
+          {
+            question: "How are advisors selected and verified?",
+            answer: "All advisors undergo rigorous verification including professional credential checks, experience validation, reference checks, and platform orientation."
+          }
+        ]
+      },
+      {
+        section: "Interns & Graduates",
+        questions: [
+          {
+            question: "How does the internship program work?",
+            answer: "Graduates apply and create profiles, program sponsors review candidates, SMEs post opportunities, and our system matches graduates with SMEs based on skills and BIG Score."
+          },
+          {
+            question: "Who can apply for internships?",
+            answer: "Graduates and students seeking practical experience can apply. They undergo verification and receive a BIG Score to ensure quality matching."
+          },
+          {
+            question: "What support do interns receive?",
+            answer: "Interns receive comprehensive support including program sponsor funding, SME mentorship, platform resources, and career development opportunities."
+          }
+        ]
+      },
+      {
+        section: "Catalysts",
+        questions: [
+          {
+            question: "What are catalysts and what do they do?",
+            answer: "Catalysts are growth enablers like accelerators and incubators who help SMEs scale operations, provide strategic guidance, and facilitate partnerships."
+          },
+          {
+            question: "How do catalysts connect with SMEs?",
+            answer: "Our matching system connects catalysts with SMEs based on growth stage, industry focus, and specific program criteria through the BIG Score system."
+          }
+        ]
+      },
+      {
+        section: "Services & Suppliers",
+        questions: [
+          {
+            question: "How do SMEs offer or request services?",
+            answer: "SMEs can both list and request products or services through their profiles. Our matching system connects businesses based on compatibility and specific needs."
+          },
+          {
+            question: "What types of services can be offered?",
+            answer: "SMEs can offer products like laptops and equipment, professional services, manufacturing, digital services, and logistics services."
+          }
+        ]
+      }
+    ],
+    subscriptions: [
+      {
+        question: "What subscription plans are available?",
+        answer: "We offer three main subscription tiers: Basic Plan (Free), Standard Plan, and Premium Plan. Each plan offers different features and capabilities to suit various business needs."
+      },
+      {
+        question: "What add-on services are available?",
+        answer: "Additional services include: API Access to BIG Score engine, Branded SME Portfolio Pages, Co-branded Calls for Applications, Custom BIG Score benchmarks, and other specialized services."
+      },
+      {
+        question: "How do I manage my subscription?",
+        answer: "You can easily manage your subscription through your account dashboard: Upgrade or downgrade your plan, Cancel your subscription, Update payment methods, View billing history and invoices, and Manage add-on services."
+      },
+      {
+        question: "What are BIG Growth Tools?",
+        answer: "BIG Growth Tools are curated resources designed to boost your BIG Score: Compliance toolkits (legal templates, policy essentials), Legitimacy boosters (digital foundation, brand identity), Capital appeal enhancers (financial readiness, investment packs), and Governance strengtheners (advisory readiness, board toolkits)."
+      }
+    ],
+    policy: [
+      {
+        section: "Privacy & Data Protection",
+        questions: [
+          {
+            question: "How does Big Marketplace Africa protect my personal information?",
+            answer: "We use industry-standard security measures including encryption, secure servers, and access controls to protect your personal information. All data is stored in secure environments with regular security audits."
+          },
+          {
+            question: "Is my card information safe when I make a payment?",
+            answer: "Yes, we use PCI-compliant payment processors and never store your full card details on our servers. All payment transactions are encrypted and processed through secure payment gateways."
+          },
+          {
+            question: "Do you share my data with third parties?",
+            answer: "We do not sell your personal data. We only share information with trusted third parties when necessary for platform functionality (e.g., payment processing) or when required by law."
+          },
+          {
+            question: "What type of personal data do you collect from users and vendors?",
+            answer: "We collect only necessary information including contact details, business information, verification documents, and platform usage data to provide and improve our services."
+          },
+          {
+            question: "How can I request that my personal data be deleted or updated?",
+            answer: "You can update most information through your account settings. For data deletion requests, please contact our support team at support@bigmarketplace.africa."
+          },
+          {
+            question: "Is my information encrypted during transactions?",
+            answer: "Yes, all data transmitted between your device and our servers is encrypted using SSL/TLS encryption protocols to ensure secure communication."
+          }
+        ]
+      },
+      {
+        section: "Refund & Return Policy",
+        questions: [
+          {
+            question: "What is your refund policy for digital subscriptions or plans?",
+            answer: "Digital subscriptions can be refunded within 14 days of purchase if no services have been utilized. Refunds are processed on a case-by-case basis for exceptional circumstances."
+          },
+          {
+            question: "Can I cancel my subscription and get a refund?",
+            answer: "You can cancel your subscription at any time. Refunds for unused portions are available within the first 14 days of the billing cycle."
+          },
+          {
+            question: "How long does it take to process a refund?",
+            answer: "Refunds are typically processed within 7-10 business days after approval. The time to appear in your account depends on your financial institution."
+          }
+        ]
+      },
+      {
+        section: "Terms of Service & General Policies",
+        questions: [
+          {
+            question: "What are the terms and conditions for using Big Marketplace Africa?",
+            answer: "Our comprehensive Terms of Service govern platform usage, covering user responsibilities, prohibited activities, intellectual property, and dispute resolution. These are available on our website."
+          },
+          {
+            question: "Are there any restrictions on what vendors can sell?",
+            answer: "Yes, we prohibit illegal items, dangerous goods, counterfeit products, and services that violate local laws or our community guidelines."
+          },
+          {
+            question: "How do I report a policy violation or fraudulent activity?",
+            answer: "Use the 'Help' feature on any listing or profile, or contact our support team immediately at support@bigmarketplace.africa with details of the violation."
+          }
+        ]
+      }
+    ],
+    bigScore: [
+      {
+        question: "What is the BIG Score?",
+        answer: "The BIG Score is our proprietary scoring system that evaluates businesses and individuals based on multiple factors including legitimacy, growth potential, compliance, and readiness for opportunities."
+      },
+      {
+        question: "How does the BIG Score improve matching?",
+        answer: "The BIG Score enhances matching by providing objective assessment of credibility, identifying growth potential and readiness, ensuring compatibility between stakeholders, and reducing risk for investors and partners."
+      },
+      {
+        question: "Do all users get a BIG Score?",
+        answer: "Yes, all registered participants receive relevant scores: SMEs get comprehensive business scores, Advisors receive credibility scores, Graduates/interns get performance metrics, and all scores help ensure quality matches."
+      },
+      {
+        question: "Can I improve my BIG Score?",
+        answer: "Yes, your BIG Score is dynamic and can be improved by: Completing your profile with accurate information, Using BIG Growth Tools to address specific areas, Maintaining good platform engagement, Building positive relationships with partners, and Demonstrating growth and compliance."
+      },
+      {
+        question: "How do BIG Growth Tools help improve my score?",
+        answer: "BIG Growth Tools are specifically designed to boost different aspects of your score: Compliance tools address legal and policy requirements, Legitimacy tools enhance your professional presence, Capital appeal tools strengthen your funding readiness, and Governance tools build proper business structure."
+      }
+    ]
+  }
+
+  const toggleQuestion = (index) => {
+    setOpenQuestion(openQuestion === index ? null : index)
+  }
+
+  const renderStakeholdersContent = () => {
+    return faqData.stakeholders.map((section, sectionIndex) => (
+      <div key={sectionIndex} style={{marginBottom:16}}>
+        <h4 style={{fontSize:"0.85rem",fontWeight:700,color:C.primary,margin:"0 0 8px",display:"flex",alignItems:"center",gap:8}}>
+          {section.section === "Advisors" && <FaUserTie size={14} />}
+          {section.section === "Interns & Graduates" && <FaGraduationCap size={14} />}
+          {section.section === "Catalysts" && <FaRocket size={14} />}
+          {section.section === "Services & Suppliers" && <FaTools size={14} />}
+          {section.section}
+        </h4>
+        {section.questions.map((item, index) => {
+          const globalIndex = sectionIndex * 10 + index
+          return (
+            <FAQItem 
+              key={globalIndex}
+              isOpen={openQuestion === globalIndex}
+              onClick={() => toggleQuestion(globalIndex)}
+              question={item.question}
+              answer={item.answer}
+            />
+          )
+        })}
+      </div>
+    ))
+  }
+
+  const renderPolicyContent = () => {
+    return faqData.policy.map((section, sectionIndex) => (
+      <div key={sectionIndex} style={{marginBottom:16}}>
+        <h4 style={{fontSize:"0.85rem",fontWeight:700,color:C.primary,margin:"0 0 8px",display:"flex",alignItems:"center",gap:8}}>
+          {section.section === "Privacy & Data Protection" && <FaLock size={14} />}
+          {section.section === "Refund & Return Policy" && <FaReceipt size={14} />}
+          {section.section === "Terms of Service & General Policies" && <FaFileContract size={14} />}
+          {section.section}
+        </h4>
+        {section.questions.map((item, index) => {
+          const globalIndex = sectionIndex * 20 + index
+          return (
+            <FAQItem 
+              key={globalIndex}
+              isOpen={openQuestion === globalIndex}
+              onClick={() => toggleQuestion(globalIndex)}
+              question={item.question}
+              answer={item.answer}
+            />
+          )
+        })}
+      </div>
+    ))
+  }
+
+  const renderContent = () => {
+    if (activeTab === 'stakeholders') {
+      return renderStakeholdersContent()
+    }
+    if (activeTab === 'policy') {
+      return renderPolicyContent()
+    }
+    return faqData[activeTab].map((item, index) => (
+      <FAQItem 
+        key={index}
+        isOpen={openQuestion === index}
+        onClick={() => toggleQuestion(index)}
+        question={item.question}
+        answer={item.answer}
+      />
+    ))
+  }
+
+  const tabs = [
+    { id: 'general', label: 'General', icon: <FaShieldAlt size={12} /> },
+    { id: 'funding', label: 'Funding', icon: <FaChartLine size={12} /> },
+    { id: 'stakeholders', label: 'Stakeholders', icon: <FaUsers size={12} /> },
+    { id: 'subscriptions', label: 'Subscriptions', icon: <FaCreditCard size={12} /> },
+    { id: 'policy', label: 'Policy', icon: <FaFileContract size={12} /> },
+    { id: 'bigScore', label: 'BIG Score', icon: <FaStar size={12} /> },
+  ]
+
+  return (
+    <div style={{
+      background: "rgba(255,255,255,0.92)",
+      backdropFilter: "blur(8px)",
+      borderRadius: 20,
+      boxShadow: "0 8px 36px rgba(28,20,16,0.08)",
+      padding: isMobile ? "20px 16px" : "28px 32px",
+      border: "1px solid rgba(0,0,0,0.04)",
+      maxWidth: 900,
+      margin: "0 auto",
+    }}>
+      {/* Header with human imagery */}
+      <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:isMobile?16:24,flexWrap:"wrap"}}>
+        <div style={{
+          width: isMobile ? 44 : 56,
+          height: isMobile ? 44 : 56,
+          borderRadius: "50%",
+          background: `linear-gradient(135deg, ${C.primary}, ${C.secondary})`,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          color: "#fff",
+          fontSize: isMobile ? "1.2rem" : "1.5rem",
+          fontWeight: 700,
+          flexShrink: 0,
+        }}>
+          ?
+        </div>
+        <div>
+          <h3 style={{fontSize:isMobile?"1.1rem":"1.3rem",fontWeight:800,color:C.dark,margin:0}}>
+            Frequently Asked Questions
+          </h3>
+          <p style={{fontSize:"0.78rem",color:C.muted,margin:"2px 0 0",display:"flex",alignItems:"center",gap:5}}>
+            <FaInfoCircle size={10} /> Find answers about our platform, matching, and how we protect your data
+          </p>
+        </div>
+      </div>
+
+      {/* Tabs */}
+      <div style={{
+        display:"flex",
+        gap:6,
+        flexWrap:"wrap",
+        marginBottom:isMobile?16:20,
+        borderBottom:`1px solid ${C.border}`,
+        paddingBottom:isMobile?10:14,
+      }}>
+        {tabs.map(tab => (
+          <button
+            key={tab.id}
+            onClick={() => { setActiveTab(tab.id); setOpenQuestion(null) }}
+            style={{
+              padding: isMobile ? "6px 12px" : "8px 18px",
+              background: activeTab === tab.id ? C.primary : "transparent",
+              color: activeTab === tab.id ? "#fff" : C.muted,
+              border: activeTab === tab.id ? "none" : `1px solid ${C.border}`,
+              borderRadius: 20,
+              cursor: "pointer",
+              fontSize: isMobile ? "0.7rem" : "0.78rem",
+              fontWeight: activeTab === tab.id ? 700 : 500,
+              display: "flex",
+              alignItems: "center",
+              gap: 5,
+              transition: "all 0.2s",
+              fontFamily: "inherit",
+            }}
+          >
+            {tab.icon} {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* FAQ List */}
+      <div style={{display:"flex",flexDirection:"column",gap:8}}>
+        {renderContent()}
+      </div>
+
+      {/* Data privacy explanation - emotionally engaging */}
+      <div style={{
+        marginTop: isMobile ? 16 : 24,
+        padding: isMobile ? "14px 16px" : "18px 24px",
+        background: `linear-gradient(135deg, ${C.cream}, ${C.white})`,
+        borderRadius: 12,
+        border: `1px solid ${C.border}`,
+        position: "relative",
+        overflow: "hidden",
+      }}>
+        <div style={{
+          position: "absolute",
+          right: -20,
+          top: -20,
+          width: 80,
+          height: 80,
+          borderRadius: "50%",
+          background: `${C.primary}08`,
+          pointerEvents: "none",
+        }} />
+        <div style={{display:"flex",alignItems:"flex-start",gap:12,position:"relative",zIndex:1}}>
+          <div style={{
+            width: 36,
+            height: 36,
+            borderRadius: "50%",
+            background: C.primary + "15",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            flexShrink: 0,
+            marginTop: 2,
+          }}>
+            <FaLock size={16} color={C.primary} />
+          </div>
+          <div>
+            <h4 style={{fontSize:"0.85rem",fontWeight:700,color:C.dark,margin:"0 0 4px"}}>
+              Your Data, Your Trust — We Take It Seriously
+            </h4>
+            <p style={{fontSize:"0.75rem",color:C.muted,lineHeight:1.6,margin:0}}>
+              BIG Marketplace collects only essential data to connect you with the right opportunities. 
+              Your information is <strong style={{color:C.dark}}>encrypted</strong>, never sold, and only shared with your consent. 
+              We're committed to <strong style={{color:C.dark}}>POPIA compliance</strong> and transparent data practices — 
+              because your journey to growth deserves a foundation of trust.
+            </p>
+            <div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:8}}>
+              <span style={{fontSize:"0.6rem",background:C.primary+"10",color:C.primary,padding:"2px 10px",borderRadius:10,fontWeight:600}}>🔒 Data Encryption</span>
+              <span style={{fontSize:"0.6rem",background:C.green+"10",color:C.green,padding:"2px 10px",borderRadius:10,fontWeight:600}}>✓ POPIA Compliant</span>
+              <span style={{fontSize:"0.6rem",background:C.amber+"10",color:C.secondary,padding:"2px 10px",borderRadius:10,fontWeight:600}}>🛡️ Secure Servers</span>
+              <span style={{fontSize:"0.6rem",background:C.blue+"10",color:C.blue,padding:"2px 10px",borderRadius:10,fontWeight:600}}>📋 Data Control</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+const FAQItem = ({ isOpen, onClick, question, answer }) => {
+  return (
+    <div style={{
+      border: `1px solid ${isOpen ? C.primary : C.border}`,
+      borderRadius: 10,
+      overflow: "hidden",
+      transition: "all 0.3s",
+      background: isOpen ? C.white : "transparent",
+    }}>
+      <button
+        onClick={onClick}
+        style={{
+          width: "100%",
+          padding: "12px 16px",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          background: "transparent",
+          border: "none",
+          cursor: "pointer",
+          fontSize: "0.82rem",
+          fontWeight: isOpen ? 700 : 500,
+          color: C.dark,
+          textAlign: "left",
+          fontFamily: "inherit",
+          transition: "all 0.2s",
+        }}
+      >
+        <span>{question}</span>
+        <span style={{
+          color: isOpen ? C.primary : C.muted,
+          fontSize: "1.1rem",
+          flexShrink: 0,
+          marginLeft: 12,
+          transition: "transform 0.3s",
+          transform: isOpen ? "rotate(180deg)" : "rotate(0)",
+        }}>
+          {isOpen ? <MdRemove size={18} /> : <MdAdd size={18} />}
+        </span>
+      </button>
+      <div style={{
+        maxHeight: isOpen ? 500 : 0,
+        overflow: "hidden",
+        transition: "max-height 0.4s ease, padding 0.3s ease",
+        padding: isOpen ? "0 16px 14px" : "0 16px",
+        borderTop: isOpen ? `1px solid ${C.border}` : "none",
+      }}>
+        <p style={{
+          fontSize: "0.78rem",
+          color: C.muted,
+          lineHeight: 1.7,
+          margin: 0,
+          whiteSpace: "pre-line",
+        }}>
+          {answer}
+        </p>
+      </div>
+    </div>
+  )
+}
+// ====================== END FAQ SECTION ======================
+
 const LandingPage = () => {
   const navigate=useNavigate()
   const [showScroll,setShowScroll]=useState(false)
@@ -508,7 +1012,7 @@ const LandingPage = () => {
         </div>
       </section>
 
-      {/* VISION MISSION SECTION - Redesigned to match the design from the second code */}
+      {/* VISION MISSION SECTION */}
       <section style={{padding:mobile?"48px 20px":"72px 40px",background:C.pageBg,position:"relative"}}>
         <div style={{position:"absolute",top:0,left:0,right:0,height:"20px",background:`linear-gradient(to right, ${C.primary}, ${C.secondary})`,clipPath:"polygon(0 0, 100% 0, 100% 70%, 0 100%)"}}/>
         <div style={{maxWidth:1100,margin:"0 auto",position:"relative",zIndex:1}}>
@@ -516,46 +1020,28 @@ const LandingPage = () => {
             OUR PURPOSE: BUILDING AFRICA'S TRUST ECONOMY
           </h2>
           <div style={{display:"grid",gridTemplateColumns:mobile?"1fr":"repeat(auto-fit, minmax(300px, 1fr))",gap:"25px",marginBottom:"30px"}}>
-            {/* Vision */}
             <div className="vm-card" style={{borderTop:`4px solid ${C.primary}`}}>
               <div className="vm-icon-wrap" style={{backgroundColor:`${C.primary}20`,borderColor:C.primary}}>
                 <FaBullseye size={24} color={C.primary} />
               </div>
-              <h3 style={{fontSize:"1.3rem",fontWeight:700,marginBottom:"12px",color:C.dark,textTransform:"uppercase"}}>
-                Our Vision
-              </h3>
-              <p style={{fontSize:"0.9rem",lineHeight:"1.6",color:C.dark}}>
-                <strong>To corporatise Africa's boldest SMEs.</strong>
-              </p>
+              <h3 style={{fontSize:"1.3rem",fontWeight:700,marginBottom:"12px",color:C.dark,textTransform:"uppercase"}}>Our Vision</h3>
+              <p style={{fontSize:"0.9rem",lineHeight:"1.6",color:C.dark}}><strong>To corporatise Africa's boldest SMEs.</strong></p>
             </div>
-
-            {/* Mission */}
             <div className="vm-card" style={{borderTop:`4px solid ${C.secondary}`}}>
               <div className="vm-icon-wrap" style={{backgroundColor:`${C.secondary}20`,borderColor:C.secondary}}>
                 <FaHandshake size={24} color={C.secondary} />
               </div>
-              <h3 style={{fontSize:"1.3rem",fontWeight:700,marginBottom:"12px",color:C.dark,textTransform:"uppercase"}}>
-                Our Mission
-              </h3>
-              <p style={{fontSize:"0.9rem",lineHeight:"1.6",color:C.dark}}>
-                <strong>To give Africa's boldest businesses the credibility, connections, and capital they need — and a seat at every table that matters.</strong>
-              </p>
+              <h3 style={{fontSize:"1.3rem",fontWeight:700,marginBottom:"12px",color:C.dark,textTransform:"uppercase"}}>Our Mission</h3>
+              <p style={{fontSize:"0.9rem",lineHeight:"1.6",color:C.dark}}><strong>To give Africa's boldest businesses the credibility, connections, and capital they need — and a seat at every table that matters.</strong></p>
             </div>
-
-            {/* Promise */}
             <div className="vm-card" style={{borderTop:`4px solid ${C.accent}`}}>
               <div className="vm-icon-wrap" style={{backgroundColor:`${C.accent}20`,borderColor:C.accent}}>
                 <FaLightbulb size={24} color={C.accent} />
               </div>
-              <h3 style={{fontSize:"1.3rem",fontWeight:700,marginBottom:"12px",color:C.dark,textTransform:"uppercase"}}>
-                Our Promise
-              </h3>
-              <p style={{fontSize:"0.9rem",lineHeight:"1.6",color:C.dark}}>
-                <strong>To make growth accessible — not accidental — for Africa's most promising enterprises.</strong>
-              </p>
+              <h3 style={{fontSize:"1.3rem",fontWeight:700,marginBottom:"12px",color:C.dark,textTransform:"uppercase"}}>Our Promise</h3>
+              <p style={{fontSize:"0.9rem",lineHeight:"1.6",color:C.dark}}><strong>To make growth accessible — not accidental — for Africa's most promising enterprises.</strong></p>
             </div>
           </div>
-
           <div style={{textAlign:"center"}}>
             <p style={{fontSize:mobile?"1rem":"1.1rem",fontWeight:600,marginBottom:"25px",color:C.primary,textTransform:"uppercase"}}>
               We're building a continent-wide trust economy. Join us.
@@ -657,6 +1143,22 @@ const LandingPage = () => {
               </div>
             ))}
           </div>
+        </div>
+      </section>
+
+      {/* ===================== FAQ SECTION ===================== */}
+      <section style={{padding:mobile?"40px 20px 32px":"60px 40px 48px",background:`linear-gradient(135deg, ${C.cream}, ${C.light})`}}>
+        <div style={{maxWidth:1100,margin:"0 auto"}}>
+          <div style={{textAlign:"center",marginBottom:32}}>
+            <p style={{color:C.secondary,fontWeight:700,fontSize:"0.74rem",letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:8}}>Got questions?</p>
+            <h2 style={{fontSize:mobile?"1.5rem":"2rem",fontWeight:800,color:C.dark,margin:0,letterSpacing:"-0.01em"}}>
+              Everything you need to know about <span style={{color:C.primary}}>BIG</span>
+            </h2>
+            <p style={{fontSize:"0.85rem",color:C.muted,marginTop:6}}>
+              Select a category below to explore answers to common questions
+            </p>
+          </div>
+          <FAQSection isMobile={mobile} />
         </div>
       </section>
 
