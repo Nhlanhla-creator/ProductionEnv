@@ -254,6 +254,7 @@ export function FundabilityScoreCard({
   useEffect(() => {
     if (auth?.currentUser?.uid) checkFundingApplicationStatus();
   }, [auth?.currentUser?.uid, checkFundingApplicationStatus]);
+const [dataLoadedAt, setDataLoadedAt] = useState(null);
 
   const fetchFundingApplicationData = useCallback(async () => {
     try {
@@ -265,8 +266,8 @@ export function FundabilityScoreCard({
         if (!snap.empty) {
           const d = snap.docs[0].data();
           const content  = d?.evaluation?.content || "";
-          const rawScore = d?.evaluation?.score   || 0;
-          const score    = Math.round(rawScore);
+          const rawScore = d?.evaluation?.score || 0;
+const score = Math.round(rawScore);
           const isValid  = score > 0 && content.trim().length > 0;
           setBusinessPlanAnalysis({ score, rawScore, content, isValid });
           if (isValid) loadedCount++;
@@ -291,9 +292,19 @@ export function FundabilityScoreCard({
         if (!snap.empty) {
           const d = snap.docs[0].data();
           const content       = d?.evaluation?.content       || "";
-          const score         = d?.evaluation?.score         || 0;
-          const label         = d?.evaluation?.label         || "";
-          const isCreditReport = d?.evaluation?.isCreditReport ?? d?.isCreditReport ?? false;
+        const score = d?.evaluation?.analysisResult?.creditScore 
+  ?? d?.evaluation?.score 
+  ?? 0;
+
+const label = d?.evaluation?.analysisResult?.creditRating 
+  ?? d?.evaluation?.label 
+  ?? "";
+         const isCreditReport = d?.evaluation?.analysisResult?.isCreditReport 
+  ?? d?.evaluation?.isCreditReport 
+  ?? d?.isCreditReport 
+  ?? false;
+
+
           const isValid = isCreditReport === true && score > 0 && content.trim().length > 0;
           setCreditReportAnalysis({ score, content, label, isCreditReport, isValid });
           if (isValid) loadedCount++;
@@ -389,6 +400,7 @@ export function FundabilityScoreCard({
       const isLoaded = loadedCount > 0;
       setIsFundingDataLoaded(isLoaded);
       isFundingDataLoadedRef.current = isLoaded;
+      setDataLoadedAt(Date.now());
     } catch (error) {
       console.error("Error fetching funding application data:", error);
       setIsFundingDataLoaded(false);
@@ -448,10 +460,10 @@ export function FundabilityScoreCard({
       if (onScoreUpdate) onScoreUpdate(result.totalScore);
     }
   }, [profileData, aiEvaluationResult, onScoreUpdate,
-      businessPlanAnalysis, pitchDeckAnalysis, creditReportAnalysis,
-      guaranteesAnalysis, financialResilienceAnalysis,
-      hasAppliedForFunding, isFundingDataLoaded, fundingTier]);
-
+    businessPlanAnalysis, pitchDeckAnalysis, creditReportAnalysis,
+    guaranteesAnalysis, financialResilienceAnalysis,
+    hasAppliedForFunding, isFundingDataLoaded, fundingTier, dataLoadedAt]);
+    
   const parseAiEvaluationScores = (text) => {
     const categories = {
       financialStrength:     ["Financial Strength"],

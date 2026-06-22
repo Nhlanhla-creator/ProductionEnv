@@ -20,6 +20,9 @@ import {
  getSyncConfig
 } from "../../utils/documentSyncService";
 import { getFunctions, httpsCallable } from "firebase/functions";
+import { analyzeBusinessPlanDocument } from "../FundingApplication/AiBusinessPlan";
+import { analyzePitchDeckDocument  } from "../FundingApplication/PitchdeckAi";
+
 
 const DOCUMENTS = [
  "5 Year Budget",
@@ -111,7 +114,8 @@ const MyDocuments = () => {
   const [editNameValue, setEditNameValue] = useState("");
   // State for guidelines expand/collapse
   const [showFullGuidelines, setShowFullGuidelines] = useState(false);
-
+const [uploadStage, setUploadStage] = useState('');
+  const [uploadProgress, setUploadProgress] = useState(0);
  // Use the synchronization hook
  useDocumentSync(setSubmittedDocuments, setProfileData, null);
 
@@ -791,7 +795,6 @@ const handleDeleteIndividualDocument = async (docLabel, displayIndex) => {
      </a>
    );
  };
-
 const handleFileUpload = async (docLabel, file) => {
   const auth = getAuth();
   const user = auth.currentUser;
@@ -829,6 +832,8 @@ const handleFileUpload = async (docLabel, file) => {
 
   setIsUploading(true);
   setIsOverlayVisible(true);
+  setUploadStage("Uploading document...");
+  setUploadProgress(10);
 
   try {
     const registeredName = await getRegisteredName();
@@ -841,6 +846,9 @@ const handleFileUpload = async (docLabel, file) => {
     await uploadBytes(storageRef, file);
     const downloadURL = await getDownloadURL(storageRef);
 
+    setUploadStage("Verifying document with AI...");
+    setUploadProgress(25);
+
     const validationResult = await validateDocumentWithAI(docLabel, file, registeredName, downloadURL);
 
     setValidationResults(prev => ({
@@ -852,6 +860,38 @@ const handleFileUpload = async (docLabel, file) => {
 
     setSubmittedDocuments((prev) => Array.from(new Set([...prev, docLabel])));
 
+    // 🔁 If this is a Business Plan or Pitch Deck and AI validation didn't reject it,
+    // run the fundability analysis so it's available under Fundability/Capital Appeal.
+    const isFundabilityDoc = docLabel === "Business Plan" || docLabel === "Pitch Deck";
+    const passedValidation = validationResult?.status !== "rejected" && validationResult?.isValid !== false;
+
+    if (isFundabilityDoc && passedValidation) {
+      setUploadStage("Document verified. Preparing fundability analysis...");
+      setUploadProgress(30);
+
+      const onProgress = ({ stage, progress }) => {
+        setUploadStage(stage);
+        setUploadProgress(progress);
+      };
+
+      try {
+        if (docLabel === "Business Plan") {
+          await analyzeBusinessPlanDocument(file, onProgress);
+        } else {
+          await analyzePitchDeckDocument(file, onProgress);
+        }
+        setUploadStage("Fundability analysis complete!");
+        setUploadProgress(100);
+      } catch (analysisError) {
+        console.error(`${docLabel} fundability analysis failed:`, analysisError);
+        setUploadStage("Document saved (fundability analysis unavailable)");
+        setUploadProgress(100);
+      }
+    } else {
+      setUploadStage("Document saved!");
+      setUploadProgress(100);
+    }
+
     const profileRef = doc(db, "universalProfiles", user.uid);
     const updatedProfileSnap = await getDoc(profileRef);
     if (updatedProfileSnap.exists()) {
@@ -861,11 +901,15 @@ const handleFileUpload = async (docLabel, file) => {
     setIsUploading(false);
     setTimeout(() => {
       setIsOverlayVisible(false);
-    }, 300);
+      setUploadStage('');
+      setUploadProgress(0);
+    }, 800);
 
   } catch (error) {
     console.error("Upload failed:", error);
     setIsUploading(false);
+    setUploadStage('');
+    setUploadProgress(0);
     setTimeout(() => {
       setIsOverlayVisible(false);
       alert(error.message || "Network error - please try again");
@@ -2185,48 +2229,83 @@ const badgeStyles = (status) => {
        </div>
      </div>
 
-     {isOverlayVisible && (
-       <div style={{
-         position: 'fixed',
-         top: 0,
-         left: 0,
-         width: '100%',
-         height: '100%',
-         backgroundColor: 'rgba(0, 0, 0, 0.7)',
-         display: 'flex',
-         justifyContent: 'center',
-         alignItems: 'center',
-         zIndex: 9999,
-         backdropFilter: 'blur(4px)',
-         opacity: isUploading ? 1 : 0,
-         transition: 'opacity 0.3s ease-in-out',
-         pointerEvents: isUploading ? 'auto' : 'none'
-       }}>
-         <div style={{
-           backgroundColor: '#f5f5f5',
-           padding: '40px 60px',
-           borderRadius: '12px',
-           textAlign: 'center',
-           boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)',
-           border: '1px solid #ddd',
-           transform: isUploading ? 'scale(1)' : 'scale(0.9)',
-           transition: 'all 0.3s ease-in-out',
-           opacity: isUploading ? 1 : 0
-         }}>
-           <div style={{
-             width: '50px',
-             height: '50px',
-             border: '4px solid #e0e0e0',
-             borderTop: '4px solid #a67c52',
-             borderRadius: '50%',
-             animation: 'spin 1s linear infinite',
-             margin: '0 auto 20px auto'
-           }}></div>
-           <p style={{ margin: 0, color: '#5d4037', fontSize: '16px', fontWeight: '600', fontFamily: 'Arial, sans-serif' }}>Uploading Document...</p>
-           <p style={{ margin: '10px 0 0 0', color: '#8d6e63', fontSize: '12px', fontStyle: 'italic' }}>Please wait while we process your file</p>
-         </div>
-       </div>
-     )}
+     
+{isOverlayVisible && (
+  <div style={{
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    width: '100%',
+    height: '100%',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    display: 'flex',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 9999,
+    backdropFilter: 'blur(4px)',
+    opacity: isUploading ? 1 : 0,
+    transition: 'opacity 0.3s ease-in-out',
+    pointerEvents: isUploading ? 'auto' : 'none',
+    padding: '20px'
+  }}>
+    <div style={{
+      backgroundColor: '#fff',
+      padding: '30px',
+      borderRadius: '12px',
+      textAlign: 'center',
+      boxShadow: '0 8px 32px rgba(0, 0, 0, 0.3)',
+      border: '1px solid #ddd',
+      transform: isUploading ? 'scale(1)' : 'scale(0.9)',
+      transition: 'all 0.3s ease-in-out',
+      opacity: isUploading ? 1 : 0,
+      minWidth: '280px',
+      maxWidth: '400px',
+      width: '100%'
+    }}>
+      <div style={{
+        width: '50px',
+        height: '50px',
+        border: '4px solid #e0e0e0',
+        borderTop: '4px solid #a67c52',
+        borderRadius: '50%',
+        animation: 'spin 1s linear infinite',
+        margin: '0 auto 20px auto'
+      }}></div>
+
+      <p style={{ margin: '0 0 8px 0', color: '#5d4037', fontSize: '16px', fontWeight: '600', fontFamily: 'Arial, sans-serif' }}>
+        Processing Document
+      </p>
+
+      <p style={{ margin: '0 0 16px 0', color: '#8d6e63', fontSize: '13px', minHeight: '18px' }}>
+        {uploadStage || 'Please wait...'}
+      </p>
+
+      <div style={{
+        width: '100%',
+        height: '6px',
+        backgroundColor: '#f0f0f0',
+        borderRadius: '3px',
+        overflow: 'hidden',
+        marginBottom: '8px'
+      }}>
+        <div style={{
+          height: '100%',
+          backgroundColor: '#a67c52',
+          width: `${uploadProgress}%`,
+          transition: 'width 0.4s ease-out'
+        }} />
+      </div>
+
+      <p style={{ fontSize: '12px', fontWeight: '600', color: '#a67c52', margin: '0 0 12px 0' }}>
+        {uploadProgress}%
+      </p>
+
+      <p style={{ margin: 0, color: '#8d6e63', fontSize: '11px', fontStyle: 'italic' }}>
+        Please don't close this window
+      </p>
+    </div>
+  </div>
+)}
    </>
  );
 };

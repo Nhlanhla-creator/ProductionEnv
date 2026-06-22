@@ -386,6 +386,185 @@ const analyzeWithGeminiAI = async (extractedTexts, fileInfo, profileData, stageL
   }
 };
 
+// ✅ Standalone helpers (module-level, reusable outside the component)
+const extractScoreFromResponseStandalone = (responseText) => {
+  try {
+    const scorePattern1 = /(?:BIG\s+Fundability\s+Score|Total\s+Score|Composite\s+Score|Final\s+Score):\s*(\d+(?:\.\d+)?)\s*(?:\/100|%|out\s+of\s+100)/i;
+    const scorePattern2 = /(\d+(?:\.\d+)?)\s*\/\s*100/g;
+    const scorePattern3 = /(?:Score|Total)[\s\|]*(\d+(?:\.\d+)?)\s*(?:\/100|%)/i;
+
+    let score = null;
+    const match1 = responseText.match(scorePattern1);
+    if (match1) {
+      score = parseFloat(match1[1]);
+    } else {
+      const matches2 = [...responseText.matchAll(scorePattern2)];
+      if (matches2.length > 0) {
+        score = parseFloat(matches2[matches2.length - 1][1]);
+      } else {
+        const match3 = responseText.match(scorePattern3);
+        if (match3) score = parseFloat(match3[1]);
+      }
+    }
+    return score;
+  } catch (error) {
+    console.error('Error extracting score:', error);
+    return null;
+  }
+};
+
+const getFundabilityLabelStandalone = (score) => {
+  if (score >= 85) return 'Investment-Ready';
+  if (score >= 65) return 'Fundable with Support';
+  if (score >= 50) return 'Emerging Potential';
+  return 'Not Yet Ready';
+};
+
+const extractOperationalScoreFromResponseStandalone = (responseText) => {
+  try {
+    const patterns = [
+      /\*\*10\.\s*Operational\s+Strength.*?\*\*\s*\*\*Score:\s*(\d(?:\.\d)?)\/5\*\*/is,
+      /10\.\s*Operational\s+Strength.*?Score:\s*(\d(?:\.\d)?)\/5/is,
+      /Operational\s+Strength\s+Score:\s*(\d(?:\.\d)?)\/5/i,
+      /\*\*Operational\s+Strength\s+Score:\s*(\d(?:\.\d)?)\/5\*\*/i,
+      /Operational.*?Score:\s*(\d(?:\.\d)?)\/5/is,
+      /(?:10\.|Operational).*?(\d(?:\.\d)?)\/5/is,
+      /operational.*?(\d(?:\.\d)?)\s*\/\s*5/is
+    ];
+    for (const pattern of patterns) {
+      const match = responseText.match(pattern);
+      if (match && match[1]) {
+        const score = parseFloat(match[1]);
+        if (score >= 0 && score <= 5) return score;
+      }
+    }
+    return null;
+  } catch (error) {
+    console.error("Error extracting operational score:", error);
+    return null;
+  }
+};
+
+const extractOperationalSummaryFromResponseStandalone = (responseText) => {
+  try {
+    const patterns = [
+      /\*\*10\.\s*Operational\s+Strength.*?\*\*\s*\*\*Score:\s*\d\/5\*\*\s*(.*?)(?=\n\s*---|\n\s*\*\*Priority|\n\s*###|\*\*\d+\.|\n\s*$)/is,
+      /10\.\s*Operational\s+Strength.*?Score:\s*\d\/5[^\n]*\n(.*?)(?=\n\s*\*\*Priority|\n\s*---|\n\s*\d+\.|\n\s*$)/is,
+      /Operational\s+Strength\s+Score:\s*\d\/5[^\n]*\n(.*?)(?=\n\s*\*\*|\n\s*---|\n\s*Priority|\n\s*$)/is,
+      /10\..*?operational.*?(\d\/5)[^\n]*\n(.*?)(?=\n\s*\*\*|\n\s*---|\n\s*Priority|\n\s*\d+\.|\n\s*$)/is
+    ];
+    for (const pattern of patterns) {
+      const match = responseText.match(pattern);
+      if (match) {
+        let summary = match[match.length - 1];
+        if (summary && summary.trim().length > 10) {
+          return summary.trim()
+            .replace(/\*\*/g, '')
+            .replace(/^\s*[-•]\s*/, '')
+            .replace(/\n\s*[-•]\s*/g, '\n')
+            .substring(0, 500);
+        }
+      }
+    }
+    return null;
+  } catch (error) {
+    console.error('Error extracting operational summary:', error);
+    return null;
+  }
+};
+
+// ✅ NEW: Trigger fundability analysis for a Pitch Deck uploaded via My Documents.
+// Extracts text, runs Gemini analysis, saves to aiPitchEvaluations, and flags the
+// universal profile so FundabilityScoreCard re-evaluates and picks it up.
+export const analyzePitchDeckDocument = async (file, onProgress = () => {}) => {
+  if (!file) throw new Error("No file provided");
+
+  const userId = auth.currentUser?.uid;
+  if (!userId) throw new Error("User not logged in.");
+
+  onProgress({ stage: "Extracting text from pitch deck...", progress: 35 });
+  const content = await extractTextFromFile(file);
+
+  if (!content || content.trim().length < 20) {
+    throw new Error("Extracted content too short or empty");
+  }
+
+  onProgress({ stage: "Loading business profile...", progress: 50 });
+  const profileData = await fetchUserProfile();
+  const stage = (profileData?.entityOverview?.operationStage || "").toLowerCase();
+  const stageLabel = ["pre-seed", "preseed"].includes(stage) ? "Pre-seed"
+    : ["growth", "scale-up", "scaling"].includes(stage) ? "Growth"
+    : "Maturity";
+
+  onProgress({ stage: "Analyzing pitch deck with AI...", progress: 65 });
+  const result = await analyzeWithGeminiAI(
+    [content],
+    [{ name: file.name, type: file.type, text: content, extractionMethod: "google_ai_enhanced" }],
+    profileData,
+    stageLabel
+  );
+
+  let analysisText, score, label, operationalScore, operationalSummary;
+  if (typeof result === 'string') {
+    analysisText = result;
+    score = extractScoreFromResponseStandalone(result);
+    operationalScore = extractOperationalScoreFromResponseStandalone(result);
+    operationalSummary = extractOperationalSummaryFromResponseStandalone(result);
+    label = score !== null ? getFundabilityLabelStandalone(score) : 'Analysis Failed';
+  } else {
+    analysisText = result.analysis || result;
+    score = result.score;
+    operationalScore = result.operationalScore;
+    operationalSummary = result.operationalSummary;
+    label = result.label || (score !== null ? getFundabilityLabelStandalone(score) : 'Analysis Failed');
+  }
+
+  onProgress({ stage: "Saving fundability results...", progress: 85 });
+
+  const dataToSave = {
+    evaluation: {
+      content: analysisText,
+      score: score ?? 0,
+      label,
+      operationalScore,
+      operationalSummary,
+      evaluatedAt: new Date().toISOString(),
+      modelVersion: "Gemini-2.5-Flash",
+      growthStage: stageLabel,
+    },
+    userId,
+    createdAt: new Date().toISOString(),
+    files: [{
+      name: file.name,
+      size: file.size,
+      type: file.type,
+      extractionMethod: "google_ai_enhanced"
+    }]
+  };
+
+  const evaluationsRef = collection(db, "aiPitchEvaluations");
+  const q = query(evaluationsRef, where("userId", "==", userId));
+  const querySnapshot = await getDocs(q);
+
+  if (!querySnapshot.empty) {
+    await setDoc(querySnapshot.docs[0].ref, dataToSave, { merge: true });
+  } else {
+    await addDoc(evaluationsRef, dataToSave);
+  }
+
+  onProgress({ stage: "Updating fundability score...", progress: 95 });
+
+  try {
+    await setDoc(doc(db, "universalProfiles", userId), {
+      triggerFundabilityEvaluation: true
+    }, { merge: true });
+  } catch (e) {
+    console.error("Failed to flag fundability re-evaluation:", e);
+  }
+
+  return { score, label, operationalScore, operationalSummary, content: analysisText };
+};
+
 
 export default function PitchDeckGPT({ files = [], onEvaluationComplete }) {
   const [input, setInput] = useState('');

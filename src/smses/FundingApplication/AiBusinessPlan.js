@@ -400,7 +400,120 @@ const analyzeWithGeminiAI = async (extractedTexts, fileInfo, profileData, stageL
     throw new Error(`AI analysis failed: ${error.message}`);
   }
 };
+// ✅ Standalone helpers (module-level so they can be reused outside the component)
+const extractScoreFromResponseStandalone = (responseText) => {
+  try {
+    const scorePattern1 = /(?:BIG\s+Fundability\s+Score|Total\s+Score|Composite\s+Score|Final\s+Score):\s*(\d+(?:\.\d+)?)\s*(?:\/100|%|out\s+of\s+100)/i;
+    const scorePattern2 = /(\d+(?:\.\d+)?)\s*\/\s*100/g;
+    const scorePattern3 = /(?:Score|Total)[\s\|]*(\d+(?:\.\d+)?)\s*(?:\/100|%)/i;
 
+    let score = null;
+    const match1 = responseText.match(scorePattern1);
+    if (match1) {
+      score = parseFloat(match1[1]);
+    } else {
+      const matches2 = [...responseText.matchAll(scorePattern2)];
+      if (matches2.length > 0) {
+        score = parseFloat(matches2[matches2.length - 1][1]);
+      } else {
+        const match3 = responseText.match(scorePattern3);
+        if (match3) score = parseFloat(match3[1]);
+      }
+    }
+    return score;
+  } catch (error) {
+    console.error('Error extracting score:', error);
+    return null;
+  }
+};
+
+const getFundabilityLabelStandalone = (score) => {
+  if (score >= 85) return 'Investment-Ready';
+  if (score >= 65) return 'Fundable with Support';
+  if (score >= 50) return 'Emerging Potential';
+  return 'Not Yet Ready';
+};
+
+// ✅ NEW: Trigger fundability analysis for a Business Plan uploaded via My Documents.
+// Extracts text, runs Gemini analysis, saves to aiEvaluations, and flags the
+// universal profile so FundabilityScoreCard re-evaluates and picks it up.
+export const analyzeBusinessPlanDocument = async (file) => {
+  if (!file) throw new Error("No file provided");
+
+  const userId = auth.currentUser?.uid;
+  if (!userId) throw new Error("User not logged in.");
+
+  // 1. Extract text from the uploaded business plan
+  const content = await extractTextFromFile(file);
+
+  // 2. Get profile/stage context (same as the in-app GPT flow)
+  const profileData = await fetchUserProfile();
+
+  const mapToBIGStage = (stage) => {
+    switch (stage?.toLowerCase()) {
+      case 'startup': return 'Pre-seed';
+      case 'growth': return 'Seed';
+      case 'scaling': return 'Series A/B';
+      case 'mature':
+      case 'turnaround': return 'Maturity';
+      default: return 'Pre-seed';
+    }
+  };
+  const stageLabel = mapToBIGStage(profileData?.entityOverview?.operationStage);
+
+  // 3. Run the Gemini fundability analysis
+  const reply = await analyzeWithGeminiAI(
+    [content],
+    [{ name: file.name, type: file.type, extractionMethod: "google_ai_enhanced" }],
+    profileData,
+    stageLabel
+  );
+
+  const score = extractScoreFromResponseStandalone(reply);
+  const label = score !== null ? getFundabilityLabelStandalone(score) : '';
+
+  // 4. Save/update the evaluation in aiEvaluations (same collection FundabilityScoreCard reads)
+  const dataToSave = {
+    evaluation: {
+      content: reply,
+      score: score ?? 0,
+      label,
+      evaluatedAt: new Date().toISOString(),
+      modelVersion: "Gemini-2.5-Flash",
+      growthStage: stageLabel,
+    },
+    userId,
+    createdAt: new Date().toISOString(),
+    files: [{
+      name: file.name,
+      size: file.size,
+      type: file.type,
+      extractionMethod: "google_ai_enhanced"
+    }]
+  };
+
+  const evaluationsRef = collection(db, "aiEvaluations");
+  const q = query(evaluationsRef, where("userId", "==", userId));
+  const querySnapshot = await getDocs(q);
+
+  if (!querySnapshot.empty) {
+    const docRef = querySnapshot.docs[0].ref;
+    await setDoc(docRef, dataToSave, { merge: true });
+  } else {
+    await addDoc(evaluationsRef, dataToSave);
+  }
+
+  // 5. Flag the universal profile so the Fundability score card re-runs its evaluation
+  try {
+    await setDoc(doc(db, "universalProfiles", userId), {
+      triggerFundabilityEvaluation: true
+    }, { merge: true });
+  } catch (e) {
+    console.error("Failed to flag fundability re-evaluation:", e);
+  }
+
+  return { score, label, content: reply };
+};
 
 export default function GPT({ files = [], onEvaluationComplete }) {
   const [input, setInput] = useState('');
