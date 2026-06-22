@@ -1,5 +1,5 @@
 "use client"
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect,useRef} from "react"
 import mammoth from "mammoth"
 import { collection, query, where, getDocs, addDoc, setDoc } from "firebase/firestore"
 import { auth, db } from "../../firebaseConfig"
@@ -80,14 +80,14 @@ const extractWithGoogleAI = async (file, documentType = "Credit Report") => {
     })
 
     // Call Firebase Function for extraction
-    const extractText = httpsCallable(functions, 'extractCreditDocumentText');
+    const extractText = httpsCallable(functions, 'extractDocumentText');
     
     const result = await extractText({
-      base64Data,
-      mimeType: file.type,
-      fileName: file.name,
-      documentType
-    });
+  base64Data,
+  mimeType: file.type,
+  fileName: file.name,
+  documentType: "Credit Report or Financial Document"  // keep this, PitchDeck passes it too
+});
 
     if (!result.data.success) {
       throw new Error(result.data.error || "Extraction failed");
@@ -592,12 +592,22 @@ Confidence: ${result.confidence}
     }
   }
 
-  useEffect(() => {
-    if (files && files.length > 0) {
-      handleIncomingFiles(files)
-    }
-  }, [files])
+const processedFilesRef = useRef(new Set());
 
+useEffect(() => {
+  if (!files?.length) return;
+
+  // Build a stable key from file names + sizes + lastModified
+  const incomingKey = files
+    .map(f => `${f.name}-${f.size}-${f.lastModified}`)
+    .sort()
+    .join('|');
+
+  if (processedFilesRef.current.has(incomingKey)) return;
+  processedFilesRef.current.add(incomingKey);
+
+  handleIncomingFiles(files);
+}, [files]);
   const saveDataToFirebase = async (response, score, label, filesEvaluated, analysis) => {
     try {
       const userId = auth.currentUser?.uid

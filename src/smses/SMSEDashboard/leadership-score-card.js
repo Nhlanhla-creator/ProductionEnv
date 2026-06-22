@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { ChevronDown, RefreshCw, AlertCircle, Users, CheckCircle, TrendingUp } from "lucide-react"
 import { db, auth } from "../../firebaseConfig"
-import { doc, onSnapshot, updateDoc, setDoc, getDoc } from "firebase/firestore"
+import { doc, onSnapshot, updateDoc, setDoc, getDoc, collection, getDocs } from "firebase/firestore"
 import { API_KEYS } from "../../API" // Make sure this path is correct
 import { getFunctions, httpsCallable } from "firebase/functions";
 
@@ -270,6 +270,51 @@ export function LeadershipScoreCard({ styles, profileData, onScoreUpdate, apiKey
     return () => unsubscribe()
   }, [auth?.currentUser?.uid, apiKey, isEvaluating])
 
+  const fetchExtractedCvData = async (userId) => {
+    if (!userId) return []
+    try {
+      const cvsRef = collection(db, "userCVData", userId, "cvs")
+      const snap = await getDocs(cvsRef)
+      return snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+    } catch (error) {
+      console.error("Error fetching extracted CV data:", error)
+      return []
+    }
+  }
+
+  const formatExtractedCv = (cv) => {
+    const lines = []
+    if (cv.personName) lines.push(`Name: ${cv.personName}`)
+    if (cv.currentRole || cv.currentCompany) {
+      lines.push(`Current Role: ${cv.currentRole || "Not specified"} at ${cv.currentCompany || "Not specified"}`)
+    }
+    if (cv.yearsOfExperience != null) lines.push(`Years of Experience: ${cv.yearsOfExperience}`)
+
+    if (Array.isArray(cv.education) && cv.education.length) {
+      lines.push("Education:")
+      cv.education.forEach((ed) => {
+        lines.push(`  - ${ed.degree || "Degree"} in ${ed.field || "Not specified"}, ${ed.institution || "Not specified"} (${ed.graduationYear || "N/A"})`)
+      })
+    }
+
+    if (Array.isArray(cv.certifications) && cv.certifications.length) {
+      lines.push(`Certifications: ${cv.certifications.join("; ")}`)
+    }
+
+    if (Array.isArray(cv.skills) && cv.skills.length) {
+      lines.push(`Skills: ${cv.skills.join(", ")}`)
+    }
+
+    if (Array.isArray(cv.experience) && cv.experience.length) {
+      lines.push("Experience:")
+      cv.experience.forEach((exp) => {
+        lines.push(`  - ${exp.role || "Role"} at ${exp.company || "Company"} (${exp.startDate || "?"} – ${exp.endDate || "Present"})${exp.industry ? `, Industry: ${exp.industry}` : ""}`)
+      })
+    }
+
+    return lines.join("\n")
+  }
+
   const runAiEvaluation = async (userId) => {
     if (!apiKey?.trim()) {
       setEvaluationError("OpenAI API key not configured.")
@@ -285,43 +330,53 @@ export function LeadershipScoreCard({ styles, profileData, onScoreUpdate, apiKey
 
     try {
       // Extract CV text for all directors and executives before building evaluation data
+     // after
       const cvTextMap = {}
       const allPeople = [
         ...(profileData?.ownershipManagement?.directors || []).map((d, i) => ({ ...d, role: 'director', index: i })),
         ...(profileData?.ownershipManagement?.executives || []).map((e, i) => ({ ...e, role: 'executive', index: i }))
       ]
 
+      const evaluatedUserId = userId || auth?.currentUser?.uid
+      const extractedCvs = await fetchExtractedCvData(evaluatedUserId)
+      console.log(`Loaded ${extractedCvs.length} extracted CV record(s) from userCVData`)
+
       for (const person of allPeople) {
-        if (person?.cv?.url) {
-          try {
-            console.log(`Extracting CV for ${person.role} ${person.index} via server`)
+        if (!person?.cv?.url) continue
 
-            const functionsInstance = getFunctions()
-            const extractDocumentText = httpsCallable(functionsInstance, 'extractDocumentText')
-            const result = await extractDocumentText({
-              fileUrl: person.cv.url,
-              fileName: person.cv.name || 'cv.pdf',
-              documentType: 'CV'
-            })
+        const matched =
+          extractedCvs.find((cv) => cv.documentUrl === person.cv.url) ||
+          extractedCvs.find(
+            (cv) => cv.personName && person.name && cv.personName.trim().toLowerCase() === person.name.trim().toLowerCase()
+          )
 
-            console.log(`Extraction result for ${person.role} ${person.index}:`, {
-              hasText: !!result?.data?.text,
-              textLength: result?.data?.text?.length,
-              success: result?.data?.success
-            })
-
-            if (result?.data?.text) {
-              cvTextMap[`${person.role}_${person.index}`] = {
-                name: person.name || `${person.role} ${person.index + 1}`,
-                text: result.data.text.substring(0, 2000)
-              }
-              console.log(`✅ CV text extracted for ${person.name || person.role} ${person.index}`)
-            } else {
-              console.warn(`⚠️ No text returned for ${person.role} ${person.index}`)
-            }
-          } catch (e) {
-            console.error(`❌ CV extraction failed for ${person.role} ${person.index}:`, e.message)
+        if (matched) {
+          cvTextMap[`${person.role}_${person.index}`] = {
+            name: person.name || matched.personName || `${person.role} ${person.index + 1}`,
+            text: formatExtractedCv(matched)
           }
+          console.log(`✅ Extracted CV data matched for ${person.name || person.role} ${person.index}`)
+          continue
+        }
+
+        // Fallback: no structured record found yet, extract raw text instead
+        try {
+          console.log(`No structured CV found, falling back to text extraction for ${person.role} ${person.index}`)
+          const functionsInstance = getFunctions()
+          const extractDocumentText = httpsCallable(functionsInstance, 'extractDocumentText')
+          const result = await extractDocumentText({
+            fileUrl: person.cv.url,
+            fileName: person.cv.name || 'cv.pdf',
+            documentType: 'CV'
+          })
+          if (result?.data?.text) {
+            cvTextMap[`${person.role}_${person.index}`] = {
+              name: person.name || `${person.role} ${person.index + 1}`,
+              text: result.data.text.substring(0, 2000)
+            }
+          }
+        } catch (e) {
+          console.error(`❌ CV extraction failed for ${person.role} ${person.index}:`, e.message)
         }
       }
 
@@ -391,6 +446,7 @@ OUTPUT FORMAT - YOU MUST FOLLOW THIS EXACTLY:
 - → Ownership & Management section: complete LinkedIn profiles for all directors
 - 💡 Directors whose CVs list formal qualifications and industry certifications score significantly higher
 - 💡 LinkedIn profiles that reflect certifications and designations further strengthen credentials
+do not punish for being unable to verify qualifications if CVs are missing, but note the lack of evidence
 
 ### 2. Leadership Structure
 **Score:** [0-5]
