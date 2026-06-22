@@ -31,11 +31,21 @@ const BIGScorePage = () => {
   const [showPopup, setShowPopup] = useState(false);
   const [popupContent, setPopupContent] = useState(null);
   const [bannerLoaded, setBannerLoaded] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
   const [expandedSections, setExpandedSections] = useState({});
 
   useEffect(() => {
     const timer = setTimeout(() => setBannerLoaded(true), 300);
     return () => clearTimeout(timer);
+  }, []);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth <= 768);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
   const colors = {
@@ -320,7 +330,7 @@ const BIGScorePage = () => {
         style={{
           backgroundColor: colors.white,
           borderRadius: '16px',
-          padding: '20px 18px',
+          padding: isMobile ? '16px 14px' : '20px 18px',
           boxShadow: isHovered 
             ? '0 12px 40px rgba(28,20,16,0.15)' 
             : '0 4px 20px rgba(28,20,16,0.06)',
@@ -338,12 +348,12 @@ const BIGScorePage = () => {
         <div style={{
           display: 'flex',
           alignItems: 'center',
-          gap: '10px',
-          marginBottom: '10px'
+          gap: isMobile ? '8px' : '10px',
+          marginBottom: '8px'
         }}>
           <div style={{
-            width: '40px',
-            height: '40px',
+            width: isMobile ? '36px' : '40px',
+            height: isMobile ? '36px' : '40px',
             borderRadius: '10px',
             background: `${component.color}15`,
             display: 'flex',
@@ -355,7 +365,7 @@ const BIGScorePage = () => {
             {component.icon}
           </div>
           <h3 style={{
-            fontSize: '0.85rem',
+            fontSize: isMobile ? '0.78rem' : '0.85rem',
             fontWeight: 700,
             color: colors.dark,
             margin: 0,
@@ -366,10 +376,10 @@ const BIGScorePage = () => {
         </div>
 
         <p style={{
-          fontSize: '0.78rem',
+          fontSize: isMobile ? '0.72rem' : '0.78rem',
           color: colors.muted,
           lineHeight: 1.5,
-          margin: '0 0 12px 0',
+          margin: '0 0 10px 0',
           flex: 1,
         }}>
           {component.description}
@@ -379,16 +389,16 @@ const BIGScorePage = () => {
           display: 'flex',
           gap: '4px',
           flexWrap: 'wrap',
-          marginBottom: '12px',
+          marginBottom: '10px',
         }}>
           <div style={{
             display: 'flex',
             alignItems: 'center',
             gap: '4px',
             background: `${component.color}10`,
-            padding: '3px 8px',
+            padding: '2px 6px',
             borderRadius: '16px',
-            fontSize: '0.6rem',
+            fontSize: '0.55rem',
             fontWeight: 600,
             color: component.color,
           }}>
@@ -399,9 +409,9 @@ const BIGScorePage = () => {
             alignItems: 'center',
             gap: '4px',
             background: `${component.color}10`,
-            padding: '3px 8px',
+            padding: '2px 6px',
             borderRadius: '16px',
-            fontSize: '0.6rem',
+            fontSize: '0.55rem',
             fontWeight: 600,
             color: component.color,
           }}>
@@ -412,9 +422,9 @@ const BIGScorePage = () => {
             alignItems: 'center',
             gap: '4px',
             background: `${component.color}10`,
-            padding: '3px 8px',
+            padding: '2px 6px',
             borderRadius: '16px',
-            fontSize: '0.6rem',
+            fontSize: '0.55rem',
             fontWeight: 600,
             color: component.color,
           }}>
@@ -429,8 +439,8 @@ const BIGScorePage = () => {
             color: colors.white,
             border: 'none',
             borderRadius: '8px',
-            padding: '8px 14px',
-            fontSize: '0.75rem',
+            padding: isMobile ? '6px 12px' : '8px 14px',
+            fontSize: isMobile ? '0.7rem' : '0.75rem',
             fontWeight: 600,
             cursor: 'pointer',
             transition: 'all 0.3s ease',
@@ -469,7 +479,7 @@ const BIGScorePage = () => {
       {/* Hero Banner */}
       <section style={{
         position: 'relative',
-        padding: '80px 20px 60px',
+        padding: isMobile ? '60px 16px 40px' : '80px 20px 60px',
         background: `linear-gradient(135deg, ${colors.dark} 0%, ${colors.primary} 100%)`,
         overflow: 'hidden',
       }}>
@@ -525,6 +535,7 @@ const BIGScorePage = () => {
             borderRadius: '30px',
             padding: '6px 16px 6px 10px',
             marginBottom: '20px',
+            flexWrap: 'wrap',
           }}>
             <span style={{
               width: 8,
@@ -545,7 +556,7 @@ const BIGScorePage = () => {
           </div>
 
           <h1 style={{
-            fontSize: 'clamp(2.2rem, 5vw, 3.5rem)',
+            fontSize: isMobile ? 'clamp(1.8rem, 8vw, 2.5rem)' : 'clamp(2.2rem, 5vw, 3.5rem)',
             fontWeight: 900,
             color: colors.white,
             margin: '0 0 16px',
@@ -556,7 +567,7 @@ const BIGScorePage = () => {
           </h1>
 
           <p style={{
-            fontSize: 'clamp(1rem, 1.5vw, 1.2rem)',
+            fontSize: isMobile ? 'clamp(0.9rem, 4vw, 1.1rem)' : 'clamp(1rem, 1.5vw, 1.2rem)',
             color: 'rgba(255,255,255,0.7)',
             maxWidth: '600px',
             lineHeight: 1.7,
@@ -568,7 +579,7 @@ const BIGScorePage = () => {
 
           <div style={{
             display: 'flex',
-            gap: '16px',
+            gap: isMobile ? '12px' : '16px',
             flexWrap: 'wrap',
           }}>
             <button
@@ -578,8 +589,8 @@ const BIGScorePage = () => {
                 color: colors.white,
                 border: 'none',
                 borderRadius: '50px',
-                padding: '14px 36px',
-                fontSize: '0.95rem',
+                padding: isMobile ? '12px 24px' : '14px 36px',
+                fontSize: isMobile ? '0.85rem' : '0.95rem',
                 fontWeight: 700,
                 cursor: 'pointer',
                 transition: 'all 0.3s ease',
@@ -587,6 +598,8 @@ const BIGScorePage = () => {
                 display: 'flex',
                 alignItems: 'center',
                 gap: '10px',
+                flex: isMobile ? '1 1 100%' : 'auto',
+                justifyContent: 'center',
               }}
               onMouseEnter={(e) => {
                 e.currentTarget.style.transform = 'translateY(-2px)';
@@ -605,12 +618,15 @@ const BIGScorePage = () => {
                 color: colors.white,
                 border: `1px solid rgba(255,255,255,0.2)`,
                 borderRadius: '50px',
-                padding: '14px 36px',
-                fontSize: '0.95rem',
+                padding: isMobile ? '12px 24px' : '14px 36px',
+                fontSize: isMobile ? '0.85rem' : '0.95rem',
                 fontWeight: 600,
                 cursor: 'pointer',
                 transition: 'all 0.3s ease',
                 backdropFilter: 'blur(8px)',
+                flex: isMobile ? '1 1 100%' : 'auto',
+                justifyContent: 'center',
+                textAlign: 'center',
               }}
               onMouseEnter={(e) => {
                 e.currentTarget.style.background = 'rgba(255,255,255,0.2)';
@@ -625,9 +641,11 @@ const BIGScorePage = () => {
 
           <div style={{
             display: 'flex',
-            gap: '32px',
+            gap: isMobile ? '16px' : '32px',
             marginTop: '32px',
             flexWrap: 'wrap',
+            flexDirection: isMobile ? 'column' : 'row',
+            alignItems: isMobile ? 'flex-start' : 'center',
           }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <FaCheckCircle size={16} color={colors.amber} />
@@ -655,19 +673,19 @@ const BIGScorePage = () => {
       <div style={{
         maxWidth: '1100px',
         margin: '0 auto',
-        padding: '40px 20px 60px',
+        padding: isMobile ? '24px 16px 40px' : '40px 20px 60px',
       }}>
 
         {/* What is BIG Score Section - With Real Images */}
         <section style={{
           backgroundColor: colors.white,
           borderRadius: '20px',
-          padding: '40px',
+          padding: isMobile ? '24px 16px' : '40px',
           marginBottom: '40px',
           boxShadow: '0 4px 20px rgba(28,20,16,0.06)',
         }}>
           <h2 style={{
-            fontSize: 'clamp(1.5rem, 2.5vw, 2rem)',
+            fontSize: isMobile ? 'clamp(1.3rem, 5vw, 1.8rem)' : 'clamp(1.5rem, 2.5vw, 2rem)',
             fontWeight: 800,
             color: colors.dark,
             textAlign: 'center',
@@ -679,7 +697,7 @@ const BIGScorePage = () => {
           <p style={{
             textAlign: 'center',
             color: colors.muted,
-            fontSize: '0.95rem',
+            fontSize: isMobile ? '0.85rem' : '0.95rem',
             maxWidth: '600px',
             margin: '0 auto 32px',
             lineHeight: 1.6,
@@ -689,7 +707,7 @@ const BIGScorePage = () => {
 
           <div style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(3, 1fr)',
+            gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)',
             gap: '20px',
           }}>
             {[
@@ -732,7 +750,7 @@ const BIGScorePage = () => {
                 }}
               >
                 <div style={{
-                  height: '180px',
+                  height: isMobile ? '160px' : '180px',
                   overflow: 'hidden',
                 }}>
                   <img
@@ -753,11 +771,11 @@ const BIGScorePage = () => {
                   />
                 </div>
                 <div style={{
-                  padding: '24px',
+                  padding: isMobile ? '16px' : '24px',
                   textAlign: 'center',
                 }}>
                   <h3 style={{
-                    fontSize: '1.1rem',
+                    fontSize: isMobile ? '1rem' : '1.1rem',
                     fontWeight: 700,
                     color: colors.dark,
                     marginBottom: '8px',
@@ -765,7 +783,7 @@ const BIGScorePage = () => {
                     {item.title}
                   </h3>
                   <p style={{
-                    fontSize: '0.85rem',
+                    fontSize: isMobile ? '0.8rem' : '0.85rem',
                     color: colors.muted,
                     lineHeight: 1.5,
                     margin: 0,
@@ -780,12 +798,12 @@ const BIGScorePage = () => {
           <div style={{
             background: colors.light,
             borderRadius: '12px',
-            padding: '24px',
+            padding: isMobile ? '16px' : '24px',
             marginTop: '24px',
             borderLeft: `4px solid ${colors.amber}`,
           }}>
             <p style={{
-              fontSize: '0.95rem',
+              fontSize: isMobile ? '0.85rem' : '0.95rem',
               lineHeight: 1.7,
               color: colors.dark,
               margin: 0,
@@ -798,16 +816,16 @@ const BIGScorePage = () => {
           </div>
         </section>
 
-        {/* Score Components Section - 5 cards in one row */}
+        {/* Score Components Section - Responsive grid */}
         <section style={{
           backgroundColor: colors.dark,
           borderRadius: '20px',
-          padding: '40px',
+          padding: isMobile ? '24px 16px' : '40px',
           marginBottom: '40px',
           backgroundImage: 'radial-gradient(circle at 20% 50%, rgba(160,112,62,0.15) 0%, transparent 70%)',
         }}>
           <h2 style={{
-            fontSize: 'clamp(1.5rem, 2.5vw, 2rem)',
+            fontSize: isMobile ? 'clamp(1.3rem, 5vw, 1.8rem)' : 'clamp(1.5rem, 2.5vw, 2rem)',
             fontWeight: 800,
             color: colors.white,
             textAlign: 'center',
@@ -819,7 +837,7 @@ const BIGScorePage = () => {
           <p style={{
             textAlign: 'center',
             color: 'rgba(255,255,255,0.6)',
-            fontSize: '0.95rem',
+            fontSize: isMobile ? '0.85rem' : '0.95rem',
             maxWidth: '600px',
             margin: '0 auto 32px',
             lineHeight: 1.6,
@@ -829,8 +847,8 @@ const BIGScorePage = () => {
 
           <div style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(5, 1fr)',
-            gap: '16px',
+            gridTemplateColumns: isMobile ? '1fr' : isMobile ? '1fr 1fr' : 'repeat(5, 1fr)',
+            gap: isMobile ? '12px' : '16px',
           }}>
             {scoreData.bigScore.components.map((component, index) => (
               <ScoreCard key={index} component={component} />
@@ -842,12 +860,12 @@ const BIGScorePage = () => {
         <section style={{
           backgroundColor: colors.white,
           borderRadius: '20px',
-          padding: '40px',
+          padding: isMobile ? '24px 16px' : '40px',
           marginBottom: '40px',
           boxShadow: '0 4px 20px rgba(28,20,16,0.06)',
         }}>
           <h2 style={{
-            fontSize: 'clamp(1.5rem, 2.5vw, 2rem)',
+            fontSize: isMobile ? 'clamp(1.3rem, 5vw, 1.8rem)' : 'clamp(1.5rem, 2.5vw, 2rem)',
             fontWeight: 800,
             color: colors.dark,
             textAlign: 'center',
@@ -859,18 +877,18 @@ const BIGScorePage = () => {
 
           <div style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(2, 1fr)',
+            gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, 1fr)',
             gap: '24px',
           }}>
             {/* Problems */}
             <div style={{
               background: colors.redBg,
               borderRadius: '16px',
-              padding: '24px',
+              padding: isMobile ? '16px' : '24px',
               border: `1px solid ${colors.red}30`,
             }}>
               <h3 style={{
-                fontSize: '1.1rem',
+                fontSize: isMobile ? '1rem' : '1.1rem',
                 fontWeight: 700,
                 color: colors.red,
                 marginBottom: '16px',
@@ -889,11 +907,11 @@ const BIGScorePage = () => {
                 <div
                   key={index}
                   style={{
-                    padding: '12px 16px',
+                    padding: isMobile ? '10px 12px' : '12px 16px',
                     background: 'rgba(255,255,255,0.6)',
                     borderRadius: '8px',
                     marginBottom: '8px',
-                    fontSize: '0.85rem',
+                    fontSize: isMobile ? '0.8rem' : '0.85rem',
                     color: colors.dark,
                     lineHeight: 1.4,
                   }}
@@ -907,11 +925,11 @@ const BIGScorePage = () => {
             <div style={{
               background: colors.greenBg,
               borderRadius: '16px',
-              padding: '24px',
+              padding: isMobile ? '16px' : '24px',
               border: `1px solid ${colors.green}30`,
             }}>
               <h3 style={{
-                fontSize: '1.1rem',
+                fontSize: isMobile ? '1rem' : '1.1rem',
                 fontWeight: 700,
                 color: colors.green,
                 marginBottom: '16px',
@@ -930,11 +948,11 @@ const BIGScorePage = () => {
                 <div
                   key={index}
                   style={{
-                    padding: '12px 16px',
+                    padding: isMobile ? '10px 12px' : '12px 16px',
                     background: 'rgba(255,255,255,0.6)',
                     borderRadius: '8px',
                     marginBottom: '8px',
-                    fontSize: '0.85rem',
+                    fontSize: isMobile ? '0.8rem' : '0.85rem',
                     color: colors.dark,
                     lineHeight: 1.4,
                   }}
@@ -946,7 +964,7 @@ const BIGScorePage = () => {
           </div>
         </section>
 
-      
+       
       </div>
 
       <Footer />
@@ -965,7 +983,7 @@ const BIGScorePage = () => {
           justifyContent: 'center',
           zIndex: 1000,
           backdropFilter: 'blur(4px)',
-          padding: '20px',
+          padding: isMobile ? '12px' : '20px',
         }}>
           <div style={{
             backgroundColor: colors.white,
@@ -974,7 +992,7 @@ const BIGScorePage = () => {
             maxWidth: '900px',
             maxHeight: '90vh',
             overflowY: 'auto',
-            padding: '40px',
+            padding: isMobile ? '24px 16px' : '40px',
             boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
             position: 'relative',
             animation: 'fadeInUp 0.3s ease-out',
@@ -983,8 +1001,8 @@ const BIGScorePage = () => {
               onClick={closePopup}
               style={{
                 position: 'absolute',
-                top: '16px',
-                right: '16px',
+                top: '12px',
+                right: '12px',
                 background: 'none',
                 border: 'none',
                 fontSize: '1.5rem',
@@ -1015,10 +1033,11 @@ const BIGScorePage = () => {
               alignItems: 'center',
               gap: '16px',
               marginBottom: '16px',
+              flexWrap: 'wrap',
             }}>
               <div style={{
-                width: '56px',
-                height: '56px',
+                width: isMobile ? '48px' : '56px',
+                height: isMobile ? '48px' : '56px',
                 borderRadius: '14px',
                 background: `${popupContent.color || colors.primary}15`,
                 display: 'flex',
@@ -1031,7 +1050,7 @@ const BIGScorePage = () => {
               </div>
               <div>
                 <h2 style={{
-                  fontSize: '1.5rem',
+                  fontSize: isMobile ? '1.2rem' : '1.5rem',
                   fontWeight: 800,
                   color: colors.dark,
                   margin: 0,
@@ -1040,7 +1059,7 @@ const BIGScorePage = () => {
                   {popupContent.title}
                 </h2>
                 <p style={{
-                  fontSize: '0.9rem',
+                  fontSize: isMobile ? '0.8rem' : '0.9rem',
                   color: colors.muted,
                   margin: '4px 0 0',
                 }}>
@@ -1050,11 +1069,11 @@ const BIGScorePage = () => {
             </div>
 
             <p style={{
-              fontSize: '1rem',
+              fontSize: isMobile ? '0.9rem' : '1rem',
               lineHeight: 1.7,
               color: colors.dark,
               marginBottom: '24px',
-              padding: '16px',
+              padding: isMobile ? '12px' : '16px',
               background: colors.light,
               borderRadius: '10px',
             }}>
@@ -1066,7 +1085,7 @@ const BIGScorePage = () => {
               marginBottom: '24px',
             }}>
               <h3 style={{
-                fontSize: '1rem',
+                fontSize: '0.9rem',
                 fontWeight: 700,
                 color: colors.dark,
                 marginBottom: '12px',
@@ -1075,48 +1094,48 @@ const BIGScorePage = () => {
               </h3>
               <div style={{
                 display: 'grid',
-                gridTemplateColumns: 'repeat(3, 1fr)',
-                gap: '12px',
+                gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)',
+                gap: isMobile ? '8px' : '12px',
               }}>
                 <div style={{
                   background: colors.light,
                   borderRadius: '10px',
-                  padding: '16px',
+                  padding: isMobile ? '12px' : '16px',
                   textAlign: 'center',
                   borderLeft: `3px solid ${colors.primary}`,
                 }}>
-                  <div style={{ fontSize: '1.2rem', fontWeight: 800, color: colors.primary }}>
+                  <div style={{ fontSize: isMobile ? '1rem' : '1.2rem', fontWeight: 800, color: colors.primary }}>
                     {popupContent.weightings.seed.value}
                   </div>
-                  <div style={{ fontSize: '0.8rem', color: colors.muted }}>
+                  <div style={{ fontSize: isMobile ? '0.7rem' : '0.8rem', color: colors.muted }}>
                     {popupContent.weightings.seed.description}
                   </div>
                 </div>
                 <div style={{
                   background: colors.light,
                   borderRadius: '10px',
-                  padding: '16px',
+                  padding: isMobile ? '12px' : '16px',
                   textAlign: 'center',
                   borderLeft: `3px solid ${colors.secondary}`,
                 }}>
-                  <div style={{ fontSize: '1.2rem', fontWeight: 800, color: colors.secondary }}>
+                  <div style={{ fontSize: isMobile ? '1rem' : '1.2rem', fontWeight: 800, color: colors.secondary }}>
                     {popupContent.weightings.growth.value}
                   </div>
-                  <div style={{ fontSize: '0.8rem', color: colors.muted }}>
+                  <div style={{ fontSize: isMobile ? '0.7rem' : '0.8rem', color: colors.muted }}>
                     {popupContent.weightings.growth.description}
                   </div>
                 </div>
                 <div style={{
                   background: colors.light,
                   borderRadius: '10px',
-                  padding: '16px',
+                  padding: isMobile ? '12px' : '16px',
                   textAlign: 'center',
                   borderLeft: `3px solid ${colors.amber}`,
                 }}>
-                  <div style={{ fontSize: '1.2rem', fontWeight: 800, color: colors.amber }}>
+                  <div style={{ fontSize: isMobile ? '1rem' : '1.2rem', fontWeight: 800, color: colors.amber }}>
                     {popupContent.weightings.maturity.value}
                   </div>
-                  <div style={{ fontSize: '0.8rem', color: colors.muted }}>
+                  <div style={{ fontSize: isMobile ? '0.7rem' : '0.8rem', color: colors.muted }}>
                     {popupContent.weightings.maturity.description}
                   </div>
                 </div>
@@ -1127,7 +1146,7 @@ const BIGScorePage = () => {
             {popupContent.subComponents && popupContent.subComponents.length > 0 && (
               <div style={{ marginBottom: '24px' }}>
                 <h3 style={{
-                  fontSize: '1rem',
+                  fontSize: '0.9rem',
                   fontWeight: 700,
                   color: colors.dark,
                   marginBottom: '12px',
@@ -1136,8 +1155,8 @@ const BIGScorePage = () => {
                 </h3>
                 <div style={{
                   display: 'grid',
-                  gridTemplateColumns: 'repeat(2, 1fr)',
-                  gap: '12px',
+                  gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, 1fr)',
+                  gap: isMobile ? '8px' : '12px',
                 }}>
                   {popupContent.subComponents.map((sub, index) => (
                     <div
@@ -1145,12 +1164,12 @@ const BIGScorePage = () => {
                       style={{
                         background: colors.light,
                         borderRadius: '10px',
-                        padding: '16px',
+                        padding: isMobile ? '12px' : '16px',
                         borderTop: `2px solid ${popupContent.color || colors.primary}`,
                       }}
                     >
                       <h4 style={{
-                        fontSize: '0.85rem',
+                        fontSize: isMobile ? '0.8rem' : '0.85rem',
                         fontWeight: 700,
                         color: colors.dark,
                         marginBottom: '4px',
@@ -1158,7 +1177,7 @@ const BIGScorePage = () => {
                         {sub.title}
                       </h4>
                       <p style={{
-                        fontSize: '0.75rem',
+                        fontSize: isMobile ? '0.7rem' : '0.75rem',
                         color: colors.muted,
                         margin: '0 0 8px',
                         lineHeight: 1.4,
@@ -1171,11 +1190,11 @@ const BIGScorePage = () => {
                           flexWrap: 'wrap',
                           gap: '4px',
                         }}>
-                          {sub.items.slice(0, 4).map((item, i) => (
+                          {sub.items.slice(0, isMobile ? 3 : 4).map((item, i) => (
                             <span
                               key={i}
                               style={{
-                                fontSize: '0.65rem',
+                                fontSize: '0.6rem',
                                 background: `${popupContent.color || colors.primary}15`,
                                 color: popupContent.color || colors.primary,
                                 padding: '2px 8px',
@@ -1186,12 +1205,12 @@ const BIGScorePage = () => {
                               {item}
                             </span>
                           ))}
-                          {sub.items.length > 4 && (
+                          {sub.items.length > (isMobile ? 3 : 4) && (
                             <span style={{
-                              fontSize: '0.65rem',
+                              fontSize: '0.6rem',
                               color: colors.muted,
                             }}>
-                              +{sub.items.length - 4} more
+                              +{sub.items.length - (isMobile ? 3 : 4)} more
                             </span>
                           )}
                         </div>
@@ -1206,7 +1225,7 @@ const BIGScorePage = () => {
             {popupContent.scoreInterpretation && (
               <div style={{ marginBottom: '24px' }}>
                 <h3 style={{
-                  fontSize: '1rem',
+                  fontSize: '0.9rem',
                   fontWeight: 700,
                   color: colors.dark,
                   marginBottom: '12px',
@@ -1219,16 +1238,17 @@ const BIGScorePage = () => {
                   <table style={{
                     width: '100%',
                     borderCollapse: 'collapse',
-                    fontSize: '0.85rem',
+                    fontSize: isMobile ? '0.75rem' : '0.85rem',
+                    minWidth: isMobile ? '500px' : 'auto',
                   }}>
                     <thead>
                       <tr style={{
                         background: colors.dark,
                         color: colors.white,
                       }}>
-                        <th style={{ padding: '10px 14px', textAlign: 'left' }}>Score Range</th>
-                        <th style={{ padding: '10px 14px', textAlign: 'left' }}>Level</th>
-                        <th style={{ padding: '10px 14px', textAlign: 'left' }}>Description</th>
+                        <th style={{ padding: isMobile ? '8px 10px' : '10px 14px', textAlign: 'left' }}>Score Range</th>
+                        <th style={{ padding: isMobile ? '8px 10px' : '10px 14px', textAlign: 'left' }}>Level</th>
+                        <th style={{ padding: isMobile ? '8px 10px' : '10px 14px', textAlign: 'left' }}>Description</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1240,11 +1260,11 @@ const BIGScorePage = () => {
                             borderBottom: `1px solid ${colors.border}`,
                           }}
                         >
-                          <td style={{ padding: '10px 14px', fontWeight: 600 }}>{item.range}</td>
-                          <td style={{ padding: '10px 14px', fontWeight: 600, color: popupContent.color || colors.primary }}>
+                          <td style={{ padding: isMobile ? '8px 10px' : '10px 14px', fontWeight: 600 }}>{item.range}</td>
+                          <td style={{ padding: isMobile ? '8px 10px' : '10px 14px', fontWeight: 600, color: popupContent.color || colors.primary }}>
                             {item.level}
                           </td>
-                          <td style={{ padding: '10px 14px', color: colors.muted }}>{item.description}</td>
+                          <td style={{ padding: isMobile ? '8px 10px' : '10px 14px', color: colors.muted }}>{item.description}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -1257,10 +1277,10 @@ const BIGScorePage = () => {
             <div style={{
               background: colors.light,
               borderRadius: '10px',
-              padding: '16px',
+              padding: isMobile ? '12px' : '16px',
             }}>
               <h3 style={{
-                fontSize: '0.9rem',
+                fontSize: '0.85rem',
                 fontWeight: 700,
                 color: colors.dark,
                 marginBottom: '4px',
@@ -1268,7 +1288,7 @@ const BIGScorePage = () => {
                 Calculation Method
               </h3>
               <p style={{
-                fontSize: '0.85rem',
+                fontSize: isMobile ? '0.8rem' : '0.85rem',
                 color: colors.muted,
                 lineHeight: 1.6,
                 margin: 0,
@@ -1298,14 +1318,21 @@ const BIGScorePage = () => {
         }
         ::-webkit-scrollbar-track {
           background: ${colors.light};
-          borderRadius: 3px;
+          border-radius: 3px;
         }
         ::-webkit-scrollbar-thumb {
           background: ${colors.secondary};
-          borderRadius: 3px;
+          border-radius: 3px;
         }
         ::-webkit-scrollbar-thumb:hover {
           background: ${colors.primary};
+        }
+
+        /* Mobile styles */
+        @media (max-width: 768px) {
+          .table-container {
+            overflow-x: auto;
+          }
         }
       `}</style>
     </div>
