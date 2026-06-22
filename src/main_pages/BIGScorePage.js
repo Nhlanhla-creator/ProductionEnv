@@ -2,13 +2,36 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from './Header';
 import Footer from './Footer';
+import { 
+  FaShieldAlt, 
+  FaCheckCircle, 
+  FaUserTie, 
+  FaBuilding, 
+  FaMoneyBillWave, 
+  FaChartLine, 
+  FaArrowRight, 
+  FaRocket,
+  FaStar,
+  FaUsers,
+  FaFileAlt,
+  FaSearch,
+  FaGlobe,
+  FaAward,
+  FaLightbulb,
+  FaChevronDown,
+  FaChevronUp,
+  FaTimes,
+  FaCertificate,
+  FaHandshake,
+  FaClipboardCheck
+} from 'react-icons/fa';
 
 const BIGScorePage = () => {
   const navigate = useNavigate();
   const [showPopup, setShowPopup] = useState(false);
   const [popupContent, setPopupContent] = useState(null);
   const [bannerLoaded, setBannerLoaded] = useState(false);
-  const [popupMode, setPopupMode] = useState('weightings');
+  const [expandedSections, setExpandedSections] = useState({});
 
   useEffect(() => {
     const timer = setTimeout(() => setBannerLoaded(true), 300);
@@ -16,13 +39,30 @@ const BIGScorePage = () => {
   }, []);
 
   const colors = {
-    primary: '#754A2D',
-    secondary: '#9E6E3C',
-    accent: '#D3C1B2',
-    light: '#F2F0E6',
-    dark: '#372C27',
-    text: '#372C27',
-    textLight: '#5A4E47'
+    primary: '#7C4D2A',
+    secondary: '#A0703E',
+    amber: '#D4894A',
+    light: '#F5F0E8',
+    cream: '#FAF7F2',
+    white: '#FFFFFF',
+    border: '#EAE2D8',
+    muted: '#7A6A5E',
+    dark: '#1C1410',
+    green: '#1E7A47',
+    greenBg: '#E4F4EB',
+    orange: '#E8831A',
+    orangeBg: '#FEF3E8',
+    red: '#BE3B2A',
+    redBg: '#FDE8E5',
+    blue: '#1D5FAA',
+    blueBg: '#E6EFF9',
+  };
+
+  const toggleSection = (id) => {
+    setExpandedSections(prev => ({
+      ...prev,
+      [id]: !prev[id]
+    }));
   };
 
   const scoreData = {
@@ -31,11 +71,13 @@ const BIGScorePage = () => {
       description: "The Score That Earns You Trust — Before You Even Pitch",
       components: [
         {
+          id: 'compliance',
           title: "Compliance Score",
-          description: <p><span style={{ fontWeight: 'bold' , color:'#754A2D'}}>What it tells us</span>:Whether a business meets core legal, regulatory, and tax requirements. </p>,
-          image: "https://img.icons8.com/ios-filled/100/754A2D/documents.png",
+          icon: <FaShieldAlt size={24} />,
+          color: colors.primary,
+          description: "Whether a business meets core legal, regulatory, and tax requirements.",
           detailedDescription: "🧱 This is the foundation of your BIG Score — no compliance, no credibility.",
-          calculationMethod: "Our AI analyzes official documents, government records, and compliance certifications to verify your business's legal standing. We cross-reference multiple data sources to ensure accuracy and up-to-date information.",
+          calculationMethod: "Our AI analyzes official documents, government records, and compliance certifications to verify your business's legal standing.",
           weightings: {
             seed: { value: "20%", description: "Focus on basic legal compliance" },
             growth: { value: "15%", description: "Expanded regulatory requirements" },
@@ -45,45 +87,33 @@ const BIGScorePage = () => {
             {
               title: "Document Uploads",
               description: "Verification of required business documents",
-              detailedDescription: "We check for what is typically required for vendor registration, including CIPC registration, SARS tax compliance, VAT (if applicable), proof of business address, ownership documents, B-BBEE certification, bank account confirmation, and completion of the BIG profile.",
-              calculationMethod: "Automated verification with government registries and document validation",
-              weightings: {
-                seed: { value: "100%", description: "All documents weighted by importance" },
-                growth: { value: "100%", description: "All documents weighted by importance" },
-                maturity: { value: "100%", description: "All documents weighted by importance" }
-              },
               items: [
-                { name: "Business Registration Verified", weight: "13.3% (Seed), 16.6% (Growth), 16% (Maturity)" },
-                { name: "Tax Compliance confirmed", weight: "19% (Seed), 22.2% (Growth), 19% (Maturity)" },
-                { name: "VAT compliance verified", weight: "9.5% (Seed), 7.4% (Growth), 9.5% (Maturity)" },
-                { name: "Proof of Business Address", weight: "4.8% (Seed), 3.7% (Growth), 4.8% (Maturity)" },
-                { name: "Director identities verified", weight: "9.5% (Seed), 7.4% (Growth), 4.8% (Maturity)" },
-                { name: "Ownership structure verified", weight: "9.5% (Seed), 7.4% (Growth), 4.8% (Maturity)" },
-                { name: "BBBEE certificate valid", weight: "14.3% (Seed), 14.8% (Growth), 19% (Maturity)" },
-                { name: "Bank Account valid", weight: "9.5% (Seed), 11.1% (Growth), 9.5% (Maturity)" },
-                { name: "Company Letterhead", weight: "4.8% (Seed), 3.7% (Growth), 4.8% (Maturity)" },
-                { name: "COID", weight: "1% (Seed), 2% (Growth), 3% (Maturity)" }
+                "Business Registration Verified",
+                "Tax Compliance confirmed",
+                "VAT compliance verified",
+                "Proof of Business Address",
+                "Director identities verified",
+                "Ownership structure verified",
+                "BBBEE certificate valid",
+                "Bank Account valid",
+                "Company Letterhead",
+                "COID"
               ]
             },
             {
               title: "Profile Completion",
-              description: "Completeness of business profile information",
-              detailedDescription: "Assessment of how fully the business has completed all mandatory fields in the universal profile.",
-              calculationMethod: "Automated checks of profile completion percentage",
-              weightings: {
-                seed: { value: "4.8%", description: "Basic profile required" },
-                growth: { value: "3.7%", description: "More detailed profile" },
-                maturity: { value: "4.8%", description: "Complete profile expected" }
-              }
+              description: "Completeness of business profile information"
             }
           ]
         },
         {
+          id: 'legitimacy',
           title: "Legitimacy Score",
-          description: <p><span style={{ fontWeight: 'bold' , color:'#754A2D'}}>What it tells us</span>:How professionally and credibly your business presents itself — from governance signals to digital presence and leadership transparency. </p>,
-          image: "https://img.icons8.com/ios-filled/100/754A2D/verified-account.png",
+          icon: <FaCheckCircle size={24} />,
+          color: colors.secondary,
+          description: "How professionally and credibly your business presents itself.",
           detailedDescription: "🎯 Funders look beyond paperwork. This score shows you mean business.",
-          calculationMethod: "We evaluate digital footprint, customer reviews, media presence, and partnership history. Our natural language processing analyzes sentiment and consistency across multiple platforms.",
+          calculationMethod: "We evaluate digital footprint, customer reviews, media presence, and partnership history.",
           weightings: {
             seed: { value: "20%", description: "Basic legitimacy checks" },
             growth: { value: "15%", description: "Expanded track record evaluation" },
@@ -92,78 +122,44 @@ const BIGScorePage = () => {
           subComponents: [
             {
               title: "Foundational Business Identity",
-              description: "Professional website, domain email, branded materials, registered address",
-              detailedDescription: "Evaluation of professional website (active, secure, mobile-friendly), domain email (vs Gmail), branded materials (logo, pitch deck, business profile), and registered business address that matches compliance docs.",
-              calculationMethod: "Automated checks and manual review where needed",
-              weightings: {
-                seed: { value: "25%", description: "Basic identity required" },
-                growth: { value: "20%", description: "More professional identity" },
-                maturity: { value: "15%", description: "Full professional identity" }
-              }
+              description: "Professional website, domain email, branded materials",
+              items: ["Professional Website", "Domain Email", "Branded Materials", "Registered Address"]
             },
             {
               title: "Digital Presence & Discoverability",
               description: "Website, social media, searchability",
-              detailedDescription: "Assessment of digital presence and how easily the business can be found online through searches.",
-              calculationMethod: "Automated web scraping and search engine analysis",
-              weightings: {
-                seed: { value: "20%", description: "Basic digital presence" },
-                growth: { value: "15%", description: "Established digital presence" },
-                maturity: { value: "10%", description: "Strong digital presence" }
-              }
+              items: ["Website Presence", "Social Media Activity", "Search Visibility"]
             },
             {
               title: "Track Record Indicators",
-              description: "Years in operation, client portfolio, repeat clients, turnover history",
-              detailedDescription: "Evaluation of years in operation, past client/project portfolio, repeat clients or retainer contracts, and turnover history or financials.",
-              calculationMethod: "Analysis of business history and client references",
-              weightings: {
-                seed: { value: "15%", description: "Limited history acceptable" },
-                growth: { value: "20%", description: "Some track record expected" },
-                maturity: { value: "25%", description: "Proven track record required" }
-              }
+              description: "Years in operation, client portfolio, repeat clients",
+              items: ["Years in Operation", "Client Portfolio", "Repeat Clients", "Turnover History"]
             },
             {
               title: "Third-Party Validations",
               description: "Accreditations, memberships, awards, media features",
-              detailedDescription: "Assessment of accreditations or certifications, membership in professional bodies, business awards or media features, and reference letters or testimonials.",
-              calculationMethod: "Verification through third-party databases and manual review",
-              weightings: {
-                seed: { value: "10%", description: "Not required" },
-                growth: { value: "15%", description: "Some validation helpful" },
-                maturity: { value: "20%", description: "Validation expected" }
-              }
+              items: ["Accreditations", "Professional Memberships", "Awards", "Media Features"]
             },
             {
               title: "Reputation and Social Proof",
               description: "Online reviews, testimonials, press mentions",
-              detailedDescription: "Evaluation of positive online reviews, testimonials or case studies from clients, and mentions in press, awards, or recognitions.",
-              calculationMethod: "Sentiment analysis across review platforms",
-              weightings: {
-                seed: { value: "10%", description: "Limited reviews acceptable" },
-                growth: { value: "15%", description: "Some positive reputation" },
-                maturity: { value: "15%", description: "Strong reputation" }
-              }
+              items: ["Online Reviews", "Testimonials", "Press Mentions"]
             },
             {
               title: "Team & Leadership",
               description: "Visible leadership team, LinkedIn presence, team growth",
-              detailedDescription: "Assessment of visible leadership team (bios on website/LinkedIn), LinkedIn presence for founders/key staff, and active hiring or team growth.",
-              calculationMethod: "Analysis of leadership profiles and team growth metrics",
-              weightings: {
-                seed: { value: "20%", description: "Founding team visibility" },
-                growth: { value: "15%", description: "Developing team structure" },
-                maturity: { value: "15%", description: "Professional team expected" }
-              }
+              items: ["Leadership Visibility", "LinkedIn Presence", "Team Growth"]
             }
           ]
         },
         {
+          id: 'leadership',
           title: "Leadership Score",
-          description: <p><span style={{ fontWeight: 'bold' , color:'#754A2D'}}>What it tells us</span>: The leadership capabilities and experience of business owners and key executives.</p>,
-          image: "https://img.icons8.com/ios-filled/100/754A2D/conference.png",
+          icon: <FaUserTie size={24} />,
+          color: colors.amber,
+          description: "The leadership capabilities and experience of business owners and key executives.",
           detailedDescription: "👑 This score assesses readiness to lead teams, attract investment, and scale operations effectively.",
-          calculationMethod: "We analyze leadership profiles, management experience, team composition, and professional credentials using advanced AI assessment of leadership capabilities.",
+          calculationMethod: "We analyze leadership profiles, management experience, team composition, and professional credentials.",
           weightings: {
             seed: { value: "15%", description: "Founding team evaluation" },
             growth: { value: "20%", description: "Developing leadership structure" },
@@ -172,63 +168,41 @@ const BIGScorePage = () => {
           subComponents: [
             {
               title: "Leadership Experience",
-              description: "Years of management experience, positions held, business complexity managed",
-              detailedDescription: "Evaluation of leadership tenure, roles and responsibilities, and complexity of organizations managed.",
-              calculationMethod: "Analysis of leadership profiles and career history",
-              weightings: {
-                seed: { value: "32%", description: "Founder experience focus" },
-                growth: { value: "32%", description: "Management experience" },
-                maturity: { value: "32%", description: "Executive experience" }
-              }
+              description: "Years of management experience, positions held",
+              items: ["Management Tenure", "Leadership Roles", "Organizational Complexity"]
             },
             {
               title: "Team Management",
-              description: "Scale of teams led, organizational structure, revenue management success",
-              detailedDescription: "Assessment of team size management, organizational complexity, and revenue responsibility.",
-              calculationMethod: "Evaluation of management scope and team leadership",
-              weightings: {
-                seed: { value: "28%", description: "Small team management" },
-                growth: { value: "28%", description: "Growing team management" },
-                maturity: { value: "28%", description: "Large team management" }
-              }
+              description: "Scale of teams led, organizational structure",
+              items: ["Team Size Managed", "Organizational Structure", "Revenue Responsibility"]
             },
             {
               title: "Recognition & Education",
-              description: "Educational qualifications, certifications, awards, industry recognition",
-              detailedDescription: "Assessment of formal education, professional certifications, industry awards, and recognition.",
-              calculationMethod: "Verification of credentials and achievements",
-              weightings: {
-                seed: { value: "20%", description: "Basic qualifications" },
-                growth: { value: "20%", description: "Professional development" },
-                maturity: { value: "20%", description: "Advanced credentials" }
-              }
+              description: "Educational qualifications, certifications, awards",
+              items: ["Formal Education", "Professional Certifications", "Industry Awards"]
             },
             {
               title: "Team & Leadership Visibility",
-              description: "Professional profiles, leadership visibility, team composition credibility",
-              detailedDescription: "Evaluation of leadership team visibility, professional online presence, and team composition.",
-              calculationMethod: "Analysis of leadership visibility and team structure",
-              weightings: {
-                seed: { value: "20%", description: "Founder visibility" },
-                growth: { value: "20%", description: "Leadership team visibility" },
-                maturity: { value: "20%", description: "Executive team credibility" }
-              }
+              description: "Professional profiles, leadership visibility",
+              items: ["Professional Profiles", "Leadership Visibility", "Team Composition"]
             }
           ],
           scoreInterpretation: [
-            { range: "91-100%", level: "Visionary Leadership", description: "Proven ability to lead complex organizations with strategic foresight" },
-            { range: "81-90%", level: "Seasoned Leadership", description: "Excellent management strength and inspiring organizational leadership" },
-            { range: "61-80%", level: "Rising Leadership", description: "Strong foundations with clear potential for scaling influence and impact" },
-            { range: "41-60%", level: "Developing Leadership", description: "Growing experience with opportunities to strengthen leadership depth" },
-            { range: "0-40%", level: "Foundational Stage Leadership", description: "Building the capabilities and credibility needed to inspire teams and investors" }
+            { range: "91-100%", level: "Visionary Leadership", description: "Proven ability to lead complex organizations" },
+            { range: "81-90%", level: "Seasoned Leadership", description: "Excellent management strength" },
+            { range: "61-80%", level: "Rising Leadership", description: "Strong foundations with clear potential" },
+            { range: "41-60%", level: "Developing Leadership", description: "Growing experience" },
+            { range: "0-40%", level: "Foundational Leadership", description: "Building capabilities" }
           ]
         },
         {
+          id: 'governance',
           title: "Governance Score",
-          description: <p><span style={{ fontWeight: 'bold' , color:'#754A2D'}}>What it tells us</span>: Whether a business is ready to establish or improve its governance structures.</p>,
-          image: "https://img.icons8.com/ios-filled/100/754A2D/government-building.png",
-          detailedDescription: "🏛️ This score combines Public Interest Score with governance maturity assessment for comprehensive oversight evaluation.",
-          calculationMethod: "We assess board structure, strategic planning, risk management, transparency practices, and policy frameworks using AI analysis of governance documentation.",
+          icon: <FaBuilding size={24} />,
+          color: colors.green,
+          description: "Whether a business is ready to establish or improve its governance structures.",
+          detailedDescription: "🏛️ This score combines Public Interest Score with governance maturity assessment.",
+          calculationMethod: "We assess board structure, strategic planning, risk management, transparency practices, and policy frameworks.",
           weightings: {
             seed: { value: "15%", description: "Basic governance evaluation" },
             growth: { value: "20%", description: "Developing governance structures" },
@@ -237,74 +211,46 @@ const BIGScorePage = () => {
           subComponents: [
             {
               title: "Board Structure & Functionality",
-              description: "Composition, roles, and effectiveness of board or advisory structure",
-              detailedDescription: "Evaluation of governance oversight suitable for business size and complexity.",
-              calculationMethod: "Review of board composition, charters, and meeting effectiveness",
-              weightings: {
-                seed: { value: "25%", description: "Advisory stage governance" },
-                growth: { value: "25%", description: "Emerging board stage" },
-                maturity: { value: "25%", description: "Full board stage" }
-              }
+              description: "Composition, roles, and effectiveness",
+              items: ["Board Composition", "Role Clarity", "Meeting Effectiveness"]
             },
             {
               title: "Strategic Planning",
-              description: "Long-term vision, business plans, decision-making processes",
-              detailedDescription: "Assessment of strategic direction clarity and performance review processes.",
-              calculationMethod: "Analysis of business plans and strategic documentation",
-              weightings: {
-                seed: { value: "20%", description: "Basic planning" },
-                growth: { value: "20%", description: "Developing strategy" },
-                maturity: { value: "20%", description: "Mature planning" }
-              }
+              description: "Long-term vision, business plans",
+              items: ["Strategic Direction", "Business Planning", "Performance Review"]
             },
             {
               title: "Risk Management",
-              description: "Risk identification, assessment, mitigation, and crisis preparedness",
-              detailedDescription: "Evaluation of business risk management and continuity planning.",
-              calculationMethod: "Review of risk frameworks and business continuity plans",
-              weightings: {
-                seed: { value: "20%", description: "Basic risk awareness" },
-                growth: { value: "20%", description: "Developing risk management" },
-                maturity: { value: "20%", description: "Comprehensive risk framework" }
-              }
+              description: "Risk identification, assessment, mitigation",
+              items: ["Risk Framework", "Business Continuity", "Crisis Preparedness"]
             },
             {
               title: "Transparency & Reporting",
-              description: "Financial reporting, stakeholder communication, disclosure standards",
-              detailedDescription: "Assessment of reporting quality and frequency to stakeholders.",
-              calculationMethod: "Evaluation of reporting practices and stakeholder communications",
-              weightings: {
-                seed: { value: "20%", description: "Basic reporting" },
-                growth: { value: "20%", description: "Developing transparency" },
-                maturity: { value: "20%", description: "Advanced reporting" }
-              }
+              description: "Financial reporting, stakeholder communication",
+              items: ["Financial Reporting", "Stakeholder Communications", "Disclosure Standards"]
             },
             {
               title: "Policies & Documentation",
-              description: "Essential business policies, employment contracts, compliance documentation",
-              detailedDescription: "Review of policy framework completeness and legal protection measures.",
-              calculationMethod: "Analysis of policy documentation and legal frameworks",
-              weightings: {
-                seed: { value: "15%", description: "Basic policies" },
-                growth: { value: "15%", description: "Developing policy framework" },
-                maturity: { value: "15%", description: "Comprehensive policies" }
-              }
+              description: "Essential business policies, employment contracts",
+              items: ["Policy Framework", "Employment Contracts", "Compliance Documentation"]
             }
           ],
           scoreInterpretation: [
-            { range: "91-100%", level: "Governance Excellence", description: "Exceptional governance maturity with comprehensive structures and robust oversight" },
-            { range: "81-90%", level: "Strong Governance", description: "Well-established governance framework with effective oversight mechanisms" },
-            { range: "61-80%", level: "Developing Governance", description: "Good governance foundations with room for refinement in oversight structures" },
-            { range: "41-60%", level: "Emerging Governance", description: "Basic governance elements with significant gaps needing addressing" },
-            { range: "0-40%", level: "Foundational Stage", description: "Governance structures require substantial development and implementation" }
+            { range: "91-100%", level: "Governance Excellence", description: "Exceptional governance maturity" },
+            { range: "81-90%", level: "Strong Governance", description: "Well-established governance framework" },
+            { range: "61-80%", level: "Developing Governance", description: "Good foundations with room for refinement" },
+            { range: "41-60%", level: "Emerging Governance", description: "Basic elements with significant gaps" },
+            { range: "0-40%", level: "Foundational Stage", description: "Structures require substantial development" }
           ]
         },
         {
+          id: 'capital',
           title: "Capital Appeal Score",
-          description: <p><span style={{ fontWeight: 'bold' , color:'#754A2D'}}>What it tells us</span>: How attractive a business is to potential investors and lenders.</p>,
-          image: "https://img.icons8.com/ios-filled/100/754A2D/money-bag.png",
-          detailedDescription: "💰 This score evaluates investment readiness and risk profile across critical funding decision factors.",
-          calculationMethod: "Financial statements are analyzed using machine learning models that compare your metrics with industry benchmarks. We assess growth trends, revenue models, and market potential.",
+          icon: <FaMoneyBillWave size={24} />,
+          color: colors.orange,
+          description: "How attractive a business is to potential investors and lenders.",
+          detailedDescription: "💰 This score evaluates investment readiness and risk profile.",
+          calculationMethod: "Financial statements are analyzed using machine learning models that compare your metrics with industry benchmarks.",
           weightings: {
             seed: { value: "30%", description: "Early-stage investment appeal" },
             growth: { value: "30%", description: "Growth-stage funding potential" },
@@ -313,86 +259,49 @@ const BIGScorePage = () => {
           subComponents: [
             {
               title: "Financial Readiness",
-              description: "Accounting systems, compliance, up-to-date financial records",
-              detailedDescription: "Assessment of financial management systems and compliance status.",
-              calculationMethod: "Evaluation of accounting systems and financial compliance",
-              weightings: {
-                seed: { value: "25%", description: "Basic systems" },
-                growth: { value: "20%", description: "Established systems" },
-                maturity: { value: "15%", description: "Professional systems" }
-              }
+              description: "Accounting systems, compliance, up-to-date records",
+              items: ["Accounting Systems", "Financial Compliance", "Record Keeping"]
             },
             {
               title: "Financial Strength",
               description: "Revenue growth, profitability, audited financials",
-              detailedDescription: "Evaluation of financial performance and stability metrics.",
-              calculationMethod: "Analysis of financial statements and growth trends",
-              weightings: {
-                seed: { value: "20%", description: "Early metrics" },
-                growth: { value: "25%", description: "Growing metrics" },
-                maturity: { value: "30%", description: "Strong metrics" }
-              }
+              items: ["Revenue Growth", "Profitability", "Audited Financials"]
             },
             {
               title: "Operational Strength",
               description: "Business processes, infrastructure, operational maturity",
-              detailedDescription: "Assessment of operational efficiency and business model strength.",
-              calculationMethod: "Evaluation of operational systems and processes",
-              weightings: {
-                seed: { value: "20%", description: "Basic operations" },
-                growth: { value: "20%", description: "Developing operations" },
-                maturity: { value: "15%", description: "Mature operations" }
-              }
+              items: ["Operational Efficiency", "Business Model Strength", "Infrastructure"]
             },
             {
               title: "Impact Proof",
-              description: "Job creation, HDG inclusion, environmental responsibility, CSR investment",
-              detailedDescription: "Assessment of social and environmental impact metrics.",
-              calculationMethod: "Analysis of impact documentation and sustainability practices",
-              weightings: {
-                seed: { value: "15%", description: "Early impact" },
-                growth: { value: "15%", description: "Growing impact" },
-                maturity: { value: "20%", description: "Mature impact" }
-              }
+              description: "Job creation, HDG inclusion, environmental responsibility",
+              items: ["Job Creation", "HDG Inclusion", "Environmental Impact"]
             },
             {
               title: "Pitch & Business Plan Quality",
-              description: "Investment narrative clarity, market analysis, competitive advantage",
-              detailedDescription: "Evaluation of business plan quality and investment pitch effectiveness.",
-              calculationMethod: "AI assessment of business plans and pitch materials",
-              weightings: {
-                seed: { value: "10%", description: "Basic pitch" },
-                growth: { value: "10%", description: "Developing pitch" },
-                maturity: { value: "10%", description: "Professional pitch" }
-              }
+              description: "Investment narrative clarity, market analysis",
+              items: ["Business Plan Quality", "Market Analysis", "Competitive Advantage"]
             },
             {
               title: "Guarantees & Security",
               description: "Forward contracts, payment guarantees, asset-backed security",
-              detailedDescription: "Assessment of financial guarantees and security arrangements.",
-              calculationMethod: "Evaluation of guarantee documentation and security arrangements",
-              weightings: {
-                seed: { value: "10%", description: "Limited guarantees" },
-                growth: { value: "10%", description: "Some guarantees" },
-                maturity: { value: "10%", description: "Strong guarantees" }
-              }
+              items: ["Forward Contracts", "Payment Guarantees", "Asset Security"]
             }
           ],
           scoreInterpretation: [
-            { range: "91-100%", level: "Highly Fundable", description: "Exceptional investment opportunity with strong financials and operations" },
-            { range: "81-90%", level: "Strong Investment Case", description: "Very attractive to funders with solid performance metrics" },
-            { range: "61-80%", level: "Moderate Potential", description: "Some areas need strengthening but shows promise" },
-            { range: "41-60%", level: "Basic Potential", description: "Significant improvements needed across multiple areas" },
-            { range: "0-40%", level: "Needs Development", description: "Fundamental changes required to attract investment" }
+            { range: "91-100%", level: "Highly Fundable", description: "Exceptional investment opportunity" },
+            { range: "81-90%", level: "Strong Investment Case", description: "Very attractive to funders" },
+            { range: "61-80%", level: "Moderate Potential", description: "Shows promise with some improvements" },
+            { range: "41-60%", level: "Basic Potential", description: "Significant improvements needed" },
+            { range: "0-40%", level: "Needs Development", description: "Fundamental changes required" }
           ]
         }
       ]
     }
   };
 
-  const openPopup = (content, mode = 'weightings') => {
+  const openPopup = (content) => {
     setPopupContent(content);
-    setPopupMode(mode);
     setShowPopup(true);
     document.body.style.overflow = 'hidden';
   };
@@ -403,832 +312,644 @@ const BIGScorePage = () => {
     document.body.style.overflow = 'auto';
   };
 
-  const ScoreBox = ({ component, index, openPopup }) => {
-    const componentImages = {
-      "Compliance Score": "https://thumbs.dreamstime.com/b/compliance-rules-law-regulation-policy-business-technology-concept-compliance-rules-law-regulation-policy-business-technology-112471593.jpg",
-      "Legitimacy Score": "https://thekyb.com/wp-content/uploads/Business-Verification_-Navigating-the-Path-to-Ensure-Company-Legitimacy.jpg",
-      "Leadership Score": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSmaC4ABRZh3z2sU4tvYq8TTcVv-l0-xAGtXQ&s",
-      "Governance Score": "https://media.istockphoto.com/id/639198068/photo/business-people-finding-solution-together-at-office.jpg?s=612x612&w=0&k=20&c=apxfQgMQ4KfWvTxdtyefbxIRiK0DVk7lFr4GbGSniR8=",
-      "Capital Appeal Score": "https://c0.wallpaperflare.com/preview/98/565/296/gosclf0t64k3vi9o2podgkh1ev.jpg"
-    };
-
-    // Extract the short name for the button text
-    const getShortName = (title) => {
-      if (title.includes("Compliance")) return "Compliance";
-      if (title.includes("Legitimacy")) return "Legitimacy";
-      if (title.includes("Leadership")) return "Leadership";
-      if (title.includes("Governance")) return "Governance";
-      if (title.includes("Capital")) return "Capital";
-      return title;
-    };
-
-    const shortName = getShortName(component.title);
+  const ScoreCard = ({ component }) => {
+    const [isHovered, setIsHovered] = useState(false);
 
     return (
-      <div style={{
-        backgroundColor: '#FFFFFF',
-        borderRadius: '16px',
-        padding: '20px',
-        boxShadow: '0 8px 30px rgba(117, 74, 45, 0.1)',
-        borderTop: '5px solid #9E6E3C',
-        height: '100%',
-        display: 'flex',
-        flexDirection: 'column',
-        transition: 'all 0.3s ease'
-      }}
-      onMouseOver={(e) => {
-        e.target.style.transform = 'translateY(-5px)';
-        e.target.style.boxShadow = '0 12px 35px rgba(117, 74, 45, 0.15)';
-      }}
-      onMouseOut={(e) => {
-        e.target.style.transform = 'translateY(0)';
-        e.target.style.boxShadow = '0 8px 30px rgba(117, 74, 45, 0.1)';
-      }}
+      <div
+        style={{
+          backgroundColor: colors.white,
+          borderRadius: '16px',
+          padding: '20px 18px',
+          boxShadow: isHovered 
+            ? '0 12px 40px rgba(28,20,16,0.15)' 
+            : '0 4px 20px rgba(28,20,16,0.06)',
+          borderTop: `4px solid ${component.color}`,
+          transition: 'all 0.3s ease',
+          cursor: 'pointer',
+          height: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+        }}
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+        onClick={() => openPopup(component)}
       >
         <div style={{
           display: 'flex',
-          alignItems: 'flex-start',
-          gap: '15px',
-          marginBottom: '15px',
-          flex: 1
+          alignItems: 'center',
+          gap: '10px',
+          marginBottom: '10px'
         }}>
-          <img
-            src={component.image}
-            alt={component.title}
-            style={{
-              width: '40px',
-              height: '40px',
-              objectFit: 'contain'
-            }}
-            onError={(e) => {
-              // Fallback if image fails to load
-              e.target.src = "https://img.icons8.com/ios-filled/100/754A2D/image.png";
-            }}
-          />
-          <div>
-            <h4 style={{ 
-              color: '#754A2D',
-              fontSize: '1.1rem',
-              fontWeight: '700',
-              margin: '0 0 8px 0'
-            }}>
-              {component.title}
-            </h4>
-            <p style={{ 
-              color: '#555',
-              lineHeight: '1.5',
-              fontSize: '0.9rem'
-            }}>
-              {component.description}
-            </p>
+          <div style={{
+            width: '40px',
+            height: '40px',
+            borderRadius: '10px',
+            background: `${component.color}15`,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: component.color,
+            flexShrink: 0,
+          }}>
+            {component.icon}
+          </div>
+          <h3 style={{
+            fontSize: '0.85rem',
+            fontWeight: 700,
+            color: colors.dark,
+            margin: 0,
+            lineHeight: 1.2,
+          }}>
+            {component.title}
+          </h3>
+        </div>
+
+        <p style={{
+          fontSize: '0.78rem',
+          color: colors.muted,
+          lineHeight: 1.5,
+          margin: '0 0 12px 0',
+          flex: 1,
+        }}>
+          {component.description}
+        </p>
+
+        <div style={{
+          display: 'flex',
+          gap: '4px',
+          flexWrap: 'wrap',
+          marginBottom: '12px',
+        }}>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
+            background: `${component.color}10`,
+            padding: '3px 8px',
+            borderRadius: '16px',
+            fontSize: '0.6rem',
+            fontWeight: 600,
+            color: component.color,
+          }}>
+            <span>Seed: {component.weightings.seed.value}</span>
+          </div>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
+            background: `${component.color}10`,
+            padding: '3px 8px',
+            borderRadius: '16px',
+            fontSize: '0.6rem',
+            fontWeight: 600,
+            color: component.color,
+          }}>
+            <span>Growth: {component.weightings.growth.value}</span>
+          </div>
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
+            background: `${component.color}10`,
+            padding: '3px 8px',
+            borderRadius: '16px',
+            fontSize: '0.6rem',
+            fontWeight: 600,
+            color: component.color,
+          }}>
+            <span>Mature: {component.weightings.maturity.value}</span>
           </div>
         </div>
-        
-        <div style={{
-          borderTop: '1px solid #D3C1B2',
-          paddingTop: '12px',
-          marginBottom: '15px',
-          display: 'flex',
-          flexDirection: 'column',
-          gap: '12px'
-        }}>
-          <img 
-            src={componentImages[component.title]} 
-            alt={component.title}
-            style={{
-              width: '100%',
-              height: '120px',
-              objectFit: 'cover',
-              borderRadius: '8px'
-            }}
-            onError={(e) => {
-              // Fallback if image fails to load
-              e.target.src = "https://via.placeholder.com/300x120/754A2D/FFFFFF?text=" + component.title;
-            }}
-          />
-          <p style={{
-            fontSize: '0.85rem',
-            color: '#666',
-            lineHeight: '1.5'
-          }}>
-            {component.detailedDescription.split('. ')[0] + '.'}
-          </p>
-        </div>
-        
-        <div style={{
-          display: 'flex',
-          gap: '8px',
-          flexWrap: 'wrap'
-        }}>
-          <button 
-            onClick={() => openPopup({
-              ...component,
-              scoreTitle: "BIG Score Components",
-              rubric: [
-                { score: "Seed/Pre-seed", criteria: component.weightings.seed.value + " weighting" },
-                { score: "Growth Stage", criteria: component.weightings.growth.value + " weighting" },
-                { score: "Mature Stage", criteria: component.weightings.maturity.value + " weighting" }
-              ],
-              weightings: component.weightings
-            }, 'weightings')}
-            style={{
-              backgroundColor: 'transparent',
-              color: '#9E6E3C',
-              border: '2px solid #9E6E3C',
-              padding: '8px 12px',
-              borderRadius: '8px',
-              fontSize: '0.8rem',
-              fontWeight: '600',
-              cursor: 'pointer',
-              transition: 'all 0.3s ease',
-              flex: 1,
-              minWidth: '100px'
-            }}
-            onMouseOver={(e) => {
-              e.target.style.backgroundColor = '#9E6E3C';
-              e.target.style.color = 'white';
-            }}
-            onMouseOut={(e) => {
-              e.target.style.backgroundColor = 'transparent';
-              e.target.style.color = '#9E6E3C';
-            }}
-          >
-            View Weightings
-          </button>
-          <button 
-            onClick={() => openPopup({
-              ...component,
-              scoreTitle: "BIG Score Components",
-              calculationMethod: component.calculationMethod,
-              subComponents: component.subComponents,
-              rubric: [
-                { score: "Seed/Pre-seed", criteria: component.weightings.seed.value + " weighting" },
-                { score: "Growth Stage", criteria: component.weightings.growth.value + " weighting" },
-                { score: "Mature Stage", criteria: component.weightings.maturity.value + " weighting" }
-              ],
-              weightings: component.weightings
-            }, 'calculation')}
-            style={{
-              backgroundColor: '#F2F0E6',
-              color: '#754A2D',
-              border: '2px solid #F2F0E6',
-              padding: '8px 12px',
-              borderRadius: '8px',
-              fontSize: '0.8rem',
-              fontWeight: '600',
-              cursor: 'pointer',
-              transition: 'all 0.3s ease',
-              flex: 1,
-              minWidth: '100px'
-            }}
-            onMouseOver={(e) => {
-              e.target.style.backgroundColor = '#E0D8C8';
-              e.target.style.borderColor = '#E0D8C8';
-            }}
-            onMouseOut={(e) => {
-              e.target.style.backgroundColor = '#F2F0E6';
-              e.target.style.borderColor = '#F2F0E6';
-            }}
-          >
-            See How {shortName} is Calculated
-          </button>
-        </div>
+
+        <button
+          style={{
+            marginTop: 'auto',
+            background: `linear-gradient(135deg, ${component.color}, ${component.color}dd)`,
+            color: colors.white,
+            border: 'none',
+            borderRadius: '8px',
+            padding: '8px 14px',
+            fontSize: '0.75rem',
+            fontWeight: 600,
+            cursor: 'pointer',
+            transition: 'all 0.3s ease',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '6px',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.transform = 'translateY(-2px)';
+            e.currentTarget.style.boxShadow = `0 4px 15px ${component.color}40`;
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.transform = 'translateY(0)';
+            e.currentTarget.style.boxShadow = 'none';
+          }}
+          onClick={(e) => {
+            e.stopPropagation();
+            openPopup(component);
+          }}
+        >
+          Learn More <FaArrowRight size={10} />
+        </button>
       </div>
     );
   };
 
   return (
-    <div style={{ 
-      background: 'linear-gradient(#F2F0E6, #AA9889, #754A2D)',
-      backgroundSize: 'cover',
-      backgroundAttachment: 'fixed',
-      fontFamily: "'Poppins', sans-serif",
-      color: '#372C27',
-      lineHeight: 1.6,
-      letterSpacing: '0.3px'
+    <div style={{
+      background: colors.light,
+      fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
+      minHeight: '100vh',
     }}>
-      <style>
-        {`
-          @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap');
-          
-          @keyframes fadeInUp {
-            from {
-              opacity: 0;
-              transform: translateY(20px);
-            }
-            to {
-              opacity: 1;
-              transform: translateY(0);
-            }
-          }
-        `}
-      </style>
-      
-      <div style={{ minHeight: '100vh' }}>
-        <Header />
-        
-        {/* Hero Banner */}
+      <Header />
+
+      {/* Hero Banner */}
+      <section style={{
+        position: 'relative',
+        padding: '80px 20px 60px',
+        background: `linear-gradient(135deg, ${colors.dark} 0%, ${colors.primary} 100%)`,
+        overflow: 'hidden',
+      }}>
         <div style={{
-          backgroundImage: 'linear-gradient(rgba(117, 74, 45, 0.85), rgba(55, 44, 39, 0.85)), url("https://images.unsplash.com/photo-1450101499163-c8848c66ca85?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80")',
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundImage: 'url(https://images.unsplash.com/photo-1450101499163-c8848c66ca85?w=1400&h=600&fit=crop&crop=center)',
           backgroundSize: 'cover',
           backgroundPosition: 'center',
-          padding: '100px 20px',
-          textAlign: 'center',
-          color: '#F2F0E6',
-          marginBottom: '60px',
+          opacity: 0.15,
+        }} />
+        
+        <div style={{
+          position: 'absolute',
+          top: -100,
+          right: -100,
+          width: 400,
+          height: 400,
+          borderRadius: '50%',
+          background: `radial-gradient(circle, ${colors.amber}30, transparent)`,
+          pointerEvents: 'none',
+        }} />
+        
+        <div style={{
+          position: 'absolute',
+          bottom: -80,
+          left: -80,
+          width: 300,
+          height: 300,
+          borderRadius: '50%',
+          background: `radial-gradient(circle, ${colors.secondary}30, transparent)`,
+          pointerEvents: 'none',
+        }} />
+
+        <div style={{
+          maxWidth: '1100px',
+          margin: '0 auto',
           position: 'relative',
-          overflow: 'hidden',
-          clipPath: 'polygon(0 0, 100% 0, 100% 90%, 0 100%)'
+          zIndex: 1,
+          opacity: bannerLoaded ? 1 : 0,
+          transform: bannerLoaded ? 'translateY(0)' : 'translateY(30px)',
+          transition: 'opacity 0.8s ease, transform 0.8s ease',
         }}>
           <div style={{
-            position: 'relative',
-            zIndex: 2,
-            opacity: bannerLoaded ? 1 : 0,
-            transform: bannerLoaded ? 'translateY(0)' : 'translateY(50px)',
-            transition: 'opacity 0.8s ease-out, transform 0.8s ease-out',
-            maxWidth: '1200px',
-            margin: '0 auto'
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '10px',
+            background: `${colors.amber}25`,
+            border: `1px solid ${colors.amber}40`,
+            borderRadius: '30px',
+            padding: '6px 16px 6px 10px',
+            marginBottom: '20px',
           }}>
-            <h1 style={{
-              fontSize: 'clamp(2.5rem, 5vw, 4rem)',
-              fontWeight: '800',
-              marginBottom: '25px',
-              letterSpacing: '1px',
-              textShadow: '2px 2px 8px rgba(0,0,0,0.3)',
-              lineHeight: 1.2
+            <span style={{
+              width: 8,
+              height: 8,
+              borderRadius: '50%',
+              background: colors.amber,
+              display: 'inline-block',
+            }} />
+            <span style={{
+              color: colors.amber,
+              fontSize: '0.75rem',
+              fontWeight: 700,
+              letterSpacing: '0.08em',
+              textTransform: 'uppercase',
             }}>
-              <span style={{ 
-                display: 'inline-block',
-                background: 'linear-gradient(90deg, #F2F0E6, #D3C1B2)',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent'
-              }}>
-                The BIG SCORE
-              </span>
-            </h1>
-            <p style={{
-              fontSize: 'clamp(1rem, 2vw, 1.5rem)',
-              maxWidth: '800px',
-              margin: '0 auto 40px',
-              lineHeight: '1.6',
-              textShadow: '1px 1px 3px rgba(0,0,0,0.3)'
-            }}>
-              The Score That Earns You Trust — Before You Even Pitch
-            </p>
+              Your Business Credibility Score
+            </span>
+          </div>
+
+          <h1 style={{
+            fontSize: 'clamp(2.2rem, 5vw, 3.5rem)',
+            fontWeight: 900,
+            color: colors.white,
+            margin: '0 0 16px',
+            lineHeight: 1.1,
+            letterSpacing: '-0.02em',
+          }}>
+            The <span style={{ color: colors.amber }}>BIG Score</span>
+          </h1>
+
+          <p style={{
+            fontSize: 'clamp(1rem, 1.5vw, 1.2rem)',
+            color: 'rgba(255,255,255,0.7)',
+            maxWidth: '600px',
+            lineHeight: 1.7,
+            margin: '0 0 32px',
+          }}>
+            The Score That Earns You Trust — Before You Even Pitch. 
+            One number that tells funders, partners, and programs everything they need to know about your business readiness.
+          </p>
+
+          <div style={{
+            display: 'flex',
+            gap: '16px',
+            flexWrap: 'wrap',
+          }}>
             <button
               onClick={() => navigate('/LoginRegister')}
               style={{
-                backgroundColor: '#9E6E3C',
-                color: 'white',
+                background: `linear-gradient(135deg, ${colors.amber}, ${colors.secondary})`,
+                color: colors.white,
                 border: 'none',
-                padding: '16px 50px',
-                borderRadius: '30px',
-                fontSize: '1.1rem',
-                fontWeight: '600',
-                cursor: 'pointer',
-                boxShadow: '0 4px 8px rgba(0,0,0,0.2)',
-                transition: 'all 0.3s ease'
-              }}
-              onMouseOver={(e) => {
-                e.target.style.transform = 'translateY(-3px)';
-                e.target.style.boxShadow = '0 10px 20px rgba(0,0,0,0.2)';
-                e.target.style.backgroundColor = '#754A2D';
-              }}
-              onMouseOut={(e) => {
-                e.target.style.transform = 'translateY(0)';
-                e.target.style.boxShadow = '0 4px 8px rgba(0,0,0,0.2)';
-                e.target.style.backgroundColor = '#9E6E3C';
-              }}
-            >
-              Get your score now
-            </button>
-          </div>
-        </div>
-        
-        <div style={{ 
-          width: '90%', 
-          maxWidth: '1400px',
-          margin: '0 auto', 
-          paddingBottom: '60px' 
-        }}>
-          
-          {/* What is BIG Score Section */}
-          <div style={{ 
-            backgroundColor: 'white',
-            padding: '40px',
-            borderRadius: '20px',
-            boxShadow: '0 10px 30px rgba(0,0,0,0.08)',
-            marginBottom: '40px'
-          }}>
-            <h2 style={{ 
-              color: '#754A2D', 
-              fontSize: 'clamp(1.5rem, 3vw, 2.2rem)',
-              fontWeight: '700',
-              marginBottom: '20px',
-              textAlign: 'center'
-            }}>
-              What Makes the BIG Score... BIG?
-            </h2>
-            
-            <div style={{ 
-              display: 'flex',
-              justifyContent: 'center',
-              gap: '20px',
-              flexWrap: 'wrap',
-              marginBottom: '20px'
-            }}>
-              {[
-                {
-                  icon: '🧱',
-                  title: "Business Credibility Score",
-                  description: "A standardized score that validates your business's readiness and trustworthiness — across compliance, governance, and legitimacy."
-                },
-                {
-                  icon: '📈',
-                  title: "Growth Roadmap",
-                  description: "Highlights strengths, flags risks, and reveals what you need to improve to unlock capital, customers, or partners."
-                },
-                {
-                  icon: '🛡',
-                  title: "Risk Assessment for Funders",
-                  description: "Enables investors and partners to filter out unqualified businesses — and make data-backed decisions with confidence."
-                }
-              ].map((item, index) => (
-                <div key={index} style={{
-                  backgroundColor: '#F2F0E6',
-                  padding: '20px',
-                  borderRadius: '12px',
-                  width: '250px',
-                  textAlign: 'center',
-                  boxShadow: '0 5px 15px rgba(0,0,0,0.05)',
-                  borderTop: '3px solid #9E6E3C',
-                  transition: 'transform 0.3s ease'
-                }}
-                onMouseOver={(e) => {
-                  e.target.style.transform = 'translateY(-5px)';
-                }}
-                onMouseOut={(e) => {
-                  e.target.style.transform = 'translateY(0)';
-                }}
-                >
-                  <div style={{
-                    width: '50px',
-                    height: '50px',
-                    backgroundColor: '#754A2D',
-                    borderRadius: '50%',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    margin: '0 auto 15px',
-                    color: '#F2F0E6',
-                    fontSize: '1.3rem'
-                  }}>
-                    {item.icon}
-                  </div>
-                  <h3 style={{
-                    fontWeight: '600',
-                    color: '#372C27',
-                    fontSize: '1rem',
-                    marginBottom: '8px'
-                  }}>{item.title}</h3>
-                  <p style={{ 
-                    color: '#555',
-                    fontSize: '0.9rem'
-                  }}>{item.description}</p>
-                </div>
-              ))}
-            </div>
-            
-            <p style={{ 
-              fontSize: '1rem',
-              lineHeight: '1.6',
-              maxWidth: '800px',
-              margin: '20px auto 0',
-              textAlign: 'center',
-              fontStyle: 'italic',
-              color: '#754A2D'
-            }}>
-              The BIG Score is more than a number — it's your passport to funders, partners, and opportunity
-            </p>
-
-            <div style={{
-              backgroundColor: '#F2F0E6',
-              padding: '25px',
-              borderRadius: '12px',
-              marginTop: '30px',
-              borderLeft: '4px solid #9E6E3C'
-            }}>
-              <p style={{
-                fontSize: '1rem',
-                lineHeight: '1.7',
-                color: '#372C27',
-                textAlign: 'center',
-                margin: 0
-              }}>
-                <strong>Consumer finance has TransUnion and Experian</strong> — global systems (like FICO in the US) that measure personal creditworthiness.<br />
-                <strong>Corporates have Moody's, Fitch, and S&P</strong> — rating frameworks that measure institutional risk<br />
-                <strong>SMEs have "The BIG Score"</strong> — a shared metric that lets funders, corporates, and partners speak the same language of readiness and reliability
-              </p>
-            </div>
-          </div>
-
-          {/* BIG Score Components Section */}
-          <div style={{ 
-            backgroundColor: '#754A2D',
-            padding: '60px',
-            borderRadius: '20px',
-            boxShadow: '0 10px 30px rgba(0,0,0,0.08)',
-            marginBottom: '60px',
-            backgroundImage: 'radial-gradient(circle at 20% 50%, rgba(158, 110, 60, 0.8) 0%, rgba(117, 74, 45, 0.9) 100%)'
-          }}>
-            <h2 style={{ 
-              color: '#F2F0E6', 
-              fontSize: 'clamp(1.8rem, 3vw, 2.5rem)',
-              fontWeight: '700',
-              marginBottom: '25px',
-              textAlign: 'center'
-            }}>
-              What Makes Up Your BIG Score?
-            </h2>
-            <p style={{
-              fontSize: '1.1rem',
-              lineHeight: '1.6',
-              maxWidth: '800px',
-              margin: '0 auto 40px',
-              textAlign: 'center',
-              color: '#F2F0E6'
-            }}>
-              Our AI-powered framework scores every SME across <strong>five core dimensions</strong> — giving funders, partners, and programs a complete view of business readiness.
-            </p>
-            
-            {/* Top Row - 3 Cards */}
-            <div style={{ 
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-              gap: '30px',
-              marginBottom: '30px'
-            }}>
-              {scoreData.bigScore.components.slice(0, 3).map((component, index) => (
-                <ScoreBox 
-                  key={index}
-                  component={component}
-                  index={index}
-                  openPopup={openPopup}
-                />
-              ))}
-            </div>
-            
-            {/* Bottom Row - 2 Cards */}
-            <div style={{ 
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
-              gap: '30px'
-            }}>
-              {scoreData.bigScore.components.slice(3, 5).map((component, index) => (
-                <ScoreBox 
-                  key={index}
-                  component={component}
-                  index={index}
-                  openPopup={openPopup}
-                />
-              ))}
-            </div>
-            
-          </div>
-
-          {/* Why BIG Score Works Section */}
-          <div style={{ 
-            backgroundColor: 'white',
-            padding: '40px',
-            borderRadius: '20px',
-            boxShadow: '0 10px 30px rgba(0,0,0,0.08)',
-            marginBottom: '40px'
-          }}>
-            <h2 style={{ 
-              color: '#372C27', 
-              fontSize: 'clamp(1.5rem, 3vw, 2rem)',
-              fontWeight: '700',
-              textAlign: 'center',
-              marginBottom: '30px'
-            }}>
-              Why the BIG Score Works
-            </h2>
-            
-            <div style={{ 
-              display: 'flex',
-              justifyContent: 'center',
-              gap: '20px',
-              flexWrap: 'wrap'
-            }}>
-              {/* Problems Column */}
-              <div style={{ 
-                backgroundColor: '#F2F0E6',
-                padding: '20px',
-                borderRadius: '16px',
-                width: '48%',
-                minWidth: '300px'
-              }}>
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '12px',
-                  marginBottom: '20px'
-                }}>
-                  <img 
-                    src="https://img.icons8.com/ios-filled/100/9E6E3C/warning-shield.png" 
-                    alt="Problems" 
-                    style={{ width: '40px' }}
-                  />
-                  <h3 style={{ 
-                    fontSize: '1.2rem',
-                    fontWeight: '700',
-                    color: '#754A2D',
-                    margin: 0
-                  }}>Traditional Challenges</h3>
-                </div>
-                
-                <div style={{ display: 'grid', gap: '15px' }}>
-                  {[
-                    {
-                      icon: '❌',
-                      title: "Subjective Judgement",
-                      desc: "Unstructured interviews. Inconsistent criteria. Unconscious bias."
-                    },
-                    {
-                      icon: '❌',
-                      title: "Static Reports",
-                      desc: "PDF-based. Instantly outdated. No live progress tracking."
-                    },
-                    {
-                      icon: '❌',
-                      title: "Opaque Criteria",
-                      desc: "No visibility into what's being scored — or why."
-                    },
-                    {
-                      icon: '❌',
-                      title: "Manual Admin",
-                      desc: "Slow. Inconsistent. Prone to error and reviewer fatigue."
-                    }
-                  ].map((item, index) => (
-                    <div key={index} style={{ 
-                      display: 'flex',
-                      alignItems: 'flex-start',
-                      gap: '10px',
-                      padding: '15px',
-                      backgroundColor: 'rgba(255,255,255,0.7)',
-                      borderRadius: '12px'
-                    }}>
-                      <span style={{ 
-                        color: '#9E6E3C', 
-                        fontSize: '1.2rem',
-                        marginTop: '2px'
-                      }}>{item.icon}</span>
-                      <div>
-                        <h4 style={{ 
-                          color: '#754A2D',
-                          fontSize: '1rem',
-                          fontWeight: '600',
-                          marginBottom: '5px'
-                        }}>{item.title}</h4>
-                        <p style={{ 
-                          color: '#555',
-                          fontSize: '0.9rem',
-                          lineHeight: '1.5'
-                        }}>{item.desc}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-              
-              {/* Solutions Column */}
-              <div style={{ 
-                backgroundColor: '#9E6E3C',
-                padding: '20px',
-                borderRadius: '16px',
-                width: '48%',
-                minWidth: '300px',
-                color: '#F2F0E6'
-              }}>
-                <div style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '12px',
-                  marginBottom: '20px'
-                }}>
-                  <img 
-                    src="https://img.icons8.com/ios-filled/100/FFFFFF/artificial-intelligence.png" 
-                    alt="Solutions" 
-                    style={{ width: '40px' }}
-                  />
-                  <h3 style={{ 
-                    fontSize: '1.2rem',
-                    fontWeight: '700',
-                    margin: 0
-                  }}>BIG Score Solutions</h3>
-                </div>
-                
-                <div style={{ display: 'grid', gap: '15px' }}>
-                  {[
-                    {
-                      icon: '✅',
-                      title: "AI-Driven Objectivity",
-                      desc: "Removes bias. Uses consistent, validated metrics."
-                    },
-                    {
-                      icon: '✅',
-                      title: "Live Score Tracking",
-                      desc: "See performance evolve over time — not just once."
-                    },
-                    {
-                      icon: '✅',
-                      title: "Transparent Weightings",
-                      desc: "Know what matters. Know what to improve."
-                    },
-                    {
-                      icon: '✅',
-                      title: "Automated Verification",
-                      desc: "Fast, consistent, and auditable vetting process."
-                    }
-                  ].map((item, index) => (
-                    <div key={index} style={{ 
-                      display: 'flex',
-                      alignItems: 'flex-start',
-                      gap: '10px',
-                      padding: '15px',
-                      backgroundColor: 'rgba(255,255,255,0.1)',
-                      borderRadius: '12px'
-                    }}>
-                      <span style={{ 
-                        color: '#F2F0E6', 
-                        fontSize: '1.2rem',
-                        marginTop: '2px'
-                      }}>{item.icon}</span>
-                      <div>
-                        <h4 style={{ 
-                          fontSize: '1rem',
-                          fontWeight: '600',
-                          marginBottom: '5px'
-                        }}>{item.title}</h4>
-                        <p style={{ 
-                          fontSize: '0.9rem',
-                          lineHeight: '1.5'
-                        }}>{item.desc}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Get Your BIG Score Today */}
-          <div style={{ 
-            backgroundColor: '#754A2D',
-            padding: '60px 40px',
-            borderRadius: '20px',
-            textAlign: 'center',
-            color: '#F2F0E6',
-            boxShadow: '0 15px 40px rgba(117, 74, 45, 0.3)',
-            marginBottom: '40px',
-            backgroundImage: 'radial-gradient(circle at 20% 50%, rgba(158, 110, 60, 0.8) 0%, rgba(117, 74, 45, 0.9) 100%)'
-          }}>
-            <h2 style={{ 
-              fontSize: 'clamp(1.8rem, 3vw, 2.5rem)',
-              fontWeight: '800',
-              marginBottom: '20px'
-            }}>Get Your BIG Score Today</h2>
-            
-            <div style={{ 
-              display: 'flex',
-              justifyContent: 'center',
-              gap: '20px',
-              marginBottom: '40px',
-              flexWrap: 'wrap'
-            }}>
-              {[
-                { 
-                  number: 1, 
-                  title: "Onboard", 
-                  desc: "Create your profile. Upload documents. Takes less than 10 minutes." 
-                },
-                { 
-                  number: 2, 
-                  title: "Evaluate", 
-                  desc: "Our AI + analyst engine calculates your BIG Score — instantly." 
-                },
-                { 
-                  number: 3, 
-                  title: "Improve", 
-                  desc: "Get a personalized improvement plan to boost fundability." 
-                },
-                { 
-                  number: 4, 
-                  title: "Connect", 
-                  desc: "Unlock funders, advisors, corporates, and programs aligned to your score." 
-                }
-              ].map((step, index) => (
-                <div key={index} style={{
-                  width: '22%',
-                  minWidth: '200px',
-                  textAlign: 'center'
-                }}>
-                  <div style={{
-                    width: '60px',
-                    height: '60px',
-                    backgroundColor: '#F2F0E6',
-                    borderRadius: '50%',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    margin: '0 auto 15px',
-                    color: '#754A2D',
-                    fontSize: '1.5rem',
-                    fontWeight: 'bold',
-                    boxShadow: '0 5px 15px rgba(0,0,0,0.1)'
-                  }}>
-                    {step.number}
-                  </div>
-                  <h3 style={{ 
-                    fontWeight: '700',
-                    fontSize: '1.1rem',
-                    marginBottom: '10px'
-                  }}>{step.title}</h3>
-                  <p style={{ 
-                    fontSize: '0.95rem',
-                    lineHeight: '1.5'
-                  }}>{step.desc}</p>
-                </div>
-              ))}
-            </div>
-            
-            <div style={{ 
-              display: 'flex',
-              justifyContent: 'center',
-              gap: '20px',
-              marginBottom: '20px',
-              flexWrap: 'wrap'
-            }}>
-              <button 
-                onClick={() => navigate('/LoginRegister')}
-                style={{ 
-                  backgroundColor: '#372C27',
-                  color: 'white',
-                  border: 'none',
-                  padding: '15px 40px',
-                  borderRadius: '30px',
-                  fontSize: '1rem',
-                  fontWeight: '600',
-                  cursor: 'pointer',
-                  transition: 'all 0.3s ease',
-                  boxShadow: '0 5px 15px rgba(0,0,0,0.2)'
-                }}
-                onMouseOver={(e) => {
-                  e.target.style.backgroundColor = '#1E1915';
-                  e.target.style.transform = 'translateY(-3px)';
-                  e.target.style.boxShadow = '0 8px 20px rgba(0,0,0,0.3)';
-                }}
-                onMouseOut={(e) => {
-                  e.target.style.backgroundColor = '#372C27';
-                  e.target.style.transform = 'translateY(0)';
-                  e.target.style.boxShadow = '0 5px 15px rgba(0,0,0,0.2)';
-                }}
-              >
-                Get Started Now
-              </button>
-              <button style={{ 
-                backgroundColor: '#F2F0E6',
-                color: '#372C27',
-                border: 'none',
-                padding: '15px 40px',
-                borderRadius: '30px',
-                fontSize: '1rem',
-                fontWeight: '600',
+                borderRadius: '50px',
+                padding: '14px 36px',
+                fontSize: '0.95rem',
+                fontWeight: 700,
                 cursor: 'pointer',
                 transition: 'all 0.3s ease',
-                boxShadow: '0 5px 15px rgba(0,0,0,0.1)'
+                boxShadow: `0 4px 20px ${colors.amber}40`,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '10px',
               }}
-              onMouseOver={(e) => {
-                e.target.style.backgroundColor = '#E0D8C8';
-                e.target.style.transform = 'translateY(-3px)';
-                e.target.style.boxShadow = '0 8px 20px rgba(0,0,0,0.2)';
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = 'translateY(-2px)';
+                e.currentTarget.style.boxShadow = `0 8px 30px ${colors.amber}50`;
               }}
-              onMouseOut={(e) => {
-                e.target.style.backgroundColor = '#F2F0E6';
-                e.target.style.transform = 'translateY(0)';
-                e.target.style.boxShadow = '0 5px 15px rgba(0,0,0,0.1)';
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = `0 4px 20px ${colors.amber}40`;
               }}
-              >
-                See Sample Report
-              </button>
+            >
+              Get Your BIG Score Now <FaArrowRight size={14} />
+            </button>
+            <button
+              style={{
+                background: 'rgba(255,255,255,0.1)',
+                color: colors.white,
+                border: `1px solid rgba(255,255,255,0.2)`,
+                borderRadius: '50px',
+                padding: '14px 36px',
+                fontSize: '0.95rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+                transition: 'all 0.3s ease',
+                backdropFilter: 'blur(8px)',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'rgba(255,255,255,0.2)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'rgba(255,255,255,0.1)';
+              }}
+            >
+              See Sample Report
+            </button>
+          </div>
+
+          <div style={{
+            display: 'flex',
+            gap: '32px',
+            marginTop: '32px',
+            flexWrap: 'wrap',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <FaCheckCircle size={16} color={colors.amber} />
+              <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem' }}>
+                AI-Powered Assessment
+              </span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <FaStar size={16} color={colors.amber} />
+              <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem' }}>
+                5 Key Dimensions
+              </span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <FaUsers size={16} color={colors.amber} />
+              <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem' }}>
+                Trusted by 500+ SMEs
+              </span>
             </div>
           </div>
         </div>
-        
-        <Footer />
+      </section>
+
+      {/* Main Content */}
+      <div style={{
+        maxWidth: '1100px',
+        margin: '0 auto',
+        padding: '40px 20px 60px',
+      }}>
+
+        {/* What is BIG Score Section - With Real Images */}
+        <section style={{
+          backgroundColor: colors.white,
+          borderRadius: '20px',
+          padding: '40px',
+          marginBottom: '40px',
+          boxShadow: '0 4px 20px rgba(28,20,16,0.06)',
+        }}>
+          <h2 style={{
+            fontSize: 'clamp(1.5rem, 2.5vw, 2rem)',
+            fontWeight: 800,
+            color: colors.dark,
+            textAlign: 'center',
+            marginBottom: '12px',
+            letterSpacing: '-0.01em',
+          }}>
+            What Makes the <span style={{ color: colors.primary }}>BIG Score</span>... BIG?
+          </h2>
+          <p style={{
+            textAlign: 'center',
+            color: colors.muted,
+            fontSize: '0.95rem',
+            maxWidth: '600px',
+            margin: '0 auto 32px',
+            lineHeight: 1.6,
+          }}>
+            A standardized score that validates your business's readiness and trustworthiness — across compliance, governance, and legitimacy.
+          </p>
+
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(3, 1fr)',
+            gap: '20px',
+          }}>
+            {[
+              {
+                image: 'https://images.unsplash.com/photo-1552664730-d307ca884978?w=400&h=300&fit=crop&crop=center',
+                title: 'Business Credibility',
+                description: 'Validates your business readiness and trustworthiness across all key dimensions.',
+                color: colors.primary,
+              },
+              {
+                image: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=400&h=300&fit=crop&crop=center',
+                title: 'Growth Roadmap',
+                description: 'Highlights strengths, flags risks, and reveals what you need to improve.',
+                color: colors.secondary,
+              },
+              {
+                image: 'https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?w=400&h=300&fit=crop&crop=center',
+                title: 'Risk Assessment',
+                description: 'Enables investors and partners to make data-backed decisions with confidence.',
+                color: colors.amber,
+              },
+            ].map((item, index) => (
+              <div
+                key={index}
+                style={{
+                  background: colors.white,
+                  borderRadius: '16px',
+                  overflow: 'hidden',
+                  boxShadow: '0 4px 20px rgba(28,20,16,0.08)',
+                  transition: 'transform 0.3s ease, box-shadow 0.3s ease',
+                  borderTop: `4px solid ${item.color}`,
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = 'translateY(-6px)';
+                  e.currentTarget.style.boxShadow = '0 12px 40px rgba(28,20,16,0.15)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = '0 4px 20px rgba(28,20,16,0.08)';
+                }}
+              >
+                <div style={{
+                  height: '180px',
+                  overflow: 'hidden',
+                }}>
+                  <img
+                    src={item.image}
+                    alt={item.title}
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'cover',
+                      transition: 'transform 0.5s ease',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.transform = 'scale(1.05)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.transform = 'scale(1)';
+                    }}
+                  />
+                </div>
+                <div style={{
+                  padding: '24px',
+                  textAlign: 'center',
+                }}>
+                  <h3 style={{
+                    fontSize: '1.1rem',
+                    fontWeight: 700,
+                    color: colors.dark,
+                    marginBottom: '8px',
+                  }}>
+                    {item.title}
+                  </h3>
+                  <p style={{
+                    fontSize: '0.85rem',
+                    color: colors.muted,
+                    lineHeight: 1.5,
+                    margin: 0,
+                  }}>
+                    {item.description}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div style={{
+            background: colors.light,
+            borderRadius: '12px',
+            padding: '24px',
+            marginTop: '24px',
+            borderLeft: `4px solid ${colors.amber}`,
+          }}>
+            <p style={{
+              fontSize: '0.95rem',
+              lineHeight: 1.7,
+              color: colors.dark,
+              margin: 0,
+              textAlign: 'center',
+            }}>
+              <strong>Consumer finance has TransUnion and Experian</strong> — global systems that measure personal creditworthiness.<br />
+              <strong>Corporates have Moody's, Fitch, and S&P</strong> — rating frameworks that measure institutional risk.<br />
+              <strong>SMEs have "The BIG Score"</strong> — a shared metric that lets funders, corporates, and partners speak the same language of readiness and reliability.
+            </p>
+          </div>
+        </section>
+
+        {/* Score Components Section - 5 cards in one row */}
+        <section style={{
+          backgroundColor: colors.dark,
+          borderRadius: '20px',
+          padding: '40px',
+          marginBottom: '40px',
+          backgroundImage: 'radial-gradient(circle at 20% 50%, rgba(160,112,62,0.15) 0%, transparent 70%)',
+        }}>
+          <h2 style={{
+            fontSize: 'clamp(1.5rem, 2.5vw, 2rem)',
+            fontWeight: 800,
+            color: colors.white,
+            textAlign: 'center',
+            marginBottom: '8px',
+            letterSpacing: '-0.01em',
+          }}>
+            What Makes Up Your <span style={{ color: colors.amber }}>BIG Score</span>?
+          </h2>
+          <p style={{
+            textAlign: 'center',
+            color: 'rgba(255,255,255,0.6)',
+            fontSize: '0.95rem',
+            maxWidth: '600px',
+            margin: '0 auto 32px',
+            lineHeight: 1.6,
+          }}>
+            Our AI-powered framework scores every SME across five core dimensions — giving funders, partners, and programs a complete view of business readiness.
+          </p>
+
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(5, 1fr)',
+            gap: '16px',
+          }}>
+            {scoreData.bigScore.components.map((component, index) => (
+              <ScoreCard key={index} component={component} />
+            ))}
+          </div>
+        </section>
+
+        {/* Why BIG Score Works Section */}
+        <section style={{
+          backgroundColor: colors.white,
+          borderRadius: '20px',
+          padding: '40px',
+          marginBottom: '40px',
+          boxShadow: '0 4px 20px rgba(28,20,16,0.06)',
+        }}>
+          <h2 style={{
+            fontSize: 'clamp(1.5rem, 2.5vw, 2rem)',
+            fontWeight: 800,
+            color: colors.dark,
+            textAlign: 'center',
+            marginBottom: '32px',
+            letterSpacing: '-0.01em',
+          }}>
+            Why the <span style={{ color: colors.primary }}>BIG Score</span> Works
+          </h2>
+
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(2, 1fr)',
+            gap: '24px',
+          }}>
+            {/* Problems */}
+            <div style={{
+              background: colors.redBg,
+              borderRadius: '16px',
+              padding: '24px',
+              border: `1px solid ${colors.red}30`,
+            }}>
+              <h3 style={{
+                fontSize: '1.1rem',
+                fontWeight: 700,
+                color: colors.red,
+                marginBottom: '16px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+              }}>
+                <span style={{ fontSize: '1.3rem' }}>✕</span> Traditional Challenges
+              </h3>
+              {[
+                'Subjective Judgement — Unstructured interviews, inconsistent criteria',
+                'Static Reports — PDF-based, instantly outdated',
+                'Opaque Criteria — No visibility into what\'s being scored',
+                'Manual Admin — Slow, inconsistent, prone to error'
+              ].map((item, index) => (
+                <div
+                  key={index}
+                  style={{
+                    padding: '12px 16px',
+                    background: 'rgba(255,255,255,0.6)',
+                    borderRadius: '8px',
+                    marginBottom: '8px',
+                    fontSize: '0.85rem',
+                    color: colors.dark,
+                    lineHeight: 1.4,
+                  }}
+                >
+                  {item}
+                </div>
+              ))}
+            </div>
+
+            {/* Solutions */}
+            <div style={{
+              background: colors.greenBg,
+              borderRadius: '16px',
+              padding: '24px',
+              border: `1px solid ${colors.green}30`,
+            }}>
+              <h3 style={{
+                fontSize: '1.1rem',
+                fontWeight: 700,
+                color: colors.green,
+                marginBottom: '16px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+              }}>
+                <span style={{ fontSize: '1.3rem' }}>✓</span> BIG Score Solutions
+              </h3>
+              {[
+                'AI-Driven Objectivity — Removes bias, uses consistent validated metrics',
+                'Live Score Tracking — See performance evolve over time',
+                'Transparent Weightings — Know what matters and what to improve',
+                'Automated Verification — Fast, consistent, and auditable process'
+              ].map((item, index) => (
+                <div
+                  key={index}
+                  style={{
+                    padding: '12px 16px',
+                    background: 'rgba(255,255,255,0.6)',
+                    borderRadius: '8px',
+                    marginBottom: '8px',
+                    fontSize: '0.85rem',
+                    color: colors.dark,
+                    lineHeight: 1.4,
+                  }}
+                >
+                  {item}
+                </div>
+              ))}
+            </div>
+          </div>
+        </section>
+
+      
       </div>
+
+      <Footer />
 
       {/* Popup Modal */}
       {showPopup && popupContent && (
@@ -1238,365 +959,355 @@ const BIGScorePage = () => {
           left: 0,
           width: '100%',
           height: '100%',
-          backgroundColor: 'rgba(55, 44, 39, 0.9)',
+          backgroundColor: 'rgba(28,20,16,0.8)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           zIndex: 1000,
-          backdropFilter: 'blur(5px)'
+          backdropFilter: 'blur(4px)',
+          padding: '20px',
         }}>
           <div style={{
-            backgroundColor: 'white',
+            backgroundColor: colors.white,
             borderRadius: '20px',
-            width: '90%',
-            maxWidth: popupMode === 'calculation' ? '1000px' : '800px',
+            width: '100%',
+            maxWidth: '900px',
             maxHeight: '90vh',
             overflowY: 'auto',
             padding: '40px',
-            boxShadow: '0 20px 50px rgba(0,0,0,0.3)',
+            boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
             position: 'relative',
-            animation: 'fadeInUp 0.5s ease-out'
+            animation: 'fadeInUp 0.3s ease-out',
           }}>
-            <button 
+            <button
               onClick={closePopup}
               style={{
                 position: 'absolute',
-                top: '20px',
-                right: '20px',
-                backgroundColor: 'transparent',
+                top: '16px',
+                right: '16px',
+                background: 'none',
                 border: 'none',
                 fontSize: '1.5rem',
                 cursor: 'pointer',
-                color: '#9E6E3C',
-                transition: 'all 0.3s ease'
+                color: colors.muted,
+                width: '40px',
+                height: '40px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                borderRadius: '50%',
+                transition: 'all 0.3s ease',
               }}
-              onMouseOver={(e) => {
-                e.target.style.transform = 'rotate(90deg)';
-                e.target.style.color = '#754A2D';
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = colors.light;
+                e.currentTarget.style.color = colors.dark;
               }}
-              onMouseOut={(e) => {
-                e.target.style.transform = 'rotate(0)';
-                e.target.style.color = '#9E6E3C';
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'transparent';
+                e.currentTarget.style.color = colors.muted;
               }}
             >
-              ×
+              <FaTimes size={20} />
             </button>
-            
-            <h2 style={{ 
-              color: '#754A2D',
-              fontSize: '1.8rem',
-              fontWeight: '700',
-              marginBottom: '10px'
+
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '16px',
+              marginBottom: '16px',
             }}>
-              {popupContent.scoreTitle} - {popupContent.title}
-            </h2>
-            
-            <p style={{ 
-              fontSize: '1.1rem',
-              lineHeight: '1.8',
-              marginBottom: '30px',
-              color: '#555'
+              <div style={{
+                width: '56px',
+                height: '56px',
+                borderRadius: '14px',
+                background: `${popupContent.color || colors.primary}15`,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: popupContent.color || colors.primary,
+                fontSize: '1.5rem',
+              }}>
+                {popupContent.icon}
+              </div>
+              <div>
+                <h2 style={{
+                  fontSize: '1.5rem',
+                  fontWeight: 800,
+                  color: colors.dark,
+                  margin: 0,
+                  letterSpacing: '-0.01em',
+                }}>
+                  {popupContent.title}
+                </h2>
+                <p style={{
+                  fontSize: '0.9rem',
+                  color: colors.muted,
+                  margin: '4px 0 0',
+                }}>
+                  {popupContent.description}
+                </p>
+              </div>
+            </div>
+
+            <p style={{
+              fontSize: '1rem',
+              lineHeight: 1.7,
+              color: colors.dark,
+              marginBottom: '24px',
+              padding: '16px',
+              background: colors.light,
+              borderRadius: '10px',
             }}>
               {popupContent.detailedDescription}
             </p>
-            
-            {popupMode === 'calculation' && popupContent.subComponents ? (
-              <div>
-                <h3 style={{ 
-                  color: '#9E6E3C',
-                  fontSize: '1.3rem',
-                  fontWeight: '600',
-                  marginBottom: '20px'
+
+            {/* Weightings */}
+            <div style={{
+              marginBottom: '24px',
+            }}>
+              <h3 style={{
+                fontSize: '1rem',
+                fontWeight: 700,
+                color: colors.dark,
+                marginBottom: '12px',
+              }}>
+                Weightings by Business Stage
+              </h3>
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(3, 1fr)',
+                gap: '12px',
+              }}>
+                <div style={{
+                  background: colors.light,
+                  borderRadius: '10px',
+                  padding: '16px',
+                  textAlign: 'center',
+                  borderLeft: `3px solid ${colors.primary}`,
                 }}>
-                  Component Details
+                  <div style={{ fontSize: '1.2rem', fontWeight: 800, color: colors.primary }}>
+                    {popupContent.weightings.seed.value}
+                  </div>
+                  <div style={{ fontSize: '0.8rem', color: colors.muted }}>
+                    {popupContent.weightings.seed.description}
+                  </div>
+                </div>
+                <div style={{
+                  background: colors.light,
+                  borderRadius: '10px',
+                  padding: '16px',
+                  textAlign: 'center',
+                  borderLeft: `3px solid ${colors.secondary}`,
+                }}>
+                  <div style={{ fontSize: '1.2rem', fontWeight: 800, color: colors.secondary }}>
+                    {popupContent.weightings.growth.value}
+                  </div>
+                  <div style={{ fontSize: '0.8rem', color: colors.muted }}>
+                    {popupContent.weightings.growth.description}
+                  </div>
+                </div>
+                <div style={{
+                  background: colors.light,
+                  borderRadius: '10px',
+                  padding: '16px',
+                  textAlign: 'center',
+                  borderLeft: `3px solid ${colors.amber}`,
+                }}>
+                  <div style={{ fontSize: '1.2rem', fontWeight: 800, color: colors.amber }}>
+                    {popupContent.weightings.maturity.value}
+                  </div>
+                  <div style={{ fontSize: '0.8rem', color: colors.muted }}>
+                    {popupContent.weightings.maturity.description}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Sub Components */}
+            {popupContent.subComponents && popupContent.subComponents.length > 0 && (
+              <div style={{ marginBottom: '24px' }}>
+                <h3 style={{
+                  fontSize: '1rem',
+                  fontWeight: 700,
+                  color: colors.dark,
+                  marginBottom: '12px',
+                }}>
+                  What We Evaluate
                 </h3>
-                
-                <div style={{ 
+                <div style={{
                   display: 'grid',
                   gridTemplateColumns: 'repeat(2, 1fr)',
-                  gap: '20px',
-                  marginBottom: '30px'
+                  gap: '12px',
                 }}>
-                  {popupContent.subComponents.map((component, index) => (
-                    <div key={index} style={{
-                      backgroundColor: '#F9F9F9',
-                      borderRadius: '12px',
-                      padding: '20px',
-                      borderLeft: '4px solid #9E6E3C'
-                    }}>
-                      <h4 style={{ 
-                        color: '#754A2D',
-                        fontSize: '1.1rem',
-                        fontWeight: '700',
-                        marginBottom: '10px'
+                  {popupContent.subComponents.map((sub, index) => (
+                    <div
+                      key={index}
+                      style={{
+                        background: colors.light,
+                        borderRadius: '10px',
+                        padding: '16px',
+                        borderTop: `2px solid ${popupContent.color || colors.primary}`,
+                      }}
+                    >
+                      <h4 style={{
+                        fontSize: '0.85rem',
+                        fontWeight: 700,
+                        color: colors.dark,
+                        marginBottom: '4px',
                       }}>
-                        {component.title}
+                        {sub.title}
                       </h4>
-                      <p style={{ 
-                        color: '#555',
-                        marginBottom: '15px',
-                        fontSize: '0.95rem'
+                      <p style={{
+                        fontSize: '0.75rem',
+                        color: colors.muted,
+                        margin: '0 0 8px',
+                        lineHeight: 1.4,
                       }}>
-                        {component.description}
+                        {sub.description}
                       </p>
-                      
-                      <div style={{ 
-                        backgroundColor: '#F2F0E6',
-                        padding: '15px',
-                        borderRadius: '8px'
-                      }}>
-                        <div style={{ 
+                      {sub.items && sub.items.length > 0 && (
+                        <div style={{
                           display: 'flex',
-                          justifyContent: 'space-between',
-                          marginBottom: '8px'
+                          flexWrap: 'wrap',
+                          gap: '4px',
                         }}>
-                          <span style={{ fontWeight: '600' }}>Early Stage:</span>
-                          <span>{component.weightings.seed.value}</span>
+                          {sub.items.slice(0, 4).map((item, i) => (
+                            <span
+                              key={i}
+                              style={{
+                                fontSize: '0.65rem',
+                                background: `${popupContent.color || colors.primary}15`,
+                                color: popupContent.color || colors.primary,
+                                padding: '2px 8px',
+                                borderRadius: '12px',
+                                fontWeight: 500,
+                              }}
+                            >
+                              {item}
+                            </span>
+                          ))}
+                          {sub.items.length > 4 && (
+                            <span style={{
+                              fontSize: '0.65rem',
+                              color: colors.muted,
+                            }}>
+                              +{sub.items.length - 4} more
+                            </span>
+                          )}
                         </div>
-                        <div style={{ 
-                          display: 'flex',
-                          justifyContent: 'space-between',
-                          marginBottom: '8px'
-                        }}>
-                          <span style={{ fontWeight: '600' }}>Growth Stage:</span>
-                          <span>{component.weightings.growth.value}</span>
-                        </div>
-                        <div style={{ 
-                          display: 'flex',
-                          justifyContent: 'space-between'
-                        }}>
-                          <span style={{ fontWeight: '600' }}>Mature Stage:</span>
-                          <span>{component.weightings.maturity.value}</span>
-                        </div>
-                      </div>
+                      )}
                     </div>
                   ))}
                 </div>
-                
-                {/* Score Interpretation Section for Leadership, Governance, and Capital Appeal */}
-                {(popupContent.title === "Leadership Score" || popupContent.title === "Governance Score" || popupContent.title === "Capital Appeal Score") && popupContent.scoreInterpretation && (
-                  <div style={{ 
-                    backgroundColor: '#F2F0E6',
-                    padding: '25px',
-                    borderRadius: '12px',
-                    marginBottom: '30px'
-                  }}>
-                    <h3 style={{ 
-                      color: '#754A2D',
-                      fontSize: '1.3rem',
-                      fontWeight: '600',
-                      marginBottom: '15px'
-                    }}>
-                      Score Interpretation
-                    </h3>
-                    <div style={{ 
-                      overflowX: 'auto'
-                    }}>
-                      <table style={{ 
-                        width: '100%',
-                        borderCollapse: 'collapse',
-                        borderRadius: '8px',
-                        overflow: 'hidden',
-                        boxShadow: '0 2px 10px rgba(0,0,0,0.1)'
-                      }}>
-                        <thead>
-                          <tr style={{ 
-                            backgroundColor: '#9E6E3C',
-                            color: 'white'
-                          }}>
-                            <th style={{ padding: '12px 15px', textAlign: 'left' }}>Score Range</th>
-                            <th style={{ padding: '12px 15px', textAlign: 'left' }}>Level</th>
-                            <th style={{ padding: '12px 15px', textAlign: 'left' }}>Description</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {popupContent.scoreInterpretation.map((item, index) => (
-                            <tr key={index} style={{ 
-                              backgroundColor: index % 2 === 0 ? 'white' : '#F9F9F9'
-                            }}>
-                              <td style={{ 
-                                padding: '12px 15px',
-                                fontWeight: '500',
-                                borderBottom: '1px solid #eee'
-                              }}>
-                                {item.range}
-                              </td>
-                              <td style={{ 
-                                padding: '12px 15px',
-                                fontWeight: '600',
-                                borderBottom: '1px solid #eee'
-                              }}>
-                                {item.level}
-                              </td>
-                              <td style={{ 
-                                padding: '12px 15px',
-                                borderBottom: '1px solid #eee'
-                              }}>
-                                {item.description}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
-                
-                <div style={{ 
-                  backgroundColor: '#F2F0E6',
-                  padding: '25px',
-                  borderRadius: '12px',
-                  marginBottom: '30px'
+              </div>
+            )}
+
+            {/* Score Interpretation */}
+            {popupContent.scoreInterpretation && (
+              <div style={{ marginBottom: '24px' }}>
+                <h3 style={{
+                  fontSize: '1rem',
+                  fontWeight: 700,
+                  color: colors.dark,
+                  marginBottom: '12px',
                 }}>
-                  <h3 style={{ 
-                    color: '#754A2D',
-                    fontSize: '1.3rem',
-                    fontWeight: '600',
-                    marginBottom: '15px'
+                  Score Interpretation
+                </h3>
+                <div style={{
+                  overflowX: 'auto',
+                }}>
+                  <table style={{
+                    width: '100%',
+                    borderCollapse: 'collapse',
+                    fontSize: '0.85rem',
                   }}>
-                    Calculation Method
-                  </h3>
-                  <p style={{ 
-                    fontSize: '1rem',
-                    lineHeight: '1.7',
-                    color: '#555'
-                  }}>
-                    {popupContent.calculationMethod}
-                  </p>
+                    <thead>
+                      <tr style={{
+                        background: colors.dark,
+                        color: colors.white,
+                      }}>
+                        <th style={{ padding: '10px 14px', textAlign: 'left' }}>Score Range</th>
+                        <th style={{ padding: '10px 14px', textAlign: 'left' }}>Level</th>
+                        <th style={{ padding: '10px 14px', textAlign: 'left' }}>Description</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {popupContent.scoreInterpretation.map((item, index) => (
+                        <tr
+                          key={index}
+                          style={{
+                            background: index % 2 === 0 ? colors.white : colors.light,
+                            borderBottom: `1px solid ${colors.border}`,
+                          }}
+                        >
+                          <td style={{ padding: '10px 14px', fontWeight: 600 }}>{item.range}</td>
+                          <td style={{ padding: '10px 14px', fontWeight: 600, color: popupContent.color || colors.primary }}>
+                            {item.level}
+                          </td>
+                          <td style={{ padding: '10px 14px', color: colors.muted }}>{item.description}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               </div>
-            ) : (
-              <>
-                <div style={{ marginBottom: '30px' }}>
-                  <h3 style={{ 
-                    color: '#9E6E3C',
-                    fontSize: '1.3rem',
-                    fontWeight: '600',
-                    marginBottom: '15px'
-                  }}>
-                    Scoring Criteria
-                  </h3>
-                  <div style={{ 
-                    overflowX: 'auto',
-                    marginBottom: '20px'
-                  }}>
-                    <table style={{ 
-                      width: '100%',
-                      borderCollapse: 'collapse',
-                      borderRadius: '8px',
-                      overflow: 'hidden',
-                      boxShadow: '0 2px 10px rgba(0,0,0,0.1)'
-                    }}>
-                      <thead>
-                        <tr style={{ 
-                          backgroundColor: '#9E6E3C',
-                          color: 'white'
-                        }}>
-                          <th style={{ padding: '12px 15px', textAlign: 'left' }}>Score</th>
-                          <th style={{ padding: '12px 15px', textAlign: 'left' }}>Criteria</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {popupContent.rubric.map((item, index) => (
-                          <tr key={index} style={{ 
-                            backgroundColor: index % 2 === 0 ? 'white' : '#F9F9F9'
-                          }}>
-                            <td style={{ 
-                              padding: '12px 15px',
-                              fontWeight: '500',
-                              borderBottom: '1px solid #eee'
-                            }}>
-                              {item.score}
-                            </td>
-                            <td style={{ 
-                              padding: '12px 15px',
-                              borderBottom: '1px solid #eee'
-                            }}>
-                              {item.criteria}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-                
-                <div style={{ 
-                  backgroundColor: '#F2F0E6',
-                  padding: '20px',
-                  borderRadius: '12px',
-                  marginBottom: '30px',
-                  border: '1px solid #D3D2CE'
-                }}>
-                  <h3 style={{ 
-                    color: '#754A2D',
-                    fontSize: '1.3rem',
-                    fontWeight: '600',
-                    marginBottom: '15px'
-                  }}>
-                    Weightings by Business Stage
-                  </h3>
-                  <div style={{ 
-                    display: 'flex',
-                    justifyContent: 'space-between',
-                    flexWrap: 'wrap',
-                    gap: '15px'
-                  }}>
-                    <div style={{ 
-                      backgroundColor: 'white',
-                      padding: '20px',
-                      borderRadius: '8px',
-                      flex: '1',
-                      minWidth: '150px',
-                      boxShadow: '0 2px 5px rgba(0,0,0,0.05)',
-                      borderLeft: '3px solid #9E6E3C'
-                    }}>
-                      <h4 style={{ 
-                        color: '#9E6E3C',
-                        fontWeight: '600',
-                        marginBottom: '5px'
-                      }}>Early Stage: {popupContent.weightings.seed.value}</h4>
-                      <p style={{ fontSize: '0.9rem' }}>{popupContent.weightings.seed.description}</p>
-                    </div>
-                    <div style={{ 
-                      backgroundColor: 'white',
-                      padding: '20px',
-                      borderRadius: '8px',
-                      flex: '1',
-                      minWidth: '150px',
-                      boxShadow: '0 2px 5px rgba(0,0,0,0.05)',
-                      borderLeft: '3px solid #754A2D'
-                    }}>
-                      <h4 style={{ 
-                        color: '#754A2D',
-                        fontWeight: '600',
-                        marginBottom: '5px'
-                      }}>Growth Stage: {popupContent.weightings.growth.value}</h4>
-                      <p style={{ fontSize: '0.9rem' }}>{popupContent.weightings.growth.description}</p>
-                    </div>
-                    <div style={{ 
-                      backgroundColor: 'white',
-                      padding: '20px',
-                      borderRadius: '8px',
-                      flex: '1',
-                      minWidth: '150px',
-                      boxShadow: '0 2px 5px rgba(0,0,0,0.05)',
-                      borderLeft: '3px solid #372C27'
-                    }}>
-                      <h4 style={{ 
-                        color: '#372C27',
-                        fontWeight: '600',
-                        marginBottom: '5px'
-                      }}>Mature Stage: {popupContent.weightings.maturity.value}</h4>
-                      <p style={{ fontSize: '0.9rem' }}>{popupContent.weightings.maturity.description}</p>
-                    </div>
-                  </div>
-                </div>
-              </>
             )}
+
+            {/* Calculation Method */}
+            <div style={{
+              background: colors.light,
+              borderRadius: '10px',
+              padding: '16px',
+            }}>
+              <h3 style={{
+                fontSize: '0.9rem',
+                fontWeight: 700,
+                color: colors.dark,
+                marginBottom: '4px',
+              }}>
+                Calculation Method
+              </h3>
+              <p style={{
+                fontSize: '0.85rem',
+                color: colors.muted,
+                lineHeight: 1.6,
+                margin: 0,
+              }}>
+                {popupContent.calculationMethod}
+              </p>
+            </div>
           </div>
         </div>
       )}
+
+      <style>{`
+        @keyframes fadeInUp {
+          from {
+            opacity: 0;
+            transform: translateY(20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+        
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+          width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+          background: ${colors.light};
+          borderRadius: 3px;
+        }
+        ::-webkit-scrollbar-thumb {
+          background: ${colors.secondary};
+          borderRadius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+          background: ${colors.primary};
+        }
+      `}</style>
     </div>
   );
 };
