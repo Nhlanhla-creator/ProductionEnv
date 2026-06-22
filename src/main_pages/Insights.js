@@ -37,7 +37,7 @@ const floatUp = keyframes`
 `;
 
 const AnimatedHeroTitle = styled.h1`
-  font-size: clamp(2rem, 4vw, 3rem);
+  font-size: clamp(1.8rem, 5vw, 3rem);
   font-weight: 800;
   margin-bottom: 1.5rem;
   line-height: 1.2;
@@ -48,7 +48,7 @@ const AnimatedHeroTitle = styled.h1`
 `;
 
 const AnimatedHeroSubtitle = styled.p`
-  font-size: clamp(1rem, 1.5vw, 1.5rem);
+  font-size: clamp(0.95rem, 2vw, 1.5rem);
   color: #BCAE9C;
   margin-bottom: 2rem;
   max-width: 800px;
@@ -77,6 +77,16 @@ const InsightsPage = () => {
   const [openMenuId, setOpenMenuId] = useState(null);
   const [selectedArticle, setSelectedArticle] = useState(null);
   const [error, setError] = useState(null);
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth <= 768);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   const categories = [
     "All Posts",
@@ -205,7 +215,10 @@ const InsightsPage = () => {
       
       <main style={styles.mainContent}>
         {/* Hero Banner */}
-        <div style={styles.fullWidthBanner}>
+        <div style={{
+          ...styles.fullWidthBanner,
+          minHeight: isMobile ? '350px' : '500px',
+        }}>
           <div style={styles.heroOverlay}></div>
           <div style={styles.heroContent}>
             {loaded && (
@@ -225,12 +238,17 @@ const InsightsPage = () => {
           <section style={styles.blogSection} id="main-content">
             <div style={styles.sectionHeader}>
               <h2 style={styles.sectionTitle}>Insights & Trends</h2>
-              <div style={styles.categoryFilters}>
+              <div style={{
+                ...styles.categoryFilters,
+                gap: isMobile ? '0.5rem' : '0.75rem',
+              }}>
                 {categories.map((category) => (
                   <button 
                     key={category}
                     style={{
                       ...styles.categoryBtn,
+                      padding: isMobile ? '0.4rem 0.8rem' : '0.5rem 1rem',
+                      fontSize: isMobile ? '0.75rem' : '0.85rem',
                       ...(activeCategory === category ? styles.activeCategoryBtn : {})
                     }}
                     onClick={() => setActiveCategory(category)}
@@ -243,7 +261,10 @@ const InsightsPage = () => {
             </div>
             
             {error && (
-              <div style={styles.errorContainer}>
+              <div style={{
+                ...styles.errorContainer,
+                padding: isMobile ? '30px 20px' : '60px',
+              }}>
                 <p>{error}</p>
                 <button onClick={loadArticles} style={styles.retryButton}>
                   Retry
@@ -252,13 +273,19 @@ const InsightsPage = () => {
             )}
             
             {loading ? (
-              <div style={styles.loadingContainer}>
+              <div style={{
+                ...styles.loadingContainer,
+                padding: isMobile ? '30px 20px' : '60px',
+              }}>
                 <div style={styles.spinner}></div>
                 <p>Loading insights...</p>
               </div>
             ) : filteredPosts.length === 0 ? (
-              <div style={styles.emptyContainer}>
-                <FiBookOpen size={48} color="#BCAE9C" />
+              <div style={{
+                ...styles.emptyContainer,
+                padding: isMobile ? '30px 20px' : '60px',
+              }}>
+                <FiBookOpen size={isMobile ? 32 : 48} color="#BCAE9C" />
                 <p>No articles found in this category.</p>
                 <p style={styles.emptySubtext}>Please add articles in the admin panel at /admin/articles</p>
               </div>
@@ -266,8 +293,16 @@ const InsightsPage = () => {
               <div style={styles.postsContainer}>
                 {filteredPosts.map((post) => (
                   <article key={post.id} style={styles.postCard}>
-                    <div style={styles.postLayout}>
-                      <div style={styles.postImageContainer}>
+                    <div style={{
+                      ...styles.postLayout,
+                      flexDirection: isMobile ? 'column' : 'row',
+                      minHeight: isMobile ? 'auto' : '300px',
+                    }}>
+                      <div style={{
+                        ...styles.postImageContainer,
+                        width: isMobile ? '100%' : '40%',
+                        height: isMobile ? '200px' : '100%',
+                      }}>
                         <img 
                           src={post.imageUrl || 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?ixlib=rb-1.2.1&auto=format&fit=crop&w=1352&q=80'} 
                           alt={post.title} 
@@ -277,15 +312,30 @@ const InsightsPage = () => {
                           }}
                         />
                         {post.category && post.category !== "All Posts" && (
-                          <div style={styles.postCategoryBadge}>
+                          <div style={{
+                            ...styles.postCategoryBadge,
+                            fontSize: isMobile ? '0.6rem' : '0.7rem',
+                            padding: isMobile ? '4px 10px' : '6px 14px',
+                          }}>
                             {CategoryIconMap[post.category]} {post.category}
                           </div>
                         )}
                       </div>
-                      <div style={styles.postContent}>
+                      <div style={{
+                        ...styles.postContent,
+                        width: isMobile ? '100%' : '60%',
+                        padding: isMobile ? '1rem 1.25rem' : '1.5rem 2rem',
+                      }}>
                         <div style={styles.postHeader}>
-                          <div style={styles.authorInfo}>
-                            <div style={styles.authorImageContainer}>
+                          <div style={{
+                            ...styles.authorInfo,
+                            gap: isMobile ? '0.75rem' : '1rem',
+                          }}>
+                            <div style={{
+                              ...styles.authorImageContainer,
+                              width: isMobile ? '36px' : '44px',
+                              height: isMobile ? '36px' : '44px',
+                            }}>
                               <img 
                                 src={post.authorImageUrl || "https://randomuser.me/api/portraits/women/44.jpg"} 
                                 alt="Author" 
@@ -296,18 +346,24 @@ const InsightsPage = () => {
                               />
                             </div>
                             <div style={styles.authorText}>
-                              <div style={styles.authorName}>
-                                <FiUser size={14} style={styles.iconInline} />
+                              <div style={{
+                                ...styles.authorName,
+                                fontSize: isMobile ? '0.85rem' : '0.95rem',
+                              }}>
+                                <FiUser size={isMobile ? 12 : 14} style={styles.iconInline} />
                                 {post.writer || 'BIG Marketplace'}
                               </div>
-                              <div style={styles.postMeta}>
+                              <div style={{
+                                ...styles.postMeta,
+                                fontSize: isMobile ? '0.7rem' : '0.8rem',
+                              }}>
                                 <span style={styles.postMetaItem}>
-                                  <FiCalendar size={12} style={styles.iconInline} />
+                                  <FiCalendar size={isMobile ? 10 : 12} style={styles.iconInline} />
                                   {formatDate(post)}
                                 </span>
                                 <span style={styles.postMetaItem}>•</span>
                                 <span style={styles.postMetaItem}>
-                                  <FiClock size={12} style={styles.iconInline} />
+                                  <FiClock size={isMobile ? 10 : 12} style={styles.iconInline} />
                                   {post.readTime || '3 min read'}
                                 </span>
                               </div>
@@ -318,7 +374,7 @@ const InsightsPage = () => {
                               style={styles.menuButton}
                               onClick={() => toggleMenu(post.id)}
                             >
-                              <FiMoreVertical size={20} />
+                              <FiMoreVertical size={isMobile ? 18 : 20} />
                             </button>
                             {openMenuId === post.id && (
                               <div style={styles.dropdownMenu}>
@@ -335,36 +391,59 @@ const InsightsPage = () => {
                           </div>
                         </div>
                         
-                        <h3 style={styles.postTitle}>{post.title}</h3>
-                        <p style={styles.postExcerpt}>{post.excerpt}</p>
+                        <h3 style={{
+                          ...styles.postTitle,
+                          fontSize: isMobile ? 'clamp(1rem, 4vw, 1.3rem)' : 'clamp(1.1rem, 1.5vw, 1.5rem)',
+                          marginBottom: isMobile ? '0.5rem' : '0.75rem',
+                        }}>
+                          {post.title}
+                        </h3>
+                        <p style={{
+                          ...styles.postExcerpt,
+                          fontSize: isMobile ? '0.85rem' : '0.95rem',
+                          marginBottom: isMobile ? '0.75rem' : '1rem',
+                        }}>
+                          {post.excerpt}
+                        </p>
                         
                         <button 
-                          style={styles.readMoreButton}
+                          style={{
+                            ...styles.readMoreButton,
+                            fontSize: isMobile ? '0.8rem' : '0.9rem',
+                            marginBottom: isMobile ? '0.75rem' : '1rem',
+                          }}
                           onClick={() => handleReadMore(post)}
                         >
                           Read More →
                         </button>
                         
-                        <div style={styles.postStats}>
+                        <div style={{
+                          ...styles.postStats,
+                          gap: isMobile ? '1rem' : '1.5rem',
+                          flexWrap: isMobile ? 'wrap' : 'nowrap',
+                          fontSize: isMobile ? '0.75rem' : '0.85rem',
+                          paddingTop: isMobile ? '0.75rem' : '1rem',
+                        }}>
                           <span style={styles.statItem}>
-                            <FiEye size={14} style={styles.iconInline} />
+                            <FiEye size={isMobile ? 12 : 14} style={styles.iconInline} />
                             {post.views || 0} view{post.views !== 1 ? 's' : ''}
                           </span>
                           <span style={styles.statItem}>
-                            <FiMessageCircle size={14} style={styles.iconInline} />
+                            <FiMessageCircle size={isMobile ? 12 : 14} style={styles.iconInline} />
                             {post.comments || 0} comment{post.comments !== 1 ? 's' : ''}
                           </span>
                           <button 
                             style={{
                               ...styles.likeBtn,
+                              fontSize: isMobile ? '0.75rem' : '0.85rem',
                               ...(likedPosts.includes(post.id) ? styles.likedBtn : {})
                             }}
                             onClick={() => toggleLike(post.id)}
                           >
                             {likedPosts.includes(post.id) ? (
-                              <FaHeart size={14} style={styles.iconInline} color="#754A2D" />
+                              <FaHeart size={isMobile ? 12 : 14} style={styles.iconInline} color="#754A2D" />
                             ) : (
-                              <FiHeart size={14} style={styles.iconInline} />
+                              <FiHeart size={isMobile ? 12 : 14} style={styles.iconInline} />
                             )}
                             {likedPosts.includes(post.id) ? 'Liked' : 'Like'}
                           </button>
@@ -381,29 +460,64 @@ const InsightsPage = () => {
 
       {/* Article Modal */}
       {selectedArticle && (
-        <div style={styles.modalOverlay} onClick={closeModal}>
-          <div style={styles.modalContent} onClick={(e) => e.stopPropagation()}>
-            <button onClick={closeModal} style={styles.modalCloseButton}>×</button>
+        <div style={{
+          ...styles.modalOverlay,
+          padding: isMobile ? '10px' : '20px',
+        }} onClick={closeModal}>
+          <div style={{
+            ...styles.modalContent,
+            width: isMobile ? '95%' : '90%',
+            margin: isMobile ? '10px' : '20px',
+            maxHeight: isMobile ? '95vh' : '90vh',
+          }} onClick={(e) => e.stopPropagation()}>
+            <button onClick={closeModal} style={{
+              ...styles.modalCloseButton,
+              top: isMobile ? '12px' : '16px',
+              right: isMobile ? '12px' : '20px',
+              width: isMobile ? '36px' : '44px',
+              height: isMobile ? '36px' : '44px',
+              fontSize: isMobile ? '1.5rem' : '2rem',
+            }}>×</button>
             
-            <div style={styles.modalImageContainer}>
+            <div style={{
+              ...styles.modalImageContainer,
+              height: isMobile ? '200px' : '400px',
+            }}>
               <img 
                 src={selectedArticle.imageUrl || 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?ixlib=rb-1.2.1&auto=format&fit=crop&w=1352&q=80'} 
                 alt={selectedArticle.title} 
                 style={styles.modalImage}
               />
-              <div style={styles.modalImageOverlay}>
-                <h1 style={styles.modalTitle}>{selectedArticle.title}</h1>
-                <div style={styles.modalMeta}>
-                  <span><FiUser size={14} style={styles.iconInline} /> {selectedArticle.writer || 'BIG Marketplace'}</span>
+              <div style={{
+                ...styles.modalImageOverlay,
+                padding: isMobile ? '20px' : '40px',
+              }}>
+                <h1 style={{
+                  ...styles.modalTitle,
+                  fontSize: isMobile ? 'clamp(1.2rem, 4vw, 1.8rem)' : 'clamp(1.5rem, 2.5vw, 2.2rem)',
+                  marginBottom: isMobile ? '0.5rem' : '0.75rem',
+                }}>
+                  {selectedArticle.title}
+                </h1>
+                <div style={{
+                  ...styles.modalMeta,
+                  fontSize: isMobile ? '0.75rem' : '0.9rem',
+                  gap: isMobile ? '0.5rem' : '0.75rem',
+                }}>
+                  <span><FiUser size={isMobile ? 12 : 14} style={styles.iconInline} /> {selectedArticle.writer || 'BIG Marketplace'}</span>
                   <span>•</span>
-                  <span><FiCalendar size={14} style={styles.iconInline} /> {formatDate(selectedArticle)}</span>
+                  <span><FiCalendar size={isMobile ? 12 : 14} style={styles.iconInline} /> {formatDate(selectedArticle)}</span>
                   <span>•</span>
-                  <span><FiClock size={14} style={styles.iconInline} /> {selectedArticle.readTime || '3 min read'}</span>
+                  <span><FiClock size={isMobile ? 12 : 14} style={styles.iconInline} /> {selectedArticle.readTime || '3 min read'}</span>
                 </div>
               </div>
             </div>
             
-            <div style={styles.modalBody}>
+            <div style={{
+              ...styles.modalBody,
+              padding: isMobile ? '20px' : '40px',
+              fontSize: isMobile ? '0.95rem' : '1.05rem',
+            }}>
               <div dangerouslySetInnerHTML={{ __html: selectedArticle.content || selectedArticle.excerpt }} />
             </div>
           </div>
@@ -884,6 +998,13 @@ styleSheet.textContent = `
   }
   .post-card:hover .post-image {
     transform: scale(1.03);
+  }
+
+  @media (max-width: 768px) {
+    .fullWidthBanner {
+      min-height: 350px !important;
+      margin-bottom: 2rem !important;
+    }
   }
 `;
 document.head.appendChild(styleSheet);

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   FaPaperPlane, 
   FaCircle, 
@@ -40,6 +40,16 @@ const ContactFormPage = () => {
   const [isSending, setIsSending] = useState(false);
   const [error, setError] = useState(null);
   const [successMessage, setSuccessMessage] = useState('');
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth <= 768);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -107,6 +117,61 @@ const ContactFormPage = () => {
     }
   };
 
+  // Responsive styles
+  const responsiveStyles = {
+    contactInfoGrid: {
+      display: 'grid',
+      gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)',
+      gap: isMobile ? '1rem' : '1.5rem',
+      width: '100%',
+      marginBottom: isMobile ? '1.5rem' : '2.5rem',
+    },
+    formContainer: {
+      maxWidth: '900px',
+      width: '100%',
+      marginBottom: isMobile ? '1.5rem' : '2.5rem',
+      padding: isMobile ? '1.5rem' : '2.5rem 3rem',
+      backgroundColor: 'rgba(255, 255, 255, 0.92)',
+      borderRadius: '24px',
+      border: '1px solid #EAE2D8',
+      position: 'relative',
+      overflow: 'hidden',
+      boxShadow: '0 10px 40px rgba(28,20,16,0.08)',
+      backdropFilter: 'blur(10px)',
+    },
+    formRow: {
+      display: 'grid',
+      gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
+      gap: isMobile ? '0' : '1.5rem',
+    },
+    bottomSection: {
+      width: '100%',
+      maxWidth: '900px',
+      display: 'grid',
+      gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr',
+      gap: isMobile ? '1rem' : '1.5rem',
+      backgroundColor: 'rgba(255,255,255,0.85)',
+      borderRadius: '16px',
+      padding: isMobile ? '1.25rem' : '1.5rem 2rem',
+      border: '1px solid #EAE2D8',
+      backdropFilter: 'blur(8px)',
+    },
+    socialIcons: {
+      display: 'flex',
+      justifyContent: isMobile ? 'center' : 'center',
+      gap: isMobile ? '0.75rem' : '1rem',
+      flexWrap: 'wrap',
+    },
+    buildingInfo: {
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: isMobile ? 'center' : 'center',
+      gap: '0.75rem',
+      flexWrap: 'wrap',
+      textAlign: isMobile ? 'center' : 'left',
+    },
+  };
+
   return (
     <div style={styles.page}>
       <style>{`
@@ -149,15 +214,34 @@ const ContactFormPage = () => {
           border-color: #754A2D;
           box-shadow: 0 0 0 4px rgba(117, 74, 45, 0.08);
         }
+        @media (max-width: 768px) {
+          .contact-card {
+            padding: 1rem !important;
+          }
+          .contact-card .icon-wrap {
+            width: 44px !important;
+            height: 44px !important;
+          }
+          .contact-card .icon-wrap svg {
+            width: 20px !important;
+            height: 20px !important;
+          }
+          .contact-card h4 {
+            font-size: 0.75rem !important;
+          }
+          .contact-card p {
+            font-size: 0.85rem !important;
+          }
+        }
       `}</style>
       <Header />
       
       <div style={styles.content}>
         {/* Contact Info Cards - Top Section */}
-        <div style={styles.contactInfoGrid}>
+        <div style={responsiveStyles.contactInfoGrid}>
           <div style={styles.contactInfoCard} className="contact-card">
             <div style={styles.contactIconWrap} className="icon-wrap">
-              <FaPhoneAlt size={24} color="#754A2D" />
+              <FaPhoneAlt size={isMobile ? 20 : 24} color="#754A2D" />
             </div>
             <h4 style={styles.contactCardTitle}>Phone</h4>
             <p style={styles.contactCardText}>+27 87 265 4893</p>
@@ -166,7 +250,7 @@ const ContactFormPage = () => {
 
           <div style={styles.contactInfoCard} className="contact-card">
             <div style={styles.contactIconWrap} className="icon-wrap">
-              <FaEnvelope size={24} color="#754A2D" />
+              <FaEnvelope size={isMobile ? 20 : 24} color="#754A2D" />
             </div>
             <h4 style={styles.contactCardTitle}>Email</h4>
             <p style={styles.contactCardText}>hello@bigmarketplace.africa</p>
@@ -175,7 +259,7 @@ const ContactFormPage = () => {
 
           <div style={styles.contactInfoCard} className="contact-card">
             <div style={styles.contactIconWrap} className="icon-wrap">
-              <FaMapMarkerAlt size={24} color="#754A2D" />
+              <FaMapMarkerAlt size={isMobile ? 20 : 24} color="#754A2D" />
             </div>
             <h4 style={styles.contactCardTitle}>Location</h4>
             <p style={styles.contactCardText}>2040 Broadacres Dr</p>
@@ -184,7 +268,7 @@ const ContactFormPage = () => {
         </div>
 
         {/* Main Form Section */}
-        <div style={styles.formContainer}>
+        <div style={responsiveStyles.formContainer}>
           <div style={styles.decorativeShape1}></div>
           <div style={styles.decorativeShape2}></div>
           <div style={styles.dots}>
@@ -195,15 +279,15 @@ const ContactFormPage = () => {
           
           <div style={styles.headerSection}>
             <div style={styles.headerIconWrap}>
-              <FaPaperPlane size={28} color="#754A2D" />
+              <FaPaperPlane size={isMobile ? 24 : 28} color="#754A2D" />
             </div>
             <div>
-              <h2 style={styles.title}>Let's Connect</h2>
-              <p style={styles.subtitle}>We'd love to hear from you</p>
+              <h2 style={isMobile ? {...styles.title, fontSize: '1.5rem'} : styles.title}>Let's Connect</h2>
+              <p style={isMobile ? {...styles.subtitle, fontSize: '0.85rem'} : styles.subtitle}>We'd love to hear from you</p>
             </div>
           </div>
 
-          <div style={styles.introMessage}>
+          <div style={isMobile ? {...styles.introMessage, padding: '0.8rem 1rem', fontSize: '0.85rem'} : styles.introMessage}>
             <span style={styles.introIcon}>💡</span>
             <div>
               At BIG Marketplace, your success is our priority. As your trusted partner, we are dedicated to helping your business grow, adapt, and thrive in an ever-changing landscape. Let's achieve greatness together.
@@ -211,29 +295,29 @@ const ContactFormPage = () => {
           </div>
           
           {error && (
-            <div style={styles.errorMessage}>
-              <FiAlertCircle size={20} style={{ flexShrink: 0 }} />
+            <div style={isMobile ? {...styles.errorMessage, padding: '0.8rem 1rem', fontSize: '0.85rem'} : styles.errorMessage}>
+              <FiAlertCircle size={isMobile ? 16 : 20} style={{ flexShrink: 0 }} />
               <span>{error}</span>
             </div>
           )}
           
           {isSubmitted ? (
-            <div style={styles.successMessage}>
-              <div style={styles.successIconWrap}>
-                <FiCheckCircle size={48} color="#754A2D" />
+            <div style={isMobile ? {...styles.successMessage, padding: '1.5rem 1rem'} : styles.successMessage}>
+              <div style={isMobile ? {...styles.successIconWrap, width: '60px', height: '60px'} : styles.successIconWrap}>
+                <FiCheckCircle size={isMobile ? 36 : 48} color="#754A2D" />
               </div>
-              <h3 style={styles.successTitle}>Message Sent! 🎉</h3>
-              <p style={styles.successText}>{successMessage}</p>
+              <h3 style={isMobile ? {...styles.successTitle, fontSize: '1.2rem'} : styles.successTitle}>Message Sent! 🎉</h3>
+              <p style={isMobile ? {...styles.successText, fontSize: '0.9rem'} : styles.successText}>{successMessage}</p>
               <div style={styles.emailNote}>
-                <FaEnvelope size={16} color="#754A2D" />
-                <span>We've sent a confirmation to <strong>{formData.email}</strong></span>
+                <FaEnvelope size={isMobile ? 14 : 16} color="#754A2D" />
+                <span style={isMobile ? {fontSize: '0.8rem'} : {}}>We've sent a confirmation to <strong>{formData.email}</strong></span>
               </div>
               <div style={styles.emailNote}>
-                <FiClock size={16} color="#754A2D" />
-                <span>Our team will respond within 24 hours</span>
+                <FiClock size={isMobile ? 14 : 16} color="#754A2D" />
+                <span style={isMobile ? {fontSize: '0.8rem'} : {}}>Our team will respond within 24 hours</span>
               </div>
               <button 
-                style={styles.newMessageButton}
+                style={isMobile ? {...styles.newMessageButton, padding: '0.6rem 1.5rem', fontSize: '0.85rem'} : styles.newMessageButton}
                 onClick={() => {
                   setIsSubmitted(false);
                   setError(null);
@@ -253,20 +337,20 @@ const ContactFormPage = () => {
                   e.currentTarget.style.transform = 'translateY(0)';
                 }}
               >
-                <FaPaperPlane size={16} />
+                <FaPaperPlane size={isMobile ? 14 : 16} />
                 Send Another Message
               </button>
             </div>
           ) : (
             <form onSubmit={handleSubmit}>
-              <div style={styles.formRow}>
+              <div style={responsiveStyles.formRow}>
                 <div style={styles.formGroup}>
-                  <label style={styles.label}>Full Name *</label>
+                  <label style={isMobile ? {...styles.label, fontSize: '0.8rem'} : styles.label}>Full Name *</label>
                   <input 
                     type="text" 
                     name="name"
                     placeholder="Enter your full name" 
-                    style={styles.input} 
+                    style={isMobile ? {...styles.input, padding: '0.7rem 1rem', fontSize: '0.9rem'} : styles.input} 
                     value={formData.name}
                     onChange={handleChange}
                     required 
@@ -275,12 +359,12 @@ const ContactFormPage = () => {
                 </div>
                 
                 <div style={styles.formGroup}>
-                  <label style={styles.label}>Email Address *</label>
+                  <label style={isMobile ? {...styles.label, fontSize: '0.8rem'} : styles.label}>Email Address *</label>
                   <input 
                     type="email" 
                     name="email"
                     placeholder="you@example.com" 
-                    style={styles.input} 
+                    style={isMobile ? {...styles.input, padding: '0.7rem 1rem', fontSize: '0.9rem'} : styles.input} 
                     value={formData.email}
                     onChange={handleChange}
                     required 
@@ -290,12 +374,12 @@ const ContactFormPage = () => {
               </div>
               
               <div style={styles.formGroup}>
-                <label style={styles.label}>Subject</label>
+                <label style={isMobile ? {...styles.label, fontSize: '0.8rem'} : styles.label}>Subject</label>
                 <input 
                   type="text" 
                   name="subject"
                   placeholder="What is this regarding?" 
-                  style={styles.input}
+                  style={isMobile ? {...styles.input, padding: '0.7rem 1rem', fontSize: '0.9rem'} : styles.input}
                   value={formData.subject}
                   onChange={handleChange}
                   disabled={isSending}
@@ -303,12 +387,12 @@ const ContactFormPage = () => {
               </div>
               
               <div style={styles.formGroup}>
-                <label style={styles.label}>Message *</label>
+                <label style={isMobile ? {...styles.label, fontSize: '0.8rem'} : styles.label}>Message *</label>
                 <textarea 
                   name="message"
                   placeholder="Tell us how we can help you..." 
-                  rows="5" 
-                  style={styles.textarea} 
+                  rows={isMobile ? 4 : 5} 
+                  style={isMobile ? {...styles.textarea, padding: '0.7rem 1rem', fontSize: '0.9rem', minHeight: '120px'} : styles.textarea} 
                   value={formData.message}
                   onChange={handleChange}
                   required
@@ -318,7 +402,7 @@ const ContactFormPage = () => {
               
               <button 
                 type="submit" 
-                style={isSending ? { ...styles.submitButton, opacity: 0.7, cursor: 'not-allowed' } : styles.submitButton}
+                style={isSending ? { ...styles.submitButton, opacity: 0.7, cursor: 'not-allowed', padding: isMobile ? '0.8rem' : '1rem' } : {...styles.submitButton, padding: isMobile ? '0.8rem' : '1rem'}}
                 disabled={isSending}
                 onMouseEnter={(e) => !isSending && Object.assign(e.currentTarget.style, { 
                   backgroundColor: '#5A3420',
@@ -340,13 +424,13 @@ const ContactFormPage = () => {
                   </>
                 ) : (
                   <>
-                    <FiSend size={18} />
+                    <FiSend size={isMobile ? 16 : 18} />
                     Send Message
                   </>
                 )}
               </button>
               
-              <div style={styles.formFooter}>
+              <div style={isMobile ? {...styles.formFooter, fontSize: '0.7rem', flexWrap: 'wrap', gap: '0.5rem'} : styles.formFooter}>
                 <span>* Required fields</span>
                 <span>|</span>
                 <span>We'll respond within 24 hours</span>
@@ -356,39 +440,39 @@ const ContactFormPage = () => {
         </div>
 
         {/* Social & Business Hours Section */}
-        <div style={styles.bottomSection}>
-          <div style={styles.businessHours}>
-            <div style={styles.businessHoursIcon}>
-              <FiClock size={24} color="#754A2D" />
+        <div style={responsiveStyles.bottomSection}>
+          <div style={isMobile ? {...styles.businessHours, justifyContent: 'center'} : styles.businessHours}>
+            <div style={isMobile ? {...styles.businessHoursIcon, width: '36px', height: '36px'} : styles.businessHoursIcon}>
+              <FiClock size={isMobile ? 20 : 24} color="#754A2D" />
             </div>
             <div>
-              <h4 style={styles.businessHoursTitle}>Business Hours</h4>
-              <p style={styles.businessHoursText}>Monday - Friday: 9:00 AM - 5:00 PM</p>
-              <p style={styles.businessHoursText}>Saturday - Sunday: Closed</p>
+              <h4 style={isMobile ? {...styles.businessHoursTitle, fontSize: '0.75rem'} : styles.businessHoursTitle}>Business Hours</h4>
+              <p style={isMobile ? {...styles.businessHoursText, fontSize: '0.7rem'} : styles.businessHoursText}>Monday - Friday: 9:00 AM - 5:00 PM</p>
+              <p style={isMobile ? {...styles.businessHoursText, fontSize: '0.7rem'} : styles.businessHoursText}>Saturday - Sunday: Closed</p>
             </div>
           </div>
 
           <div style={styles.socialLinks}>
-            <h4 style={styles.socialTitle}>Follow Us</h4>
-            <div style={styles.socialIcons}>
-              <a href="#" style={styles.socialIcon} className="social-icon">
-                <FaWhatsapp size={22} />
+            <h4 style={isMobile ? {...styles.socialTitle, fontSize: '0.75rem'} : styles.socialTitle}>Follow Us</h4>
+            <div style={responsiveStyles.socialIcons}>
+              <a href="#" style={isMobile ? {...styles.socialIcon, width: '36px', height: '36px'} : styles.socialIcon} className="social-icon">
+                <FaWhatsapp size={isMobile ? 18 : 22} />
               </a>
-              <a href="#" style={styles.socialIcon} className="social-icon">
-                <FaLinkedin size={22} />
+              <a href="#" style={isMobile ? {...styles.socialIcon, width: '36px', height: '36px'} : styles.socialIcon} className="social-icon">
+                <FaLinkedin size={isMobile ? 18 : 22} />
               </a>
-              <a href="#" style={styles.socialIcon} className="social-icon">
-                <FaTwitter size={22} />
+              <a href="#" style={isMobile ? {...styles.socialIcon, width: '36px', height: '36px'} : styles.socialIcon} className="social-icon">
+                <FaTwitter size={isMobile ? 18 : 22} />
               </a>
-              <a href="#" style={styles.socialIcon} className="social-icon">
-                <FaInstagram size={22} />
+              <a href="#" style={isMobile ? {...styles.socialIcon, width: '36px', height: '36px'} : styles.socialIcon} className="social-icon">
+                <FaInstagram size={isMobile ? 18 : 22} />
               </a>
             </div>
           </div>
 
-          <div style={styles.buildingInfo}>
-            <FaBuilding size={20} color="#754A2D" />
-            <span style={styles.buildingText}>BIG Marketplace • 2040 Broadacres Dr, Fourways</span>
+          <div style={isMobile ? {...styles.buildingInfo, flexDirection: 'column', textAlign: 'center'} : styles.buildingInfo}>
+            <FaBuilding size={isMobile ? 16 : 20} color="#754A2D" />
+            <span style={isMobile ? {...styles.buildingText, fontSize: '0.75rem'} : styles.buildingText}>BIG Marketplace • 2040 Broadacres Dr, Fourways</span>
           </div>
         </div>
       </div>
@@ -421,13 +505,6 @@ const styles = {
   },
   
   // Contact Info Cards
-  contactInfoGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(3, 1fr)',
-    gap: '1.5rem',
-    width: '100%',
-    marginBottom: '2.5rem',
-  },
   contactInfoCard: {
     backgroundColor: 'white',
     borderRadius: '16px',
@@ -470,19 +547,6 @@ const styles = {
   },
 
   // Form Container
-  formContainer: {
-    maxWidth: '900px',
-    width: '100%',
-    marginBottom: '2.5rem',
-    padding: '2.5rem 3rem',
-    backgroundColor: 'rgba(255, 255, 255, 0.92)',
-    borderRadius: '24px',
-    border: '1px solid #EAE2D8',
-    position: 'relative',
-    overflow: 'hidden',
-    boxShadow: '0 10px 40px rgba(28,20,16,0.08)',
-    backdropFilter: 'blur(10px)',
-  },
   decorativeShape1: {
     position: 'absolute',
     top: '-60px',
@@ -559,11 +623,6 @@ const styles = {
   },
   
   // Form Elements
-  formRow: {
-    display: 'grid',
-    gridTemplateColumns: '1fr 1fr',
-    gap: '1.5rem',
-  },
   formGroup: {
     marginBottom: '1.5rem',
   },
@@ -691,18 +750,6 @@ const styles = {
   },
 
   // Bottom Section
-  bottomSection: {
-    width: '100%',
-    maxWidth: '900px',
-    display: 'grid',
-    gridTemplateColumns: '1fr 1fr 1fr',
-    gap: '1.5rem',
-    backgroundColor: 'rgba(255,255,255,0.85)',
-    borderRadius: '16px',
-    padding: '1.5rem 2rem',
-    border: '1px solid #EAE2D8',
-    backdropFilter: 'blur(8px)',
-  },
   businessHours: {
     display: 'flex',
     alignItems: 'center',
@@ -737,11 +784,6 @@ const styles = {
     fontWeight: '700',
     color: '#1C1410',
     marginBottom: '0.5rem',
-  },
-  socialIcons: {
-    display: 'flex',
-    justifyContent: 'center',
-    gap: '1rem',
   },
   socialIcon: {
     width: '40px',

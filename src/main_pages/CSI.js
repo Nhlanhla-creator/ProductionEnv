@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Header from "./Header";
 import Footer from "./Footer";
 import { 
@@ -32,6 +32,16 @@ import {
 const CharmSchool = () => {
   const [openAccordion, setOpenAccordion] = useState(null);
   const [activeTab, setActiveTab] = useState('graduates');
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth <= 768);
+    };
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
 
   const toggleAccordion = (index) => {
     setOpenAccordion(openAccordion === index ? null : index);
@@ -144,7 +154,7 @@ const CharmSchool = () => {
     partnershipSection: {
       width: '100%',
       backgroundColor: 'white',
-      padding: '2rem 0',
+      padding: isMobile ? '1.5rem 0' : '2rem 0',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
@@ -154,29 +164,29 @@ const CharmSchool = () => {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      gap: '2rem',
+      gap: isMobile ? '1rem' : '2rem',
       maxWidth: '1200px',
       width: '100%',
       padding: '0 1rem',
       flexWrap: 'wrap',
     },
     partnershipLabel: {
-      fontSize: '0.9rem',
+      fontSize: isMobile ? '0.7rem' : '0.9rem',
       fontWeight: '700',
       color: '#7C4D2A',
       textTransform: 'uppercase',
       letterSpacing: '0.15em',
     },
     floconsultLogo: {
-      height: '80px',
+      height: isMobile ? '60px' : '80px',
       width: 'auto',
-      maxWidth: '200px',
+      maxWidth: isMobile ? '150px' : '200px',
     },
     
     // Hero Section
     heroSection: {
       position: 'relative',
-      minHeight: '70vh',
+      minHeight: isMobile ? '60vh' : '70vh',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
@@ -206,7 +216,7 @@ const CharmSchool = () => {
     heroContent: {
       position: 'relative',
       zIndex: 10,
-      textAlign: 'left',
+      textAlign: isMobile ? 'center' : 'left',
       color: 'white',
       padding: '0 1.5rem',
       maxWidth: '1200px',
@@ -220,8 +230,8 @@ const CharmSchool = () => {
       background: 'rgba(212,137,74,0.2)',
       border: '1px solid rgba(212,137,74,0.3)',
       borderRadius: '30px',
-      padding: '6px 16px 6px 10px',
-      marginBottom: '20px',
+      padding: isMobile ? '4px 12px 4px 8px' : '6px 16px 6px 10px',
+      marginBottom: isMobile ? '16px' : '20px',
     },
     heroBadgeDot: {
       width: 8,
@@ -232,91 +242,99 @@ const CharmSchool = () => {
     },
     heroBadgeText: {
       color: '#D4894A',
-      fontSize: '0.75rem',
+      fontSize: isMobile ? '0.65rem' : '0.75rem',
       fontWeight: 700,
       letterSpacing: '0.08em',
       textTransform: 'uppercase',
     },
     heroTitle: {
-      fontSize: 'clamp(2.5rem, 5vw, 4rem)',
+      fontSize: isMobile ? 'clamp(2rem, 8vw, 3rem)' : 'clamp(2.5rem, 5vw, 4rem)',
       fontWeight: 900,
-      marginBottom: '1.5rem',
+      marginBottom: isMobile ? '1rem' : '1.5rem',
       lineHeight: '1.1',
       letterSpacing: '-0.02em',
+      textAlign: isMobile ? 'center' : 'left',
     },
     heroTitleAccent: {
       color: '#D4894A',
     },
     heroSubtitle: {
-      fontSize: 'clamp(1.2rem, 2vw, 1.8rem)',
-      marginBottom: '1rem',
+      fontSize: isMobile ? 'clamp(1rem, 4vw, 1.4rem)' : 'clamp(1.2rem, 2vw, 1.8rem)',
+      marginBottom: '0.75rem',
       lineHeight: '1.4',
       fontWeight: 600,
       color: '#D3C1B2',
+      textAlign: isMobile ? 'center' : 'left',
     },
     heroDescription: {
-      fontSize: 'clamp(1rem, 1.2vw, 1.2rem)',
-      marginBottom: '2rem',
+      fontSize: isMobile ? 'clamp(0.9rem, 3vw, 1rem)' : 'clamp(1rem, 1.2vw, 1.2rem)',
+      marginBottom: isMobile ? '1.5rem' : '2rem',
       lineHeight: '1.7',
-      maxWidth: '650px',
+      maxWidth: isMobile ? '100%' : '650px',
       color: 'rgba(255,255,255,0.7)',
+      textAlign: isMobile ? 'center' : 'left',
     },
     heroButtons: {
       display: 'flex',
-      gap: '1rem',
+      gap: isMobile ? '0.75rem' : '1rem',
       flexWrap: 'wrap',
+      justifyContent: isMobile ? 'center' : 'flex-start',
     },
     heroButtonPrimary: {
       backgroundColor: '#D4894A',
       color: 'white',
-      padding: '1rem 2rem',
+      padding: isMobile ? '0.8rem 1.5rem' : '1rem 2rem',
       borderRadius: '50px',
-      fontSize: '1rem',
+      fontSize: isMobile ? '0.85rem' : '1rem',
       fontWeight: 700,
       border: 'none',
       cursor: 'pointer',
       transition: 'all 0.3s ease',
       display: 'inline-flex',
       alignItems: 'center',
-      gap: '0.75rem',
+      gap: '0.5rem',
       boxShadow: '0 4px 20px rgba(212, 137, 74, 0.3)',
+      width: isMobile ? '100%' : 'auto',
+      justifyContent: 'center',
     },
     heroButtonSecondary: {
       backgroundColor: 'transparent',
       color: 'white',
-      padding: '1rem 2rem',
+      padding: isMobile ? '0.8rem 1.5rem' : '1rem 2rem',
       borderRadius: '50px',
-      fontSize: '1rem',
+      fontSize: isMobile ? '0.85rem' : '1rem',
       fontWeight: 600,
       border: '1px solid rgba(255,255,255,0.2)',
       cursor: 'pointer',
       transition: 'all 0.3s ease',
       display: 'inline-flex',
       alignItems: 'center',
-      gap: '0.75rem',
+      gap: '0.5rem',
       backdropFilter: 'blur(8px)',
+      width: isMobile ? '100%' : 'auto',
+      justifyContent: 'center',
     },
     
     // Section Wrapper
     section: {
-      padding: '4rem 1.5rem',
+      padding: isMobile ? '2.5rem 1rem' : '4rem 1.5rem',
       maxWidth: '1200px',
       margin: '0 auto',
     },
     sectionDark: {
-      padding: '4rem 1.5rem',
+      padding: isMobile ? '2.5rem 1rem' : '4rem 1.5rem',
       backgroundColor: '#1C1410',
     },
     sectionLight: {
-      padding: '4rem 1.5rem',
+      padding: isMobile ? '2.5rem 1rem' : '4rem 1.5rem',
       backgroundColor: '#F5F0E8',
     },
     sectionWhite: {
-      padding: '4rem 1.5rem',
+      padding: isMobile ? '2.5rem 1rem' : '4rem 1.5rem',
       backgroundColor: '#FFFFFF',
     },
     sectionTitle: {
-      fontSize: 'clamp(1.8rem, 3vw, 2.8rem)',
+      fontSize: isMobile ? 'clamp(1.5rem, 6vw, 2rem)' : 'clamp(1.8rem, 3vw, 2.8rem)',
       fontWeight: 800,
       textAlign: 'center',
       marginBottom: '0.5rem',
@@ -324,7 +342,7 @@ const CharmSchool = () => {
       color: '#1C1410',
     },
     sectionTitleWhite: {
-      fontSize: 'clamp(1.8rem, 3vw, 2.8rem)',
+      fontSize: isMobile ? 'clamp(1.5rem, 6vw, 2rem)' : 'clamp(1.8rem, 3vw, 2.8rem)',
       fontWeight: 800,
       textAlign: 'center',
       marginBottom: '0.5rem',
@@ -334,7 +352,7 @@ const CharmSchool = () => {
     sectionSubtitle: {
       textAlign: 'center',
       color: '#7A6A5E',
-      fontSize: '1.1rem',
+      fontSize: isMobile ? '0.95rem' : '1.1rem',
       maxWidth: '700px',
       margin: '0 auto 2.5rem',
       lineHeight: '1.7',
@@ -342,7 +360,7 @@ const CharmSchool = () => {
     sectionSubtitleWhite: {
       textAlign: 'center',
       color: 'rgba(255,255,255,0.6)',
-      fontSize: '1.1rem',
+      fontSize: isMobile ? '0.95rem' : '1.1rem',
       maxWidth: '700px',
       margin: '0 auto 2.5rem',
       lineHeight: '1.7',
@@ -351,13 +369,13 @@ const CharmSchool = () => {
     // What Is Charm School
     whatIsGrid: {
       display: 'grid',
-      gridTemplateColumns: '1fr 1fr',
-      gap: '3rem',
+      gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
+      gap: isMobile ? '1.5rem' : '3rem',
       alignItems: 'center',
     },
     whatIsImage: {
       width: '100%',
-      height: '400px',
+      height: isMobile ? '250px' : '400px',
       objectFit: 'cover',
       borderRadius: '16px',
       boxShadow: '0 10px 30px rgba(0,0,0,0.1)',
@@ -368,16 +386,16 @@ const CharmSchool = () => {
       gap: '1.2rem',
     },
     whatIsText: {
-      fontSize: '1.05rem',
+      fontSize: isMobile ? '0.95rem' : '1.05rem',
       lineHeight: '1.8',
       color: '#372C27',
     },
     whatIsHighlight: {
       backgroundColor: 'rgba(212, 137, 74, 0.08)',
       borderLeft: '4px solid #D4894A',
-      padding: '1.2rem 1.5rem',
+      padding: isMobile ? '1rem' : '1.2rem 1.5rem',
       borderRadius: '0 8px 8px 0',
-      fontSize: '1.05rem',
+      fontSize: isMobile ? '0.95rem' : '1.05rem',
       lineHeight: '1.7',
       color: '#1C1410',
     },
@@ -385,24 +403,24 @@ const CharmSchool = () => {
     // Stats
     statsGrid: {
       display: 'grid',
-      gridTemplateColumns: 'repeat(4, 1fr)',
-      gap: '1.5rem',
+      gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(4, 1fr)',
+      gap: isMobile ? '1rem' : '1.5rem',
       marginTop: '2rem',
     },
     statCard: {
       textAlign: 'center',
-      padding: '1.5rem',
+      padding: isMobile ? '1rem' : '1.5rem',
       backgroundColor: 'white',
       borderRadius: '12px',
       boxShadow: '0 4px 20px rgba(0,0,0,0.05)',
     },
     statNumber: {
-      fontSize: '2.5rem',
+      fontSize: isMobile ? '1.8rem' : '2.5rem',
       fontWeight: 800,
       color: '#7C4D2A',
     },
     statLabel: {
-      fontSize: '0.9rem',
+      fontSize: isMobile ? '0.75rem' : '0.9rem',
       color: '#7A6A5E',
       marginTop: '0.3rem',
     },
@@ -410,13 +428,13 @@ const CharmSchool = () => {
     // Tab Navigation
     tabNavigation: {
       display: 'flex',
-      gap: '1rem',
+      gap: isMobile ? '0.5rem' : '1rem',
       justifyContent: 'center',
       marginBottom: '2.5rem',
       flexWrap: 'wrap',
     },
     tabButton: {
-      padding: '0.75rem 1.5rem',
+      padding: isMobile ? '0.6rem 1rem' : '0.75rem 1.5rem',
       backgroundColor: 'white',
       color: '#7C4D2A',
       border: '2px solid #EAE2D8',
@@ -426,11 +444,13 @@ const CharmSchool = () => {
       transition: 'all 0.3s ease',
       display: 'inline-flex',
       alignItems: 'center',
-      gap: '0.5rem',
-      fontSize: '0.9rem',
+      gap: '0.4rem',
+      fontSize: isMobile ? '0.75rem' : '0.9rem',
+      flex: isMobile ? '1' : 'auto',
+      justifyContent: 'center',
     },
     tabButtonActive: {
-      padding: '0.75rem 1.5rem',
+      padding: isMobile ? '0.6rem 1rem' : '0.75rem 1.5rem',
       backgroundColor: '#7C4D2A',
       color: 'white',
       border: '2px solid #7C4D2A',
@@ -439,50 +459,52 @@ const CharmSchool = () => {
       cursor: 'pointer',
       display: 'inline-flex',
       alignItems: 'center',
-      gap: '0.5rem',
-      fontSize: '0.9rem',
+      gap: '0.4rem',
+      fontSize: isMobile ? '0.75rem' : '0.9rem',
       boxShadow: '0 4px 15px rgba(124, 77, 42, 0.25)',
+      flex: isMobile ? '1' : 'auto',
+      justifyContent: 'center',
     },
     
     // Tab Content
     tabContent: {
       backgroundColor: 'white',
       borderRadius: '16px',
-      padding: '2.5rem',
+      padding: isMobile ? '1.5rem' : '2.5rem',
       boxShadow: '0 4px 20px rgba(0,0,0,0.05)',
     },
     tabTitle: {
-      fontSize: '1.5rem',
+      fontSize: isMobile ? '1.2rem' : '1.5rem',
       fontWeight: 700,
       color: '#1C1410',
       marginBottom: '1rem',
       display: 'flex',
       alignItems: 'center',
-      gap: '0.75rem',
+      gap: '0.5rem',
     },
     tabDescription: {
-      fontSize: '1rem',
+      fontSize: isMobile ? '0.9rem' : '1rem',
       color: '#7A6A5E',
       lineHeight: '1.7',
       marginBottom: '1.5rem',
     },
     benefitList: {
       display: 'grid',
-      gridTemplateColumns: '1fr 1fr',
-      gap: '0.8rem',
+      gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
+      gap: '0.5rem',
     },
     benefitItem: {
       display: 'flex',
       alignItems: 'flex-start',
-      gap: '0.75rem',
-      fontSize: '0.95rem',
+      gap: '0.5rem',
+      fontSize: isMobile ? '0.85rem' : '0.95rem',
       color: '#372C27',
-      padding: '0.5rem 0',
+      padding: '0.4rem 0',
       lineHeight: '1.5',
     },
     benefitIcon: {
-      width: '20px',
-      height: '20px',
+      width: isMobile ? '18px' : '20px',
+      height: isMobile ? '18px' : '20px',
       backgroundColor: '#7C4D2A',
       borderRadius: '50%',
       display: 'flex',
@@ -495,58 +517,58 @@ const CharmSchool = () => {
     },
     tabHighlight: {
       marginTop: '1.5rem',
-      padding: '1rem 1.5rem',
+      padding: isMobile ? '0.8rem 1rem' : '1rem 1.5rem',
       background: '#F5F0E8',
       borderRadius: '8px',
       borderLeft: '4px solid #7C4D2A',
     },
     tabHighlightText: {
       margin: 0,
-      fontSize: '0.95rem',
+      fontSize: isMobile ? '0.85rem' : '0.95rem',
       color: '#372C27',
     },
     
     // Toolkit Section
     toolkitSection: {
       marginTop: '2rem',
-      padding: '1.5rem',
+      padding: isMobile ? '1rem' : '1.5rem',
       backgroundColor: '#FAF7F2',
       borderRadius: '12px',
       border: '1px solid #EAE2D8',
     },
     toolkitTitle: {
-      fontSize: '1.1rem',
+      fontSize: isMobile ? '1rem' : '1.1rem',
       fontWeight: 700,
       color: '#1C1410',
-      marginBottom: '0.8rem',
+      marginBottom: '0.5rem',
     },
     toolkitList: {
       display: 'grid',
-      gridTemplateColumns: '1fr 1fr',
-      gap: '0.5rem',
+      gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
+      gap: '0.3rem',
     },
     toolkitItem: {
-      fontSize: '0.95rem',
+      fontSize: isMobile ? '0.85rem' : '0.95rem',
       color: '#372C27',
-      padding: '0.3rem 0',
+      padding: '0.2rem 0',
     },
     
     // Event Info
     eventCard: {
       backgroundColor: '#f3f4f6',
-      padding: '1.5rem',
+      padding: isMobile ? '1rem' : '1.5rem',
       borderRadius: '12px',
       marginTop: '1.5rem',
     },
     eventTitle: {
-      fontSize: '1.2rem',
-      fontWeight: '700',
+      fontSize: isMobile ? '1rem' : '1.2rem',
+      fontWeight: 700,
       color: '#1C1410',
-      marginBottom: '0.8rem',
+      marginBottom: '0.5rem',
     },
     eventDetail: {
-      fontSize: '1rem',
-      marginBottom: '0.5rem',
+      fontSize: isMobile ? '0.9rem' : '1rem',
+      marginBottom: '0.4rem',
       color: '#372C27',
       display: 'flex',
       alignItems: 'center',
@@ -560,19 +582,19 @@ const CharmSchool = () => {
     ctaSection: {
       background: `linear-gradient(135deg, #7C4D2A, #D4894A)`,
       borderRadius: '16px',
-      padding: '3rem 2.5rem',
+      padding: isMobile ? '2rem 1.5rem' : '3rem 2.5rem',
       textAlign: 'center',
       marginTop: '2rem',
     },
     ctaTitle: {
-      fontSize: 'clamp(1.5rem, 2.5vw, 2.2rem)',
+      fontSize: isMobile ? 'clamp(1.3rem, 5vw, 1.8rem)' : 'clamp(1.5rem, 2.5vw, 2.2rem)',
       fontWeight: 800,
       color: 'white',
       marginBottom: '0.5rem',
     },
     ctaText: {
       color: 'rgba(255,255,255,0.8)',
-      fontSize: '1.05rem',
+      fontSize: isMobile ? '0.9rem' : '1.05rem',
       maxWidth: '600px',
       margin: '0 auto 1.5rem',
       lineHeight: '1.7',
@@ -580,24 +602,24 @@ const CharmSchool = () => {
     ctaButton: {
       backgroundColor: 'white',
       color: '#7C4D2A',
-      padding: '1rem 2.5rem',
+      padding: isMobile ? '0.8rem 1.5rem' : '1rem 2.5rem',
       borderRadius: '50px',
-      fontSize: '1rem',
+      fontSize: isMobile ? '0.85rem' : '1rem',
       fontWeight: 700,
       border: 'none',
       cursor: 'pointer',
       transition: 'all 0.3s ease',
       display: 'inline-flex',
       alignItems: 'center',
-      gap: '0.75rem',
+      gap: '0.5rem',
       boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
     },
     
     // FAQ
     faqGrid: {
       display: 'grid',
-      gridTemplateColumns: '1fr 1fr',
-      gap: '2rem',
+      gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
+      gap: isMobile ? '1rem' : '2rem',
       marginTop: '2rem',
     },
     faqColumn: {
@@ -608,11 +630,11 @@ const CharmSchool = () => {
     faqHeader: {
       display: 'flex',
       alignItems: 'center',
-      gap: '0.75rem',
+      gap: '0.5rem',
       marginBottom: '0.5rem',
     },
     faqTitle: {
-      fontSize: '1.1rem',
+      fontSize: isMobile ? '1rem' : '1.1rem',
       fontWeight: 700,
       color: '#1C1410',
     },
@@ -624,7 +646,7 @@ const CharmSchool = () => {
     },
     accordionButton: {
       width: '100%',
-      padding: '1rem 1.2rem',
+      padding: isMobile ? '0.8rem 1rem' : '1rem 1.2rem',
       backgroundColor: 'transparent',
       color: '#1C1410',
       border: 'none',
@@ -632,16 +654,16 @@ const CharmSchool = () => {
       justifyContent: 'space-between',
       alignItems: 'center',
       cursor: 'pointer',
-      fontSize: '0.95rem',
+      fontSize: isMobile ? '0.85rem' : '0.95rem',
       fontWeight: 600,
       textAlign: 'left',
       transition: 'all 0.3s ease',
       fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif",
     },
     accordionContent: {
-      padding: '0 1.2rem 1.2rem',
+      padding: isMobile ? '0 1rem 1rem' : '0 1.2rem 1.2rem',
       color: '#7A6A5E',
-      fontSize: '0.95rem',
+      fontSize: isMobile ? '0.85rem' : '0.95rem',
       lineHeight: '1.7',
     },
     accordionIcon: {
@@ -656,29 +678,33 @@ const CharmSchool = () => {
     },
     sponsorsFaqGrid: {
       display: 'grid',
-      gridTemplateColumns: '1fr 1fr',
-      gap: '1rem',
+      gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
+      gap: isMobile ? '0.8rem' : '1rem',
     },
 
     // Button Group
     buttonGroup: {
       display: 'flex',
-      gap: '1rem',
+      gap: '0.75rem',
       flexWrap: 'wrap',
       marginTop: '1rem',
+      flexDirection: isMobile ? 'column' : 'row',
     },
     primaryButton: {
       backgroundColor: '#7C4D2A',
       color: 'white',
-      padding: '0.75rem 1.5rem',
+      padding: isMobile ? '0.6rem 1rem' : '0.75rem 1.5rem',
       borderRadius: '8px',
-      fontWeight: '600',
+      fontWeight: 600,
       border: '2px solid #7C4D2A',
       cursor: 'pointer',
       transition: 'all 0.3s ease',
       display: 'inline-flex',
       alignItems: 'center',
+      justifyContent: 'center',
       gap: '0.5rem',
+      flex: isMobile ? '1' : 'auto',
+      fontSize: isMobile ? '0.85rem' : '1rem',
     },
   };
 
@@ -721,7 +747,7 @@ const CharmSchool = () => {
                 e.currentTarget.style.transform = 'translateY(0)';
               }}
             >
-              <FiUserPlus size={18} />
+              <FiUserPlus size={isMobile ? 16 : 18} />
               Register Now
             </button>
             <button 
@@ -733,7 +759,7 @@ const CharmSchool = () => {
                 e.currentTarget.style.backgroundColor = 'transparent';
               }}
             >
-              <FiBook size={18} />
+              <FiBook size={isMobile ? 16 : 18} />
               Learn More
             </button>
           </div>
@@ -794,15 +820,15 @@ const CharmSchool = () => {
           <div style={styles.eventCard}>
             <h3 style={styles.eventTitle}>📅 Upcoming Charm School Event</h3>
             <p style={styles.eventDetail}>
-              <FiCalendar size={18} />
+              <FiCalendar size={isMobile ? 16 : 18} />
               <span><span style={styles.eventLabel}>Date:</span> Coming Soon</span>
             </p>
             <p style={styles.eventDetail}>
-              <FiMapPin size={18} />
+              <FiMapPin size={isMobile ? 16 : 18} />
               <span><span style={styles.eventLabel}>Location:</span> Johannesburg, South Africa</span>
             </p>
             <p style={styles.eventDetail}>
-              <FiClock size={18} />
+              <FiClock size={isMobile ? 16 : 18} />
               <span><span style={styles.eventLabel}>Duration:</span> 2-Day Immersive Programme</span>
             </p>
             <div style={styles.buttonGroup}>
@@ -815,11 +841,11 @@ const CharmSchool = () => {
                   e.currentTarget.style.backgroundColor = '#7C4D2A';
                 }}
               >
-                <FiUserPlus size={18} />
+                <FiUserPlus size={isMobile ? 16 : 18} />
                 Register Now
               </button>
               <button 
-                style={{...styles.primaryButton, backgroundColor: 'transparent', color: '#7C4D2A'}}
+                style={{...styles.primaryButton, backgroundColor: 'transparent', color: '#7C4D2A', border: '2px solid #7C4D2A'}}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.backgroundColor = '#F5F0E8';
                 }}
@@ -827,7 +853,7 @@ const CharmSchool = () => {
                   e.currentTarget.style.backgroundColor = 'transparent';
                 }}
               >
-                <FiMail size={18} />
+                <FiMail size={isMobile ? 16 : 18} />
                 Contact Us
               </button>
             </div>
@@ -848,21 +874,21 @@ const CharmSchool = () => {
               style={activeTab === 'graduates' ? styles.tabButtonActive : styles.tabButton}
               onClick={() => setActiveTab('graduates')}
             >
-              <FaGraduationCap size={16} />
+              <FaGraduationCap size={isMobile ? 14 : 16} />
               For Graduates
             </button>
             <button 
               style={activeTab === 'smes' ? styles.tabButtonActive : styles.tabButton}
               onClick={() => setActiveTab('smes')}
             >
-              <FaBuilding size={16} />
+              <FaBuilding size={isMobile ? 14 : 16} />
               For SMEs
             </button>
             <button 
               style={activeTab === 'sponsors' ? styles.tabButtonActive : styles.tabButton}
               onClick={() => setActiveTab('sponsors')}
             >
-              <FaHandshake size={16} />
+              <FaHandshake size={isMobile ? 14 : 16} />
               For Sponsors
             </button>
           </div>
@@ -881,7 +907,7 @@ const CharmSchool = () => {
                   the soft skills and personal power that set you apart.
                 </p>
                 
-                <h4 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#1C1410', marginBottom: '0.8rem' }}>
+                <h4 style={{ fontSize: isMobile ? '1rem' : '1.1rem', fontWeight: 700, color: '#1C1410', marginBottom: '0.5rem' }}>
                   What You Will Learn:
                 </h4>
                 <div style={styles.benefitList}>
@@ -895,7 +921,7 @@ const CharmSchool = () => {
 
                 <div style={styles.toolkitSection}>
                   <h4 style={styles.toolkitTitle}>🎓 Your Exclusive Charm School Toolkit</h4>
-                  <p style={{ fontSize: '0.95rem', color: '#7A6A5E', marginBottom: '0.8rem' }}>
+                  <p style={{ fontSize: isMobile ? '0.85rem' : '0.95rem', color: '#7A6A5E', marginBottom: '0.5rem' }}>
                     Every participant receives:
                   </p>
                   <div style={styles.toolkitList}>
@@ -929,7 +955,7 @@ const CharmSchool = () => {
                   Charm School prepares young professionals to thrive in fast-paced SME environments.
                 </p>
                 
-                <h4 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#1C1410', marginBottom: '0.8rem' }}>
+                <h4 style={{ fontSize: isMobile ? '1rem' : '1.1rem', fontWeight: 700, color: '#1C1410', marginBottom: '0.5rem' }}>
                   A Charm-Certified Graduate Brings:
                 </h4>
                 <div style={styles.benefitList}>
@@ -957,7 +983,7 @@ const CharmSchool = () => {
 
                 <div style={styles.toolkitSection}>
                   <h4 style={styles.toolkitTitle}>🏢 Get Access to the Charm-Certified Talent Pool</h4>
-                  <p style={{ fontSize: '0.95rem', color: '#7A6A5E', marginBottom: '0.5rem' }}>
+                  <p style={{ fontSize: isMobile ? '0.85rem' : '0.95rem', color: '#7A6A5E', marginBottom: '0.5rem' }}>
                     SMEs on BIG Marketplace can:
                   </p>
                   <div style={styles.toolkitList}>
@@ -982,7 +1008,7 @@ const CharmSchool = () => {
                   professionalism, and skills that dramatically increase their employability — funding a career, not just training.
                 </p>
                 
-                <h4 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#1C1410', marginBottom: '0.8rem' }}>
+                <h4 style={{ fontSize: isMobile ? '1rem' : '1.1rem', fontWeight: 700, color: '#1C1410', marginBottom: '0.5rem' }}>
                   Why Sponsor Charm School?
                 </h4>
                 <div style={styles.benefitList}>
@@ -996,7 +1022,7 @@ const CharmSchool = () => {
 
                 <div style={styles.toolkitSection}>
                   <h4 style={styles.toolkitTitle}>📊 What Your Sponsorship Funds</h4>
-                  <p style={{ fontSize: '0.95rem', color: '#7A6A5E', marginBottom: '0.5rem' }}>
+                  <p style={{ fontSize: isMobile ? '0.85rem' : '0.95rem', color: '#7A6A5E', marginBottom: '0.5rem' }}>
                     Each sponsored graduate receives:
                   </p>
                   <div style={styles.toolkitList}>
@@ -1022,7 +1048,6 @@ const CharmSchool = () => {
         </div>
       </section>
 
-    
       {/* FAQ SECTION */}
       <section style={styles.sectionLight}>
         <div style={styles.section}>
@@ -1047,7 +1072,7 @@ const CharmSchool = () => {
                   >
                     <span>{item.q}</span>
                     <span style={styles.accordionIcon}>
-                      {openAccordion === `grad-${index}` ? <FiMinus size={18} /> : <FiPlus size={18} />}
+                      {openAccordion === `grad-${index}` ? <FiMinus size={isMobile ? 16 : 18} /> : <FiPlus size={isMobile ? 16 : 18} />}
                     </span>
                   </button>
                   {openAccordion === `grad-${index}` && (
@@ -1071,7 +1096,7 @@ const CharmSchool = () => {
                   >
                     <span>{item.q}</span>
                     <span style={styles.accordionIcon}>
-                      {openAccordion === `sme-${index}` ? <FiMinus size={18} /> : <FiPlus size={18} />}
+                      {openAccordion === `sme-${index}` ? <FiMinus size={isMobile ? 16 : 18} /> : <FiPlus size={isMobile ? 16 : 18} />}
                     </span>
                   </button>
                   {openAccordion === `sme-${index}` && (
@@ -1097,7 +1122,7 @@ const CharmSchool = () => {
                   >
                     <span>{item.q}</span>
                     <span style={styles.accordionIcon}>
-                      {openAccordion === `sponsor-${index}` ? <FiMinus size={18} /> : <FiPlus size={18} />}
+                      {openAccordion === `sponsor-${index}` ? <FiMinus size={isMobile ? 16 : 18} /> : <FiPlus size={isMobile ? 16 : 18} />}
                     </span>
                   </button>
                   {openAccordion === `sponsor-${index}` && (

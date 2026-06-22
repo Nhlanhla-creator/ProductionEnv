@@ -13,7 +13,8 @@ import {
   FaBell, FaSearch, FaCreditCard, FaArrowUp, FaQuestionCircle,
   FaInfoCircle, FaMoneyBillWave, FaTools, FaGraduationCap,
   FaTruck, FaUniversity, FaSyncAlt, FaUserCheck, FaRocketchat,
-  FaFileContract, FaReceipt, FaGlobe, FaIndustry, FaExternalLinkAlt
+  FaFileContract, FaReceipt, FaGlobe, FaIndustry, FaExternalLinkAlt,
+  FaDesktop, FaTimes
 } from "react-icons/fa"
 import { MdCorporateFare, MdVerified, MdSmartphone, MdDashboard, MdTrendingUp, MdGroup, MdAdd, MdRemove } from "react-icons/md"
 import "./LandingPage.css"
@@ -881,7 +882,7 @@ const FAQItem = ({ isOpen, onClick, question, answer }) => {
       <div style={{
         maxHeight: isOpen ? 500 : 0,
         overflow: "hidden",
-        transition: "max-height 0.4s ease, padding 0.3s ease",
+        transition: "maxHeight 0.4s ease, padding 0.3s ease",
         padding: isOpen ? "0 16px 14px" : "0 16px",
         borderTop: isOpen ? `1px solid ${C.border}` : "none",
       }}>
@@ -900,6 +901,75 @@ const FAQItem = ({ isOpen, onClick, question, answer }) => {
 }
 // ====================== END FAQ SECTION ======================
 
+// ====================== MOBILE NOTICE BANNER ======================
+const MobileNotice = ({ onClose }) => {
+  return (
+    <div style={{
+      position: "sticky",
+      top: 0,
+      zIndex: 999,
+      background: `linear-gradient(135deg, ${C.dark}, ${C.primary})`,
+      color: "#fff",
+      padding: "12px 16px",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      gap: 12,
+      borderBottom: `2px solid ${C.amber}`,
+    }}>
+      <div style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 10,
+        flex: 1,
+      }}>
+        <FaDesktop size={20} color={C.amber} style={{ flexShrink: 0 }} />
+        <div style={{ flex: 1 }}>
+          <p style={{
+            fontSize: "0.8rem",
+            fontWeight: 600,
+            margin: 0,
+            lineHeight: 1.3,
+          }}>
+            📱 Best Experience on Desktop
+          </p>
+          <p style={{
+            fontSize: "0.65rem",
+            opacity: 0.8,
+            margin: "2px 0 0",
+            lineHeight: 1.3,
+          }}>
+            The dashboard features are optimized for laptop and desktop viewing. 
+            For the full experience, please open on a computer.
+          </p>
+        </div>
+      </div>
+      <button
+        onClick={onClose}
+        style={{
+          background: "rgba(255,255,255,0.1)",
+          border: "none",
+          color: "#fff",
+          cursor: "pointer",
+          padding: "4px 8px",
+          borderRadius: "50%",
+          fontSize: "1.2rem",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          transition: "background 0.2s",
+          flexShrink: 0,
+        }}
+        onMouseEnter={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.2)" }}
+        onMouseLeave={(e) => { e.currentTarget.style.background = "rgba(255,255,255,0.1)" }}
+      >
+        <FaTimes size={14} />
+      </button>
+    </div>
+  )
+}
+// ====================== END MOBILE NOTICE BANNER ======================
+
 const LandingPage = () => {
   const navigate=useNavigate()
   const [showScroll,setShowScroll]=useState(false)
@@ -907,6 +977,7 @@ const LandingPage = () => {
   const [winW,setWinW]=useState(window.innerWidth)
   const [regOpen,setRegOpen]=useState(false)
   const [activeTab,setActiveTab]=useState("smse")
+  const [showMobileNotice, setShowMobileNotice] = useState(true)
 
   useEffect(()=>{ const r=()=>setWinW(window.innerWidth); window.addEventListener("resize",r); return ()=>window.removeEventListener("resize",r) },[])
   useEffect(()=>{ const s=()=>setShowScroll(window.scrollY>400); window.addEventListener("scroll",s); return ()=>window.removeEventListener("scroll",s) },[])
@@ -967,8 +1038,11 @@ const LandingPage = () => {
   return (
     <div style={{background:C.light,fontFamily:"'Inter','Neue Haas Grotesk Text Pro',sans-serif",overflowX:"hidden"}}>
       <style>{css}</style>
+      
+      {/* Mobile Notice Banner - Only shows on mobile */}
+      {mobile && showMobileNotice && <MobileNotice onClose={() => setShowMobileNotice(false)} />}
+      
       {showModal&&<RegModal onClose={()=>setShowModal(false)} isMobile={mobile}/>}
-      {mobile&&<div style={{background:C.primary,color:"#fff",padding:"8px 16px",textAlign:"center",fontSize:"0.74rem",display:"flex",alignItems:"center",justifyContent:"center",gap:8}}><MdSmartphone/> Best viewed on a desktop or laptop.</div>}
       <Header onLoginClick={go}/>
 
       {/* HERO SECTION */}
