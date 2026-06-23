@@ -1,16 +1,52 @@
 import { useEffect, useRef, useState } from "react"
 import { Chart, registerables } from "chart.js"
-import { TrendingUp, DollarSign, Users, Clock, Building2, MapPin, Target, Award, PieChart, Briefcase, Activity } from "lucide-react"
+import { TrendingUp, DollarSign, Users, Clock, Building2, MapPin, Target, Award, PieChart, Briefcase, Activity, Loader2 } from "lucide-react"
 import styles from "../MyMatches/investor-funding.module.css"
 import "../../styles/insights-grid.css"
 import { db, auth } from "../../firebaseConfig"
-import { collection, query, onSnapshot, getDocs, where, doc, getDoc } from "firebase/firestore"
+import { collection, query, getDocs, where } from "firebase/firestore"
 import Upsell from "../../components/Upsell/Upsell"
 import useSubscriptionPlan from "../../hooks/useSubscriptionPlan"
 
 Chart.register(...registerables)
 
-export function InvestorInsights() {
+/** Batch-fetch documents by IDs using `where('__name__', 'in', chunk)` queries (max 10 per chunk). */
+async function fetchDocsById(collectionName, ids) {
+  if (!ids || ids.length === 0) return new Map()
+  const uniqueIds = [...new Set(ids)]
+  const chunks = []
+  for (let i = 0; i < uniqueIds.length; i += 10) {
+    chunks.push(uniqueIds.slice(i, i + 10))
+  }
+  const results = new Map()
+  const snapshots = await Promise.all(
+    chunks.map(chunk =>
+      getDocs(query(collection(db, collectionName), where("__name__", "in", chunk)))
+    )
+  )
+  for (const snap of snapshots) {
+    snap.forEach(docSnap => {
+      results.set(docSnap.id, { id: docSnap.id, ...docSnap.data() })
+    })
+  }
+  return results
+}
+
+/** Fetch investor profiles from universalProfiles first, falling back to MyuniversalProfiles. */
+async function fetchInvestorProfiles(funderIds) {
+  if (!funderIds || funderIds.length === 0) return new Map()
+  const uniqueIds = [...new Set(funderIds)]
+  // Try universalProfiles first
+  const profiles = await fetchDocsById("universalProfiles", uniqueIds)
+  const missingIds = uniqueIds.filter(id => !profiles.has(id))
+  if (missingIds.length > 0) {
+    const fallbackProfiles = await fetchDocsById("MyuniversalProfiles", missingIds)
+    fallbackProfiles.forEach((value, key) => profiles.set(key, value))
+  }
+  return profiles
+}
+
+export function InvestorInsights({ isInvestorProfile }) {
   const [activeTab, setActiveTab] = useState("investment-demand")
   const { currentPlan, subscriptionLoading } = useSubscriptionPlan()
   const charts = useRef([])
@@ -52,251 +88,6 @@ export function InvestorInsights() {
     accent3: "#3e2723",
   }
 
-  // ========== FETCH REAL DATA FROM EXISTING SOURCES ==========
-  const fetchRealCapitalFlowInsights = async () => {
-    try {
-      const currentUser = auth.currentUser
-      if (!currentUser) {
-        return getFallbackData()
-      }
-
-      // Fetch investor applications for current user only
-      const applicationsQuery = query(
-        collection(db, "investorApplications"),
-        where("funderId", "==", currentUser.uid)
-      )
-      const applicationsSnapshot = await getDocs(applicationsQuery)
-      
-      const applications = []
-      const smeIds = new Set()
-      
-      for (const docSnap of applicationsSnapshot.docs) {
-        const appData = docSnap.data()
-        if (appData.smeId) {
-          smeIds.add(appData.smeId)
-        }
-        
-        applications.push({
-          id: docSnap.id,
-          ...appData,
-          createdAt: appData.createdAt ? new Date(appData.createdAt) : new Date(),
-          fundingNeeded: 0,
-          amountApproved: appData.fundingDetails?.amountApproved || 0,
-          pipelineStage: appData.pipelineStage || "Application Received",
-          rejectionReason: appData.rejectionReason || appData.notes || null,
-          coInvestors: appData.coInvestors || [],
-        })
-      }
-
-      // Fetch SME profiles to get fundingNeeded
-      const smeProfileMap = new Map()
-      for (const smeId of Array.from(smeIds)) {
-        try {
-          const profileDoc = await getDoc(doc(db, "universalProfiles", smeId))
-          if (profileDoc.exists()) {
-            const profileData = profileDoc.data()
-            const fundingNeededStr = profileData.useOfFunds?.amountRequested || "0"
-            const fundingNeeded = parseInt(String(fundingNeededStr).replace(/[^\d]/g, "")) || 0
-            smeProfileMap.set(smeId, {
-              fundingNeeded,
-              fundingInstruments: profileData.useOfFunds?.fundingInstruments || [],
-              sector: profileData.entityOverview?.economicSectors?.[0] || "Other",
-              location: profileData.entityOverview?.location || "Unknown",
-            })
-          }
-        } catch (error) {
-          console.error("Error fetching SME profile:", smeId, error)
-        }
-      }
-
-      // Update applications with fundingNeeded from SME profiles
-      for (const app of applications) {
-        const smeData = smeProfileMap.get(app.smeId)
-        if (smeData) {
-          app.fundingNeeded = smeData.fundingNeeded
-          app.smeSector = smeData.sector
-          app.smeLocation = smeData.location
-          app.fundingInstruments = smeData.fundingInstruments
-        }
-      }
-
-      // 1. Instrument Breakdown
-      const instrumentCounts = { Equity: 0, Debt: 0, Grant: 0, Convertible: 0 }
-      let totalInstruments = 0
-      
-      for (const app of applications) {
-        const instruments = app.fundingInstruments || []
-        instruments.forEach(inst => {
-          const instLower = String(inst || "").toLowerCase()
-          if (instLower.includes("equity")) instrumentCounts.Equity++
-          else if (instLower.includes("debt")) instrumentCounts.Debt++
-          else if (instLower.includes("grant")) instrumentCounts.Grant++
-          else if (instLower.includes("convertible")) instrumentCounts.Convertible++
-          totalInstruments++
-        })
-      }
-      
-      const instrumentBreakdown = { Equity: 55, Debt: 25, Grant: 15, Convertible: 5 }
-      if (totalInstruments > 0) {
-        Object.keys(instrumentCounts).forEach(key => {
-          instrumentBreakdown[key] = Math.round((instrumentCounts[key] / totalInstruments) * 100)
-        })
-      }
-
-      // 2. Deal Stage Distribution
-      const stageCounts = { "Pre-seed": 0, "Seed": 0, "Series A": 0, "Series B": 0, "Series C+": 0 }
-      
-      for (const app of applications) {
-        const stage = app.dealStage || app.pipelineStage || "Seed"
-        const stageLower = String(stage).toLowerCase()
-        if (stageLower.includes("pre-seed")) stageCounts["Pre-seed"]++
-        else if (stageLower.includes("seed")) stageCounts["Seed"]++
-        else if (stageLower.includes("series a")) stageCounts["Series A"]++
-        else if (stageLower.includes("series b")) stageCounts["Series B"]++
-        else if (stageLower.includes("series c")) stageCounts["Series C+"]++
-        else stageCounts["Seed"]++
-      }
-      
-      const totalStages = Object.values(stageCounts).reduce((a, b) => a + b, 0)
-      const dealStages = { "Pre-seed": 12, "Seed": 28, "Series A": 35, "Series B": 18, "Series C+": 7 }
-      if (totalStages > 0) {
-        Object.keys(stageCounts).forEach(key => {
-          dealStages[key] = Math.round((stageCounts[key] / totalStages) * 100)
-        })
-      }
-
-      // 3. Funds Requested vs Funds Deployed (using fundingNeeded and amountApproved)
-      const yearlyData = {}
-      for (const app of applications) {
-        if (app.createdAt && app.createdAt.getFullYear) {
-          const year = app.createdAt.getFullYear()
-          const requested = app.fundingNeeded || 0
-          const deployed = app.amountApproved || 0
-          
-          if (!yearlyData[year]) {
-            yearlyData[year] = { requested: 0, deployed: 0 }
-          }
-          yearlyData[year].requested += requested
-          yearlyData[year].deployed += deployed
-        }
-      }
-      
-      let years = Object.keys(yearlyData).sort()
-      let requestedData = []
-      let deployedData = []
-      
-      if (years.length > 0) {
-        requestedData = years.map(y => Math.round(yearlyData[y].requested / 1000000))
-        deployedData = years.map(y => Math.round(yearlyData[y].deployed / 1000000))
-      } else {
-        years = ["2023", "2024", "2025"]
-        requestedData = [0, 0, 0]
-        deployedData = [0, 0, 0]
-      }
-      
-      const fundsRequestedVsDeployed = {
-        years: years,
-        requested: requestedData,
-        deployed: deployedData,
-      }
-
-      // 4. Rejection Reasons
-      const rejectedApps = applications.filter(app => 
-        app.pipelineStage === "Rejected" || app.pipelineStage === "Deal Declined"
-      )
-      const rejectionRate = applications.length > 0 ? Math.round((rejectedApps.length / applications.length) * 100) : 0
-      
-      const rejectionReasonCounts = {
-        "Poor financials": 0,
-        "Weak team": 0,
-        "Market too small": 0,
-        "No traction": 0,
-        "Other": 0
-      }
-      
-      for (const app of rejectedApps) {
-        const reason = app.rejectionReason || ""
-        const reasonLower = String(reason).toLowerCase()
-        if (reasonLower.includes("financial")) rejectionReasonCounts["Poor financials"]++
-        else if (reasonLower.includes("team")) rejectionReasonCounts["Weak team"]++
-        else if (reasonLower.includes("market")) rejectionReasonCounts["Market too small"]++
-        else if (reasonLower.includes("traction")) rejectionReasonCounts["No traction"]++
-        else rejectionReasonCounts["Other"]++
-      }
-      
-      const totalRejected = rejectedApps.length || 1
-      const rejectionReasons = {}
-      Object.keys(rejectionReasonCounts).forEach(key => {
-        rejectionReasons[key] = Math.round((rejectionReasonCounts[key] / totalRejected) * 100)
-      })
-
-      // 5. Funder Types
-      const investorSnapshot = await getDocs(collection(db, "MyuniversalProfiles"))
-      const funderTypeCounts = { VC: 0, Angel: 0, DFI: 0, "Corporate VC": 0, "Family Office": 0 }
-      
-      for (const docSnap of investorSnapshot.docs) {
-        const formData = docSnap.data().formData || {}
-        const investorType = formData.fundManageOverview?.investorType || 
-                            formData.entityOverview?.investorType || "VC"
-        const typeLower = String(investorType).toLowerCase()
-        if (typeLower.includes("vc") || typeLower.includes("venture")) funderTypeCounts.VC++
-        else if (typeLower.includes("angel")) funderTypeCounts.Angel++
-        else if (typeLower.includes("dfi")) funderTypeCounts.DFI++
-        else if (typeLower.includes("corporate")) funderTypeCounts["Corporate VC"]++
-        else if (typeLower.includes("family")) funderTypeCounts["Family Office"]++
-        else funderTypeCounts.VC++
-      }
-      
-      const totalFunders = Object.values(funderTypeCounts).reduce((a, b) => a + b, 0)
-      const funderTypes = { VC: 45, Angel: 20, DFI: 18, "Corporate VC": 12, "Family Office": 5 }
-      if (totalFunders > 0) {
-        Object.keys(funderTypeCounts).forEach(key => {
-          if (funderTypeCounts[key] > 0) {
-            funderTypes[key] = Math.round((funderTypeCounts[key] / totalFunders) * 100)
-          }
-        })
-      }
-
-      // 6. Co-investment Activity
-      const dealsWithCoInvestors = applications.filter(app => app.coInvestors && app.coInvestors.length > 0).length
-      const coInvestment = {
-        "With Co-investors": applications.length > 0 ? Math.round((dealsWithCoInvestors / applications.length) * 100) : 45,
-        "Solo": applications.length > 0 ? 100 - Math.round((dealsWithCoInvestors / applications.length) * 100) : 55
-      }
-
-      // 7. Averages
-      const requestedAmounts = applications.map(app => app.fundingNeeded).filter(a => a > 0)
-      const avgDealSize = requestedAmounts.length > 0 
-        ? (requestedAmounts.reduce((a, b) => a + b, 0) / requestedAmounts.length / 1000000) 
-        : 12.5
-      
-      const fundSizes = []
-      for (const docSnap of investorSnapshot.docs) {
-        const formData = docSnap.data().formData || {}
-        const fundSize = formData.fundManageOverview?.fundSize || formData.fundManageOverview?.totalFundSize
-        if (fundSize && typeof fundSize === 'number') fundSizes.push(fundSize)
-      }
-      const avgFundSize = fundSizes.length > 0 ? (fundSizes.reduce((a, b) => a + b, 0) / fundSizes.length / 1000000) : 45
-
-      return {
-        instrumentBreakdown,
-        fundsRequestedVsDeployed,
-        rejectionReasons,
-        funderTypes,
-        coInvestment,
-        dealStages,
-        avgDealSize: Math.round(avgDealSize * 10) / 10,
-        avgFundSize: Math.round(avgFundSize),
-        rejectionRate,
-        totalApplications: applications.length,
-        totalDeployed: applications.filter(a => a.amountApproved > 0).length,
-      }
-    } catch (error) {
-      console.error("Error fetching capital flow insights:", error)
-      return getFallbackData()
-    }
-  }
-
   const getFallbackData = () => ({
     instrumentBreakdown: { Equity: 55, Debt: 25, Grant: 15, Convertible: 5 },
     fundsRequestedVsDeployed: { years: ["2023", "2024", "2025"], requested: [0, 0, 0], deployed: [0, 0, 0] },
@@ -311,86 +102,61 @@ export function InvestorInsights() {
     totalDeployed: 0,
   })
 
-  const fetchRealTimeInvestmentData = () => {
-    return new Promise((resolve) => {
-      const applicationsQuery = query(collection(db, "investorApplications"))
-      
-      const unsubscribeApplications = onSnapshot(applicationsQuery, async (querySnapshot) => {
-        try {
-          const applications = []
-          const smeIds = new Set()
-          const investorIds = new Set()
-          
-          querySnapshot.forEach((docSnap) => {
-            const appData = docSnap.data()
-            applications.push({
-              id: docSnap.id,
-              ...appData,
-              createdAt: appData.createdAt ? new Date(appData.createdAt) : new Date(),
-              updatedAt: appData.updatedAt ? new Date(appData.updatedAt) : new Date(),
-            })
-            if (appData.smeId) smeIds.add(appData.smeId)
-            if (appData.funderId) investorIds.add(appData.funderId)
-          })
+  // ========== BATCHED DATA FETCHING – SHARED BETWEEN INSIGHTS ==========
 
-          const smeProfiles = []
-          for (const smeId of Array.from(smeIds)) {
-            try {
-              const profileDoc = await getDoc(doc(db, "universalProfiles", smeId))
-              if (profileDoc.exists()) {
-                smeProfiles.push({ id: smeId, ...profileDoc.data() })
-              }
-            } catch (error) {
-              console.error("Error fetching SME profile:", error)
-            }
-          }
+  /** Fetch all investor applications (one-time read) + batched SME + investor profiles. */
+  const fetchApplicationsWithProfiles = async () => {
+    const currentUser = auth.currentUser
+    if (!currentUser) return { applications: [], smeProfileMap: new Map(), investorProfileMap: new Map(), investorNameMap: {} }
 
-          const investorProfiles = {}
-          for (const investorId of Array.from(investorIds)) {
-            try {
-              const profileDoc = await getDoc(doc(db, "universalProfiles", investorId))
-              if (profileDoc.exists()) {
-                investorProfiles[investorId] = {
-                  name: profileDoc.data().entityOverview?.registeredName || `Investor ${investorId.substring(0, 6)}...`,
-                  id: investorId
-                }
-              } else {
-                const myProfileDoc = await getDoc(doc(db, "MyuniversalProfiles", investorId))
-                if (myProfileDoc.exists()) {
-                  investorProfiles[investorId] = {
-                    name: myProfileDoc.data().formData?.fundManageOverview?.registeredName || `Investor ${investorId.substring(0, 6)}...`,
-                    id: investorId
-                  }
-                } else {
-                  investorProfiles[investorId] = {
-                    name: `Investor ${investorId.substring(0, 6)}...`,
-                    id: investorId
-                  }
-                }
-              }
-            } catch (error) {
-              console.error("Error fetching investor profile:", error)
-            }
-          }
+    // 1. One-time read of investorApplications (replaces onSnapshot)
+    const applicationsSnapshot = await getDocs(
+      query(collection(db, "investorApplications"))
+    )
 
-          const insights = calculateInsights(applications, smeProfiles, investorProfiles)
-          resolve(insights)
-          unsubscribeApplications()
-        } catch (error) {
-          console.error("Error fetching real-time insights:", error)
-          resolve(null)
-          unsubscribeApplications()
-        }
+    const applications = []
+    const smeIds = new Set()
+    const funderIds = new Set()
+
+    for (const docSnap of applicationsSnapshot.docs) {
+      const appData = docSnap.data()
+      applications.push({
+        id: docSnap.id,
+        ...appData,
+        createdAt: appData.createdAt ? new Date(appData.createdAt) : new Date(),
+        updatedAt: appData.updatedAt ? new Date(appData.updatedAt) : new Date(),
       })
-    })
+      if (appData.smeId) smeIds.add(appData.smeId)
+      if (appData.funderId) funderIds.add(appData.funderId)
+    }
+
+    // 2. Batch-fetch all SME profiles in parallel (chunked by 10)
+    const smeProfileMap = await fetchDocsById("universalProfiles", [...smeIds])
+
+    // 3. Batch-fetch all investor profiles in parallel with dual-collection fallback
+    const investorProfileMap = await fetchInvestorProfiles([...funderIds])
+
+    // 4. Build investor name map (matching the shape calculateInsights expects)
+    const investorNameMap = {}
+    for (const [id, data] of investorProfileMap) {
+      const name =
+        data.entityOverview?.registeredName ||
+        data.formData?.fundManageOverview?.registeredName ||
+        `Investor ${id.substring(0, 6)}...`
+      investorNameMap[id] = { name, id }
+    }
+
+    return { applications, smeProfileMap, investorProfileMap, investorNameMap }
   }
+
+  // ========== INVESTMENT DEMAND INSIGHTS ==========
 
   const calculateInsights = (applications, smeProfiles, investorProfiles) => {
     const totalApplications = applications.length
     const successfulApplications = applications.filter(app => app.pipelineStage === "Deal Complete").length
     const successRate = totalApplications > 0 ? Math.round((successfulApplications / totalApplications) * 100) : 0
 
-    const fundingAmounts = smeProfiles
+    const fundingAmounts = Object.values(smeProfiles)
       .map((profile) => {
         const amount = profile.useOfFunds?.amountRequested?.replace(/[^\d]/g, "")
         return amount ? Number.parseInt(amount) : 0
@@ -410,7 +176,7 @@ export function InvestorInsights() {
       : 0
 
     const investmentTypes = {}
-    smeProfiles.forEach((profile) => {
+    Object.values(smeProfiles).forEach((profile) => {
       const instruments = profile.useOfFunds?.fundingInstruments
       if (Array.isArray(instruments)) {
         instruments.forEach((instrument) => {
@@ -422,7 +188,7 @@ export function InvestorInsights() {
 
     const sectorData = {}
     const sectorAmounts = {}
-    smeProfiles.forEach((profile) => {
+    Object.values(smeProfiles).forEach((profile) => {
       const sector = formatLabel(profile.entityOverview?.economicSectors?.[0]) || "Other"
       const amount = Number.parseInt(profile.useOfFunds?.amountRequested?.replace(/[^\d]/g, "") || "0")
       sectorData[sector] = (sectorData[sector] || 0) + 1
@@ -431,7 +197,7 @@ export function InvestorInsights() {
 
     const regionData = {}
     const regionAmounts = {}
-    smeProfiles.forEach((profile) => {
+    Object.values(smeProfiles).forEach((profile) => {
       const location = formatLabel(profile.entityOverview?.location) || "Unknown"
       const amount = Number.parseInt(profile.useOfFunds?.amountRequested?.replace(/[^\d]/g, "") || "0")
       regionData[location] = (regionData[location] || 0) + 1
@@ -447,7 +213,7 @@ export function InvestorInsights() {
     const typeSuccessRates = {}
     Object.keys(investmentTypes).forEach((type) => {
       const typeApps = applications.filter((app) => {
-        const profile = smeProfiles.find((p) => p.id === app.smeId)
+        const profile = smeProfiles[app.smeId]
         return profile?.useOfFunds?.fundingInstruments?.some((inst) => formatLabel(inst) === type)
       })
       const successful = typeApps.filter(app => app.pipelineStage === "Deal Complete").length
@@ -468,9 +234,9 @@ export function InvestorInsights() {
     const mostActiveInvestors = Object.entries(investorData)
       .sort((a, b) => b[1] - a[1])
       .slice(0, 5)
-      .map(([id, investments]) => ({ 
-        name: investorProfiles[id]?.name || `Investor ${id.substring(0, 6)}...`, 
-        investments 
+      .map(([id, investments]) => ({
+        name: investorProfiles[id]?.name || `Investor ${id.substring(0, 6)}...`,
+        investments
       }))
 
     return {
@@ -516,13 +282,248 @@ export function InvestorInsights() {
       applicationsByRegion: regionData,
       successRateByRegion: Object.keys(regionData).reduce((acc, region) => {
         const regionApps = applications.filter((app) => {
-          const profile = smeProfiles.find((p) => p.id === app.smeId)
+          const profile = smeProfiles[app.smeId]
           return formatLabel(profile?.entityOverview?.location) === region
         })
         const successful = regionApps.filter(app => app.pipelineStage === "Deal Complete").length
         acc[region] = regionApps.length > 0 ? Math.round((successful / regionApps.length) * 100) : 0
         return acc
       }, {}),
+    }
+  }
+
+  // ========== CAPITAL FLOW INSIGHTS (SHARES ALREADY-FETCHED PROFILES) ==========
+
+  const fetchRealCapitalFlowInsights = async (sharedSmeProfileMap, sharedInvestorProfileMap, sharedInvestorNameMap) => {
+    try {
+      const currentUser = auth.currentUser
+      if (!currentUser) {
+        return getFallbackData()
+      }
+
+      // Fetch investor applications for current user only
+      const applicationsQuery = query(
+        collection(db, "investorApplications"),
+        where("funderId", "==", currentUser.uid)
+      )
+      const applicationsSnapshot = await getDocs(applicationsQuery)
+
+      const applications = []
+      const smeIds = new Set()
+
+      for (const docSnap of applicationsSnapshot.docs) {
+        const appData = docSnap.data()
+        if (appData.smeId) {
+          smeIds.add(appData.smeId)
+        }
+
+        applications.push({
+          id: docSnap.id,
+          ...appData,
+          createdAt: appData.createdAt ? new Date(appData.createdAt) : new Date(),
+          fundingNeeded: 0,
+          amountApproved: appData.fundingDetails?.amountApproved || 0,
+          pipelineStage: appData.pipelineStage || "Application Received",
+          rejectionReason: appData.rejectionReason || appData.notes || null,
+          coInvestors: appData.coInvestors || [],
+        })
+      }
+
+      // Use the already-fetched SME profile map instead of re-fetching
+      // For any SME IDs not in the shared map (unlikely but safe), fetch them
+      const localSmeMap = new Map(sharedSmeProfileMap)
+      const missingSmeIds = [...smeIds].filter(id => !localSmeMap.has(id))
+      if (missingSmeIds.length > 0) {
+        const missingProfiles = await fetchDocsById("universalProfiles", missingSmeIds)
+        missingProfiles.forEach((value, key) => localSmeMap.set(key, value))
+      }
+
+      // Update applications with fundingNeeded from SME profiles
+      for (const app of applications) {
+        const smeData = localSmeMap.get(app.smeId)
+        if (smeData) {
+          const fundingNeededStr = smeData.useOfFunds?.amountRequested || "0"
+          app.fundingNeeded = parseInt(String(fundingNeededStr).replace(/[^\d]/g, "")) || 0
+          app.smeSector = smeData.entityOverview?.economicSectors?.[0] || "Other"
+          app.smeLocation = smeData.entityOverview?.location || "Unknown"
+          app.fundingInstruments = smeData.useOfFunds?.fundingInstruments || []
+        }
+      }
+
+      // 1. Instrument Breakdown
+      const instrumentCounts = { Equity: 0, Debt: 0, Grant: 0, Convertible: 0 }
+      let totalInstruments = 0
+
+      for (const app of applications) {
+        const instruments = app.fundingInstruments || []
+        instruments.forEach(inst => {
+          const instLower = String(inst || "").toLowerCase()
+          if (instLower.includes("equity")) instrumentCounts.Equity++
+          else if (instLower.includes("debt")) instrumentCounts.Debt++
+          else if (instLower.includes("grant")) instrumentCounts.Grant++
+          else if (instLower.includes("convertible")) instrumentCounts.Convertible++
+          totalInstruments++
+        })
+      }
+
+      const instrumentBreakdown = { Equity: 55, Debt: 25, Grant: 15, Convertible: 5 }
+      if (totalInstruments > 0) {
+        Object.keys(instrumentCounts).forEach(key => {
+          instrumentBreakdown[key] = Math.round((instrumentCounts[key] / totalInstruments) * 100)
+        })
+      }
+
+      // 2. Deal Stage Distribution
+      const stageCounts = { "Pre-seed": 0, "Seed": 0, "Series A": 0, "Series B": 0, "Series C+": 0 }
+
+      for (const app of applications) {
+        const stage = app.dealStage || app.pipelineStage || "Seed"
+        const stageLower = String(stage).toLowerCase()
+        if (stageLower.includes("pre-seed")) stageCounts["Pre-seed"]++
+        else if (stageLower.includes("seed")) stageCounts["Seed"]++
+        else if (stageLower.includes("series a")) stageCounts["Series A"]++
+        else if (stageLower.includes("series b")) stageCounts["Series B"]++
+        else if (stageLower.includes("series c")) stageCounts["Series C+"]++
+        else stageCounts["Seed"]++
+      }
+
+      const totalStages = Object.values(stageCounts).reduce((a, b) => a + b, 0)
+      const dealStages = { "Pre-seed": 12, "Seed": 28, "Series A": 35, "Series B": 18, "Series C+": 7 }
+      if (totalStages > 0) {
+        Object.keys(stageCounts).forEach(key => {
+          dealStages[key] = Math.round((stageCounts[key] / totalStages) * 100)
+        })
+      }
+
+      // 3. Funds Requested vs Funds Deployed (using fundingNeeded and amountApproved)
+      const yearlyData = {}
+      for (const app of applications) {
+        if (app.createdAt && app.createdAt.getFullYear) {
+          const year = app.createdAt.getFullYear()
+          const requested = app.fundingNeeded || 0
+          const deployed = app.amountApproved || 0
+
+          if (!yearlyData[year]) {
+            yearlyData[year] = { requested: 0, deployed: 0 }
+          }
+          yearlyData[year].requested += requested
+          yearlyData[year].deployed += deployed
+        }
+      }
+
+      let years = Object.keys(yearlyData).sort()
+      let requestedData = []
+      let deployedData = []
+
+      if (years.length > 0) {
+        requestedData = years.map(y => Math.round(yearlyData[y].requested / 1000000))
+        deployedData = years.map(y => Math.round(yearlyData[y].deployed / 1000000))
+      } else {
+        years = ["2023", "2024", "2025"]
+        requestedData = [0, 0, 0]
+        deployedData = [0, 0, 0]
+      }
+
+      const fundsRequestedVsDeployed = {
+        years: years,
+        requested: requestedData,
+        deployed: deployedData,
+      }
+
+      // 4. Rejection Reasons
+      const rejectedApps = applications.filter(app =>
+        app.pipelineStage === "Rejected" || app.pipelineStage === "Deal Declined"
+      )
+      const rejectionRate = applications.length > 0 ? Math.round((rejectedApps.length / applications.length) * 100) : 0
+
+      const rejectionReasonCounts = {
+        "Poor financials": 0,
+        "Weak team": 0,
+        "Market too small": 0,
+        "No traction": 0,
+        "Other": 0
+      }
+
+      for (const app of rejectedApps) {
+        const reason = app.rejectionReason || ""
+        const reasonLower = String(reason).toLowerCase()
+        if (reasonLower.includes("financial")) rejectionReasonCounts["Poor financials"]++
+        else if (reasonLower.includes("team")) rejectionReasonCounts["Weak team"]++
+        else if (reasonLower.includes("market")) rejectionReasonCounts["Market too small"]++
+        else if (reasonLower.includes("traction")) rejectionReasonCounts["No traction"]++
+        else rejectionReasonCounts["Other"]++
+      }
+
+      const totalRejected = rejectedApps.length || 1
+      const rejectionReasons = {}
+      Object.keys(rejectionReasonCounts).forEach(key => {
+        rejectionReasons[key] = Math.round((rejectionReasonCounts[key] / totalRejected) * 100)
+      })
+
+      // 5. Funder Types – use the already-batched investor profile map instead of scanning the whole collection
+      const funderTypeCounts = { VC: 0, Angel: 0, DFI: 0, "Corporate VC": 0, "Family Office": 0 }
+      let totalFunders = 0
+
+      for (const [, profileData] of sharedInvestorProfileMap) {
+        const formData = profileData.formData || {}
+        const investorType = formData.fundManageOverview?.investorType ||
+                             formData.entityOverview?.investorType || "VC"
+        const typeLower = String(investorType).toLowerCase()
+        if (typeLower.includes("vc") || typeLower.includes("venture")) funderTypeCounts.VC++
+        else if (typeLower.includes("angel")) funderTypeCounts.Angel++
+        else if (typeLower.includes("dfi")) funderTypeCounts.DFI++
+        else if (typeLower.includes("corporate")) funderTypeCounts["Corporate VC"]++
+        else if (typeLower.includes("family")) funderTypeCounts["Family Office"]++
+        else funderTypeCounts.VC++
+        totalFunders++
+      }
+
+      const funderTypes = { VC: 45, Angel: 20, DFI: 18, "Corporate VC": 12, "Family Office": 5 }
+      if (totalFunders > 0) {
+        Object.keys(funderTypeCounts).forEach(key => {
+          if (funderTypeCounts[key] > 0) {
+            funderTypes[key] = Math.round((funderTypeCounts[key] / totalFunders) * 100)
+          }
+        })
+      }
+
+      // 6. Co-investment Activity
+      const dealsWithCoInvestors = applications.filter(app => app.coInvestors && app.coInvestors.length > 0).length
+      const coInvestment = {
+        "With Co-investors": applications.length > 0 ? Math.round((dealsWithCoInvestors / applications.length) * 100) : 45,
+        "Solo": applications.length > 0 ? 100 - Math.round((dealsWithCoInvestors / applications.length) * 100) : 55
+      }
+
+      // 7. Averages – use fetched investor profiles for fund sizes instead of re-scanning
+      const requestedAmounts = applications.map(app => app.fundingNeeded).filter(a => a > 0)
+      const avgDealSize = requestedAmounts.length > 0
+        ? (requestedAmounts.reduce((a, b) => a + b, 0) / requestedAmounts.length / 1000000)
+        : 12.5
+
+      const fundSizes = []
+      for (const [, profileData] of sharedInvestorProfileMap) {
+        const formData = profileData.formData || {}
+        const fundSize = formData.fundManageOverview?.fundSize || formData.fundManageOverview?.totalFundSize
+        if (fundSize && typeof fundSize === 'number') fundSizes.push(fundSize)
+      }
+      const avgFundSize = fundSizes.length > 0 ? (fundSizes.reduce((a, b) => a + b, 0) / fundSizes.length / 1000000) : 45
+
+      return {
+        instrumentBreakdown,
+        fundsRequestedVsDeployed,
+        rejectionReasons,
+        funderTypes,
+        coInvestment,
+        dealStages,
+        avgDealSize: Math.round(avgDealSize * 10) / 10,
+        avgFundSize: Math.round(avgFundSize),
+        rejectionRate,
+        totalApplications: applications.length,
+        totalDeployed: applications.filter(a => a.amountApproved > 0).length,
+      }
+    } catch (error) {
+      console.error("Error fetching capital flow insights:", error)
+      return getFallbackData()
     }
   }
 
@@ -542,17 +543,26 @@ export function InvestorInsights() {
       .join(", ")
   }
 
+  // ========== MAIN DATA FETCH (SHARED PROFILES, PARALLEL EXECUTION) ==========
+
   useEffect(() => {
     if (subscriptionLoading) return
     if (currentPlan === "basic") return
-    
+
     const fetchAllData = async () => {
       setLoading(true)
       try {
-        const [investmentData, capitalData] = await Promise.all([
-          fetchRealTimeInvestmentData(),
-          fetchRealCapitalFlowInsights()
-        ])
+        // Step 1: Fetch applications and batch all profiles once
+        const { applications, smeProfileMap, investorProfileMap, investorNameMap } =
+          await fetchApplicationsWithProfiles()
+
+        // Step 2: Compute investment insights (uses the batched maps)
+        const investmentData = calculateInsights(applications, Object.fromEntries(smeProfileMap), investorNameMap)
+
+        // Step 3: Compute capital flow insights – passes the already-fetched maps
+        // This shares the SME and investor profile maps, eliminating re-fetches
+        const capitalData = await fetchRealCapitalFlowInsights(smeProfileMap, investorProfileMap, investorNameMap)
+
         setRealTimeInsights(investmentData)
         setCapitalFlowInsights(capitalData)
       } catch (error) {
@@ -561,7 +571,7 @@ export function InvestorInsights() {
         setLoading(false)
       }
     }
-    
+
     fetchAllData()
   }, [subscriptionLoading, currentPlan])
 
@@ -835,17 +845,17 @@ export function InvestorInsights() {
         options: {
           responsive: true,
           maintainAspectRatio: false,
-          plugins: { 
-            title: { display: true, text: "Funds Requested vs Funds Deployed", color: brownPalette.primary, font: { weight: "bold", size: 12 } }, 
-            legend: { position: "top", labels: { font: { size: 10 } } } 
+          plugins: {
+            title: { display: true, text: "Funds Requested vs Funds Deployed", color: brownPalette.primary, font: { weight: "bold", size: 12 } },
+            legend: { position: "top", labels: { font: { size: 10 } } }
           },
-          scales: { 
-            y: { 
-              beginAtZero: true, 
-              ticks: { color: brownPalette.primary, font: { size: 10 }, callback: (value) => "R" + value + "M" }, 
-              grid: { color: brownPalette.lighter } 
-            }, 
-            x: { ticks: { color: brownPalette.primary, font: { size: 10 } }, grid: { color: brownPalette.lighter } } 
+          scales: {
+            y: {
+              beginAtZero: true,
+              ticks: { color: brownPalette.primary, font: { size: 10 }, callback: (value) => "R" + value + "M" },
+              grid: { color: brownPalette.lighter }
+            },
+            x: { ticks: { color: brownPalette.primary, font: { size: 10 } }, grid: { color: brownPalette.lighter } }
           }
         },
       })
@@ -940,9 +950,9 @@ export function InvestorInsights() {
 
   if (loading || !realTimeInsights || !capitalFlowInsights) {
     return (
-      <div style={{ padding: "20px", minHeight: "100vh", backgroundColor: "#fafafa", display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <div style={{ padding: "20px", backgroundColor: "#fafafa", display: "flex", alignItems: "center", justifyContent: "center" }}>
         <div style={{ textAlign: "center", color: "#6d4c41" }}>
-          <div style={{ width: "40px", height: "40px", border: "3px solid #e0d5c8", borderTop: "3px solid #a67c52", borderRadius: "50%", animation: "spin 1s linear infinite", margin: "0 auto 16px" }}></div>
+          <Loader2 size={32} className="spin" style={{ animation: 'spin 1s linear infinite', marginBottom: '16px' }} />
           <h2>Loading Platform Insights...</h2>
           <p>Fetching investment data...</p>
           <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
@@ -953,10 +963,12 @@ export function InvestorInsights() {
 
   return (
     <div style={{ padding: "20px", minHeight: "100vh", backgroundColor: "#fafafa", boxSizing: "border-box" }}>
-      <div style={{ backgroundColor: "#f5f5f5", padding: "30px 40px", borderRadius: "8px", marginBottom: "24px", textAlign: "center", maxWidth: "1400px", marginLeft: "auto", marginRight: "auto" }}>
-        <h1 style={{ fontSize: "42px", fontWeight: "bold", color: "#6d4c41", marginBottom: "8px", marginTop: "0" }}>BIG Platform Insights</h1>
-        <p style={{ fontSize: "18px", color: "#8d6e63", margin: "0", fontWeight: "400" }}>Real-time analytics and insights across all investors on the platform</p>
-      </div>
+      {isInvestorProfile && (
+        <div style={{ backgroundColor: "#f5f5f5", padding: "30px 40px", borderRadius: "8px", marginBottom: "24px", textAlign: "center", maxWidth: "1400px", marginLeft: "auto", marginRight: "auto" }}>
+          <h1 style={{ fontSize: "42px", fontWeight: "bold", color: "#6d4c41", marginBottom: "8px", marginTop: "0" }}>BIG Platform Insights</h1>
+          <p style={{ fontSize: "18px", color: "#8d6e63", margin: "0", fontWeight: "400" }}>Real-time analytics and insights across all investors on the platform</p>
+        </div>
+      )}
 
       <div className={styles.fundingInsights} style={{ maxWidth: "1400px", marginLeft: "auto", marginRight: "auto", padding: "0 10px" }}>
         <div className={styles.insightsSummary}>

@@ -5,6 +5,7 @@ import { Chart, registerables } from "chart.js"
 import { TrendingUp, DollarSign, Users, Clock, Building2, MapPin, Target, Award } from "lucide-react"
 import { collection, onSnapshot, query, where, getDocs } from "firebase/firestore"
 import { db } from "../../firebaseConfig"
+import { InvestorInsights } from "../../Investor/InvestorInsights/investorInsights"
 import "../MyFunderMatches/funding-insights.css"
 import "../../styles/insights-grid.css"
 
