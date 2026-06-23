@@ -278,14 +278,14 @@ export const QAMasterTable = ({ tasks, onUpdateTask, onAddTask, onDeleteTask, is
               {QA_COLUMNS.map(col => (
                 <th key={col.id} style={{
                   padding: '10px 12px', textAlign: 'left', fontWeight: 700,
-                  color: '#4a352f', whiteSpace: 'nowrap', fontSize: 12,
+                  whiteSpace: 'nowrap', fontSize: 12,
                   borderRight: '1px solid #e6d7c3', minWidth: col.width,
-                  maxWidth: 120,
+                  maxWidth: 120, background: '#4a352f', color: '#fff',
                 }}>
                   {col.label}
                 </th>
               ))}
-              <th style={{ padding: '10px 12px', color: '#4a352f', fontSize: 12, minWidth: 52, maxWidth: 52 }}>Del</th>
+              <th style={{ padding: '10px 12px', background: '#4a352f', color: '#fff', fontSize: 12, minWidth: 52, maxWidth: 52 }}>Del</th>
             </tr>
           </thead>
           <tbody>
