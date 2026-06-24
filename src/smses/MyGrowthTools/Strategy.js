@@ -10,8 +10,6 @@ import {
   FaRobot,
   FaSpinner,
   FaDownload,
-   FaChevronLeft, 
-  FaChevronRight, 
 } from "react-icons/fa";
 import {
   collection,
@@ -125,16 +123,6 @@ const SECTION_DATA = {
     name: "Change and Adaptability",
     keyQuestion:
       "Does the organization effectively adapt its strategy based on feedback and changing conditions?",
-    keySignals:
-      "Strategy reviews occur regularly, Pivots are documented and reasoned",
-    keyDecisions:
-      "When to pivot vs persist? What adjustments are needed? How to communicate changes?",
-    kpis: ["Review frequency", "Pivot documentation", "Strategy adjustments"],
-  },
-   "governance-calendar": {
-    name: "Governance Calendar",
-    keyQuestion:
-      "Are you up to date with your upcoming meetings?",
     keySignals:
       "Strategy reviews occur regularly, Pivots are documented and reasoned",
     keyDecisions:
@@ -3521,9 +3509,9 @@ const StrategicGoals = ({
       overallCompletionRate:
         data.length > 0
           ? Math.round(
-              data.reduce((sum, m) => sum + (m.percentageCompletion || 0), 0) /
-                data.length,
-            )
+            data.reduce((sum, m) => sum + (m.percentageCompletion || 0), 0) /
+            data.length,
+          )
           : 0,
     };
   };
@@ -3543,21 +3531,21 @@ MILESTONES BY STATUS:
 
 MILESTONES BY GOAL DOMAIN:
 ${Object.keys(data.milestonesByDomain)
-  .map((domain) => {
-    const milestones = data.milestonesByDomain[domain];
-    const avgCompletion = data.avgCompletionByDomain[domain] || 0;
-    return `- ${domain}: ${milestones.length} milestones, ${avgCompletion}% avg completion`;
-  })
-  .join("\n")}
+        .map((domain) => {
+          const milestones = data.milestonesByDomain[domain];
+          const avgCompletion = data.avgCompletionByDomain[domain] || 0;
+          return `- ${domain}: ${milestones.length} milestones, ${avgCompletion}% avg completion`;
+        })
+        .join("\n")}
 
 MILESTONE DETAILS BY DOMAIN:
 ${Object.keys(data.milestonesByDomain)
-  .map((domain) => {
-    const milestones = data.milestonesByDomain[domain];
-    return `\n${domain}:
+        .map((domain) => {
+          const milestones = data.milestonesByDomain[domain];
+          return `\n${domain}:
   ${milestones.map((m) => `  • Goal: ${m.goal} - Goal Description: ${m.goalDescription || "Not provided"} - Milestone: ${m.milestoneDescription} - Status: ${m.status}, ${m.percentageCompletion}% complete, Owner: ${m.owner}, Target: ${m.targetDate}`).join("\n")}`;
-  })
-  .join("")}
+        })
+        .join("")}
 
 ANALYSIS REQUIREMENTS:
 
@@ -3971,7 +3959,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
               data={createChartData(
                 activeSubTab,
                 categories.find((c) => c.key === activeSubTab)?.color ||
-                  "#7d5a50",
+                "#7d5a50",
               )}
               options={chartOptions}
               data-growth-stage={activeSubTab}
@@ -4290,18 +4278,18 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
             filterStatus ||
             filterOwner ||
             filterDate) && (
-            <span style={{ fontSize: "12px", color: "#8d6e63" }}>
-              Showing {filteredMilestones.length} of{" "}
-              {
-                milestoneData.filter((m) =>
-                  activeSubTab === "all"
-                    ? true
-                    : m.growthStage === activeSubTab,
-                ).length
-              }{" "}
-              items
-            </span>
-          )}
+              <span style={{ fontSize: "12px", color: "#8d6e63" }}>
+                Showing {filteredMilestones.length} of{" "}
+                {
+                  milestoneData.filter((m) =>
+                    activeSubTab === "all"
+                      ? true
+                      : m.growthStage === activeSubTab,
+                  ).length
+                }{" "}
+                items
+              </span>
+            )}
         </div>
 
         {filteredMilestones.length === 0 ? (
@@ -4316,10 +4304,10 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
               filterStatus ||
               filterOwner ||
               filterDate) && (
-              <p style={{ marginTop: "10px", fontSize: "13px" }}>
-                Try clearing some filters to see more milestones.
-              </p>
-            )}
+                <p style={{ marginTop: "10px", fontSize: "13px" }}>
+                  Try clearing some filters to see more milestones.
+                </p>
+              )}
           </div>
         ) : (
           <div style={{ overflowX: "auto" }}>
@@ -5433,7 +5421,9 @@ const RiskManagement = ({ activeSection, currentUser, isInvestorView }) => {
   const [hoveredRiskType, setHoveredRiskType] = useState(null);
   const [selectedMonth, setSelectedMonth] = useState("");
   const [selectedYear, setSelectedYear] = useState("");
-
+  // Add these with the other state declarations
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveSuccess, setSaveSuccess] = useState(false);
   // Table filter states - Reduced to essential ones
   const [filterRisk, setFilterRisk] = useState("");
   const [filterCategory, setFilterCategory] = useState("");
@@ -5987,24 +5977,24 @@ GOVERNANCE METRICS:
 
 RISK CATEGORY BREAKDOWN:
 ${Object.keys(data.avgScoresByCategory)
-  .map((category) => {
-    const cat = data.avgScoresByCategory[category];
-    return `- ${category}: ${cat.count} risks, Avg Risk Score: ${cat.avgRiskScore}, Controlled: ${cat.controlledRisks}/${cat.count}`;
-  })
-  .join("\n")}
+        .map((category) => {
+          const cat = data.avgScoresByCategory[category];
+          return `- ${category}: ${cat.count} risks, Avg Risk Score: ${cat.avgRiskScore}, Controlled: ${cat.controlledRisks}/${cat.count}`;
+        })
+        .join("\n")}
 
 TOP 5 HIGHEST RISK ITEMS:
 ${data.highRiskItems
-  .map(
-    (risk, i) =>
-      `  ${i + 1}. ${risk.riskSubCategory || "Unnamed Risk"} (${risk.riskNumber || "N/A"}) - Score: ${risk.riskScore} (Severity: ${risk.severity}, Likelihood: ${risk.likelihood}), Status: ${risk.mitigationStatus}, Owner: ${risk.owner || "Unassigned"}`,
-  )
-  .join("\n")}
+        .map(
+          (risk, i) =>
+            `  ${i + 1}. ${risk.riskSubCategory || "Unnamed Risk"} (${risk.riskNumber || "N/A"}) - Score: ${risk.riskScore} (Severity: ${risk.severity}, Likelihood: ${risk.likelihood}), Status: ${risk.mitigationStatus}, Owner: ${risk.owner || "Unassigned"}`,
+        )
+        .join("\n")}
 
 RISK STATUS DISTRIBUTION:
 ${Object.keys(data.risksByStatus)
-  .map((status) => `- ${status}: ${data.risksByStatus[status]}`)
-  .join("\n")}
+        .map((status) => `- ${status}: ${data.risksByStatus[status]}`)
+        .join("\n")}
 
 ANALYSIS REQUIREMENTS:
 
@@ -6150,25 +6140,76 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
     }
   };
 
-  const handleAIAnalysis = () => {
-    if (!showAIAnalysis) {
-      if (savedAnalysis) {
-        setAiAnalysis(savedAnalysis);
-        setShowAIAnalysis(true);
-      } else {
-        generateAIAnalysis();
-      }
+const handleAIAnalysis = () => {
+  if (!showAIAnalysis) {
+    if (savedAnalysis) {
+      setAiAnalysis(savedAnalysis);
+      setShowAIAnalysis(true);
     } else {
-      setShowAIAnalysis(!showAIAnalysis);
+      generateAIAnalysis();
     }
-  };
+  } else {
+    setShowAIAnalysis(!showAIAnalysis);
+  }
+};
 
-  const refreshAnalysis = async () => {
-    await generateAIAnalysis();
-  };
+const refreshAnalysis = async () => {
+  // Clear saved analysis state before regenerating
+  setSavedAnalysis("");
+  setAiAnalysis("");
+  await generateAIAnalysis();
+};
+
 
   const currentYear = new Date().getFullYear();
   const years = Array.from({ length: 5 }, (_, i) => currentYear + i);
+
+  // Add this inside the RiskManagement component, near the other handler functions
+
+  const handleSaveToNotes = async () => {
+    if (!currentUser || !aiAnalysis) return;
+
+    setIsSaving(true);
+    try {
+      const savedAnalysisRef = doc(
+        db,
+        `users/${currentUser.uid}/savedRiskAnalyses`,
+        `risk_analysis_${Date.now()}`
+      );
+
+      // Get risk summary for context
+      const allRisks = Object.values(riskData).flat();
+      const riskSummary = {
+        totalRisks: allRisks.length,
+        highRisks: allRisks.filter(r => (r.severity || 1) * (r.likelihood || 1) >= 16).length,
+        mediumRisks: allRisks.filter(r => {
+          const score = (r.severity || 1) * (r.likelihood || 1);
+          return score >= 9 && score < 16;
+        }).length,
+        lowRisks: allRisks.filter(r => (r.severity || 1) * (r.likelihood || 1) < 9).length,
+        uncontrolledRisks: allRisks.filter(r => r.mitigationStatus === "🔴 Uncontrolled").length,
+      };
+
+      await setDoc(savedAnalysisRef, {
+        type: "risk_analysis",
+        analysis: aiAnalysis,
+        riskSummary,
+        riskCategories: Object.keys(riskData).filter(cat => riskData[cat].length > 0),
+        generatedAt: new Date().toISOString(),
+        savedAt: new Date().toISOString(),
+        notes: "",
+      });
+
+      setSaveSuccess(true);
+      setTimeout(() => setSaveSuccess(false), 3000);
+    } catch (error) {
+      console.error("Error saving risk analysis:", error);
+      alert("Failed to save analysis");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
 
   return (
     <div
@@ -6679,16 +6720,16 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                     filterCategory ||
                     filterOwner ||
                     filterStatus) && (
-                    <span
-                      style={{
-                        fontSize: "12px",
-                        marginLeft: "10px",
-                        color: "#8d6e63",
-                      }}
-                    >
-                      (Showing {filtered.length} of {data.length} items)
-                    </span>
-                  )}
+                      <span
+                        style={{
+                          fontSize: "12px",
+                          marginLeft: "10px",
+                          color: "#8d6e63",
+                        }}
+                      >
+                        (Showing {filtered.length} of {data.length} items)
+                      </span>
+                    )}
                 </h4>
               </div>
 
@@ -6709,10 +6750,10 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                     filterCategory ||
                     filterOwner ||
                     filterStatus) && (
-                    <p style={{ marginTop: "10px", fontSize: "13px" }}>
-                      Try clearing some filters to see more items.
-                    </p>
-                  )}
+                      <p style={{ marginTop: "10px", fontSize: "13px" }}>
+                        Try clearing some filters to see more items.
+                      </p>
+                    )}
                 </div>
               ) : (
                 <div style={{ overflowX: "auto" }}>
@@ -6860,8 +6901,8 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                         const originalCategory =
                           category.id === "business-risk"
                             ? Object.keys(riskData).find((key) =>
-                                riskData[key].some((r) => r.id === item.id),
-                              )
+                              riskData[key].some((r) => r.id === item.id),
+                            )
                             : category.id;
                         const riskScore =
                           (item.severity || 1) * (item.likelihood || 1);
@@ -6902,7 +6943,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                                   fontSize: "12px",
                                   backgroundColor:
                                     isInvestorView ||
-                                    category.id === "business-risk"
+                                      category.id === "business-risk"
                                       ? "#f5f5f5"
                                       : "white",
                                 }}
@@ -6940,7 +6981,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                                   fontSize: "12px",
                                   backgroundColor:
                                     isInvestorView ||
-                                    category.id === "business-risk"
+                                      category.id === "business-risk"
                                       ? "#f5f5f5"
                                       : "white",
                                 }}
@@ -6973,7 +7014,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                                   resize: "vertical",
                                   backgroundColor:
                                     isInvestorView ||
-                                    category.id === "business-risk"
+                                      category.id === "business-risk"
                                       ? "#f5f5f5"
                                       : "white",
                                 }}
@@ -7009,7 +7050,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                                   textAlign: "center",
                                   backgroundColor:
                                     isInvestorView ||
-                                    category.id === "business-risk"
+                                      category.id === "business-risk"
                                       ? "#f5f5f5"
                                       : "white",
                                 }}
@@ -7045,7 +7086,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                                   textAlign: "center",
                                   backgroundColor:
                                     isInvestorView ||
-                                    category.id === "business-risk"
+                                      category.id === "business-risk"
                                       ? "#f5f5f5"
                                       : "white",
                                 }}
@@ -7097,7 +7138,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                                   fontSize: "12px",
                                   backgroundColor:
                                     isInvestorView ||
-                                    category.id === "business-risk"
+                                      category.id === "business-risk"
                                       ? "#f5f5f5"
                                       : "white",
                                 }}
@@ -7127,7 +7168,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                                   fontSize: "12px",
                                   backgroundColor:
                                     isInvestorView ||
-                                    category.id === "business-risk"
+                                      category.id === "business-risk"
                                       ? "#f5f5f5"
                                       : "white",
                                 }}
@@ -7170,7 +7211,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                                   resize: "vertical",
                                   backgroundColor:
                                     isInvestorView ||
-                                    category.id === "business-risk"
+                                      category.id === "business-risk"
                                       ? "#f5f5f5"
                                       : "white",
                                 }}
@@ -7202,7 +7243,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                                   fontSize: "12px",
                                   backgroundColor:
                                     isInvestorView ||
-                                    category.id === "business-risk"
+                                      category.id === "business-risk"
                                       ? "#f5f5f5"
                                       : "white",
                                 }}
@@ -7233,7 +7274,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                                   fontSize: "12px",
                                   backgroundColor:
                                     isInvestorView ||
-                                    category.id === "business-risk"
+                                      category.id === "business-risk"
                                       ? "#f5f5f5"
                                       : "white",
                                 }}
@@ -7279,6 +7320,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
         );
       })}
 
+      {/* AI Analysis Section */}
       {/* AI Analysis Section */}
       <div style={{ marginTop: "30px", marginBottom: "20px" }}>
         <div
@@ -7369,8 +7411,7 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
               marginLeft: "10px",
             }}
           >
-            Add risk items to generate AI analysis of your strategic risk
-            posture.
+            Add risk items to generate AI analysis of your strategic risk posture.
           </p>
         )}
 
@@ -7414,10 +7455,10 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                   }}
                 >
                   Analysis generated from{" "}
-                  {Object.values(riskData).flat().length} risk items in your
-                  register
+                  {Object.values(riskData).flat().length} risk items in your register
                 </p>
               </div>
+
               {savedAnalysis && (
                 <span
                   style={{
@@ -7474,28 +7515,60 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
                     marginTop: "5px",
                   }}
                 >
-                  Evaluating risk scores, mitigation effectiveness, and
-                  governance maturity
+                  Evaluating risk scores, mitigation effectiveness, and governance maturity
                 </p>
               </div>
             ) : (
-              <div
-                style={{
-                  backgroundColor: "white",
-                  padding: "20px",
-                  borderRadius: "6px",
-                  border: "1px solid #e8d8cf",
-                  maxHeight: "400px",
-                  overflowY: "auto",
-                  fontSize: "14px",
-                  lineHeight: "1.6",
-                  color: "#5d4037",
-                  whiteSpace: "pre-wrap",
-                }}
-              >
-                {aiAnalysis ||
-                  "AI analysis will be generated based on your risk register data, identifying critical risks, evaluating mitigation effectiveness, and providing actionable recommendations to strengthen strategic risk control."}
-              </div>
+              <>
+                <div
+                  style={{
+                    backgroundColor: "white",
+                    padding: "20px",
+                    borderRadius: "6px",
+                    border: "1px solid #e8d8cf",
+                    maxHeight: "400px",
+                    overflowY: "auto",
+                    fontSize: "14px",
+                    lineHeight: "1.6",
+                    color: "#5d4037",
+                    whiteSpace: "pre-wrap",
+                  }}
+                >
+                  {aiAnalysis ||
+                    "AI analysis will be generated based on your risk register data, identifying critical risks, evaluating mitigation effectiveness, and providing actionable recommendations to strengthen strategic risk control."}
+                </div>
+
+                {/* Save Analysis Button */}
+                {!isInvestorView && aiAnalysis && (
+                  <div style={{ marginTop: "15px", textAlign: "right" }}>
+                    <button
+                      onClick={handleSaveToNotes}
+                      disabled={isSaving}
+                      style={{
+                        padding: "8px 16px",
+                        backgroundColor: isSaving ? "#a1887f" : "#7d5a50",
+                        color: "white",
+                        border: "none",
+                        borderRadius: "4px",
+                        cursor: isSaving ? "not-allowed" : "pointer",
+                        fontSize: "12px",
+                        fontWeight: "500",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "5px",
+                      }}
+                    >
+                      {isSaving ? (
+                        "Saving..."
+                      ) : saveSuccess ? (
+                        "✓ Saved!"
+                      ) : (
+                        "📌 Save Analysis to Notes"
+                      )}
+                    </button>
+                  </div>
+                )}
+              </>
             )}
 
             <div
@@ -8236,10 +8309,10 @@ const ChangeAdaptability = ({ activeSection, currentUser, isInvestorView }) => {
       overallDocumentationRate:
         totalAdjustments + totalPivots > 0
           ? Math.round(
-              ((adjustmentsWithDocs + pivotsWithDocs) /
-                (totalAdjustments + totalPivots)) *
-                100,
-            )
+            ((adjustmentsWithDocs + pivotsWithDocs) /
+              (totalAdjustments + totalPivots)) *
+            100,
+          )
           : 0,
 
       // Has data flags
@@ -8262,8 +8335,8 @@ CHANGE MANAGEMENT DATA:
    
    Reviews by Timeframe:
    ${Object.keys(data.reviewsByTimeframe)
-     .map((month) => `   - ${month}: ${data.reviewsByTimeframe[month]} reviews`)
-     .join("\n")}
+        .map((month) => `   - ${month}: ${data.reviewsByTimeframe[month]} reviews`)
+        .join("\n")}
 
 2. STRATEGIC ADJUSTMENTS:
    Total Adjustments Made: ${data.totalAdjustments}
@@ -8272,8 +8345,8 @@ CHANGE MANAGEMENT DATA:
    
    Top Adjustment Reasons:
    ${data.topAdjustmentReasons
-     .map((r, i) => `   ${i + 1}. "${r.reason}" (${r.count} occurrences)`)
-     .join("\n")}
+        .map((r, i) => `   ${i + 1}. "${r.reason}" (${r.count} occurrences)`)
+        .join("\n")}
 
 3. STRATEGIC PIVOTS:
    Total Pivots Executed: ${data.totalPivots}
@@ -8282,8 +8355,8 @@ CHANGE MANAGEMENT DATA:
    
    Top Pivot Themes:
    ${data.topPivotThemes
-     .map((t, i) => `   ${i + 1}. "${t.theme}" (${t.count} occurrences)`)
-     .join("\n")}
+        .map((t, i) => `   ${i + 1}. "${t.theme}" (${t.count} occurrences)`)
+        .join("\n")}
 
 4. ADAPTATION VELOCITY:
    Total Changes (Adjustments + Pivots): ${data.totalChanges}
@@ -8291,8 +8364,8 @@ CHANGE MANAGEMENT DATA:
    
    Changes by Month:
    ${Object.keys(data.changesByMonth)
-     .map((month) => `   - ${month}: ${data.changesByMonth[month]} changes`)
-     .join("\n")}
+        .map((month) => `   - ${month}: ${data.changesByMonth[month]} changes`)
+        .join("\n")}
 
 5. DOCUMENTATION HEALTH:
    Overall Documentation Rate: ${data.overallDocumentationRate}%
@@ -9982,1458 +10055,6 @@ IMPORTANT: Do NOT use any markdown formatting like ###, **, or # in your respons
   );
 };
 
-// Governance Calendar Component
-const GovernanceCalendar = ({ activeSection, currentUser, isInvestorView }) => {
-  const [currentDate, setCurrentDate] = useState(new Date());
-  const [selectedDate, setSelectedDate] = useState(new Date());
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
-  const [showDetailsModal, setShowDetailsModal] = useState(null);
-  const [meetings, setMeetings] = useState([]);
-  const [loading, setLoading] = useState(false);
-  
-  // Department options with colors
-  const departmentOptions = [
-    { name: "Overall Company Health", color: "#4CAF50", bg: "#E8F5E9" },
-    { name: "Strategy & Execution", color: "#2196F3", bg: "#E3F2FD" },
-    { name: "Financial Performance", color: "#FF9800", bg: "#FFF3E0" },
-    { name: "Operational Performance", color: "#9C27B0", bg: "#F3E5F5" },
-    { name: "People", color: "#FF5722", bg: "#FBE9E7" },
-    { name: "ESG Impact", color: "#8BC34A", bg: "#F1F8E9" },
-    { name: "Marketing & Sales", color: "#E91E63", bg: "#FCE4EC" },
-  ];
-  
-  const [customDepartments, setCustomDepartments] = useState([]);
-  const [showAddDepartment, setShowAddDepartment] = useState(false);
-  const [newDepartmentName, setNewDepartmentName] = useState("");
-  
-  const [formData, setFormData] = useState({
-    title: "",
-    department: departmentOptions[0].name,
-    purpose: "",
-    participants: "",
-    repeatType: "none",
-    startDate: "",
-    endDate: "",
-    time: "10:00",
-  });
-  
-  const [errors, setErrors] = useState({});
-  
-  const allDepartments = [...departmentOptions, ...customDepartments];
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  
-  const getRandomColor = () => {
-    const colors = ["#607D8B", "#795548", "#009688", "#673AB7", "#3F51B5", "#CDDC39", "#FFC107"];
-    const randomIndex = Math.floor(Math.random() * colors.length);
-    return colors[randomIndex];
-  };
-  
-  const getRandomBgColor = (color) => color + "20";
-  
-  const generateId = () => {
-    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-      return crypto.randomUUID();
-    }
-    return Date.now().toString() + Math.random().toString(36).substr(2, 9);
-  };
-  
-  const handleAddCustomDepartment = () => {
-    if (!newDepartmentName.trim()) return;
-    const newColor = getRandomColor();
-    setCustomDepartments([
-      ...customDepartments,
-      {
-        name: newDepartmentName.trim(),
-        color: newColor,
-        bg: getRandomBgColor(newColor),
-      },
-    ]);
-    setNewDepartmentName("");
-    setShowAddDepartment(false);
-  };
-  
-  useEffect(() => {
-    if (!currentUser || activeSection !== "governance-calendar") return;
-    
-    const loadMeetings = async () => {
-      try {
-        const calendarRef = doc(db, "governanceCalendar", currentUser.uid);
-        const calendarSnap = await getDoc(calendarRef);
-        
-        if (calendarSnap.exists()) {
-          setMeetings(calendarSnap.data().meetings || []);
-        }
-      } catch (error) {
-        console.error("Error loading meetings:", error);
-      }
-    };
-    
-    loadMeetings();
-  }, [currentUser, activeSection]);
-  
-  const getMeetingsForDate = (date) => {
-    const dateStr = date.toDateString();
-    return meetings.filter(meeting => {
-      return meeting.instances?.some(instance => {
-        const instanceDate = new Date(instance.date);
-        return instanceDate.toDateString() === dateStr;
-      });
-    });
-  };
-  
-  const generateInstances = (startDate, endDate, repeatType) => {
-    const instances = [];
-    const start = new Date(startDate);
-    const end = endDate ? new Date(endDate) : null;
-    
-    if (repeatType === "none") {
-      if (start < today) {
-        throw new Error("Cannot schedule meetings on past dates");
-      }
-      instances.push({
-        instanceId: generateId(),
-        date: start.toISOString(),
-        time: formData.time,
-        status: "scheduled",
-      });
-      return instances;
-    }
-    
-    if (repeatType === "weekly") {
-      let current = new Date(start);
-      let maxIterations = 100;
-      let iterations = 0;
-      
-      while ((!end || current <= end) && iterations < maxIterations) {
-        if (current >= today) {
-          instances.push({
-            instanceId: generateId(),
-            date: current.toISOString(),
-            time: formData.time,
-            status: "scheduled",
-          });
-        }
-        current.setDate(current.getDate() + 7);
-        iterations++;
-      }
-      return instances;
-    }
-    
-    if (repeatType === "monthly") {
-      let current = new Date(start);
-      let maxIterations = 100;
-      let iterations = 0;
-      
-      while ((!end || current <= end) && iterations < maxIterations) {
-        if (current >= today) {
-          instances.push({
-            instanceId: generateId(),
-            date: current.toISOString(),
-            time: formData.time,
-            status: "scheduled",
-          });
-        }
-        current.setMonth(current.getMonth() + 1);
-        iterations++;
-      }
-      return instances;
-    }
-    
-    return instances;
-  };
-  
-  const handleSubmit = async () => {
-    if (isInvestorView) {
-      alert("You are in view-only mode and cannot add meetings.");
-      return;
-    }
-    
-    if (!currentUser) {
-      alert("Please log in to add meetings.");
-      return;
-    }
-    
-    const newErrors = {};
-    if (!formData.title.trim()) newErrors.title = "Meeting title is required";
-    if (!formData.purpose.trim()) newErrors.purpose = "Purpose is required";
-    if (!formData.startDate) newErrors.startDate = "Start date is required";
-    if (!formData.time) newErrors.time = "Time is required";
-    
-    const startDateObj = new Date(formData.startDate);
-    if (startDateObj < today) {
-      newErrors.startDate = "Cannot schedule meetings on past dates";
-    }
-    
-    if (formData.endDate) {
-      const endDateObj = new Date(formData.endDate);
-      if (endDateObj < startDateObj) {
-        newErrors.endDate = "End date cannot be before start date";
-      }
-    }
-    
-    if (Object.keys(newErrors).length > 0) {
-      setErrors(newErrors);
-      return;
-    }
-    
-    setLoading(true);
-    
-    try {
-      const selectedDepartment = allDepartments.find(d => d.name === formData.department);
-      let instances;
-      
-      try {
-        instances = generateInstances(formData.startDate, formData.endDate, formData.repeatType);
-      } catch (error) {
-        setErrors({ startDate: error.message });
-        setLoading(false);
-        return;
-      }
-      
-      if (instances.length === 0) {
-        setErrors({ startDate: "No valid dates found. Please check your date range." });
-        setLoading(false);
-        return;
-      }
-      
-      const newMeeting = {
-        id: generateId(),
-        title: formData.title,
-        department: formData.department,
-        departmentColor: selectedDepartment?.color || "#757575",
-        departmentBg: selectedDepartment?.bg || "#EEEEEE",
-        purpose: formData.purpose,
-        participants: formData.participants.split(",").map(p => p.trim()).filter(p => p),
-        isRecurring: formData.repeatType !== "none",
-        recurrencePattern: formData.repeatType !== "none" ? formData.repeatType : null,
-        recurrenceInterval: formData.repeatType !== "none" ? 1 : null,
-        instances: instances,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
-      
-      const updatedMeetings = [...meetings, newMeeting];
-      setMeetings(updatedMeetings);
-      
-      const calendarRef = doc(db, "governanceCalendar", currentUser.uid);
-      await setDoc(calendarRef, {
-        meetings: updatedMeetings,
-        updatedAt: new Date().toISOString(),
-        userId: currentUser.uid,
-      }, { merge: true });
-      
-      setFormData({
-        title: "",
-        department: departmentOptions[0].name,
-        purpose: "",
-        participants: "",
-        repeatType: "none",
-        startDate: "",
-        endDate: "",
-        time: "10:00",
-      });
-      setErrors({});
-      setShowAddModal(false);
-      
-      alert("Meeting scheduled successfully!");
-    } catch (error) {
-      console.error("Error saving meeting:", error);
-      alert("Error saving meeting. Please try again.");
-    } finally {
-      setLoading(false);
-    }
-  };
-  
-  const handleDeleteMeeting = async (meetingId) => {
-    if (isInvestorView) {
-      alert("You are in view-only mode and cannot delete meetings.");
-      return;
-    }
-    
-    setLoading(true);
-    
-    try {
-      const updatedMeetings = meetings.filter(m => m.id !== meetingId);
-      setMeetings(updatedMeetings);
-      
-      const calendarRef = doc(db, "governanceCalendar", currentUser.uid);
-      await setDoc(calendarRef, {
-        meetings: updatedMeetings,
-        updatedAt: new Date().toISOString(),
-        userId: currentUser.uid,
-      }, { merge: true });
-      
-      setShowDeleteConfirm(null);
-      setShowDetailsModal(null);
-      alert("Meeting deleted successfully!");
-    } catch (error) {
-      console.error("Error deleting meeting:", error);
-      alert("Error deleting meeting. Please try again.");
-    } finally {
-      setLoading(false);
-    }
-  };
-  
-  const getMeetingColor = (meeting) => meeting.departmentColor || "#757575";
-  
-  if (activeSection !== "governance-calendar") return null;
-  
-  // Calendar helper functions
-  const getMonthYear = () => {
-    return currentDate.toLocaleString("default", { month: "long", year: "numeric" });
-  };
-  
-  const goToPreviousMonth = () => {
-    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() - 1, 1));
-  };
-  
-  const goToNextMonth = () => {
-    setCurrentDate(new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, 1));
-  };
-  
-  const goToToday = () => {
-    const d = new Date();
-    setCurrentDate(d);
-    setSelectedDate(d);
-  };
-  
-  const getDaysInMonth = (date) => {
-    return new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
-  };
-  
-  const getFirstDayOfMonth = (date) => {
-    return new Date(date.getFullYear(), date.getMonth(), 1).getDay();
-  };
-  
-  const generateCalendarDays = () => {
-    const daysInMonth = getDaysInMonth(currentDate);
-    const firstDay = getFirstDayOfMonth(currentDate);
-    const days = [];
-    const todayDate = new Date();
-    
-    for (let i = 0; i < firstDay; i++) {
-      const prevMonthDate = new Date(currentDate.getFullYear(), currentDate.getMonth(), -i);
-      days.unshift({
-        date: prevMonthDate,
-        day: prevMonthDate.getDate(),
-        isCurrentMonth: false,
-        isToday: false,
-        meetings: [],
-      });
-    }
-    
-    for (let i = 1; i <= daysInMonth; i++) {
-      const date = new Date(currentDate.getFullYear(), currentDate.getMonth(), i);
-      days.push({
-        date: date,
-        day: i,
-        isCurrentMonth: true,
-        isToday: date.toDateString() === todayDate.toDateString(),
-        meetings: getMeetingsForDate(date),
-      });
-    }
-    
-    const remainingDays = 42 - days.length;
-    for (let i = 1; i <= remainingDays; i++) {
-      const nextMonthDate = new Date(currentDate.getFullYear(), currentDate.getMonth() + 1, i);
-      days.push({
-        date: nextMonthDate,
-        day: i,
-        isCurrentMonth: false,
-        isToday: false,
-        meetings: [],
-      });
-    }
-    
-    return days;
-  };
-  
-  const weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-  const calendarDays = generateCalendarDays();
-  
-  const isSelectedDate = (date) => {
-    return selectedDate && date.toDateString() === selectedDate.toDateString();
-  };
-  
-  const handleDateClick = (date) => {
-    setSelectedDate(date);
-    if (!showAddModal && date >= today) {
-      setFormData(prev => ({ ...prev, startDate: date.toISOString().split('T')[0] }));
-    }
-  };
-  
-  const handleOpenAddModal = () => {
-    const targetDate = selectedDate >= today ? selectedDate : new Date();
-    setFormData(prev => ({ ...prev, startDate: targetDate.toISOString().split('T')[0] }));
-    setShowAddModal(true);
-  };
-  
-  const selectedMeetings = getMeetingsForDate(selectedDate);
-  
-  // Styles
-  const containerStyles = {
-    backgroundColor: "#fdfcfb",
-    borderRadius: "8px",
-    boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
-    padding: "20px",
-  };
-  
-  const keyQuestionStyles = {
-    backgroundColor: "#DCDCDC",
-    padding: "15px 20px",
-    borderRadius: "8px",
-    marginBottom: "20px",
-    border: "1px solid #5d4037",
-  };
-  
-  const headerRowStyles = {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: "20px",
-  };
-  
-  const addButtonStyles = {
-    padding: "10px 20px",
-    backgroundColor: "#7d5a50",
-    color: "white",
-    border: "none",
-    borderRadius: "6px",
-    cursor: isInvestorView ? "not-allowed" : "pointer",
-    fontWeight: "600",
-    fontSize: "14px",
-    display: "flex",
-    alignItems: "center",
-    gap: "8px",
-    opacity: isInvestorView ? 0.6 : 1,
-  };
-  
-  const calendarHeaderStyles = {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: "20px",
-    paddingBottom: "15px",
-    borderBottom: "2px solid #e8ddd4",
-    flexWrap: "wrap",
-    gap: "10px",
-  };
-  
-  const navButtonStyles = {
-    padding: "8px 12px",
-    backgroundColor: "#7d5a50",
-    color: "white",
-    border: "none",
-    borderRadius: "4px",
-    cursor: "pointer",
-    display: "flex",
-    alignItems: "center",
-    gap: "8px",
-    fontSize: "14px",
-  };
-  
-  const monthTitleStyles = {
-    fontSize: "20px",
-    fontWeight: "600",
-    color: "#5d4037",
-  };
-  
-  const todayButtonStyles = {
-    padding: "8px 16px",
-    backgroundColor: "#e6d7c3",
-    color: "#4a352f",
-    border: "none",
-    borderRadius: "4px",
-    cursor: "pointer",
-    fontWeight: "500",
-    fontSize: "13px",
-  };
-  
-  const weekdayHeaderStyles = {
-    display: "grid",
-    gridTemplateColumns: "repeat(7, 1fr)",
-    marginBottom: "10px",
-  };
-  
-  const weekdayCellStyles = {
-    padding: "12px",
-    textAlign: "center",
-    fontWeight: "600",
-    color: "#5d4037",
-    fontSize: "14px",
-  };
-  
-  const calendarGridStyles = {
-    display: "grid",
-    gridTemplateColumns: "repeat(7, 1fr)",
-    gap: "5px",
-  };
-  
-  const getDayCellStyles = (day) => {
-    let backgroundColor = "#ffffff";
-    let color = "#4a352f";
-    let fontWeight = "normal";
-    
-    if (!day.isCurrentMonth) {
-      backgroundColor = "#f5f5f5";
-      color = "#bdbdbd";
-    }
-    
-    if (day.isToday) {
-      backgroundColor = "#7d5a50";
-      color = "white";
-      fontWeight = "bold";
-    }
-    
-    if (isSelectedDate(day.date) && !day.isToday) {
-      backgroundColor = "#e6d7c3";
-      color = "#4a352f";
-      fontWeight = "bold";
-    }
-    
-    return {
-      backgroundColor,
-      color,
-      fontWeight,
-      padding: "12px 8px",
-      textAlign: "center",
-      borderRadius: "6px",
-      cursor: "pointer",
-      transition: "all 0.2s ease",
-      border: "1px solid #e8ddd4",
-      minHeight: "80px",
-      display: "flex",
-      flexDirection: "column",
-      alignItems: "center",
-      justifyContent: "flex-start",
-      position: "relative",
-    };
-  };
-  
-  const dayNumberStyles = {
-    fontSize: "14px",
-    fontWeight: "inherit",
-    marginBottom: "4px",
-  };
-  
-  const eventDotStyles = (color) => ({
-    width: "8px",
-    height: "8px",
-    borderRadius: "50%",
-    backgroundColor: color,
-    margin: "2px",
-    display: "inline-block",
-  });
-  
-  const eventIndicatorsContainer = {
-    display: "flex",
-    flexWrap: "wrap",
-    justifyContent: "center",
-    gap: "2px",
-    marginTop: "4px",
-  };
-  
-  const legendContainerStyles = {
-    backgroundColor: "#f7f3f0",
-    padding: "12px 16px",
-    borderRadius: "6px",
-    marginBottom: "20px",
-    border: "1px solid #e8ddd4",
-  };
-  
-  const legendTitleStyles = {
-    fontSize: "12px",
-    fontWeight: "600",
-    color: "#5d4037",
-    marginBottom: "10px",
-    letterSpacing: "0.5px",
-  };
-  
-  const legendItemsContainer = {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: "16px",
-    alignItems: "center",
-  };
-  
-  const legendItemStyles = {
-    display: "flex",
-    alignItems: "center",
-    gap: "6px",
-    fontSize: "11px",
-    color: "#4a352f",
-  };
-  
-  const legendColorBlockStyles = (color) => ({
-    width: "12px",
-    height: "12px",
-    borderRadius: "3px",
-    backgroundColor: color,
-  });
-  
-  // Meeting Card Styles (updated with clickable cursor)
-  const meetingItemStyles = (color, bg) => ({
-    padding: "12px",
-    backgroundColor: bg,
-    borderLeft: `4px solid ${color}`,
-    borderRadius: "6px",
-    marginBottom: "8px",
-    cursor: "pointer",
-    transition: "all 0.2s ease",
-  });
-  
-  const meetingTitleStyles = {
-    fontWeight: "bold",
-    fontSize: "14px",
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-  };
-  
-  const meetingMetaStyles = {
-    fontSize: "11px",
-    color: "#8d6e63",
-    marginTop: "4px",
-    display: "flex",
-    alignItems: "center",
-    gap: "8px",
-    flexWrap: "wrap",
-  };
-  
-  const participantBadgeStyles = {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: "4px",
-    backgroundColor: "rgba(0,0,0,0.05)",
-    padding: "2px 6px",
-    borderRadius: "12px",
-    fontSize: "10px",
-  };
-  
-  const purposePreviewStyles = {
-    fontSize: "12px",
-    marginTop: "4px",
-    color: "#4a352f",
-    display: "-webkit-box",
-    WebkitLineClamp: 2,
-    WebkitBoxOrient: "vertical",
-    overflow: "hidden",
-  };
-  
-  const deleteIconStyles = {
-    background: "none",
-    border: "none",
-    color: "#f44336",
-    cursor: "pointer",
-    fontSize: "16px",
-    padding: "4px",
-    borderRadius: "4px",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-  };
-  
-  // Details Modal Styles
-  const detailsModalOverlayStyles = {
-    position: "fixed",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
-    zIndex: 1000,
-  };
-  
-  const detailsModalStyles = {
-    backgroundColor: "white",
-    borderRadius: "12px",
-    width: "90%",
-    maxWidth: "500px",
-    maxHeight: "85vh",
-    overflow: "auto",
-    boxShadow: "0 4px 20px rgba(0,0,0,0.15)",
-  };
-  
-  const detailsSectionStyles = {
-    marginBottom: "20px",
-  };
-  
-  const detailsLabelStyles = {
-    fontSize: "11px",
-    fontWeight: "600",
-    color: "#8d6e63",
-    textTransform: "uppercase",
-    letterSpacing: "0.5px",
-    marginBottom: "6px",
-  };
-  
-  const detailsValueStyles = {
-    fontSize: "14px",
-    color: "#4a352f",
-    lineHeight: "1.5",
-  };
-  
-  const participantsListStyles = {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: "8px",
-    marginTop: "8px",
-  };
-  
-  const participantTagStyles = {
-    backgroundColor: "#f7f3f0",
-    padding: "4px 10px",
-    borderRadius: "20px",
-    fontSize: "12px",
-    color: "#5d4037",
-  };
-  
-  const recurringBadgeStyles = {
-    display: "inline-block",
-    backgroundColor: "#e8f5e9",
-    color: "#4caf50",
-    padding: "4px 8px",
-    borderRadius: "4px",
-    fontSize: "11px",
-    fontWeight: "500",
-  };
-  
-  const departmentColorStripStyles = (color) => ({
-    width: "100%",
-    height: "4px",
-    backgroundColor: color,
-    borderRadius: "2px",
-    marginBottom: "16px",
-  });
-  
-  const detailsActionButtonsStyles = {
-    display: "flex",
-    gap: "12px",
-    marginTop: "20px",
-    paddingTop: "20px",
-    borderTop: "1px solid #e8ddd4",
-  };
-  
-  const detailsDeleteButtonStyles = {
-    flex: 1,
-    padding: "10px",
-    backgroundColor: "#f44336",
-    color: "white",
-    border: "none",
-    borderRadius: "6px",
-    cursor: "pointer",
-    fontWeight: "500",
-    fontSize: "14px",
-  };
-  
-  const detailsCloseButtonStyles = {
-    flex: 1,
-    padding: "10px",
-    backgroundColor: "#e6d7c3",
-    color: "#4a352f",
-    border: "none",
-    borderRadius: "6px",
-    cursor: "pointer",
-    fontWeight: "500",
-    fontSize: "14px",
-  };
-  
-  // Modal Styles (Add Meeting)
-  const modalOverlayStyles = {
-    position: "fixed",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
-    zIndex: 1000,
-  };
-  
-  const modalStyles = {
-    backgroundColor: "white",
-    borderRadius: "12px",
-    width: "90%",
-    maxWidth: "550px",
-    maxHeight: "85vh",
-    overflow: "auto",
-    boxShadow: "0 4px 20px rgba(0,0,0,0.15)",
-  };
-  
-  const modalHeaderStyles = {
-    padding: "20px 24px",
-    borderBottom: "2px solid #e8ddd4",
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-  };
-  
-  const modalTitleStyles = {
-    fontSize: "20px",
-    fontWeight: "600",
-    color: "#5d4037",
-    margin: 0,
-  };
-  
-  const closeButtonStyles = {
-    background: "none",
-    border: "none",
-    fontSize: "24px",
-    cursor: "pointer",
-    color: "#8d6e63",
-  };
-  
-  const modalBodyStyles = {
-    padding: "24px",
-  };
-  
-  const formGroupStyles = {
-    marginBottom: "20px",
-  };
-  
-  const labelStyles = {
-    display: "block",
-    marginBottom: "8px",
-    fontWeight: "600",
-    color: "#4a352f",
-    fontSize: "14px",
-  };
-  
-  const inputStyles = (hasError) => ({
-    width: "100%",
-    padding: "10px 12px",
-    border: hasError ? "2px solid #f44336" : "2px solid #e8ddd4",
-    borderRadius: "6px",
-    fontSize: "14px",
-    fontFamily: "inherit",
-    boxSizing: "border-box",
-    transition: "all 0.2s ease",
-  });
-  
-  const textareaStyles = (hasError) => ({
-    width: "100%",
-    padding: "10px 12px",
-    border: hasError ? "2px solid #f44336" : "2px solid #e8ddd4",
-    borderRadius: "6px",
-    fontSize: "14px",
-    fontFamily: "inherit",
-    resize: "vertical",
-    boxSizing: "border-box",
-  });
-  
-  const selectStyles = (hasError) => ({
-    width: "100%",
-    padding: "10px 12px",
-    border: hasError ? "2px solid #f44336" : "2px solid #e8ddd4",
-    borderRadius: "6px",
-    fontSize: "14px",
-    fontFamily: "inherit",
-    backgroundColor: "white",
-    cursor: "pointer",
-  });
-  
-  const errorTextStyles = {
-    color: "#f44336",
-    fontSize: "12px",
-    marginTop: "4px",
-  };
-  
-  const departmentDropdownStyles = {
-    border: "2px solid #e8ddd4",
-    borderRadius: "6px",
-    overflow: "hidden",
-  };
-  
-  const departmentOptionStyles = (dept, isSelected) => ({
-    display: "flex",
-    alignItems: "center",
-    gap: "10px",
-    padding: "10px 12px",
-    cursor: "pointer",
-    backgroundColor: isSelected ? dept.bg : "white",
-    transition: "all 0.2s ease",
-    borderBottom: "1px solid #f0e6d9",
-  });
-  
-  const departmentColorBlockStyles = (color) => ({
-    width: "20px",
-    height: "20px",
-    borderRadius: "4px",
-    backgroundColor: color,
-  });
-  
-  const addDepartmentButtonStyles = {
-    width: "100%",
-    padding: "10px",
-    backgroundColor: "#f7f3f0",
-    border: "2px dashed #e8ddd4",
-    borderRadius: "6px",
-    cursor: "pointer",
-    color: "#7d5a50",
-    fontSize: "13px",
-    marginTop: "8px",
-  };
-  
-  const modalFooterStyles = {
-    padding: "16px 24px",
-    borderTop: "2px solid #e8ddd4",
-    display: "flex",
-    justifyContent: "flex-end",
-    gap: "12px",
-  };
-  
-  const cancelButtonStyles = {
-    padding: "10px 20px",
-    backgroundColor: "#e6d7c3",
-    color: "#4a352f",
-    border: "none",
-    borderRadius: "6px",
-    cursor: "pointer",
-    fontWeight: "500",
-    fontSize: "14px",
-  };
-  
-  const submitButtonStyles = {
-    padding: "10px 20px",
-    backgroundColor: "#7d5a50",
-    color: "white",
-    border: "none",
-    borderRadius: "6px",
-    cursor: loading ? "not-allowed" : "pointer",
-    fontWeight: "600",
-    fontSize: "14px",
-    opacity: loading ? 0.7 : 1,
-  };
-  
-  const repeatHelpStyles = {
-    fontSize: "11px",
-    color: "#8d6e63",
-    marginTop: "4px",
-    fontStyle: "italic",
-  };
-  
-  const selectedDateInfoStyles = {
-    marginTop: "20px",
-    marginBottom: "20px",
-    padding: "15px",
-    backgroundColor: "#f7f3f0",
-    borderRadius: "6px",
-    border: "1px solid #e8ddd4",
-  };
-  
-  const selectedDateTitleStyles = {
-    fontSize: "16px",
-    fontWeight: "600",
-    color: "#5d4037",
-    marginBottom: "12px",
-  };
-  
-  const noEventsStyles = {
-    color: "#8d6e63",
-    fontSize: "14px",
-    fontStyle: "italic",
-  };
-  
-  const confirmOverlayStyles = {
-    position: "fixed",
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: "rgba(0,0,0,0.5)",
-    display: "flex",
-    justifyContent: "center",
-    alignItems: "center",
-    zIndex: 1100,
-  };
-  
-  const confirmModalStyles = {
-    backgroundColor: "white",
-    borderRadius: "12px",
-    width: "90%",
-    maxWidth: "400px",
-    padding: "24px",
-    textAlign: "center",
-  };
-  
-  const confirmTitleStyles = {
-    fontSize: "18px",
-    fontWeight: "600",
-    color: "#5d4037",
-    marginBottom: "12px",
-  };
-  
-  const confirmMessageStyles = {
-    fontSize: "14px",
-    color: "#4a352f",
-    marginBottom: "20px",
-  };
-  
-  const confirmButtonsStyles = {
-    display: "flex",
-    gap: "12px",
-    justifyContent: "center",
-  };
-  
-  const confirmDeleteStyles = {
-    padding: "8px 20px",
-    backgroundColor: "#f44336",
-    color: "white",
-    border: "none",
-    borderRadius: "6px",
-    cursor: "pointer",
-    fontWeight: "500",
-  };
-  
-  const confirmCancelStyles = {
-    padding: "8px 20px",
-    backgroundColor: "#e6d7c3",
-    color: "#4a352f",
-    border: "none",
-    borderRadius: "6px",
-    cursor: "pointer",
-    fontWeight: "500",
-  };
-  
-  return (
-        <div style={containerStyles}>
-        {/* Key Question Section */}
-    <div style={keyQuestionStyles}>
-      <div style={{ marginBottom: "8px" }}>
-        <strong style={{ color: "#5d4037", fontSize: "14px" }}>Key Question:</strong>
-        <span style={{ color: "#5d4037", fontSize: "14px", marginLeft: "8px" }}>
-          Are you up to date with your upcoming governance meetings?
-        </span>
-      </div>
-      <div style={{ marginBottom: "8px" }}>
-        <strong style={{ color: "#5d4037", fontSize: "14px" }}>Key Signals:</strong>
-        <span style={{ color: "#5d4037", fontSize: "14px", marginLeft: "8px" }}>
-          Make sure everything is up to date. Meeting materials prepared
-        </span>
-      </div>
-      <div>
-        <strong style={{ color: "#5d4037", fontSize: "14px" }}>Key Decisions:</strong>
-        <span style={{ color: "#5d4037", fontSize: "14px", marginLeft: "8px" }}>
-          What requires board approval? Who needs to present? Are all materials ready before the meeting?
-        </span>
-      </div>
-    </div>
-      
-      {/* Add Meeting Button */}
-      <div style={headerRowStyles}>
-        <div></div>
-        <button onClick={handleOpenAddModal} style={addButtonStyles} disabled={isInvestorView}>
-          + Add Meeting
-        </button>
-      </div>
-      
-      {/* Calendar Header */}
-      <div style={calendarHeaderStyles}>
-        <button onClick={goToPreviousMonth} style={navButtonStyles}>
-          <FaChevronLeft size={12} /> Prev
-        </button>
-        <span style={monthTitleStyles}>{getMonthYear()}</span>
-        <div style={{ display: "flex", gap: "10px" }}>
-          <button onClick={goToToday} style={todayButtonStyles}>
-            Today
-          </button>
-          <button onClick={goToNextMonth} style={navButtonStyles}>
-            Next <FaChevronRight size={12} />
-          </button>
-        </div>
-      </div>
-      
-      {/* Weekday Headers */}
-      <div style={weekdayHeaderStyles}>
-        {weekdays.map((day) => (
-          <div key={day} style={weekdayCellStyles}>
-            {day}
-          </div>
-        ))}
-      </div>
-      
-      {/* Calendar Days Grid */}
-      <div style={calendarGridStyles}>
-        {calendarDays.map((day, index) => (
-          <div
-            key={index}
-            style={getDayCellStyles(day)}
-            onClick={() => handleDateClick(day.date)}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.transform = "translateY(-2px)";
-              e.currentTarget.style.boxShadow = "0 2px 8px rgba(0,0,0,0.1)";
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.transform = "translateY(0)";
-              e.currentTarget.style.boxShadow = "none";
-            }}
-          >
-            <span style={dayNumberStyles}>{day.day}</span>
-            {day.meetings && day.meetings.length > 0 && (
-              <div style={eventIndicatorsContainer}>
-                {day.meetings.slice(0, 3).map((meeting, idx) => (
-                  <div
-                    key={idx}
-                    style={eventDotStyles(getMeetingColor(meeting))}
-                    title={meeting.title}
-                  />
-                ))}
-                {day.meetings.length > 3 && (
-                  <span style={{ fontSize: "10px", color: "#8d6e63" }}>
-                    +{day.meetings.length - 3}
-                  </span>
-                )}
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-      
-      {/* Selected Date Information - Meeting Cards (Clickable) */}
-      <div style={selectedDateInfoStyles}>
-        <div style={selectedDateTitleStyles}>
-          {selectedDate.toLocaleDateString("default", {
-            weekday: "long",
-            year: "numeric",
-            month: "long",
-            day: "numeric",
-          })}
-        </div>
-        {selectedMeetings.length === 0 ? (
-          <div style={noEventsStyles}>
-            No governance meetings scheduled for this date.
-            {!isInvestorView && selectedDate >= today && (
-              <button
-                onClick={handleOpenAddModal}
-                style={{
-                  background: "none",
-                  border: "none",
-                  color: "#7d5a50",
-                  cursor: "pointer",
-                  textDecoration: "underline",
-                  marginLeft: "8px",
-                  fontSize: "13px",
-                }}
-              >
-                Schedule one?
-              </button>
-            )}
-          </div>
-        ) : (
-          selectedMeetings.map((meeting, idx) => {
-            const instance = meeting.instances?.find(inst => {
-              const instDate = new Date(inst.date);
-              return instDate.toDateString() === selectedDate.toDateString();
-            });
-            
-            const participantCount = meeting.participants?.length || 0;
-            
-            return (
-              <div
-                key={idx}
-                style={meetingItemStyles(meeting.departmentColor, meeting.departmentBg)}
-                onClick={() => setShowDetailsModal(meeting)}
-              >
-                <div style={meetingTitleStyles}>
-                  <span>{meeting.title}</span>
-                  {!isInvestorView && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setShowDeleteConfirm(meeting.id);
-                      }}
-                      style={deleteIconStyles}
-                      title="Delete meeting"
-                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#ffebee"}
-                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
-                    >
-                      ×
-                    </button>
-                  )}
-                </div>
-                <div style={meetingMetaStyles}>
-                  <span>{meeting.department}</span>
-                  <span>•</span>
-                  <span>{instance?.time || "Time TBD"}</span>
-                  {participantCount > 0 && (
-                    <>
-                      <span>•</span>
-                      <span style={participantBadgeStyles}>
-                        👥 {participantCount} participant{participantCount !== 1 ? "s" : ""}
-                      </span>
-                    </>
-                  )}
-                  {meeting.isRecurring && (
-                    <>
-                      <span>•</span>
-                      <span>🔄 {meeting.recurrencePattern === "weekly" ? "Weekly" : "Monthly"}</span>
-                    </>
-                  )}
-                </div>
-                <div style={purposePreviewStyles}>
-                  {meeting.purpose.length > 100 ? meeting.purpose.substring(0, 100) + "..." : meeting.purpose}
-                </div>
-              </div>
-            );
-          })
-        )}
-      </div>
-      
-      {/* Color Legend */}
-      <div style={legendContainerStyles}>
-        <div style={legendTitleStyles}>Department Color Guide</div>
-        <div style={legendItemsContainer}>
-          {allDepartments.map((dept) => (
-            <div key={dept.name} style={legendItemStyles}>
-              <div style={legendColorBlockStyles(dept.color)} />
-              <span>{dept.name}</span>
-            </div>
-          ))}
-        </div>
-      </div>
-      
-      {/* KPIs Section */}
-      <div style={{ backgroundColor: "#f7f3f0", padding: "20px", borderRadius: "6px" }}>
-        <h3 style={{ color: "#5d4037", marginTop: 0, marginBottom: "15px" }}>
-          Governance Calendar KPIs
-        </h3>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "15px" }}>
-          <div style={{ backgroundColor: "#fdfcfb", padding: "15px", borderRadius: "4px", border: "2px solid #e8ddd4", textAlign: "center" }}>
-            <div style={{ fontSize: "24px", fontWeight: "bold", color: "#5d4037" }}>{meetings.length}</div>
-            <div style={{ fontSize: "12px", color: "#8d6e63" }}>Total Meetings</div>
-          </div>
-          <div style={{ backgroundColor: "#fdfcfb", padding: "15px", borderRadius: "4px", border: "2px solid #e8ddd4", textAlign: "center" }}>
-            <div style={{ fontSize: "24px", fontWeight: "bold", color: "#5d4037" }}>{meetings.filter(m => m.isRecurring).length}</div>
-            <div style={{ fontSize: "12px", color: "#8d6e63" }}>Recurring Meetings</div>
-          </div>
-          <div style={{ backgroundColor: "#fdfcfb", padding: "15px", borderRadius: "4px", border: "2px solid #e8ddd4", textAlign: "center" }}>
-            <div style={{ fontSize: "24px", fontWeight: "bold", color: "#5d4037" }}>{[...new Set(meetings.map(m => m.department))].length}</div>
-            <div style={{ fontSize: "12px", color: "#8d6e63" }}>Active Departments</div>
-          </div>
-        </div>
-      </div>
-      
-      {/* Add Meeting Modal */}
-      {showAddModal && !isInvestorView && (
-        <div style={modalOverlayStyles} onClick={() => setShowAddModal(false)}>
-          <div style={modalStyles} onClick={(e) => e.stopPropagation()}>
-            <div style={modalHeaderStyles}>
-              <h3 style={modalTitleStyles}>Schedule Governance Meeting</h3>
-              <button onClick={() => setShowAddModal(false)} style={closeButtonStyles}>×</button>
-            </div>
-            <div style={modalBodyStyles}>
-              <div style={formGroupStyles}>
-                <label style={labelStyles}>Meeting Title *</label>
-                <input type="text" placeholder="e.g., Q4 Board Meeting, Strategy Review" value={formData.title} onChange={(e) => setFormData({ ...formData, title: e.target.value })} style={inputStyles(errors.title)} />
-                {errors.title && <div style={errorTextStyles}>{errors.title}</div>}
-              </div>
-              
-              <div style={formGroupStyles}>
-                <label style={labelStyles}>Department *</label>
-                <div style={departmentDropdownStyles}>
-                  {allDepartments.map((dept) => (
-                    <div key={dept.name} onClick={() => setFormData({ ...formData, department: dept.name })} style={departmentOptionStyles(dept, formData.department === dept.name)}>
-                      <div style={departmentColorBlockStyles(dept.color)} />
-                      <span>{dept.name}</span>
-                    </div>
-                  ))}
-                </div>
-                {showAddDepartment ? (
-                  <div style={{ marginTop: "12px" }}>
-                    <input type="text" placeholder="Enter department name" value={newDepartmentName} onChange={(e) => setNewDepartmentName(e.target.value)} style={inputStyles(false)} autoFocus />
-                    <div style={{ display: "flex", gap: "8px", marginTop: "8px" }}>
-                      <button onClick={handleAddCustomDepartment} style={{ padding: "6px 12px", backgroundColor: "#7d5a50", color: "white", border: "none", borderRadius: "4px", cursor: "pointer", fontSize: "12px" }}>Add</button>
-                      <button onClick={() => setShowAddDepartment(false)} style={{ padding: "6px 12px", backgroundColor: "#e6d7c3", color: "#4a352f", border: "none", borderRadius: "4px", cursor: "pointer", fontSize: "12px" }}>Cancel</button>
-                    </div>
-                  </div>
-                ) : (
-                  <button onClick={() => setShowAddDepartment(true)} style={addDepartmentButtonStyles}>+ Add Custom Department</button>
-                )}
-              </div>
-              
-              <div style={formGroupStyles}>
-                <label style={labelStyles}>Purpose of Meeting *</label>
-                <textarea rows="3" placeholder="What is the goal of this meeting? What decisions need to be made?" value={formData.purpose} onChange={(e) => setFormData({ ...formData, purpose: e.target.value })} style={textareaStyles(errors.purpose)} />
-                {errors.purpose && <div style={errorTextStyles}>{errors.purpose}</div>}
-              </div>
-              
-              <div style={formGroupStyles}>
-                <label style={labelStyles}>Participants</label>
-                <input type="text" placeholder="Enter names or emails separated by commas" value={formData.participants} onChange={(e) => setFormData({ ...formData, participants: e.target.value })} style={inputStyles(false)} />
-                <div style={repeatHelpStyles}>e.g., CEO, Board Members, Legal Team, john@company.com</div>
-              </div>
-              
-              <div style={formGroupStyles}>
-                <label style={labelStyles}>Repeat Frequency</label>
-                <select value={formData.repeatType} onChange={(e) => setFormData({ ...formData, repeatType: e.target.value })} style={selectStyles(false)}>
-                  <option value="none">One-time meeting</option>
-                  <option value="weekly">Weekly (every 7 days)</option>
-                  <option value="monthly">Monthly (same date each month)</option>
-                </select>
-                <div style={repeatHelpStyles}>Weekly/Monthly will schedule all future instances between start and end dates</div>
-              </div>
-              
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px" }}>
-                <div style={formGroupStyles}>
-                  <label style={labelStyles}>Start Date *</label>
-                  <input type="date" value={formData.startDate} min={today.toISOString().split('T')[0]} onChange={(e) => setFormData({ ...formData, startDate: e.target.value })} style={inputStyles(errors.startDate)} />
-                  {errors.startDate && <div style={errorTextStyles}>{errors.startDate}</div>}
-                </div>
-                <div style={formGroupStyles}>
-                  <label style={labelStyles}>Time *</label>
-                  <input type="time" value={formData.time} onChange={(e) => setFormData({ ...formData, time: e.target.value })} style={inputStyles(errors.time)} />
-                  {errors.time && <div style={errorTextStyles}>{errors.time}</div>}
-                </div>
-              </div>
-              
-              {formData.repeatType !== "none" && (
-                <div style={formGroupStyles}>
-                  <label style={labelStyles}>End Date (optional)</label>
-                  <input type="date" value={formData.endDate} min={formData.startDate || today.toISOString().split('T')[0]} onChange={(e) => setFormData({ ...formData, endDate: e.target.value })} style={inputStyles(errors.endDate)} />
-                  {errors.endDate && <div style={errorTextStyles}>{errors.endDate}</div>}
-                  <div style={repeatHelpStyles}>Leave empty to schedule indefinitely</div>
-                </div>
-              )}
-            </div>
-            <div style={modalFooterStyles}>
-              <button onClick={() => setShowAddModal(false)} style={cancelButtonStyles}>Cancel</button>
-              <button onClick={handleSubmit} disabled={loading} style={submitButtonStyles}>{loading ? "Scheduling..." : "Schedule Meeting"}</button>
-            </div>
-          </div>
-        </div>
-      )}
-      
-      {/* Meeting Details Modal */}
-      {showDetailsModal && (
-        <div style={detailsModalOverlayStyles} onClick={() => setShowDetailsModal(null)}>
-          <div style={detailsModalStyles} onClick={(e) => e.stopPropagation()}>
-            <div style={modalHeaderStyles}>
-              <h3 style={modalTitleStyles}>Meeting Details</h3>
-              <button onClick={() => setShowDetailsModal(null)} style={closeButtonStyles}>×</button>
-            </div>
-            <div style={modalBodyStyles}>
-              <div style={departmentColorStripStyles(showDetailsModal.departmentColor)} />
-              
-              <div style={detailsSectionStyles}>
-                <div style={detailsLabelStyles}>Meeting Title</div>
-                <div style={detailsValueStyles}>{showDetailsModal.title}</div>
-              </div>
-              
-              <div style={detailsSectionStyles}>
-                <div style={detailsLabelStyles}>Department</div>
-                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <div style={{ width: "12px", height: "12px", borderRadius: "3px", backgroundColor: showDetailsModal.departmentColor }} />
-                  <span style={detailsValueStyles}>{showDetailsModal.department}</span>
-                </div>
-              </div>
-              
-              <div style={detailsSectionStyles}>
-                <div style={detailsLabelStyles}>Purpose / Agenda</div>
-                <div style={detailsValueStyles}>{showDetailsModal.purpose}</div>
-              </div>
-              
-              <div style={detailsSectionStyles}>
-                <div style={detailsLabelStyles}>Participants</div>
-                {showDetailsModal.participants && showDetailsModal.participants.length > 0 ? (
-                  <div style={participantsListStyles}>
-                    {showDetailsModal.participants.map((participant, idx) => (
-                      <span key={idx} style={participantTagStyles}>{participant}</span>
-                    ))}
-                  </div>
-                ) : (
-                  <div style={detailsValueStyles}>No participants specified</div>
-                )}
-              </div>
-              
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "20px" }}>
-                <div>
-                  <div style={detailsLabelStyles}>Date</div>
-                  <div style={detailsValueStyles}>
-                    {new Date(selectedDate).toLocaleDateString("default", {
-                      weekday: "long",
-                      year: "numeric",
-                      month: "long",
-                      day: "numeric",
-                    })}
-                  </div>
-                </div>
-                <div>
-                  <div style={detailsLabelStyles}>Time</div>
-                  <div style={detailsValueStyles}>
-                    {showDetailsModal.instances?.find(inst => {
-                      const instDate = new Date(inst.date);
-                      return instDate.toDateString() === selectedDate.toDateString();
-                    })?.time || "Time TBD"}
-                  </div>
-                </div>
-              </div>
-              
-              {showDetailsModal.isRecurring && (
-                <div style={detailsSectionStyles}>
-                  <div style={detailsLabelStyles}>Recurrence</div>
-                  <div style={recurringBadgeStyles}>
-                    🔄 Repeats {showDetailsModal.recurrencePattern === "weekly" ? "Weekly" : "Monthly"}
-                  </div>
-                </div>
-              )}
-              
-              <div style={detailsSectionStyles}>
-                <div style={detailsLabelStyles}>Created</div>
-                <div style={detailsValueStyles}>
-                  {new Date(showDetailsModal.createdAt).toLocaleDateString()}
-                </div>
-              </div>
-              
-              {!isInvestorView && (
-                <div style={detailsActionButtonsStyles}>
-                  <button onClick={() => {
-                    setShowDetailsModal(null);
-                    setShowDeleteConfirm(showDetailsModal.id);
-                  }} style={detailsDeleteButtonStyles}>
-                    Delete Meeting
-                  </button>
-                  <button onClick={() => setShowDetailsModal(null)} style={detailsCloseButtonStyles}>
-                    Close
-                  </button>
-                </div>
-              )}
-              
-              {isInvestorView && (
-                <div style={detailsActionButtonsStyles}>
-                  <button onClick={() => setShowDetailsModal(null)} style={detailsCloseButtonStyles}>
-                    Close
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-      
-      {/* Delete Confirmation Modal */}
-      {showDeleteConfirm && (
-        <div style={confirmOverlayStyles} onClick={() => setShowDeleteConfirm(null)}>
-          <div style={confirmModalStyles} onClick={(e) => e.stopPropagation()}>
-            <div style={confirmTitleStyles}>Delete Meeting</div>
-            <div style={confirmMessageStyles}>Are you sure you want to delete this meeting? This action cannot be undone.</div>
-            <div style={confirmButtonsStyles}>
-              <button onClick={() => setShowDeleteConfirm(null)} style={confirmCancelStyles}>Cancel</button>
-              <button onClick={() => handleDeleteMeeting(showDeleteConfirm)} style={confirmDeleteStyles}>Delete</button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
 const Strategy = () => {
   const [activeSection, setActiveSection] = useState("strategic-clarity");
   const [milestoneData, setMilestoneData] = useState([]);
@@ -11531,8 +10152,6 @@ const Strategy = () => {
     { id: "strategy-operationalisation", label: "Strategy Operationalisation" },
     { id: "strategic-risk-control", label: "Strategic Risk Control" },
     { id: "change-adaptability", label: "Change and adaptability" },
-    { id: "governance-calendar", label: "Governance Calendar" },
-
   ];
 
   return (
@@ -11820,11 +10439,6 @@ const Strategy = () => {
             isInvestorView={isInvestorView}
           />
           <ChangeAdaptability
-            activeSection={activeSection}
-            currentUser={currentUser}
-            isInvestorView={isInvestorView}
-          />
-          <GovernanceCalendar
             activeSection={activeSection}
             currentUser={currentUser}
             isInvestorView={isInvestorView}
