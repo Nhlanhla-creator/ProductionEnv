@@ -367,32 +367,69 @@ export const useAdvisoryApplications = ({
  
   const triggerAIMatching = async (docId) => {
     try {
-      setAnalysisProgress({ current: 0, total: null })
- 
-      let result
-      if (IS_PROD) {
-        // Cloud Function (callable)
-        const fn = httpsCallable(getFunctions(), "analyzeAdvisorMatches")
-        const { data } = await fn({ applicationId: docId })
-        result = data
-      } else {
-        // Local Express backend
-        const res = await fetch(LOCAL_MATCHING_URL, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ applicationId: docId }),
-        })
-        if (!res.ok) throw new Error(`Backend error: ${res.status}`)
-        result = await res.json()
+      // STEP 1: Count advisor profiles
+      let advisorsCount = 0
+      try {
+        const snapshot = await getDocs(collection(db, "advisorProfiles"))
+        advisorsCount = snapshot.size
+      } catch (err) {
+        console.error("Error counting advisors:", err)
       }
- 
+
+      // STEP 2: Show "Getting Things Ready" for 5 seconds
+      setAnalysisProgress({ stage: "gettingReady", advisorsCount })
+      await new Promise((r) => setTimeout(r, 5000))
+
+      // STEP 3: Show "Searching For Matches" and start the fetch
+      setAnalysisProgress({ stage: "searching", advisorsCount })
+
+      let result
+      const controller = new AbortController()
+
+      const fetchPromise = IS_PROD
+        ? (async () => {
+            const fn = httpsCallable(getFunctions(), "analyzeAdvisorMatches")
+            const { data } = await fn({ applicationId: docId })
+            return data
+          })()
+        : (async () => {
+            const res = await fetch(LOCAL_MATCHING_URL, {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ applicationId: docId }),
+              signal: controller.signal,
+            })
+            if (!res.ok) throw new Error(`Backend error: ${res.status}`)
+            return await res.json()
+          })()
+
+      // STEP 4: Race — if fetch takes >15s, switch to "Almost There"
+      const fifteenSecondTimer = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("timeout")), 15000)
+      )
+
+      try {
+        await Promise.race([fetchPromise, fifteenSecondTimer])
+      } catch (raceErr) {
+        if (raceErr.message === "timeout") {
+          // 15s elapsed — show "Almost There", then wait for the actual fetch
+          setAnalysisProgress({ stage: "wrappingUp" })
+          // Abort after 30s total from here (45s overall)
+          const abortTimer = setTimeout(() => controller.abort(), 30000)
+          controller._timeoutId = abortTimer
+          await fetchPromise.catch(() => {})
+          clearTimeout(abortTimer)
+        }
+      }
+
       setAnalysisComplete(true)
-      setAnalysisProgress({ current: result.matchedCount || 0, total: result.totalAdvisors || 0 })
+
+      // After 1.5s, navigate to matches page
       setTimeout(() => {
         setAnalysisProgress(null)
         setAnalysisComplete(false)
         onNavigateToMatches?.()
-      }, 2000)
+      }, 1500)
     } catch (err) {
       console.error("AI matching failed:", err)
       setAnalysisProgress(null)

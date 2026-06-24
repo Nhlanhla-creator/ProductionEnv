@@ -3,7 +3,7 @@ import { useState, useEffect } from "react"
 import { Trophy, Users, Star, Eye, X } from "lucide-react"
 import AdvisorMatchesTable from "./AdvisorMatchesTable"
 import { db, auth } from "../../firebaseConfig"
-import { collection, query, where, onSnapshot } from "firebase/firestore"
+import { collection, doc, query, where, onSnapshot, updateDoc, serverTimestamp } from "firebase/firestore"
 
 // Star Rating Component (for successful deals)
 const StarRating = ({ rating, readOnly = true, size = 14 }) => {
@@ -190,9 +190,20 @@ const AdvisorTabbedTables = ({ onConnectionRequested }) => {
     transition: "all 0.3s ease",
   })
 
-  const handleConnectionRequestedWrapper = () => {
-    if (onConnectionRequested) {
-      onConnectionRequested()
+  const handleConnectionRequestedWrapper = async (advisor) => {
+    try {
+      await updateDoc(doc(db, "smseAdvisoryMatches", advisor.id), {
+        status: "contacted",
+        contactedAt: serverTimestamp(),
+      })
+      // TODO: COMMS — send email + in-app notification to advisor
+      // This is where the comms dev should hook in email/notification logic
+      if (onConnectionRequested) {
+        onConnectionRequested()
+      }
+    } catch (err) {
+      console.error("Failed to update advisor match status to contacted:", err)
+      throw err // re-throw so AdvisorMatchesTable can show error feedback
     }
   }
 
