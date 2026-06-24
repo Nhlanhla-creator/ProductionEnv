@@ -1103,11 +1103,11 @@ function App() {
 
         {/* Insights Routes */}
         <Route path="/insights" element={withProtection(BigInsights, {}, renderSMERoute)} />
-        <Route path="/investor-insights" element={withProtection(InvestorInsights, {}, renderInvestorRoute)} />
+        <Route path="/investor-insights" element={withProtection(InvestorInsights, { isInvestorProfile: true }, renderInvestorRoute)} />
         <Route path="/advisor-insights" element={withProtection(AdvisorInsights, {}, renderAdvisorRoute)} />
         <Route path="/intern-insights" element={withProtection(InternInsights, {}, renderInternRoute)} />
         <Route path="/program-sponsor-insights" element={withProtection(ProgramSponsorInsights, {}, renderProgramSponsorRoute)} />
-        <Route path="/support-insights" element={withProtection(CatalystInsights, {}, renderSupportProgramRoute)} />
+        <Route path="/support-insights" element={withProtection(CatalystInsights, { isCatalystProfile: true }, renderSupportProgramRoute)} />
 
         {/* ─── Associator Dashboard Routes ──────────────────────────────────────── */}
         <Route path="/associator-dashboard" element={withProtection(AssociatorDashboard, {}, renderAssociatorRoute)} />

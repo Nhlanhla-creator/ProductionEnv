@@ -10,6 +10,7 @@ import { FundingInsights } from "./FundingInsights"
 import { AcceleratorInsights } from "./AcceleratorInsights" // Catalyst
 import { AdvisorInsights } from "./AdvisorInsights"
 import { InternInsightsPage } from "./InternInsightsPage"
+import { InvestorInsights } from "../../Investor/InvestorInsights/investorInsights"
 
 // Import the CSS file
 import "../MyFunderMatches/funding-insights.css"
@@ -92,8 +93,8 @@ export function BigInsights() {
       <div className="bigInsightsContent">
         {activeInsightTab === "customers" && <CustomerInsights />}
         {activeInsightTab === "suppliers" && <SupplierInsights />}
-        {activeInsightTab === "funders" && <FundingInsights />}
-        {activeInsightTab === "catalyst" && <AcceleratorInsights />}
+        {activeInsightTab === "funders" && <InvestorInsights isInvestorProfile={false} />}
+        {activeInsightTab === "catalyst" && <AcceleratorInsights isCatalystProfile={false} />}
         {activeInsightTab === "advisors" && <AdvisorInsights />}
         {activeInsightTab === "interns" && <InternInsightsPage />}
       </div>

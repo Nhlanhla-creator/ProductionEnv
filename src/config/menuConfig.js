@@ -639,7 +639,7 @@ export const smeMenuItems = [
       },
       {
         id: "intern-matches",
-        label: "Intern",
+        label: "Interns",
         icon: <GraduationCap size={16} />,
         route: "/intern-matches-page",
       },
