@@ -1,8 +1,8 @@
 "use client"
 
-import { useMemo, useState, useEffect } from "react"
+import { useMemo, useState, useEffect, useCallback } from "react"
 import { createPortal } from "react-dom"
-import { Eye, MessageSquare, Users, Award, MapPin, Percent, Info, Brain, Settings2 } from "lucide-react"
+import { Eye, MessageSquare, Users, Award, MapPin, Percent, Info, Brain, Settings2, Loader2, CheckCircle, AlertCircle } from "lucide-react"
 import { collection, query, where, onSnapshot } from "firebase/firestore"
 import { db } from "../../firebaseConfig"
 import AdvisorDetailsModal from "./AdvisorDetailsModal"
@@ -51,6 +51,27 @@ const BreakdownCard = ({ itemKey, item, devMode }) => {
   );
 };
 
+// ── Status display helpers ──
+const STATUS_CONFIG = {
+  matched: { label: "Matched", color: "#F57C00", bg: "rgba(245,124,0,0.12)" },
+  contacted: { label: "Contacted", color: "#388E3C", bg: "rgba(56,142,60,0.12)" },
+  evaluation: { label: "Evaluation", color: "#1976D2", bg: "rgba(25,118,210,0.12)" },
+  negotiation: { label: "Negotiation", color: "#7B1FA2", bg: "rgba(123,31,162,0.12)" },
+  termIssued: { label: "Term Issued", color: "#00838F", bg: "rgba(0,131,143,0.12)" },
+  "Term Issued": { label: "Term Issued", color: "#00838F", bg: "rgba(0,131,143,0.12)" },
+  dealClosed: { label: "Deal Closed", color: "#2E7D32", bg: "rgba(46,125,50,0.12)" },
+  "Deal Closed": { label: "Deal Closed", color: "#2E7D32", bg: "rgba(46,125,50,0.12)" },
+  "Deal Successful": { label: "Deal Closed", color: "#2E7D32", bg: "rgba(46,125,50,0.12)" },
+  withdrawn: { label: "Withdrawn", color: "#757575", bg: "rgba(117,117,117,0.12)" },
+  declined: { label: "Declined", color: "#D32F2F", bg: "rgba(211,47,47,0.12)" },
+  Declined: { label: "Declined", color: "#D32F2F", bg: "rgba(211,47,47,0.12)" },
+}
+
+const getStatusDisplay = (status) => {
+  const config = STATUS_CONFIG[status] || STATUS_CONFIG.matched
+  return config
+}
+
 const AdvisorMatchesTable = ({
   advisors: externalAdvisors = [],
   applicationId,
@@ -67,6 +88,7 @@ const AdvisorMatchesTable = ({
   const [breakdownAdvisor, setBreakdownAdvisor] = useState(null)
   const [mounted, setMounted] = useState(false)
   const [devMode, setDevMode] = useState(false)
+  const [contactingId, setContactingId] = useState(null)
 
   useEffect(() => { setMounted(true) }, [])
 
@@ -133,8 +155,16 @@ const AdvisorMatchesTable = ({
     setModalAdvisor(advisor)
   }
 
-  const handleContact = (advisor) => {
-    if (onContact) onContact(advisor)
+  const handleContact = async (advisor) => {
+    if (!onContact || advisor.status === "contacted") return
+    setContactingId(advisor.id)
+    try {
+      await onContact(advisor)
+    } catch (err) {
+      // Contact failed; user can retry
+    } finally {
+      setContactingId(null)
+    }
   }
 
   const advisorName = (a) =>
@@ -168,6 +198,12 @@ const AdvisorMatchesTable = ({
 
   return (
     <div style={{ width: "100%" }}>
+      <style>{`
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
       <div
         style={{
           width: "100%",
@@ -183,16 +219,17 @@ const AdvisorMatchesTable = ({
             width: "100%",
             borderCollapse: "separate",
             borderSpacing: 0,
-            minWidth: 720,
+            minWidth: 820,
             tableLayout: "fixed",
           }}
         >
           <colgroup>
-            <col style={{ width: "28%" }} />
-            <col style={{ width: "22%" }} />
-            <col style={{ width: "11%" }} />
-            <col style={{ width: "11%" }} />
-            <col style={{ width: "14%" }} />
+            <col style={{ width: "24%" }} />
+            <col style={{ width: "18%" }} />
+            <col style={{ width: "10%" }} />
+            <col style={{ width: "10%" }} />
+            <col style={{ width: "12%" }} />
+            <col style={{ width: "12%" }} />
             <col style={{ width: "14%" }} />
           </colgroup>
           <thead>
@@ -203,6 +240,7 @@ const AdvisorMatchesTable = ({
                 { label: "Match", Icon: Percent },
                 { label: "Rating", Icon: Award },
                 { label: "Location", Icon: MapPin },
+                { label: "Status", Icon: null },
                 { label: "Actions", Icon: null, align: "center" },
               ].map(({ label, Icon, align }) => (
                 <th
@@ -230,7 +268,7 @@ const AdvisorMatchesTable = ({
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={6} style={{ padding: "28px", textAlign: "center", color: "#8D6E63" }}>
+                <td colSpan={7} style={{ padding: "28px", textAlign: "center", color: "#8D6E63" }}>
                   Loading matches…
                 </td>
               </tr>
@@ -239,7 +277,7 @@ const AdvisorMatchesTable = ({
             {!loading && rows.length === 0 && (
               <tr>
                 <td
-                  colSpan={6}
+                  colSpan={7}
                   style={{
                     padding: "28px",
                     textAlign: "center",
@@ -258,6 +296,7 @@ const AdvisorMatchesTable = ({
             {!loading &&
               rows.map((a, idx) => {
                 const pct = a.finalScore || 0
+                const statusInfo = getStatusDisplay(a.status)
                 return (
                   <tr
                     key={a.id}
@@ -362,6 +401,24 @@ const AdvisorMatchesTable = ({
                       {advisorLocation(a)}
                     </td>
 
+                    {/* Status column — reactive to Firestore status changes */}
+                    <td style={{ padding: pad }}>
+                      <span
+                        style={{
+                          display: "inline-block",
+                          padding: "3px 10px",
+                          borderRadius: 12,
+                          fontSize: "11px",
+                          fontWeight: 600,
+                          background: statusInfo.bg,
+                          color: statusInfo.color,
+                          whiteSpace: "nowrap",
+                        }}
+                      >
+                        {statusInfo.label}
+                      </span>
+                    </td>
+
                     <td style={{ padding: pad }}>
                       <div style={{ display: "flex", gap: 6, justifyContent: "center" }}>
                         <button
@@ -387,32 +444,92 @@ const AdvisorMatchesTable = ({
                         >
                           <Eye size={12} />
                         </button>
-                        {onContact && (
-                          <button
-                            onClick={() => handleContact(a)}
-                            style={{
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: 4,
-                              padding: denseMode ? "6px 9px" : "7px 11px",
-                              background: "linear-gradient(135deg,#a67c52,#7d5a50)",
-                              color: "#FAF7F2",
-                              border: "none",
-                              borderRadius: 6,
-                              fontSize: "12px",
-                              fontWeight: 600,
-                              cursor: "pointer",
-                              whiteSpace: "nowrap",
-                              boxShadow: "0 2px 6px rgba(166,124,82,0.3)",
-                              transition: "transform 0.15s, box-shadow 0.15s",
-                            }}
-                            onMouseEnter={(e) => (e.currentTarget.style.transform = "translateY(-1px)")}
-                            onMouseLeave={(e) => (e.currentTarget.style.transform = "")}
-                            title={`Contact ${advisorName(a)}`}
-                          >
-                            <MessageSquare size={12} />
-                          </button>
-                        )}
+                        {onContact && (() => {
+                          const isContacted = a.status === "contacted"
+                          const isThisContacting = contactingId === a.id
+
+                          // Already contacted — show permanent green state
+                          if (isContacted) {
+                            return (
+                              <button
+                                disabled
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: 4,
+                                  padding: denseMode ? "6px 9px" : "7px 11px",
+                                  background: "linear-gradient(135deg,#388E3C,#2E7D32)",
+                                  color: "#fff",
+                                  border: "none",
+                                  borderRadius: 6,
+                                  fontSize: "12px",
+                                  fontWeight: 600,
+                                  cursor: "default",
+                                  whiteSpace: "nowrap",
+                                  boxShadow: "0 2px 6px rgba(56,142,60,0.3)",
+                                }}
+                                title={`Contacted ${advisorName(a)}`}
+                              >
+                                <CheckCircle size={12} />
+                                Contacted
+                              </button>
+                            )
+                          }
+
+                          // Loading
+                          if (isThisContacting) {
+                            return (
+                              <button
+                                disabled
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: 4,
+                                  padding: denseMode ? "6px 9px" : "7px 11px",
+                                  background: "linear-gradient(135deg,#a67c52,#7d5a50)",
+                                  color: "#FAF7F2",
+                                  border: "none",
+                                  borderRadius: 6,
+                                  fontSize: "12px",
+                                  fontWeight: 600,
+                                  cursor: "not-allowed",
+                                  whiteSpace: "nowrap",
+                                  boxShadow: "0 2px 6px rgba(166,124,82,0.3)",
+                                }}
+                              >
+                                <Loader2 size={12} style={{ animation: "spin 1s linear infinite" }} />
+                              </button>
+                            )
+                          }
+
+                          // Idle — contact button
+                          return (
+                            <button
+                              onClick={() => handleContact(a)}
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: 4,
+                                padding: denseMode ? "6px 9px" : "7px 11px",
+                                background: "linear-gradient(135deg,#a67c52,#7d5a50)",
+                                color: "#FAF7F2",
+                                border: "none",
+                                borderRadius: 6,
+                                fontSize: "12px",
+                                fontWeight: 600,
+                                cursor: "pointer",
+                                whiteSpace: "nowrap",
+                                boxShadow: "0 2px 6px rgba(166,124,82,0.3)",
+                                transition: "transform 0.15s, box-shadow 0.15s",
+                              }}
+                              onMouseEnter={(e) => (e.currentTarget.style.transform = "translateY(-1px)")}
+                              onMouseLeave={(e) => (e.currentTarget.style.transform = "")}
+                              title={`Contact ${advisorName(a)}`}
+                            >
+                              <MessageSquare size={12} />
+                            </button>
+                          )
+                        })()}
                       </div>
                     </td>
                   </tr>
