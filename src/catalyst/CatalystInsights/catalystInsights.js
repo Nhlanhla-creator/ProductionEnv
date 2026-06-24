@@ -492,7 +492,7 @@ const CohortSelectionTabContent = () => {
 };
 
 // ── Main Component ────────────────────────────────────────────────────────────
-export function AcceleratorInsights() {
+export function AcceleratorInsights({ isCatalystProfile }) {
   const [activeTab, setActiveTab] = useState("cohort-selection");
 
   // All data sourced from the universal batch — same view for every logged-in user
@@ -771,13 +771,15 @@ export function AcceleratorInsights() {
   ];
 
   return (
-    <div className="min-h-screen bg-backgroundBrown px-5 py-6 box-border">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold text-mediumBrown mt-0 mb-1">My BIG Insights</h1>
-        <p className="text-lg text-lightBrown m-0 font-normal">
-          Comprehensive analytics and insights across all your Catalyst programs
-        </p>
-      </div>
+    <div className="min-h-screen px-5 py-6 box-border">
+      {isCatalystProfile && (
+        <div className="mb-6">
+          <h1 className="text-3xl font-bold text-mediumBrown mt-0 mb-1">My BIG Insights</h1>
+          <p className="text-lg text-lightBrown m-0 font-normal">
+            Comprehensive analytics and insights across all your Catalyst programs
+          </p>
+        </div>
+      )}
 
       <div className="flex flex-wrap gap-3 mb-6">
         {loading
