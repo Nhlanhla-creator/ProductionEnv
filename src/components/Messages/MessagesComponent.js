@@ -1129,10 +1129,12 @@ const MessagesComponent = ({ config = {}, recipientsList = [] }) => {
               {visibleMessages.length > 0 ? (
                 <>
                   {visibleMessages.map((message) => {
-                    const displayName =
-                      message.type === "inbox"
-                        ? message.fromName || message.sender || "Investment Team"
-                        : message.toName || "Unknown SME";
+                   const displayName =
+                    message.type === "inbox"
+                      ? message.from === "system" 
+                        ? "BIG Marketplace Team 🌍"
+                        : message.fromName || message.sender || "Investment Team"
+                      : message.toName || "Unknown SME";
                     const isSelected = selectedMessages.has(message.id);
 
                     return (
