@@ -5,8 +5,12 @@ import { FaChevronLeft, FaChevronRight } from "react-icons/fa";
 import { getAuth } from "firebase/auth";
 import { doc, getDoc, setDoc, addDoc, collection } from "firebase/firestore";
 import { db } from "../../firebaseConfig";
+import { getFunctions, httpsCallable } from "firebase/functions";
 
-const GovernanceCalendar = () => {
+const functions = getFunctions();
+
+
+const GovernanceCalendar = (activeSection, isInvestorView ) => {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showAddModal, setShowAddModal] = useState(false);
@@ -19,6 +23,13 @@ const GovernanceCalendar = () => {
   const [showDoubleBookingWarning, setShowDoubleBookingWarning] = useState(false);
   const [pendingMeetingData, setPendingMeetingData] = useState(null);
   const [conflictingMeetingData, setConflictingMeetingData] = useState(null);
+const [showRescheduleModal, setShowRescheduleModal] = useState(false);
+const [rescheduleMeeting, setRescheduleMeeting] = useState(null);
+const [rescheduleData, setRescheduleData] = useState({
+  newDate: "",
+  newTime: "",
+  reason: "",
+});
 
   // Department options with colors
   const departmentOptions = [
@@ -356,6 +367,47 @@ This is an automated notification from the BIG Marketplace Governance System.
 Best regards,
 BIG Marketplace Team 🌍`;
 
+// ==================== SEND EMAIL ====================
+
+// Get user email
+let userEmail = null;
+try {
+  const userDocRef = await getDoc(doc(db, "users", currentUser.uid));
+  if (userDocRef.exists()) {
+    const userData = userDocRef.data();
+    userEmail = userData.email;
+  }
+} catch (error) {
+  console.error("Error fetching user email:", error);
+}
+
+if (userEmail) {
+  try {
+    const sendGovernanceMeetingConfirmation = httpsCallable(
+      functions, 
+      'sendGovernanceMeetingConfirmation'
+    );
+    
+    await sendGovernanceMeetingConfirmation({
+      to: currentUser.uid,
+      meetingTitle: formData.title,
+      meetingDate: formattedDate,
+      meetingTime: meetingTime,
+      department: formData.department,
+      participants: newMeeting.participants,
+      purpose: formData.purpose,
+      isRecurring: newMeeting.isRecurring,
+      recurrencePattern: newMeeting.recurrencePattern,
+      isDoubleBooked: isDoubleBooked,
+      conflictingMeetings: conflictingMeetingData || []
+    });
+    
+    console.log("✅ Meeting confirmation email sent to:", userEmail);
+  } catch (emailError) {
+    console.error("Failed to send meeting confirmation email:", emailError);
+  }
+}
+
     // Save to Firestore messages
     await addDoc(collection(db, "messages"), {
       to: currentUser.uid,
@@ -590,29 +642,135 @@ BIG Marketplace Team 🌍`,
 };
   
   const handleDeleteMeeting = async (meetingId) => {
-    setLoading(true);
+  setLoading(true);
+  
+  try {
+    // Find the meeting before deleting
+    const deletedMeeting = meetings.find(m => m.id === meetingId);
     
-    try {
-      const updatedMeetings = meetings.filter(m => m.id !== meetingId);
-      setMeetings(updatedMeetings);
+    const updatedMeetings = meetings.filter(m => m.id !== meetingId);
+    setMeetings(updatedMeetings);
+    
+    const calendarRef = doc(db, "governanceCalendar", currentUser.uid);
+    await setDoc(calendarRef, {
+      meetings: updatedMeetings,
+      updatedAt: new Date().toISOString(),
+      userId: currentUser.uid,
+    }, { merge: true });
+    
+    setShowDeleteConfirm(null);
+    setShowDetailsModal(null);
+    
+    // ==================== DELETE NOTIFICATION ====================
+    
+    if (deletedMeeting) {
+      const firstInstance = deletedMeeting.instances?.[0];
+      const formattedDate = firstInstance 
+        ? new Date(firstInstance.date).toLocaleDateString("en-US", {
+            weekday: "long",
+            year: "numeric",
+            month: "long",
+            day: "numeric",
+          })
+        : "TBD";
+      const meetingTime = firstInstance?.time || "TBD";
+      const displayName = currentUser.displayName || "User";
       
-      const calendarRef = doc(db, "governanceCalendar", currentUser.uid);
-      await setDoc(calendarRef, {
-        meetings: updatedMeetings,
-        updatedAt: new Date().toISOString(),
-        userId: currentUser.uid,
-      }, { merge: true });
+      // 1. In-app banner notification
+      setNotification({ 
+        type: "warning", 
+        message: `❌ "${deletedMeeting.title}" has been cancelled` 
+      });
+      setTimeout(() => setNotification(null), 5000);
       
-      setShowDeleteConfirm(null);
-      setShowDetailsModal(null);
-      alert("Meeting deleted successfully!");
-    } catch (error) {
-      console.error("Error deleting meeting:", error);
-      alert("Error deleting meeting. Please try again.");
-    } finally {
-      setLoading(false);
+      // 2. Save to Firestore messages (ONCE - only inbox)
+      await addDoc(collection(db, "messages"), {
+        to: currentUser.uid,
+        from: "system",
+        subject: `❌ Meeting Cancelled: ${deletedMeeting.title}`,
+        content: `Dear ${displayName},
+
+The meeting "${deletedMeeting.title}" has been cancelled and removed from your calendar.
+
+📋 Cancelled Meeting Details:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📅 Originally Scheduled: ${formattedDate}
+⏰ Time: ${meetingTime}
+🏢 Department: ${deletedMeeting.department}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📌 Purpose:
+${deletedMeeting.purpose}
+
+⚠️ Important:
+• This meeting has been removed from your calendar
+• Any previously scheduled reminders have been cancelled
+${deletedMeeting.isRecurring ? '• All future recurring instances have been removed' : ''}
+
+If you believe this was done in error, please contact your department administrator or reschedule the meeting using the Governance Calendar.
+
+Best regards,
+BIG Marketplace Team 🌍`,
+        date: new Date().toISOString(),
+        read: false,
+        type: "inbox",
+        meetingId: deletedMeeting.id,
+        linkTo: "/governance-calendar",
+      });
+      
+      // ==================== SEND CANCELLATION EMAIL ====================
+      
+      // Get user email
+      let userEmail = null;
+      try {
+        const userDocRef = await getDoc(doc(db, "users", currentUser.uid));
+        if (userDocRef.exists()) {
+          const userData = userDocRef.data();
+          userEmail = userData.email;
+        }
+      } catch (error) {
+        console.error("Error fetching user email:", error);
+      }
+      
+      if (userEmail) {
+        try {
+          const functions = getFunctions();
+          const sendGovernanceMeetingCancellation = httpsCallable(
+            functions, 
+            'sendGovernanceMeetingCancellation'
+          );
+          
+          await sendGovernanceMeetingCancellation({
+            to: currentUser.uid,
+            meetingTitle: deletedMeeting.title,
+            meetingDate: formattedDate,
+            meetingTime: meetingTime,
+            department: deletedMeeting.department,
+            purpose: deletedMeeting.purpose,
+            isRecurring: deletedMeeting.isRecurring || false
+          });
+          
+          console.log("✅ Meeting cancellation email sent to:", userEmail);
+        } catch (emailError) {
+          console.error("Failed to send meeting cancellation email:", emailError);
+        }
+      }
+      
+      // ==================== END CANCELLATION EMAIL ====================
     }
-  };
+    
+    // ==================== END DELETE NOTIFICATION ====================
+    
+  } catch (error) {
+    console.error("Error deleting meeting:", error);
+    setNotification({ 
+      type: "error", 
+      message: "Failed to delete meeting. Please try again." 
+    });
+  } finally {
+    setLoading(false);
+  }
+};
   
   const getMeetingColor = (meeting) => meeting.departmentColor || "#757575";
   
@@ -1472,58 +1630,64 @@ BIG Marketplace Team 🌍`,
             )}
           </div>
         ) : (
-          selectedMeetings.map((meeting, idx) => {
-            const instance = meeting.instances?.find(inst => {
-              const instDate = new Date(inst.date);
-              return instDate.toDateString() === selectedDate.toDateString();
-            });
-            
-            const participantCount = meeting.participants?.length || 0;
-            
-            return (
-              <div
-                key={idx}
-                style={meetingItemStyles(meeting.departmentColor, meeting.departmentBg)}
-                onClick={() => setShowDetailsModal(meeting)}
-              >
-                <div style={meetingTitleStyles}>
-                  <span>{meeting.title}</span>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setShowDeleteConfirm(meeting.id);
-                    }}
-                    style={deleteIconStyles}
-                    title="Delete meeting"
-                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#ffebee"}
-                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
-                  >
-                    ×
-                  </button>
-                </div>
-                <div style={meetingMetaStyles}>
-                  <span>{meeting.department}</span>
-                  <span>•</span>
-                  <span>{instance?.time || "Time TBD"}</span>
-                  {participantCount > 0 && (
-                    <>
-                      <span>•</span>
-                      <span style={participantBadgeStyles}>
-                        👥 {participantCount} participant{participantCount !== 1 ? "s" : ""}
-                      </span>
-                    </>
-                  )}
-                  {meeting.isRecurring && (
-                    <>
-                      <span>•</span>
-                      <span>🔄 {meeting.recurrencePattern === "weekly" ? "Weekly" : "Monthly"}</span>
-                    </>
-                  )}
-                </div>
-                <div style={purposePreviewStyles}>
-                  {meeting.purpose.length > 100 ? meeting.purpose.substring(0, 100) + "..." : meeting.purpose}
-                </div>
-              </div>
+         selectedMeetings.map((meeting, idx) => {
+  // Check if meeting is in the past
+  const isPastMeeting = new Date(meeting.instances?.[0]?.date) < new Date();
+  
+  const instance = meeting.instances?.find(inst => {
+    const instDate = new Date(inst.date);
+    return instDate.toDateString() === selectedDate.toDateString();
+  });
+  
+  const participantCount = meeting.participants?.length || 0;
+  
+  return (
+    <div
+      key={idx}
+      style={meetingItemStyles(meeting.departmentColor, meeting.departmentBg)}
+      onClick={() => setShowDetailsModal(meeting)}
+    >
+      <div style={meetingTitleStyles}>
+        <span>{meeting.title}</span>
+        {/* Only show delete button for future meetings */}
+        {!isPastMeeting && !isInvestorView && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowDeleteConfirm(meeting.id);
+            }}
+            style={deleteIconStyles}
+            title="Delete meeting"
+            onMouseEnter={(e) => e.currentTarget.style.backgroundColor = "#ffebee"}
+            onMouseLeave={(e) => e.currentTarget.style.backgroundColor = "transparent"}
+          >
+            ×
+          </button>
+        )}
+      </div>
+      <div style={meetingMetaStyles}>
+        <span>{meeting.department}</span>
+        <span>•</span>
+        <span>{instance?.time || "Time TBD"}</span>
+        {participantCount > 0 && (
+          <>
+            <span>•</span>
+            <span style={participantBadgeStyles}>
+              👥 {participantCount} participant{participantCount !== 1 ? "s" : ""}
+            </span>
+          </>
+        )}
+        {meeting.isRecurring && (
+          <>
+            <span>•</span>
+            <span>🔄 {meeting.recurrencePattern === "weekly" ? "Weekly" : "Monthly"}</span>
+          </>
+        )}
+      </div>
+      <div style={purposePreviewStyles}>
+        {meeting.purpose.length > 100 ? meeting.purpose.substring(0, 100) + "..." : meeting.purpose}
+      </div>
+    </div>
             );
           })
         )}
@@ -1654,101 +1818,123 @@ BIG Marketplace Team 🌍`,
       )}
       
       {/* Meeting Details Modal */}
-      {showDetailsModal && (
-        <div style={modalOverlayStyles} onClick={() => setShowDetailsModal(null)}>
-          <div style={detailsModalStyles} onClick={(e) => e.stopPropagation()}>
-            <div style={modalHeaderStyles}>
-              <h3 style={modalTitleStyles}>Meeting Details</h3>
-              <button onClick={() => setShowDetailsModal(null)} style={closeButtonStyles}>×</button>
+  {showDetailsModal && (
+  <div style={modalOverlayStyles} onClick={() => setShowDetailsModal(null)}>
+    <div style={detailsModalStyles} onClick={(e) => e.stopPropagation()}>
+      <div style={modalHeaderStyles}>
+        <h3 style={modalTitleStyles}>Meeting Details</h3>
+        <button onClick={() => setShowDetailsModal(null)} style={closeButtonStyles}>×</button>
+      </div>
+      <div style={modalBodyStyles}>
+        <div style={departmentColorStripStyles(showDetailsModal.departmentColor)} />
+        
+        <div style={detailsSectionStyles}>
+          <div style={detailsLabelStyles}>Meeting Title</div>
+          <div style={detailsValueStyles}>{showDetailsModal.title}</div>
+        </div>
+        
+        <div style={detailsSectionStyles}>
+          <div style={detailsLabelStyles}>Department</div>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <div style={{ width: "12px", height: "12px", borderRadius: "3px", backgroundColor: showDetailsModal.departmentColor }} />
+            <span style={detailsValueStyles}>{showDetailsModal.department}</span>
+          </div>
+        </div>
+        
+        <div style={detailsSectionStyles}>
+          <div style={detailsLabelStyles}>Purpose / Agenda</div>
+          <div style={detailsValueStyles}>{showDetailsModal.purpose}</div>
+        </div>
+        
+        <div style={detailsSectionStyles}>
+          <div style={detailsLabelStyles}>Participants</div>
+          {showDetailsModal.participants && showDetailsModal.participants.length > 0 ? (
+            <div style={participantsListStyles}>
+              {showDetailsModal.participants.map((participant, idx) => (
+                <span key={idx} style={participantTagStyles}>{participant}</span>
+              ))}
             </div>
-            <div style={modalBodyStyles}>
-              <div style={departmentColorStripStyles(showDetailsModal.departmentColor)} />
-              
-              <div style={detailsSectionStyles}>
-                <div style={detailsLabelStyles}>Meeting Title</div>
-                <div style={detailsValueStyles}>{showDetailsModal.title}</div>
-              </div>
-              
-              <div style={detailsSectionStyles}>
-                <div style={detailsLabelStyles}>Department</div>
-                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                  <div style={{ width: "12px", height: "12px", borderRadius: "3px", backgroundColor: showDetailsModal.departmentColor }} />
-                  <span style={detailsValueStyles}>{showDetailsModal.department}</span>
-                </div>
-              </div>
-              
-              <div style={detailsSectionStyles}>
-                <div style={detailsLabelStyles}>Purpose / Agenda</div>
-                <div style={detailsValueStyles}>{showDetailsModal.purpose}</div>
-              </div>
-              
-              <div style={detailsSectionStyles}>
-                <div style={detailsLabelStyles}>Participants</div>
-                {showDetailsModal.participants && showDetailsModal.participants.length > 0 ? (
-                  <div style={participantsListStyles}>
-                    {showDetailsModal.participants.map((participant, idx) => (
-                      <span key={idx} style={participantTagStyles}>{participant}</span>
-                    ))}
-                  </div>
-                ) : (
-                  <div style={detailsValueStyles}>No participants specified</div>
-                )}
-              </div>
-              
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "20px" }}>
-                <div>
-                  <div style={detailsLabelStyles}>Date</div>
-                  <div style={detailsValueStyles}>
-                    {new Date(selectedDate).toLocaleDateString("default", {
-                      weekday: "long",
-                      year: "numeric",
-                      month: "long",
-                      day: "numeric",
-                    })}
-                  </div>
-                </div>
-                <div>
-                  <div style={detailsLabelStyles}>Time</div>
-                  <div style={detailsValueStyles}>
-                    {showDetailsModal.instances?.find(inst => {
-                      const instDate = new Date(inst.date);
-                      return instDate.toDateString() === selectedDate.toDateString();
-                    })?.time || "Time TBD"}
-                  </div>
-                </div>
-              </div>
-              
-              {showDetailsModal.isRecurring && (
-                <div style={detailsSectionStyles}>
-                  <div style={detailsLabelStyles}>Recurrence</div>
-                  <div style={recurringBadgeStyles}>
-                    🔄 Repeats {showDetailsModal.recurrencePattern === "weekly" ? "Weekly" : "Monthly"}
-                  </div>
-                </div>
-              )}
-              
-              <div style={detailsSectionStyles}>
-                <div style={detailsLabelStyles}>Created</div>
-                <div style={detailsValueStyles}>
-                  {new Date(showDetailsModal.createdAt).toLocaleDateString()}
-                </div>
-              </div>
-              
-              <div style={detailsActionButtonsStyles}>
-                <button onClick={() => {
-                  setShowDetailsModal(null);
-                  setShowDeleteConfirm(showDetailsModal.id);
-                }} style={detailsDeleteButtonStyles}>
-                  Delete Meeting
-                </button>
-                <button onClick={() => setShowDetailsModal(null)} style={detailsCloseButtonStyles}>
-                  Close
-                </button>
-              </div>
+          ) : (
+            <div style={detailsValueStyles}>No participants specified</div>
+          )}
+        </div>
+        
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "20px" }}>
+          <div>
+            <div style={detailsLabelStyles}>Date</div>
+            <div style={detailsValueStyles}>
+              {new Date(selectedDate).toLocaleDateString("default", {
+                weekday: "long",
+                year: "numeric",
+                month: "long",
+                day: "numeric",
+              })}
+            </div>
+          </div>
+          <div>
+            <div style={detailsLabelStyles}>Time</div>
+            <div style={detailsValueStyles}>
+              {showDetailsModal.instances?.find(inst => {
+                const instDate = new Date(inst.date);
+                return instDate.toDateString() === selectedDate.toDateString();
+              })?.time || "Time TBD"}
             </div>
           </div>
         </div>
-      )}
+        
+        {showDetailsModal.isRecurring && (
+          <div style={detailsSectionStyles}>
+            <div style={detailsLabelStyles}>Recurrence</div>
+            <div style={recurringBadgeStyles}>
+              🔄 Repeats {showDetailsModal.recurrencePattern === "weekly" ? "Weekly" : "Monthly"}
+            </div>
+          </div>
+        )}
+        
+        <div style={detailsSectionStyles}>
+          <div style={detailsLabelStyles}>Created</div>
+          <div style={detailsValueStyles}>
+            {new Date(showDetailsModal.createdAt).toLocaleDateString()}
+          </div>
+        </div>
+        
+        {/* Action Buttons - Only show Delete for future meetings */}
+        {(() => {
+          const isPastMeeting = new Date(showDetailsModal.instances?.[0]?.date) < new Date();
+          return (
+            <>
+              {!isPastMeeting && !isInvestorView && (
+                <div style={detailsActionButtonsStyles}>
+                  <button
+                    onClick={() => {
+                      setShowDetailsModal(null);
+                      setShowDeleteConfirm(showDetailsModal.id);
+                    }}
+                    style={detailsDeleteButtonStyles}
+                  >
+                    Delete Meeting
+                  </button>
+                  <button onClick={() => setShowDetailsModal(null)} style={detailsCloseButtonStyles}>
+                    Close
+                  </button>
+                </div>
+              )}
+              
+              {(isPastMeeting || isInvestorView) && (
+                <div style={detailsActionButtonsStyles}>
+                  <button onClick={() => setShowDetailsModal(null)} style={detailsCloseButtonStyles}>
+                    Close
+                  </button>
+                </div>
+              )}
+            </>
+          );
+        })()}
+        
+      </div>
+    </div>
+  </div>
+)}
       
       {/* Delete Confirmation Modal */}
       {showDeleteConfirm && (
