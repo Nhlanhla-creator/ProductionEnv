@@ -28,6 +28,7 @@ import {
   Network,
   Briefcase,
   TrendingUp,
+  LayoutDashboard
 } from "lucide-react";
 
 export const advisorMenuItems = [
@@ -652,6 +653,14 @@ export const smeMenuItems = [
     route: "/growth",
     hasSubmenu: true,
     subItems: [
+       {
+          id: "raps",
+          label: "RAPs",
+          icon: <LayoutDashboard size={16} />,
+          route: "/governance-calendar",
+          hasSubmenu: false,
+          hoverText: "Result and Progress Meeting",
+        },
       {
         id: "overall-health",
         label: "Overall Company Health",
