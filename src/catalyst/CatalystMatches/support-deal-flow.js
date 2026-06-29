@@ -60,18 +60,14 @@ export function SupportDealFlowPipeline({ onStageClick, smeOverrides = [] }) {
       review:      (s) => ["under review", "in review", "evaluation"].includes(s),
       approved:    (s) => ["due diligence", "shortlisted"].includes(s),
       funding:     (s) => ["decision"].includes(s),
-      // new: "term sheet" | old: no equivalent
       termsheet:   (s) => ["term sheet","support approved"].includes(s),
-      // new: "active"     | old: "active support", "support approved"
-      active:      (s) => ["active", "active support", ].includes(s),
-      // new: "exit"       | old: "exited", "completed", "graduated"
+      active:      (s) => ["active", "active support"].includes(s),
       exit:        (s) => ["exit", "exited", "completed", "graduated"].includes(s),
-      // new: "decline"    | old: "support declined", "rejected", "withdrawn", "declined"
       rejected:    (s) => ["decline", "support declined", "rejected", "withdrawn", "declined"].includes(s),
     }
     const result = {}
     for (const [id, test] of Object.entries(stageMapping)) {
-      result[id] = mergedEnriched.filter(e => {  // <-- was `enriched`, now `mergedEnriched`
+      result[id] = mergedEnriched.filter(e => {
         const stage = (e.pipelineStage || e.status || "").toLowerCase()
         return test(stage)
       }).length
@@ -80,7 +76,6 @@ export function SupportDealFlowPipeline({ onStageClick, smeOverrides = [] }) {
   }, [mergedEnriched])
 
   const handleStageClick = (stage) => {
-    // console.log("Matches rendered", enriched);
     if (!stage?.id) return;
     if (onStageClick) onStageClick(stage.id === "all" ? null : stage.id);
   };
@@ -100,8 +95,8 @@ export function SupportDealFlowPipeline({ onStageClick, smeOverrides = [] }) {
               <div
                 key={stage.id}
                 className="relative flex-shrink-0 cursor-pointer transition-transform duration-200"
-                // onMouseEnter={() => setHoveredStage(stage.id)}
-                // onMouseLeave={() => setHoveredStage(null)}
+                onMouseEnter={() => setHoveredStage(stage.id)}
+                onMouseLeave={() => setHoveredStage(null)}
                 onClick={() => handleStageClick(stage)}
               >
                 {/* Stage card */}
