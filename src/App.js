@@ -233,6 +233,7 @@ import Profile from "./smses/UniversalProfile/UniversalProfile"
 import FindMatches from "./smses/MyMatches/FindMatches"
 import MyDocuments from "./smses/MyDocuments/myDocuments"
 import GrowthEnabler from "./smses/MyGrowthTools/shop"
+
 import Messages from "./smses/Messages/Messages"
 import Calendar from "./smses/MyCalender/Calendar"
 import Settings from "./smses/Settings/Settings"
@@ -332,6 +333,7 @@ import BillingInfoCatalyst from "catalyst/CatalystBillingAndPayments/billing-inf
 import CatalystSubscriptions from "catalyst/CatalystBillingAndPayments/catalyst-subscription"
 import BillingHistoryCatalyst from "catalyst/CatalystBillingAndPayments/billing-history-catalyst"
 import AdvisorApplicationManager from "smses/AdvisorApplication/AdvisorApplicationManager"
+import GovernanceCalendar from "smses/MyGrowthTools/GovernanceCalendar"
 
 // Initial Data States
 const initialFormData = {
@@ -1164,6 +1166,8 @@ function App() {
         <Route path="/applications/intern-application" element={<Navigate to="/applications/intern" replace />} />
         <Route path="/associator" element={<Navigate to="/associator-dashboard" replace />} />
         <Route path="/associator-universal-profile" element={<Navigate to="/associator-profile/instructions" replace />} />
+        <Route path="/governance-calendar" element={withProtection(GovernanceCalendar, {}, renderSMERoute)} />
+      
       </Routes>
     </Router>
   )
