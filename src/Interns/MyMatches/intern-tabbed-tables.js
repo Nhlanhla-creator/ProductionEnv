@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Eye, Check, ChevronDown, ChevronUp, Filter, Search, RefreshCw, X, AlertTriangle, Trophy, TrendingUp, Calendar, DollarSign, Users, BarChart3, Package, GraduationCap, Award, Building, Star, Clock, Briefcase, MessageCircle } from "lucide-react";
 import { InternTable } from "./intern-table";
 import styles from "./intern.module.css";
-import { collection, getDocs, doc, getDoc, setDoc, addDoc, updateDoc, query, where, orderBy } from "firebase/firestore";
+import { collection, getDocs, doc, getDoc, setDoc, addDoc, updateDoc, query, where, orderBy, onSnapshot } from "firebase/firestore";
 import { auth, db } from "../../firebaseConfig";
 
 // Text truncation component
@@ -442,61 +442,79 @@ const SuccessfulInternshipsTable = ({ refreshCount }) => {
  const [selectedSmsInternship, setSelectedSmsInternship] = useState(null);
   const [showSmsRatingModal, setShowSmsRatingModal] = useState(false);
   
- useEffect(() => { 
-  const fetchSuccessfulInternships = async () => {
+ useEffect(() => {
+  const user = auth.currentUser;
+  if (!user) {
+    setLoading(false);
+    return;
+  }
+
+  // Same success statuses the SME side uses, so an accepted/confirmed deal
+  // shows on BOTH the Intern and SME sides (includes every status variant).
+  const SUCCESS_STATUSES = [
+    "Accepted",
+    "Confirmed",
+    "Confirmed/Term Sheet Sign",
+    "Active",
+    "Contract_signed",
+    "Contract Signed",
+    "Completed",
+    "Successfully Completed",
+  ];
+
+  const q = query(
+    collection(db, "internshipApplications"),
+    where("applicantId", "==", user.uid),
+    where("status", "in", SUCCESS_STATUSES)
+  );
+
+  // Real-time listener: updates the moment the SME changes a status (no refresh needed).
+  const unsubscribe = onSnapshot(q, async (snapshot) => {
     try {
-      const user = auth.currentUser;
-      if (!user) return;
-
-      const applicationsSnapshot = await getDocs(collection(db, "internshipApplications"));
       const successfulApps = [];
-      
-      for (const docSnap of applicationsSnapshot.docs) {
+
+      for (const docSnap of snapshot.docs) {
         const appData = docSnap.data();
-        if (
-          appData.applicantId === user.uid && 
-          (appData.status === "Confirmed" || appData.status === "Successfully Completed" || appData.status === "Completed")
-        ) {
-          // Get sponsor details
-          let sponsorData = {};
-          try {
-            const sponsorDoc = await getDoc(doc(db, "universalProfiles", appData.sponsorId));
-            if (sponsorDoc.exists()) {
-              sponsorData = sponsorDoc.data();
-            }
-          } catch (error) {
-            console.error("Error fetching sponsor data:", error);
+
+        // Get sponsor details
+        let sponsorData = {};
+        try {
+          const sponsorDoc = await getDoc(doc(db, "universalProfiles", appData.sponsorId));
+          if (sponsorDoc.exists()) {
+            sponsorData = sponsorDoc.data();
           }
-
-          // ⭐ FETCH SMS RATINGS: Get average rating for this SMS
-          let avgRating = null;
-          let reviewCount = 0;
-          try {
-            if (appData.sponsorId) {
-              const smsRatingsRef = collection(db, "InternToSmsesRatings");
-              const q = query(smsRatingsRef, where("sponsorId", "==", appData.sponsorId));
-              const ratingsSnap = await getDocs(q);
-
-              if (!ratingsSnap.empty) {
-                const ratings = ratingsSnap.docs.map(r => r.data().rating || 0);
-                reviewCount = ratings.length;
-                avgRating = ratings.reduce((sum, r) => sum + r, 0) / reviewCount;
-              }
-            }
-          } catch (error) {
-            console.error("Error fetching ratings from InternToSmsesRatings:", error);
-          }
-
-          successfulApps.push({
-            id: docSnap.id,
-            ...appData,
-            sponsorData,
-            rating: avgRating,
-            performanceRating: avgRating ? `${avgRating.toFixed(1)}/5` : "Not Rated",
-            reviewsCount: reviewCount,
-            absorptionStatus: appData.absorptionStatus || "Not specified"
-          });
+        } catch (error) {
+          console.error("Error fetching sponsor data:", error);
         }
+
+        // ⭐ FETCH SMS RATINGS: Get average rating for this SMS
+        let avgRating = null;
+        let reviewCount = 0;
+        try {
+          if (appData.sponsorId) {
+            const smsRatingsRef = collection(db, "InternToSmsesRatings");
+            const ratingsQuery = query(smsRatingsRef, where("sponsorId", "==", appData.sponsorId));
+            const ratingsSnap = await getDocs(ratingsQuery);
+
+            if (!ratingsSnap.empty) {
+              const ratings = ratingsSnap.docs.map(r => r.data().rating || 0);
+              reviewCount = ratings.length;
+              avgRating = ratings.reduce((sum, r) => sum + r, 0) / reviewCount;
+            }
+          }
+        } catch (error) {
+          console.error("Error fetching ratings from InternToSmsesRatings:", error);
+        }
+
+        successfulApps.push({
+          id: docSnap.id,
+          ...appData,
+          sponsorData,
+          rating: avgRating,
+          performanceRating: avgRating ? `${avgRating.toFixed(1)}/5` : "Not Rated",
+          reviewsCount: reviewCount,
+          absorptionStatus: appData.absorptionStatus || "Not specified"
+        });
       }
 
       setSuccessfulInternships(successfulApps);
@@ -505,9 +523,12 @@ const SuccessfulInternshipsTable = ({ refreshCount }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, (error) => {
+    console.error("Error in successful internships listener:", error);
+    setLoading(false);
+  });
 
-  fetchSuccessfulInternships();
+  return () => unsubscribe();
 }, [refreshCount]);
 
   
@@ -1436,32 +1457,35 @@ const InternTabbedTables = ({ filters, stageFilter, loading, matchesCount }) => 
   const [successfulInternshipsCount, setSuccessfulInternshipsCount] = useState(0);
   const [refreshCount, setRefreshCount] = useState(0);
 
-  // Fetch successful internships count
+  // Fetch successful internships count (real-time, all success status variants)
   useEffect(() => {
-    const fetchSuccessfulCount = async () => {
-      try {
-        const user = auth.currentUser;
-        if (!user) return;
+    const user = auth.currentUser;
+    if (!user) return;
 
-        // Get all applications with status "Confirmed" or "Successfully Completed"
-        const applicationsSnapshot = await getDocs(collection(db, "internshipApplications"));
-        let count = 0;
-        
-        applicationsSnapshot.forEach((doc) => {
-          const appData = doc.data();
-          if (appData.applicantId === user.uid && 
-              (appData.status === "Confirmed" || appData.status === "Successfully Completed" || appData.status === "Completed")) {
-            count++;
-          }
-        });
+    const SUCCESS_STATUSES = [
+      "Accepted",
+      "Confirmed",
+      "Confirmed/Term Sheet Sign",
+      "Active",
+      "Contract_signed",
+      "Contract Signed",
+      "Completed",
+      "Successfully Completed",
+    ];
 
-        setSuccessfulInternshipsCount(count);
-      } catch (error) {
-        console.error("Error fetching successful internships count:", error);
-      }
-    };
+    const q = query(
+      collection(db, "internshipApplications"),
+      where("applicantId", "==", user.uid),
+      where("status", "in", SUCCESS_STATUSES)
+    );
 
-    fetchSuccessfulCount();
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      setSuccessfulInternshipsCount(snapshot.size);
+    }, (error) => {
+      console.error("Error fetching successful internships count:", error);
+    });
+
+    return () => unsubscribe();
   }, [refreshCount]);
 
   const refreshData = () => {

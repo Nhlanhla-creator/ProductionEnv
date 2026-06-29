@@ -9,66 +9,65 @@ import styles from "./pipeline.module.css";
 export function InternDealflowPage({ profiles }) {
   const [stages, setStages] = useState([
     {
+      id: "applied",
+      name: "Applied",
+      count: 0,
+      colorClass: styles.stageInitial,
+      iconColor: "#8d6e63",
+    },
+    {
       id: "requested",
       name: "Requested",
       count: 0,
-
-      colorClass: styles.stageInitial,
-      iconColor: "#8d6e63",
+      colorClass: styles.stageApplication,
+      iconColor: "#795548",
     },
     {
       id: "matched",
       name: "Matched",
       count: 0,
-
-      colorClass: styles.stageApplication,
-      iconColor: "#795548",
+      colorClass: styles.stageReview,
+      iconColor: "#6d4c41",
     },
     {
       id: "shortlisted",
       name: "Shortlisted",
       count: 0,
-
-      colorClass: styles.stageReview,
-      iconColor: "#6d4c41",
+      colorClass: styles.stageApproved,
+      iconColor: "#5d4037",
     },
     {
       id: "interviewed",
       name: "Interviewed",
       count: 0,
-
-      colorClass: styles.stageApproved,
-      iconColor: "#5d4037",
+      colorClass: styles.stageFeedback,
+      iconColor: "#4e342e",
     },
     {
       id: "confirmed",
       name: "Confirmed",
       count: 0,
-
-      colorClass: styles.stageFeedback,
-      iconColor: "#4e342e",
+      colorClass: styles.stageDeals,
+      iconColor: "#3e2723",
     },
     {
       id: "accepted",
       name: "Accepted",
       count: 0,
-
       colorClass: styles.stageDeals,
-      iconColor: "#3e2723",
+      iconColor: "#2e1b13",
     },
     {
       id: "contract_signed",
-      name: "Contract_signed",
+      name: "Contract Signed",
       count: 0,
-
-      colorClass: styles.stageDeals,
-      iconColor: "#2e1b13",
+      colorClass: styles.stageWithdrawn,
+      iconColor: "#1e0e09",
     },
     {
       id: "active",
       name: "Active",
       count: 0,
-
       colorClass: styles.stageWithdrawn,
       iconColor: "#1e0e09",
     },
@@ -76,58 +75,49 @@ export function InternDealflowPage({ profiles }) {
       id: "completed",
       name: "Completed",
       count: 0,
-
       colorClass: styles.stageWithdrawn,
       iconColor: "#1e0e09",
     },
     {
-      id: "decline",
-      name: "Decline",
+      id: "declined",
+      name: "Declined",
       count: 0,
-
       colorClass: styles.stageWithdrawn,
       iconColor: "#1e0e09",
     },
-
-
   ]);
 
   const [loading, setLoading] = useState(true);
   const [totalApplications, setTotalApplications] = useState(0);
-  const [count, setCount] = useState(0)
-  // Stage mappings for status calculation
+
+  // Stage mappings that align with the table's actual status values
   const stageMapping = {
+    applied: { statusMapping: ["Applied"] },
     requested: { statusMapping: ["Requested"] },
-    matched: { useProfilesCount: true }, // Use profiles count instead of status mapping
-    shortlisted: { statusMapping: ["Shortlisted", "Applied"] },
-    interviewed: { statusMapping: ["Contacted/Interview",] },
-    confirmed: { statusMapping: ["Confirmed"] },
+    matched: { statusMapping: ["Matched"] },
+    shortlisted: { statusMapping: ["Shortlisted"] },
+    interviewed: { statusMapping: ["Contacted/Interview", "Interviewed"] },
+    confirmed: { statusMapping: ["Confirmed", "Confirmed/Term Sheet Sign"] },
     accepted: { statusMapping: ["Accepted"] },
-    contract_signed: { statusMapping: ["Active", "Confirmed/Term Sheet Sign"] },
+    contract_signed: { statusMapping: ["Contract Signed", "Contract_signed"] },
     active: { statusMapping: ["Active"] },
     completed: { statusMapping: ["Completed"] },
-    decline: { statusMapping: ["Declined"] },
+    declined: { statusMapping: ["Declined", "Decline"] },
   };
 
-  //   useEffect(() => {
-  //   setCount(count)
-  // }, [profiles])
-
-  // console.log(profiles)
   const calculateStageCounts = (applications) => {
     const counts = {};
 
     stages.forEach(stage => {
       const mapping = stageMapping[stage.id];
-      if (mapping?.countFromRequests) {
-        counts[stage.id] = applications.length > 0 ? applications.length : 0;
-      } else if (mapping?.useProfilesCount) {
-        // Use profiles count for matched stage
-        counts[stage.id] = profiles || 0;
-      } else if (mapping?.statusMapping) {
-        counts[stage.id] = applications.filter(app =>
-          mapping.statusMapping.includes(app.status || "New Match")
-        ).length;
+      
+      if (mapping?.statusMapping) {
+        // Count applications that match the status mapping
+        counts[stage.id] = applications.filter(app => {
+          // Check both status and pipelineStage fields
+          const appStatus = app.status || app.pipelineStage || "";
+          return mapping.statusMapping.includes(appStatus);
+        }).length;
       } else {
         counts[stage.id] = 0;
       }
@@ -144,22 +134,30 @@ export function InternDealflowPage({ profiles }) {
     }
 
     const sponsorId = user.uid;
-    const q = query(collection(db, "internshipApplications"), where("sponsorId", "==", sponsorId));
+    
+    // Query applications where this user is the sponsor
+    const applicationsQuery = query(
+      collection(db, "internshipApplications"), 
+      where("sponsorId", "==", sponsorId)
+    );
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
+    const unsubscribe = onSnapshot(applicationsQuery, (snapshot) => {
       const applications = snapshot.docs.map(doc => ({
         id: doc.id,
         ...doc.data()
       }));
 
       setTotalApplications(applications.length);
+      
       const stageCounts = calculateStageCounts(applications);
+      
       setStages(current =>
         current.map(stage => ({
           ...stage,
           count: stageCounts[stage.id] || 0,
         }))
       );
+      
       setLoading(false);
     }, (error) => {
       console.error("Error fetching pipeline data:", error);
@@ -167,7 +165,7 @@ export function InternDealflowPage({ profiles }) {
     });
 
     return () => unsubscribe();
-  }, [profiles]);
+  }, []);
 
   if (loading) {
     return (

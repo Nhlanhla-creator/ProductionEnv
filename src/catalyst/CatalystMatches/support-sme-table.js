@@ -423,9 +423,35 @@ if (!stageFilter) { setSmes(mapped); onSMEsLoaded?.(mapped); return }
   const applyFilters = () => { setShowFilters(false) }
 
   const functions = getFunctions();
+
+  const getCatalystName = async (userId) => {
+  if (!userId) {
+    return "Catalyst";
+  }
+
+  try {
+    const profileRef = doc(db, "catalystProfiles", userId);
+    const profileSnap = await getDoc(profileRef);
+    
+    if (profileSnap.exists()) {
+      const data = profileSnap.data();
+      const formData = data.formData || {};
+      const entityOverview = formData.entityOverview || {};
+      
+      return entityOverview.registeredName || "Catalyst";
+    }
+    return "Catalyst";
+  } catch (error) {
+    console.error("Error fetching catalyst profile:", error);
+    return "Catalyst";
+  }
+};
+
 // ── Stage update ───────────────────────────────────────────────────────────
 const handleStageUpdate = async () => {
   const stageFields = getStageFields(nextStage)
+  
+
   const errors = {}
   if (!nextStage) errors.nextStage = "Please select a stage"
   if (stageFields.showMessage && !message.trim()) errors.message = "Please provide a message"
@@ -490,6 +516,9 @@ const handleStageUpdate = async () => {
       } catch (e) { console.error("Error creating calendar event:", e) }
     }
     
+    // 🔥 GET CATALYST NAME
+const catalystName = await getCatalystName(catalystId);
+
     // Update local state with the new stage
     const stageKey = `${smeId}_${programIndex}`
     setUpdatedStages((prev) => ({ ...prev, [stageKey]: nextStage }))
@@ -558,8 +587,8 @@ const handleStageUpdate = async () => {
       content += `\n\nPlease reply with your preferred meeting time from the above options.`
     }
 
-    content += `\n\nBest regards,\nSupport Team`
-    
+content += `\n\nBest regards,\n${catalystName || "Support Team"}`
+
     const messagePayload = {
       to: smeId,
       from: catalystId,
@@ -579,6 +608,8 @@ const handleStageUpdate = async () => {
       addDoc(collection(db, "messages"), { ...messagePayload, read: true, type: "sent" }),
     ])
 // ========== SEND EMAIL NOTIFICATION ==========
+
+
 let smeEmail = null;
 try {
   const smeUserDoc = await getDoc(doc(db, "users", smeId));
@@ -598,6 +629,7 @@ if (smeEmail) {
         data: {
           to: smeEmail,
           name: selectedSMEForStage.name,
+          catalystName: catalystName,           // ✅ ADD THIS
           stage: nextStage,
           message: message,
           meetingLocation: stageFields.showMeeting ? meetingLocation : null,
@@ -619,7 +651,7 @@ if (smeEmail) {
     
     const result = await response.json();
     if (result.data?.success) {
-      // console.log("✅ Stage update email sent to SME");
+      console.log("✅ Stage update email sent to SME");
     } else {
       console.error("Email sending failed:", result);
     }
@@ -636,6 +668,7 @@ if (smeEmail) {
     setIsSubmitting(false)
   }
 }
+
 
   // Load existing shared NDAs for all SMEs
 useEffect(() => {
