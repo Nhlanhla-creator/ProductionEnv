@@ -89,12 +89,13 @@ const Header = ({ onLoginClick }) => {
     { label: 'For Interns', path: '/HowItWorksInterns' },
   ];
 
-  // Navigation items - Home first, then How It Works (dropdown), then the rest
+  // Navigation items - UPDATED: Home, BIG Score, How It Works, BIG Pulse, BIG Academy, Contact Us
   const navItems = [
     { label: 'Home', path: '/' },
     { label: 'BIG Score', path: '/BigScorePage' },
-    { label: 'CSI @BIG', path: '/CharmSchool' },
-    { label: 'Insights', path: '/InsightsPage' },
+    // How It Works is handled separately as a dropdown
+    { label: 'BIG Pulse', path: '/InsightsPage' },  // Renamed from "Insights" to "BIG Pulse"
+    { label: 'BIG Academy', path: '/CharmSchool' }, // Renamed from "CSI @BIG" to "BIG Academy"
     { label: 'Contact Us', path: '/ContactPage' },
   ];
 
@@ -419,7 +420,26 @@ const Header = ({ onLoginClick }) => {
               Home
             </button>
 
-            {/* How It Works Dropdown - Second (next to Home) */}
+            {/* BIG Score - Second */}
+            <button
+              className="nav-btn"
+              onClick={() => handleNavigation('/BigScorePage')}
+              style={styles.navButton}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = '#372C27';
+                e.currentTarget.style.transform = 'translateY(-1px)';
+                e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = '#5D432C';
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = 'none';
+              }}
+            >
+              BIG Score
+            </button>
+
+            {/* How It Works Dropdown - Third */}
             <div 
               ref={dropdownRef}
               style={{ position: 'relative' }}
@@ -476,27 +496,62 @@ const Header = ({ onLoginClick }) => {
               </div>
             </div>
 
-            {/* Remaining Nav Items */}
-            {navItems.slice(1).map((item) => (
-              <button
-                key={item.label}
-                className="nav-btn"
-                onClick={() => handleNavigation(item.path)}
-                style={styles.navButton}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.backgroundColor = '#372C27';
-                  e.currentTarget.style.transform = 'translateY(-1px)';
-                  e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.backgroundColor = '#5D432C';
-                  e.currentTarget.style.transform = 'translateY(0)';
-                  e.currentTarget.style.boxShadow = 'none';
-                }}
-              >
-                {item.label}
-              </button>
-            ))}
+            {/* BIG Pulse - Fourth (renamed from Insights) */}
+            <button
+              className="nav-btn"
+              onClick={() => handleNavigation('/InsightsPage')}
+              style={styles.navButton}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = '#372C27';
+                e.currentTarget.style.transform = 'translateY(-1px)';
+                e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = '#5D432C';
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = 'none';
+              }}
+            >
+              BIG Pulse
+            </button>
+
+            {/* BIG Academy - Fifth (renamed from CSI @BIG) */}
+            <button
+              className="nav-btn"
+              onClick={() => handleNavigation('/CharmSchool')}
+              style={styles.navButton}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = '#372C27';
+                e.currentTarget.style.transform = 'translateY(-1px)';
+                e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = '#5D432C';
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = 'none';
+              }}
+            >
+              BIG Academy
+            </button>
+
+            {/* Contact Us - Sixth */}
+            <button
+              className="nav-btn"
+              onClick={() => handleNavigation('/ContactPage')}
+              style={styles.navButton}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = '#372C27';
+                e.currentTarget.style.transform = 'translateY(-1px)';
+                e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = '#5D432C';
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = 'none';
+              }}
+            >
+              Contact Us
+            </button>
           </nav>
         </div>
 
@@ -576,7 +631,21 @@ const Header = ({ onLoginClick }) => {
           Home
         </button>
 
-        {/* How It Works - Second in mobile */}
+        {/* BIG Score - Second in mobile */}
+        <button
+          style={styles.mobileNavButton}
+          onClick={() => handleNavigation('/BigScorePage')}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = '#372C27';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = '#5D432C';
+          }}
+        >
+          BIG Score
+        </button>
+
+        {/* How It Works - Third in mobile */}
         <div>
           <button
             style={styles.mobileDropdownHeader}
@@ -615,22 +684,47 @@ const Header = ({ onLoginClick }) => {
           </div>
         </div>
 
-        {/* Remaining Nav Items */}
-        {navItems.slice(1).map((item) => (
-          <button
-            key={item.label}
-            style={styles.mobileNavButton}
-            onClick={() => handleNavigation(item.path)}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.backgroundColor = '#372C27';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.backgroundColor = '#5D432C';
-            }}
-          >
-            {item.label}
-          </button>
-        ))}
+        {/* BIG Pulse - Fourth in mobile (renamed from Insights) */}
+        <button
+          style={styles.mobileNavButton}
+          onClick={() => handleNavigation('/InsightsPage')}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = '#372C27';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = '#5D432C';
+          }}
+        >
+          BIG Pulse
+        </button>
+
+        {/* BIG Academy - Fifth in mobile (renamed from CSI @BIG) */}
+        <button
+          style={styles.mobileNavButton}
+          onClick={() => handleNavigation('/CharmSchool')}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = '#372C27';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = '#5D432C';
+          }}
+        >
+          BIG Academy
+        </button>
+
+        {/* Contact Us - Sixth in mobile */}
+        <button
+          style={styles.mobileNavButton}
+          onClick={() => handleNavigation('/ContactPage')}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.backgroundColor = '#372C27';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.backgroundColor = '#5D432C';
+          }}
+        >
+          Contact Us
+        </button>
 
         <div style={styles.divider} />
 

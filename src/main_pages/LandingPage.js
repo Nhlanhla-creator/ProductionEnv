@@ -1004,7 +1004,7 @@ const LandingPage = () => {
     {name:"Lebo K.",  role:"Agri Business Founder",  img:"https://randomuser.me/api/portraits/women/32.jpg", stars:5, quote:"The BIG Score helped us understand our strengths and gave us the confidence to grow and apply for funding."},
     {name:"Thabo D.", role:"Impact Investor",         img:"https://randomuser.me/api/portraits/men/68.jpg",   stars:5, quote:"As an investor, I trust the data. BIG helps me find businesses with real verified potential."},
   ]
-  const partners=["ABSA","Seda","SANBI","Standard Bank","AWS","Google for Startups"]
+
 
   const css=`
     *{box-sizing:border-box}
@@ -1191,10 +1191,7 @@ const LandingPage = () => {
               </div>
             ))}
           </div>
-          <div style={{textAlign:"center"}}>
-            <p style={{fontSize:"0.72rem",color:C.muted,fontWeight:700,textTransform:"uppercase",letterSpacing:"0.12em",marginBottom:16}}>Our Partners</p>
-            <div style={{display:"flex",flexWrap:"wrap",gap:10,justifyContent:"center"}}>{partners.map(p=><div key={p} className="pb">{p}</div>)}</div>
-          </div>
+         
         </div>
       </section>
 
@@ -1220,21 +1217,7 @@ const LandingPage = () => {
         </div>
       </section>
 
-      {/* ===================== FAQ SECTION ===================== */}
-      <section style={{padding:mobile?"40px 20px 32px":"60px 40px 48px",background:`linear-gradient(135deg, ${C.cream}, ${C.light})`}}>
-        <div style={{maxWidth:1100,margin:"0 auto"}}>
-          <div style={{textAlign:"center",marginBottom:32}}>
-            <p style={{color:C.secondary,fontWeight:700,fontSize:"0.74rem",letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:8}}>Got questions?</p>
-            <h2 style={{fontSize:mobile?"1.5rem":"2rem",fontWeight:800,color:C.dark,margin:0,letterSpacing:"-0.01em"}}>
-              Everything you need to know about <span style={{color:C.primary}}>BIG</span>
-            </h2>
-            <p style={{fontSize:"0.85rem",color:C.muted,marginTop:6}}>
-              Select a category below to explore answers to common questions
-            </p>
-          </div>
-          <FAQSection isMobile={mobile} />
-        </div>
-      </section>
+    
 
       {/* CTA SECTION */}
       <section style={{padding:mobile?"56px 20px":"80px 40px",background:`linear-gradient(135deg, ${C.dark} 0%, #3D2A1A 100%)`,textAlign:"center",position:"relative",overflow:"hidden"}}>

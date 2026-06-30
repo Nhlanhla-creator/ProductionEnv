@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { FaUserEdit, FaFilter, FaFileAlt, FaMoneyBillWave, FaArrowRight, FaRocket, FaCheckCircle, FaClock, FaShieldAlt } from 'react-icons/fa';
+import { FaUserEdit, FaFilter, FaFileAlt, FaMoneyBillWave, FaArrowRight, FaRocket, FaCheckCircle, FaClock, FaShieldAlt, FaLock, FaDatabase, FaUserSecret, FaRegClock, FaGlobeAfrica, FaFileContract, FaHandshake, FaChartLine, FaSearchDollar, FaUserTie } from 'react-icons/fa';
 import Header from './Header';
 import Footer from './Footer';
 
@@ -47,7 +47,7 @@ const HowItWorksInvestors = () => {
         flex: '1',
         width: '100%',
       }}>
-        {/* Hero Section - Stretched Image */}
+        {/* Hero Section */}
         <section style={{
           position: 'relative',
           borderRadius: '20px',
@@ -259,7 +259,7 @@ const HowItWorksInvestors = () => {
           </div>
         </section>
 
-        {/* Steps Section */}
+        {/* Steps Section - 4 steps */}
         <div style={{ marginBottom: '50px' }}>
           <div style={{ textAlign: 'center', marginBottom: '40px' }}>
             <p style={{
@@ -292,7 +292,7 @@ const HowItWorksInvestors = () => {
           
           <div style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))',
+            gridTemplateColumns: 'repeat(4, 1fr)',
             gap: '20px',
           }}>
             {[
@@ -441,6 +441,62 @@ const HowItWorksInvestors = () => {
           </div>
         </div>
 
+        {/* 🚀 REGISTER NOW CTA - BEFORE VIDEOS */}
+        <section style={{
+          marginBottom: '50px',
+          padding: '40px',
+          background: `linear-gradient(135deg, ${colors.primary} 0%, ${colors.secondary} 100%)`,
+          borderRadius: '20px',
+          textAlign: 'center',
+        }}>
+          <h2 style={{
+            fontSize: 'clamp(1.5rem, 2.5vw, 2.2rem)',
+            fontWeight: 800,
+            color: colors.white,
+            margin: '0 0 12px',
+          }}>
+            Ready to Start Investing?
+          </h2>
+          <p style={{
+            fontSize: '1rem',
+            color: 'rgba(255,255,255,0.85)',
+            margin: '0 0 24px',
+            maxWidth: '500px',
+            marginLeft: 'auto',
+            marginRight: 'auto',
+          }}>
+            Join the growing community of investors discovering vetted SMEs through BIG.
+          </p>
+          <button
+            onClick={handleButtonClick}
+            style={{
+              background: colors.white,
+              color: colors.primary,
+              border: 'none',
+              borderRadius: '50px',
+              padding: '16px 48px',
+              fontSize: '1rem',
+              fontWeight: 700,
+              cursor: 'pointer',
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '12px',
+              transition: 'all 0.3s ease',
+              boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = 'translateY(-3px)';
+              e.currentTarget.style.boxShadow = '0 8px 30px rgba(0,0,0,0.25)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.boxShadow = '0 4px 20px rgba(0,0,0,0.15)';
+            }}
+          >
+            Register Now <FaArrowRight size={14} />
+          </button>
+        </section>
+
         {/* Video Section */}
         <section style={{
           marginBottom: '50px',
@@ -508,7 +564,278 @@ const HowItWorksInvestors = () => {
           </div>
         </section>
 
-       
+        {/* 🛡️ INVESTOR SECURITY SECTION - 4 blocks in one row */}
+        <section style={{
+          marginBottom: '50px',
+          padding: '50px 30px',
+          background: colors.white,
+          borderRadius: '20px',
+          boxShadow: '0 4px 30px rgba(0,0,0,0.05)',
+          border: `1px solid ${colors.border}`,
+        }}>
+          <div style={{ textAlign: 'center', marginBottom: '36px' }}>
+            <div style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '10px',
+              background: `${colors.blue}15`,
+              border: `1px solid ${colors.blue}30`,
+              borderRadius: '30px',
+              padding: '6px 18px 6px 12px',
+              marginBottom: '14px',
+            }}>
+              <FaSearchDollar size={14} color={colors.blue} />
+              <span style={{
+                color: colors.blue,
+                fontSize: '0.7rem',
+                fontWeight: 700,
+                letterSpacing: '0.08em',
+                textTransform: 'uppercase',
+              }}>
+                Invest with Confidence
+              </span>
+            </div>
+            
+            <h2 style={{
+              fontSize: 'clamp(1.5rem, 2.8vw, 2.2rem)',
+              fontWeight: 800,
+              color: colors.dark,
+              margin: '0 0 8px',
+              letterSpacing: '-0.01em',
+            }}>
+              How <span style={{ color: colors.blue }}>BIG Ensures</span> Investment Security
+            </h2>
+            <p style={{
+              fontSize: '0.95rem',
+              color: colors.muted,
+              maxWidth: '600px',
+              margin: '0 auto',
+            }}>
+              We verify, validate, and protect your investment journey at every step.
+            </p>
+          </div>
+
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(4, 1fr)',
+            gap: '20px',
+          }}>
+            {/* Block 1: SME Verification */}
+            <div style={{
+              background: colors.light,
+              borderRadius: '14px',
+              padding: '22px 18px',
+              border: `1px solid ${colors.border}`,
+              transition: 'all 0.3s ease',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = 'translateY(-4px)';
+              e.currentTarget.style.boxShadow = '0 8px 25px rgba(0,0,0,0.08)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.boxShadow = 'none';
+            }}>
+              <div style={{
+                width: '48px',
+                height: '48px',
+                borderRadius: '12px',
+                background: `${colors.green}15`,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: colors.green,
+                marginBottom: '14px',
+              }}>
+                <FaCheckCircle size={22} />
+              </div>
+              <h4 style={{
+                fontSize: '0.95rem',
+                fontWeight: 700,
+                color: colors.dark,
+                margin: '0 0 6px',
+              }}>
+                Verified SMEs Only
+              </h4>
+              <p style={{
+                fontSize: '0.82rem',
+                color: colors.muted,
+                lineHeight: 1.6,
+                margin: 0,
+              }}>
+                Every SME undergoes <strong>rigorous verification</strong> before appearing on the platform. No unverified businesses.
+              </p>
+            </div>
+
+            {/* Block 2: Data Protection */}
+            <div style={{
+              background: colors.light,
+              borderRadius: '14px',
+              padding: '22px 18px',
+              border: `1px solid ${colors.border}`,
+              transition: 'all 0.3s ease',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = 'translateY(-4px)';
+              e.currentTarget.style.boxShadow = '0 8px 25px rgba(0,0,0,0.08)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.boxShadow = 'none';
+            }}>
+              <div style={{
+                width: '48px',
+                height: '48px',
+                borderRadius: '12px',
+                background: `${colors.blue}15`,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: colors.blue,
+                marginBottom: '14px',
+              }}>
+                <FaDatabase size={22} />
+              </div>
+              <h4 style={{
+                fontSize: '0.95rem',
+                fontWeight: 700,
+                color: colors.dark,
+                margin: '0 0 6px',
+              }}>
+                Investment Data Encryption
+              </h4>
+              <p style={{
+                fontSize: '0.82rem',
+                color: colors.muted,
+                lineHeight: 1.6,
+                margin: 0,
+              }}>
+                All investment data encrypted with <strong>AES-256</strong> at rest and <strong>TLS 1.3</strong> in transit. Your deal flow is protected.
+              </p>
+            </div>
+
+            {/* Block 3: Confidentiality */}
+            <div style={{
+              background: colors.light,
+              borderRadius: '14px',
+              padding: '22px 18px',
+              border: `1px solid ${colors.border}`,
+              transition: 'all 0.3s ease',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = 'translateY(-4px)';
+              e.currentTarget.style.boxShadow = '0 8px 25px rgba(0,0,0,0.08)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.boxShadow = 'none';
+            }}>
+              <div style={{
+                width: '48px',
+                height: '48px',
+                borderRadius: '12px',
+                background: `${colors.amber}15`,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: colors.amber,
+                marginBottom: '14px',
+              }}>
+                <FaUserTie size={22} />
+              </div>
+              <h4 style={{
+                fontSize: '0.95rem',
+                fontWeight: 700,
+                color: colors.dark,
+                margin: '0 0 6px',
+              }}>
+                Strict Confidentiality
+              </h4>
+              <p style={{
+                fontSize: '0.82rem',
+                color: colors.muted,
+                lineHeight: 1.6,
+                margin: 0,
+              }}>
+                <strong>NDA-protected</strong> access for all investor data. Your investment activity and portfolio details remain private.
+              </p>
+            </div>
+
+            {/* Block 4: Due Diligence Ready */}
+            <div style={{
+              background: colors.light,
+              borderRadius: '14px',
+              padding: '22px 18px',
+              border: `1px solid ${colors.border}`,
+              transition: 'all 0.3s ease',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = 'translateY(-4px)';
+              e.currentTarget.style.boxShadow = '0 8px 25px rgba(0,0,0,0.08)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.boxShadow = 'none';
+            }}>
+              <div style={{
+                width: '48px',
+                height: '48px',
+                borderRadius: '12px',
+                background: `${colors.orange}15`,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: colors.orange,
+                marginBottom: '14px',
+              }}>
+                <FaFileContract size={22} />
+              </div>
+              <h4 style={{
+                fontSize: '0.95rem',
+                fontWeight: 700,
+                color: colors.dark,
+                margin: '0 0 6px',
+              }}>
+                Due Diligence Ready
+              </h4>
+              <p style={{
+                fontSize: '0.82rem',
+                color: colors.muted,
+                lineHeight: 1.6,
+                margin: 0,
+              }}>
+                All SME profiles include <strong>verified documents, score breakdowns, and compliance checks</strong> — ready for your due diligence.
+              </p>
+            </div>
+          </div>
+
+          {/* Security Footer */}
+          <div style={{
+            marginTop: '24px',
+            padding: '16px 24px',
+            background: `${colors.blue}08`,
+            borderRadius: '12px',
+            border: `1px solid ${colors.blue}20`,
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            gap: '24px',
+            flexWrap: 'wrap',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <FaLock size={16} color={colors.blue} />
+              <span style={{ fontSize: '0.8rem', color: colors.muted }}>Multi-Factor Authentication</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <FaShieldAlt size={16} color={colors.green} />
+              <span style={{ fontSize: '0.8rem', color: colors.muted }}>POPIA Compliant</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <FaRegClock size={16} color={colors.amber} />
+              <span style={{ fontSize: '0.8rem', color: colors.muted }}>Secure Transaction Logging</span>
+            </div>
+          </div>
+        </section>
       </div>
 
       <Footer />
