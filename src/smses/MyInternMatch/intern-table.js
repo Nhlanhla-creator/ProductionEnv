@@ -1538,26 +1538,50 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
               const programAffiliation = formData.programAffiliation || {}
               const requiredDocuments = formData.requiredDocuments || profileData.requiredDocuments || {}
 
-              const bigScore = applicationData.bigScore || applicationData.bigInternScore || 0
+              // Fetch live evaluation scores from internEvaluations collection
+              let evaluationScores = {
+                academic: applicationData.aiAcademicScore || 0,
+                bigInternScore: applicationData.bigScore || applicationData.bigInternScore || 0,
+                professionalPresentation: applicationData.aiPresentationScore || 0,
+                professionalSkills: applicationData.aiProfessionalSkillsScore || 0,
+                workExperience: applicationData.aiWorkExperienceScore || 0,
+              }
+              try {
+                const evalDoc = await getDoc(doc(db, "internEvaluations", internId))
+                if (evalDoc.exists()) {
+                  const evalScores = evalDoc.data().scores || {}
+                  evaluationScores = {
+                    academic: evalScores.academic ?? evaluationScores.academic,
+                    bigInternScore: evalScores.bigInternScore ?? evaluationScores.bigInternScore,
+                    professionalPresentation: evalScores.professionalPresentation ?? evaluationScores.professionalPresentation,
+                    professionalSkills: evalScores.professionalSkills ?? evaluationScores.professionalSkills,
+                    workExperience: evalScores.workExperience ?? evaluationScores.workExperience,
+                  }
+                }
+              } catch (evalError) {
+                console.warn(`Could not fetch live evaluation for intern ${internId}:`, evalError)
+              }
+
+              const bigScore = evaluationScores.bigInternScore
               const matchPercentage =
                 applicationData.matchPercentage || applicationData.matchAnalysis?.overallScore || 0
 
               setBigScoreData({
                 PresentationScore: {
-                  score: applicationData.aiPresentationScore || 0,
-                  color: getScoreColor(applicationData.aiPresentationScore || 0),
+                  score: evaluationScores.professionalPresentation,
+                  color: getScoreColor(evaluationScores.professionalPresentation),
                 },
                 ProfessionalSkillsScore: {
-                  score: applicationData.aiProfessionalSkillsScore || 0,
-                  color: getScoreColor(applicationData.aiProfessionalSkillsScore || 0),
+                  score: evaluationScores.professionalSkills,
+                  color: getScoreColor(evaluationScores.professionalSkills),
                 },
                 WorkExperienceScore: {
-                  score: applicationData.aiWorkExperienceScore || 0,
-                  color: getScoreColor(applicationData.aiWorkExperienceScore || 0),
+                  score: evaluationScores.workExperience,
+                  color: getScoreColor(evaluationScores.workExperience),
                 },
                 AcademicScore: {
-                  score: applicationData.aiAcademicScore || 0,
-                  color: getScoreColor(applicationData.aiAcademicScore || 0),
+                  score: evaluationScores.academic,
+                  color: getScoreColor(evaluationScores.academic),
                 },
               })
 
@@ -1607,6 +1631,7 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
                 fundingProgramType: applicationData.funding || programAffiliation.fundingType || "Not specified",
                 startDate: applicationData.startDate || skillsInterests.availabilityStart || "Not specified",
                 bigScore: bigScore,
+                evaluationScores: evaluationScores,
                 matchPercentage: matchPercentage,
                 status: applicationData.status || "Applied",
                 pipelineStage: applicationData.status || "Applied",
@@ -1674,7 +1699,29 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
               const programAffiliation = fd.programAffiliation || {}
               const requiredDocs = fd.requiredDocuments || data.requiredDocuments || {}
               const experienceTrackRecord = fd.experienceTrackRecord || {}
-
+              // inside profilesSnapshot.docs.map, before building the return object:
+              let evaluationScores = {
+                academic: 0,
+                bigInternScore: data.bigInternScore || 0,
+                professionalPresentation: 0,
+                professionalSkills: 0,
+                workExperience: 0,
+              }
+              try {
+                const evalDoc = await getDoc(doc(db, "internEvaluations", internId))
+                if (evalDoc.exists()) {
+                  const evalScores = evalDoc.data().scores || {}
+                  evaluationScores = {
+                    academic: evalScores.academic ?? 0,
+                    bigInternScore: evalScores.bigInternScore ?? evaluationScores.bigInternScore,
+                    professionalPresentation: evalScores.professionalPresentation ?? 0,
+                    professionalSkills: evalScores.professionalSkills ?? 0,
+                    workExperience: evalScores.workExperience ?? 0,
+                  }
+                }
+              } catch (evalError) {
+                console.warn(`Could not fetch live evaluation for intern ${internId}:`, evalError)
+              }
               const hasRelevantData =
                 personalOverview.fullName ||
                 personalOverview.firstName ||
@@ -1713,7 +1760,8 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
                 sponsorName: programAffiliation.sponsorName || "Not specified",
                 fundingProgramType: programAffiliation.fundingStatus || "Not specified",
                 startDate: skillsInterests.availabilityStart || "Not specified",
-                bigScore: data.bigInternScore || 0,
+                bigScore: evaluationScores.bigInternScore,
+                evaluationScores: evaluationScores, // ADD THIS LINE
                 matchPercentage: matchPercentage || 0,
                 status: "Matched",
                 pipelineStage: "Matched",
@@ -3535,52 +3583,37 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
         createPortal(
           <div style={modalOverlayStyle} onClick={resetModal}>
             <div style={{ ...modalContentStyle, maxWidth: "600px" }} onClick={(e) => e.stopPropagation()}>
-              <div
-                style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px" }}
-              >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px" }}>
                 <h3 style={{ fontSize: "24px", fontWeight: "800", color: "#3e2723", margin: 0 }}>
                   BIG Score Breakdown
                 </h3>
-                <button
-                  onClick={resetModal}
-                  style={{
-                    background: "none",
-                    border: "none",
-                    fontSize: "24px",
-                    cursor: "pointer",
-                    color: "#666",
-                  }}
-                >
+                <button onClick={resetModal} style={{ background: "none", border: "none", fontSize: "24px", cursor: "pointer", color: "#666" }}>
                   <X size={24} />
                 </button>
               </div>
               <div style={{ marginBottom: "24px" }}>
-                <div
-                  style={{
-                    fontSize: "48px",
-                    fontWeight: "800",
-                    color: getScoreColor(selectedIntern.bigScore),
-                    textAlign: "center",
-                    marginBottom: "16px",
-                  }}
-                >
+                <div style={{ fontSize: "48px", fontWeight: "800", color: getScoreColor(selectedIntern.bigScore), textAlign: "center", marginBottom: "16px" }}>
                   {selectedIntern.bigScore}%
                 </div>
                 <p style={{ textAlign: "center", color: "#666", fontSize: "14px" }}>BIG Assessment Score</p>
               </div>
+              {selectedIntern.evaluationScores && (
+                <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                  {[
+                    { label: "Academic", value: selectedIntern.evaluationScores.academic },
+                    { label: "Professional Presentation", value: selectedIntern.evaluationScores.professionalPresentation },
+                    { label: "Professional Skills", value: selectedIntern.evaluationScores.professionalSkills },
+                    { label: "Work Experience", value: selectedIntern.evaluationScores.workExperience },
+                  ].map((item) => (
+                    <div key={item.label} style={{ padding: "12px 16px", backgroundColor: "#f9f5f0", borderRadius: "8px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span style={{ fontSize: "14px", color: "#4a352f", fontWeight: "600" }}>{item.label}</span>
+                      <span style={{ fontSize: "14px", fontWeight: "700", color: getScoreColor(item.value) }}>{item.value}%</span>
+                    </div>
+                  ))}
+                </div>
+              )}
               <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "24px" }}>
-                <button
-                  onClick={resetModal}
-                  style={{
-                    padding: "12px 24px",
-                    backgroundColor: "#a67c52",
-                    color: "white",
-                    border: "none",
-                    borderRadius: "8px",
-                    cursor: "pointer",
-                    fontWeight: "600",
-                  }}
-                >
+                <button onClick={resetModal} style={{ padding: "12px 24px", backgroundColor: "#a67c52", color: "white", border: "none", borderRadius: "8px", cursor: "pointer", fontWeight: "600" }}>
                   Close
                 </button>
               </div>
@@ -3588,7 +3621,6 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
           </div>,
           document.body,
         )}
-
       {/* Stage Update Modal */}
       {showStageModal &&
         selectedInternForStage &&

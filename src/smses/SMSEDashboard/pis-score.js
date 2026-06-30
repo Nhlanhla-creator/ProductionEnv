@@ -22,26 +22,23 @@ export function PISScoreCard({ styles, profileData, onScoreUpdate, apiKey }) {
   const [governanceStage, setGovernanceStage] = useState("");
   const [governanceRecommendation, setGovernanceRecommendation] = useState("");
   const [triggeredByAuto, setTriggeredByAuto] = useState(true);
-const [pisCalculation, setPisCalculation] = useState(() => {
-  const employees = parseInt(profileData?.entityOverview?.employeeCount) || 0;
-  const turnoverRaw = profileData?.financialOverview?.annualRevenue || '0';
-  const turnover = parseFloat(turnoverRaw.toString().replace(/[R,\s]/g, '')) || 0;
-  const liabilitiesRaw = profileData?.financialOverview?.existingDebt || '0';
-  const liabilities = parseFloat(liabilitiesRaw.toString().replace(/[R,\s]/g, '')) || 0;
-  const shareholders = profileData?.ownershipManagement?.shareholders?.length || 1;
-  const turnoverComponent = parseFloat((turnover / 1000000).toFixed(2));
-  const liabilitiesComponent = parseFloat((liabilities / 1000000).toFixed(2));
-  return {
-    employees,
-    turnover,
-    liabilities,
-    shareholders,
-    turnoverComponent,
-    liabilitiesComponent,
-    totalPIS: parseFloat((employees + turnoverComponent + liabilitiesComponent + shareholders).toFixed(2))
-  };
+const [pisCalculation, setPisCalculation] = useState({
+  employees: 0, turnover: 0, liabilities: 0, shareholders: 1,
+  turnoverComponent: 0, liabilitiesComponent: 0, totalPIS: 1,
 });
 // Inside runAiEvaluation, after const pisCalc = calculatePIS():
+
+// 1. PIS calculation - runs whenever profileData fields change
+useEffect(() => {
+  if (!profileData) return;
+  const recalculated = calculatePIS();
+  setPisCalculation(recalculated);
+}, [
+  profileData?.entityOverview?.employeeCount,
+  profileData?.financialOverview?.annualRevenue,
+  profileData?.financialOverview?.existingDebt,
+  profileData?.ownershipManagement?.shareholders?.length,
+]);
 
 // Then replace pisCalc in the JSX above with pisCalculation
   const calculatePIS = () => {
@@ -101,24 +98,66 @@ const [pisCalculation, setPisCalculation] = useState(() => {
       total: policyItems.length
     };
   };
+useEffect(() => {
+  if (!profileData?.entityOverview?.operationStage) return;
 
-  // Add/remove body class to prevent scrolling when modal is open
-  useEffect(() => {
-    if (!aiEvaluationResult) return;
+  const cleanProfile = {
+    ...profileData,
+    ownershipManagement: {
+      ...profileData?.ownershipManagement,
+      directors: (profileData?.ownershipManagement?.directors || [])
+        .filter((d) => d?.name && d.name.trim() !== ""),
+    },
+  };
 
-    const parsed = parseAiEvaluation(aiEvaluationResult);
+  const localScores = calculateGovernanceScore(cleanProfile);
 
-    // Keep all local states in sync from the parsed AI result
-    setPisScore(parsed.pis || 0);
-    setGovernanceScore(parsed.govScore || 0);
-    setScoreBreakdown(parsed.breakdown || []);
-    setGovernanceStage(parsed.stage || "");
-    setGovernanceRecommendation(parsed.recommendation || "");
+  if (localScores.overall >= 0) {
+    setGovernanceScore(localScores.overall);
+    setScoreBreakdown(localScores.categories);
+    setGovernanceStage(localScores.stage);
+    if (onScoreUpdate) onScoreUpdate(localScores.overall);
+  }
+}, [
+  // Spread out specific fields so React detects actual changes
+  profileData?.entityOverview?.operationStage,
+  profileData?.entityOverview?.employeeCount,
+  profileData?.governance?.governanceChecklist,
+  profileData?.governance?.strategicClarity?.strategicDirection,
+  profileData?.governance?.strategicClarity?.planningDepth,
+  profileData?.governance?.strategicClarity?.marketStrategy,
+  profileData?.governance?.strategicClarity?.executionRoadmap,
+  profileData?.governance?.strategicClarity?.decisionMaking,
+  profileData?.governance?.strategicClarity?.adaptability,
+  profileData?.governance?.riskManagement?.riskIdentification,
+  profileData?.governance?.riskManagement?.riskAssessment,
+  profileData?.governance?.riskManagement?.riskMitigation,
+  profileData?.governance?.riskManagement?.businessContinuity,
+  profileData?.governance?.riskManagement?.crisisPreparedness,
+  profileData?.governance?.riskManagement?.riskOwnership,
+  profileData?.governance?.transparencyReporting?.reportingFrequency,
+  profileData?.governance?.transparencyReporting?.kpiMonitoring,
+  profileData?.governance?.transparencyReporting?.auditAndAssurance,
+  profileData?.governance?.transparencyReporting?.dataGovernance,
+  profileData?.ownershipManagement?.directors?.length,
+  profileData?.ownershipManagement?.businessLeadership?.decisionGovernance,
+  profileData?.ownershipManagement?.businessLeadership?.opennessToAdvice,
+  profileData?.enterpriseReadiness?.hasAdvisors,
+  profileData?.enterpriseReadiness?.advisorsMeetRegularly,
+  profileData?.enterpriseReadiness?.advisorsMeetingFrequency,
+  profileData?.financialOverview?.annualRevenue,
+  profileData?.financialOverview?.existingDebt,
+  profileData?.ownershipManagement?.shareholders?.length,
+]);
 
-    // Notify parent with the current overall score
-    if (onScoreUpdate) onScoreUpdate(parsed.govScore || 0);
-  }, [aiEvaluationResult, profileData]);
-
+useEffect(() => {
+  if (!aiEvaluationResult) return;
+  const parsed = parseAiEvaluation(aiEvaluationResult);
+  setPisScore(parsed.pis || 0);
+  setGovernanceRecommendation(parsed.recommendation || "");
+  // governanceScore, scoreBreakdown, governanceStage
+  // are owned exclusively by the deterministic useEffect
+}, [aiEvaluationResult]);
 
   useEffect(() => {
     document.body.style.overflow = showModal ? 'hidden' : '';
@@ -342,15 +381,15 @@ setPisCalculation(pisCalc);
   const userId = auth?.currentUser?.uid;
   if (userId) {
     const aiEvalRef = doc(db, "aiGovernanceEvaluation", userId);
-    await setDoc(aiEvalRef, {
-      result:           parsed.analysis,
-      pisScore:         parsed.pis,
-      governanceScore:  localScores.overall,        // store deterministic score
-      governanceStage:  localScores.stage,
-      timestamp:        new Date(),
-      profileSnapshot:  profileData,
-      pisCalculation:   parsed.pisCalculation,
-    }, { merge: true });
+   await setDoc(aiEvalRef, {
+  result: parsed.analysis,
+  pisScore: parsed.pis,
+  governanceScore: localScores.overall,   // ← this is what reload falls back to
+  governanceStage: localScores.stage,
+  timestamp: new Date(),
+  profileSnapshot: profileData,
+  pisCalculation: parsed.pisCalculation,
+}, { merge: true });
   }
  
   if (onScoreUpdate) onScoreUpdate(localScores.overall);
@@ -434,89 +473,146 @@ setPisCalculation(pisCalc);
 };
 
   // Load saved evaluation if exists
- useEffect(() => {
+// In PISScoreCard.jsx
+useEffect(() => {
   const userId = auth?.currentUser?.uid;
   if (!userId) return;
- 
-  const loadSavedEvaluation = async () => {
+
+  const loadSavedAiText = async () => {
     const aiEvalRef = doc(db, "aiGovernanceEvaluation", userId);
-    const docSnap   = await getDoc(aiEvalRef);
- 
-    if (docSnap.exists()) {
-      const data = docSnap.data();
- 
-      // Always recalculate from live profileData so score reflects latest edits
-      if (profileData) {
-        const cleanProfile = {
-          ...profileData,
-          ownershipManagement: {
-            ...profileData?.ownershipManagement,
-            directors: (profileData?.ownershipManagement?.directors || [])
-              .filter((d) => d?.name && d.name.trim() !== ""),
-          },
-        };
-        const localScores = calculateGovernanceScore(cleanProfile);
-        setGovernanceScore(localScores.overall);
-        setScoreBreakdown(localScores.categories);
-        setGovernanceStage(localScores.stage);
-      } else {
-        // Fallback to stored value if profileData not yet available
-        setGovernanceScore(data.governanceScore || 0);
-      }
- 
-      if (data.result) {
-        const parsed = parseAiEvaluation(data.result);
-        setPisScore(data.pisScore || 0);
-        setAiEvaluationResult(data.result);
-        setGovernanceRecommendation(parsed.recommendation);
-        setScoreBreakdown(prev => prev.length > 0 ? prev : parsed.breakdown);
-      }
+    const docSnap = await getDoc(aiEvalRef);
+    if (!docSnap.exists()) return;
+
+    const data = docSnap.data();
+
+    // Only restore AI narrative text - score comes from effect #2 above
+    if (data.result) {
+      const parsed = parseAiEvaluation(data.result);
+      setPisScore(data.pisScore || 0);
+      setAiEvaluationResult(data.result);
+      setGovernanceRecommendation(parsed.recommendation);
     }
   };
- 
-  loadSavedEvaluation();
-}, [auth?.currentUser?.uid, profileData]);  // re-run when profileData arrives
 
-  // Trigger evaluation when profile data changes or manual trigger
-  useEffect(() => {
-    if (!auth?.currentUser?.uid || !apiKey) return;
+  loadSavedAiText();
+}, [auth?.currentUser?.uid]); // runs once on mount, never touches breakdown
 
-    const docRef = doc(db, "universalProfiles", auth.currentUser.uid);
-    const aiEvalRef = doc(db, "aiGovernanceEvaluation", auth.currentUser.uid);
+// 4. Firestore trigger listener - unchanged except reset key
+useEffect(() => {
+  if (!auth?.currentUser?.uid || !apiKey) return;
 
-    const unsubscribe = onSnapshot(docRef, async (docSnap) => {
-      if (!docSnap.exists()) return;
+  const docRef = doc(db, "universalProfiles", auth.currentUser.uid);
+  const aiEvalRef = doc(db, "aiGovernanceEvaluation", auth.currentUser.uid);
 
-      const data = docSnap.data();
-      if (data.triggerLegitimacyEvaluation === true && !isEvaluating) {
+  const unsubscribe = onSnapshot(docRef, async (docSnap) => {
+    if (!docSnap.exists()) return;
 
-        console.log("Trigger detected: Running PIS AI evaluation...");
+    const data = docSnap.data();
+    if (data.triggerGovernanceEvaluation === true && !isEvaluating) {
+      const result = await runAiEvaluation();
+      await updateDoc(docRef, { triggerGovernanceEvaluation: false });
 
-
-        const result = await runAiEvaluation();
-
-        // Reset the trigger
-        await updateDoc(docRef, { triggerLegitimacyEvaluation: false });
-
-        // Also ensure result is loaded into state if not already
-        const aiSnap = await getDoc(aiEvalRef);
-        if (aiSnap.exists()) {
-          const saved = aiSnap.data();
-          if (saved.result) {
-            const parsed = parseAiEvaluation(saved.result);
-            setPisScore(saved.pisScore || 0);
-            setGovernanceScore(saved.governanceScore || 0);
-            setAiEvaluationResult(saved.result);
-            setGovernanceStage(parsed.stage);
-            setGovernanceRecommendation(parsed.recommendation);
-            setScoreBreakdown(parsed.breakdown);
-          }
+      const aiSnap = await getDoc(aiEvalRef);
+      if (aiSnap.exists()) {
+        const saved = aiSnap.data();
+        if (saved.result) {
+          const parsed = parseAiEvaluation(saved.result);
+          setPisScore(saved.pisScore || 0);
+          setAiEvaluationResult(saved.result);
+          setGovernanceRecommendation(parsed.recommendation);
+          // scoreBreakdown and governanceScore are handled by effect #2
         }
       }
-    });
+    }
+  });
 
-    return () => unsubscribe();
-  }, [auth?.currentUser?.uid, apiKey, isEvaluating]);
+  return () => unsubscribe();
+}, [auth?.currentUser?.uid, apiKey, isEvaluating]);
+
+// REPLACE the entire loadSavedEvaluation useEffect:
+useEffect(() => {
+  const userId = auth?.currentUser?.uid;
+  if (!userId) return;
+
+  const loadSavedEvaluation = async () => {
+    const aiEvalRef = doc(db, "aiGovernanceEvaluation", userId);
+    const docSnap = await getDoc(aiEvalRef);
+
+    if (!docSnap.exists()) return;
+
+    const data = docSnap.data();
+
+    // Always restore AI text and PIS immediately
+    if (data.result) {
+      const parsed = parseAiEvaluation(data.result);
+      setPisScore(data.pisScore || 0);
+      setAiEvaluationResult(data.result);
+      setGovernanceRecommendation(parsed.recommendation);
+      setGovernanceStage(data.governanceStage || parsed.stage || "");
+    }
+
+    // Use saved deterministic score as the display value
+    // Only recalculate live if profileData is fully hydrated
+    const profileFullyLoaded =
+      profileData?.entityOverview?.operationStage &&
+      profileData?.ownershipManagement !== undefined &&
+      profileData?.financialOverview !== undefined &&
+      profileData?.governance !== undefined;
+
+    if (profileFullyLoaded) {
+      const cleanProfile = {
+        ...profileData,
+        ownershipManagement: {
+          ...profileData?.ownershipManagement,
+          directors: (profileData?.ownershipManagement?.directors || [])
+            .filter((d) => d?.name && d.name.trim() !== ""),
+        },
+      };
+      const localScores = calculateGovernanceScore(cleanProfile);
+      setGovernanceScore(localScores.overall);
+      setScoreBreakdown(localScores.categories);
+      setGovernanceStage(localScores.stage);
+    } else {
+      // Profile not ready — use the score saved during last analysis run
+      setGovernanceScore(data.governanceScore || 0);
+      setScoreBreakdown([]); // will repopulate when profileData arrives
+    }
+  };
+
+  loadSavedEvaluation();
+}, [auth?.currentUser?.uid, profileData]); // re-run when profileData arrives
+
+  // Trigger evaluation when profile data changes or manual trigger
+ useEffect(() => {
+  if (!auth?.currentUser?.uid || !apiKey) return;
+
+  const docRef = doc(db, "universalProfiles", auth.currentUser.uid);
+  const aiEvalRef = doc(db, "aiGovernanceEvaluation", auth.currentUser.uid);
+
+  const unsubscribe = onSnapshot(docRef, async (docSnap) => {
+    if (!docSnap.exists()) return;
+
+    const data = docSnap.data();
+    if (data.triggerGovernanceEvaluation === true && !isEvaluating) {
+      const result = await runAiEvaluation();
+      await updateDoc(docRef, { triggerGovernanceEvaluation: false });
+
+      const aiSnap = await getDoc(aiEvalRef);
+      if (aiSnap.exists()) {
+        const saved = aiSnap.data();
+        if (saved.result) {
+          const parsed = parseAiEvaluation(saved.result);
+          setPisScore(saved.pisScore || 0);
+          setAiEvaluationResult(saved.result);
+          setGovernanceRecommendation(parsed.recommendation);
+          // scoreBreakdown and governanceScore are handled by effect #2
+        }
+      }
+    }
+  });
+
+  return () => unsubscribe();
+}, [auth?.currentUser?.uid, apiKey, isEvaluating]);
 
   const getProgressBarColor = (score) => {
     if (score > 90) return "#1B5E20";

@@ -370,11 +370,51 @@ export default function UniversalProfile() {
       editHistory: [...existingHistory, editLogEntry],
     }
     const triggerSections = ["enterpriseReadiness", "documentUpload", "entityOverview", "legalCompliance", "governance", "contactDetails", "financialOverview"]
-    if (section) {
-      const triggerPayload = {}
-      if (triggerSections.includes(section)) { triggerPayload.triggerFundabilityEvaluation = true; triggerPayload.triggerLegitimacyEvaluation = true }
-      if (Object.keys(triggerPayload).length > 0) await setDoc(docRef, triggerPayload, { merge: true })
-    }
+    // WITH THIS:
+
+if (section) {
+  const triggerPayload = {}
+
+  // Legitimacy: contactDetails (website, email, socials, address) + entityOverview (years, stage) + productsServices (key clients)
+  const legitimacySections = ["contactDetails", "entityOverview", "productsServices"]
+  if (legitimacySections.includes(section)) {
+    triggerPayload.triggerLegitimacyEvaluation = true
+  }
+
+  // Fundability: financialOverview (revenue, debt, audited) + operationsOverview (suppliers, capacity, procedures)
+  const fundabilitySections = ["financialOverview", "operationsOverview"]
+  if (fundabilitySections.includes(section)) {
+    triggerPayload.triggerFundabilityEvaluation = true
+  }
+
+  // Leadership: ownershipManagement (directors, executives, CVs, behaviour questions)
+  const leadershipSections = ["ownershipManagement"]
+  if (leadershipSections.includes(section)) {
+    triggerPayload.triggerLeadershipEvaluation = true
+  }
+
+  // Governance: governance (checklist, strategic clarity, risk, transparency) + ownershipManagement (directors, board)
+  const governanceSections = ["governance", "ownershipManagement"]
+  if (governanceSections.includes(section)) {
+    triggerPayload.triggerGovernanceEvaluation = true
+  }
+
+  // Documents: triggers both legitimacy (BBBEE, registration) and fundability (business plan, credit report, pitch deck)
+  if (section === "documents") {
+    triggerPayload.triggerLegitimacyEvaluation = true
+    triggerPayload.triggerFundabilityEvaluation = true
+  }
+
+  // legalCompliance: legitimacy (BBBEE level, accreditations) + governance (compliance checklist feeds into it)
+  if (section === "legalCompliance") {
+    triggerPayload.triggerLegitimacyEvaluation = true
+    triggerPayload.triggerGovernanceEvaluation = true
+  }
+
+  if (Object.keys(triggerPayload).length > 0) {
+    await setDoc(docRef, triggerPayload, { merge: true })
+  }
+}
     await setDoc(docRef, dataToSave, { merge: true })
     setEditHistory([...existingHistory, editLogEntry])
     setLoading(false)

@@ -165,7 +165,7 @@ export default function InvestorDealFlowPipeline({ onStageClick }) {
         // Count based on pipelineStage first, then fall back to status/stage
         if (pipelineStage === "under review") counts.review++;
         else if (pipelineStage === "due diligence" || pipelineStage === "Due Diligence") counts.diligence++;
-        else if (pipelineStage === "funding approved" || pipelineStage === "approved") counts.approved++;
+       else if (pipelineStage === "funding approved" || pipelineStage === "approved" || pipelineStage === "decision") counts.approved++;
         else if (pipelineStage === "termsheet" || pipelineStage === "term sheet" || pipelineStage === "terms issue") counts.feedback++;
         else if (pipelineStage === "deal complete" || pipelineStage === "deals closed" || pipelineStage === "Deal Complete") counts.deals++;
         else if (pipelineStage === "declined" || pipelineStage === "deal declined") counts.withdrawn++;

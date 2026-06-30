@@ -353,18 +353,17 @@ export function BigScoreCard({
   }
 
   const calculateBigScore = (compliance, legitimacy, fundability, pis, leadership, data) => {
-    const stage = data?.entityOverview?.operationStage?.toLowerCase() || "ideation"
-    const stageWeights = {
-      ideation: { compliance: 0.32, legitimacy: 0.13, leadership: 0.1, pis: 0.13, fundability: 0.32 },
-      prototype: { compliance: 0.32, legitimacy: 0.13, leadership: 0.1, pis: 0.13, fundability: 0.32 },
-      startup: { compliance: 0.32, legitimacy: 0.13, leadership: 0.1, pis: 0.13, fundability: 0.32 },
-      "early-growth": { compliance: 0.32, legitimacy: 0.13, leadership: 0.1, pis: 0.13, fundability: 0.32 },
-      growth: { compliance: 0.32, legitimacy: 0.13, leadership: 0.1, pis: 0.13, fundability: 0.32 },
-      "scale-up": { compliance: 0.32, legitimacy: 0.13, leadership: 0.1, pis: 0.13, fundability: 0.32 },
-      mature: { compliance: 0.32, legitimacy: 0.13, leadership: 0.1, pis: 0.13, fundability: 0.32 },
-    }
-    const weights = stageWeights[stage] || stageWeights.ideation
+    const stage = data?.entityOverview?.operationStage?.toLowerCase() || "startup"
+  // In BigScoreCard.jsx, REPLACE calculateBigScore's stageWeights:
+const stageWeights = {
+  startup:    { compliance: 0.25, legitimacy: 0.15, leadership: 0.12, pis: 0.13, fundability: 0.35 },
+  growth:     { compliance: 0.28, legitimacy: 0.13, leadership: 0.10, pis: 0.14, fundability: 0.35 },
+  scaling:    { compliance: 0.32, legitimacy: 0.12, leadership: 0.08, pis: 0.13, fundability: 0.35 },
+  turnaround: { compliance: 0.30, legitimacy: 0.13, leadership: 0.10, pis: 0.12, fundability: 0.35 },
+  mature:     { compliance: 0.38, legitimacy: 0.08, leadership: 0.07, pis: 0.12, fundability: 0.35 },
+}
 
+const weights = stageWeights[stage] || stageWeights.startup
     const complianceWeighted = compliance * weights.compliance
     const legitimacyWeighted = legitimacy * weights.legitimacy
     const leadershipWeighted = leadership * weights.leadership

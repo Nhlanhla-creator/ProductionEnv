@@ -170,13 +170,13 @@ export function LeadershipScoreCard({ styles, profileData, onScoreUpdate, apiKey
     const unsubscribe = onSnapshot(docRef, async (docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data()
-        if (data.triggerFundabilityEvaluation === true && !isEvaluating) {
+        if (data.triggerLeadershipEvaluation === true && !isEvaluating) {
           console.log("Trigger detected: Running leadership AI evaluation...")
           setTriggeredByAuto(true)
           await runAiEvaluation()
           // Reset the trigger to prevent repeated evaluations
           await updateDoc(docRef, {
-            triggerFundabilityEvaluation: false,
+            triggerLeadershipEvaluation: false,
           })
         }
       }
