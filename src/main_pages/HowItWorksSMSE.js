@@ -364,7 +364,7 @@ const HowItWorksSMSE = () => {
                     width: '50px',
                     height: '50px',
                     borderRadius: '12px',
-                    background: `${step.color}15`,
+                    background: `${step.color}60`,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -375,7 +375,7 @@ const HowItWorksSMSE = () => {
                   <span style={{
                     fontSize: '1.8rem',
                     fontWeight: 900,
-                    color: `${step.color}20`,
+                    color: `${step.color}60`,
                     lineHeight: 1,
                   }}>
                     {step.number}
