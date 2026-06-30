@@ -3,7 +3,7 @@ import "./UniversalProfile.css"
 import FormField from "./form-field";
 import FileUpload from "./file-upload";
 import { profitabilityOptions } from "./applicationOptions";
-
+import FinancialsGPT from "../FundingApplication/FinancialsAI";
 // Currency formatter function
 const formatCurrency = (value) => {
   if (!value) return '';
@@ -120,8 +120,7 @@ const YearMultiSelect = ({ selected = [], onChange, fromYear = 2015 }) => {
     </div>
   );
 };
-
-const FinancialOverview = ({ data, updateData }) => {
+const FinancialOverview = ({ data, updateData, apiKey, onEvaluationComplete }) => {
   const [currencyValues, setCurrencyValues] = useState({
     annualRevenue: data.annualRevenue || '',
     currentValuation: data.currentValuation || '',
@@ -579,6 +578,29 @@ const FinancialOverview = ({ data, updateData }) => {
           </FormField>
         </div>
       </div>
+       {/* AI Financial Health Analysis */}
+      {/* ═══════════════════════════════════════════════════════════════════════ */}
+    
+        <FinancialsGPT
+          financialStatementsDocs={data.financialStatementsDocs || []}
+          auditedFinancialsDocs={data.auditedFinancialsDocs || []}
+          managementAccountsDocs={data.managementAccountsDocs || []}
+          profileFields={{
+            generatesRevenue: data.generatesRevenue,
+            annualRevenue: data.annualRevenue,
+            profitabilityStatus: data.profitabilityStatus,
+            revenueTrend: data.revenueTrend,
+            hasAccountingSoftware: data.hasAccountingSoftware,
+            booksUpToDate: data.booksUpToDate,
+            hasManagementAccounts: data.hasManagementAccounts,
+            financialsAudited: data.financialsAudited,
+            existingDebtStatus: data.existingDebtStatus,
+            existingDebt: data.existingDebt,
+          }}
+         
+          onEvaluationComplete={onEvaluationComplete}
+        />
+      
     </>
   );
 };
