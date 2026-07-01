@@ -1035,18 +1035,7 @@ export default function EntityOverview({ data = {}, updateData }) {
           />
         </FormField>
 
-        {/* Number of Employees - moved next to Agencies */}
-        <FormField label="Number of Employees">
-          <input
-            type="number"
-            name="numberOfEmployees"
-            value={formData.numberOfEmployees || ""}
-            onChange={handleChange}
-            style={inputStyle}
-            placeholder="e.g., 50"
-            min="0"
-          />
-        </FormField>
+        
 
         <FormField label="Do you hold any Agencies?">
           <RadioGroup 
