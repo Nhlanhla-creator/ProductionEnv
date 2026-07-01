@@ -890,61 +890,7 @@ export default function EntityOverview({ data = {}, updateData }) {
         </FormField>
       </div>
 
-      {/* ============================================================ */}
-      {/* SECTION 3: Employees - All 4 in one row */}
-      {/* ============================================================ */}
-      <SectionHeading title="Employees" />
-
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '20px' }}>
-        <FormField label="Permanent" required>
-          <input
-            type="number"
-            name="permanentEmployees"
-            value={formData.permanentEmployees || ""}
-            onChange={handleChange}
-            min="0"
-            style={inputStyle}
-            placeholder="0"
-            required
-          />
-        </FormField>
-
-        <FormField label="Contract">
-          <input
-            type="number"
-            name="contractEmployees"
-            value={formData.contractEmployees || ""}
-            onChange={handleChange}
-            min="0"
-            style={inputStyle}
-            placeholder="0"
-          />
-        </FormField>
-
-        <FormField label="Internship">
-          <input
-            type="number"
-            name="internshipEmployees"
-            value={formData.internshipEmployees || ""}
-            onChange={handleChange}
-            min="0"
-            style={inputStyle}
-            placeholder="0"
-          />
-        </FormField>
-
-        <FormField label="Temporary">
-          <input
-            type="number"
-            name="temporaryEmployees"
-            value={formData.temporaryEmployees || ""}
-            onChange={handleChange}
-            min="0"
-            style={inputStyle}
-            placeholder="0"
-          />
-        </FormField>
-      </div>
+      
 
       {/* ============================================================ */}
       {/* SECTION 4: Industry Associations - 3 per row */}

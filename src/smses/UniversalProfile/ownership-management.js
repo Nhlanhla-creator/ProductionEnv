@@ -1030,9 +1030,51 @@ export default function OwnershipManagement({ data = { shareholders: [], directo
           <h3 className="text-lg font-semibold text-brown-700">Employee Qualification & Clearance</h3>
           <p className="text-xs text-brown-500 mt-1">Record employee details, qualifications, and roles</p>
         </div>
-        <FormField label="How many employees do you have?" required>
-          <input type="number" value={formData.totalEmployees || ""} onChange={(e) => updateFormData({ ...formData, totalEmployees: e.target.value })} className="w-full max-w-xs px-3 py-2 border border-brown-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brown-500" placeholder="Enter total number" min="0" />
-        </FormField>
+       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '20px', marginBottom: '20px' }}>
+  <FormField label="Permanent Employees" required>
+    <input 
+      type="number" 
+      value={formData.permanentEmployees || ""} 
+      onChange={(e) => updateFormData({ ...formData, permanentEmployees: e.target.value })} 
+      className="w-full px-3 py-2 border border-brown-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brown-500" 
+      placeholder="0" 
+      min="0"
+    />
+  </FormField>
+  
+  <FormField label="Contract Employees">
+    <input 
+      type="number" 
+      value={formData.contractEmployees || ""} 
+      onChange={(e) => updateFormData({ ...formData, contractEmployees: e.target.value })} 
+      className="w-full px-3 py-2 border border-brown-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brown-500" 
+      placeholder="0" 
+      min="0"
+    />
+  </FormField>
+  
+  <FormField label="Internship Employees">
+    <input 
+      type="number" 
+      value={formData.internshipEmployees || ""} 
+      onChange={(e) => updateFormData({ ...formData, internshipEmployees: e.target.value })} 
+      className="w-full px-3 py-2 border border-brown-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brown-500" 
+      placeholder="0" 
+      min="0"
+    />
+  </FormField>
+  
+  <FormField label="Temporary Employees">
+    <input 
+      type="number" 
+      value={formData.temporaryEmployees || ""} 
+      onChange={(e) => updateFormData({ ...formData, temporaryEmployees: e.target.value })} 
+      className="w-full px-3 py-2 border border-brown-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-brown-500" 
+      placeholder="0" 
+      min="0"
+    />
+  </FormField>
+</div>
         <div className="flex justify-between items-center mt-6 mb-4">
           <h4 className="text-md font-semibold text-brown-600">Employee List</h4>
           <button type="button" onClick={addEmployee} className="flex items-center px-3 py-1 bg-brown-100 text-brown-700 rounded-md hover:bg-brown-200"><Plus className="w-4 h-4 mr-1" /> Add Employee</button>
