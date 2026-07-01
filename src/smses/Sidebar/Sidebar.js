@@ -32,22 +32,25 @@ function SMESidebar() {
       setFilteredMenuItems(smeMenuItems.filter((item) => item.id === "growth-tools"))
       
       // Auto-expand My Growth Suite for investors
-      setAutoExpandMenus({ "growth-tools": true })
+      setAutoExpandMenus({ "growth-tools": true ,
+         "raps": true,
+      })
     } else {
       setFilteredMenuItems(smeMenuItems)
       setAutoExpandMenus({})
     }
   }, [])
 
-  return (
+    return (
     <Sidebar
       menuItems={filteredMenuItems}
       userName={isInvestorView ? viewingSMEName : userName}
       portalTitle="SMSE Dashboard"
       storageKey="smeSidebarCollapsed"
       autoExpandMenus={autoExpandMenus}
+      enableNested={true}  
     />
-  )
+  );
 }
 
 export default SMESidebar

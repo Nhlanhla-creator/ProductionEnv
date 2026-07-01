@@ -370,8 +370,6 @@
 .submenuLabel {
   font-size: 14px;
   font-weight: 400;
-  max-width: 130px;
-  white-space: nowrap;
   letter-spacing: -0.01em;
 }
 
@@ -646,4 +644,91 @@ body.sidebar-collapsed .main-content {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* ============================================
+   THIRD LEVEL SUBMENU (Nested inside submenu)
+   ============================================ */
+
+.subSubmenu {
+  padding: 6px 6px 6px 16px;
+  margin: 0 0 0 8px;
+  border-left: 2px solid rgba(158, 110, 60, 0.15);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sidebar.collapsed .subSubmenu {
+  display: none;
+}
+
+.subSubmenuItem {
+  display: flex;
+  align-items: center;
+  padding: 8px 12px;
+  margin: 2px 0;
+  border-radius: 8px;
+  transition: var(--sidebar-transition);
+  font-weight: 400;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--sidebar-icon);
+}
+
+.subSubmenuItem:hover {
+  background: var(--sidebar-hover);
+  color: var(--sidebar-text);
+}
+
+.subSubmenuItem.active {
+  background: var(--sidebar-active-hover);
+  color: var(--sidebar-text);
+  box-shadow: var(--shadow-sm);
+}
+
+.subSubmenuIcon {
+  margin-right: 10px;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--sidebar-icon);
+  transition: var(--sidebar-transition);
+  border-radius: 4px;
+  background: rgba(188, 174, 156, 0.08);
+  font-size: 14px;
+}
+
+.subSubmenuItem.active .subSubmenuIcon {
+  color: var(--sidebar-text);
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.subSubmenuLabel {
+  font-size: 13px;
+  font-weight: 400;
+  letter-spacing: -0.01em;
+}
+
+/* Arrow indicator for submenu items that have children */
+.submenuItem.hasChildren {
+  position: relative;
+}
+
+.submenuItem .submenuChevron {
+  margin-left: auto;
+  color: var(--sidebar-icon);
+  opacity: 0.5;
+  transition: transform 0.3s ease;
+}
+
+.submenuItem .submenuChevron.rotated {
+  transform: rotate(180deg);
+}
+
+.submenuItem.active .submenuChevron {
+  color: var(--sidebar-text);
+  opacity: 0.8;
 }

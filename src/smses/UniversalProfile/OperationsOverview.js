@@ -95,40 +95,174 @@ const OperationsOverview = ({ data, updateData }) => {
         {/* Section 1 – Supplier & Continuity Risk */}
         <div>
           <SectionHeading number="1" title="Supplier & Continuity Risk" />
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            <FormField label="Q1. Do you rely on more than one key supplier for critical inputs or services?" required>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+            <FormField label="Do you rely on more than one key supplier for critical inputs or services?" required>
               {renderRadioGroup("multipleSuppliers", data.multipleSuppliers)}
             </FormField>
-            <FormField label="Q2. Do you have a documented contingency or continuity plan?" required>
+
+            <FormField label="Do you have a documented contingency or continuity plan?" required>
               {renderRadioGroup("contingencyPlan", data.contingencyPlan)}
             </FormField>
           </div>
+
+          {data.multipleSuppliers === "yes" && (
+            <div style={{ 
+              marginTop: '12px',
+              padding: '1rem', 
+              backgroundColor: "#f9f7f3", 
+              borderRadius: "8px", 
+              border: "1px solid #d6c4a8" 
+            }}>
+              <h5 style={{ color: "#3d2b1f", marginBottom: "0.75rem", fontSize: "14px" }}>Supplier References</h5>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                {/* Supplier 1 */}
+                <div>
+                  <label style={{ fontSize: "13px", color: "#5c4a3a", marginBottom: "4px", display: "block", fontWeight: "500" }}>
+                    Supplier 1 - Company Name
+                  </label>
+                  <input
+                    type="text"
+                    name="supplier1Name"
+                    value={data.supplier1Name || ""}
+                    onChange={(e) => handleInputChange("supplier1Name", e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      border: '1px solid #d6c4a8',
+                      borderRadius: '4px',
+                      fontSize: '14px',
+                    }}
+                    placeholder="Company Name"
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: "13px", color: "#5c4a3a", marginBottom: "4px", display: "block", fontWeight: "500" }}>
+                    Supplier 1 - Contact Telephone No.
+                  </label>
+                  <input
+                    type="text"
+                    name="supplier1Contact"
+                    value={data.supplier1Contact || ""}
+                    onChange={(e) => handleInputChange("supplier1Contact", e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      border: '1px solid #d6c4a8',
+                      borderRadius: '4px',
+                      fontSize: '14px',
+                    }}
+                    placeholder="Contact Telephone No."
+                  />
+                </div>
+
+                {/* Supplier 2 */}
+                <div>
+                  <label style={{ fontSize: "13px", color: "#5c4a3a", marginBottom: "4px", display: "block", fontWeight: "500" }}>
+                    Supplier 2 - Company Name
+                  </label>
+                  <input
+                    type="text"
+                    name="supplier2Name"
+                    value={data.supplier2Name || ""}
+                    onChange={(e) => handleInputChange("supplier2Name", e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      border: '1px solid #d6c4a8',
+                      borderRadius: '4px',
+                      fontSize: '14px',
+                    }}
+                    placeholder="Company Name"
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: "13px", color: "#5c4a3a", marginBottom: "4px", display: "block", fontWeight: "500" }}>
+                    Supplier 2 - Contact Telephone No.
+                  </label>
+                  <input
+                    type="text"
+                    name="supplier2Contact"
+                    value={data.supplier2Contact || ""}
+                    onChange={(e) => handleInputChange("supplier2Contact", e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      border: '1px solid #d6c4a8',
+                      borderRadius: '4px',
+                      fontSize: '14px',
+                    }}
+                    placeholder="Contact Telephone No."
+                  />
+                </div>
+
+                {/* Supplier 3 */}
+                <div>
+                  <label style={{ fontSize: "13px", color: "#5c4a3a", marginBottom: "4px", display: "block", fontWeight: "500" }}>
+                    Supplier 3 - Company Name
+                  </label>
+                  <input
+                    type="text"
+                    name="supplier3Name"
+                    value={data.supplier3Name || ""}
+                    onChange={(e) => handleInputChange("supplier3Name", e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      border: '1px solid #d6c4a8',
+                      borderRadius: '4px',
+                      fontSize: '14px',
+                    }}
+                    placeholder="Company Name"
+                  />
+                </div>
+                <div>
+                  <label style={{ fontSize: "13px", color: "#5c4a3a", marginBottom: "4px", display: "block", fontWeight: "500" }}>
+                    Supplier 3 - Contact Telephone No.
+                  </label>
+                  <input
+                    type="text"
+                    name="supplier3Contact"
+                    value={data.supplier3Contact || ""}
+                    onChange={(e) => handleInputChange("supplier3Contact", e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      border: '1px solid #d6c4a8',
+                      borderRadius: '4px',
+                      fontSize: '14px',
+                    }}
+                    placeholder="Contact Telephone No."
+                  />
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* Section 2 – Delivery */}
+        {/* Section 2 – Delivery (Productivity & Reliability) */}
         <div>
           <SectionHeading number="2" title="Delivery (Productivity & Reliability)" />
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            <FormField label="Q3. Do you track operational performance metrics?" required>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+            <FormField label="Do you track operational performance metrics?" required>
               {renderRadioGroup("trackPerformanceMetrics", data.trackPerformanceMetrics)}
             </FormField>
-            <FormField label="Q4. Have you delivered at least three contracts successfully in the past 12 months?" required>
+            <FormField label="Have you delivered at least three contracts successfully in the past 12 months?" required>
               {renderRadioGroup("threeSuccessfulDeliveries", data.threeSuccessfulDeliveries)}
             </FormField>
-            <FormField label="Q5. Do you have capacity to increase output without compromising quality?" required>
+            <FormField label="Do you have capacity to increase output without compromising quality?" required>
               {renderRadioGroup("hasCapacityToIncrease", data.hasCapacityToIncrease)}
             </FormField>
           </div>
         </div>
 
-        {/* Section 3 – Safety */}
+        {/* Section 3 – Safety (Risk & Compliance) */}
         <div>
           <SectionHeading number="3" title="Safety (Risk & Compliance)" />
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-            <FormField label="Q6. Do you have formal safety, risk, or compliance procedures?" required>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+            <FormField label="Do you have formal safety, risk, or compliance procedures?" required>
               {renderRadioGroup("hasFormalProcedures", data.hasFormalProcedures)}
             </FormField>
-            <FormField label="Q7. Have you experienced any major operational incidents in the past 24 months?" required>
+            <FormField label="Have you experienced any major operational incidents in the past 24 months?" required>
               {renderRadioGroup("hasMajorIncidents", data.hasMajorIncidents)}
             </FormField>
           </div>

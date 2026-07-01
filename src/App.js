@@ -334,6 +334,8 @@ import CatalystSubscriptions from "catalyst/CatalystBillingAndPayments/catalyst-
 import BillingHistoryCatalyst from "catalyst/CatalystBillingAndPayments/billing-history-catalyst"
 import AdvisorApplicationManager from "smses/AdvisorApplication/AdvisorApplicationManager"
 import GovernanceCalendar from "smses/MyGrowthTools/GovernanceCalendar"
+import RapsActions from "smses/MyGrowthTools/RapsActions"
+import RapsOverview from "smses/MyGrowthTools/RapsOverview"
 
 // Initial Data States
 const initialFormData = {
@@ -1167,7 +1169,9 @@ function App() {
         <Route path="/associator" element={<Navigate to="/associator-dashboard" replace />} />
         <Route path="/associator-universal-profile" element={<Navigate to="/associator-profile/instructions" replace />} />
         <Route path="/governance-calendar" element={withProtection(GovernanceCalendar, {}, renderSMERoute)} />
-      
+      <Route path="/raps-overview" element={withProtection(RapsOverview, {}, renderSMERoute)} />
+      <Route path="/raps-actions" element={withProtection(RapsActions, {}, renderSMERoute)} />
+
       </Routes>
     </Router>
   )
