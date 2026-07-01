@@ -15,7 +15,7 @@ import CreditGPT from './aiCreditReport';
 import { Eye } from "lucide-react"
 
 // Component for Enterprise Readiness
-const EnterpriseReadiness = ({ data = {}, updateData, apiKey}) => {
+const EnterpriseReadiness = ({ data = {}, updateData, apiKey }) => {
   const [aiEvaluation, setAiEvaluation] = useState(null);
   const [existingUniversalDocs, setExistingUniversalDocs] = useState({
     businessPlan: null,
@@ -36,10 +36,10 @@ const EnterpriseReadiness = ({ data = {}, updateData, apiKey}) => {
       try {
         const profileRef = doc(db, "universalProfiles", user.uid);
         const profileSnap = await getDoc(profileRef);
-        
+
         if (profileSnap.exists()) {
           const documents = profileSnap.data().documents || {};
-          
+
           setExistingUniversalDocs({
             businessPlan: documents.businessPlan || null,
             pitchDeck: documents.pitchDeck || null,
@@ -54,7 +54,7 @@ const EnterpriseReadiness = ({ data = {}, updateData, apiKey}) => {
         setExistingUniversalDocs(prev => ({ ...prev, loading: false }));
       }
     };
-    
+
     fetchExistingDocs();
   }, []);
 
@@ -92,7 +92,7 @@ export const renderEnterpriseReadiness = (data, updateFormData, apiKey, handleAi
     const { name, value, type, checked } = e.target
     updateFormData("enterpriseReadiness", { [name]: type === "checkbox" ? checked : value })
   }
-  
+
   const handleMultiSelect = (e) => {
     const { value, checked } = e.target
     let barriers = [...(data.barriers || [])]
@@ -120,12 +120,12 @@ export const renderEnterpriseReadiness = (data, updateFormData, apiKey, handleAi
       const url = typeof appDocument === 'string' ? appDocument : appDocument.url
       return { type: 'application', url, label: `This application's ${docLabel}` }
     }
-    
+
     // Priority 2: Check universal profile
     if (universalUrl) {
       return { type: 'universal', url: universalUrl, label: `${docLabel} from your profile` }
     }
-    
+
     return null
   }
 
@@ -137,21 +137,21 @@ export const renderEnterpriseReadiness = (data, updateFormData, apiKey, handleAi
       const url = typeof appDocument === 'string' ? appDocument : appDocument.url
       return { type: 'application', url, label: "This application's Financial Statement" }
     }
-    
+
     // Priority 2: Universal profile documents
     if (universalUrls && universalUrls.length > 0) {
       return { type: 'universal', urls: universalUrls, label: "Financial Statements from your profile" }
     }
-    
+
     return null
   }
 
   const renderViewLink = (url, label, isUniversal = true) => {
     if (!url) return null;
     return (
-      <div style={{ 
-        marginBottom: "12px", 
-        padding: "8px 12px", 
+      <div style={{
+        marginBottom: "12px",
+        padding: "8px 12px",
         backgroundColor: isUniversal ? "#f0f7ff" : "#e8f5e9",
         borderRadius: "6px",
         border: `1px solid ${isUniversal ? "#4a90e2" : "#4caf50"}`
@@ -223,11 +223,11 @@ export const renderEnterpriseReadiness = (data, updateFormData, apiKey, handleAi
                   }
                   return null
                 })()}
-                
+
                 <div style={{ marginTop: "8px", marginBottom: "8px", fontSize: "12px", color: "#666", borderTop: "1px dashed #ccc", paddingTop: "8px" }}>
                   <strong>Need to update?</strong> Upload a new file below:
                 </div>
-                
+
                 <FileUpload
                   label="Upload Business Plan"
                   accept=".pdf,.doc,.docx"
@@ -251,119 +251,7 @@ export const renderEnterpriseReadiness = (data, updateFormData, apiKey, handleAi
           </FormField>
         </div>
 
-        <div className="form-column">
-         <div className="form-column">
-  <FormField label="Do you have financials longer than 3 months?">
-    <div className="radio-group">
-      <label className="form-radio-label">
-        <input
-          type="radio"
-          name="hasFinancials"
-          value="yes"
-          checked={data.hasFinancials === "yes"}
-          onChange={handleChange}
-          className="form-radio"
-        />
-        <span>Yes</span>
-      </label>
-      <label className="form-radio-label">
-        <input
-          type="radio"
-          name="hasFinancials"
-          value="no"
-          checked={data.hasFinancials === "no"}
-          onChange={handleChange}
-          className="form-radio"
-        />
-        <span>No</span>
-      </label>
-    </div>
-    {data.hasFinancials === "yes" && (
-      <div className="conditional-field">
-        <FormField label="Are these financials audited?">
-          <div className="radio-group">
-            <label className="form-radio-label">
-              <input
-                type="radio"
-                name="hasAuditedFinancials"
-                value="yes"
-                checked={data.hasAuditedFinancials === "yes"}
-                onChange={handleChange}
-                className="form-radio"
-              />
-              <span>Yes</span>
-            </label>
-            <label className="form-radio-label">
-              <input
-                type="radio"
-                name="hasAuditedFinancials"
-                value="no"
-                checked={data.hasAuditedFinancials === "no"}
-                onChange={handleChange}
-                className="form-radio"
-              />
-              <span>No</span>
-            </label>
-          </div>
-        </FormField>
-        <input
-          type="text"
-          name="financialsPeriod"
-          value={data.financialsPeriod || ""}
-          onChange={handleChange}
-          className="form-input"
-          placeholder="Please specify the period of your financials"
-        />
         
-        {/* Show financial document based on priority */}
-        {(() => {
-          const doc = getFinancialDocumentToDisplay(data.financialsFile, existingUniversalDocs?.financialStatements?.map(d => d.url))
-          if (doc) {
-            if (doc.type === 'application') {
-              return renderViewLink(doc.url, doc.label, false)
-            } else if (doc.type === 'universal' && doc.urls) {
-              return (
-                <div style={{ marginBottom: "12px" }}>
-                  {doc.urls.map((url, idx) => (
-                    <div key={idx} style={{ marginBottom: "8px" }}>
-                      {renderViewLink(url, `${doc.label} ${idx + 1}`, true)}
-                    </div>
-                  ))}
-                </div>
-              )
-            }
-          }
-          return null
-        })()}
-        
-        <div style={{ marginTop: "8px", marginBottom: "8px", fontSize: "12px", color: "#666", borderTop: "1px dashed #ccc", paddingTop: "8px" }}>
-          <strong>Need to update?</strong> Upload new files below:
-        </div>
-        
-        <FileUpload
-          label="Upload Financials"
-          accept=".pdf,.xlsx,.xls,.doc,.docx"
-          onChange={(files) => handleFileChange("financialsFile", files)}
-          value={data.financialsFile?.filter(f => f instanceof File) || []}
-        />
-
-        {Array.isArray(data.financialsFile) &&
-          data.financialsFile.length > 0 &&
-          !data.financialsFile.some(file =>
-            typeof file === "string" ||
-            (file?.url && file.url.startsWith("https://firebasestorage.googleapis.com"))
-          ) && (
-            <FinancialsGPT
-              files={data.financialsFile}
-              onEvaluationComplete={handleAiResponse}
-              apiKey={apiKey}
-            />
-          )}
-      </div>
-    )}
-  </FormField>
-</div>
-        </div>
       </div>
 
       {/* Second Row: Pitch Deck + MVP */}
@@ -405,11 +293,11 @@ export const renderEnterpriseReadiness = (data, updateFormData, apiKey, handleAi
                   }
                   return null
                 })()}
-                
+
                 <div style={{ marginTop: "8px", marginBottom: "8px", fontSize: "12px", color: "#666", borderTop: "1px dashed #ccc", paddingTop: "8px" }}>
                   <strong>Need to update?</strong> Upload a new file below:
                 </div>
-                
+
                 <FileUpload
                   label="Upload Pitch Deck"
                   accept=".pdf,.ppt,.pptx"
@@ -523,19 +411,19 @@ export const renderEnterpriseReadiness = (data, updateFormData, apiKey, handleAi
                 onChange={(files) => handleFileChange("creditReportDocs", files)}
                 value={data.creditReportDocs || []}
               />
-   
-         
-{Array.isArray(data.creditReportDocs) &&
-  data.creditReportDocs.length > 0 && (
-    <CreditGPT
-      files={data.creditReportDocs.filter(file => 
-        file instanceof File && 
-        !(file?.url && file.url.startsWith("https://firebasestorage.googleapis.com"))
-      )}
-      onEvaluationComplete={handleAiResponse}
-      apiKey={apiKey}
-    />
-  )}
+
+
+              {Array.isArray(data.creditReportDocs) &&
+                data.creditReportDocs.length > 0 && (
+                  <CreditGPT
+                    files={data.creditReportDocs.filter(file =>
+                      file instanceof File &&
+                      !(file?.url && file.url.startsWith("https://firebasestorage.googleapis.com"))
+                    )}
+                    onEvaluationComplete={handleAiResponse}
+                    apiKey={apiKey}
+                  />
+                )}
             </div>
           )}
         </div>
@@ -636,61 +524,61 @@ export const renderEnterpriseReadiness = (data, updateFormData, apiKey, handleAi
                 <span>No</span>
               </label>
             </div>
-                    {data.hasGuarantees === "yes" && (
-            <div className="conditional-field">
-              {/* Show document based on priority */}
-              {(() => {
-                // Priority 1: Check application document
-                const appDocument = data.guaranteeFile?.find(f => typeof f === 'string' || f?.url)
-                if (appDocument) {
-                  const url = typeof appDocument === 'string' ? appDocument : appDocument.url
-                  const label = "This application's Guarantee/Contract"
-                  return (
-                    <div style={{ 
-                      marginBottom: "12px", 
-                      padding: "8px 12px", 
-                      backgroundColor: "#e8f5e9",
-                      borderRadius: "6px",
-                      border: "1px solid #4caf50"
-                    }}>
-                      <a
-                        href={url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: "6px",
-                          color: "#2e7d32",
-                          textDecoration: "underline",
-                          fontSize: "13px",
-                          fontWeight: "500"
-                        }}
-                      >
-                        <Eye size={14} />
-                        {label}
-                      </a>
-                      <div style={{ fontSize: "11px", color: "#2e7d32", marginTop: "4px" }}>
-                        ✓ This document is attached to this application. Upload new to replace it.
+            {data.hasGuarantees === "yes" && (
+              <div className="conditional-field">
+                {/* Show document based on priority */}
+                {(() => {
+                  // Priority 1: Check application document
+                  const appDocument = data.guaranteeFile?.find(f => typeof f === 'string' || f?.url)
+                  if (appDocument) {
+                    const url = typeof appDocument === 'string' ? appDocument : appDocument.url
+                    const label = "This application's Guarantee/Contract"
+                    return (
+                      <div style={{
+                        marginBottom: "12px",
+                        padding: "8px 12px",
+                        backgroundColor: "#e8f5e9",
+                        borderRadius: "6px",
+                        border: "1px solid #4caf50"
+                      }}>
+                        <a
+                          href={url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "6px",
+                            color: "#2e7d32",
+                            textDecoration: "underline",
+                            fontSize: "13px",
+                            fontWeight: "500"
+                          }}
+                        >
+                          <Eye size={14} />
+                          {label}
+                        </a>
+                        <div style={{ fontSize: "11px", color: "#2e7d32", marginTop: "4px" }}>
+                          ✓ This document is attached to this application. Upload new to replace it.
+                        </div>
                       </div>
-                    </div>
-                  )
-                }
-                return null
-              })()}
-              
-              <div style={{ marginTop: "8px", marginBottom: "8px", fontSize: "12px", color: "#666", borderTop: "1px dashed #ccc", paddingTop: "8px" }}>
-                <strong>Need to add or update?</strong> Upload a file below:
+                    )
+                  }
+                  return null
+                })()}
+
+                <div style={{ marginTop: "8px", marginBottom: "8px", fontSize: "12px", color: "#666", borderTop: "1px dashed #ccc", paddingTop: "8px" }}>
+                  <strong>Need to add or update?</strong> Upload a file below:
+                </div>
+
+                <FileUpload
+                  label="Upload Guarantee/Contract"
+                  accept=".pdf,.doc,.docx"
+                  onChange={(files) => handleFileChange("guaranteeFile", files)}
+                  value={data.guaranteeFile?.filter(f => f instanceof File) || []}
+                />
               </div>
-              
-              <FileUpload
-                label="Upload Guarantee/Contract"
-                accept=".pdf,.doc,.docx"
-                onChange={(files) => handleFileChange("guaranteeFile", files)}
-                value={data.guaranteeFile?.filter(f => f instanceof File) || []}
-              />
-            </div>
-          )}
+            )}
           </FormField>
         </div>
       </div>

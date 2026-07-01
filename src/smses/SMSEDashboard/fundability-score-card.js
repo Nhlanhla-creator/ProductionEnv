@@ -467,7 +467,6 @@ const label = d?.evaluation?.analysisResult?.creditRating
   const parseAiEvaluationScores = (text) => {
     const categories = {
       financialStrength:     ["Financial Strength"],
-      operations:            ["Operational Strength"],
       impactMandate:         ["Impact & Mandate Alignment"],
       businessPlanAnalysis:  ["Business Plan / Investment Case", "Business Plan Quality"],
       pitchDeckScore:        ["Pitch Readiness / Pitch Deck", "Pitch Deck Effectiveness"],
@@ -481,30 +480,36 @@ const label = d?.evaluation?.analysisResult?.creditRating
     const evidenceMap = {};
     const confRationaleMap = {};
 
+    // Split into ### chunks and search the WHOLE chunk (heading line included),
+    // not just the text after the heading's line break. The model sometimes
+    // crams "Score: X Confidence: ... Evidence: ..." onto the same line as
+    // "### N. Label" itself, and a body-only search misses that entirely —
+    // which is exactly why sections like Business Plan / Pitch Deck /
+    // Guarantees would intermittently show 0/5 even though the score was
+    // right there in the detailed analysis text.
+    const chunks = text.split(/(?=###\s)/g);
+
     Object.entries(categories).forEach(([key, labels]) => {
       let foundScore = null;
 
       for (const label of labels) {
-        const sectionRe = new RegExp(
-          `###\\s*\\d+\\.\\s*${label}[^\\n]*\\n([\\s\\S]*?)(?=###\\s+\\d+\\.|###\\s+Overall Assessment|$)`,
-          "i"
-        );
-        const sectionMatch = text.match(sectionRe);
-        if (!sectionMatch) continue;
+        const chunk = chunks.find((c) => new RegExp(`###\\s*\\d+\\.\\s*${label}`, "i").test(c));
+        if (!chunk) continue;
 
-        const body = sectionMatch[1];
-
-        const confMatch    = body.match(/Confidence\s*:\s*(High|Medium|Low)/i);
-        const confRatMatch = body.match(/Confidence Rationale\s*:\s*([^\n]+)/i);
-        const evidenceMatch= body.match(/Evidence\s*:\s*([^\n]+)/i);
+        const confMatch    = chunk.match(/Confidence\s*:\s*(High|Medium|Low)/i);
+        const confRatMatch = chunk.match(/Confidence Rationale\s*:\s*([^\n]+)/i);
+        const evidenceMatch= chunk.match(/Evidence\s*:\s*([^\n]+)/i);
 
         if (confMatch)    confidenceMap[key]   = confMatch[1];
         if (confRatMatch) confRationaleMap[key] = confRatMatch[1].trim();
         if (evidenceMatch) evidenceMap[key]     = evidenceMatch[1].trim();
 
-        const scoreMatch = body.match(/\*\*Score:\*\*\s*(\d)|Score:\s*(\d)/i);
+        const scoreMatch =
+          chunk.match(/\*\*Score:\*\*\s*(\d)/i) ||
+          chunk.match(/Score\s*:\s*(\d)\s*\/\s*5/i) ||
+          chunk.match(/Score\s*:\s*(\d)/i);
         if (scoreMatch) {
-          foundScore = parseInt(scoreMatch[1] ?? scoreMatch[2], 10);
+          foundScore = parseInt(scoreMatch[1], 10);
           break;
         }
       }
@@ -542,14 +547,15 @@ const label = d?.evaluation?.analysisResult?.creditRating
     const subW = getFundabilitySubWeights(fundingTier);
     
     const overallWeights = {
-      financialStrength: hasAppliedForFunding && fundingTier ? 40 : 55,
-      operations: hasAppliedForFunding && fundingTier ? 30 : 45,
-      fundability: hasAppliedForFunding && fundingTier ? 30 : 0,
+      // Operational Strength has been removed. Its 30% (with funding) / 45% (without
+      // funding) has been folded fully into the remaining core category — Fundability
+      // when a tier is active, otherwise the stage-based weightings below.
+      financialStrength: hasAppliedForFunding && fundingTier ? 40 : (weightings?.financialStrength || 0),
+      fundability: hasAppliedForFunding && fundingTier ? 60 : 0,
     };
     
     const categoryMappings = [
       { key: "financialStrength", name: "Financial Strength", isCore: true },
-      { key: "operations", name: "Operational Strength", isCore: true },
     ];
     
     if (hasAppliedForFunding && fundingTier && subW) {
@@ -570,23 +576,23 @@ const label = d?.evaluation?.analysisResult?.creditRating
     const colors = ["#8D6E63", "#6D4C41", "#A67C52", "#D7CCC8", "#4E342E", "#795548", "#5D4037", "#3E2723"];
     const breakdown = [];
     
-    for (let i = 0; i < 2; i++) {
-      const cat = categoryMappings[i];
-      if (!cat) continue;
+    // Index 0 is always the sole core category now: Financial Strength.
+    {
+      const cat = categoryMappings[0];
       const aiScore = aiScores[cat.key] ?? 0;
       const percent = (aiScore / 5) * 100;
-      const weight = overallWeights[cat.key];
+      const weight = overallWeights.financialStrength;
       const weightedContribution = (percent / 100) * weight;
       breakdown.push({
         name: cat.name, score: Math.round(percent), weight, weightedScore: Math.round(weightedContribution),
-        color: colors[i], rawScore: Math.round(aiScore * 10) / 10, maxScore: 5,
+        color: colors[0], rawScore: Math.round(aiScore * 10) / 10, maxScore: 5,
         tier: null, active: true, excluded: false, exclusionNote: null, reductionNote: null,
       });
     }
     
     if (hasAppliedForFunding && fundingTier && subW) {
       const fundabilityWeight = overallWeights.fundability;
-      for (let i = 2; i < categoryMappings.length; i++) {
+      for (let i = 1; i < categoryMappings.length; i++) {
         const cat = categoryMappings[i];
         let rawScore = 0, percent = 0, sourceType = "ai";
         
@@ -606,14 +612,14 @@ const label = d?.evaluation?.analysisResult?.creditRating
         breakdown.push({
           name: cat.name, score: isExcluded ? 0 : Math.round(percent),
           weight: weightWithinBlock, weightedScore: Math.round(weightedContribution),
-          color: colors[(i + 2) % colors.length], rawScore: Math.round(rawScore * 10) / 10,
+          color: colors[i % colors.length], rawScore: Math.round(rawScore * 10) / 10,
           maxScore: 5, tier: fundingTier, active: !isExcluded && weightWithinBlock > 0,
           excluded: isExcluded, exclusionNote: cat.exclusionNote || null,
           reductionNote: cat.reductionNote || null, source: sourceType,
         });
       }
     } else {
-      const cat = categoryMappings[2];
+      const cat = categoryMappings[1];
       if (cat) {
         const aiScore = aiScores[cat.key] ?? 0;
         const percent = (aiScore / 5) * 100;
@@ -621,7 +627,7 @@ const label = d?.evaluation?.analysisResult?.creditRating
         const weightedContribution = (percent / 100) * weight;
         breakdown.push({
           name: cat.name, score: Math.round(percent), weight, weightedScore: Math.round(weightedContribution),
-          color: colors[2], rawScore: Math.round(aiScore * 10) / 10, maxScore: 5,
+          color: colors[1], rawScore: Math.round(aiScore * 10) / 10, maxScore: 5,
           tier: null, active: true, excluded: false, exclusionNote: null, reductionNote: null,
         });
       }
@@ -665,17 +671,6 @@ const label = d?.evaluation?.analysisResult?.creditRating
         }
       }
     } catch (_) {}
-
-    out += `\n=== OPERATIONAL STRENGTH ===\n`;
-    out += `Team size (FT): ${data?.entityOverview?.fullTimeEmployees ?? "Unknown"}\n`;
-    out += `Processes documented: ${data?.operationsOverview?.hasFormalProcedures || "Not specified"}\n`;
-    out += `Contingency planning: ${data?.operationsOverview?.contingencyPlan || "Not specified"}\n`;
-    out += `Performance tracking: ${data?.operationsOverview?.trackPerformanceMetrics || "Not specified"}\n`;
-    out += `Multiple suppliers: ${data?.operationsOverview?.multipleSuppliers || "Not specified"}\n`;
-    out += `Capacity to increase: ${data?.operationsOverview?.hasCapacityToIncrease || "Not specified"}\n`;
-    out += `3 successful deliveries: ${data?.operationsOverview?.threeSuccessfulDeliveries || "Not specified"}\n`;
-    out += `Major incidents: ${data?.operationsOverview?.hasMajorIncidents || "Not specified"}\n`;
-    out += `Operational challenges: ${data?.operationsOverview?.operationalChallenges || "Not specified"}\n`;
 
     out += `\n=== IMPACT & MANDATE ALIGNMENT ===\n`;
     out += `Black ownership: ${data?.socialImpact?.blackOwnership || 0}%\n`;
@@ -816,7 +811,7 @@ const label = d?.evaluation?.analysisResult?.creditRating
 **How to Improve:** 
 - → [Section]: [specific action]
 
-### 2. Operational Strength
+### 2. Impact & Mandate Alignment
 **Score:** [0-5]
 **Evidence:** [cite exact fields used]
 **Confidence:** [High | Medium | Low]
@@ -825,16 +820,7 @@ const label = d?.evaluation?.analysisResult?.creditRating
 **How to Improve:** 
 - → [Section]: [specific action]
 
-### 3. Impact & Mandate Alignment
-**Score:** [0-5]
-**Evidence:** [cite exact fields used]
-**Confidence:** [High | Medium | Low]
-**Confidence Rationale:** [one sentence]
-**Rationale:** [explanation based only on provided data]
-**How to Improve:** 
-- → [Section]: [specific action]
-
-### 4. Business Plan / Investment Case
+### 3. Business Plan / Investment Case
 **Score:** [0-5 - Base this on the business plan analysis content provided]
 **Evidence:** [Cite specific elements from the business plan analysis]
 **Confidence:** [High | Medium | Low]
@@ -843,7 +829,7 @@ const label = d?.evaluation?.analysisResult?.creditRating
 **How to Improve:** 
 - → [Document Uploads]: Upload an updated business plan
 
-### 5. Pitch Readiness / Pitch Deck
+### 4. Pitch Readiness / Pitch Deck
 **Score:** [0-5 - Base this on the pitch deck analysis content provided]
 **Evidence:** [Cite specific elements from the pitch deck analysis]
 **Confidence:** [High | Medium | Low]
@@ -852,7 +838,7 @@ const label = d?.evaluation?.analysisResult?.creditRating
 **How to Improve:** 
 - → [Document Uploads]: Upload an updated pitch deck
 
-### 6. Creditworthiness
+### 5. Creditworthiness
 **Score:** [${tier === "A" || tier === "C" ? "0-5 — note this is at reduced weight for grant/ESD tier" : "0-5"}]
 **Evidence:** [Cite specific elements from the credit report analysis]
 **Confidence:** [High | Medium | Low]
@@ -861,7 +847,7 @@ const label = d?.evaluation?.analysisResult?.creditRating
 **How to Improve:** 
 - → [Document Uploads]: Upload an updated credit report
 
-### 7. Guarantees / Collateral
+### 6. Guarantees / Collateral
 **Score:** [${tier === "A" || tier === "C" ? "0 — excluded for grant/ESD funding" : "0-5"}]
 **Evidence:** ${tier === "A" || tier === "C" ? "N/A — excluded for Tier " + tier : "[Cite guarantee types provided]"}
 **Confidence:** ${tier === "A" || tier === "C" ? "N/A" : "[High | Medium | Low]"}
@@ -869,7 +855,7 @@ const label = d?.evaluation?.analysisResult?.creditRating
 **Rationale:** ${tier === "A" || tier === "C" ? "Guarantees are not assessed for " + TIER_LABELS[tier] + " funding." : "[Explain based on provided guarantees]"}
 **How to Improve:** ${tier === "A" || tier === "C" ? "N/A" : "- → [Guarantees Section]: Add purchase orders, personal guarantees, or collateral"}
 
-### 8. Financial Resilience & Efficiency
+### 7. Financial Resilience & Efficiency
 **Score:** [${tier === "D" ? "0-5 — CRITICAL for Tier D" : "0 — excluded for Tier " + tier}]
 **Evidence:** ${tier !== "D" ? "N/A — excluded for Tier " + tier : "[Cite solvency, liquidity, leverage metrics]"}
 **Confidence:** ${tier !== "D" ? "N/A" : "[High | Medium | Low]"}
@@ -887,16 +873,7 @@ const label = d?.evaluation?.analysisResult?.creditRating
 **How to Improve:** 
 - → [Section]: [specific action]
 
-### 2. Operational Strength
-**Score:** [0-5]
-**Evidence:** [cite exact fields used]
-**Confidence:** [High | Medium | Low]
-**Confidence Rationale:** [one sentence]
-**Rationale:** [explanation based only on provided data]
-**How to Improve:** 
-- → [Section]: [specific action]
-
-### 3. Impact & Mandate Alignment
+### 2. Impact & Mandate Alignment
 **Score:** [0-5]
 **Evidence:** [cite exact fields used]
 **Confidence:** [High | Medium | Low]
@@ -921,7 +898,7 @@ STRICT DATA RULES:
 - Only reference data explicitly provided in the input below
 - If a section says "not yet completed" or "not provided", score it 0
 
-${hasAppliedForFunding && tier ? `⚠️ IMPORTANT: This business HAS APPLIED FOR FUNDING. You MUST include sections 4-8 in your analysis.` : ''}
+${hasAppliedForFunding && tier ? `⚠️ IMPORTANT: This business HAS APPLIED FOR FUNDING. You MUST include sections 3-7 in your analysis.` : ''}
 
 Categories to evaluate:
 ${categoriesToEvaluate}
@@ -1050,13 +1027,17 @@ ${evalData}`;
     return "maturity";
   };
 
+  // Operational Strength removed — its per-stage weight has been redistributed
+  // proportionally between Financial Strength and Impact & Mandate (the only two
+  // categories active when no funding tier applies), so each row still sums to 100.
+  // e.g. pre-seed previously: financialStrength 25, operations 40, impactMandate 35.
   const weightingsByStage = {
-    "pre-seed": { financialStrength: 25, operations: 40, impactMandate: 35, businessPlan: 0, pitchDeck: 0, creditworthiness: 0, guarantees: 0, financialResilience: 0 },
-    seed:       { financialStrength: 35, operations: 35, impactMandate: 30, businessPlan: 0, pitchDeck: 0, creditworthiness: 0, guarantees: 0, financialResilience: 0 },
-    seriesa:    { financialStrength: 45, operations: 30, impactMandate: 25, businessPlan: 0, pitchDeck: 0, creditworthiness: 0, guarantees: 0, financialResilience: 0 },
-    seriesb:    { financialStrength: 55, operations: 25, impactMandate: 20, businessPlan: 0, pitchDeck: 0, creditworthiness: 0, guarantees: 0, financialResilience: 0 },
-    growth:     { financialStrength: 65, operations: 20, impactMandate: 15, businessPlan: 0, pitchDeck: 0, creditworthiness: 0, guarantees: 0, financialResilience: 0 },
-    maturity:   { financialStrength: 75, operations: 15, impactMandate: 10, businessPlan: 0, pitchDeck: 0, creditworthiness: 0, guarantees: 0, financialResilience: 0 },
+    "pre-seed": { financialStrength: 42, impactMandate: 58, businessPlan: 0, pitchDeck: 0, creditworthiness: 0, guarantees: 0, financialResilience: 0 },
+    seed:       { financialStrength: 54, impactMandate: 46, businessPlan: 0, pitchDeck: 0, creditworthiness: 0, guarantees: 0, financialResilience: 0 },
+    seriesa:    { financialStrength: 64, impactMandate: 36, businessPlan: 0, pitchDeck: 0, creditworthiness: 0, guarantees: 0, financialResilience: 0 },
+    seriesb:    { financialStrength: 73, impactMandate: 27, businessPlan: 0, pitchDeck: 0, creditworthiness: 0, guarantees: 0, financialResilience: 0 },
+    growth:     { financialStrength: 81, impactMandate: 19, businessPlan: 0, pitchDeck: 0, creditworthiness: 0, guarantees: 0, financialResilience: 0 },
+    maturity:   { financialStrength: 88, impactMandate: 12, businessPlan: 0, pitchDeck: 0, creditworthiness: 0, guarantees: 0, financialResilience: 0 },
   };
 
   const getScoreLevel = (score) => {
@@ -1080,9 +1061,18 @@ ${evalData}`;
       const isCategorySection = /^###\s+\d+\./.test(trimmed);
 
       if (isCategorySection) {
-        const lines   = trimmed.split("\n").filter((l) => l.trim());
-        const header  = lines[0];
-        const content = lines.slice(1).join("\n");
+        // Pull just the heading text out (e.g. "1. Business Plan / Investment
+        // Case") rather than assuming it's line 1 — the model sometimes puts
+        // "Score: X Confidence: ... Evidence: ..." on the SAME line as the
+        // "### N. Label" heading, which used to make `lines[0]` swallow the
+        // whole section and leave `content` empty (so Evidence/Confidence/
+        // How to Improve never rendered and, upstream in scoring, the score
+        // was never found either).
+        const headingMatch = trimmed.match(/^###\s*(.+?)(?=\s+(?:\*\*)?Score\s*:|\n|$)/i);
+        const header = headingMatch ? headingMatch[1].trim() : trimmed.replace(/^###\s*/, "").split("\n")[0];
+        const content = header
+          ? trimmed.slice(trimmed.indexOf(header) + header.length).replace(/^###\s*/, "").trim()
+          : trimmed.split("\n").slice(1).join("\n");
 
         const evidenceMatch   = content.match(/Evidence\s*:\s*([^\n]+)/i);
         const confidenceMatch = content.match(/Confidence\s*:\s*(High|Medium|Low)/i);
@@ -1383,7 +1373,7 @@ ${evalData}`;
                 {showAboutScore && (
                   <div style={{ backgroundColor: "#f5f2f0", padding: "20px", color: "#5d4037" }}>
                     <p style={{ marginBottom: "16px", lineHeight: "1.6" }}>
-                      The Capital Appeal Score measures a business's ability to absorb, deploy, and return capital. It assesses financial strength, operational execution, and fundability. The fundability block's sub-component weights adapt automatically to your funding type (tier).
+                      The Capital Appeal Score measures a business's ability to absorb, deploy, and return capital. It assesses financial strength and fundability. The fundability block's sub-component weights adapt automatically to your funding type (tier).
                     </p>
 
                     {/* ── Overall weights table — UPDATED with without/with funding columns ── */}
@@ -1401,20 +1391,14 @@ ${evalData}`;
                         <tbody>
                           <tr>
                             <td style={{ padding: "6px 10px" }}>Financial Strength</td>
-                            <td style={{ padding: "6px 10px", textAlign: "center", fontWeight: "600", borderLeft: "1px solid #e0d5cf" }}>40%</td>
+                            <td style={{ padding: "6px 10px", textAlign: "center", fontWeight: "600", borderLeft: "1px solid #e0d5cf" }}>Varies by stage</td>
                             <td style={{ padding: "6px 10px", textAlign: "center", fontWeight: "600", borderLeft: "1px solid #e0d5cf" }}>40%</td>
                             <td style={{ padding: "6px 10px", borderLeft: "1px solid #e0d5cf" }}>Core signal of viability</td>
-                          </tr>
-                          <tr style={{ backgroundColor: "#f5f0ec" }}>
-                            <td style={{ padding: "6px 10px" }}>Operational Strength</td>
-                            <td style={{ padding: "6px 10px", textAlign: "center", fontWeight: "600", borderLeft: "1px solid #e0d5cf" }}>30%</td>
-                            <td style={{ padding: "6px 10px", textAlign: "center", fontWeight: "600", borderLeft: "1px solid #e0d5cf" }}>30%</td>
-                            <td style={{ padding: "6px 10px", borderLeft: "1px solid #e0d5cf" }}>Execution capability + discipline</td>
                           </tr>
                           <tr>
                             <td style={{ padding: "6px 10px" }}>Fundability</td>
                             <td style={{ padding: "6px 10px", textAlign: "center", fontWeight: "600", color: "#9e9e9e", borderLeft: "1px solid #e0d5cf" }}>0%</td>
-                            <td style={{ padding: "6px 10px", textAlign: "center", fontWeight: "600", color: "#2e7d32", borderLeft: "1px solid #e0d5cf" }}>30%</td>
+                            <td style={{ padding: "6px 10px", textAlign: "center", fontWeight: "600", color: "#2e7d32", borderLeft: "1px solid #e0d5cf" }}>60%</td>
                             <td style={{ padding: "6px 10px", fontSize: "12px", color: "#8d6e63", borderLeft: "1px solid #e0d5cf" }}>Trust + investor confidence (activated on funding application)</td>
                           </tr>
                         </tbody>
@@ -1462,7 +1446,7 @@ ${evalData}`;
                 </div>
                 {showScoreBreakdown && (
                   <div style={{ backgroundColor: "#f5f2f0", padding: "20px" }}>
-                    {["Financial Strength", "Operational Strength", "Fundability"].map((group) => {
+                    {["Financial Strength", "Fundability"].map((group) => {
                       const groupRows = scoreBreakdown.filter((r) =>
                         group === "Fundability" ? r.tier != null : r.name === group
                       );

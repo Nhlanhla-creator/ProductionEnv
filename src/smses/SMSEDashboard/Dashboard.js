@@ -7,8 +7,8 @@ import { LegitimacyScoreCard } from "./legitimacy-score-card"
 import { FundabilityScoreCard } from "./fundability-score-card"
 import { ComplianceScoreCard } from "./compliance-score"
 import { BigScoreCard } from "./big-score"
-import { PISScoreCard } from "./pis-score"
-import { LeadershipScoreCard } from "./leadership-score-card"
+import { GovernanceLeadershipScoreCard } from "./governance-leadership-score-card"
+import { OperationalStrengthScoreCard } from "./Operationalstrength"
 import { CustomerReviewsCard } from "./customer-reviews-card"
 import ShopToolsPage from "../../smses/MyGrowthTools/shop"
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore"
@@ -1158,12 +1158,12 @@ export function Dashboard() {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [activeTab, setActiveTab] = useState("bigscore") // New state for tab management
 
-  // Score states for BIG Score calculation - Added leadershipScore
+  // Score states for BIG Score calculation
   const [complianceScore, setComplianceScore] = useState(0)
   const [legitimacyScore, setLegitimacyScore] = useState(0)
-  const [leadershipScore, setLeadershipScore] = useState(0) // New state
+  const [governanceLeadershipScore, setGovernanceLeadershipScore] = useState(0) // Leadership & Governance, combined
+  const [operationalScore, setOperationalScore] = useState(0) // Operational Strength
   const [fundabilityScore, setFundabilityScore] = useState(0)
-  const [pisScore, setPisScore] = useState(0)
   // Add these state variables after existing state declarations in Dashboard component
 const [companyOwnerId, setCompanyOwnerId] = useState(null);
 const [isCompanyMember, setIsCompanyMember] = useState(false);
@@ -1508,9 +1508,9 @@ useEffect(() => {
                   profileData={profileData}
                   complianceScore={complianceScore}
                   legitimacyScore={legitimacyScore}
-                  leadershipScore={leadershipScore}
+                  governanceLeadershipScore={governanceLeadershipScore}
+                  operationalScore={operationalScore}
                   fundabilityScore={fundabilityScore}
-                  pisScore={pisScore}
                   onScoreUpdate={score => console.log("Updated BIG Score:", score)}
                   setActiveTab={setActiveTab}
                 />
@@ -1588,18 +1588,18 @@ useEffect(() => {
   userId={effectiveUserId} // Add this prop
 />
 
-<LeadershipScoreCard
+<GovernanceLeadershipScoreCard
   styles={styles}
   profileData={profileData?.formData}
-  onScoreUpdate={setLeadershipScore}
+  onScoreUpdate={setGovernanceLeadershipScore}
   apiKey={apiKey}
   userId={effectiveUserId} // Add this prop
 />
 
-<PISScoreCard
+<OperationalStrengthScoreCard
   styles={styles}
   profileData={profileData?.formData}
-  onScoreUpdate={setPisScore}
+  onScoreUpdate={setOperationalScore}
   apiKey={apiKey}
   userId={effectiveUserId} // Add this prop
 />

@@ -12,8 +12,8 @@ export function BigScoreCard({
   complianceScore,
   legitimacyScore,
   fundabilityScore,
-  pisScore,
-  leadershipScore,
+  governanceLeadershipScore,
+  operationalScore,
   onScoreUpdate,
   setActiveTab,
 }) {
@@ -84,16 +84,16 @@ export function BigScoreCard({
     if (typeof complianceScore !== 'number') return
     if (typeof legitimacyScore !== 'number') return
     if (typeof fundabilityScore !== 'number') return
-    if (typeof pisScore !== 'number') return
-    if (typeof leadershipScore !== 'number') return
+    if (typeof governanceLeadershipScore !== 'number') return
+    if (typeof operationalScore !== 'number') return
     
     // Calculate the BIG Score
     const result = calculateBigScore(
       complianceScore,
       legitimacyScore,
       fundabilityScore,
-      pisScore,
-      leadershipScore,
+      governanceLeadershipScore,
+      operationalScore,
       profileData.formData,
     )
     
@@ -117,7 +117,7 @@ export function BigScoreCard({
       handleSaveWithDelay(newBigScore)
     }
     
-  }, [complianceScore, legitimacyScore, fundabilityScore, pisScore, leadershipScore, profileData?.id, profileData?.formData, onScoreUpdate])
+  }, [complianceScore, legitimacyScore, fundabilityScore, governanceLeadershipScore, operationalScore, profileData?.id, profileData?.formData, onScoreUpdate])
 
   // FIX 5: Improved save delay logic
   const handleSaveWithDelay = (newScore) => {
@@ -218,8 +218,8 @@ export function BigScoreCard({
           compliance: complianceScore,
           legitimacy: legitimacyScore,
           fundability: fundabilityScore,
-          pis: pisScore,
-          leadership: leadershipScore,
+          governanceLeadership: governanceLeadershipScore,
+          operational: operationalScore,
           bigScore: bigScoreValue,
           lastUpdated: now,
         },
@@ -286,11 +286,11 @@ export function BigScoreCard({
     })
 
     recommendations.push({
-      category: "Governance",
-      title: "Governance Tools",
+      category: "Leadership & Governance",
+      title: "Leadership & Governance Tools",
       description:
-        "Your Governance score shows whether you're just hustling — or building an enterprise with proper structure and leadership.",
-      action: "Governance Tools",
+        "Your Leadership & Governance score shows whether you're just hustling — or building an enterprise with proper structure and leadership.",
+      action: "Leadership & Governance Tools",
       tab: "governance",
       priority: "medium",
       color: "#B8860B",
@@ -305,6 +305,17 @@ export function BigScoreCard({
       tab: "compliance",
       priority: "high",
       color: "#8D6E63",
+    })
+
+    recommendations.push({
+      category: "Operational Strength",
+      title: "Operational Strength Tools",
+      description:
+        "Strengthen your supplier & continuity risk management, delivery reliability, and safety/compliance procedures so you can reliably execute and scale.",
+      action: "Operational Strength Tools",
+      tab: "operations",
+      priority: "medium",
+      color: "#4E342E",
     })
 
     recommendations.push({
@@ -352,26 +363,26 @@ export function BigScoreCard({
     return "#B71C1C"
   }
 
-  const calculateBigScore = (compliance, legitimacy, fundability, pis, leadership, data) => {
+  const calculateBigScore = (compliance, legitimacy, fundability, governanceLeadership, operational, data) => {
     const stage = data?.entityOverview?.operationStage?.toLowerCase() || "startup"
-  // In BigScoreCard.jsx, REPLACE calculateBigScore's stageWeights:
-const stageWeights = {
-  startup:    { compliance: 0.25, legitimacy: 0.15, leadership: 0.12, pis: 0.13, fundability: 0.35 },
-  growth:     { compliance: 0.28, legitimacy: 0.13, leadership: 0.10, pis: 0.14, fundability: 0.35 },
-  scaling:    { compliance: 0.32, legitimacy: 0.12, leadership: 0.08, pis: 0.13, fundability: 0.35 },
-  turnaround: { compliance: 0.30, legitimacy: 0.13, leadership: 0.10, pis: 0.12, fundability: 0.35 },
-  mature:     { compliance: 0.38, legitimacy: 0.08, leadership: 0.07, pis: 0.12, fundability: 0.35 },
-}
+    // 5 pillars: Compliance, Legitimacy, Leadership & Governance, Operational Strength, Capital Appeal (Fundability)
+    const stageWeights = {
+      startup:    { compliance: 0.25, legitimacy: 0.15, governanceLeadership: 0.12, operational: 0.13, fundability: 0.35 },
+      growth:     { compliance: 0.28, legitimacy: 0.13, governanceLeadership: 0.10, operational: 0.14, fundability: 0.35 },
+      scaling:    { compliance: 0.32, legitimacy: 0.12, governanceLeadership: 0.08, operational: 0.13, fundability: 0.35 },
+      turnaround: { compliance: 0.30, legitimacy: 0.13, governanceLeadership: 0.10, operational: 0.12, fundability: 0.35 },
+      mature:     { compliance: 0.38, legitimacy: 0.08, governanceLeadership: 0.07, operational: 0.12, fundability: 0.35 },
+    }
 
-const weights = stageWeights[stage] || stageWeights.startup
+    const weights = stageWeights[stage] || stageWeights.startup
     const complianceWeighted = compliance * weights.compliance
     const legitimacyWeighted = legitimacy * weights.legitimacy
-    const leadershipWeighted = leadership * weights.leadership
-    const pisWeighted = pis * weights.pis
+    const governanceLeadershipWeighted = governanceLeadership * weights.governanceLeadership
+    const operationalWeighted = operational * weights.operational
     const fundabilityWeighted = fundability * weights.fundability
 
     const totalScore = Math.round(
-      complianceWeighted + legitimacyWeighted + leadershipWeighted + pisWeighted + fundabilityWeighted,
+      complianceWeighted + legitimacyWeighted + governanceLeadershipWeighted + operationalWeighted + fundabilityWeighted,
     )
 
     const breakdown = [
@@ -390,18 +401,18 @@ const weights = stageWeights[stage] || stageWeights.startup
         color: "#6D4C41",
       },
       {
-        name: "Leadership score",
-        score: leadership,
-        weight: Math.round(weights.leadership * 100),
-        weightedScore: Math.round(leadershipWeighted),
-        color: "#A0522D",
+        name: "Leadership & Governance score",
+        score: governanceLeadership,
+        weight: Math.round(weights.governanceLeadership * 100),
+        weightedScore: Math.round(governanceLeadershipWeighted),
+        color: "#B8860B",
       },
       {
-        name: "Governance score",
-        score: pis,
-        weight: Math.round(weights.pis * 100),
-        weightedScore: Math.round(pisWeighted),
-        color: "#B8860B",
+        name: "Operational Strength score",
+        score: operational,
+        weight: Math.round(weights.operational * 100),
+        weightedScore: Math.round(operationalWeighted),
+        color: "#4E342E",
       },
       {
         name: "Capital appeal score",
@@ -923,9 +934,9 @@ const weights = stageWeights[stage] || stageWeights.startup
                     }}
                   >
                     <p style={{ marginBottom: "16px", lineHeight: "1.6" }}>
-                      The BIG score combines your compliance, legitimacy, team, fundability, and governance scores into
-                      one comprehensive business readiness metric that reflects your overall organizational maturity and
-                      market readiness.
+                      The BIG score combines your compliance, legitimacy, leadership &amp; governance, operational
+                      strength, and capital appeal scores into one comprehensive business readiness metric that
+                      reflects your overall organizational maturity and market readiness.
                     </p>
                     <div
                       style={{
@@ -939,22 +950,24 @@ const weights = stageWeights[stage] || stageWeights.startup
                       <p style={{ fontWeight: "bold", marginBottom: "8px", color: "#6d4c41" }}>Five key components:</p>
                       <ul style={{ margin: "0", paddingLeft: "20px", color: "#5d4037" }}>
                         <li style={{ marginBottom: "6px" }}>
-                          <strong>Compliance score (32%):</strong> Legal and regulatory documentation and compliance
+                          <strong>Compliance score:</strong> Legal and regulatory documentation and compliance
                           status
                         </li>
                         <li style={{ marginBottom: "6px" }}>
-                          <strong>Legitimacy score (13%):</strong> Business credibility, professionalism, and market
+                          <strong>Legitimacy score:</strong> Business credibility, professionalism, and market
                           presence
                         </li>
                         <li style={{ marginBottom: "6px" }}>
-                          <strong>Leadership score (10%):</strong> Evaluates the team capabilities and experience of business
-                          owners and key executives
+                          <strong>Leadership &amp; Governance score:</strong> Ownership and board structure, founder
+                          and leadership quality, and governance maturity — can we trust the people and
+                          decision-making structures?
                         </li>
                         <li style={{ marginBottom: "6px" }}>
-                          <strong>Governance score (13%):</strong> Board readiness and governance maturity indicators
+                          <strong>Operational Strength score:</strong> Supplier &amp; continuity risk, delivery
+                          reliability, and safety/compliance — can this business reliably execute?
                         </li>
                         <li style={{ marginBottom: "6px" }}>
-                          <strong>Capital Appeal score (32%):</strong> Investment readiness, financial health, and growth
+                          <strong>Capital Appeal score:</strong> Investment readiness, financial health, and growth
                           potential
                         </li>
                       </ul>
@@ -1003,9 +1016,9 @@ const weights = stageWeights[stage] || stageWeights.startup
                     >
                       <p style={{ fontWeight: "bold", marginBottom: "8px", color: "#6d4c41" }}>Weighted assessment:</p>
                       <p style={{ margin: "0", color: "#5d4037" }}>
-                        Compliance and Capital Appeal receive the highest weights (32% each) as they represent the
+                        Compliance and Capital Appeal receive the highest weights as they represent the
                         fundamental legal foundation and investment attractiveness that drive business opportunities and
-                        partnerships.
+                        partnerships. Weightings shift slightly by business stage.
                       </p>
                     </div>
                     <p style={{ marginBottom: "0", lineHeight: "1.6", fontStyle: "italic", color: "#6d4c41" }}>
@@ -1197,18 +1210,19 @@ const weights = stageWeights[stage] || stageWeights.startup
                       {bigScore >= 91 && (
                         <p style={{ margin: "0" }}>
                           <strong>Outstanding business readiness.</strong> Your organization demonstrates excellence
-                          across all critical dimensions - compliance, legitimacy, team, governance, and capital appeal. You're
-                          exceptionally well-positioned for major funding opportunities, strategic partnerships, and
-                          rapid scaling. This level of business maturity places you in the top tier of investment-ready
-                          companies.
+                          across all critical dimensions - compliance, legitimacy, leadership &amp; governance,
+                          operational strength, and capital appeal. You're exceptionally well-positioned for major
+                          funding opportunities, strategic partnerships, and rapid scaling. This level of business
+                          maturity places you in the top tier of investment-ready companies.
                         </p>
                       )}
                       {bigScore >= 81 && bigScore <= 90 && (
                         <p style={{ margin: "0" }}>
                           <strong>Strong overall business position.</strong> Your company shows solid performance across
-                          most areas with good compliance, credibility, leadership, and capital appeal foundations. You're
-                          well-prepared for growth opportunities and would be attractive to most investors and partners.
-                          Minor improvements in weaker areas could elevate you to exceptional status.
+                          most areas with good compliance, credibility, leadership &amp; governance, operational, and
+                          capital appeal foundations. You're well-prepared for growth opportunities and would be
+                          attractive to most investors and partners. Minor improvements in weaker areas could elevate
+                          you to exceptional status.
                         </p>
                       )}
                       {bigScore >= 61 && bigScore <= 80 && (
@@ -1223,16 +1237,17 @@ const weights = stageWeights[stage] || stageWeights.startup
                         <p style={{ margin: "0" }}>
                           <strong>Basic foundation requiring substantial development.</strong> Your business shows some
                           positive elements but lacks the comprehensive readiness needed for major opportunities.
-                          Systematic improvements across compliance, legitimacy, leadership, and capital appeal are essential
-                          before pursuing significant funding or partnerships.
+                          Systematic improvements across compliance, legitimacy, leadership &amp; governance, and
+                          operational strength are essential before pursuing significant funding or partnerships.
                         </p>
                       )}
                       {bigScore <= 40 && (
                         <p style={{ margin: "0" }}>
                           <strong>Fundamental improvements urgently needed.</strong> Your business requires
                           comprehensive strengthening across multiple critical areas. Focus immediately on achieving
-                          basic compliance, establishing professional legitimacy, building leadership capabilities, and developing
-                          fundamental operational capabilities before pursuing external opportunities.
+                          basic compliance, establishing professional legitimacy, building leadership &amp; governance
+                          capabilities, and developing fundamental operational capabilities before pursuing external
+                          opportunities.
                         </p>
                       )}
                     </div>
