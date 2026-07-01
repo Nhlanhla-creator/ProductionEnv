@@ -198,16 +198,7 @@ export default function ContactDetails({ data = {}, updateData }) {
             />
           </FormField>
 
-          <FormField label="ID Number" required>
-            <input
-              type="text"
-              name="contactId"
-              value={formData.contactId || ""}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
-              required
-            />
-          </FormField>
+         
 
           <FormField label="Business Phone" required>
             <input
