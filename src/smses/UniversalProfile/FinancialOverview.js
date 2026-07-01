@@ -248,18 +248,7 @@ const FinancialOverview = ({ data, updateData, apiKey, onEvaluationComplete }) =
       </div>
 
       {/* Current Value Input - Now for amount, not year */}
-      <div style={{ marginBottom: "1.5rem" }}>
-        <FormField label="Current Financial Value">
-          <input
-            type="text"
-            name="currentFinancialValue"
-            value={data.currentFinancialValue || ""}
-            onChange={(e) => handleInputChange("currentFinancialValue", e.target.value)}
-            className="form-input"
-            placeholder="e.g., R 1,000,000"
-          />
-        </FormField>
-      </div>
+     
 
       {/* Income Statement Table - Dark brown header matching Ownership Management */}
       <div style={{ marginBottom: "2rem" }}>
