@@ -26,11 +26,12 @@ const sections = [
   { id: "entityOverview", label: "Entity\nOverview" },
   { id: "productsServices", label: "Products &\nServices" },
   { id: "ownershipManagement", label: "Ownership &\nManagement" },
-  { id: "contactDetails", label: "Contact\nDetails" },
+
   { id: "legalCompliance", label: "Legal &\nCompliance" },
   { id: "operationsOverview", label: "Operations\nOverview" },
   { id: "financialOverview", label: "Financial\nOverview" },
   { id: "governance", label: "Governance" },
+    { id: "contactDetails", label: "Contact\nDetails" },
   { id: "howDidYouHear", label: "How Did\nYou Hear" },
   { id: "documents", label: "Document\nUpload" },
   { id: "declarationConsent", label: "Declaration &\nConsent" },
