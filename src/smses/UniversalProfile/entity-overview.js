@@ -576,7 +576,6 @@ export default function EntityOverview({ data = {}, updateData }) {
             brandsRepresented: "",
             holdsFranchises: "",
             holdsAgencies: "",
-            numberOfEmployees: "",
           };
 
           Object.keys(defaultFields).forEach(key => {
@@ -607,7 +606,6 @@ export default function EntityOverview({ data = {}, updateData }) {
             brandsRepresented: "",
             holdsFranchises: "",
             holdsAgencies: "",
-            numberOfEmployees: "",
           });
         }
       } catch (error) {
@@ -883,21 +881,8 @@ export default function EntityOverview({ data = {}, updateData }) {
             />
           </FormField>
         )}
-      </div>
 
-      {/* Business Description - Full Width */}
-      <div style={{ marginTop: '1rem' }}>
-        <FormField label="Brief Business Description" required>
-          <textarea name="businessDescription" value={formData.businessDescription || ""} onChange={handleChange} rows={4} style={{ ...inputStyle, resize: 'vertical' }} required />
-        </FormField>
-      </div>
-
-      {/* ============================================================ */}
-      {/* SECTION 4: Industry Associations - 3 per row */}
-      {/* ============================================================ */}
-      <SectionHeading title="Industry Associations" />
-
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px' }}>
+        {/* Industry Association moved here - next to provinces */}
         <FormField label="Are you a member of any industry association?">
           <div style={{ display: 'flex', gap: '16px' }}>
             {["yes", "no"].map((opt) => (
@@ -976,7 +961,6 @@ export default function EntityOverview({ data = {}, updateData }) {
             borderRadius: '4px',
             fontSize: '12px',
             color: '#666',
-            gridColumn: 'span 2',
           }}>
             You indicated that you are not a member of any industry association.
           </div>
@@ -999,7 +983,7 @@ export default function EntityOverview({ data = {}, updateData }) {
       )}
 
       {/* ============================================================ */}
-      {/* SECTION 5: Brand Assets - Includes Brands, Franchises & Agencies */}
+      {/* SECTION 3: Brand Assets - Includes Brands, Franchises & Agencies */}
       {/* ============================================================ */}
       <SectionHeading title="Brand Assets" />
 
@@ -1034,8 +1018,6 @@ export default function EntityOverview({ data = {}, updateData }) {
             onChange={(value) => handleRadioChange("holdsFranchises", value)}
           />
         </FormField>
-
-        
 
         <FormField label="Do you hold any Agencies?">
           <RadioGroup 
