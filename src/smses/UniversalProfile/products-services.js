@@ -47,7 +47,7 @@ const categoryOptions = [
 
 const industryOptions = categoryOptions
 
-// MultiSelect component
+// MultiSelect component with Ownership Management colors
 function MultiSelect({ options, selected, onChange, label, placeholder }) {
   const [isOpen, setIsOpen] = useState(false)
 
@@ -66,31 +66,31 @@ function MultiSelect({ options, selected, onChange, label, placeholder }) {
       <div
         onClick={toggleDropdown}
         style={{
-          border: '1px solid #d1d5db',
-          borderRadius: '6px',
-          padding: '10px 12px',
+          border: '1px solid #d6c4a8',
+          borderRadius: '4px',
+          padding: '8px 12px',
           cursor: 'pointer',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          minHeight: '44px',
+          minHeight: '40px',
           backgroundColor: 'white',
           transition: 'border-color 0.2s'
         }}
         onMouseEnter={(e) => e.currentTarget.style.borderColor = '#8B4513'}
-        onMouseLeave={(e) => e.currentTarget.style.borderColor = '#d1d5db'}
+        onMouseLeave={(e) => e.currentTarget.style.borderColor = '#d6c4a8'}
       >
         {selected.length > 0 ? (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
             {selected.map((cat) => (
               <span
                 key={cat}
                 style={{ 
-                  backgroundColor: '#f3ebe0', 
-                  padding: '4px 12px', 
-                  borderRadius: '20px', 
-                  fontSize: '13px',
-                  color: '#6B3410',
+                  backgroundColor: '#f0e8d8', 
+                  padding: '2px 10px', 
+                  borderRadius: '12px', 
+                  fontSize: '12px',
+                  color: '#5c3a1e',
                   fontWeight: '500'
                 }}
               >
@@ -99,9 +99,9 @@ function MultiSelect({ options, selected, onChange, label, placeholder }) {
             ))}
           </div>
         ) : (
-          <span style={{ color: '#9ca3af' }}>{placeholder || `Select ${label}`}</span>
+          <span style={{ color: '#999', fontSize: '12px' }}>{placeholder || `Select ${label}`}</span>
         )}
-        {isOpen ? <ChevronUp size={18} color="#6B3410" /> : <ChevronDown size={18} color="#6B3410" />}
+        {isOpen ? <ChevronUp size={16} color="#5c3a1e" /> : <ChevronDown size={16} color="#5c3a1e" />}
       </div>
 
       {isOpen && (
@@ -111,72 +111,74 @@ function MultiSelect({ options, selected, onChange, label, placeholder }) {
           left: 0, 
           right: 0,
           backgroundColor: 'white', 
-          border: '1px solid #d1d5db', 
-          borderRadius: '6px',
+          border: '1px solid #d6c4a8', 
+          borderRadius: '4px',
           marginTop: '4px', 
           zIndex: 1000, 
-          maxHeight: '320px', 
+          maxHeight: '300px', 
           overflow: 'auto',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+          boxShadow: '0 8px 24px rgba(0,0,0,0.15)'
         }}>
-          <div style={{ padding: '8px' }}>
+          <div style={{ padding: '4px' }}>
             {options.map((option) => (
               <div
                 key={option.value}
                 onClick={() => handleSelect(option.value)}
                 style={{
-                  padding: '10px 12px', 
+                  padding: '8px 12px', 
                   cursor: 'pointer',
-                  backgroundColor: selected.includes(option.value) ? '#fdf6ee' : 'white',
+                  backgroundColor: selected.includes(option.value) ? '#fdf6ed' : 'white',
                   display: 'flex', 
                   alignItems: 'center', 
-                  gap: '10px',
-                  borderRadius: '4px',
-                  transition: 'background-color 0.15s'
+                  gap: '8px',
+                  borderBottom: '1px solid #f5f0e8',
+                  fontSize: '12px'
                 }}
-                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#faf5ef'}
+                onMouseEnter={(e) => {
+                  if (!selected.includes(option.value)) {
+                    e.currentTarget.style.backgroundColor = '#faf5ef'
+                  }
+                }}
                 onMouseLeave={(e) => {
                   if (!selected.includes(option.value)) {
                     e.currentTarget.style.backgroundColor = 'white'
                   }
                 }}
               >
-                <div style={{
-                  width: '18px', 
-                  height: '18px', 
-                  borderRadius: '4px',
-                  border: `2px solid ${selected.includes(option.value) ? '#8B4513' : '#d1d5db'}`,
-                  backgroundColor: selected.includes(option.value) ? '#8B4513' : 'white',
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  justifyContent: 'center',
-                  flexShrink: 0
-                }}>
-                  {selected.includes(option.value) && (
-                    <span style={{ color: 'white', fontSize: '12px', fontWeight: 'bold' }}>✓</span>
-                  )}
-                </div>
-                <span style={{ fontSize: '14px', color: '#1f2937' }}>{option.label}</span>
+                <input 
+                  type="checkbox" 
+                  checked={selected.includes(option.value)} 
+                  onChange={() => {}} 
+                  style={{ 
+                    cursor: 'pointer',
+                    accentColor: '#8B4513'
+                  }} 
+                />
+                <span style={{ color: '#3d2b1f' }}>{option.label}</span>
               </div>
             ))}
           </div>
-          <div style={{ padding: '8px', borderTop: '1px solid #e5e7eb', backgroundColor: '#f9fafb' }}>
+          <div style={{ 
+            padding: '8px', 
+            borderTop: '1px solid #d6c4a8',
+            backgroundColor: '#fdfaf5'
+          }}>
             <button 
               type="button" 
               onClick={closeDropdown} 
               style={{
                 width: '100%', 
-                padding: '10px',
+                padding: '8px',
                 backgroundColor: '#8B4513',
                 color: 'white', 
                 border: 'none', 
                 borderRadius: '4px', 
                 cursor: 'pointer',
                 fontWeight: '600',
-                fontSize: '14px',
+                fontSize: '12px',
                 transition: 'background-color 0.2s'
               }}
-              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#6B3410'}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#5c3a1e'}
               onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#8B4513'}
             >
               Done
@@ -188,75 +190,54 @@ function MultiSelect({ options, selected, onChange, label, placeholder }) {
   )
 }
 
-// CSS-safe Yes/No radio
-const YesNoRadio = ({ value, onChange }) => (
-  <div style={{ display: 'flex', gap: '32px' }}>
-    {['Yes', 'No'].map((val) => (
-      <label
-        key={val}
-        onClick={() => onChange(val)}
-        style={{
-          display: 'flex', 
-          alignItems: 'center', 
-          gap: '10px',
-          cursor: 'pointer', 
-          userSelect: 'none',
-          fontSize: '14px', 
-          fontWeight: '500', 
-          color: '#3d2b1f',
-        }}
-      >
-        <div style={{
-          width: '20px', 
-          height: '20px', 
-          borderRadius: '50%',
-          border: `2px solid ${value === val ? '#8B4513' : '#d1d5db'}`,
-          backgroundColor: value === val ? '#8B4513' : 'white',
-          display: 'flex', 
-          alignItems: 'center', 
-          justifyContent: 'center',
-          flexShrink: 0, 
-          transition: 'all 0.2s ease',
-          boxShadow: value === val ? '0 0 0 3px rgba(139,69,19,0.15)' : 'none',
-        }}>
-          {value === val && (
-            <div style={{ 
-              width: '8px', 
-              height: '8px', 
-              borderRadius: '50%', 
-              backgroundColor: 'white' 
-            }} />
-          )}
-        </div>
-        <span>{val}</span>
-      </label>
-    ))}
-  </div>
+// Yes/No dropdown instead of radio buttons
+const YesNoDropdown = ({ value, onChange }) => (
+  <select
+    value={value || ""}
+    onChange={(e) => onChange(e.target.value)}
+    style={{
+      width: '100%',
+      padding: '8px 12px',
+      border: '1px solid #d6c4a8',
+      borderRadius: '4px',
+      fontSize: '12px',
+      backgroundColor: 'white',
+      outline: 'none',
+      transition: 'border-color 0.2s',
+      color: '#3d2b1f'
+    }}
+    onFocus={(e) => e.currentTarget.style.borderColor = '#8B4513'}
+    onBlur={(e) => e.currentTarget.style.borderColor = '#d6c4a8'}
+  >
+    <option value="">Select...</option>
+    <option value="Yes">Yes</option>
+    <option value="No">No</option>
+  </select>
 )
 
-// Section wrapper component
+// Section wrapper component with Ownership Management colors
 const Section = ({ title, description, children }) => (
   <div style={{
-    marginBottom: '28px',
-    padding: '24px',
+    marginBottom: '24px',
+    padding: '20px',
     backgroundColor: '#fdfaf5',
-    borderRadius: '12px',
-    border: '2px solid #e8dcc8',
+    borderRadius: '8px',
+    border: '1px solid #d6c4a8',
     transition: 'border-color 0.2s'
   }}>
-    <div style={{ marginBottom: '20px' }}>
+    <div style={{ marginBottom: '16px' }}>
       <h3 style={{
-        fontSize: '18px',
+        fontSize: '16px',
         fontWeight: '700',
-        color: '#6B3410',
+        color: '#5c3a1e',
         margin: 0,
-        marginBottom: description ? '6px' : '0'
+        marginBottom: description ? '4px' : '0'
       }}>
         {title}
       </h3>
       {description && (
         <p style={{
-          fontSize: '14px',
+          fontSize: '12px',
           color: '#8B6F47',
           margin: 0
         }}>
@@ -274,14 +255,14 @@ const SectionHeader = ({ title, onAdd, addLabel }) => (
     display: 'flex',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: '16px',
+    marginBottom: '12px',
     flexWrap: 'wrap',
-    gap: '12px'
+    gap: '8px'
   }}>
     <h4 style={{
-      fontSize: '16px',
+      fontSize: '14px',
       fontWeight: '600',
-      color: '#6B3410',
+      color: '#5c3a1e',
       margin: 0
     }}>
       {title}
@@ -293,21 +274,21 @@ const SectionHeader = ({ title, onAdd, addLabel }) => (
         style={{
           display: 'flex',
           alignItems: 'center',
-          gap: '8px',
-          padding: '8px 18px',
-          backgroundColor: '#8B4513',
-          color: 'white',
+          gap: '6px',
+          padding: '6px 14px',
+          backgroundColor: '#f0e8d8',
+          color: '#5c3a1e',
           border: 'none',
-          borderRadius: '6px',
-          fontSize: '14px',
+          borderRadius: '4px',
+          fontSize: '12px',
           fontWeight: '600',
           cursor: 'pointer',
           transition: 'background-color 0.2s'
         }}
-        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#6B3410'}
-        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#8B4513'}
+        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#e0d5c0'}
+        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#f0e8d8'}
       >
-        <Plus size={16} /> {addLabel}
+        <Plus size={14} /> {addLabel}
       </button>
     )}
   </div>
@@ -316,24 +297,24 @@ const SectionHeader = ({ title, onAdd, addLabel }) => (
 // Category card component
 const CategoryCard = ({ children, onRemove, title }) => (
   <div style={{
-    marginBottom: '16px',
-    padding: '20px',
+    marginBottom: '12px',
+    padding: '16px',
     backgroundColor: 'white',
-    borderRadius: '8px',
-    border: '1px solid #e8dcc8',
+    borderRadius: '6px',
+    border: '1px solid #e0d5c0',
     boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
   }}>
     <div style={{
       display: 'flex',
       justifyContent: 'space-between',
       alignItems: 'flex-start',
-      marginBottom: '16px'
+      marginBottom: '12px'
     }}>
       {title && (
         <span style={{
-          fontSize: '14px',
+          fontSize: '12px',
           fontWeight: '600',
-          color: '#6B3410'
+          color: '#5c3a1e'
         }}>
           {title}
         </span>
@@ -342,7 +323,7 @@ const CategoryCard = ({ children, onRemove, title }) => (
         type="button"
         onClick={onRemove}
         style={{
-          padding: '6px',
+          padding: '4px',
           color: '#dc2626',
           background: 'none',
           border: 'none',
@@ -353,7 +334,7 @@ const CategoryCard = ({ children, onRemove, title }) => (
         onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#fee2e2'}
         onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
       >
-        <Trash2 size={18} />
+        <Trash2 size={16} />
       </button>
     </div>
     {children}
@@ -364,12 +345,13 @@ const CategoryCard = ({ children, onRemove, title }) => (
 const ItemCard = ({ children, onRemove }) => (
   <div style={{
     display: 'flex',
-    gap: '12px',
+    gap: '8px',
     alignItems: 'flex-start',
-    padding: '16px',
-    backgroundColor: '#faf6f0',
-    borderRadius: '6px',
-    marginBottom: '12px'
+    padding: '12px',
+    backgroundColor: '#fdfaf5',
+    borderRadius: '4px',
+    border: '1px solid #f0e8d8',
+    marginBottom: '8px'
   }}>
     <div style={{ flex: 1 }}>
       {children}
@@ -378,7 +360,7 @@ const ItemCard = ({ children, onRemove }) => (
       type="button"
       onClick={onRemove}
       style={{
-        padding: '6px',
+        padding: '4px',
         color: '#dc2626',
         background: 'none',
         border: 'none',
@@ -390,21 +372,21 @@ const ItemCard = ({ children, onRemove }) => (
       onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#fee2e2'}
       onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
     >
-      <Trash2 size={16} />
+      <Trash2 size={14} />
     </button>
   </div>
 )
 
 // Input with label component
 const Input = ({ label, ...props }) => (
-  <div style={{ marginBottom: '12px' }}>
+  <div style={{ marginBottom: '8px' }}>
     {label && (
       <label style={{
         display: 'block',
-        fontSize: '13px',
+        fontSize: '11px',
         fontWeight: '600',
-        color: '#6B3410',
-        marginBottom: '4px'
+        color: '#5c3a1e',
+        marginBottom: '3px'
       }}>
         {label}
       </label>
@@ -413,21 +395,22 @@ const Input = ({ label, ...props }) => (
       {...props}
       style={{
         width: '100%',
-        padding: '10px 12px',
-        border: '1px solid #d1d5db',
-        borderRadius: '6px',
-        fontSize: '14px',
+        padding: '8px 10px',
+        border: '1px solid #d6c4a8',
+        borderRadius: '4px',
+        fontSize: '12px',
         transition: 'border-color 0.2s, box-shadow 0.2s',
         outline: 'none',
+        color: '#3d2b1f',
         ...props.style
       }}
       onFocus={(e) => {
         e.currentTarget.style.borderColor = '#8B4513'
-        e.currentTarget.style.boxShadow = '0 0 0 3px rgba(139,69,19,0.1)'
+        e.currentTarget.style.boxShadow = '0 0 0 2px rgba(139,69,19,0.1)'
         if (props.onFocus) props.onFocus(e)
       }}
       onBlur={(e) => {
-        e.currentTarget.style.borderColor = '#d1d5db'
+        e.currentTarget.style.borderColor = '#d6c4a8'
         e.currentTarget.style.boxShadow = 'none'
         if (props.onBlur) props.onBlur(e)
       }}
@@ -436,14 +419,14 @@ const Input = ({ label, ...props }) => (
 )
 
 const TextArea = ({ label, ...props }) => (
-  <div style={{ marginBottom: '12px' }}>
+  <div style={{ marginBottom: '8px' }}>
     {label && (
       <label style={{
         display: 'block',
-        fontSize: '13px',
+        fontSize: '11px',
         fontWeight: '600',
-        color: '#6B3410',
-        marginBottom: '4px'
+        color: '#5c3a1e',
+        marginBottom: '3px'
       }}>
         {label}
       </label>
@@ -452,23 +435,24 @@ const TextArea = ({ label, ...props }) => (
       {...props}
       style={{
         width: '100%',
-        padding: '10px 12px',
-        border: '1px solid #d1d5db',
-        borderRadius: '6px',
-        fontSize: '14px',
+        padding: '8px 10px',
+        border: '1px solid #d6c4a8',
+        borderRadius: '4px',
+        fontSize: '12px',
         transition: 'border-color 0.2s, box-shadow 0.2s',
         outline: 'none',
         resize: 'vertical',
         fontFamily: 'inherit',
+        color: '#3d2b1f',
         ...props.style
       }}
       onFocus={(e) => {
         e.currentTarget.style.borderColor = '#8B4513'
-        e.currentTarget.style.boxShadow = '0 0 0 3px rgba(139,69,19,0.1)'
+        e.currentTarget.style.boxShadow = '0 0 0 2px rgba(139,69,19,0.1)'
         if (props.onFocus) props.onFocus(e)
       }}
       onBlur={(e) => {
-        e.currentTarget.style.borderColor = '#d1d5db'
+        e.currentTarget.style.borderColor = '#d6c4a8'
         e.currentTarget.style.boxShadow = 'none'
         if (props.onBlur) props.onBlur(e)
       }}
@@ -603,13 +587,13 @@ export default function ProductsServices({ data = {}, updateData }) {
       <div style={{ 
         display: 'flex', 
         alignItems: 'center', 
-        gap: '12px', 
-        marginBottom: '24px' 
+        gap: '10px', 
+        marginBottom: '20px' 
       }}>
         <h2 style={{
-          fontSize: '24px',
+          fontSize: '22px',
           fontWeight: '700',
-          color: '#6B3410',
+          color: '#5c3a1e',
           margin: 0
         }}>
           Products & Services
@@ -618,22 +602,22 @@ export default function ProductsServices({ data = {}, updateData }) {
           type="button"
           onClick={() => setShowExplanation(!showExplanation)}
           style={{
-            padding: '6px',
+            padding: '4px',
             background: 'none',
             border: 'none',
             cursor: 'pointer',
             display: 'inline-flex',
             alignItems: 'center',
             justifyContent: 'center',
-            borderRadius: '6px',
+            borderRadius: '4px',
             transition: 'background-color 0.2s',
-            color: '#6B3410'
+            color: '#5c3a1e'
           }}
-          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f3ebe0'}
+          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f0e8d8'}
           onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
           title={showExplanation ? "Hide explanation" : "Show explanation"}
         >
-          {showExplanation ? <EyeOff size={20} /> : <Eye size={20} />}
+          {showExplanation ? <EyeOff size={18} /> : <Eye size={18} />}
         </button>
       </div>
 
@@ -642,22 +626,22 @@ export default function ProductsServices({ data = {}, updateData }) {
         <div style={{
           backgroundColor: '#eff6ff',
           border: '1px solid #bfdbfe',
-          borderRadius: '10px',
-          padding: '20px 24px',
-          marginBottom: '28px'
+          borderRadius: '8px',
+          padding: '16px 20px',
+          marginBottom: '24px'
         }}>
           <h4 style={{
-            fontSize: '16px',
+            fontSize: '14px',
             fontWeight: '600',
             color: '#1e40af',
-            margin: '0 0 12px 0'
+            margin: '0 0 8px 0'
           }}>
             📋 Products & Services - Guidance
           </h4>
           <p style={{
             color: '#1e40af',
-            margin: '0 0 12px 0',
-            fontSize: '14px',
+            margin: '0 0 8px 0',
+            fontSize: '12px',
             lineHeight: '1.6'
           }}>
             This section helps us <strong>match your business with the right funders, corporates, and service providers</strong>.
@@ -667,7 +651,7 @@ export default function ProductsServices({ data = {}, updateData }) {
             color: '#1e40af',
             margin: 0,
             paddingLeft: '20px',
-            fontSize: '14px',
+            fontSize: '12px',
             lineHeight: '1.8'
           }}>
             <li>Select whether you offer products, services, or both</li>
@@ -683,7 +667,7 @@ export default function ProductsServices({ data = {}, updateData }) {
       {/* ============================================================ */}
       <Section title="Section 1: Add Product or Service">
         <FormField label="What does your business offer?" required>
-          <div style={{ display: 'flex', gap: '24px', flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap' }}>
             {[
               { value: 'products', label: 'Products only' },
               { value: 'services', label: 'Services only' },
@@ -692,9 +676,9 @@ export default function ProductsServices({ data = {}, updateData }) {
               <label key={value} style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: '10px',
+                gap: '8px',
                 cursor: 'pointer',
-                fontSize: '14px',
+                fontSize: '13px',
                 fontWeight: '500',
                 color: '#3d2b1f'
               }}>
@@ -705,8 +689,8 @@ export default function ProductsServices({ data = {}, updateData }) {
                   checked={data.offeringType === value}
                   onChange={handleOfferingTypeChange}
                   style={{
-                    width: '18px',
-                    height: '18px',
+                    width: '16px',
+                    height: '16px',
                     accentColor: '#8B4513',
                     cursor: 'pointer'
                   }}
@@ -723,8 +707,8 @@ export default function ProductsServices({ data = {}, updateData }) {
           <div style={{ 
             display: 'grid', 
             gridTemplateColumns: showProducts && showServices ? '1fr 1fr' : '1fr', 
-            gap: '24px',
-            marginTop: '24px'
+            gap: '20px',
+            marginTop: '20px'
           }}>
             {/* Products */}
             {showProducts && (
@@ -739,13 +723,13 @@ export default function ProductsServices({ data = {}, updateData }) {
                     key={categoryIndex}
                     onRemove={() => removeProductCategory(categoryIndex)}
                   >
-                    <div style={{ marginBottom: '16px' }}>
+                    <div style={{ marginBottom: '12px' }}>
                       <label style={{
                         display: 'block',
-                        fontSize: '13px',
+                        fontSize: '11px',
                         fontWeight: '600',
-                        color: '#6B3410',
-                        marginBottom: '6px'
+                        color: '#5c3a1e',
+                        marginBottom: '4px'
                       }}>
                         Category Name(s) *
                       </label>
@@ -763,12 +747,12 @@ export default function ProductsServices({ data = {}, updateData }) {
                         display: 'flex',
                         justifyContent: 'space-between',
                         alignItems: 'center',
-                        marginBottom: '12px'
+                        marginBottom: '8px'
                       }}>
                         <span style={{
-                          fontSize: '13px',
+                          fontSize: '11px',
                           fontWeight: '600',
-                          color: '#6B3410'
+                          color: '#5c3a1e'
                         }}>
                           Products
                         </span>
@@ -778,21 +762,21 @@ export default function ProductsServices({ data = {}, updateData }) {
                           style={{
                             display: 'flex',
                             alignItems: 'center',
-                            gap: '6px',
-                            padding: '6px 14px',
-                            fontSize: '13px',
+                            gap: '4px',
+                            padding: '4px 12px',
+                            fontSize: '11px',
                             fontWeight: '500',
-                            backgroundColor: '#f3ebe0',
-                            color: '#6B3410',
+                            backgroundColor: '#f0e8d8',
+                            color: '#5c3a1e',
                             border: 'none',
-                            borderRadius: '4px',
+                            borderRadius: '3px',
                             cursor: 'pointer',
                             transition: 'background-color 0.2s'
                           }}
-                          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#e8dcc8'}
-                          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#f3ebe0'}
+                          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#e0d5c0'}
+                          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#f0e8d8'}
                         >
-                          <Plus size={14} /> Add Product
+                          <Plus size={12} /> Add Product
                         </button>
                       </div>
                       {(category.products || []).map((product, productIndex) => (
@@ -812,7 +796,7 @@ export default function ProductsServices({ data = {}, updateData }) {
                             value={product.description}
                             onChange={(e) => updateProduct(categoryIndex, productIndex, "description", e.target.value)}
                             placeholder="Brief description of the product, its features, and benefits"
-                            rows={3}
+                            rows={2}
                             label="Description"
                             required
                           />
@@ -821,11 +805,12 @@ export default function ProductsServices({ data = {}, updateData }) {
                       {(category.products || []).length === 0 && (
                         <div style={{
                           textAlign: 'center',
-                          padding: '20px',
-                          color: '#9ca3af',
-                          fontSize: '14px',
-                          backgroundColor: '#faf6f0',
-                          borderRadius: '6px'
+                          padding: '16px',
+                          color: '#999',
+                          fontSize: '11px',
+                          backgroundColor: '#fdfaf5',
+                          borderRadius: '4px',
+                          border: '1px dashed #d6c4a8'
                         }}>
                           No products added yet. Click "Add Product" to get started.
                         </div>
@@ -836,11 +821,12 @@ export default function ProductsServices({ data = {}, updateData }) {
                 {(data.productCategories || []).length === 0 && (
                   <div style={{
                     textAlign: 'center',
-                    padding: '32px',
-                    color: '#9ca3af',
-                    fontSize: '14px',
-                    backgroundColor: '#faf6f0',
-                    borderRadius: '8px'
+                    padding: '24px',
+                    color: '#999',
+                    fontSize: '12px',
+                    backgroundColor: '#fdfaf5',
+                    borderRadius: '6px',
+                    border: '1px dashed #d6c4a8'
                   }}>
                     No product categories added yet. Click "Add Category" to get started.
                   </div>
@@ -861,13 +847,13 @@ export default function ProductsServices({ data = {}, updateData }) {
                     key={categoryIndex}
                     onRemove={() => removeServiceCategory(categoryIndex)}
                   >
-                    <div style={{ marginBottom: '16px' }}>
+                    <div style={{ marginBottom: '12px' }}>
                       <label style={{
                         display: 'block',
-                        fontSize: '13px',
+                        fontSize: '11px',
                         fontWeight: '600',
-                        color: '#6B3410',
-                        marginBottom: '6px'
+                        color: '#5c3a1e',
+                        marginBottom: '4px'
                       }}>
                         Category Name(s) *
                       </label>
@@ -885,12 +871,12 @@ export default function ProductsServices({ data = {}, updateData }) {
                         display: 'flex',
                         justifyContent: 'space-between',
                         alignItems: 'center',
-                        marginBottom: '12px'
+                        marginBottom: '8px'
                       }}>
                         <span style={{
-                          fontSize: '13px',
+                          fontSize: '11px',
                           fontWeight: '600',
-                          color: '#6B3410'
+                          color: '#5c3a1e'
                         }}>
                           Services
                         </span>
@@ -900,21 +886,21 @@ export default function ProductsServices({ data = {}, updateData }) {
                           style={{
                             display: 'flex',
                             alignItems: 'center',
-                            gap: '6px',
-                            padding: '6px 14px',
-                            fontSize: '13px',
+                            gap: '4px',
+                            padding: '4px 12px',
+                            fontSize: '11px',
                             fontWeight: '500',
-                            backgroundColor: '#f3ebe0',
-                            color: '#6B3410',
+                            backgroundColor: '#f0e8d8',
+                            color: '#5c3a1e',
                             border: 'none',
-                            borderRadius: '4px',
+                            borderRadius: '3px',
                             cursor: 'pointer',
                             transition: 'background-color 0.2s'
                           }}
-                          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#e8dcc8'}
-                          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#f3ebe0'}
+                          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#e0d5c0'}
+                          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#f0e8d8'}
                         >
-                          <Plus size={14} /> Add Service
+                          <Plus size={12} /> Add Service
                         </button>
                       </div>
                       {(category.services || []).map((service, serviceIndex) => (
@@ -934,7 +920,7 @@ export default function ProductsServices({ data = {}, updateData }) {
                             value={service.description}
                             onChange={(e) => updateService(categoryIndex, serviceIndex, "description", e.target.value)}
                             placeholder="Brief description of the service, what it includes, and its value proposition"
-                            rows={3}
+                            rows={2}
                             label="Description"
                             required
                           />
@@ -943,11 +929,12 @@ export default function ProductsServices({ data = {}, updateData }) {
                       {(category.services || []).length === 0 && (
                         <div style={{
                           textAlign: 'center',
-                          padding: '20px',
-                          color: '#9ca3af',
-                          fontSize: '14px',
-                          backgroundColor: '#faf6f0',
-                          borderRadius: '6px'
+                          padding: '16px',
+                          color: '#999',
+                          fontSize: '11px',
+                          backgroundColor: '#fdfaf5',
+                          borderRadius: '4px',
+                          border: '1px dashed #d6c4a8'
                         }}>
                           No services added yet. Click "Add Service" to get started.
                         </div>
@@ -958,11 +945,12 @@ export default function ProductsServices({ data = {}, updateData }) {
                 {(data.serviceCategories || []).length === 0 && (
                   <div style={{
                     textAlign: 'center',
-                    padding: '32px',
-                    color: '#9ca3af',
-                    fontSize: '14px',
-                    backgroundColor: '#faf6f0',
-                    borderRadius: '8px'
+                    padding: '24px',
+                    color: '#999',
+                    fontSize: '12px',
+                    backgroundColor: '#fdfaf5',
+                    borderRadius: '6px',
+                    border: '1px dashed #d6c4a8'
                   }}>
                     No service categories added yet. Click "Add Category" to get started.
                   </div>
@@ -977,17 +965,17 @@ export default function ProductsServices({ data = {}, updateData }) {
       {/* SECTION 2: Delivery Standards */}
       {/* ============================================================ */}
       <Section title="Section 2: Delivery Standards">
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
           <div>
             <FormField label="Preferred Delivery Mode" required>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 {deliveryModes.map(mode => (
                   <label key={mode} style={{
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '10px',
+                    gap: '8px',
                     cursor: 'pointer',
-                    fontSize: '14px',
+                    fontSize: '12px',
                     color: '#3d2b1f'
                   }}>
                     <input
@@ -995,8 +983,8 @@ export default function ProductsServices({ data = {}, updateData }) {
                       checked={(data.deliveryModes || []).includes(mode)}
                       onChange={() => handleCheckboxChange('deliveryModes', mode)}
                       style={{
-                        width: '18px',
-                        height: '18px',
+                        width: '16px',
+                        height: '16px',
                         accentColor: '#8B4513',
                         cursor: 'pointer'
                       }}
@@ -1010,14 +998,14 @@ export default function ProductsServices({ data = {}, updateData }) {
 
           <div>
             <FormField label="Lead Time (from contract award to start)" required>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div>
                   <label style={{
                     display: 'block',
-                    fontSize: '13px',
+                    fontSize: '11px',
                     fontWeight: '600',
-                    color: '#6B3410',
-                    marginBottom: '4px'
+                    color: '#5c3a1e',
+                    marginBottom: '3px'
                   }}>
                     Minimum Time
                   </label>
@@ -1031,29 +1019,31 @@ export default function ProductsServices({ data = {}, updateData }) {
                       min="0"
                       style={{
                         flex: 1,
-                        padding: '10px 12px',
-                        border: '1px solid #d1d5db',
-                        borderRadius: '6px 0 0 6px',
-                        fontSize: '14px',
+                        padding: '8px 10px',
+                        border: '1px solid #d6c4a8',
+                        borderRadius: '4px 0 0 4px',
+                        fontSize: '12px',
                         outline: 'none',
-                        transition: 'border-color 0.2s'
+                        transition: 'border-color 0.2s',
+                        color: '#3d2b1f'
                       }}
                       onFocus={(e) => e.currentTarget.style.borderColor = '#8B4513'}
-                      onBlur={(e) => e.currentTarget.style.borderColor = '#d1d5db'}
+                      onBlur={(e) => e.currentTarget.style.borderColor = '#d6c4a8'}
                     />
                     <select
                       name="minLeadTimeUnit"
                       value={data.minLeadTimeUnit || "days"}
                       onChange={handleChange}
                       style={{
-                        padding: '10px 12px',
-                        border: '1px solid #d1d5db',
+                        padding: '8px 10px',
+                        border: '1px solid #d6c4a8',
                         borderLeft: 'none',
-                        borderRadius: '0 6px 6px 0',
+                        borderRadius: '0 4px 4px 0',
                         backgroundColor: 'white',
-                        fontSize: '14px',
+                        fontSize: '12px',
                         outline: 'none',
-                        cursor: 'pointer'
+                        cursor: 'pointer',
+                        color: '#3d2b1f'
                       }}
                     >
                       <option value="hours">Hours</option>
@@ -1066,10 +1056,10 @@ export default function ProductsServices({ data = {}, updateData }) {
                 <div>
                   <label style={{
                     display: 'block',
-                    fontSize: '13px',
+                    fontSize: '11px',
                     fontWeight: '600',
-                    color: '#6B3410',
-                    marginBottom: '4px'
+                    color: '#5c3a1e',
+                    marginBottom: '3px'
                   }}>
                     Maximum Time
                   </label>
@@ -1083,29 +1073,31 @@ export default function ProductsServices({ data = {}, updateData }) {
                       min="0"
                       style={{
                         flex: 1,
-                        padding: '10px 12px',
-                        border: '1px solid #d1d5db',
-                        borderRadius: '6px 0 0 6px',
-                        fontSize: '14px',
+                        padding: '8px 10px',
+                        border: '1px solid #d6c4a8',
+                        borderRadius: '4px 0 0 4px',
+                        fontSize: '12px',
                         outline: 'none',
-                        transition: 'border-color 0.2s'
+                        transition: 'border-color 0.2s',
+                        color: '#3d2b1f'
                       }}
                       onFocus={(e) => e.currentTarget.style.borderColor = '#8B4513'}
-                      onBlur={(e) => e.currentTarget.style.borderColor = '#d1d5db'}
+                      onBlur={(e) => e.currentTarget.style.borderColor = '#d6c4a8'}
                     />
                     <select
                       name="maxLeadTimeUnit"
                       value={data.maxLeadTimeUnit || "days"}
                       onChange={handleChange}
                       style={{
-                        padding: '10px 12px',
-                        border: '1px solid #d1d5db',
+                        padding: '8px 10px',
+                        border: '1px solid #d6c4a8',
                         borderLeft: 'none',
-                        borderRadius: '0 6px 6px 0',
+                        borderRadius: '0 4px 4px 0',
                         backgroundColor: 'white',
-                        fontSize: '14px',
+                        fontSize: '12px',
                         outline: 'none',
-                        cursor: 'pointer'
+                        cursor: 'pointer',
+                        color: '#3d2b1f'
                       }}
                     >
                       <option value="hours">Hours</option>
@@ -1118,14 +1110,14 @@ export default function ProductsServices({ data = {}, updateData }) {
               </div>
               {(data.minLeadTime || data.maxLeadTime) && (
                 <div style={{
-                  marginTop: '12px',
-                  padding: '10px 14px',
+                  marginTop: '10px',
+                  padding: '8px 12px',
                   backgroundColor: '#eff6ff',
-                  borderRadius: '6px',
+                  borderRadius: '4px',
                   border: '1px solid #bfdbfe'
                 }}>
                   <p style={{
-                    fontSize: '14px',
+                    fontSize: '11px',
                     color: '#1e40af',
                     margin: 0
                   }}>
@@ -1153,7 +1145,7 @@ export default function ProductsServices({ data = {}, updateData }) {
             name="targetMarket"
             value={data.targetMarket || ""}
             onChange={handleChange}
-            rows={4}
+            rows={3}
             placeholder="e.g., NGO Contracts and youth development programs, Corporate / IAD departments seeking online training delivery, Government departments, education and youth development..."
             required
           />
@@ -1172,15 +1164,15 @@ export default function ProductsServices({ data = {}, updateData }) {
           <div style={{
             display: 'inline-flex',
             alignItems: 'center',
-            gap: '10px',
-            padding: '10px 18px',
-            borderRadius: '6px',
-            marginBottom: '20px',
-            fontSize: '14px',
+            gap: '8px',
+            padding: '8px 14px',
+            borderRadius: '4px',
+            marginBottom: '16px',
+            fontSize: '12px',
             fontWeight: '600',
             backgroundColor: revenueOver100 ? '#fff1f0' : totalRevenuePercent === 100 ? '#f0faf0' : '#fdf6ee',
             border: `1px solid ${revenueOver100 ? '#ffccc7' : totalRevenuePercent === 100 ? '#b7eb8f' : '#d6c4a8'}`,
-            color: revenueOver100 ? '#cf1322' : totalRevenuePercent === 100 ? '#389e0d' : '#8B4513',
+            color: revenueOver100 ? '#cf1322' : totalRevenuePercent === 100 ? '#389e0d' : '#5c3a1e',
           }}>
             <span>
               {revenueOver100
@@ -1198,14 +1190,14 @@ export default function ProductsServices({ data = {}, updateData }) {
           addLabel="Add Client" 
         />
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           {(data.keyClients || []).map((client, index) => (
             <CategoryCard
               key={index}
               onRemove={() => removeClient(index)}
               title={`Client ${index + 1}`}
             >
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
                 <Input
                   type="text"
                   value={client.name || ""}
@@ -1217,10 +1209,10 @@ export default function ProductsServices({ data = {}, updateData }) {
                 <div>
                   <label style={{
                     display: 'block',
-                    fontSize: '13px',
+                    fontSize: '11px',
                     fontWeight: '600',
-                    color: '#6B3410',
-                    marginBottom: '4px'
+                    color: '#5c3a1e',
+                    marginBottom: '3px'
                   }}>
                     Client Type
                   </label>
@@ -1229,16 +1221,17 @@ export default function ProductsServices({ data = {}, updateData }) {
                     onChange={(e) => updateClient(index, "clientType", e.target.value)}
                     style={{
                       width: '100%',
-                      padding: '10px 12px',
-                      border: '1px solid #d1d5db',
-                      borderRadius: '6px',
-                      fontSize: '14px',
+                      padding: '8px 10px',
+                      border: '1px solid #d6c4a8',
+                      borderRadius: '4px',
+                      fontSize: '12px',
                       backgroundColor: 'white',
                       outline: 'none',
-                      transition: 'border-color 0.2s'
+                      transition: 'border-color 0.2s',
+                      color: '#3d2b1f'
                     }}
                     onFocus={(e) => e.currentTarget.style.borderColor = '#8B4513'}
-                    onBlur={(e) => e.currentTarget.style.borderColor = '#d1d5db'}
+                    onBlur={(e) => e.currentTarget.style.borderColor = '#d6c4a8'}
                   >
                     <option value="">Select type</option>
                     <option value="Government">Government</option>
@@ -1262,20 +1255,20 @@ export default function ProductsServices({ data = {}, updateData }) {
               <div style={{ 
                 display: 'grid', 
                 gridTemplateColumns: '1fr 2fr 1fr', 
-                gap: '16px',
+                gap: '12px',
                 marginTop: '8px'
               }}>
                 <div>
                   <label style={{
                     display: 'block',
-                    fontSize: '13px',
+                    fontSize: '11px',
                     fontWeight: '600',
-                    color: '#6B3410',
-                    marginBottom: '4px'
+                    color: '#5c3a1e',
+                    marginBottom: '3px'
                   }}>
                     % of Total Revenue
                   </label>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <input
                       type="number"
                       value={client.revenuePercentage || ""}
@@ -1288,21 +1281,22 @@ export default function ProductsServices({ data = {}, updateData }) {
                       max="100"
                       style={{
                         flex: 1,
-                        padding: '10px 12px',
-                        border: '1px solid #d1d5db',
-                        borderRadius: '6px',
-                        fontSize: '14px',
+                        padding: '8px 10px',
+                        border: '1px solid #d6c4a8',
+                        borderRadius: '4px',
+                        fontSize: '12px',
                         outline: 'none',
-                        transition: 'border-color 0.2s'
+                        transition: 'border-color 0.2s',
+                        color: '#3d2b1f'
                       }}
                       onFocus={(e) => e.currentTarget.style.borderColor = '#8B4513'}
-                      onBlur={(e) => e.currentTarget.style.borderColor = '#d1d5db'}
+                      onBlur={(e) => e.currentTarget.style.borderColor = '#d6c4a8'}
                     />
                     <span style={{
                       fontWeight: '600',
-                      color: '#8B4513',
+                      color: '#5c3a1e',
                       flexShrink: 0,
-                      fontSize: '14px'
+                      fontSize: '12px'
                     }}>%</span>
                   </div>
                 </div>
@@ -1310,10 +1304,10 @@ export default function ProductsServices({ data = {}, updateData }) {
                 <div>
                   <label style={{
                     display: 'block',
-                    fontSize: '13px',
+                    fontSize: '11px',
                     fontWeight: '600',
-                    color: '#6B3410',
-                    marginBottom: '4px'
+                    color: '#5c3a1e',
+                    marginBottom: '3px'
                   }}>
                     Industry (select all that apply)
                   </label>
@@ -1329,14 +1323,14 @@ export default function ProductsServices({ data = {}, updateData }) {
                 <div>
                   <label style={{
                     display: 'block',
-                    fontSize: '13px',
+                    fontSize: '11px',
                     fontWeight: '600',
-                    color: '#6B3410',
-                    marginBottom: '4px'
+                    color: '#5c3a1e',
+                    marginBottom: '3px'
                   }}>
                     Revenue Growth Potential?
                   </label>
-                  <YesNoRadio
+                  <YesNoDropdown
                     value={client.revenueGrowthPotential || ""}
                     onChange={(val) => updateClient(index, "revenueGrowthPotential", val)}
                   />
@@ -1345,7 +1339,7 @@ export default function ProductsServices({ data = {}, updateData }) {
 
               {/* Revenue growth details - full width if Yes */}
               {client.revenueGrowthPotential === "Yes" && (
-                <div style={{ marginTop: '16px' }}>
+                <div style={{ marginTop: '12px' }}>
                   <TextArea
                     value={client.revenueGrowthDetails || ""}
                     onChange={(e) => updateClient(index, "revenueGrowthDetails", e.target.value)}
@@ -1362,11 +1356,12 @@ export default function ProductsServices({ data = {}, updateData }) {
         {(data.keyClients || []).length === 0 && (
           <div style={{
             textAlign: 'center',
-            padding: '40px',
-            color: '#9ca3af',
-            fontSize: '14px',
-            backgroundColor: '#faf6f0',
-            borderRadius: '8px'
+            padding: '32px',
+            color: '#999',
+            fontSize: '12px',
+            backgroundColor: '#fdfaf5',
+            borderRadius: '6px',
+            border: '1px dashed #d6c4a8'
           }}>
             <p style={{ margin: 0 }}>No clients added yet. Click "Add Client" to get started.</p>
           </div>
