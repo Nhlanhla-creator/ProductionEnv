@@ -561,14 +561,14 @@ const Governance = ({ data, updateData }) => {
           <div className="mt-4">
             <div className="flex items-center justify-between mb-4">
               <h4 className="text-md font-medium text-brown-700">Members' Other Business Interests</h4>
-              <button
-                type="button"
-                onClick={handleAddConflictOfInterest}
-                className="flex items-center gap-2 px-4 py-2 bg-brown-600 text-white rounded-md hover:bg-brown-700 transition-colors"
-              >
-                <Plus className="w-4 h-4" />
-                Add Member
-              </button>
+             <button
+  type="button"
+  onClick={handleAddConflictOfInterest}
+  className="flex items-center gap-2 px-4 py-2 bg-stone-700 text-white rounded-md hover:bg-stone-800 transition-colors font-medium"
+>
+  <Plus className="w-4 h-4" />
+  Add Member
+</button>
             </div>
 
             {(formData.conflictOfInterest || []).length === 0 && (

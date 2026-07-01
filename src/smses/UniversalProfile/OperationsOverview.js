@@ -190,55 +190,23 @@ const OperationsOverview = ({ data, updateData }) => {
         </div>
 
         {/* ============================================================ */}
-        {/* SECTION 2: Import / Export - 3 per row */}
+        {/* SECTION 2: Import / Export - Dropdown */}
         {/* ============================================================ */}
         <div>
           <SectionHeading number="2" title="Import / Export" />
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px' }}>
             <FormField label="Do you Import and/or Export?" required>
-              <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+              <select
+                name="importExport"
+                value={formData.importExport || "none"}
+                onChange={(e) => handleInputChange("importExport", e.target.value)}
+                style={inputStyle}
+              >
                 {importExportOptions.map((opt) => (
-                  <label
-                    key={opt.value}
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      padding: '6px 14px',
-                      borderRadius: '6px',
-                      border: `2px solid ${importExport === opt.value ? '#8B4513' : '#ccc'}`,
-                      backgroundColor: importExport === opt.value ? '#fdf6ee' : 'white',
-                      cursor: 'pointer',
-                      fontWeight: importExport === opt.value ? '600' : '400',
-                      color: importExport === opt.value ? '#6B3410' : '#555',
-                      fontSize: '13px',
-                      transition: 'all 0.2s ease',
-                      userSelect: 'none',
-                    }}
-                  >
-                    <input
-                      type="radio"
-                      name="importExport"
-                      value={opt.value}
-                      checked={importExport === opt.value}
-                      onChange={(e) => handleInputChange("importExport", e.target.value)}
-                      style={{ display: 'none' }}
-                    />
-                    <span style={{
-                      width: '14px', height: '14px', borderRadius: '50%', flexShrink: 0,
-                      border: `2px solid ${importExport === opt.value ? '#8B4513' : '#ccc'}`,
-                      backgroundColor: importExport === opt.value ? '#8B4513' : 'transparent',
-                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                    }}>
-                      {importExport === opt.value && (
-                        <span style={{ width: '5px', height: '5px', borderRadius: '50%', backgroundColor: 'white' }} />
-                      )}
-                    </span>
-                    <span style={{ textTransform: 'capitalize' }}>{opt.label}</span>
-                  </label>
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
                 ))}
-              </div>
+              </select>
             </FormField>
 
             {importExport !== "none" && (
@@ -272,49 +240,10 @@ const OperationsOverview = ({ data, updateData }) => {
         </div>
 
         {/* ============================================================ */}
-        {/* SECTION 3: Brands, Franchises & Agencies - 3 per row */}
+        {/* SECTION 3: Contract Operations - 3 per row */}
         {/* ============================================================ */}
         <div>
-          <SectionHeading number="3" title="Brands, Franchises & Agencies" />
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px' }}>
-            <FormField label="Brands Owned">
-              <input
-                type="text"
-                name="brandsOwned"
-                value={formData.brandsOwned || ""}
-                onChange={(e) => handleInputChange("brandsOwned", e.target.value)}
-                style={inputStyle}
-                placeholder="e.g., Brand A, Brand B"
-              />
-            </FormField>
-
-            <FormField label="Brands Represented">
-              <input
-                type="text"
-                name="brandsRepresented"
-                value={formData.brandsRepresented || ""}
-                onChange={(e) => handleInputChange("brandsRepresented", e.target.value)}
-                style={inputStyle}
-                placeholder="e.g., Brand X, Brand Y"
-              />
-            </FormField>
-
-            <FormField label="Do you hold any Franchises?">
-              {renderRadioGroup("holdsFranchises", formData.holdsFranchises)}
-            </FormField>
-
-            <FormField label="Do you hold any Agencies?">
-              {renderRadioGroup("holdsAgencies", formData.holdsAgencies)}
-            </FormField>
-          </div>
-        </div>
-
-        {/* ============================================================ */}
-        {/* SECTION 4: Contract Operations - 3 per row */}
-        {/* ============================================================ */}
-        <div>
-          <SectionHeading number="4" title="Contract Operations" />
+          <SectionHeading number="3" title="Contract Operations" />
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px' }}>
             <FormField label="Do you operate on a contract basis?" required>
@@ -352,10 +281,10 @@ const OperationsOverview = ({ data, updateData }) => {
         </div>
 
         {/* ============================================================ */}
-        {/* SECTION 5: Supplier & Continuity Risk - 3 per row */}
+        {/* SECTION 4: Supplier & Continuity Risk - 3 per row */}
         {/* ============================================================ */}
         <div>
-          <SectionHeading number="5" title="Supplier & Continuity Risk" />
+          <SectionHeading number="4" title="Supplier & Continuity Risk" />
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px' }}>
             <FormField label="Do you rely on more than one key supplier for critical inputs or services?" required>
@@ -466,10 +395,10 @@ const OperationsOverview = ({ data, updateData }) => {
         </div>
 
         {/* ============================================================ */}
-        {/* SECTION 6: Premises & Facilities - 3 per row */}
+        {/* SECTION 5: Premises & Facilities - 3 per row */}
         {/* ============================================================ */}
         <div>
-          <SectionHeading number="6" title="Premises & Facilities" />
+          <SectionHeading number="5" title="Premises & Facilities" />
           
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px' }}>
             <FormField label="Premises rented or owned?" required>
@@ -589,10 +518,10 @@ const OperationsOverview = ({ data, updateData }) => {
         </div>
 
         {/* ============================================================ */}
-        {/* SECTION 7: Delivery (Productivity & Reliability) - 3 per row */}
+        {/* SECTION 6: Delivery (Productivity & Reliability) - 3 per row */}
         {/* ============================================================ */}
         <div>
-          <SectionHeading number="7" title="Delivery (Productivity & Reliability)" />
+          <SectionHeading number="6" title="Delivery (Productivity & Reliability)" />
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px' }}>
             <FormField label="Do you track operational performance metrics?" required>
@@ -610,10 +539,10 @@ const OperationsOverview = ({ data, updateData }) => {
         </div>
 
         {/* ============================================================ */}
-        {/* SECTION 8: Safety (Risk & Compliance) - 3 per row */}
+        {/* SECTION 7: Safety (Risk & Compliance) - 3 per row */}
         {/* ============================================================ */}
         <div>
-          <SectionHeading number="8" title="Safety (Risk & Compliance)" />
+          <SectionHeading number="7" title="Safety (Risk & Compliance)" />
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px' }}>
             <FormField label="Do you have formal safety, risk, or compliance procedures?" required>
@@ -627,10 +556,10 @@ const OperationsOverview = ({ data, updateData }) => {
         </div>
 
         {/* ============================================================ */}
-        {/* SECTION 9: Operational Challenges - Full Width */}
+        {/* SECTION 8: Operational Challenges - Full Width */}
         {/* ============================================================ */}
         <div>
-          <SectionHeading number="9" title="Operational Challenges" />
+          <SectionHeading number="8" title="Operational Challenges" />
 
           <FormField label="What are your current operational challenges?">
             <textarea

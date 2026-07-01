@@ -178,6 +178,23 @@ const industryAssociations = [
   { value: "Other", label: "Other" },
 ]
 
+// ── Currencies ──
+const currencies = [
+  { value: "ZAR", label: "ZAR - South African Rand" },
+  { value: "USD", label: "USD - US Dollar" },
+  { value: "EUR", label: "EUR - Euro" },
+  { value: "GBP", label: "GBP - British Pound" },
+  { value: "NGN", label: "NGN - Nigerian Naira" },
+]
+
+// ── Import/Export options ──
+const importExportOptions = [
+  { value: "import", label: "Import" },
+  { value: "export", label: "Export" },
+  { value: "both", label: "Both" },
+  { value: "none", label: "None" },
+]
+
 // FormField component
 function FormField({ label, required, tooltip, children }) {
   return (
@@ -555,6 +572,10 @@ export default function EntityOverview({ data = {}, updateData }) {
             memberOfAssociation: "",
             industryAssociations: [],
             industryAssociationsOther: "",
+            brandsOwned: "",
+            brandsRepresented: "",
+            holdsFranchises: "",
+            holdsAgencies: "",
           };
 
           Object.keys(defaultFields).forEach(key => {
@@ -581,6 +602,10 @@ export default function EntityOverview({ data = {}, updateData }) {
             memberOfAssociation: "",
             industryAssociations: [],
             industryAssociationsOther: "",
+            brandsOwned: "",
+            brandsRepresented: "",
+            holdsFranchises: "",
+            holdsAgencies: "",
           });
         }
       } catch (error) {
@@ -866,12 +891,12 @@ export default function EntityOverview({ data = {}, updateData }) {
       </div>
 
       {/* ============================================================ */}
-      {/* SECTION 3: Employees - 3 per row */}
+      {/* SECTION 3: Employees - All 4 in one row */}
       {/* ============================================================ */}
       <SectionHeading title="Employees" />
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px' }}>
-        <FormField label="Permanent Employees" required>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '20px' }}>
+        <FormField label="Permanent" required>
           <input
             type="number"
             name="permanentEmployees"
@@ -884,7 +909,7 @@ export default function EntityOverview({ data = {}, updateData }) {
           />
         </FormField>
 
-        <FormField label="Contract Employees">
+        <FormField label="Contract">
           <input
             type="number"
             name="contractEmployees"
@@ -896,7 +921,7 @@ export default function EntityOverview({ data = {}, updateData }) {
           />
         </FormField>
 
-        <FormField label="Internship Employees">
+        <FormField label="Internship">
           <input
             type="number"
             name="internshipEmployees"
@@ -908,7 +933,7 @@ export default function EntityOverview({ data = {}, updateData }) {
           />
         </FormField>
 
-        <FormField label="Temporary Employees">
+        <FormField label="Temporary">
           <input
             type="number"
             name="temporaryEmployees"
@@ -1028,10 +1053,52 @@ export default function EntityOverview({ data = {}, updateData }) {
       )}
 
       {/* ============================================================ */}
-      {/* SECTION 5: Brand Assets - 2 per row */}
+      {/* SECTION 5: Brand Assets - Includes Brands, Franchises & Agencies */}
       {/* ============================================================ */}
       <SectionHeading title="Brand Assets" />
 
+      {/* Brands, Franchises & Agencies - 3 per row */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px', marginBottom: '1.5rem' }}>
+        <FormField label="Brands Owned">
+          <input
+            type="text"
+            name="brandsOwned"
+            value={formData.brandsOwned || ""}
+            onChange={handleChange}
+            style={inputStyle}
+            placeholder="e.g., Brand A, Brand B"
+          />
+        </FormField>
+
+        <FormField label="Brands Represented">
+          <input
+            type="text"
+            name="brandsRepresented"
+            value={formData.brandsRepresented || ""}
+            onChange={handleChange}
+            style={inputStyle}
+            placeholder="e.g., Brand X, Brand Y"
+          />
+        </FormField>
+
+        <FormField label="Do you hold any Franchises?">
+          <RadioGroup 
+            name="holdsFranchises" 
+            value={formData.holdsFranchises} 
+            onChange={(value) => handleRadioChange("holdsFranchises", value)}
+          />
+        </FormField>
+
+        <FormField label="Do you hold any Agencies?">
+          <RadioGroup 
+            name="holdsAgencies" 
+            value={formData.holdsAgencies} 
+            onChange={(value) => handleRadioChange("holdsAgencies", value)}
+          />
+        </FormField>
+      </div>
+
+      {/* Company Logo, Letterhead, Org Structure - 2 per row */}
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
         {/* Company Logo */}
         <FormField label="Company Logo">
