@@ -576,6 +576,7 @@ export default function EntityOverview({ data = {}, updateData }) {
             brandsRepresented: "",
             holdsFranchises: "",
             holdsAgencies: "",
+            numberOfEmployees: "",
           };
 
           Object.keys(defaultFields).forEach(key => {
@@ -606,6 +607,7 @@ export default function EntityOverview({ data = {}, updateData }) {
             brandsRepresented: "",
             holdsFranchises: "",
             holdsAgencies: "",
+            numberOfEmployees: "",
           });
         }
       } catch (error) {
@@ -890,8 +892,6 @@ export default function EntityOverview({ data = {}, updateData }) {
         </FormField>
       </div>
 
-      
-
       {/* ============================================================ */}
       {/* SECTION 4: Industry Associations - 3 per row */}
       {/* ============================================================ */}
@@ -1035,6 +1035,19 @@ export default function EntityOverview({ data = {}, updateData }) {
           />
         </FormField>
 
+        {/* Number of Employees - moved next to Agencies */}
+        <FormField label="Number of Employees">
+          <input
+            type="number"
+            name="numberOfEmployees"
+            value={formData.numberOfEmployees || ""}
+            onChange={handleChange}
+            style={inputStyle}
+            placeholder="e.g., 50"
+            min="0"
+          />
+        </FormField>
+
         <FormField label="Do you hold any Agencies?">
           <RadioGroup 
             name="holdsAgencies" 
@@ -1044,8 +1057,8 @@ export default function EntityOverview({ data = {}, updateData }) {
         </FormField>
       </div>
 
-      {/* Company Logo, Letterhead, Org Structure - 2 per row */}
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+      {/* Company Logo, Org Structure, Letterhead - 3 in one row */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '24px' }}>
         {/* Company Logo */}
         <FormField label="Company Logo">
           <div style={{
@@ -1097,78 +1110,6 @@ export default function EntityOverview({ data = {}, updateData }) {
                 }}>
                   <div style={{ fontWeight: '600', marginBottom: '2px' }}>📋 Requirements</div>
                   <div>JPG, PNG, GIF, WebP • Max 5MB</div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </FormField>
-
-        {/* Company Letterhead */}
-        <FormField label="Company Letterhead">
-          <div style={{
-            border: '2px dashed #C19A6B', borderRadius: '8px', padding: '16px',
-            backgroundColor: '#FAF8F5',
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-              <div style={{
-                width: '80px', height: '80px', borderRadius: '8px', overflow: 'hidden',
-                border: '3px solid #8B6F47', backgroundColor: 'white',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                boxShadow: '0 4px 12px rgba(139,111,71,0.2)', flexShrink: 0,
-              }}>
-                {formData.companyLetterhead ? (
-                  <div style={{ padding: '8px', textAlign: 'center' }}>
-                    <div style={{ fontSize: '32px', lineHeight: '1', marginBottom: '4px' }}>📄</div>
-                    <div style={{ fontSize: '9px', fontWeight: '600', color: '#8B6F47' }}>Letterhead</div>
-                  </div>
-                ) : (
-                  <div style={{ color: '#A0826D', fontSize: '10px', textAlign: 'center', padding: '6px' }}>
-                    <div style={{ fontSize: '28px', lineHeight: '1', marginBottom: '2px' }}>📋</div>
-                    <div style={{ fontWeight: '600', color: '#8B6F47', fontSize: '9px' }}>No Letterhead</div>
-                  </div>
-                )}
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
-                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                  <label htmlFor="letterhead-upload" style={{
-                    padding: '10px 16px',
-                    background: letterheadUploading ? 'linear-gradient(135deg,#A0826D,#8B6F47)' : 'linear-gradient(135deg,#8B4513,#6B3410)',
-                    color: 'white', border: 'none', borderRadius: '5px', fontSize: '13px', fontWeight: '600',
-                    cursor: letterheadUploading ? 'not-allowed' : 'pointer',
-                    display: 'inline-flex', alignItems: 'center', gap: '8px',
-                    opacity: letterheadUploading ? 0.7 : 1,
-                  }}>
-                    {letterheadUploading ? <><div style={spinnerStyle}></div>Uploading...</> : <><Upload size={16} />{formData.companyLetterhead ? 'Replace' : 'Upload'}</>}
-                    <input id="letterhead-upload" type="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" onChange={handleLetterheadUpload} disabled={letterheadUploading} style={{ display: 'none' }} />
-                  </label>
-                  {formData.companyLetterhead && (
-                    <button type="button" onClick={handleDeleteLetterhead} style={{
-                      padding: '10px 16px', background: 'linear-gradient(135deg,#B8860B,#996515)', color: 'white',
-                      border: 'none', borderRadius: '5px', fontSize: '13px', fontWeight: '600', cursor: 'pointer',
-                      display: 'inline-flex', alignItems: 'center', gap: '8px',
-                    }}>
-                      <X size={16} />Delete
-                    </button>
-                  )}
-                </div>
-                <div style={{
-                  fontSize: '11px', color: '#8B6F47', lineHeight: '1.4',
-                  backgroundColor: 'rgba(139,111,71,0.08)', padding: '8px 10px',
-                  borderRadius: '5px', border: '1px solid rgba(139,111,71,0.15)',
-                }}>
-                  {formData.companyLetterhead ? (
-                    <>
-                      <div style={{ fontWeight: '600', marginBottom: '4px' }}>✅ Letterhead Uploaded</div>
-                      <a href={formData.companyLetterhead} target="_blank" rel="noopener noreferrer"
-                        style={{ color: '#8B4513', textDecoration: 'underline' }}>View Document ↗</a>
-                    </>
-                  ) : (
-                    <>
-                      <div style={{ fontWeight: '600', marginBottom: '2px' }}>📋 Requirements</div>
-                      <div>PDF, JPG, PNG • Max 10MB</div>
-                      <div style={{ marginTop: '2px' }}>Company name, logo, address, contact info required</div>
-                    </>
-                  )}
                 </div>
               </div>
             </div>
@@ -1268,6 +1209,78 @@ export default function EntityOverview({ data = {}, updateData }) {
                     <>
                       <div style={{ fontWeight: '600', marginBottom: '2px' }}>📋 Accepted formats</div>
                       <div>PDF, Word, Excel, Image • Max 10MB</div>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </FormField>
+
+        {/* Company Letterhead */}
+        <FormField label="Company Letterhead">
+          <div style={{
+            border: '2px dashed #C19A6B', borderRadius: '8px', padding: '16px',
+            backgroundColor: '#FAF8F5',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+              <div style={{
+                width: '80px', height: '80px', borderRadius: '8px', overflow: 'hidden',
+                border: '3px solid #8B6F47', backgroundColor: 'white',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                boxShadow: '0 4px 12px rgba(139,111,71,0.2)', flexShrink: 0,
+              }}>
+                {formData.companyLetterhead ? (
+                  <div style={{ padding: '8px', textAlign: 'center' }}>
+                    <div style={{ fontSize: '32px', lineHeight: '1', marginBottom: '4px' }}>📄</div>
+                    <div style={{ fontSize: '9px', fontWeight: '600', color: '#8B6F47' }}>Letterhead</div>
+                  </div>
+                ) : (
+                  <div style={{ color: '#A0826D', fontSize: '10px', textAlign: 'center', padding: '6px' }}>
+                    <div style={{ fontSize: '28px', lineHeight: '1', marginBottom: '2px' }}>📋</div>
+                    <div style={{ fontWeight: '600', color: '#8B6F47', fontSize: '9px' }}>No Letterhead</div>
+                  </div>
+                )}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  <label htmlFor="letterhead-upload" style={{
+                    padding: '10px 16px',
+                    background: letterheadUploading ? 'linear-gradient(135deg,#A0826D,#8B6F47)' : 'linear-gradient(135deg,#8B4513,#6B3410)',
+                    color: 'white', border: 'none', borderRadius: '5px', fontSize: '13px', fontWeight: '600',
+                    cursor: letterheadUploading ? 'not-allowed' : 'pointer',
+                    display: 'inline-flex', alignItems: 'center', gap: '8px',
+                    opacity: letterheadUploading ? 0.7 : 1,
+                  }}>
+                    {letterheadUploading ? <><div style={spinnerStyle}></div>Uploading...</> : <><Upload size={16} />{formData.companyLetterhead ? 'Replace' : 'Upload'}</>}
+                    <input id="letterhead-upload" type="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" onChange={handleLetterheadUpload} disabled={letterheadUploading} style={{ display: 'none' }} />
+                  </label>
+                  {formData.companyLetterhead && (
+                    <button type="button" onClick={handleDeleteLetterhead} style={{
+                      padding: '10px 16px', background: 'linear-gradient(135deg,#B8860B,#996515)', color: 'white',
+                      border: 'none', borderRadius: '5px', fontSize: '13px', fontWeight: '600', cursor: 'pointer',
+                      display: 'inline-flex', alignItems: 'center', gap: '8px',
+                    }}>
+                      <X size={16} />Delete
+                    </button>
+                  )}
+                </div>
+                <div style={{
+                  fontSize: '11px', color: '#8B6F47', lineHeight: '1.4',
+                  backgroundColor: 'rgba(139,111,71,0.08)', padding: '8px 10px',
+                  borderRadius: '5px', border: '1px solid rgba(139,111,71,0.15)',
+                }}>
+                  {formData.companyLetterhead ? (
+                    <>
+                      <div style={{ fontWeight: '600', marginBottom: '4px' }}>✅ Letterhead Uploaded</div>
+                      <a href={formData.companyLetterhead} target="_blank" rel="noopener noreferrer"
+                        style={{ color: '#8B4513', textDecoration: 'underline' }}>View Document ↗</a>
+                    </>
+                  ) : (
+                    <>
+                      <div style={{ fontWeight: '600', marginBottom: '2px' }}>📋 Requirements</div>
+                      <div>PDF, JPG, PNG • Max 10MB</div>
+                      <div style={{ marginTop: '2px' }}>Company name, logo, address, contact info required</div>
                     </>
                   )}
                 </div>
