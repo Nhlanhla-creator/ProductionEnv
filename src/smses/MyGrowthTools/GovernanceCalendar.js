@@ -23,13 +23,17 @@ const GovernanceCalendar = (activeSection, isInvestorView ) => {
   const [showDoubleBookingWarning, setShowDoubleBookingWarning] = useState(false);
   const [pendingMeetingData, setPendingMeetingData] = useState(null);
   const [conflictingMeetingData, setConflictingMeetingData] = useState(null);
-const [showRescheduleModal, setShowRescheduleModal] = useState(false);
-const [rescheduleMeeting, setRescheduleMeeting] = useState(null);
-const [rescheduleData, setRescheduleData] = useState({
-  newDate: "",
-  newTime: "",
-  reason: "",
-});
+  const [showRescheduleModal, setShowRescheduleModal] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState("Processing..."); 
+  const [showRecurringDeleteModal, setShowRecurringDeleteModal] = useState(false);
+  const [recurringDeleteMeeting, setRecurringDeleteMeeting] = useState(null);
+  const [rescheduleMeeting, setRescheduleMeeting] = useState(null);
+  const [participants, setParticipants] = useState([]);
+  const [rescheduleData, setRescheduleData] = useState({
+    newDate: "",
+    newTime: "",
+    reason: "",
+  });
 
   // Department options with colors
   const departmentOptions = [
@@ -50,7 +54,7 @@ const [rescheduleData, setRescheduleData] = useState({
     title: "",
     department: departmentOptions[0].name,
     purpose: "",
-    participants: "",
+    participants: [],
     repeatType: "none",
     startDate: "",
     endDate: "",
@@ -219,9 +223,40 @@ useEffect(() => {
     
     return instances;
   };
+
+ const addParticipant = () => {
+  console.log("Add participant clicked!");
+  setFormData((prev) => {
+    console.log("Current participants:", prev.participants);
+    return {
+      ...prev,
+      participants: [...prev.participants, { name: "", email: "" }]
+    };
+  });
+};
+
+  // Remove a participant
+  const removeParticipant = (index) => {
+    setFormData((prev) => ({
+      ...prev,
+      participants: prev.participants.filter((_, i) => i !== index)
+    }));
+  };
+
+  // Update participant field
+  const updateParticipant = (index, field, value) => {
+    setFormData((prev) => {
+      const updatedParticipants = [...prev.participants];
+      updatedParticipants[index] = { ...updatedParticipants[index], [field]: value };
+      return { ...prev, participants: updatedParticipants };
+    });
+  };
+
 const proceedWithBooking = async () => {
   setLoading(true);
-  
+    setLoadingMessage("Booking your meeting...");
+
+
   try {
     const selectedDepartment = allDepartments.find(d => d.name === formData.department);
     let instances;
@@ -247,8 +282,8 @@ const proceedWithBooking = async () => {
       departmentColor: selectedDepartment?.color || "#757575",
       departmentBg: selectedDepartment?.bg || "#EEEEEE",
       purpose: formData.purpose,
-      participants: formData.participants.split(",").map(p => p.trim()).filter(p => p),
-      isRecurring: formData.repeatType !== "none",
+    participants: formData.participants,
+    isRecurring: formData.repeatType !== "none",
       recurrencePattern: formData.repeatType !== "none" ? formData.repeatType : null,
       recurrenceInterval: formData.repeatType !== "none" ? 1 : null,
       instances: instances,
@@ -390,11 +425,12 @@ if (userEmail) {
     
     await sendGovernanceMeetingConfirmation({
       to: currentUser.uid,
+      useTestMode: false, 
       meetingTitle: formData.title,
       meetingDate: formattedDate,
       meetingTime: meetingTime,
       department: formData.department,
-      participants: newMeeting.participants,
+      participants: formData.participants,
       purpose: formData.purpose,
       isRecurring: newMeeting.isRecurring,
       recurrencePattern: newMeeting.recurrencePattern,
@@ -422,16 +458,18 @@ if (userEmail) {
     });
     
     // ==================== END NOTIFICATIONS ====================
+     setNotification({ 
+      type: "success", 
+      message: `✅ "${formData.title}" confirmed for ${formattedDate} at ${meetingTime}` 
+    });
     
   } catch (error) {
-    console.error("Error saving meeting:", error);
     setNotification({ 
       type: "error", 
       message: "Failed to schedule meeting. Please try again." 
     });
   } finally {
-    setLoading(false);
-    setConflictingMeetingData(null);
+    setLoading(false);  // ✅ Hide loading overlay
   }
 };
 
@@ -466,6 +504,7 @@ const handleSubmit = async () => {
     setErrors(newErrors);
     return;
   } 
+  
   
   // ==================== DOUBLE-BOOKING CHECK (ALL CONFLICTS) ====================
   
@@ -531,7 +570,7 @@ const handleSubmit = async () => {
       departmentColor: selectedDepartment?.color || "#757575",
       departmentBg: selectedDepartment?.bg || "#EEEEEE",
       purpose: formData.purpose,
-      participants: formData.participants.split(",").map(p => p.trim()).filter(p => p),
+      participants: formData.participants,  // ← Already an array of { name, email }
       isRecurring: formData.repeatType !== "none",
       recurrencePattern: formData.repeatType !== "none" ? formData.repeatType : null,
       recurrenceInterval: formData.repeatType !== "none" ? 1 : null,
@@ -554,7 +593,7 @@ const handleSubmit = async () => {
       title: "",
       department: departmentOptions[0].name,
       purpose: "",
-      participants: "",
+      participants: [],
       repeatType: "none",
       startDate: "",
       endDate: "",
@@ -573,9 +612,9 @@ const handleSubmit = async () => {
     });
     
     const meetingTime = formData.time;
-    const participantText = newMeeting.participants.length > 0 
-      ? newMeeting.participants.join(", ")
-      : 'No participants specified';
+  const participantText = newMeeting.participants.length > 0 
+  ? newMeeting.participants.map(p => p.name || p.email || "Participant").join(", ")
+  : 'No participants specified';
     const recurrenceText = newMeeting.isRecurring 
       ? `🔄 Repeats ${newMeeting.recurrencePattern === 'weekly' ? 'weekly' : 'monthly'}` 
       : '';
@@ -641,9 +680,25 @@ BIG Marketplace Team 🌍`,
   }
 };
   
-  const handleDeleteMeeting = async (meetingId) => {
-  setLoading(true);
+ const handleDeleteMeeting = async (meetingId) => {
+   const meeting = meetings.find(m => m.id === meetingId);
   
+  if (meeting?.isRecurring) {
+    const confirmDelete = window.confirm(
+      `⚠️ "${meeting.title}" is a recurring meeting.\n\n` +
+      `This will delete ALL ${meeting.instances?.length || 0} instances.\n\n` +
+      `Are you sure?`
+    );
+    
+    if (!confirmDelete) {
+      return; // Stop here, don't delete
+    }
+  }
+  
+
+  setLoading(true);
+    setLoadingMessage("Deleting meeting...");
+ 
   try {
     // Find the meeting before deleting
     const deletedMeeting = meetings.find(m => m.id === meetingId);
@@ -661,7 +716,7 @@ BIG Marketplace Team 🌍`,
     setShowDeleteConfirm(null);
     setShowDetailsModal(null);
     
-    // ==================== DELETE NOTIFICATION ====================
+    // ==================== SEND CANCELLATION EMAIL ====================
     
     if (deletedMeeting) {
       const firstInstance = deletedMeeting.instances?.[0];
@@ -674,7 +729,46 @@ BIG Marketplace Team 🌍`,
           })
         : "TBD";
       const meetingTime = firstInstance?.time || "TBD";
-      const displayName = currentUser.displayName || "User";
+      
+      // ✅ Get user email for the cancellation function
+      let userEmail = null;
+      try {
+        const userDocRef = await getDoc(doc(db, "users", currentUser.uid));
+        if (userDocRef.exists()) {
+          const userData = userDocRef.data();
+          userEmail = userData.email;
+        }
+      } catch (error) {
+        console.error("Error fetching user email:", error);
+      }
+      
+      if (userEmail) {
+        try {
+          const functions = getFunctions();
+          const sendGovernanceMeetingCancellation = httpsCallable(
+            functions, 
+            'sendGovernanceMeetingCancellation'
+          );
+          
+          // ✅ PASS PARTICIPANTS TO THE CANCELLATION FUNCTION
+          await sendGovernanceMeetingCancellation({
+            to: currentUser.uid,
+            meetingTitle: deletedMeeting.title,
+            meetingDate: formattedDate,
+            meetingTime: meetingTime,
+            department: deletedMeeting.department,
+            purpose: deletedMeeting.purpose,
+            isRecurring: deletedMeeting.isRecurring || false,
+            participants: deletedMeeting.participants || []  // ✅ ADD THIS
+          });
+          
+          console.log("✅ Meeting cancellation email sent to organizer and participants");
+        } catch (emailError) {
+          console.error("Failed to send meeting cancellation email:", emailError);
+        }
+      }
+      
+      // ==================== IN-APP NOTIFICATION ====================
       
       // 1. In-app banner notification
       setNotification({ 
@@ -683,7 +777,8 @@ BIG Marketplace Team 🌍`,
       });
       setTimeout(() => setNotification(null), 5000);
       
-      // 2. Save to Firestore messages (ONCE - only inbox)
+      // 2. Save to Firestore messages
+      const displayName = currentUser.displayName || "User";
       await addDoc(collection(db, "messages"), {
         to: currentUser.uid,
         from: "system",
@@ -707,8 +802,6 @@ ${deletedMeeting.purpose}
 • Any previously scheduled reminders have been cancelled
 ${deletedMeeting.isRecurring ? '• All future recurring instances have been removed' : ''}
 
-If you believe this was done in error, please contact your department administrator or reschedule the meeting using the Governance Calendar.
-
 Best regards,
 BIG Marketplace Team 🌍`,
         date: new Date().toISOString(),
@@ -718,51 +811,13 @@ BIG Marketplace Team 🌍`,
         linkTo: "/governance-calendar",
       });
       
-      // ==================== SEND CANCELLATION EMAIL ====================
-      
-      // Get user email
-      let userEmail = null;
-      try {
-        const userDocRef = await getDoc(doc(db, "users", currentUser.uid));
-        if (userDocRef.exists()) {
-          const userData = userDocRef.data();
-          userEmail = userData.email;
-        }
-      } catch (error) {
-        console.error("Error fetching user email:", error);
-      }
-      
-      if (userEmail) {
-        try {
-          const functions = getFunctions();
-          const sendGovernanceMeetingCancellation = httpsCallable(
-            functions, 
-            'sendGovernanceMeetingCancellation'
-          );
-          
-          await sendGovernanceMeetingCancellation({
-            to: currentUser.uid,
-            meetingTitle: deletedMeeting.title,
-            meetingDate: formattedDate,
-            meetingTime: meetingTime,
-            department: deletedMeeting.department,
-            purpose: deletedMeeting.purpose,
-            isRecurring: deletedMeeting.isRecurring || false
-          });
-          
-          console.log("✅ Meeting cancellation email sent to:", userEmail);
-        } catch (emailError) {
-          console.error("Failed to send meeting cancellation email:", emailError);
-        }
-      }
-      
-      // ==================== END CANCELLATION EMAIL ====================
+      // ==================== END NOTIFICATIONS ====================
     }
-    
-    // ==================== END DELETE NOTIFICATION ====================
-    
+   setNotification({ 
+      type: "warning", 
+      message: `❌ "${deletedMeeting.title}" has been cancelled` 
+    });
   } catch (error) {
-    console.error("Error deleting meeting:", error);
     setNotification({ 
       type: "error", 
       message: "Failed to delete meeting. Please try again." 
@@ -875,6 +930,7 @@ BIG Marketplace Team 🌍`,
     maxWidth: "1200px",
     margin: "0 auto",
   };
+  
   
   const keyQuestionStyles = {
     backgroundColor: "#DCDCDC",
@@ -1489,7 +1545,52 @@ BIG Marketplace Team 🌍`,
     cursor: "pointer",
     fontWeight: "500",
   };
+
   
+  // Styles object
+const styles = {
+  container: {
+    backgroundColor: "#fdfcfb",
+    borderRadius: "8px",
+    boxShadow: "0 2px 4px rgba(0,0,0,0.05)",
+    padding: "20px",
+    maxWidth: "1200px",
+    margin: "0 auto",
+  },
+  keyQuestion: {
+    backgroundColor: "#DCDCDC",
+    padding: "15px 20px",
+    borderRadius: "8px",
+    marginBottom: "20px",
+    border: "1px solid #5d4037",
+  },
+  notification: {
+    padding: "12px 20px",
+    borderRadius: "8px",
+    marginBottom: "16px",
+    color: "#4a352f",
+    fontSize: "14px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+  },
+  // ✅ ADD SPIN ANIMATION AS AN OBJECT
+  spin: {
+    animation: 'spin 1s linear infinite',
+  },
+};
+
+// ✅ ADD KEYFRAMES AS A STYLE TAG (only once)
+const SpinKeyframes = () => (
+  <style>{`
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  `}</style>
+);
+
   // If no user is logged in, show login message
   if (!currentUser) {
     return (
@@ -1504,7 +1605,50 @@ BIG Marketplace Team 🌍`,
   
   return (
     <div style={containerStyles}>
-      
+          <SpinKeyframes />
+      {/* Notification Banner */}
+{notification && (
+  <div style={{
+    padding: "12px 20px",
+    borderRadius: "8px",
+    marginBottom: "16px",
+    backgroundColor: notification.type === "success" ? "#E8F5E9" : 
+                     notification.type === "warning" ? "#FFF3E0" : 
+                     notification.type === "error" ? "#FFEBEE" : "#E3F2FD",
+    borderLeft: `4px solid ${
+      notification.type === "success" ? "#4CAF50" : 
+      notification.type === "warning" ? "#FF9800" : 
+      notification.type === "error" ? "#F44336" : "#2196F3"
+    }`,
+    color: "#4a352f",
+    fontSize: "14px",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+    boxShadow: "0 2px 8px rgba(0,0,0,0.08)",
+  }}>
+    <span style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+      {notification.type === "success" && "✅"}
+      {notification.type === "warning" && "⚠️"}
+      {notification.type === "error" && "❌"}
+      {notification.type === "info" && "ℹ️"}
+      {notification.message}
+    </span>
+    <button
+      onClick={() => setNotification(null)}
+      style={{
+        background: "none",
+        border: "none",
+        fontSize: "18px",
+        cursor: "pointer",
+        color: "#8d6e63",
+        padding: "0 4px",
+      }}
+    >
+      ×
+    </button>
+  </div>
+)}
       {/* Header with Page Title and Add Button */}
       <div style={headerRowStyles}>
           <div style={{ 
@@ -1630,10 +1774,14 @@ BIG Marketplace Team 🌍`,
             )}
           </div>
         ) : (
-         selectedMeetings.map((meeting, idx) => {
-  // Check if meeting is in the past
-  const isPastMeeting = new Date(meeting.instances?.[0]?.date) < new Date();
+        selectedMeetings.map((meeting, idx) => {
+  // ✅ Check if there are any future instances
+  const hasFutureInstance = meeting.instances?.some(instance => {
+    return new Date(instance.date) >= new Date();
+  });
   
+  // ✅ Only hide delete if ALL instances are in the past
+  const isPastMeeting = !hasFutureInstance;
   const instance = meeting.instances?.find(inst => {
     const instDate = new Date(inst.date);
     return instDate.toDateString() === selectedDate.toDateString();
@@ -1770,12 +1918,61 @@ BIG Marketplace Team 🌍`,
                 <textarea rows="3" placeholder="What is the goal of this meeting? What decisions need to be made?" value={formData.purpose} onChange={(e) => setFormData({ ...formData, purpose: e.target.value })} style={textareaStyles(errors.purpose)} />
                 {errors.purpose && <div style={errorTextStyles}>{errors.purpose}</div>}
               </div>
-              
-              <div style={formGroupStyles}>
-                <label style={labelStyles}>Participants</label>
-                <input type="text" placeholder="Enter names or emails separated by commas" value={formData.participants} onChange={(e) => setFormData({ ...formData, participants: e.target.value })} style={inputStyles(false)} />
-                <div style={repeatHelpStyles}>e.g., CEO, Board Members, Legal Team, john@company.com</div>
-              </div>
+
+            {/* Participants Section */}
+                  <div style={formGroupStyles}>
+                    <label style={labelStyles}>Participants</label>
+                    
+                    {/* 👇 THIS MAP RENDERS THE INPUT FIELDS */}
+                    {formData.participants && formData.participants.length > 0 ? (
+                      formData.participants.map((participant, index) => (
+                        <div key={index} style={{ display: "flex", gap: "8px", marginBottom: "8px" }}>
+                          <input
+                            type="text"
+                            placeholder="Full Name"
+                            value={participant.name || ""}
+                            onChange={(e) => updateParticipant(index, "name", e.target.value)}
+                            style={{ flex: 1, ...inputStyles(false) }}
+                          />
+                          <input
+                            type="email"
+                            placeholder="Email"
+                            value={participant.email || ""}
+                            onChange={(e) => updateParticipant(index, "email", e.target.value)}
+                            style={{ flex: 1, ...inputStyles(false) }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => removeParticipant(index)}
+                            style={{ padding: "8px 12px", backgroundColor: "#f44336", color: "white", border: "none", borderRadius: "4px", cursor: "pointer" }}
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))
+                    ) : (
+                      <p style={{ color: "#8d6e63", fontSize: "13px", fontStyle: "italic" }}>
+                        No participants added yet. Click "Add Participant" to invite people.
+                      </p>
+                    )}
+                    
+                    <button
+                      type="button"
+                      onClick={addParticipant}
+                      style={{
+                        padding: "8px 16px",
+                        backgroundColor: "#e6d7c3",
+                        color: "#4a352f",
+                        border: "none",
+                        borderRadius: "4px",
+                        cursor: "pointer",
+                        fontSize: "13px",
+                        marginTop: "8px",
+                      }}
+                    >
+                      + Add Participant
+                    </button>
+                  </div>
               
               <div style={formGroupStyles}>
                 <label style={labelStyles}>Repeat Frequency</label>
@@ -1846,12 +2043,15 @@ BIG Marketplace Team 🌍`,
           <div style={detailsValueStyles}>{showDetailsModal.purpose}</div>
         </div>
         
-        <div style={detailsSectionStyles}>
+       <div style={detailsSectionStyles}>
           <div style={detailsLabelStyles}>Participants</div>
           {showDetailsModal.participants && showDetailsModal.participants.length > 0 ? (
             <div style={participantsListStyles}>
               {showDetailsModal.participants.map((participant, idx) => (
-                <span key={idx} style={participantTagStyles}>{participant}</span>
+                <span key={idx} style={participantTagStyles}>
+                  {participant.name || participant.email || "Participant"}
+                  {participant.email && participant.name ? ` (${participant.email})` : ''}
+                </span>
               ))}
             </div>
           ) : (
@@ -2078,6 +2278,45 @@ BIG Marketplace Team 🌍`,
             </div>
           </div>
         )}
+
+        {/* Loading Overlay */}
+          {loading && (
+            <div style={{
+              position: "fixed",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: "rgba(0,0,0,0.5)",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 9999,
+              backdropFilter: "blur(4px)",
+            }}>
+              <div style={{
+                backgroundColor: "white",
+                padding: "32px 40px",
+                borderRadius: "12px",
+                boxShadow: "0 4px 20px rgba(0,0,0,0.15)",
+                textAlign: "center",
+              }}>
+                <div style={{
+                  width: "48px",
+                  height: "48px",
+                  border: "4px solid #f3e5f5",
+                  borderTop: "4px solid #7d5a50",
+                  borderRadius: "50%",
+                  animation: "spin 1s linear infinite",
+                  margin: "0 auto 16px",
+                }} />
+                <p style={{ color: "#4a352f", fontSize: "16px", fontWeight: "500", margin: 0 }}>
+                  {loadingMessage || "Processing..."}
+                </p>
+              </div>
+            </div>
+          )}
     </div>
   );
 

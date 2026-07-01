@@ -21,7 +21,8 @@ function Sidebar({
   userNameField = "contactDetails.contactName",
   onLogout,
   storageKey = "sidebarCollapsed",
-  autoExpandMenus = {}
+  autoExpandMenus = {},
+  enableNested = false  // ← NEW: enables nested submenus (3rd level)
 }) {
   const navigate = useNavigate()
   const location = useLocation()
@@ -53,33 +54,60 @@ function Sidebar({
     }
   }, [isCollapsed, storageKey])
 
-  // Update expanded menus when the route changes.
-  // Merge route-driven expansions with the existing state so
-  // user toggles are preserved instead of being overridden.
   useEffect(() => {
     const currentPath = location.pathname
     const desiredExpansions = {}
 
-    memoizedMenuItems.forEach((item) => {
-      if (item.hasSubmenu && item.subItems) {
-        const shouldExpand = item.subItems.some(
-          (subItem) =>
-            currentPath === subItem.route ||
-            (subItem.route && currentPath.startsWith(subItem.route + "/"))
-        )
-        if (shouldExpand) desiredExpansions[item.id] = true
+    // If nested submenus are enabled, check 3 levels deep
+    if (enableNested) {
+      const findParentIds = (items, parentId = null) => {
+        for (const item of items) {
+          const isActiveRoute = item.route && 
+            (currentPath === item.route || currentPath.startsWith(item.route + "/"))
+          
+          if (isActiveRoute) {
+            if (parentId) desiredExpansions[parentId] = true
+            desiredExpansions[item.id] = true
+            return true
+          }
+          if (item.subItems) {
+            const found = findParentIds(item.subItems, item.id)
+            if (found) {
+              if (parentId) desiredExpansions[parentId] = true
+              desiredExpansions[item.id] = true
+              return true
+            }
+          }
+        }
+        return false
       }
-    })
+
+      memoizedMenuItems.forEach((item) => {
+        if (item.subItems) {
+          findParentIds(item.subItems, item.id)
+        }
+      })
+    } else {
+      // Original flat route matching (2 levels only)
+      memoizedMenuItems.forEach((item) => {
+        if (item.hasSubmenu && item.subItems) {
+          const shouldExpand = item.subItems.some(
+            (subItem) =>
+              currentPath === subItem.route ||
+              (subItem.route && currentPath.startsWith(subItem.route + "/"))
+          )
+          if (shouldExpand) desiredExpansions[item.id] = true
+        }
+      })
+    }
 
     setExpandedMenus((prev) => {
       const merged = { ...prev, ...desiredExpansions }
       if (JSON.stringify(prev) === JSON.stringify(merged)) return prev
       return merged
     })
-  }, [location.pathname, memoizedMenuItems])
+  }, [location.pathname, memoizedMenuItems, enableNested])
 
-  // PERFECT FIX: Only "growth-tools" (My Growth Suite) navigates when clicked
-  // All other items work exactly as before (only toggle submenu)
   const handleItemClick = useCallback((item) => {
     if (item.hasSubmenu) {
       // Toggle submenu expansion (for ALL items with submenu)
@@ -103,14 +131,22 @@ function Sidebar({
 
   const handleSubItemClick = useCallback((subItem, e) => {
     e.stopPropagation()
-    if (subItem.route) {
+    // If nested submenus are enabled and this item has its own submenu, toggle it
+    if (enableNested && subItem.hasSubmenu && subItem.subItems) {
+      setExpandedMenus((prev) => ({
+        ...prev,
+        [subItem.id]: !prev[subItem.id],
+      }))
+      return
+    }
+    if (subItem.route && subItem.route !== "#") {
       navigate(subItem.route)
       // Close sidebar on mobile
       if (window.innerWidth <= 768) {
         setIsCollapsed(true)
       }
     }
-  }, [navigate])
+  }, [navigate, enableNested])
 
   const toggleSidebar = useCallback(() => {
     setIsCollapsed(!isCollapsed)
@@ -137,7 +173,32 @@ function Sidebar({
     return location.pathname === item.route
   }, [location.pathname])
 
-  // Memoize rendered menu items to improve performance
+  // NEW: Function to render third level items (sub-submenu)
+  const renderSubSubItems = useCallback((subItems) => {
+    return subItems.map((subItem) => (
+      <div
+        key={subItem.id}
+        title={subItem.label}
+        className={`${styles.subSubmenuItem} ${
+          location.pathname === subItem.route ? styles.active : ""
+        }`}
+        onClick={(e) => {
+          e.stopPropagation()
+          if (subItem.route && subItem.route !== "#") {
+            navigate(subItem.route)
+            if (window.innerWidth <= 768) {
+              setIsCollapsed(true)
+            }
+          }
+        }}
+      >
+        <div className={styles.subSubmenuIcon}>{subItem.icon}</div>
+        <span className={styles.subSubmenuLabel}>{subItem.label}</span>
+      </div>
+    ))
+  }, [location.pathname, navigate])
+
+  // Memoize rendered menu items
   const renderedMenuItems = useMemo(() => (
     memoizedMenuItems.map((item, index) => (
       <div
@@ -172,27 +233,64 @@ function Sidebar({
           <div className={styles.sidebarTooltip}>{item.label}</div>
         )}
 
-        {/* Submenu */}
+        {/* Submenu - Level 2 */}
         {item.hasSubmenu && expandedMenus[item.id] && !isCollapsed && (
           <div className={styles.submenu}>
-            {item.subItems?.map((subItem) => (
-              <div
-                key={subItem.id}
-                title={subItem.label}
-                className={`${styles.submenuItem} ${
-                  location.pathname === subItem.route ? styles.active : ""
-                }`}
-                onClick={(e) => handleSubItemClick(subItem, e)}
-              >
-                <div className={styles.submenuIcon}>{subItem.icon}</div>
-                <span className={`${styles.submenuLabel} truncate`}>{subItem.label}</span>
-              </div>
-            ))}
+            {item.subItems?.map((subItem) => {
+              // Check if this sub-item has its own submenu (third level)
+              const hasSubSubmenu = enableNested && subItem.hasSubmenu && subItem.subItems
+              const isSubExpanded = expandedMenus[subItem.id] || false
+
+              return (
+                <div key={subItem.id}>
+                  {/* Submenu item - Level 2 */}
+                  <div
+                    title={subItem.label}
+                    className={`${styles.submenuItem} ${
+                      location.pathname === subItem.route ? styles.active : ""
+                    } ${hasSubSubmenu ? styles.hasChildren : ""}`}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      if (hasSubSubmenu) {
+                        // Toggle third level
+                        setExpandedMenus((prev) => ({
+                          ...prev,
+                          [subItem.id]: !prev[subItem.id],
+                        }))
+                      } else if (subItem.route && subItem.route !== "#") {
+                        navigate(subItem.route)
+                        if (window.innerWidth <= 768) {
+                          setIsCollapsed(true)
+                        }
+                      }
+                    }}
+                  >
+                    <div className={styles.submenuIcon}>{subItem.icon}</div>
+                    <span className={styles.submenuLabel}>{subItem.label}</span>
+                    {hasSubSubmenu && (
+                      <ChevronDown
+                        size={14}
+                        className={`${styles.submenuChevron} ${
+                          isSubExpanded ? styles.rotated : ""
+                        }`}
+                      />
+                    )}
+                  </div>
+
+                  {/* Sub-submenu - Level 3 (RAPs children) */}
+                  {hasSubSubmenu && isSubExpanded && (
+                    <div className={styles.subSubmenu}>
+                      {renderSubSubItems(subItem.subItems)}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
           </div>
         )}
       </div>
     ))
-  ), [memoizedMenuItems, isCollapsed, expandedMenus, isMenuItemActive, handleItemClick, handleSubItemClick, location.pathname])
+  ), [memoizedMenuItems, isCollapsed, expandedMenus, isMenuItemActive, handleItemClick, location.pathname, navigate, enableNested, renderSubSubItems])
 
   return (
     <>

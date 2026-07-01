@@ -1,6 +1,6 @@
 "use client"
 import { useEffect, useState } from "react"
-import { HelpCircle, ChevronDown, ChevronUp } from "lucide-react"
+import { HelpCircle, Plus, Trash2 } from "lucide-react"
 import FormField from "./form-field"
 import FileUpload from "./file-upload"
 import './UniversalProfile.css';
@@ -8,7 +8,7 @@ import { db, auth, storage } from "../../firebaseConfig"
 import { doc, getDoc, updateDoc } from "firebase/firestore"
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage"
 
-// Governance Checklist Items (updated with Customer Agreements)
+// Governance Checklist Items (updated with Bribery and Corruption)
 const governanceChecklistItems = [
   {
     category: "Agreements",
@@ -30,6 +30,7 @@ const governanceChecklistItems = [
       { name: "Disciplinary & Grievance Policy", id: "disciplinaryPolicy" },
       { name: "Health & Safety Policy", id: "healthSafetyPolicy" },
       { name: "Privacy & Data Protection Policy", id: "privacyPolicy" },
+      { name: "Bribery and Corruption Policy", id: "briberyCorruptionPolicy" },
     ]
   },
   {
@@ -51,7 +52,7 @@ const governanceChecklistItems = [
 const strategicClarityQuestions = [
   {
     field: "strategicDirection",
-    question: "Q1 – Do you have clearly defined strategic priorities for the next 12–24 months?",
+    question: "Do you have clearly defined strategic priorities for the next 12–24 months?",
     dimension: "Strategic Direction",
     options: [
       { value: "documented_shared", label: "Documented & shared" },
@@ -61,7 +62,7 @@ const strategicClarityQuestions = [
   },
   {
     field: "planningDepth",
-    question: "Q2 – Which of the following do you have? (Business plan, financial model, GTM, ops plan)",
+    question: "Which of the following do you have? (Business plan, financial model, GTM, ops plan)",
     dimension: "Planning Depth",
     options: [
       { value: "3_4_selected", label: "3–4 selected" },
@@ -71,7 +72,7 @@ const strategicClarityQuestions = [
   },
   {
     field: "marketStrategy",
-    question: "Q3 – Do you have a clearly defined target market and value proposition?",
+    question: "Do you have a clearly defined target market and value proposition?",
     dimension: "Market Strategy",
     options: [
       { value: "clearly_defined", label: "Clearly defined & validated" },
@@ -81,7 +82,7 @@ const strategicClarityQuestions = [
   },
   {
     field: "executionRoadmap",
-    question: "Q4 – Do you have a clear roadmap to achieve your strategy?",
+    question: "Do you have a clear roadmap to achieve your strategy?",
     dimension: "Execution Roadmap",
     options: [
       { value: "detailed_roadmap", label: "Detailed roadmap with milestones" },
@@ -91,7 +92,7 @@ const strategicClarityQuestions = [
   },
   {
     field: "decisionMaking",
-    question: "Q5 – How are key strategic decisions made?",
+    question: "How are key strategic decisions made?",
     dimension: "Decision-Making",
     options: [
       { value: "structured_data_driven", label: "Structured & data-driven" },
@@ -101,7 +102,7 @@ const strategicClarityQuestions = [
   },
   {
     field: "adaptability",
-    question: "Q6 – When strategy is not working, how do you respond?",
+    question: "When strategy is not working, how do you respond?",
     dimension: "Adaptability",
     options: [
       { value: "structured_review", label: "Structured review + adjustment" },
@@ -115,7 +116,7 @@ const strategicClarityQuestions = [
 const riskManagementQuestions = [
   {
     field: "riskIdentification",
-    question: "Q1 – Do you formally identify key business risks?",
+    question: "Do you formally identify key business risks?",
     dimension: "Risk Identification",
     options: [
       { value: "documented_risk_register", label: "Documented risk register" },
@@ -125,7 +126,7 @@ const riskManagementQuestions = [
   },
   {
     field: "riskAssessment",
-    question: "Q2 – How do you assess the impact and likelihood of risks?",
+    question: "How do you assess the impact and likelihood of risks?",
     dimension: "Risk Assessment",
     options: [
       { value: "structured_assessment", label: "Structured assessment (scoring/prioritisation)" },
@@ -135,7 +136,7 @@ const riskManagementQuestions = [
   },
   {
     field: "riskMitigation",
-    question: "Q3 – Do you have mitigation plans for key risks?",
+    question: "Do you have mitigation plans for key risks?",
     dimension: "Risk Mitigation",
     options: [
       { value: "defined_mitigation_plans", label: "Defined mitigation plans" },
@@ -145,7 +146,7 @@ const riskManagementQuestions = [
   },
   {
     field: "businessContinuity",
-    question: "Q4 – Do you have a business continuity or contingency plan?",
+    question: "Do you have a business continuity or contingency plan?",
     dimension: "Business Continuity",
     options: [
       { value: "formal_documented_plan", label: "Formal documented plan" },
@@ -155,7 +156,7 @@ const riskManagementQuestions = [
   },
   {
     field: "crisisPreparedness",
-    question: "Q5 – How prepared are you to respond to unexpected disruptions?",
+    question: "How prepared are you to respond to unexpected disruptions?",
     dimension: "Crisis Preparedness",
     options: [
       { value: "clear_response_protocols", label: "Clear response protocols & roles" },
@@ -165,7 +166,7 @@ const riskManagementQuestions = [
   },
   {
     field: "riskOwnership",
-    question: "Q6 – Is risk management assigned to specific roles or leadership?",
+    question: "Is risk management assigned to specific roles or leadership?",
     dimension: "Risk Ownership",
     options: [
       { value: "clear_ownership", label: "Clear ownership & accountability" },
@@ -175,11 +176,11 @@ const riskManagementQuestions = [
   },
 ];
 
-// Transparency & Reporting questions (replacing old multi-selects and textareas)
+// Transparency & Reporting questions
 const transparencyReportingQuestions = [
   {
     field: "reportingFrequency",
-    question: "Q1 – How often do you report to stakeholders?",
+    question: "How often do you report to stakeholders?",
     dimension: "Reporting Frequency",
     options: [
       { value: "monthly", label: "Monthly" },
@@ -189,7 +190,7 @@ const transparencyReportingQuestions = [
   },
   {
     field: "performanceReviewCycle",
-    question: "Q2 – How often is performance formally reviewed internally?",
+    question: "How often is performance formally reviewed internally?",
     dimension: "Performance Review Cycle",
     options: [
       { value: "monthly", label: "Monthly" },
@@ -199,7 +200,7 @@ const transparencyReportingQuestions = [
   },
   {
     field: "kpiMonitoring",
-    question: "Q3 – How structured is your KPI tracking?",
+    question: "How structured is your KPI tracking?",
     dimension: "KPI Monitoring",
     options: [
       { value: "defined_kpis_tracked", label: "Defined KPIs + tracked regularly" },
@@ -209,7 +210,7 @@ const transparencyReportingQuestions = [
   },
   {
     field: "stakeholderCommunication",
-    question: "Q4 – How do you communicate performance?",
+    question: "How do you communicate performance?",
     dimension: "Stakeholder Communication",
     options: [
       { value: "structured_reports", label: "Structured (reports, dashboards, meetings)" },
@@ -219,7 +220,7 @@ const transparencyReportingQuestions = [
   },
   {
     field: "complianceAndRisk",
-    question: "Q5 – Do you have formal compliance & risk processes?",
+    question: "Do you have formal compliance & risk processes?",
     dimension: "Compliance & Risk",
     options: [
       { value: "formal_risk_register_audits", label: "Formal (risk register + audits)" },
@@ -229,7 +230,7 @@ const transparencyReportingQuestions = [
   },
   {
     field: "dataGovernance",
-    question: "Q6 – How is data managed and protected?",
+    question: "How is data managed and protected?",
     dimension: "Data Governance",
     options: [
       { value: "formal_popia_aligned", label: "Formal policies + controls (POPIA aligned)" },
@@ -239,7 +240,7 @@ const transparencyReportingQuestions = [
   },
   {
     field: "auditAndAssurance",
-    question: "Q7 – Do you conduct internal/external audits?",
+    question: "Do you conduct internal/external audits?",
     dimension: "Audit & Assurance",
     options: [
       { value: "regular_internal_external", label: "Regular internal + external audits" },
@@ -249,51 +250,26 @@ const transparencyReportingQuestions = [
   },
 ];
 
-// Tooltip Component
-const Tooltip = ({ children, content, position = "top" }) => {
-  const [isVisible, setIsVisible] = useState(false)
-
-  return (
-    <div
-      className="relative inline-block"
-      onMouseEnter={() => setIsVisible(true)}
-      onMouseLeave={() => setIsVisible(false)}
-    >
-      {children}
-      {isVisible && (
-        <div
-          className={`absolute z-50 px-3 py-2 text-xs text-white bg-brown-900 rounded-lg shadow-lg whitespace-normal max-w-xs ${
-            position === "top"
-              ? "bottom-full left-1/2 -translate-x-1/2 mb-2"
-              : "top-full left-1/2 -translate-x-1/2 mt-2"
-          }`}
-          style={{ width: "max-content", maxWidth: "300px" }}
-        >
-          {content}
-          <div
-            className={`absolute w-2 h-2 bg-brown-900 transform rotate-45 ${
-              position === "top" ? "top-full left-1/2 -translate-x-1/2 -mt-1" : "bottom-full left-1/2 -translate-x-1/2 -mb-1"
-            }`}
-          />
-        </div>
-      )}
-    </div>
-  )
-}
-
 const Governance = ({ data, updateData }) => {
   const [formData, setFormData] = useState({
     governanceChecklist: {},
-    // Conflict Resolution
-    hasConflictResolution: "",
+    // Conflict of Interest
+    membersHaveMultipleBusinesses: "",
+    conflictOfInterest: [],
+    // Ethics Training
     ethicsTrainingFrequency: "",
     lastEthicsTrainingDate: "",
     // Strategic Clarity & Planning
     strategicClarity: {},
     // Risk Management
     riskManagement: {},
-    // Transparency & Reporting (new dropdown-based)
+    // Transparency & Reporting
     transparencyReporting: {},
+    // Risk & Legal
+    adverseListings: "",
+    adverseListingsDetails: "",
+    courtNotices: "",
+    courtNoticesDetails: "",
   })
   const [isLoading, setIsLoading] = useState(true)
 
@@ -316,12 +292,17 @@ const Governance = ({ data, updateData }) => {
             } else {
               const initialData = {
                 governanceChecklist: {},
-                hasConflictResolution: "",
+                membersHaveMultipleBusinesses: "",
+                conflictOfInterest: [],
                 ethicsTrainingFrequency: "",
                 lastEthicsTrainingDate: "",
                 strategicClarity: {},
                 riskManagement: {},
                 transparencyReporting: {},
+                adverseListings: "",
+                adverseListingsDetails: "",
+                courtNotices: "",
+                courtNoticesDetails: "",
               }
               setFormData(initialData)
               updateData("governance", initialData)
@@ -329,12 +310,17 @@ const Governance = ({ data, updateData }) => {
           } else {
             const initialData = {
               governanceChecklist: {},
-              hasConflictResolution: "",
+              membersHaveMultipleBusinesses: "",
+              conflictOfInterest: [],
               ethicsTrainingFrequency: "",
               lastEthicsTrainingDate: "",
               strategicClarity: {},
               riskManagement: {},
               transparencyReporting: {},
+              adverseListings: "",
+              adverseListingsDetails: "",
+              courtNotices: "",
+              courtNoticesDetails: "",
             }
             setFormData(initialData)
             updateData("governance", initialData)
@@ -381,6 +367,39 @@ const Governance = ({ data, updateData }) => {
     }
   }
 
+  // Conflict of Interest handlers
+  const handleAddConflictOfInterest = () => {
+    const newEntry = {
+      id: Date.now(),
+      personName: "",
+      otherPositions: "",
+      companyName: "",
+      businessType: "",
+    }
+    const updated = { 
+      ...formData, 
+      conflictOfInterest: [...(formData.conflictOfInterest || []), newEntry] 
+    }
+    setFormData(updated)
+    updateData("governance", updated)
+  }
+
+  const handleConflictOfInterestChange = (id, field, value) => {
+    const updatedEntries = (formData.conflictOfInterest || []).map(entry => 
+      entry.id === id ? { ...entry, [field]: value } : entry
+    )
+    const updated = { ...formData, conflictOfInterest: updatedEntries }
+    setFormData(updated)
+    updateData("governance", updated)
+  }
+
+  const handleRemoveConflictOfInterest = (id) => {
+    const updatedEntries = (formData.conflictOfInterest || []).filter(entry => entry.id !== id)
+    const updated = { ...formData, conflictOfInterest: updatedEntries }
+    setFormData(updated)
+    updateData("governance", updated)
+  }
+
   // Strategic Clarity handler
   const handleStrategicClarityChange = (field, value) => {
     const updated = { ...formData, strategicClarity: { ...(formData.strategicClarity || {}), [field]: value } }
@@ -422,25 +441,22 @@ const Governance = ({ data, updateData }) => {
     )
   }
 
-  // Generic section renderer for dropdown-based question sets
+  // Generic section renderer for dropdown-based question sets - 3 per row
   const renderQuestionSection = (title, subtitle, questions, dataObject, changeHandler) => (
     <div className="mb-8">
       <h3 className="text-xl font-semibold text-brown-700 mt-6 mb-2 border-b border-brown-200 pb-2">{title}</h3>
-      {subtitle && <p className="text-xs text-brown-500 mb-4">{subtitle}</p>}
-      <div className="bg-white border border-brown-200 rounded-lg overflow-hidden">
-        {questions.map((item, i) => (
-          <div
-            key={item.field}
-            className={`px-6 py-5 ${i < questions.length - 1 ? "border-b border-brown-100" : ""} ${i % 2 === 0 ? "bg-white" : "bg-brown-50"}`}
-          >
-            <label className="block text-sm font-semibold text-brown-700 mb-1">{item.question}</label>
+      {subtitle && <p className="text-sm text-brown-500 mb-4">{subtitle}</p>}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {questions.map((item) => (
+          <div key={item.field} className="bg-white border border-brown-200 rounded-lg p-4">
+            <label className="block text-sm font-medium text-brown-700 mb-1">{item.question}</label>
             <span className="text-xs text-brown-400 mb-2 block">{item.dimension}</span>
             <select
               value={(dataObject || {})[item.field] || ""}
               onChange={(e) => changeHandler(item.field, e.target.value)}
-              className="w-full max-w-xl px-3 py-2 border border-brown-300 rounded-md text-sm text-brown-800 focus:outline-none focus:ring-2 focus:ring-brown-500 bg-white"
+              className="w-full px-3 py-2 border border-brown-300 rounded-md text-sm text-brown-800 focus:outline-none focus:ring-2 focus:ring-brown-500 bg-white"
             >
-              <option value="">— Select an answer —</option>
+              <option value="">Select</option>
               {item.options.map((opt) => (
                 <option key={opt.value} value={opt.value}>{opt.label}</option>
               ))}
@@ -510,32 +526,123 @@ const Governance = ({ data, updateData }) => {
         </div>
       </div>
 
-      {/* Conflict Resolution Section */}
+      {/* Conflict of Interest Section */}
       <div className="mb-8">
         <h3 className="text-xl font-semibold text-brown-700 mt-6 mb-6 border-b border-brown-200 pb-2">
-          Conflict Resolution
+          Conflict of Interest
         </h3>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="space-y-6">
-            <div>
-              <FormField label="Do you have conflict resolution procedures?" required>
-                <select
-                  name="hasConflictResolution"
-                  value={formData.hasConflictResolution || ""}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
-                  required
-                >
-                  <option value="">Select</option>
-                  <option value="Yes">Yes</option>
-                  <option value="No">No</option>
-                </select>
-              </FormField>
-            </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <FormField label="Do your members have more than one business?" required>
+              <select
+                name="membersHaveMultipleBusinesses"
+                value={formData.membersHaveMultipleBusinesses || ""}
+                onChange={(e) => {
+                  handleChange(e)
+                  if (e.target.value === "No") {
+                    const updated = { ...formData, conflictOfInterest: [] }
+                    setFormData(updated)
+                    updateData("governance", updated)
+                  }
+                }}
+                className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
+                required
+              >
+                <option value="">Select</option>
+                <option value="Yes">Yes</option>
+                <option value="No">No</option>
+              </select>
+            </FormField>
           </div>
+        </div>
 
-          <div className="space-y-6">
+        {formData.membersHaveMultipleBusinesses === "Yes" && (
+          <div className="mt-4">
+            <div className="flex items-center justify-between mb-4">
+              <h4 className="text-md font-medium text-brown-700">Members' Other Business Interests</h4>
+              <button
+                type="button"
+                onClick={handleAddConflictOfInterest}
+                className="flex items-center gap-2 px-4 py-2 bg-brown-600 text-white rounded-md hover:bg-brown-700 transition-colors"
+              >
+                <Plus className="w-4 h-4" />
+                Add Member
+              </button>
+            </div>
+
+            {(formData.conflictOfInterest || []).length === 0 && (
+              <p className="text-sm text-brown-500 italic">No members added yet. Click "Add Member" to add.</p>
+            )}
+
+            {(formData.conflictOfInterest || []).map((entry, index) => (
+              <div key={entry.id} className="bg-white border border-brown-200 rounded-lg p-4 mb-4">
+                <div className="flex items-center justify-between mb-3">
+                  <h5 className="font-medium text-brown-700">Member #{index + 1}</h5>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveConflictOfInterest(entry.id)}
+                    className="text-red-500 hover:text-red-700 transition-colors"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-brown-700 mb-1">Person Name</label>
+                    <input
+                      type="text"
+                      value={entry.personName || ""}
+                      onChange={(e) => handleConflictOfInterestChange(entry.id, "personName", e.target.value)}
+                      className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
+                      placeholder="Full name"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-brown-700 mb-1">Other Positions Held</label>
+                    <input
+                      type="text"
+                      value={entry.otherPositions || ""}
+                      onChange={(e) => handleConflictOfInterestChange(entry.id, "otherPositions", e.target.value)}
+                      className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
+                      placeholder="e.g., Director, Shareholder"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-brown-700 mb-1">Company Name</label>
+                    <input
+                      type="text"
+                      value={entry.companyName || ""}
+                      onChange={(e) => handleConflictOfInterestChange(entry.id, "companyName", e.target.value)}
+                      className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
+                      placeholder="Company name"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-brown-700 mb-1">Business Type</label>
+                    <input
+                      type="text"
+                      value={entry.businessType || ""}
+                      onChange={(e) => handleConflictOfInterestChange(entry.id, "businessType", e.target.value)}
+                      className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
+                      placeholder="e.g., Consulting, Manufacturing"
+                    />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Ethics Training Section */}
+      <div className="mb-8">
+        <h3 className="text-xl font-semibold text-brown-700 mt-6 mb-6 border-b border-brown-200 pb-2">
+          Ethics Training
+        </h3>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
             <FormField label="Ethics training frequency">
               <select
                 name="ethicsTrainingFrequency"
@@ -553,7 +660,9 @@ const Governance = ({ data, updateData }) => {
                 <option value="None">None</option>
               </select>
             </FormField>
+          </div>
 
+          <div>
             <FormField label="Last ethics training date">
               <input
                 type="date"
@@ -570,7 +679,7 @@ const Governance = ({ data, updateData }) => {
       {/* Strategic Clarity & Planning Section */}
       {renderQuestionSection(
         "Strategic Clarity & Planning",
-        "Help us understand how strategically your business is planned and directed.",
+        "",
         strategicClarityQuestions,
         formData.strategicClarity,
         handleStrategicClarityChange
@@ -579,20 +688,97 @@ const Governance = ({ data, updateData }) => {
       {/* Risk Management Section */}
       {renderQuestionSection(
         "Risk Management",
-        "Assess how your business identifies, evaluates, and manages risk.",
+        "",
         riskManagementQuestions,
         formData.riskManagement,
         handleRiskManagementChange
       )}
 
-      {/* Transparency & Reporting Section (new dropdown-based) */}
+      {/* Transparency & Reporting Section */}
       {renderQuestionSection(
         "Transparency & Reporting",
-        "Evaluate how your business reports, monitors performance, and manages compliance.",
+        "",
         transparencyReportingQuestions,
         formData.transparencyReporting,
         handleTransparencyChange
       )}
+
+      {/* Risk & Legal Section */}
+      <div className="mb-8">
+        <h3 className="text-xl font-semibold text-brown-700 mt-6 mb-6 border-b border-brown-200 pb-2">
+          Risk & Legal
+        </h3>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <FormField label="Are there any adverse listings against the business or its members?">
+              <select
+                name="adverseListings"
+                value={formData.adverseListings || ""}
+                onChange={(e) => {
+                  handleChange(e)
+                  if (e.target.value === "No") {
+                    const updated = { ...formData, adverseListingsDetails: "" }
+                    setFormData(updated)
+                    updateData("governance", updated)
+                  }
+                }}
+                className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
+              >
+                <option value="">Select</option>
+                <option value="Yes">Yes</option>
+                <option value="No">No</option>
+              </select>
+            </FormField>
+            {formData.adverseListings === "Yes" && (
+              <div className="mt-2">
+                <textarea
+                  name="adverseListingsDetails"
+                  value={formData.adverseListingsDetails || ""}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
+                  placeholder="Please provide details of any adverse listings"
+                  rows={3}
+                ></textarea>
+              </div>
+            )}
+          </div>
+
+          <div>
+            <FormField label="Are there any court notices or legal proceedings against the business?">
+              <select
+                name="courtNotices"
+                value={formData.courtNotices || ""}
+                onChange={(e) => {
+                  handleChange(e)
+                  if (e.target.value === "No") {
+                    const updated = { ...formData, courtNoticesDetails: "" }
+                    setFormData(updated)
+                    updateData("governance", updated)
+                  }
+                }}
+                className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
+              >
+                <option value="">Select</option>
+                <option value="Yes">Yes</option>
+                <option value="No">No</option>
+              </select>
+            </FormField>
+            {formData.courtNotices === "Yes" && (
+              <div className="mt-2">
+                <textarea
+                  name="courtNoticesDetails"
+                  value={formData.courtNoticesDetails || ""}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
+                  placeholder="Please provide details of any court notices or legal proceedings"
+                  rows={3}
+                ></textarea>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
 
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mt-6">
         <h4 className="font-semibold text-blue-800 mb-2 flex items-center gap-2">

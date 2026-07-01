@@ -249,7 +249,14 @@ export default function ProductsServices({ data = {}, updateData }) {
   // Clients
   const addClient = () => {
     const keyClients = data.keyClients || []
-    updateData({ keyClients: [...keyClients, { name: "", industries: [], revenuePercentage: "", revenueGrowthPotential: "" }] })
+    updateData({ keyClients: [...keyClients, { 
+      name: "", 
+      clientType: "",
+      contactNumber: "",
+      industries: [], 
+      revenuePercentage: "", 
+      revenueGrowthPotential: "" 
+    }] })
   }
   const updateClient = (index, field, value) => {
     const keyClients = [...(data.keyClients || [])]
@@ -423,67 +430,73 @@ export default function ProductsServices({ data = {}, updateData }) {
         )}
       </div>
 
-      {/* Section 2 */}
+      {/* Section 2 - Delivery Standards - Side by Side */}
       <div className="mb-8 p-6 bg-brown-50 rounded-lg border-2 border-brown-200">
         <h3 className="text-xl font-semibold text-brown-800 mb-4">Section 2: Delivery Standards</h3>
 
-        <FormField label="Preferred Delivery Mode" required>
-          <div className="checkbox-group">
-            {deliveryModes.map(mode => (
-              <label key={mode} className="checkbox-item">
-                <input type="checkbox" checked={(data.deliveryModes || []).includes(mode)} onChange={() => handleCheckboxChange('deliveryModes', mode)} />
-                {mode}
-              </label>
-            ))}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+          <div>
+            <FormField label="Preferred Delivery Mode" required>
+              <div className="checkbox-group">
+                {deliveryModes.map(mode => (
+                  <label key={mode} className="checkbox-item">
+                    <input type="checkbox" checked={(data.deliveryModes || []).includes(mode)} onChange={() => handleCheckboxChange('deliveryModes', mode)} />
+                    {mode}
+                  </label>
+                ))}
+              </div>
+            </FormField>
           </div>
-        </FormField>
 
-        <FormField label="Lead Time (from contract award to start)" required>
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-brown-700 mb-1">Minimum Time</label>
-                <div className="flex">
-                  <input type="number" name="minLeadTime" value={data.minLeadTime || ""} onChange={handleChange} placeholder="e.g., 2" min="0" className="w-full px-3 py-2 border border-brown-300 rounded-l-md focus:outline-none focus:ring-2 focus:ring-brown-500" />
-                  <select name="minLeadTimeUnit" value={data.minLeadTimeUnit || "days"} onChange={handleChange} className="px-3 py-2 border border-brown-300 border-l-0 rounded-r-md focus:outline-none focus:ring-2 focus:ring-brown-500 bg-white">
-                    <option value="hours">Hours</option>
-                    <option value="days">Days</option>
-                    <option value="weeks">Weeks</option>
-                    <option value="months">Months</option>
-                  </select>
+          <div>
+            <FormField label="Lead Time (from contract award to start)" required>
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-brown-700 mb-1">Minimum Time</label>
+                    <div className="flex">
+                      <input type="number" name="minLeadTime" value={data.minLeadTime || ""} onChange={handleChange} placeholder="e.g., 2" min="0" className="w-full px-3 py-2 border border-brown-300 rounded-l-md focus:outline-none focus:ring-2 focus:ring-brown-500" />
+                      <select name="minLeadTimeUnit" value={data.minLeadTimeUnit || "days"} onChange={handleChange} className="px-3 py-2 border border-brown-300 border-l-0 rounded-r-md focus:outline-none focus:ring-2 focus:ring-brown-500 bg-white">
+                        <option value="hours">Hours</option>
+                        <option value="days">Days</option>
+                        <option value="weeks">Weeks</option>
+                        <option value="months">Months</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-brown-700 mb-1">Maximum Time</label>
+                    <div className="flex">
+                      <input type="number" name="maxLeadTime" value={data.maxLeadTime || ""} onChange={handleChange} placeholder="e.g., 5" min="0" className="w-full px-3 py-2 border border-brown-300 rounded-l-md focus:outline-none focus:ring-2 focus:ring-brown-500" />
+                      <select name="maxLeadTimeUnit" value={data.maxLeadTimeUnit || "days"} onChange={handleChange} className="px-3 py-2 border border-brown-300 border-l-0 rounded-r-md focus:outline-none focus:ring-2 focus:ring-brown-500 bg-white">
+                        <option value="hours">Hours</option>
+                        <option value="days">Days</option>
+                        <option value="weeks">Weeks</option>
+                        <option value="months">Months</option>
+                      </select>
+                    </div>
+                  </div>
                 </div>
+                {(data.minLeadTime || data.maxLeadTime) && (
+                  <div className="bg-blue-50 p-3 rounded-md">
+                    <p className="text-sm text-blue-700">
+                      <strong>Delivery timeframe:</strong> {
+                        data.minLeadTime && data.maxLeadTime
+                          ? `${data.minLeadTime} ${data.minLeadTimeUnit} - ${data.maxLeadTime} ${data.maxLeadTimeUnit}`
+                          : data.minLeadTime
+                            ? `Minimum ${data.minLeadTime} ${data.minLeadTimeUnit}`
+                            : `Maximum ${data.maxLeadTime} ${data.maxLeadTimeUnit}`
+                      }
+                    </p>
+                  </div>
+                )}
               </div>
-              <div>
-                <label className="block text-sm font-medium text-brown-700 mb-1">Maximum Time</label>
-                <div className="flex">
-                  <input type="number" name="maxLeadTime" value={data.maxLeadTime || ""} onChange={handleChange} placeholder="e.g., 5" min="0" className="w-full px-3 py-2 border border-brown-300 rounded-l-md focus:outline-none focus:ring-2 focus:ring-brown-500" />
-                  <select name="maxLeadTimeUnit" value={data.maxLeadTimeUnit || "days"} onChange={handleChange} className="px-3 py-2 border border-brown-300 border-l-0 rounded-r-md focus:outline-none focus:ring-2 focus:ring-brown-500 bg-white">
-                    <option value="hours">Hours</option>
-                    <option value="days">Days</option>
-                    <option value="weeks">Weeks</option>
-                    <option value="months">Months</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-            {(data.minLeadTime || data.maxLeadTime) && (
-              <div className="bg-blue-50 p-3 rounded-md">
-                <p className="text-sm text-blue-700">
-                  <strong>Delivery timeframe:</strong> {
-                    data.minLeadTime && data.maxLeadTime
-                      ? `${data.minLeadTime} ${data.minLeadTimeUnit} - ${data.maxLeadTime} ${data.maxLeadTimeUnit}`
-                      : data.minLeadTime
-                        ? `Minimum ${data.minLeadTime} ${data.minLeadTimeUnit}`
-                        : `Maximum ${data.maxLeadTime} ${data.maxLeadTimeUnit}`
-                  }
-                </p>
-              </div>
-            )}
+            </FormField>
           </div>
-        </FormField>
+        </div>
       </div>
 
-      {/* Section 3 */}
+      {/* Section 3 - Target Market - Full Width */}
       <div className="mb-8 p-6 bg-brown-50 rounded-lg border-2 border-brown-200">
         <h3 className="text-xl font-semibold text-brown-800 mb-4">Section 3: Target Market</h3>
         <FormField label="Target Market" required>
@@ -499,7 +512,7 @@ export default function ProductsServices({ data = {}, updateData }) {
         </FormField>
       </div>
 
-      {/* Section 4: Key Clients */}
+      {/* Section 4: Key Clients - Side by Side where possible */}
       <div className="mb-8 p-6 bg-brown-50 rounded-lg border-2 border-brown-200">
         <h3 className="text-xl font-semibold text-brown-800 mb-1">Section 4: Key Clients / Customers</h3>
         <p className="text-sm text-brown-500 mb-4">Optional — list your current notable clients and their revenue contribution.</p>
@@ -513,7 +526,7 @@ export default function ProductsServices({ data = {}, updateData }) {
               gap: '8px',
               padding: '8px 14px',
               borderRadius: '6px',
-              marginBottom: '-26px',
+              marginBottom: '16px',
               fontSize: '13px',
               fontWeight: '600',
               backgroundColor: revenueOver100 ? '#fff1f0' : totalRevenuePercent === 100 ? '#f0faf0' : '#fdf6ee',
@@ -532,19 +545,18 @@ export default function ProductsServices({ data = {}, updateData }) {
         )}
 
         <div className="flex justify-end mb-4">
-      <button
-  type="button"
-  onClick={addClient}
-  className="flex items-center gap-2 px-4 py-2 bg-stone-600 text-white rounded-md hover:bg-stone-700 transition-colors"
->
-  <Plus className="w-4 h-4" /> Add Client
-</button>
+          <button
+            type="button"
+            onClick={addClient}
+            className="flex items-center gap-2 px-4 py-2 bg-brown-600 text-white rounded-md hover:bg-brown-700 transition-colors"
+          >
+            <Plus className="w-4 h-4" /> Add Client
+          </button>
         </div>
 
         <div className="space-y-4">
           {(data.keyClients || []).map((client, index) => (
             <div key={index} className="p-4 bg-white rounded-md border border-brown-200">
-
               {/* Client header */}
               <div className="flex justify-between items-center mb-4">
                 <h4 className="text-sm font-semibold text-brown-700">Client {index + 1}</h4>
@@ -553,8 +565,7 @@ export default function ProductsServices({ data = {}, updateData }) {
                 </button>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px' }}>
                 {/* Client name */}
                 <div>
                   <label className="block text-sm font-medium text-brown-700 mb-1">Client / Customer Name</label>
@@ -563,6 +574,35 @@ export default function ProductsServices({ data = {}, updateData }) {
                     value={client.name || ""}
                     onChange={(e) => updateClient(index, "name", e.target.value)}
                     placeholder="e.g., ABC Corporation"
+                    className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
+                  />
+                </div>
+
+                {/* Client Type */}
+                <div>
+                  <label className="block text-sm font-medium text-brown-700 mb-1">Client Type</label>
+                  <select
+                    value={client.clientType || ""}
+                    onChange={(e) => updateClient(index, "clientType", e.target.value)}
+                    className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500 bg-white"
+                  >
+                    <option value="">Select type</option>
+                    <option value="Government">Government</option>
+                    <option value="Private">Private</option>
+                    <option value="NGO / Non-Profit">NGO / Non-Profit</option>
+                    <option value="International Organisation">International Organisation</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+
+                {/* Contact Number */}
+                <div>
+                  <label className="block text-sm font-medium text-brown-700 mb-1">Contact Number</label>
+                  <input
+                    type="text"
+                    value={client.contactNumber || ""}
+                    onChange={(e) => updateClient(index, "contactNumber", e.target.value)}
+                    placeholder="e.g., +27 82 123 4567"
                     className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
                   />
                 </div>
@@ -589,7 +629,7 @@ export default function ProductsServices({ data = {}, updateData }) {
                   </div>
                 </div>
 
-                {/* Industry */}
+                {/* Industry - Full Width */}
                 <div style={{ gridColumn: '1 / -1' }}>
                   <label className="block text-sm font-medium text-brown-700 mb-1">Industry (select all that apply)</label>
                   <MultiSelect
@@ -627,7 +667,6 @@ export default function ProductsServices({ data = {}, updateData }) {
                     />
                   </div>
                 )}
-
               </div>
             </div>
           ))}
