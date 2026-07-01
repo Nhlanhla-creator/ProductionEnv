@@ -1,6 +1,6 @@
 "use client"
+import React, { useState } from 'react'
 import { Plus, Trash2, Eye, EyeOff, ChevronDown, ChevronUp } from 'lucide-react'
-import { useState } from 'react'
 import FormField from "./form-field"
 import './UniversalProfile.css';
 import {deliveryModes} from '../ProductApplication/applicationOptions'
@@ -47,7 +47,7 @@ const categoryOptions = [
 
 const industryOptions = categoryOptions
 
-// MultiSelect component with Ownership Management colors
+// MultiSelect component
 function MultiSelect({ options, selected, onChange, label, placeholder }) {
   const [isOpen, setIsOpen] = useState(false)
 
@@ -68,12 +68,12 @@ function MultiSelect({ options, selected, onChange, label, placeholder }) {
         style={{
           border: '1px solid #d6c4a8',
           borderRadius: '4px',
-          padding: '8px 12px',
+          padding: '6px 10px',
           cursor: 'pointer',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          minHeight: '40px',
+          minHeight: '36px',
           backgroundColor: 'white',
           transition: 'border-color 0.2s'
         }}
@@ -81,15 +81,15 @@ function MultiSelect({ options, selected, onChange, label, placeholder }) {
         onMouseLeave={(e) => e.currentTarget.style.borderColor = '#d6c4a8'}
       >
         {selected.length > 0 ? (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px' }}>
             {selected.map((cat) => (
               <span
                 key={cat}
                 style={{ 
                   backgroundColor: '#f0e8d8', 
-                  padding: '2px 10px', 
-                  borderRadius: '12px', 
-                  fontSize: '12px',
+                  padding: '1px 8px', 
+                  borderRadius: '10px', 
+                  fontSize: '10px',
                   color: '#5c3a1e',
                   fontWeight: '500'
                 }}
@@ -99,9 +99,9 @@ function MultiSelect({ options, selected, onChange, label, placeholder }) {
             ))}
           </div>
         ) : (
-          <span style={{ color: '#999', fontSize: '12px' }}>{placeholder || `Select ${label}`}</span>
+          <span style={{ color: '#999', fontSize: '11px' }}>{placeholder || `Select ${label}`}</span>
         )}
-        {isOpen ? <ChevronUp size={16} color="#5c3a1e" /> : <ChevronDown size={16} color="#5c3a1e" />}
+        {isOpen ? <ChevronUp size={14} color="#5c3a1e" /> : <ChevronDown size={14} color="#5c3a1e" />}
       </div>
 
       {isOpen && (
@@ -115,7 +115,7 @@ function MultiSelect({ options, selected, onChange, label, placeholder }) {
           borderRadius: '4px',
           marginTop: '4px', 
           zIndex: 1000, 
-          maxHeight: '300px', 
+          maxHeight: '280px', 
           overflow: 'auto',
           boxShadow: '0 8px 24px rgba(0,0,0,0.15)'
         }}>
@@ -125,14 +125,14 @@ function MultiSelect({ options, selected, onChange, label, placeholder }) {
                 key={option.value}
                 onClick={() => handleSelect(option.value)}
                 style={{
-                  padding: '8px 12px', 
+                  padding: '6px 10px', 
                   cursor: 'pointer',
                   backgroundColor: selected.includes(option.value) ? '#fdf6ed' : 'white',
                   display: 'flex', 
                   alignItems: 'center', 
                   gap: '8px',
                   borderBottom: '1px solid #f5f0e8',
-                  fontSize: '12px'
+                  fontSize: '11px'
                 }}
                 onMouseEnter={(e) => {
                   if (!selected.includes(option.value)) {
@@ -151,7 +151,9 @@ function MultiSelect({ options, selected, onChange, label, placeholder }) {
                   onChange={() => {}} 
                   style={{ 
                     cursor: 'pointer',
-                    accentColor: '#8B4513'
+                    accentColor: '#8B4513',
+                    width: '14px',
+                    height: '14px'
                   }} 
                 />
                 <span style={{ color: '#3d2b1f' }}>{option.label}</span>
@@ -159,7 +161,7 @@ function MultiSelect({ options, selected, onChange, label, placeholder }) {
             ))}
           </div>
           <div style={{ 
-            padding: '8px', 
+            padding: '6px', 
             borderTop: '1px solid #d6c4a8',
             backgroundColor: '#fdfaf5'
           }}>
@@ -168,14 +170,14 @@ function MultiSelect({ options, selected, onChange, label, placeholder }) {
               onClick={closeDropdown} 
               style={{
                 width: '100%', 
-                padding: '8px',
+                padding: '6px',
                 backgroundColor: '#8B4513',
                 color: 'white', 
                 border: 'none', 
                 borderRadius: '4px', 
                 cursor: 'pointer',
                 fontWeight: '600',
-                fontSize: '12px',
+                fontSize: '11px',
                 transition: 'background-color 0.2s'
               }}
               onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#5c3a1e'}
@@ -190,17 +192,17 @@ function MultiSelect({ options, selected, onChange, label, placeholder }) {
   )
 }
 
-// Yes/No dropdown instead of radio buttons
+// Yes/No dropdown
 const YesNoDropdown = ({ value, onChange }) => (
   <select
     value={value || ""}
     onChange={(e) => onChange(e.target.value)}
     style={{
       width: '100%',
-      padding: '8px 12px',
+      padding: '6px 10px',
       border: '1px solid #d6c4a8',
       borderRadius: '4px',
-      fontSize: '12px',
+      fontSize: '11px',
       backgroundColor: 'white',
       outline: 'none',
       transition: 'border-color 0.2s',
@@ -215,7 +217,7 @@ const YesNoDropdown = ({ value, onChange }) => (
   </select>
 )
 
-// Section wrapper component with Ownership Management colors
+// Section wrapper component
 const Section = ({ title, description, children }) => (
   <div style={{
     marginBottom: '24px',
@@ -294,171 +296,17 @@ const SectionHeader = ({ title, onAdd, addLabel }) => (
   </div>
 )
 
-// Category card component
-const CategoryCard = ({ children, onRemove, title }) => (
-  <div style={{
-    marginBottom: '12px',
-    padding: '16px',
-    backgroundColor: 'white',
-    borderRadius: '6px',
-    border: '1px solid #e0d5c0',
-    boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
-  }}>
-    <div style={{
-      display: 'flex',
-      justifyContent: 'space-between',
-      alignItems: 'flex-start',
-      marginBottom: '12px'
-    }}>
-      {title && (
-        <span style={{
-          fontSize: '12px',
-          fontWeight: '600',
-          color: '#5c3a1e'
-        }}>
-          {title}
-        </span>
-      )}
-      <button
-        type="button"
-        onClick={onRemove}
-        style={{
-          padding: '4px',
-          color: '#dc2626',
-          background: 'none',
-          border: 'none',
-          cursor: 'pointer',
-          borderRadius: '4px',
-          transition: 'background-color 0.2s'
-        }}
-        onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#fee2e2'}
-        onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-      >
-        <Trash2 size={16} />
-      </button>
-    </div>
-    {children}
-  </div>
-)
-
-// Product/Service item component
-const ItemCard = ({ children, onRemove }) => (
-  <div style={{
-    display: 'flex',
-    gap: '8px',
-    alignItems: 'flex-start',
-    padding: '12px',
-    backgroundColor: '#fdfaf5',
-    borderRadius: '4px',
-    border: '1px solid #f0e8d8',
-    marginBottom: '8px'
-  }}>
-    <div style={{ flex: 1 }}>
-      {children}
-    </div>
-    <button
-      type="button"
-      onClick={onRemove}
-      style={{
-        padding: '4px',
-        color: '#dc2626',
-        background: 'none',
-        border: 'none',
-        cursor: 'pointer',
-        borderRadius: '4px',
-        transition: 'background-color 0.2s',
-        flexShrink: 0
-      }}
-      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#fee2e2'}
-      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
-    >
-      <Trash2 size={14} />
-    </button>
-  </div>
-)
-
-// Input with label component
-const Input = ({ label, ...props }) => (
-  <div style={{ marginBottom: '8px' }}>
-    {label && (
-      <label style={{
-        display: 'block',
-        fontSize: '11px',
-        fontWeight: '600',
-        color: '#5c3a1e',
-        marginBottom: '3px'
-      }}>
-        {label}
-      </label>
-    )}
-    <input
-      {...props}
-      style={{
-        width: '100%',
-        padding: '8px 10px',
-        border: '1px solid #d6c4a8',
-        borderRadius: '4px',
-        fontSize: '12px',
-        transition: 'border-color 0.2s, box-shadow 0.2s',
-        outline: 'none',
-        color: '#3d2b1f',
-        ...props.style
-      }}
-      onFocus={(e) => {
-        e.currentTarget.style.borderColor = '#8B4513'
-        e.currentTarget.style.boxShadow = '0 0 0 2px rgba(139,69,19,0.1)'
-        if (props.onFocus) props.onFocus(e)
-      }}
-      onBlur={(e) => {
-        e.currentTarget.style.borderColor = '#d6c4a8'
-        e.currentTarget.style.boxShadow = 'none'
-        if (props.onBlur) props.onBlur(e)
-      }}
-    />
-  </div>
-)
-
-const TextArea = ({ label, ...props }) => (
-  <div style={{ marginBottom: '8px' }}>
-    {label && (
-      <label style={{
-        display: 'block',
-        fontSize: '11px',
-        fontWeight: '600',
-        color: '#5c3a1e',
-        marginBottom: '3px'
-      }}>
-        {label}
-      </label>
-    )}
-    <textarea
-      {...props}
-      style={{
-        width: '100%',
-        padding: '8px 10px',
-        border: '1px solid #d6c4a8',
-        borderRadius: '4px',
-        fontSize: '12px',
-        transition: 'border-color 0.2s, box-shadow 0.2s',
-        outline: 'none',
-        resize: 'vertical',
-        fontFamily: 'inherit',
-        color: '#3d2b1f',
-        ...props.style
-      }}
-      onFocus={(e) => {
-        e.currentTarget.style.borderColor = '#8B4513'
-        e.currentTarget.style.boxShadow = '0 0 0 2px rgba(139,69,19,0.1)'
-        if (props.onFocus) props.onFocus(e)
-      }}
-      onBlur={(e) => {
-        e.currentTarget.style.borderColor = '#d6c4a8'
-        e.currentTarget.style.boxShadow = 'none'
-        if (props.onBlur) props.onBlur(e)
-      }}
-    />
-  </div>
-)
+// Table header style
+const thStyle = {
+  padding: '8px 10px',
+  textAlign: 'left',
+  color: '#ffffff',
+  fontWeight: '600',
+  fontSize: '10px',
+  borderBottom: '2px solid #3d2b1f',
+  backgroundColor: '#5c3a1e',
+  whiteSpace: 'nowrap'
+}
 
 // Main component
 export default function ProductsServices({ data = {}, updateData }) {
@@ -581,6 +429,12 @@ export default function ProductsServices({ data = {}, updateData }) {
   const showProducts = data.offeringType === 'products' || data.offeringType === 'both'
   const showServices = data.offeringType === 'services' || data.offeringType === 'both'
 
+  // Helper to get category labels
+  const getCategoryLabels = (categories) => {
+    if (!categories || categories.length === 0) return 'No categories'
+    return categories.map(cat => categoryOptions.find(o => o.value === cat)?.label || cat).join(', ')
+  }
+
   return (
     <div>
       {/* Header */}
@@ -702,261 +556,383 @@ export default function ProductsServices({ data = {}, updateData }) {
           </div>
         </FormField>
 
-        {/* Products & Services side by side */}
-        {(showProducts || showServices) && (
-          <div style={{ 
-            display: 'grid', 
-            gridTemplateColumns: showProducts && showServices ? '1fr 1fr' : '1fr', 
-            gap: '20px',
-            marginTop: '20px'
-          }}>
-            {/* Products */}
-            {showProducts && (
-              <div>
-                <SectionHeader 
-                  title="Product Categories" 
-                  onAdd={addProductCategory} 
-                  addLabel="Add Category" 
-                />
-                {(data.productCategories || []).map((category, categoryIndex) => (
-                  <CategoryCard
-                    key={categoryIndex}
-                    onRemove={() => removeProductCategory(categoryIndex)}
-                  >
-                    <div style={{ marginBottom: '12px' }}>
-                      <label style={{
-                        display: 'block',
-                        fontSize: '11px',
-                        fontWeight: '600',
-                        color: '#5c3a1e',
-                        marginBottom: '4px'
-                      }}>
-                        Category Name(s) *
-                      </label>
-                      <MultiSelect 
-                        options={categoryOptions} 
-                        selected={category.categories || []} 
-                        onChange={(value) => updateProductCategory(categoryIndex, "categories", value)} 
-                        label="categories"
-                        placeholder="Select product categories..."
-                      />
-                    </div>
-
-                    <div>
-                      <div style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        marginBottom: '8px'
-                      }}>
-                        <span style={{
-                          fontSize: '11px',
+        {/* Products Table - Simple flat table */}
+        {showProducts && (
+          <div style={{ marginTop: '20px' }}>
+            <SectionHeader 
+              title="Products" 
+              onAdd={addProductCategory} 
+              addLabel="Add Category" 
+            />
+            <div className="overflow-x-auto">
+              <table className="min-w-full bg-white border border-brown-200 rounded-lg" style={{ borderCollapse: 'collapse', width: '100%' }}>
+                <thead>
+                  <tr>
+                    <th style={thStyle}>Category</th>
+                    <th style={thStyle}>Product Name</th>
+                    <th style={thStyle}>Description</th>
+                    <th style={thStyle} style={{ width: '60px' }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(data.productCategories || []).map((category, categoryIndex) => (
+                    <React.Fragment key={categoryIndex}>
+                      {/* Category header row */}
+                      <tr className="bg-brown-100">
+                        <td colSpan="4" style={{ 
+                          padding: '6px 10px', 
                           fontWeight: '600',
-                          color: '#5c3a1e'
+                          color: '#5c3a1e',
+                          fontSize: '12px',
+                          borderBottom: '2px solid #d6c4a8'
                         }}>
-                          Products
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => addProduct(categoryIndex)}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '4px',
-                            padding: '4px 12px',
-                            fontSize: '11px',
-                            fontWeight: '500',
-                            backgroundColor: '#f0e8d8',
-                            color: '#5c3a1e',
-                            border: 'none',
-                            borderRadius: '3px',
-                            cursor: 'pointer',
-                            transition: 'background-color 0.2s'
-                          }}
-                          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#e0d5c0'}
-                          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#f0e8d8'}
-                        >
-                          <Plus size={12} /> Add Product
-                        </button>
-                      </div>
-                      {(category.products || []).map((product, productIndex) => (
-                        <ItemCard
-                          key={productIndex}
-                          onRemove={() => removeProduct(categoryIndex, productIndex)}
-                        >
-                          <Input
-                            type="text"
-                            value={product.name}
-                            onChange={(e) => updateProduct(categoryIndex, productIndex, "name", e.target.value)}
-                            placeholder="Product name"
-                            label="Product Name"
-                            required
-                          />
-                          <TextArea
-                            value={product.description}
-                            onChange={(e) => updateProduct(categoryIndex, productIndex, "description", e.target.value)}
-                            placeholder="Brief description of the product, its features, and benefits"
-                            rows={2}
-                            label="Description"
-                            required
-                          />
-                        </ItemCard>
-                      ))}
-                      {(category.products || []).length === 0 && (
-                        <div style={{
-                          textAlign: 'center',
-                          padding: '16px',
-                          color: '#999',
-                          fontSize: '11px',
-                          backgroundColor: '#fdfaf5',
-                          borderRadius: '4px',
-                          border: '1px dashed #d6c4a8'
-                        }}>
-                          No products added yet. Click "Add Product" to get started.
-                        </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span>
+                              <MultiSelect 
+                                options={categoryOptions} 
+                                selected={category.categories || []} 
+                                onChange={(value) => updateProductCategory(categoryIndex, "categories", value)} 
+                                label="categories"
+                                placeholder="Select categories..."
+                              />
+                            </span>
+                            <div>
+                              <button
+                                type="button"
+                                onClick={() => addProduct(categoryIndex)}
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '4px',
+                                  padding: '2px 10px',
+                                  marginRight: '6px',
+                                  fontSize: '10px',
+                                  fontWeight: '500',
+                                  backgroundColor: '#f0e8d8',
+                                  color: '#5c3a1e',
+                                  border: 'none',
+                                  borderRadius: '3px',
+                                  cursor: 'pointer',
+                                  transition: 'background-color 0.2s'
+                                }}
+                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#e0d5c0'}
+                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#f0e8d8'}
+                              >
+                                <Plus size={12} /> Add Product
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => removeProductCategory(categoryIndex)}
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '4px',
+                                  padding: '2px 10px',
+                                  fontSize: '10px',
+                                  fontWeight: '500',
+                                  backgroundColor: '#fee2e2',
+                                  color: '#dc2626',
+                                  border: 'none',
+                                  borderRadius: '3px',
+                                  cursor: 'pointer',
+                                  transition: 'background-color 0.2s'
+                                }}
+                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#fecaca'}
+                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#fee2e2'}
+                              >
+                                <Trash2 size={12} /> Remove Category
+                              </button>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                      {/* Product rows */}
+                      {(category.products || []).length === 0 ? (
+                        <tr className={categoryIndex % 2 === 0 ? "bg-white" : "bg-brown-50/30"}>
+                          <td colSpan="4" style={{
+                            textAlign: 'center',
+                            padding: '16px',
+                            color: '#999',
+                            fontSize: '11px'
+                          }}>
+                            No products in this category. Click "Add Product" to add one.
+                          </td>
+                        </tr>
+                      ) : (
+                        (category.products || []).map((product, productIndex) => (
+                          <tr key={`${categoryIndex}-${productIndex}`} className={productIndex % 2 === 0 ? "bg-white" : "bg-brown-50/30"}>
+                            <td className="px-3 py-2 border-b" style={{ fontSize: '11px', color: '#5c3a1e' }}>
+                              {getCategoryLabels(category.categories)}
+                            </td>
+                            <td className="px-3 py-2 border-b">
+                              <input
+                                type="text"
+                                value={product.name}
+                                onChange={(e) => updateProduct(categoryIndex, productIndex, "name", e.target.value)}
+                                placeholder="Product name"
+                                style={{
+                                  width: '100%',
+                                  padding: '4px 8px',
+                                  border: '1px solid #d6c4a8',
+                                  borderRadius: '3px',
+                                  fontSize: '11px',
+                                  outline: 'none',
+                                  color: '#3d2b1f'
+                                }}
+                                onFocus={(e) => e.currentTarget.style.borderColor = '#8B4513'}
+                                onBlur={(e) => e.currentTarget.style.borderColor = '#d6c4a8'}
+                              />
+                            </td>
+                            <td className="px-3 py-2 border-b">
+                              <textarea
+                                value={product.description}
+                                onChange={(e) => updateProduct(categoryIndex, productIndex, "description", e.target.value)}
+                                placeholder="Description"
+                                rows={2}
+                                style={{
+                                  width: '100%',
+                                  padding: '4px 8px',
+                                  border: '1px solid #d6c4a8',
+                                  borderRadius: '3px',
+                                  fontSize: '10px',
+                                  outline: 'none',
+                                  resize: 'vertical',
+                                  fontFamily: 'inherit',
+                                  color: '#3d2b1f'
+                                }}
+                                onFocus={(e) => e.currentTarget.style.borderColor = '#8B4513'}
+                                onBlur={(e) => e.currentTarget.style.borderColor = '#d6c4a8'}
+                              />
+                            </td>
+                            <td className="px-3 py-2 border-b" style={{ textAlign: 'center' }}>
+                              <button
+                                type="button"
+                                onClick={() => removeProduct(categoryIndex, productIndex)}
+                                style={{
+                                  padding: '4px',
+                                  color: '#dc2626',
+                                  background: 'none',
+                                  border: 'none',
+                                  cursor: 'pointer',
+                                  borderRadius: '3px'
+                                }}
+                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#fee2e2'}
+                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </td>
+                          </tr>
+                        ))
                       )}
-                    </div>
-                  </CategoryCard>
-                ))}
-                {(data.productCategories || []).length === 0 && (
-                  <div style={{
-                    textAlign: 'center',
-                    padding: '24px',
-                    color: '#999',
-                    fontSize: '12px',
-                    backgroundColor: '#fdfaf5',
-                    borderRadius: '6px',
-                    border: '1px dashed #d6c4a8'
-                  }}>
-                    No product categories added yet. Click "Add Category" to get started.
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Services */}
-            {showServices && (
-              <div>
-                <SectionHeader 
-                  title="Service Categories" 
-                  onAdd={addServiceCategory} 
-                  addLabel="Add Category" 
-                />
-                {(data.serviceCategories || []).map((category, categoryIndex) => (
-                  <CategoryCard
-                    key={categoryIndex}
-                    onRemove={() => removeServiceCategory(categoryIndex)}
-                  >
-                    <div style={{ marginBottom: '12px' }}>
-                      <label style={{
-                        display: 'block',
-                        fontSize: '11px',
-                        fontWeight: '600',
-                        color: '#5c3a1e',
-                        marginBottom: '4px'
+                    </React.Fragment>
+                  ))}
+                  {(data.productCategories || []).length === 0 && (
+                    <tr>
+                      <td colSpan="4" style={{
+                        textAlign: 'center',
+                        padding: '24px',
+                        color: '#999',
+                        fontSize: '12px',
+                        backgroundColor: '#fdfaf5'
                       }}>
-                        Category Name(s) *
-                      </label>
-                      <MultiSelect 
-                        options={categoryOptions} 
-                        selected={category.categories || []} 
-                        onChange={(value) => updateServiceCategory(categoryIndex, "categories", value)} 
-                        label="categories"
-                        placeholder="Select service categories..."
-                      />
-                    </div>
+                        No product categories added yet. Click "Add Category" to get started.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
 
-                    <div>
-                      <div style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        marginBottom: '8px'
-                      }}>
-                        <span style={{
-                          fontSize: '11px',
+        {/* Services Table - Simple flat table */}
+        {showServices && (
+          <div style={{ marginTop: '20px' }}>
+            <SectionHeader 
+              title="Services" 
+              onAdd={addServiceCategory} 
+              addLabel="Add Category" 
+            />
+            <div className="overflow-x-auto">
+              <table className="min-w-full bg-white border border-brown-200 rounded-lg" style={{ borderCollapse: 'collapse', width: '100%' }}>
+                <thead>
+                  <tr>
+                    <th style={thStyle}>Category</th>
+                    <th style={thStyle}>Service Name</th>
+                    <th style={thStyle}>Description</th>
+                    <th style={thStyle} style={{ width: '60px' }}>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(data.serviceCategories || []).map((category, categoryIndex) => (
+                    <React.Fragment key={categoryIndex}>
+                      {/* Category header row */}
+                      <tr className="bg-brown-100">
+                        <td colSpan="4" style={{ 
+                          padding: '6px 10px', 
                           fontWeight: '600',
-                          color: '#5c3a1e'
+                          color: '#5c3a1e',
+                          fontSize: '12px',
+                          borderBottom: '2px solid #d6c4a8'
                         }}>
-                          Services
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => addService(categoryIndex)}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '4px',
-                            padding: '4px 12px',
-                            fontSize: '11px',
-                            fontWeight: '500',
-                            backgroundColor: '#f0e8d8',
-                            color: '#5c3a1e',
-                            border: 'none',
-                            borderRadius: '3px',
-                            cursor: 'pointer',
-                            transition: 'background-color 0.2s'
-                          }}
-                          onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#e0d5c0'}
-                          onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#f0e8d8'}
-                        >
-                          <Plus size={12} /> Add Service
-                        </button>
-                      </div>
-                      {(category.services || []).map((service, serviceIndex) => (
-                        <ItemCard
-                          key={serviceIndex}
-                          onRemove={() => removeService(categoryIndex, serviceIndex)}
-                        >
-                          <Input
-                            type="text"
-                            value={service.name}
-                            onChange={(e) => updateService(categoryIndex, serviceIndex, "name", e.target.value)}
-                            placeholder="Service name"
-                            label="Service Name"
-                            required
-                          />
-                          <TextArea
-                            value={service.description}
-                            onChange={(e) => updateService(categoryIndex, serviceIndex, "description", e.target.value)}
-                            placeholder="Brief description of the service, what it includes, and its value proposition"
-                            rows={2}
-                            label="Description"
-                            required
-                          />
-                        </ItemCard>
-                      ))}
-                      {(category.services || []).length === 0 && (
-                        <div style={{
-                          textAlign: 'center',
-                          padding: '16px',
-                          color: '#999',
-                          fontSize: '11px',
-                          backgroundColor: '#fdfaf5',
-                          borderRadius: '4px',
-                          border: '1px dashed #d6c4a8'
-                        }}>
-                          No services added yet. Click "Add Service" to get started.
-                        </div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span>
+                              <MultiSelect 
+                                options={categoryOptions} 
+                                selected={category.categories || []} 
+                                onChange={(value) => updateServiceCategory(categoryIndex, "categories", value)} 
+                                label="categories"
+                                placeholder="Select categories..."
+                              />
+                            </span>
+                            <div>
+                              <button
+                                type="button"
+                                onClick={() => addService(categoryIndex)}
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '4px',
+                                  padding: '2px 10px',
+                                  marginRight: '6px',
+                                  fontSize: '10px',
+                                  fontWeight: '500',
+                                  backgroundColor: '#f0e8d8',
+                                  color: '#5c3a1e',
+                                  border: 'none',
+                                  borderRadius: '3px',
+                                  cursor: 'pointer',
+                                  transition: 'background-color 0.2s'
+                                }}
+                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#e0d5c0'}
+                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#f0e8d8'}
+                              >
+                                <Plus size={12} /> Add Service
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => removeServiceCategory(categoryIndex)}
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '4px',
+                                  padding: '2px 10px',
+                                  fontSize: '10px',
+                                  fontWeight: '500',
+                                  backgroundColor: '#fee2e2',
+                                  color: '#dc2626',
+                                  border: 'none',
+                                  borderRadius: '3px',
+                                  cursor: 'pointer',
+                                  transition: 'background-color 0.2s'
+                                }}
+                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#fecaca'}
+                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#fee2e2'}
+                              >
+                                <Trash2 size={12} /> Remove Category
+                              </button>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                      {/* Service rows */}
+                      {(category.services || []).length === 0 ? (
+                        <tr className={categoryIndex % 2 === 0 ? "bg-white" : "bg-brown-50/30"}>
+                          <td colSpan="4" style={{
+                            textAlign: 'center',
+                            padding: '16px',
+                            color: '#999',
+                            fontSize: '11px'
+                          }}>
+                            No services in this category. Click "Add Service" to add one.
+                          </td>
+                        </tr>
+                      ) : (
+                        (category.services || []).map((service, serviceIndex) => (
+                          <tr key={`${categoryIndex}-${serviceIndex}`} className={serviceIndex % 2 === 0 ? "bg-white" : "bg-brown-50/30"}>
+                            <td className="px-3 py-2 border-b" style={{ fontSize: '11px', color: '#5c3a1e' }}>
+                              {getCategoryLabels(category.categories)}
+                            </td>
+                            <td className="px-3 py-2 border-b">
+                              <input
+                                type="text"
+                                value={service.name}
+                                onChange={(e) => updateService(categoryIndex, serviceIndex, "name", e.target.value)}
+                                placeholder="Service name"
+                                style={{
+                                  width: '100%',
+                                  padding: '4px 8px',
+                                  border: '1px solid #d6c4a8',
+                                  borderRadius: '3px',
+                                  fontSize: '11px',
+                                  outline: 'none',
+                                  color: '#3d2b1f'
+                                }}
+                                onFocus={(e) => e.currentTarget.style.borderColor = '#8B4513'}
+                                onBlur={(e) => e.currentTarget.style.borderColor = '#d6c4a8'}
+                              />
+                            </td>
+                            <td className="px-3 py-2 border-b">
+                              <textarea
+                                value={service.description}
+                                onChange={(e) => updateService(categoryIndex, serviceIndex, "description", e.target.value)}
+                                placeholder="Description"
+                                rows={2}
+                                style={{
+                                  width: '100%',
+                                  padding: '4px 8px',
+                                  border: '1px solid #d6c4a8',
+                                  borderRadius: '3px',
+                                  fontSize: '10px',
+                                  outline: 'none',
+                                  resize: 'vertical',
+                                  fontFamily: 'inherit',
+                                  color: '#3d2b1f'
+                                }}
+                                onFocus={(e) => e.currentTarget.style.borderColor = '#8B4513'}
+                                onBlur={(e) => e.currentTarget.style.borderColor = '#d6c4a8'}
+                              />
+                            </td>
+                            <td className="px-3 py-2 border-b" style={{ textAlign: 'center' }}>
+                              <button
+                                type="button"
+                                onClick={() => removeService(categoryIndex, serviceIndex)}
+                                style={{
+                                  padding: '4px',
+                                  color: '#dc2626',
+                                  background: 'none',
+                                  border: 'none',
+                                  cursor: 'pointer',
+                                  borderRadius: '3px'
+                                }}
+                                onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#fee2e2'}
+                                onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </td>
+                          </tr>
+                        ))
                       )}
-                    </div>
-                  </CategoryCard>
-                ))}
-                {(data.serviceCategories || []).length === 0 && (
-                  <div style={{
-                    textAlign: 'center',
-                    padding: '24px',
-                    color: '#999',
-                    fontSize: '12px',
-                    backgroundColor: '#fdfaf5',
-                    borderRadius: '6px',
-                    border: '1px dashed #d6c4a8'
-                  }}>
-                    No service categories added yet. Click "Add Category" to get started.
-                  </div>
-                )}
-              </div>
-            )}
+                    </React.Fragment>
+                  ))}
+                  {(data.serviceCategories || []).length === 0 && (
+                    <tr>
+                      <td colSpan="4" style={{
+                        textAlign: 'center',
+                        padding: '24px',
+                        color: '#999',
+                        fontSize: '12px',
+                        backgroundColor: '#fdfaf5'
+                      }}>
+                        No service categories added yet. Click "Add Category" to get started.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
       </Section>
@@ -1019,7 +995,7 @@ export default function ProductsServices({ data = {}, updateData }) {
                       min="0"
                       style={{
                         flex: 1,
-                        padding: '8px 10px',
+                        padding: '6px 10px',
                         border: '1px solid #d6c4a8',
                         borderRadius: '4px 0 0 4px',
                         fontSize: '12px',
@@ -1035,7 +1011,7 @@ export default function ProductsServices({ data = {}, updateData }) {
                       value={data.minLeadTimeUnit || "days"}
                       onChange={handleChange}
                       style={{
-                        padding: '8px 10px',
+                        padding: '6px 10px',
                         border: '1px solid #d6c4a8',
                         borderLeft: 'none',
                         borderRadius: '0 4px 4px 0',
@@ -1073,7 +1049,7 @@ export default function ProductsServices({ data = {}, updateData }) {
                       min="0"
                       style={{
                         flex: 1,
-                        padding: '8px 10px',
+                        padding: '6px 10px',
                         border: '1px solid #d6c4a8',
                         borderRadius: '4px 0 0 4px',
                         fontSize: '12px',
@@ -1089,7 +1065,7 @@ export default function ProductsServices({ data = {}, updateData }) {
                       value={data.maxLeadTimeUnit || "days"}
                       onChange={handleChange}
                       style={{
-                        padding: '8px 10px',
+                        padding: '6px 10px',
                         border: '1px solid #d6c4a8',
                         borderLeft: 'none',
                         borderRadius: '0 4px 4px 0',
@@ -1110,8 +1086,8 @@ export default function ProductsServices({ data = {}, updateData }) {
               </div>
               {(data.minLeadTime || data.maxLeadTime) && (
                 <div style={{
-                  marginTop: '10px',
-                  padding: '8px 12px',
+                  marginTop: '8px',
+                  padding: '6px 10px',
                   backgroundColor: '#eff6ff',
                   borderRadius: '4px',
                   border: '1px solid #bfdbfe'
@@ -1141,19 +1117,32 @@ export default function ProductsServices({ data = {}, updateData }) {
       {/* ============================================================ */}
       <Section title="Section 3: Target Market">
         <FormField label="Target Market" required>
-          <TextArea
+          <textarea
             name="targetMarket"
             value={data.targetMarket || ""}
             onChange={handleChange}
             rows={3}
             placeholder="e.g., NGO Contracts and youth development programs, Corporate / IAD departments seeking online training delivery, Government departments, education and youth development..."
+            style={{
+              width: '100%',
+              padding: '8px 10px',
+              border: '1px solid #d6c4a8',
+              borderRadius: '4px',
+              fontSize: '12px',
+              outline: 'none',
+              resize: 'vertical',
+              fontFamily: 'inherit',
+              color: '#3d2b1f'
+            }}
+            onFocus={(e) => e.currentTarget.style.borderColor = '#8B4513'}
+            onBlur={(e) => e.currentTarget.style.borderColor = '#d6c4a8'}
             required
           />
         </FormField>
       </Section>
 
       {/* ============================================================ */}
-      {/* SECTION 4: Key Clients */}
+      {/* SECTION 4: Key Clients - Table format */}
       {/* ============================================================ */}
       <Section 
         title="Section 4: Key Clients / Customers"
@@ -1165,10 +1154,10 @@ export default function ProductsServices({ data = {}, updateData }) {
             display: 'inline-flex',
             alignItems: 'center',
             gap: '8px',
-            padding: '8px 14px',
+            padding: '6px 12px',
             borderRadius: '4px',
-            marginBottom: '16px',
-            fontSize: '12px',
+            marginBottom: '12px',
+            fontSize: '11px',
             fontWeight: '600',
             backgroundColor: revenueOver100 ? '#fff1f0' : totalRevenuePercent === 100 ? '#f0faf0' : '#fdf6ee',
             border: `1px solid ${revenueOver100 ? '#ffccc7' : totalRevenuePercent === 100 ? '#b7eb8f' : '#d6c4a8'}`,
@@ -1190,182 +1179,185 @@ export default function ProductsServices({ data = {}, updateData }) {
           addLabel="Add Client" 
         />
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          {(data.keyClients || []).map((client, index) => (
-            <CategoryCard
-              key={index}
-              onRemove={() => removeClient(index)}
-              title={`Client ${index + 1}`}
-            >
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '12px' }}>
-                <Input
-                  type="text"
-                  value={client.name || ""}
-                  onChange={(e) => updateClient(index, "name", e.target.value)}
-                  placeholder="e.g., ABC Corporation"
-                  label="Client / Customer Name"
-                />
-
-                <div>
-                  <label style={{
-                    display: 'block',
-                    fontSize: '11px',
-                    fontWeight: '600',
-                    color: '#5c3a1e',
-                    marginBottom: '3px'
-                  }}>
-                    Client Type
-                  </label>
-                  <select
-                    value={client.clientType || ""}
-                    onChange={(e) => updateClient(index, "clientType", e.target.value)}
-                    style={{
-                      width: '100%',
-                      padding: '8px 10px',
-                      border: '1px solid #d6c4a8',
-                      borderRadius: '4px',
-                      fontSize: '12px',
-                      backgroundColor: 'white',
-                      outline: 'none',
-                      transition: 'border-color 0.2s',
-                      color: '#3d2b1f'
-                    }}
-                    onFocus={(e) => e.currentTarget.style.borderColor = '#8B4513'}
-                    onBlur={(e) => e.currentTarget.style.borderColor = '#d6c4a8'}
-                  >
-                    <option value="">Select type</option>
-                    <option value="Government">Government</option>
-                    <option value="Private">Private</option>
-                    <option value="NGO / Non-Profit">NGO / Non-Profit</option>
-                    <option value="International Organisation">International Organisation</option>
-                    <option value="Other">Other</option>
-                  </select>
-                </div>
-
-                <Input
-                  type="text"
-                  value={client.contactNumber || ""}
-                  onChange={(e) => updateClient(index, "contactNumber", e.target.value)}
-                  placeholder="e.g., +27 82 123 4567"
-                  label="Contact Number"
-                />
-              </div>
-
-              {/* Second row - Revenue %, Industry, Revenue Potential - all in one row */}
-              <div style={{ 
-                display: 'grid', 
-                gridTemplateColumns: '1fr 2fr 1fr', 
-                gap: '12px',
-                marginTop: '8px'
-              }}>
-                <div>
-                  <label style={{
-                    display: 'block',
-                    fontSize: '11px',
-                    fontWeight: '600',
-                    color: '#5c3a1e',
-                    marginBottom: '3px'
-                  }}>
-                    % of Total Revenue
-                  </label>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+        <div className="overflow-x-auto">
+          <table className="min-w-full bg-white border border-brown-200 rounded-lg" style={{ borderCollapse: 'collapse', width: '100%' }}>
+            <thead>
+              <tr>
+                <th style={thStyle}>Client Name</th>
+                <th style={thStyle}>Type</th>
+                <th style={thStyle}>Contact</th>
+                <th style={thStyle}>Revenue %</th>
+                <th style={thStyle}>Industry</th>
+                <th style={thStyle}>Growth Potential</th>
+                <th style={thStyle} style={{ width: '40px' }}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(data.keyClients || []).map((client, index) => (
+                <tr key={index} className={index % 2 === 0 ? "bg-white" : "bg-brown-50/30"}>
+                  <td className="px-3 py-2 border-b">
                     <input
-                      type="number"
-                      value={client.revenuePercentage || ""}
-                      onChange={(e) => {
-                        const val = Math.min(100, Math.max(0, Number(e.target.value)))
-                        updateClient(index, "revenuePercentage", val === 0 ? "" : String(val))
-                      }}
-                      placeholder="e.g., 25"
-                      min="0"
-                      max="100"
+                      type="text"
+                      value={client.name || ""}
+                      onChange={(e) => updateClient(index, "name", e.target.value)}
+                      placeholder="Client name"
                       style={{
-                        flex: 1,
-                        padding: '8px 10px',
+                        width: '100%',
+                        padding: '4px 8px',
                         border: '1px solid #d6c4a8',
-                        borderRadius: '4px',
-                        fontSize: '12px',
+                        borderRadius: '3px',
+                        fontSize: '11px',
                         outline: 'none',
-                        transition: 'border-color 0.2s',
                         color: '#3d2b1f'
                       }}
                       onFocus={(e) => e.currentTarget.style.borderColor = '#8B4513'}
                       onBlur={(e) => e.currentTarget.style.borderColor = '#d6c4a8'}
                     />
-                    <span style={{
-                      fontWeight: '600',
-                      color: '#5c3a1e',
-                      flexShrink: 0,
-                      fontSize: '12px'
-                    }}>%</span>
-                  </div>
-                </div>
-
-                <div>
-                  <label style={{
-                    display: 'block',
-                    fontSize: '11px',
-                    fontWeight: '600',
-                    color: '#5c3a1e',
-                    marginBottom: '3px'
+                  </td>
+                  <td className="px-3 py-2 border-b">
+                    <select
+                      value={client.clientType || ""}
+                      onChange={(e) => updateClient(index, "clientType", e.target.value)}
+                      style={{
+                        width: '100%',
+                        padding: '4px 8px',
+                        border: '1px solid #d6c4a8',
+                        borderRadius: '3px',
+                        fontSize: '11px',
+                        backgroundColor: 'white',
+                        outline: 'none',
+                        color: '#3d2b1f'
+                      }}
+                      onFocus={(e) => e.currentTarget.style.borderColor = '#8B4513'}
+                      onBlur={(e) => e.currentTarget.style.borderColor = '#d6c4a8'}
+                    >
+                      <option value="">Select</option>
+                      <option value="Government">Government</option>
+                      <option value="Private">Private</option>
+                      <option value="NGO / Non-Profit">NGO / Non-Profit</option>
+                      <option value="International Organisation">International Organisation</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </td>
+                  <td className="px-3 py-2 border-b">
+                    <input
+                      type="text"
+                      value={client.contactNumber || ""}
+                      onChange={(e) => updateClient(index, "contactNumber", e.target.value)}
+                      placeholder="Contact number"
+                      style={{
+                        width: '100%',
+                        padding: '4px 8px',
+                        border: '1px solid #d6c4a8',
+                        borderRadius: '3px',
+                        fontSize: '11px',
+                        outline: 'none',
+                        color: '#3d2b1f'
+                      }}
+                      onFocus={(e) => e.currentTarget.style.borderColor = '#8B4513'}
+                      onBlur={(e) => e.currentTarget.style.borderColor = '#d6c4a8'}
+                    />
+                  </td>
+                  <td className="px-3 py-2 border-b">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <input
+                        type="number"
+                        value={client.revenuePercentage || ""}
+                        onChange={(e) => {
+                          const val = Math.min(100, Math.max(0, Number(e.target.value)))
+                          updateClient(index, "revenuePercentage", val === 0 ? "" : String(val))
+                        }}
+                        placeholder="%"
+                        min="0"
+                        max="100"
+                        style={{
+                          width: '60px',
+                          padding: '4px 8px',
+                          border: '1px solid #d6c4a8',
+                          borderRadius: '3px',
+                          fontSize: '11px',
+                          outline: 'none',
+                          color: '#3d2b1f'
+                        }}
+                        onFocus={(e) => e.currentTarget.style.borderColor = '#8B4513'}
+                        onBlur={(e) => e.currentTarget.style.borderColor = '#d6c4a8'}
+                      />
+                      <span style={{ fontSize: '11px', color: '#5c3a1e', fontWeight: '600' }}>%</span>
+                    </div>
+                  </td>
+                  <td className="px-3 py-2 border-b" style={{ minWidth: '140px' }}>
+                    <MultiSelect
+                      options={industryOptions}
+                      selected={client.industries || []}
+                      onChange={(value) => updateClient(index, "industries", value)}
+                      label="industries"
+                      placeholder="Select..."
+                    />
+                  </td>
+                  <td className="px-3 py-2 border-b">
+                    <YesNoDropdown
+                      value={client.revenueGrowthPotential || ""}
+                      onChange={(val) => updateClient(index, "revenueGrowthPotential", val)}
+                    />
+                    {client.revenueGrowthPotential === "Yes" && (
+                      <textarea
+                        value={client.revenueGrowthDetails || ""}
+                        onChange={(e) => updateClient(index, "revenueGrowthDetails", e.target.value)}
+                        placeholder="Growth details..."
+                        rows={1}
+                        style={{
+                          width: '100%',
+                          marginTop: '4px',
+                          padding: '4px 8px',
+                          border: '1px solid #d6c4a8',
+                          borderRadius: '3px',
+                          fontSize: '10px',
+                          outline: 'none',
+                          resize: 'vertical',
+                          fontFamily: 'inherit',
+                          color: '#3d2b1f'
+                        }}
+                        onFocus={(e) => e.currentTarget.style.borderColor = '#8B4513'}
+                        onBlur={(e) => e.currentTarget.style.borderColor = '#d6c4a8'}
+                      />
+                    )}
+                  </td>
+                  <td className="px-3 py-2 border-b" style={{ textAlign: 'center' }}>
+                    <button
+                      type="button"
+                      onClick={() => removeClient(index)}
+                      style={{
+                        padding: '4px',
+                        color: '#dc2626',
+                        background: 'none',
+                        border: 'none',
+                        cursor: 'pointer',
+                        borderRadius: '3px'
+                      }}
+                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#fee2e2'}
+                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+              {(data.keyClients || []).length === 0 && (
+                <tr>
+                  <td colSpan="7" style={{
+                    textAlign: 'center',
+                    padding: '32px',
+                    color: '#999',
+                    fontSize: '12px',
+                    backgroundColor: '#fdfaf5'
                   }}>
-                    Industry (select all that apply)
-                  </label>
-                  <MultiSelect
-                    options={industryOptions}
-                    selected={client.industries || []}
-                    onChange={(value) => updateClient(index, "industries", value)}
-                    label="industries"
-                    placeholder="Select industries..."
-                  />
-                </div>
-
-                <div>
-                  <label style={{
-                    display: 'block',
-                    fontSize: '11px',
-                    fontWeight: '600',
-                    color: '#5c3a1e',
-                    marginBottom: '3px'
-                  }}>
-                    Revenue Growth Potential?
-                  </label>
-                  <YesNoDropdown
-                    value={client.revenueGrowthPotential || ""}
-                    onChange={(val) => updateClient(index, "revenueGrowthPotential", val)}
-                  />
-                </div>
-              </div>
-
-              {/* Revenue growth details - full width if Yes */}
-              {client.revenueGrowthPotential === "Yes" && (
-                <div style={{ marginTop: '12px' }}>
-                  <TextArea
-                    value={client.revenueGrowthDetails || ""}
-                    onChange={(e) => updateClient(index, "revenueGrowthDetails", e.target.value)}
-                    placeholder="e.g., Expanding into new product lines, upcoming contract renewal, additional departments to onboard..."
-                    rows={2}
-                    label="Please elaborate on the growth opportunity"
-                  />
-                </div>
+                    No clients added yet. Click "Add Client" to get started.
+                  </td>
+                </tr>
               )}
-            </CategoryCard>
-          ))}
+            </tbody>
+          </table>
         </div>
-
-        {(data.keyClients || []).length === 0 && (
-          <div style={{
-            textAlign: 'center',
-            padding: '32px',
-            color: '#999',
-            fontSize: '12px',
-            backgroundColor: '#fdfaf5',
-            borderRadius: '6px',
-            border: '1px dashed #d6c4a8'
-          }}>
-            <p style={{ margin: 0 }}>No clients added yet. Click "Add Client" to get started.</p>
-          </div>
-        )}
       </Section>
     </div>
   )
