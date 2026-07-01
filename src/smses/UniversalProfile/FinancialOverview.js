@@ -1537,7 +1537,7 @@ const FinancialOverview = ({ data, updateData, apiKey, onEvaluationComplete }) =
                     display: "block",
                   }}
                 >
-                  Sales Terms to your clients (30days, progress payment etc)
+                  Payment Terms to your clients (30days, progress payment etc)
                 </label>
                 <input
                   type="text"

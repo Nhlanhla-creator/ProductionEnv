@@ -152,7 +152,7 @@ const southAfricanProvinces = [
   { value: "Western Cape", label: "Western Cape" },
 ]
 
-// ── Industry Associations (same list as association profile) ──
+// ── Industry Associations ──
 const industryAssociations = [
   { value: "SA Township Traders Association", label: "SA Township Traders Association" },
   { value: "Minerals Council South Africa", label: "Minerals Council South Africa" },
@@ -178,7 +178,7 @@ const industryAssociations = [
   { value: "Other", label: "Other" },
 ]
 
-// Simple FormField component
+// FormField component
 function FormField({ label, required, tooltip, children }) {
   return (
     <div style={{ marginBottom: '1rem' }}>
@@ -203,6 +203,69 @@ function SectionHeading({ title }) {
       <h3 style={{ fontSize: '15px', fontWeight: '700', color: '#6B3410', margin: 0, letterSpacing: '0.3px' }}>
         {title}
       </h3>
+    </div>
+  )
+}
+
+// Radio Group component
+function RadioGroup({ name, value, onChange }) {
+  return (
+    <div style={{ display: 'flex', gap: '24px', marginTop: '6px' }}>
+      {["yes", "no"].map((val) => (
+        <label
+          key={val}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            cursor: 'pointer',
+            userSelect: 'none',
+            fontSize: '14px',
+            fontWeight: '500',
+            color: '#3d2b1f',
+          }}
+        >
+          <input
+            type="radio"
+            name={name}
+            value={val}
+            checked={value === val}
+            onChange={(e) => onChange(e.target.value)}
+            style={{
+              position: 'absolute',
+              opacity: 0,
+              width: 0,
+              height: 0,
+              margin: 0,
+            }}
+          />
+          <div
+            style={{
+              width: '18px',
+              height: '18px',
+              borderRadius: '50%',
+              border: `2px solid ${value === val ? '#8B4513' : '#ccc'}`,
+              backgroundColor: value === val ? '#8B4513' : 'white',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+              transition: 'all 0.15s ease',
+              boxShadow: value === val ? '0 0 0 3px rgba(139,69,19,0.12)' : 'none',
+            }}
+          >
+            {value === val && (
+              <div style={{
+                width: '7px',
+                height: '7px',
+                borderRadius: '50%',
+                backgroundColor: 'white',
+              }} />
+            )}
+          </div>
+          <span style={{ textTransform: 'capitalize' }}>{val}</span>
+        </label>
+      ))}
     </div>
   )
 }
@@ -353,7 +416,6 @@ export default function EntityOverview({ data = {}, updateData }) {
   const [formData, setFormData] = useState({})
   const [isLoading, setIsLoading] = useState(true)
   const [logoUploading, setLogoUploading] = useState(false);
-  const [showLogoUpload, setShowLogoUpload] = useState(false);
   const [logoPreview, setLogoPreview] = useState("");
   const [letterheadUploading, setLetterheadUploading] = useState(false);
   const [letterheadFile, setLetterheadFile] = useState(null);
@@ -425,7 +487,6 @@ export default function EntityOverview({ data = {}, updateData }) {
         }
       }
 
-      setShowLogoUpload(false);
     } catch (error) {
       console.error('Error uploading logo:', error);
       alert('Failed to upload logo. Please try again.');
@@ -489,16 +550,18 @@ export default function EntityOverview({ data = {}, updateData }) {
           const companyLogo = getDocumentUrlFromAnyLocation('Company Logo', profileData);
           const orgStructure = getDocumentUrlFromAnyLocation('Org Structure', profileData);
 
-          // Initialize industry associations if they don't exist
-          if (!entityData.memberOfAssociation) {
-            entityData.memberOfAssociation = "";
-          }
-          if (!entityData.industryAssociations) {
-            entityData.industryAssociations = [];
-          }
-          if (!entityData.industryAssociationsOther) {
-            entityData.industryAssociationsOther = "";
-          }
+          // Initialize fields if they don't exist
+          const defaultFields = {
+            memberOfAssociation: "",
+            industryAssociations: [],
+            industryAssociationsOther: "",
+          };
+
+          Object.keys(defaultFields).forEach(key => {
+            if (entityData[key] === undefined) {
+              entityData[key] = defaultFields[key];
+            }
+          });
 
           updateFormData({
             ...entityData,
@@ -513,7 +576,6 @@ export default function EntityOverview({ data = {}, updateData }) {
             orgStructure,
           });
         } else {
-          // Initialize with default values if no profile exists
           updateFormData({
             ...data,
             memberOfAssociation: "",
@@ -534,6 +596,11 @@ export default function EntityOverview({ data = {}, updateData }) {
 
   const handleChange = (e) => {
     const { name, value } = e.target
+    const newData = { ...formData, [name]: value }
+    updateFormData(newData)
+  }
+
+  const handleRadioChange = (name, value) => {
     const newData = { ...formData, [name]: value }
     updateFormData(newData)
   }
@@ -608,7 +675,6 @@ export default function EntityOverview({ data = {}, updateData }) {
     }
   };
 
-  // Org Structure upload
   const handleOrgStructureUpload = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -690,8 +756,6 @@ export default function EntityOverview({ data = {}, updateData }) {
 
   const selectedCountries = Array.isArray(formData.operatingCountries) ? formData.operatingCountries : []
   const showProvinces = selectedCountries.includes("South Africa")
-
-  // Whether the user indicated they belong to an association
   const memberOfAssociation = formData.memberOfAssociation
 
   return (
@@ -699,461 +763,505 @@ export default function EntityOverview({ data = {}, updateData }) {
       <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
       <h2 style={{ fontSize: '24px', fontWeight: 'bold', marginBottom: '24px' }}>Entity Overview</h2>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
-        {/* LEFT COLUMN */}
-        <div>
-          <FormField label="Registered Name" required>
-            <input type="text" name="registeredName" value={formData.registeredName || ""} onChange={handleChange} style={inputStyle} required />
-          </FormField>
+      {/* ============================================================ */}
+      {/* SECTION 1: Company Information - 3 per row */}
+      {/* ============================================================ */}
+      <SectionHeading title="Company Information" />
 
-          <FormField label="Trading Name (if different)">
-            <input type="text" name="tradingName" value={formData.tradingName || ""} onChange={handleChange} style={inputStyle} />
-          </FormField>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px' }}>
+        <FormField label="Registered Name" required>
+          <input type="text" name="registeredName" value={formData.registeredName || ""} onChange={handleChange} style={inputStyle} required />
+        </FormField>
 
-          <FormField label="Registration Number" required>
-            <input type="text" name="registrationNumber" value={formData.registrationNumber || ""} onChange={handleChange} style={inputStyle} required />
-          </FormField>
+        <FormField label="Trading Name (if different)">
+          <input type="text" name="tradingName" value={formData.tradingName || ""} onChange={handleChange} style={inputStyle} />
+        </FormField>
 
-          <FormField label="Entity Type" required>
-            <select name="entityType" value={formData.entityType || ""} onChange={handleChange} style={inputStyle} required>
-              <option value="">Select Entity Type</option>
-              {entityTypes.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
-            </select>
-          </FormField>
+        <FormField label="Registration Number" required>
+          <input type="text" name="registrationNumber" value={formData.registrationNumber || ""} onChange={handleChange} style={inputStyle} required />
+        </FormField>
 
-          <FormField label="Legal Structure" required>
-            <select name="legalStructure" value={formData.legalStructure || ""} onChange={handleChange} style={inputStyle} required>
-              <option value="">Select Legal Structure</option>
-              {legalStructures.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
-            </select>
-          </FormField>
+        <FormField label="Entity Type" required>
+          <select name="entityType" value={formData.entityType || ""} onChange={handleChange} style={inputStyle} required>
+            <option value="">Select Entity Type</option>
+            {entityTypes.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
+          </select>
+        </FormField>
 
-          <FormField label="Entity Size" required>
-            <select name="entitySize" value={formData.entitySize || ""} onChange={handleChange} style={inputStyle} required>
-              <option value="">Select Entity Size</option>
-              {entitySizes.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
-            </select>
-          </FormField>
+        <FormField label="Legal Structure" required>
+          <select name="legalStructure" value={formData.legalStructure || ""} onChange={handleChange} style={inputStyle} required>
+            <option value="">Select Legal Structure</option>
+            {legalStructures.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+          </select>
+        </FormField>
 
-          <FormField label="Financial Year End" required>
-            <input type="month" name="financialYearEnd" value={formData.financialYearEnd || ""} onChange={handleChange} style={inputStyle} required />
-          </FormField>
+        <FormField label="Entity Size" required>
+          <select name="entitySize" value={formData.entitySize || ""} onChange={handleChange} style={inputStyle} required>
+            <option value="">Select Entity Size</option>
+            {entitySizes.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+          </select>
+        </FormField>
 
-          <FormField label="Years in Operation" required>
-            <input type="number" name="yearsInOperation" value={formData.yearsInOperation || ""} onChange={handleChange} min="0" step="0.5" style={inputStyle} required />
-          </FormField>
+        <FormField label="Financial Year End" required>
+          <input type="month" name="financialYearEnd" value={formData.financialYearEnd || ""} onChange={handleChange} style={inputStyle} required />
+        </FormField>
 
-          {/* ── EMPLOYEES ── */}
-          <SectionHeading title="Number of Employees" />
+        <FormField label="Years in Operation" required>
+          <input type="number" name="yearsInOperation" value={formData.yearsInOperation || ""} onChange={handleChange} min="0" step="0.5" style={inputStyle} required />
+        </FormField>
 
-          <FormField label="Full-Time Employees" required>
-            <input
-              type="number"
-              name="fullTimeEmployees"
-              value={formData.fullTimeEmployees || ""}
-              onChange={handleChange}
-              min="0"
-              style={inputStyle}
-              placeholder="0"
-              required
+        <FormField label="CIPC Annual Return">
+          <input type="text" name="cipcAnnualReturn" value={formData.cipcAnnualReturn || ""} onChange={handleChange} style={inputStyle} placeholder="e.g., 2024-01-15" />
+        </FormField>
+      </div>
+
+      {/* ============================================================ */}
+      {/* SECTION 2: Business Details - 3 per row */}
+      {/* ============================================================ */}
+      <SectionHeading title="Business Details" />
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px' }}>
+        <FormField label="Business Stage" required>
+          <select name="operationStage" value={formData.operationStage || ""} onChange={handleChange} style={inputStyle} required>
+            <option value="">Select Operation Stage</option>
+            {operationStages.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
+          </select>
+        </FormField>
+
+        <FormField label="Economic Sector" required>
+          <MultiSelectDropdown
+            options={economicSectors}
+            selected={formData.economicSectors || []}
+            onChange={(value) => handleMultiSelectChange("economicSectors", value)}
+            placeholder="Select economic sectors..."
+          />
+        </FormField>
+
+        <FormField label="Countries of Operation" required>
+          <MultiSelectDropdown
+            options={africanCountries}
+            selected={selectedCountries}
+            onChange={(value) => handleMultiSelectChange("operatingCountries", value)}
+            placeholder="Select countries..."
+          />
+        </FormField>
+
+        {showProvinces && (
+          <FormField label="Provinces (South Africa)" required>
+            <MultiSelectDropdown
+              options={southAfricanProvinces}
+              selected={Array.isArray(formData.operatingProvinces) ? formData.operatingProvinces : []}
+              onChange={(value) => handleMultiSelectChange("operatingProvinces", value)}
+              placeholder="Select provinces..."
             />
           </FormField>
+        )}
+      </div>
 
-          <FormField label="Part-Time Employees">
-            <input
-              type="number"
-              name="partTimeEmployees"
-              value={formData.partTimeEmployees || ""}
-              onChange={handleChange}
-              min="0"
-              style={inputStyle}
-              placeholder="0"
-            />
-          </FormField>
+      {/* Business Description - Full Width */}
+      <div style={{ marginTop: '1rem' }}>
+        <FormField label="Brief Business Description" required>
+          <textarea name="businessDescription" value={formData.businessDescription || ""} onChange={handleChange} rows={4} style={{ ...inputStyle, resize: 'vertical' }} required />
+        </FormField>
+      </div>
 
-          {/* Org Structure Upload */}
-          <FormField label="Organisational Structure (optional)">
-            <div style={{
-              border: '2px dashed #C19A6B',
-              borderRadius: '8px',
-              padding: '16px',
-              backgroundColor: '#FAF8F5',
-              maxWidth: '400px',
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                {/* Icon */}
-                <div style={{
-                  width: '72px', height: '72px', borderRadius: '8px',
-                  border: '3px solid #8B6F47', backgroundColor: 'white',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  boxShadow: '0 4px 12px rgba(139,111,71,0.2)', flexShrink: 0,
+      {/* ============================================================ */}
+      {/* SECTION 3: Employees - 3 per row */}
+      {/* ============================================================ */}
+      <SectionHeading title="Employees" />
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px' }}>
+        <FormField label="Permanent Employees" required>
+          <input
+            type="number"
+            name="permanentEmployees"
+            value={formData.permanentEmployees || ""}
+            onChange={handleChange}
+            min="0"
+            style={inputStyle}
+            placeholder="0"
+            required
+          />
+        </FormField>
+
+        <FormField label="Contract Employees">
+          <input
+            type="number"
+            name="contractEmployees"
+            value={formData.contractEmployees || ""}
+            onChange={handleChange}
+            min="0"
+            style={inputStyle}
+            placeholder="0"
+          />
+        </FormField>
+
+        <FormField label="Internship Employees">
+          <input
+            type="number"
+            name="internshipEmployees"
+            value={formData.internshipEmployees || ""}
+            onChange={handleChange}
+            min="0"
+            style={inputStyle}
+            placeholder="0"
+          />
+        </FormField>
+
+        <FormField label="Temporary Employees">
+          <input
+            type="number"
+            name="temporaryEmployees"
+            value={formData.temporaryEmployees || ""}
+            onChange={handleChange}
+            min="0"
+            style={inputStyle}
+            placeholder="0"
+          />
+        </FormField>
+      </div>
+
+      {/* ============================================================ */}
+      {/* SECTION 4: Industry Associations - 3 per row */}
+      {/* ============================================================ */}
+      <SectionHeading title="Industry Associations" />
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px' }}>
+        <FormField label="Are you a member of any industry association?">
+          <div style={{ display: 'flex', gap: '16px' }}>
+            {["yes", "no"].map((opt) => (
+              <label
+                key={opt}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '8px 16px',
+                  borderRadius: '6px',
+                  border: `2px solid ${memberOfAssociation === opt ? '#8B4513' : '#ccc'}`,
+                  backgroundColor: memberOfAssociation === opt ? '#fdf6ee' : 'white',
+                  cursor: 'pointer',
+                  fontWeight: memberOfAssociation === opt ? '600' : '400',
+                  color: memberOfAssociation === opt ? '#6B3410' : '#555',
+                  fontSize: '14px',
+                  transition: 'all 0.2s ease',
+                  userSelect: 'none',
+                }}
+              >
+                <input
+                  type="radio"
+                  name="memberOfAssociation"
+                  value={opt}
+                  checked={memberOfAssociation === opt}
+                  onChange={(e) => handleRadioChange("memberOfAssociation", e.target.value)}
+                  style={{ display: 'none' }}
+                />
+                <span style={{
+                  width: '16px', height: '16px', borderRadius: '50%', flexShrink: 0,
+                  border: `2px solid ${memberOfAssociation === opt ? '#8B4513' : '#ccc'}`,
+                  backgroundColor: memberOfAssociation === opt ? '#8B4513' : 'transparent',
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
                 }}>
-                  {formData.orgStructure ? (
-                    <div style={{ textAlign: 'center', padding: '6px' }}>
-                      <div style={{ fontSize: '28px', lineHeight: 1 }}>🗂️</div>
-                      <div style={{ fontSize: '9px', fontWeight: '600', color: '#8B6F47', marginTop: '2px' }}>Uploaded</div>
-                    </div>
-                  ) : (
-                    <div style={{ textAlign: 'center', padding: '6px' }}>
-                      <div style={{ fontSize: '28px', lineHeight: 1 }}>📊</div>
-                      <div style={{ fontSize: '9px', fontWeight: '600', color: '#8B6F47', marginTop: '2px' }}>No File</div>
-                    </div>
+                  {memberOfAssociation === opt && (
+                    <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: 'white' }} />
                   )}
-                </div>
+                </span>
+                <span style={{ textTransform: 'capitalize' }}>{opt}</span>
+              </label>
+            ))}
+          </div>
+        </FormField>
 
-                {/* Controls */}
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
-                  <div style={{ display: 'flex', gap: '8px' }}>
-                    <label
-                      htmlFor="org-structure-upload"
-                      style={{
-                        padding: '10px 14px',
-                        background: orgStructureUploading
-                          ? 'linear-gradient(135deg, #A0826D 0%, #8B6F47 100%)'
-                          : 'linear-gradient(135deg, #8B4513 0%, #6B3410 100%)',
-                        color: 'white', border: 'none', borderRadius: '5px',
-                        fontSize: '13px', fontWeight: '600',
-                        cursor: orgStructureUploading ? 'not-allowed' : 'pointer',
-                        display: 'inline-flex', alignItems: 'center', gap: '6px',
-                        transition: 'all 0.3s ease',
-                        opacity: orgStructureUploading ? 0.7 : 1,
-                      }}
-                    >
-                      {orgStructureUploading ? (
-                        <><div style={spinnerStyle}></div> Uploading...</>
-                      ) : (
-                        <><Upload size={14} />{formData.orgStructure ? 'Replace' : 'Upload'}</>
-                      )}
-                      <input
-                        id="org-structure-upload"
-                        type="file"
-                        accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.xlsx,.xls"
-                        onChange={handleOrgStructureUpload}
-                        disabled={orgStructureUploading}
-                        style={{ display: 'none' }}
-                      />
-                    </label>
-
-                    {formData.orgStructure && (
-                      <button
-                        type="button"
-                        onClick={handleDeleteOrgStructure}
-                        style={{
-                          padding: '10px',
-                          background: 'linear-gradient(135deg, #B8860B 0%, #996515 100%)',
-                          color: 'white', border: 'none', borderRadius: '5px',
-                          cursor: 'pointer', display: 'inline-flex', alignItems: 'center',
-                          justifyContent: 'center', width: '40px', height: '40px',
-                        }}
-                        title="Delete org structure"
-                      >
-                        <X size={16} />
-                      </button>
-                    )}
-                  </div>
-
-                  <div style={{
-                    fontSize: '11px', color: '#8B6F47', lineHeight: '1.4',
-                    backgroundColor: 'rgba(139,111,71,0.08)', padding: '8px 10px',
-                    borderRadius: '5px', border: '1px solid rgba(139,111,71,0.15)',
-                  }}>
-                    {formData.orgStructure ? (
-                      <>
-                        <div style={{ fontWeight: '600', marginBottom: '4px' }}>✅ Org Structure Uploaded</div>
-                        <a href={formData.orgStructure} target="_blank" rel="noopener noreferrer"
-                          style={{ color: '#8B4513', textDecoration: 'underline' }}>
-                          View Document ↗
-                        </a>
-                      </>
-                    ) : (
-                      <>
-                        <div style={{ fontWeight: '600', marginBottom: '2px' }}>📋 Accepted formats</div>
-                        <div>PDF, Word, Excel, Image • Max 10MB</div>
-                      </>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </FormField>
-        </div>
-
-        {/* RIGHT COLUMN */}
-        <div>
-          <FormField label="Business Stage" required>
-            <select name="operationStage" value={formData.operationStage || ""} onChange={handleChange} style={inputStyle} required>
-              <option value="">Select Operation Stage</option>
-              {operationStages.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
-            </select>
-          </FormField>
-
-          <FormField label="Economic Sector" required>
-            <MultiSelectDropdown
-              options={economicSectors}
-              selected={formData.economicSectors || []}
-              onChange={(value) => handleMultiSelectChange("economicSectors", value)}
-              placeholder="Select economic sectors..."
-            />
-          </FormField>
-
-          <FormField label="Brief Business Description" required>
-            <textarea name="businessDescription" value={formData.businessDescription || ""} onChange={handleChange} rows={4} style={{ ...inputStyle, resize: 'vertical' }} required />
-          </FormField>
-
-          {/* ── GEOGRAPHIC REACH ── */}
-          <SectionHeading title="Geographic Reach" />
-
-          <FormField label="Countries of Operation" required>
-            <MultiSelectDropdown
-              options={africanCountries}
-              selected={selectedCountries}
-              onChange={(value) => handleMultiSelectChange("operatingCountries", value)}
-              placeholder="Select countries..."
-            />
-          </FormField>
-
-          {showProvinces && (
-            <FormField label="Provinces (South Africa)" required>
+        {memberOfAssociation === "yes" && (
+          <>
+            <FormField label="Select your association(s)">
               <MultiSelectDropdown
-                options={southAfricanProvinces}
-                selected={Array.isArray(formData.operatingProvinces) ? formData.operatingProvinces : []}
-                onChange={(value) => handleMultiSelectChange("operatingProvinces", value)}
-                placeholder="Select provinces..."
+                options={industryAssociations}
+                selected={Array.isArray(formData.industryAssociations) ? formData.industryAssociations : []}
+                onChange={(value) => handleMultiSelectChange("industryAssociations", value)}
+                placeholder="Select associations..."
               />
             </FormField>
-          )}
 
-          {/* ── INDUSTRY ASSOCIATIONS ── */}
-          <SectionHeading title="Industry Associations" />
-
-          <FormField label="Are you a member of any industry association?">
-            <div style={{ display: 'flex', gap: '16px', marginBottom: memberOfAssociation === "yes" ? '1rem' : 0 }}>
-              {["yes", "no"].map((opt) => (
-                <label
-                  key={opt}
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '8px',
-                    padding: '8px 20px',
-                    borderRadius: '6px',
-                    border: `2px solid ${memberOfAssociation === opt ? '#8B4513' : '#ccc'}`,
-                    backgroundColor: memberOfAssociation === opt ? '#fdf6ee' : 'white',
-                    cursor: 'pointer',
-                    fontWeight: memberOfAssociation === opt ? '600' : '400',
-                    color: memberOfAssociation === opt ? '#6B3410' : '#555',
-                    fontSize: '14px',
-                    transition: 'all 0.2s ease',
-                    userSelect: 'none',
-                  }}
-                >
-                  <input
-                    type="radio"
-                    name="memberOfAssociation"
-                    value={opt}
-                    checked={memberOfAssociation === opt}
-                    onChange={handleChange}
-                    style={{ display: 'none' }}
-                  />
-                  <span style={{
-                    width: '16px', height: '16px', borderRadius: '50%', flexShrink: 0,
-                    border: `2px solid ${memberOfAssociation === opt ? '#8B4513' : '#ccc'}`,
-                    backgroundColor: memberOfAssociation === opt ? '#8B4513' : 'transparent',
-                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                  }}>
-                    {memberOfAssociation === opt && (
-                      <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: 'white' }} />
-                    )}
-                  </span>
-                  {opt === "yes" ? "Yes" : "No"}
-                </label>
-              ))}
-            </div>
-          </FormField>
-
-          {memberOfAssociation === "yes" && (
-            <>
-              <FormField label="Select your association(s)">
-                <MultiSelectDropdown
-                  options={industryAssociations}
-                  selected={Array.isArray(formData.industryAssociations) ? formData.industryAssociations : []}
-                  onChange={(value) => handleMultiSelectChange("industryAssociations", value)}
-                  placeholder="Select associations..."
+            {Array.isArray(formData.industryAssociations) && formData.industryAssociations.includes("Other") && (
+              <FormField label="Specify other association">
+                <input
+                  type="text"
+                  name="industryAssociationsOther"
+                  value={formData.industryAssociationsOther || ""}
+                  onChange={handleChange}
+                  placeholder="Please specify..."
+                  style={inputStyle}
                 />
-                {Array.isArray(formData.industryAssociations) && formData.industryAssociations.includes("Other") && (
-                  <div style={{ marginTop: '10px' }}>
-                    <input
-                      type="text"
-                      name="industryAssociationsOther"
-                      value={formData.industryAssociationsOther || ""}
-                      onChange={handleChange}
-                      placeholder="Please specify your association..."
-                      style={{ ...inputStyle, marginTop: '4px' }}
-                    />
+              </FormField>
+            )}
+          </>
+        )}
+
+        {memberOfAssociation === "no" && (
+          <div style={{
+            padding: '10px 12px',
+            backgroundColor: '#f5f5f5',
+            borderRadius: '4px',
+            fontSize: '12px',
+            color: '#666',
+            gridColumn: 'span 2',
+          }}>
+            You indicated that you are not a member of any industry association.
+          </div>
+        )}
+      </div>
+
+      {memberOfAssociation === "yes" && (
+        <div style={{
+          marginTop: '12px',
+          padding: '10px 12px',
+          backgroundColor: '#f0f7f0',
+          borderLeft: '3px solid #4CAF50',
+          borderRadius: '4px',
+          fontSize: '12px',
+          color: '#2e7d32',
+        }}>
+          <strong>📌 Note:</strong> The associations you select here will be able to see your business in their member ecosystem.
+          Make sure to select all associations you are a member of.
+        </div>
+      )}
+
+      {/* ============================================================ */}
+      {/* SECTION 5: Brand Assets - 2 per row */}
+      {/* ============================================================ */}
+      <SectionHeading title="Brand Assets" />
+
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
+        {/* Company Logo */}
+        <FormField label="Company Logo">
+          <div style={{
+            border: '2px dashed #C19A6B', borderRadius: '8px', padding: '16px',
+            backgroundColor: '#FAF8F5',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+              <div style={{
+                width: '80px', height: '80px', borderRadius: '50%', overflow: 'hidden',
+                border: '3px solid #8B6F47', backgroundColor: 'white',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                boxShadow: '0 4px 12px rgba(139,111,71,0.2)', flexShrink: 0,
+              }}>
+                {formData.companyLogo || logoPreview ? (
+                  <img src={logoPreview || formData.companyLogo} alt="Company Logo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                ) : (
+                  <div style={{ color: '#A0826D', fontSize: '10px', textAlign: 'center', padding: '6px' }}>
+                    <div style={{ fontSize: '28px', lineHeight: '1' }}>🏢</div>
+                    <div style={{ fontWeight: '600', color: '#8B6F47', fontSize: '9px' }}>No Logo</div>
                   </div>
                 )}
-              </FormField>
-              
-              {/* Help text to explain matching */}
-              <div style={{
-                marginTop: '8px',
-                padding: '10px 12px',
-                backgroundColor: '#f0f7f0',
-                borderLeft: '3px solid #4CAF50',
-                borderRadius: '4px',
-                fontSize: '12px',
-                color: '#2e7d32',
-              }}>
-                <strong>📌 Note:</strong> The associations you select here will be able to see your business in their member ecosystem. 
-                Make sure to select all associations you are a member of.
               </div>
-            </>
-          )}
-
-          {/* Only show "No associations selected" message if they answered "no" */}
-          {memberOfAssociation === "no" && (
-            <div style={{
-              marginTop: '8px',
-              padding: '10px 12px',
-              backgroundColor: '#f5f5f5',
-              borderRadius: '4px',
-              fontSize: '12px',
-              color: '#666',
-            }}>
-              You indicated that you are not a member of any industry association. You can update this later if needed.
-            </div>
-          )}
-
-          {/* Company Logo */}
-          <SectionHeading title="Brand Assets" />
-
-          <FormField label="Company Logo">
-            <div style={{
-              border: '2px dashed #C19A6B', borderRadius: '8px', padding: '16px',
-              backgroundColor: '#FAF8F5', maxWidth: '400px',
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                <div style={{
-                  width: '80px', height: '80px', borderRadius: '50%', overflow: 'hidden',
-                  border: '3px solid #8B6F47', backgroundColor: 'white',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  boxShadow: '0 4px 12px rgba(139,111,71,0.2)', flexShrink: 0,
-                }}>
-                  {formData.companyLogo || logoPreview ? (
-                    <img src={logoPreview || formData.companyLogo} alt="Company Logo" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                  ) : (
-                    <div style={{ color: '#A0826D', fontSize: '10px', textAlign: 'center', padding: '6px' }}>
-                      <div style={{ fontSize: '28px', lineHeight: '1' }}>🏢</div>
-                      <div style={{ fontWeight: '600', color: '#8B6F47', fontSize: '9px' }}>No Logo</div>
-                    </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  <label htmlFor="logo-upload" style={{
+                    padding: '10px 16px',
+                    background: logoUploading ? 'linear-gradient(135deg,#A0826D,#8B6F47)' : 'linear-gradient(135deg,#8B4513,#6B3410)',
+                    color: 'white', border: 'none', borderRadius: '5px', fontSize: '13px', fontWeight: '600',
+                    cursor: logoUploading ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: '8px',
+                    opacity: logoUploading ? 0.7 : 1,
+                  }}>
+                    {logoUploading ? <><div style={spinnerStyle}></div>Uploading...</> : <><Upload size={16} />{formData.companyLogo ? 'Replace' : 'Upload'}</>}
+                    <input id="logo-upload" type="file" accept="image/jpeg,image/jpg,image/png,image/gif,image/webp" onChange={handleLogoUpload} disabled={logoUploading} style={{ display: 'none' }} />
+                  </label>
+                  {(formData.companyLogo || logoPreview) && (
+                    <button type="button" onClick={handleRemoveLogo} style={{
+                      padding: '10px 16px', background: 'linear-gradient(135deg,#B8860B,#996515)', color: 'white',
+                      border: 'none', borderRadius: '5px', cursor: 'pointer',
+                      display: 'inline-flex', alignItems: 'center', gap: '8px',
+                    }}>
+                      <X size={16} />Delete
+                    </button>
                   )}
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
-                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                    <label htmlFor="logo-upload" title="Upload Logo" style={{
-                      padding: '10px', background: logoUploading ? 'linear-gradient(135deg,#A0826D,#8B6F47)' : 'linear-gradient(135deg,#8B4513,#6B3410)',
-                      color: 'white', border: 'none', borderRadius: '5px', fontSize: '13px', fontWeight: '600',
-                      cursor: logoUploading ? 'not-allowed' : 'pointer', display: 'inline-flex', alignItems: 'center',
-                      justifyContent: 'center', width: '40px', height: '40px', opacity: logoUploading ? 0.7 : 1,
-                    }}>
-                      {logoUploading ? <div style={spinnerStyle}></div> : <Upload size={18} />}
-                      <input id="logo-upload" type="file" accept="image/jpeg,image/jpg,image/png,image/gif,image/webp" onChange={handleLogoUpload} disabled={logoUploading} style={{ display: 'none' }} />
-                    </label>
-                    {(formData.companyLogo || logoPreview) && (
-                      <button type="button" onClick={handleRemoveLogo} title="Remove Logo" style={{
-                        padding: '10px', background: 'linear-gradient(135deg,#B8860B,#996515)', color: 'white',
-                        border: 'none', borderRadius: '5px', cursor: 'pointer',
-                        display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: '40px', height: '40px',
-                      }}>
-                        <X size={18} />
-                      </button>
-                    )}
-                  </div>
-                  <div style={{
-                    fontSize: '11px', color: '#8B6F47', lineHeight: '1.4',
-                    backgroundColor: 'rgba(139,111,71,0.08)', padding: '8px 10px',
-                    borderRadius: '5px', border: '1px solid rgba(139,111,71,0.15)',
-                  }}>
-                    <div style={{ fontWeight: '600', marginBottom: '2px' }}>📋 Requirements</div>
-                    <div>JPG, PNG, GIF, WebP • Max 5MB</div>
-                  </div>
+                <div style={{
+                  fontSize: '11px', color: '#8B6F47', lineHeight: '1.4',
+                  backgroundColor: 'rgba(139,111,71,0.08)', padding: '8px 10px',
+                  borderRadius: '5px', border: '1px solid rgba(139,111,71,0.15)',
+                }}>
+                  <div style={{ fontWeight: '600', marginBottom: '2px' }}>📋 Requirements</div>
+                  <div>JPG, PNG, GIF, WebP • Max 5MB</div>
                 </div>
               </div>
             </div>
-          </FormField>
+          </div>
+        </FormField>
 
-          {/* Company Letterhead */}
-          <FormField label="Company Letterhead">
-            <div style={{
-              border: '2px dashed #C19A6B', borderRadius: '8px', padding: '16px',
-              backgroundColor: '#FAF8F5', maxWidth: '400px',
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+        {/* Company Letterhead */}
+        <FormField label="Company Letterhead">
+          <div style={{
+            border: '2px dashed #C19A6B', borderRadius: '8px', padding: '16px',
+            backgroundColor: '#FAF8F5',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+              <div style={{
+                width: '80px', height: '80px', borderRadius: '8px', overflow: 'hidden',
+                border: '3px solid #8B6F47', backgroundColor: 'white',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                boxShadow: '0 4px 12px rgba(139,111,71,0.2)', flexShrink: 0,
+              }}>
+                {formData.companyLetterhead ? (
+                  <div style={{ padding: '8px', textAlign: 'center' }}>
+                    <div style={{ fontSize: '32px', lineHeight: '1', marginBottom: '4px' }}>📄</div>
+                    <div style={{ fontSize: '9px', fontWeight: '600', color: '#8B6F47' }}>Letterhead</div>
+                  </div>
+                ) : (
+                  <div style={{ color: '#A0826D', fontSize: '10px', textAlign: 'center', padding: '6px' }}>
+                    <div style={{ fontSize: '28px', lineHeight: '1', marginBottom: '2px' }}>📋</div>
+                    <div style={{ fontWeight: '600', color: '#8B6F47', fontSize: '9px' }}>No Letterhead</div>
+                  </div>
+                )}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  <label htmlFor="letterhead-upload" style={{
+                    padding: '10px 16px',
+                    background: letterheadUploading ? 'linear-gradient(135deg,#A0826D,#8B6F47)' : 'linear-gradient(135deg,#8B4513,#6B3410)',
+                    color: 'white', border: 'none', borderRadius: '5px', fontSize: '13px', fontWeight: '600',
+                    cursor: letterheadUploading ? 'not-allowed' : 'pointer',
+                    display: 'inline-flex', alignItems: 'center', gap: '8px',
+                    opacity: letterheadUploading ? 0.7 : 1,
+                  }}>
+                    {letterheadUploading ? <><div style={spinnerStyle}></div>Uploading...</> : <><Upload size={16} />{formData.companyLetterhead ? 'Replace' : 'Upload'}</>}
+                    <input id="letterhead-upload" type="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" onChange={handleLetterheadUpload} disabled={letterheadUploading} style={{ display: 'none' }} />
+                  </label>
+                  {formData.companyLetterhead && (
+                    <button type="button" onClick={handleDeleteLetterhead} style={{
+                      padding: '10px 16px', background: 'linear-gradient(135deg,#B8860B,#996515)', color: 'white',
+                      border: 'none', borderRadius: '5px', fontSize: '13px', fontWeight: '600', cursor: 'pointer',
+                      display: 'inline-flex', alignItems: 'center', gap: '8px',
+                    }}>
+                      <X size={16} />Delete
+                    </button>
+                  )}
+                </div>
                 <div style={{
-                  width: '80px', height: '80px', borderRadius: '8px', overflow: 'hidden',
-                  border: '3px solid #8B6F47', backgroundColor: 'white',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  boxShadow: '0 4px 12px rgba(139,111,71,0.2)', flexShrink: 0,
+                  fontSize: '11px', color: '#8B6F47', lineHeight: '1.4',
+                  backgroundColor: 'rgba(139,111,71,0.08)', padding: '8px 10px',
+                  borderRadius: '5px', border: '1px solid rgba(139,111,71,0.15)',
                 }}>
                   {formData.companyLetterhead ? (
-                    <div style={{ padding: '8px', textAlign: 'center' }}>
-                      <div style={{ fontSize: '32px', lineHeight: '1', marginBottom: '4px' }}>📄</div>
-                      <div style={{ fontSize: '9px', fontWeight: '600', color: '#8B6F47' }}>Letterhead</div>
-                    </div>
+                    <>
+                      <div style={{ fontWeight: '600', marginBottom: '4px' }}>✅ Letterhead Uploaded</div>
+                      <a href={formData.companyLetterhead} target="_blank" rel="noopener noreferrer"
+                        style={{ color: '#8B4513', textDecoration: 'underline' }}>View Document ↗</a>
+                    </>
                   ) : (
-                    <div style={{ color: '#A0826D', fontSize: '10px', textAlign: 'center', padding: '6px' }}>
-                      <div style={{ fontSize: '28px', lineHeight: '1', marginBottom: '2px' }}>📋</div>
-                      <div style={{ fontWeight: '600', color: '#8B6F47', fontSize: '9px' }}>No Letterhead</div>
-                    </div>
+                    <>
+                      <div style={{ fontWeight: '600', marginBottom: '2px' }}>📋 Requirements</div>
+                      <div>PDF, JPG, PNG • Max 10MB</div>
+                      <div style={{ marginTop: '2px' }}>Company name, logo, address, contact info required</div>
+                    </>
                   )}
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
-                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                    <label htmlFor="letterhead-upload" style={{
-                      padding: '10px 16px',
-                      background: letterheadUploading ? 'linear-gradient(135deg,#A0826D,#8B6F47)' : 'linear-gradient(135deg,#8B4513,#6B3410)',
-                      color: 'white', border: 'none', borderRadius: '5px', fontSize: '13px', fontWeight: '600',
-                      cursor: letterheadUploading ? 'not-allowed' : 'pointer',
-                      display: 'inline-flex', alignItems: 'center', gap: '8px',
-                      opacity: letterheadUploading ? 0.7 : 1,
-                    }}>
-                      {letterheadUploading ? <><div style={spinnerStyle}></div>Uploading...</> : <><Upload size={16} />{formData.companyLetterhead ? 'Replace' : 'Upload'}</>}
-                      <input id="letterhead-upload" type="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png" onChange={handleLetterheadUpload} disabled={letterheadUploading} style={{ display: 'none' }} />
-                    </label>
-                    {formData.companyLetterhead && (
-                      <button type="button" onClick={handleDeleteLetterhead} style={{
-                        padding: '10px 16px', background: 'linear-gradient(135deg,#B8860B,#996515)', color: 'white',
-                        border: 'none', borderRadius: '5px', fontSize: '13px', fontWeight: '600', cursor: 'pointer',
-                        display: 'inline-flex', alignItems: 'center', gap: '8px',
-                      }}>
-                        <X size={16} />Delete
-                      </button>
-                    )}
-                  </div>
-                  <div style={{
-                    fontSize: '11px', color: '#8B6F47', lineHeight: '1.4',
-                    backgroundColor: 'rgba(139,111,71,0.08)', padding: '8px 10px',
-                    borderRadius: '5px', border: '1px solid rgba(139,111,71,0.15)',
-                  }}>
-                    {formData.companyLetterhead ? (
-                      <>
-                        <div style={{ fontWeight: '600', marginBottom: '4px' }}>✅ Letterhead Uploaded</div>
-                        <a href={formData.companyLetterhead} target="_blank" rel="noopener noreferrer"
-                          style={{ color: '#8B4513', textDecoration: 'underline' }}>View Document ↗</a>
-                      </>
-                    ) : (
-                      <>
-                        <div style={{ fontWeight: '600', marginBottom: '2px' }}>📋 Requirements</div>
-                        <div>PDF, JPG, PNG • Max 10MB</div>
-                        <div style={{ marginTop: '2px' }}>Company name, logo, address, contact info required</div>
-                      </>
-                    )}
-                  </div>
                 </div>
               </div>
             </div>
-          </FormField>
-        </div>
+          </div>
+        </FormField>
+
+        {/* Organisational Structure */}
+        <FormField label="Organisational Structure (optional)">
+          <div style={{
+            border: '2px dashed #C19A6B',
+            borderRadius: '8px',
+            padding: '16px',
+            backgroundColor: '#FAF8F5',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+              <div style={{
+                width: '72px', height: '72px', borderRadius: '8px',
+                border: '3px solid #8B6F47', backgroundColor: 'white',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                boxShadow: '0 4px 12px rgba(139,111,71,0.2)', flexShrink: 0,
+              }}>
+                {formData.orgStructure ? (
+                  <div style={{ textAlign: 'center', padding: '6px' }}>
+                    <div style={{ fontSize: '28px', lineHeight: '1' }}>🗂️</div>
+                    <div style={{ fontSize: '9px', fontWeight: '600', color: '#8B6F47', marginTop: '2px' }}>Uploaded</div>
+                  </div>
+                ) : (
+                  <div style={{ textAlign: 'center', padding: '6px' }}>
+                    <div style={{ fontSize: '28px', lineHeight: '1' }}>📊</div>
+                    <div style={{ fontSize: '9px', fontWeight: '600', color: '#8B6F47', marginTop: '2px' }}>No File</div>
+                  </div>
+                )}
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: 1 }}>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <label
+                    htmlFor="org-structure-upload"
+                    style={{
+                      padding: '10px 16px',
+                      background: orgStructureUploading
+                        ? 'linear-gradient(135deg, #A0826D 0%, #8B6F47 100%)'
+                        : 'linear-gradient(135deg, #8B4513 0%, #6B3410 100%)',
+                      color: 'white', border: 'none', borderRadius: '5px',
+                      fontSize: '13px', fontWeight: '600',
+                      cursor: orgStructureUploading ? 'not-allowed' : 'pointer',
+                      display: 'inline-flex', alignItems: 'center', gap: '8px',
+                      transition: 'all 0.3s ease',
+                      opacity: orgStructureUploading ? 0.7 : 1,
+                    }}
+                  >
+                    {orgStructureUploading ? (
+                      <><div style={spinnerStyle}></div> Uploading...</>
+                    ) : (
+                      <><Upload size={16} />{formData.orgStructure ? 'Replace' : 'Upload'}</>
+                    )}
+                    <input
+                      id="org-structure-upload"
+                      type="file"
+                      accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.xlsx,.xls"
+                      onChange={handleOrgStructureUpload}
+                      disabled={orgStructureUploading}
+                      style={{ display: 'none' }}
+                    />
+                  </label>
+
+                  {formData.orgStructure && (
+                    <button
+                      type="button"
+                      onClick={handleDeleteOrgStructure}
+                      style={{
+                        padding: '10px 16px',
+                        background: 'linear-gradient(135deg, #B8860B 0%, #996515 100%)',
+                        color: 'white', border: 'none', borderRadius: '5px',
+                        cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '8px',
+                      }}
+                    >
+                      <X size={16} />Delete
+                    </button>
+                  )}
+                </div>
+
+                <div style={{
+                  fontSize: '11px', color: '#8B6F47', lineHeight: '1.4',
+                  backgroundColor: 'rgba(139,111,71,0.08)', padding: '8px 10px',
+                  borderRadius: '5px', border: '1px solid rgba(139,111,71,0.15)',
+                }}>
+                  {formData.orgStructure ? (
+                    <>
+                      <div style={{ fontWeight: '600', marginBottom: '4px' }}>✅ Org Structure Uploaded</div>
+                      <a href={formData.orgStructure} target="_blank" rel="noopener noreferrer"
+                        style={{ color: '#8B4513', textDecoration: 'underline' }}>
+                        View Document ↗
+                      </a>
+                    </>
+                  ) : (
+                    <>
+                      <div style={{ fontWeight: '600', marginBottom: '2px' }}>📋 Accepted formats</div>
+                      <div>PDF, Word, Excel, Image • Max 10MB</div>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </FormField>
       </div>
     </div>
   )

@@ -1,16 +1,41 @@
-import React from "react";
-import "./UniversalProfile.css"
+import React, { useState, useEffect } from "react";
+import "./UniversalProfile.css";
 import FormField from "./form-field";
 
+// ── Currencies ──
+const currencies = [
+  { value: "ZAR", label: "ZAR - South African Rand" },
+  { value: "USD", label: "USD - US Dollar" },
+  { value: "EUR", label: "EUR - Euro" },
+  { value: "GBP", label: "GBP - British Pound" },
+  { value: "NGN", label: "NGN - Nigerian Naira" },
+];
+
+// ── Import/Export options ──
+const importExportOptions = [
+  { value: "import", label: "Import" },
+  { value: "export", label: "Export" },
+  { value: "both", label: "Both" },
+  { value: "none", label: "None" },
+];
+
 const OperationsOverview = ({ data, updateData }) => {
+  const [formData, setFormData] = useState({});
+
+  useEffect(() => {
+    setFormData(data || {});
+  }, [data]);
+
   const handleInputChange = (field, value) => {
-    updateData({ [field]: value });
+    const newData = { ...formData, [field]: value };
+    setFormData(newData);
+    updateData(newData);
   };
 
-  // Proper radio group with actual input elements
-  const renderRadioGroup = (name, currentValue) => (
-    <div style={{ display: 'flex', gap: '24px', marginTop: '6px' }}>
-      {["yes", "no"].map((val) => (
+  // Radio Group Component
+  const renderRadioGroup = (name, currentValue, options = ["yes", "no"]) => (
+    <div style={{ display: 'flex', gap: '24px', marginTop: '6px', flexWrap: 'wrap' }}>
+      {options.map((val) => (
         <label
           key={val}
           style={{
@@ -86,26 +111,263 @@ const OperationsOverview = ({ data, updateData }) => {
     </div>
   );
 
+  const inputStyle = {
+    width: '100%',
+    padding: '8px 12px',
+    border: '1px solid #ccc',
+    borderRadius: '4px',
+    fontSize: '14px',
+  };
+
+  const hasBranches = formData.hasBranches === "yes";
+  const outsourcesValueChain = formData.outsourcesValueChain;
+  const importExport = formData.importExport;
+  const operatesOnContract = formData.operatesOnContract;
+
   return (
     <>
       <h2>Operations Overview</h2>
 
       <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
 
-        {/* Section 1 – Supplier & Continuity Risk */}
+        {/* ============================================================ */}
+        {/* SECTION 1: Outsourcing & Value Chain - 3 per row */}
+        {/* ============================================================ */}
         <div>
-          <SectionHeading number="1" title="Supplier & Continuity Risk" />
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
-            <FormField label="Do you rely on more than one key supplier for critical inputs or services?" required>
-              {renderRadioGroup("multipleSuppliers", data.multipleSuppliers)}
-            </FormField>
-
-            <FormField label="Do you have a documented contingency or continuity plan?" required>
-              {renderRadioGroup("contingencyPlan", data.contingencyPlan)}
+          <SectionHeading number="1" title="Outsourcing & Value Chain" />
+          
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px' }}>
+            <FormField label="Do you contract any part of your value chain?" required>
+              {renderRadioGroup("outsourcesValueChain", formData.outsourcesValueChain)}
             </FormField>
           </div>
 
-          {data.multipleSuppliers === "yes" && (
+          {outsourcesValueChain === "yes" && (
+            <div style={{ 
+              marginTop: '12px',
+              padding: '1rem', 
+              backgroundColor: "#f9f7f3", 
+              borderRadius: "8px", 
+              border: "1px solid #d6c4a8" 
+            }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px' }}>
+                <FormField label="Which services are outsourced?">
+                  <input
+                    type="text"
+                    name="outsourcedServices"
+                    value={formData.outsourcedServices || ""}
+                    onChange={(e) => handleInputChange("outsourcedServices", e.target.value)}
+                    style={inputStyle}
+                    placeholder="e.g., Logistics, IT, Manufacturing"
+                  />
+                </FormField>
+                <FormField label="Annual value of outsourced services">
+                  <input
+                    type="number"
+                    name="outsourcedValue"
+                    value={formData.outsourcedValue || ""}
+                    onChange={(e) => handleInputChange("outsourcedValue", e.target.value)}
+                    min="0"
+                    style={inputStyle}
+                    placeholder="0"
+                  />
+                </FormField>
+                <FormField label="Currency">
+                  <select
+                    name="outsourcedCurrency"
+                    value={formData.outsourcedCurrency || "ZAR"}
+                    onChange={(e) => handleInputChange("outsourcedCurrency", e.target.value)}
+                    style={inputStyle}
+                  >
+                    {currencies.map((c) => (
+                      <option key={c.value} value={c.value}>{c.label}</option>
+                    ))}
+                  </select>
+                </FormField>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* ============================================================ */}
+        {/* SECTION 2: Import / Export - 3 per row */}
+        {/* ============================================================ */}
+        <div>
+          <SectionHeading number="2" title="Import / Export" />
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px' }}>
+            <FormField label="Do you Import and/or Export?" required>
+              <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap' }}>
+                {importExportOptions.map((opt) => (
+                  <label
+                    key={opt.value}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      padding: '6px 14px',
+                      borderRadius: '6px',
+                      border: `2px solid ${importExport === opt.value ? '#8B4513' : '#ccc'}`,
+                      backgroundColor: importExport === opt.value ? '#fdf6ee' : 'white',
+                      cursor: 'pointer',
+                      fontWeight: importExport === opt.value ? '600' : '400',
+                      color: importExport === opt.value ? '#6B3410' : '#555',
+                      fontSize: '13px',
+                      transition: 'all 0.2s ease',
+                      userSelect: 'none',
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      name="importExport"
+                      value={opt.value}
+                      checked={importExport === opt.value}
+                      onChange={(e) => handleInputChange("importExport", e.target.value)}
+                      style={{ display: 'none' }}
+                    />
+                    <span style={{
+                      width: '14px', height: '14px', borderRadius: '50%', flexShrink: 0,
+                      border: `2px solid ${importExport === opt.value ? '#8B4513' : '#ccc'}`,
+                      backgroundColor: importExport === opt.value ? '#8B4513' : 'transparent',
+                      display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                    }}>
+                      {importExport === opt.value && (
+                        <span style={{ width: '5px', height: '5px', borderRadius: '50%', backgroundColor: 'white' }} />
+                      )}
+                    </span>
+                    <span style={{ textTransform: 'capitalize' }}>{opt.label}</span>
+                  </label>
+                ))}
+              </div>
+            </FormField>
+
+            {importExport !== "none" && (
+              <>
+                <FormField label="Annual value">
+                  <input
+                    type="number"
+                    name="importExportValue"
+                    value={formData.importExportValue || ""}
+                    onChange={(e) => handleInputChange("importExportValue", e.target.value)}
+                    min="0"
+                    style={inputStyle}
+                    placeholder="0"
+                  />
+                </FormField>
+                <FormField label="Currency">
+                  <select
+                    name="importExportCurrency"
+                    value={formData.importExportCurrency || "ZAR"}
+                    onChange={(e) => handleInputChange("importExportCurrency", e.target.value)}
+                    style={inputStyle}
+                  >
+                    {currencies.map((c) => (
+                      <option key={c.value} value={c.value}>{c.label}</option>
+                    ))}
+                  </select>
+                </FormField>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* ============================================================ */}
+        {/* SECTION 3: Brands, Franchises & Agencies - 3 per row */}
+        {/* ============================================================ */}
+        <div>
+          <SectionHeading number="3" title="Brands, Franchises & Agencies" />
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px' }}>
+            <FormField label="Brands Owned">
+              <input
+                type="text"
+                name="brandsOwned"
+                value={formData.brandsOwned || ""}
+                onChange={(e) => handleInputChange("brandsOwned", e.target.value)}
+                style={inputStyle}
+                placeholder="e.g., Brand A, Brand B"
+              />
+            </FormField>
+
+            <FormField label="Brands Represented">
+              <input
+                type="text"
+                name="brandsRepresented"
+                value={formData.brandsRepresented || ""}
+                onChange={(e) => handleInputChange("brandsRepresented", e.target.value)}
+                style={inputStyle}
+                placeholder="e.g., Brand X, Brand Y"
+              />
+            </FormField>
+
+            <FormField label="Do you hold any Franchises?">
+              {renderRadioGroup("holdsFranchises", formData.holdsFranchises)}
+            </FormField>
+
+            <FormField label="Do you hold any Agencies?">
+              {renderRadioGroup("holdsAgencies", formData.holdsAgencies)}
+            </FormField>
+          </div>
+        </div>
+
+        {/* ============================================================ */}
+        {/* SECTION 4: Contract Operations - 3 per row */}
+        {/* ============================================================ */}
+        <div>
+          <SectionHeading number="4" title="Contract Operations" />
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px' }}>
+            <FormField label="Do you operate on a contract basis?" required>
+              {renderRadioGroup("operatesOnContract", formData.operatesOnContract)}
+            </FormField>
+
+            {operatesOnContract === "yes" && (
+              <>
+                <FormField label="Total contracts value">
+                  <input
+                    type="number"
+                    name="totalContractValue"
+                    value={formData.totalContractValue || ""}
+                    onChange={(e) => handleInputChange("totalContractValue", e.target.value)}
+                    min="0"
+                    style={inputStyle}
+                    placeholder="0"
+                  />
+                </FormField>
+                <FormField label="Currency">
+                  <select
+                    name="contractCurrency"
+                    value={formData.contractCurrency || "ZAR"}
+                    onChange={(e) => handleInputChange("contractCurrency", e.target.value)}
+                    style={inputStyle}
+                  >
+                    {currencies.map((c) => (
+                      <option key={c.value} value={c.value}>{c.label}</option>
+                    ))}
+                  </select>
+                </FormField>
+              </>
+            )}
+          </div>
+        </div>
+
+        {/* ============================================================ */}
+        {/* SECTION 5: Supplier & Continuity Risk - 3 per row */}
+        {/* ============================================================ */}
+        <div>
+          <SectionHeading number="5" title="Supplier & Continuity Risk" />
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px' }}>
+            <FormField label="Do you rely on more than one key supplier for critical inputs or services?" required>
+              {renderRadioGroup("multipleSuppliers", formData.multipleSuppliers)}
+            </FormField>
+
+            <FormField label="Do you have a documented contingency or continuity plan?" required>
+              {renderRadioGroup("contingencyPlan", formData.contingencyPlan)}
+            </FormField>
+          </div>
+
+          {formData.multipleSuppliers === "yes" && (
             <div style={{ 
               marginTop: '12px',
               padding: '1rem', 
@@ -114,7 +376,7 @@ const OperationsOverview = ({ data, updateData }) => {
               border: "1px solid #d6c4a8" 
             }}>
               <h5 style={{ color: "#3d2b1f", marginBottom: "0.75rem", fontSize: "14px" }}>Supplier References</h5>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px' }}>
                 {/* Supplier 1 */}
                 <div>
                   <label style={{ fontSize: "13px", color: "#5c4a3a", marginBottom: "4px", display: "block", fontWeight: "500" }}>
@@ -123,35 +385,23 @@ const OperationsOverview = ({ data, updateData }) => {
                   <input
                     type="text"
                     name="supplier1Name"
-                    value={data.supplier1Name || ""}
+                    value={formData.supplier1Name || ""}
                     onChange={(e) => handleInputChange("supplier1Name", e.target.value)}
-                    style={{
-                      width: '100%',
-                      padding: '8px 12px',
-                      border: '1px solid #d6c4a8',
-                      borderRadius: '4px',
-                      fontSize: '14px',
-                    }}
+                    style={inputStyle}
                     placeholder="Company Name"
                   />
                 </div>
                 <div>
                   <label style={{ fontSize: "13px", color: "#5c4a3a", marginBottom: "4px", display: "block", fontWeight: "500" }}>
-                    Supplier 1 - Contact Telephone No.
+                    Supplier 1 - Contact
                   </label>
                   <input
                     type="text"
                     name="supplier1Contact"
-                    value={data.supplier1Contact || ""}
+                    value={formData.supplier1Contact || ""}
                     onChange={(e) => handleInputChange("supplier1Contact", e.target.value)}
-                    style={{
-                      width: '100%',
-                      padding: '8px 12px',
-                      border: '1px solid #d6c4a8',
-                      borderRadius: '4px',
-                      fontSize: '14px',
-                    }}
-                    placeholder="Contact Telephone No."
+                    style={inputStyle}
+                    placeholder="Telephone No."
                   />
                 </div>
 
@@ -163,35 +413,23 @@ const OperationsOverview = ({ data, updateData }) => {
                   <input
                     type="text"
                     name="supplier2Name"
-                    value={data.supplier2Name || ""}
+                    value={formData.supplier2Name || ""}
                     onChange={(e) => handleInputChange("supplier2Name", e.target.value)}
-                    style={{
-                      width: '100%',
-                      padding: '8px 12px',
-                      border: '1px solid #d6c4a8',
-                      borderRadius: '4px',
-                      fontSize: '14px',
-                    }}
+                    style={inputStyle}
                     placeholder="Company Name"
                   />
                 </div>
                 <div>
                   <label style={{ fontSize: "13px", color: "#5c4a3a", marginBottom: "4px", display: "block", fontWeight: "500" }}>
-                    Supplier 2 - Contact Telephone No.
+                    Supplier 2 - Contact
                   </label>
                   <input
                     type="text"
                     name="supplier2Contact"
-                    value={data.supplier2Contact || ""}
+                    value={formData.supplier2Contact || ""}
                     onChange={(e) => handleInputChange("supplier2Contact", e.target.value)}
-                    style={{
-                      width: '100%',
-                      padding: '8px 12px',
-                      border: '1px solid #d6c4a8',
-                      borderRadius: '4px',
-                      fontSize: '14px',
-                    }}
-                    placeholder="Contact Telephone No."
+                    style={inputStyle}
+                    placeholder="Telephone No."
                   />
                 </div>
 
@@ -203,35 +441,23 @@ const OperationsOverview = ({ data, updateData }) => {
                   <input
                     type="text"
                     name="supplier3Name"
-                    value={data.supplier3Name || ""}
+                    value={formData.supplier3Name || ""}
                     onChange={(e) => handleInputChange("supplier3Name", e.target.value)}
-                    style={{
-                      width: '100%',
-                      padding: '8px 12px',
-                      border: '1px solid #d6c4a8',
-                      borderRadius: '4px',
-                      fontSize: '14px',
-                    }}
+                    style={inputStyle}
                     placeholder="Company Name"
                   />
                 </div>
                 <div>
                   <label style={{ fontSize: "13px", color: "#5c4a3a", marginBottom: "4px", display: "block", fontWeight: "500" }}>
-                    Supplier 3 - Contact Telephone No.
+                    Supplier 3 - Contact
                   </label>
                   <input
                     type="text"
                     name="supplier3Contact"
-                    value={data.supplier3Contact || ""}
+                    value={formData.supplier3Contact || ""}
                     onChange={(e) => handleInputChange("supplier3Contact", e.target.value)}
-                    style={{
-                      width: '100%',
-                      padding: '8px 12px',
-                      border: '1px solid #d6c4a8',
-                      borderRadius: '4px',
-                      fontSize: '14px',
-                    }}
-                    placeholder="Contact Telephone No."
+                    style={inputStyle}
+                    placeholder="Telephone No."
                   />
                 </div>
               </div>
@@ -239,42 +465,177 @@ const OperationsOverview = ({ data, updateData }) => {
           )}
         </div>
 
-        {/* Section 2 – Delivery (Productivity & Reliability) */}
+        {/* ============================================================ */}
+        {/* SECTION 6: Premises & Facilities - 3 per row */}
+        {/* ============================================================ */}
         <div>
-          <SectionHeading number="2" title="Delivery (Productivity & Reliability)" />
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+          <SectionHeading number="6" title="Premises & Facilities" />
+          
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px' }}>
+            <FormField label="Premises rented or owned?" required>
+              <select 
+                name="premisesStatus" 
+                value={formData.premisesStatus || ""} 
+                onChange={(e) => handleInputChange("premisesStatus", e.target.value)} 
+                style={inputStyle} 
+                required
+              >
+                <option value="">Select</option>
+                <option value="rented">Rented</option>
+                <option value="owned">Owned</option>
+              </select>
+            </FormField>
+            
+            {formData.premisesStatus === "rented" && (
+              <FormField label="Lease Expiry Date">
+                <input 
+                  type="date" 
+                  name="leaseExpiryDate" 
+                  value={formData.leaseExpiryDate || ""} 
+                  onChange={(e) => handleInputChange("leaseExpiryDate", e.target.value)} 
+                  style={inputStyle} 
+                />
+              </FormField>
+            )}
+            
+            <FormField label="Type of Premises">
+              <select 
+                name="premisesType" 
+                value={formData.premisesType || ""} 
+                onChange={(e) => handleInputChange("premisesType", e.target.value)} 
+                style={inputStyle}
+              >
+                <option value="">Select</option>
+                <option value="offices">Offices</option>
+                <option value="warehouse">Warehouse</option>
+                <option value="factory">Factory</option>
+                <option value="workshop">Workshop</option>
+                <option value="retail">Retail Space</option>
+                <option value="other">Other</option>
+              </select>
+            </FormField>
+            
+            <FormField label="Size of Premises (sqm)">
+              <input 
+                type="number" 
+                name="premisesSize" 
+                value={formData.premisesSize || ""} 
+                onChange={(e) => handleInputChange("premisesSize", e.target.value)} 
+                min="0" 
+                style={inputStyle} 
+                placeholder="e.g., 500" 
+              />
+            </FormField>
+          </div>
+
+          <FormField label="Other premises (branches) rented or owned?">
+            <select 
+              name="hasBranches" 
+              value={formData.hasBranches || ""} 
+              onChange={(e) => handleInputChange("hasBranches", e.target.value)} 
+              style={inputStyle}
+            >
+              <option value="">Select</option>
+              <option value="yes">Yes</option>
+              <option value="no">No</option>
+            </select>
+          </FormField>
+
+          {hasBranches && (
+            <div style={{ 
+              marginTop: '12px',
+              padding: '1rem', 
+              backgroundColor: "#f9f7f3", 
+              borderRadius: "8px", 
+              border: "1px solid #d6c4a8" 
+            }}>
+              <h5 style={{ color: "#3d2b1f", marginBottom: "0.75rem", fontSize: "14px" }}>Branch Information</h5>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px' }}>
+                <FormField label="Number of Branches" required>
+                  <input 
+                    type="number" 
+                    name="numberOfBranches" 
+                    value={formData.numberOfBranches || ""} 
+                    onChange={(e) => handleInputChange("numberOfBranches", e.target.value)} 
+                    min="0" 
+                    style={inputStyle} 
+                    required 
+                  />
+                </FormField>
+                <FormField label="Branch Location(s)">
+                  <input 
+                    type="text" 
+                    name="branchLocations" 
+                    value={formData.branchLocations || ""} 
+                    onChange={(e) => handleInputChange("branchLocations", e.target.value)} 
+                    style={inputStyle} 
+                    placeholder="e.g., Cape Town, Durban" 
+                  />
+                </FormField>
+                <FormField label="Staff at Branches">
+                  <input 
+                    type="number" 
+                    name="branchStaff" 
+                    value={formData.branchStaff || ""} 
+                    onChange={(e) => handleInputChange("branchStaff", e.target.value)} 
+                    min="0" 
+                    style={inputStyle} 
+                    placeholder="0" 
+                  />
+                </FormField>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* ============================================================ */}
+        {/* SECTION 7: Delivery (Productivity & Reliability) - 3 per row */}
+        {/* ============================================================ */}
+        <div>
+          <SectionHeading number="7" title="Delivery (Productivity & Reliability)" />
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px' }}>
             <FormField label="Do you track operational performance metrics?" required>
-              {renderRadioGroup("trackPerformanceMetrics", data.trackPerformanceMetrics)}
+              {renderRadioGroup("trackPerformanceMetrics", formData.trackPerformanceMetrics)}
             </FormField>
+
             <FormField label="Have you delivered at least three contracts successfully in the past 12 months?" required>
-              {renderRadioGroup("threeSuccessfulDeliveries", data.threeSuccessfulDeliveries)}
+              {renderRadioGroup("threeSuccessfulDeliveries", formData.threeSuccessfulDeliveries)}
             </FormField>
+
             <FormField label="Do you have capacity to increase output without compromising quality?" required>
-              {renderRadioGroup("hasCapacityToIncrease", data.hasCapacityToIncrease)}
+              {renderRadioGroup("hasCapacityToIncrease", formData.hasCapacityToIncrease)}
             </FormField>
           </div>
         </div>
 
-        {/* Section 3 – Safety (Risk & Compliance) */}
+        {/* ============================================================ */}
+        {/* SECTION 8: Safety (Risk & Compliance) - 3 per row */}
+        {/* ============================================================ */}
         <div>
-          <SectionHeading number="3" title="Safety (Risk & Compliance)" />
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+          <SectionHeading number="8" title="Safety (Risk & Compliance)" />
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px' }}>
             <FormField label="Do you have formal safety, risk, or compliance procedures?" required>
-              {renderRadioGroup("hasFormalProcedures", data.hasFormalProcedures)}
+              {renderRadioGroup("hasFormalProcedures", formData.hasFormalProcedures)}
             </FormField>
+
             <FormField label="Have you experienced any major operational incidents in the past 24 months?" required>
-              {renderRadioGroup("hasMajorIncidents", data.hasMajorIncidents)}
+              {renderRadioGroup("hasMajorIncidents", formData.hasMajorIncidents)}
             </FormField>
           </div>
         </div>
 
-        {/* Section 4 – Operational Challenges */}
+        {/* ============================================================ */}
+        {/* SECTION 9: Operational Challenges - Full Width */}
+        {/* ============================================================ */}
         <div>
-          <SectionHeading number="4" title="Operational Challenges" />
+          <SectionHeading number="9" title="Operational Challenges" />
+
           <FormField label="What are your current operational challenges?">
             <textarea
               name="operationalChallenges"
-              value={data.operationalChallenges || ""}
+              value={formData.operationalChallenges || ""}
               onChange={(e) => handleInputChange("operationalChallenges", e.target.value)}
               rows={4}
               placeholder="Describe any operational challenges your business is currently facing (e.g. supply chain disruptions, capacity constraints, skills gaps, technology limitations)"
