@@ -47,8 +47,9 @@ const categoryOptions = [
 
 const industryOptions = categoryOptions
 
-// MultiSelect component
-function MultiSelect({ options, selected, onChange, label, placeholder }) {
+// MultiSelect component - Fixed sizing
+// MultiSelect component - Fixed scrolling and sizing
+function MultiSelect({ options, selected = [], onChange, label, placeholder }) {
   const [isOpen, setIsOpen] = useState(false)
 
   const toggleDropdown = () => setIsOpen(!isOpen)
@@ -62,36 +63,40 @@ function MultiSelect({ options, selected, onChange, label, placeholder }) {
   }
 
   return (
-    <div style={{ position: 'relative' }}>
+    <div style={{ position: 'relative', width: '100%' }}>
       <div
         onClick={toggleDropdown}
         style={{
           border: '1px solid #d6c4a8',
-          borderRadius: '4px',
-          padding: '6px 10px',
+          borderRadius: '6px',
+          padding: '10px 14px',
           cursor: 'pointer',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          minHeight: '36px',
+          minHeight: '44px',
           backgroundColor: 'white',
-          transition: 'border-color 0.2s'
+          transition: 'border-color 0.2s, box-shadow 0.2s',
+          boxShadow: '0 1px 3px rgba(0,0,0,0.05)'
         }}
         onMouseEnter={(e) => e.currentTarget.style.borderColor = '#8B4513'}
         onMouseLeave={(e) => e.currentTarget.style.borderColor = '#d6c4a8'}
       >
-        {selected.length > 0 ? (
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '3px' }}>
+        {selected && selected.length > 0 ? (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', flex: 1 }}>
             {selected.map((cat) => (
               <span
                 key={cat}
                 style={{ 
                   backgroundColor: '#f0e8d8', 
-                  padding: '1px 8px', 
-                  borderRadius: '10px', 
-                  fontSize: '10px',
+                  padding: '4px 12px', 
+                  borderRadius: '14px', 
+                  fontSize: '13px',
                   color: '#5c3a1e',
-                  fontWeight: '500'
+                  fontWeight: '500',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px'
                 }}
               >
                 {options.find((opt) => opt.value === cat)?.label || cat}
@@ -99,25 +104,26 @@ function MultiSelect({ options, selected, onChange, label, placeholder }) {
             ))}
           </div>
         ) : (
-          <span style={{ color: '#999', fontSize: '11px' }}>{placeholder || `Select ${label}`}</span>
+          <span style={{ color: '#999', fontSize: '14px' }}>{placeholder || `Select ${label}`}</span>
         )}
-        {isOpen ? <ChevronUp size={14} color="#5c3a1e" /> : <ChevronDown size={14} color="#5c3a1e" />}
+        {isOpen ? <ChevronUp size={20} color="#5c3a1e" /> : <ChevronDown size={20} color="#5c3a1e" />}
       </div>
 
       {isOpen && (
         <div style={{
           position: 'absolute', 
-          top: '100%', 
+          top: 'calc(100% + 4px)', 
           left: 0, 
           right: 0,
           backgroundColor: 'white', 
           border: '1px solid #d6c4a8', 
-          borderRadius: '4px',
+          borderRadius: '6px',
           marginTop: '4px', 
-          zIndex: 1000, 
-          maxHeight: '280px', 
-          overflow: 'auto',
-          boxShadow: '0 8px 24px rgba(0,0,0,0.15)'
+          zIndex: 9999, 
+          maxHeight: '280px',  // Increased to show more items
+          overflow: 'auto',    // Enables scrolling
+          boxShadow: '0 8px 32px rgba(0,0,0,0.15)',
+          minWidth: '250px'
         }}>
           <div style={{ padding: '4px' }}>
             {options.map((option) => (
@@ -125,14 +131,16 @@ function MultiSelect({ options, selected, onChange, label, placeholder }) {
                 key={option.value}
                 onClick={() => handleSelect(option.value)}
                 style={{
-                  padding: '6px 10px', 
+                  padding: '10px 14px', 
                   cursor: 'pointer',
                   backgroundColor: selected.includes(option.value) ? '#fdf6ed' : 'white',
                   display: 'flex', 
                   alignItems: 'center', 
-                  gap: '8px',
+                  gap: '12px',
                   borderBottom: '1px solid #f5f0e8',
-                  fontSize: '11px'
+                  fontSize: '14px',
+                  borderRadius: '4px',
+                  transition: 'background-color 0.15s'
                 }}
                 onMouseEnter={(e) => {
                   if (!selected.includes(option.value)) {
@@ -145,39 +153,46 @@ function MultiSelect({ options, selected, onChange, label, placeholder }) {
                   }
                 }}
               >
-                <input 
-                  type="checkbox" 
-                  checked={selected.includes(option.value)} 
-                  onChange={() => {}} 
-                  style={{ 
-                    cursor: 'pointer',
-                    accentColor: '#8B4513',
-                    width: '14px',
-                    height: '14px'
-                  }} 
-                />
+                <div style={{
+                  width: '20px', 
+                  height: '20px', 
+                  borderRadius: '4px',
+                  border: `2px solid ${selected.includes(option.value) ? '#8B4513' : '#d1d5db'}`,
+                  backgroundColor: selected.includes(option.value) ? '#8B4513' : 'white',
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  justifyContent: 'center',
+                  flexShrink: 0
+                }}>
+                  {selected.includes(option.value) && (
+                    <span style={{ color: 'white', fontSize: '14px', fontWeight: 'bold' }}>✓</span>
+                  )}
+                </div>
                 <span style={{ color: '#3d2b1f' }}>{option.label}</span>
               </div>
             ))}
           </div>
           <div style={{ 
-            padding: '6px', 
+            padding: '10px', 
             borderTop: '1px solid #d6c4a8',
-            backgroundColor: '#fdfaf5'
+            backgroundColor: '#fdfaf5',
+            borderRadius: '0 0 6px 6px',
+            position: 'sticky',
+            bottom: 0
           }}>
             <button 
               type="button" 
               onClick={closeDropdown} 
               style={{
                 width: '100%', 
-                padding: '6px',
+                padding: '10px',
                 backgroundColor: '#8B4513',
                 color: 'white', 
                 border: 'none', 
                 borderRadius: '4px', 
                 cursor: 'pointer',
                 fontWeight: '600',
-                fontSize: '11px',
+                fontSize: '14px',
                 transition: 'background-color 0.2s'
               }}
               onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#5c3a1e'}
@@ -192,24 +207,32 @@ function MultiSelect({ options, selected, onChange, label, placeholder }) {
   )
 }
 
-// Yes/No dropdown
+// Yes/No dropdown - Fixed sizing
 const YesNoDropdown = ({ value, onChange }) => (
   <select
     value={value || ""}
     onChange={(e) => onChange(e.target.value)}
     style={{
       width: '100%',
-      padding: '6px 10px',
+      padding: '10px 14px',
       border: '1px solid #d6c4a8',
-      borderRadius: '4px',
-      fontSize: '11px',
+      borderRadius: '6px',
+      fontSize: '14px',
       backgroundColor: 'white',
       outline: 'none',
-      transition: 'border-color 0.2s',
-      color: '#3d2b1f'
+      transition: 'border-color 0.2s, box-shadow 0.2s',
+      color: '#3d2b1f',
+      minHeight: '44px',
+      cursor: 'pointer'
     }}
-    onFocus={(e) => e.currentTarget.style.borderColor = '#8B4513'}
-    onBlur={(e) => e.currentTarget.style.borderColor = '#d6c4a8'}
+    onFocus={(e) => {
+      e.currentTarget.style.borderColor = '#8B4513'
+      e.currentTarget.style.boxShadow = '0 0 0 3px rgba(139,69,19,0.1)'
+    }}
+    onBlur={(e) => {
+      e.currentTarget.style.borderColor = '#d6c4a8'
+      e.currentTarget.style.boxShadow = 'none'
+    }}
   >
     <option value="">Select...</option>
     <option value="Yes">Yes</option>
@@ -221,7 +244,7 @@ const YesNoDropdown = ({ value, onChange }) => (
 const Section = ({ title, description, children }) => (
   <div style={{
     marginBottom: '24px',
-    padding: '20px',
+    padding: '24px',
     backgroundColor: '#fdfaf5',
     borderRadius: '8px',
     border: '1px solid #d6c4a8',
@@ -277,12 +300,12 @@ const SectionHeader = ({ title, onAdd, addLabel }) => (
           display: 'flex',
           alignItems: 'center',
           gap: '6px',
-          padding: '6px 14px',
+          padding: '8px 18px',
           backgroundColor: '#f0e8d8',
           color: '#5c3a1e',
           border: 'none',
           borderRadius: '4px',
-          fontSize: '12px',
+          fontSize: '13px',
           fontWeight: '600',
           cursor: 'pointer',
           transition: 'background-color 0.2s'
@@ -290,7 +313,7 @@ const SectionHeader = ({ title, onAdd, addLabel }) => (
         onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#e0d5c0'}
         onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#f0e8d8'}
       >
-        <Plus size={14} /> {addLabel}
+        <Plus size={16} /> {addLabel}
       </button>
     )}
   </div>
@@ -298,11 +321,11 @@ const SectionHeader = ({ title, onAdd, addLabel }) => (
 
 // Table header style
 const thStyle = {
-  padding: '8px 10px',
+  padding: '10px 12px',
   textAlign: 'left',
   color: '#ffffff',
   fontWeight: '600',
-  fontSize: '10px',
+  fontSize: '11px',
   borderBottom: '2px solid #3d2b1f',
   backgroundColor: '#5c3a1e',
   whiteSpace: 'nowrap'
@@ -532,7 +555,7 @@ export default function ProductsServices({ data = {}, updateData }) {
                 alignItems: 'center',
                 gap: '8px',
                 cursor: 'pointer',
-                fontSize: '13px',
+                fontSize: '14px',
                 fontWeight: '500',
                 color: '#3d2b1f'
               }}>
@@ -543,8 +566,8 @@ export default function ProductsServices({ data = {}, updateData }) {
                   checked={data.offeringType === value}
                   onChange={handleOfferingTypeChange}
                   style={{
-                    width: '16px',
-                    height: '16px',
+                    width: '18px',
+                    height: '18px',
                     accentColor: '#8B4513',
                     cursor: 'pointer'
                   }}
@@ -571,7 +594,7 @@ export default function ProductsServices({ data = {}, updateData }) {
                     <th style={thStyle}>Category</th>
                     <th style={thStyle}>Product Name</th>
                     <th style={thStyle}>Description</th>
-                    <th style={thStyle} style={{ width: '60px' }}>Actions</th>
+                    <th style={thStyle} style={{ width: '80px' }}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -580,45 +603,45 @@ export default function ProductsServices({ data = {}, updateData }) {
                       {/* Category header row */}
                       <tr className="bg-brown-100">
                         <td colSpan="4" style={{ 
-                          padding: '6px 10px', 
+                          padding: '8px 12px', 
                           fontWeight: '600',
                           color: '#5c3a1e',
-                          fontSize: '12px',
+                          fontSize: '13px',
                           borderBottom: '2px solid #d6c4a8'
                         }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
+                            <div style={{ flex: 1, minWidth: '200px' }}>
                               <MultiSelect 
                                 options={categoryOptions} 
                                 selected={category.categories || []} 
                                 onChange={(value) => updateProductCategory(categoryIndex, "categories", value)} 
                                 label="categories"
-                                placeholder="Select categories..."
+                                placeholder="Select product categories..."
                               />
-                            </span>
-                            <div>
+                            </div>
+                            <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
                               <button
                                 type="button"
                                 onClick={() => addProduct(categoryIndex)}
                                 style={{
                                   display: 'inline-flex',
                                   alignItems: 'center',
-                                  gap: '4px',
-                                  padding: '2px 10px',
-                                  marginRight: '6px',
-                                  fontSize: '10px',
+                                  gap: '6px',
+                                  padding: '6px 14px',
+                                  fontSize: '12px',
                                   fontWeight: '500',
                                   backgroundColor: '#f0e8d8',
                                   color: '#5c3a1e',
                                   border: 'none',
-                                  borderRadius: '3px',
+                                  borderRadius: '4px',
                                   cursor: 'pointer',
-                                  transition: 'background-color 0.2s'
+                                  transition: 'background-color 0.2s',
+                                  whiteSpace: 'nowrap'
                                 }}
                                 onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#e0d5c0'}
                                 onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#f0e8d8'}
                               >
-                                <Plus size={12} /> Add Product
+                                <Plus size={14} /> Add Product
                               </button>
                               <button
                                 type="button"
@@ -626,21 +649,22 @@ export default function ProductsServices({ data = {}, updateData }) {
                                 style={{
                                   display: 'inline-flex',
                                   alignItems: 'center',
-                                  gap: '4px',
-                                  padding: '2px 10px',
-                                  fontSize: '10px',
+                                  gap: '6px',
+                                  padding: '6px 14px',
+                                  fontSize: '12px',
                                   fontWeight: '500',
                                   backgroundColor: '#fee2e2',
                                   color: '#dc2626',
                                   border: 'none',
-                                  borderRadius: '3px',
+                                  borderRadius: '4px',
                                   cursor: 'pointer',
-                                  transition: 'background-color 0.2s'
+                                  transition: 'background-color 0.2s',
+                                  whiteSpace: 'nowrap'
                                 }}
                                 onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#fecaca'}
                                 onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#fee2e2'}
                               >
-                                <Trash2 size={12} /> Remove Category
+                                <Trash2 size={14} /> Remove Category
                               </button>
                             </div>
                           </div>
@@ -651,9 +675,9 @@ export default function ProductsServices({ data = {}, updateData }) {
                         <tr className={categoryIndex % 2 === 0 ? "bg-white" : "bg-brown-50/30"}>
                           <td colSpan="4" style={{
                             textAlign: 'center',
-                            padding: '16px',
+                            padding: '20px',
                             color: '#999',
-                            fontSize: '11px'
+                            fontSize: '12px'
                           }}>
                             No products in this category. Click "Add Product" to add one.
                           </td>
@@ -661,7 +685,7 @@ export default function ProductsServices({ data = {}, updateData }) {
                       ) : (
                         (category.products || []).map((product, productIndex) => (
                           <tr key={`${categoryIndex}-${productIndex}`} className={productIndex % 2 === 0 ? "bg-white" : "bg-brown-50/30"}>
-                            <td className="px-3 py-2 border-b" style={{ fontSize: '11px', color: '#5c3a1e' }}>
+                            <td className="px-3 py-2 border-b" style={{ fontSize: '12px', color: '#5c3a1e' }}>
                               {getCategoryLabels(category.categories)}
                             </td>
                             <td className="px-3 py-2 border-b">
@@ -672,12 +696,13 @@ export default function ProductsServices({ data = {}, updateData }) {
                                 placeholder="Product name"
                                 style={{
                                   width: '100%',
-                                  padding: '4px 8px',
+                                  padding: '8px 12px',
                                   border: '1px solid #d6c4a8',
-                                  borderRadius: '3px',
-                                  fontSize: '11px',
+                                  borderRadius: '4px',
+                                  fontSize: '13px',
                                   outline: 'none',
-                                  color: '#3d2b1f'
+                                  color: '#3d2b1f',
+                                  transition: 'border-color 0.2s'
                                 }}
                                 onFocus={(e) => e.currentTarget.style.borderColor = '#8B4513'}
                                 onBlur={(e) => e.currentTarget.style.borderColor = '#d6c4a8'}
@@ -691,14 +716,15 @@ export default function ProductsServices({ data = {}, updateData }) {
                                 rows={2}
                                 style={{
                                   width: '100%',
-                                  padding: '4px 8px',
+                                  padding: '8px 12px',
                                   border: '1px solid #d6c4a8',
-                                  borderRadius: '3px',
-                                  fontSize: '10px',
+                                  borderRadius: '4px',
+                                  fontSize: '12px',
                                   outline: 'none',
                                   resize: 'vertical',
                                   fontFamily: 'inherit',
-                                  color: '#3d2b1f'
+                                  color: '#3d2b1f',
+                                  transition: 'border-color 0.2s'
                                 }}
                                 onFocus={(e) => e.currentTarget.style.borderColor = '#8B4513'}
                                 onBlur={(e) => e.currentTarget.style.borderColor = '#d6c4a8'}
@@ -709,17 +735,18 @@ export default function ProductsServices({ data = {}, updateData }) {
                                 type="button"
                                 onClick={() => removeProduct(categoryIndex, productIndex)}
                                 style={{
-                                  padding: '4px',
+                                  padding: '6px',
                                   color: '#dc2626',
                                   background: 'none',
                                   border: 'none',
                                   cursor: 'pointer',
-                                  borderRadius: '3px'
+                                  borderRadius: '4px',
+                                  transition: 'background-color 0.2s'
                                 }}
                                 onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#fee2e2'}
                                 onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                               >
-                                <Trash2 size={14} />
+                                <Trash2 size={18} />
                               </button>
                             </td>
                           </tr>
@@ -731,9 +758,9 @@ export default function ProductsServices({ data = {}, updateData }) {
                     <tr>
                       <td colSpan="4" style={{
                         textAlign: 'center',
-                        padding: '24px',
+                        padding: '32px',
                         color: '#999',
-                        fontSize: '12px',
+                        fontSize: '13px',
                         backgroundColor: '#fdfaf5'
                       }}>
                         No product categories added yet. Click "Add Category" to get started.
@@ -761,7 +788,7 @@ export default function ProductsServices({ data = {}, updateData }) {
                     <th style={thStyle}>Category</th>
                     <th style={thStyle}>Service Name</th>
                     <th style={thStyle}>Description</th>
-                    <th style={thStyle} style={{ width: '60px' }}>Actions</th>
+                    <th style={thStyle} style={{ width: '80px' }}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -770,45 +797,45 @@ export default function ProductsServices({ data = {}, updateData }) {
                       {/* Category header row */}
                       <tr className="bg-brown-100">
                         <td colSpan="4" style={{ 
-                          padding: '6px 10px', 
+                          padding: '8px 12px', 
                           fontWeight: '600',
                           color: '#5c3a1e',
-                          fontSize: '12px',
+                          fontSize: '13px',
                           borderBottom: '2px solid #d6c4a8'
                         }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '12px' }}>
+                            <div style={{ flex: 1, minWidth: '200px' }}>
                               <MultiSelect 
                                 options={categoryOptions} 
                                 selected={category.categories || []} 
                                 onChange={(value) => updateServiceCategory(categoryIndex, "categories", value)} 
                                 label="categories"
-                                placeholder="Select categories..."
+                                placeholder="Select service categories..."
                               />
-                            </span>
-                            <div>
+                            </div>
+                            <div style={{ display: 'flex', gap: '6px', flexShrink: 0 }}>
                               <button
                                 type="button"
                                 onClick={() => addService(categoryIndex)}
                                 style={{
                                   display: 'inline-flex',
                                   alignItems: 'center',
-                                  gap: '4px',
-                                  padding: '2px 10px',
-                                  marginRight: '6px',
-                                  fontSize: '10px',
+                                  gap: '6px',
+                                  padding: '6px 14px',
+                                  fontSize: '12px',
                                   fontWeight: '500',
                                   backgroundColor: '#f0e8d8',
                                   color: '#5c3a1e',
                                   border: 'none',
-                                  borderRadius: '3px',
+                                  borderRadius: '4px',
                                   cursor: 'pointer',
-                                  transition: 'background-color 0.2s'
+                                  transition: 'background-color 0.2s',
+                                  whiteSpace: 'nowrap'
                                 }}
                                 onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#e0d5c0'}
                                 onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#f0e8d8'}
                               >
-                                <Plus size={12} /> Add Service
+                                <Plus size={14} /> Add Service
                               </button>
                               <button
                                 type="button"
@@ -816,21 +843,22 @@ export default function ProductsServices({ data = {}, updateData }) {
                                 style={{
                                   display: 'inline-flex',
                                   alignItems: 'center',
-                                  gap: '4px',
-                                  padding: '2px 10px',
-                                  fontSize: '10px',
+                                  gap: '6px',
+                                  padding: '6px 14px',
+                                  fontSize: '12px',
                                   fontWeight: '500',
                                   backgroundColor: '#fee2e2',
                                   color: '#dc2626',
                                   border: 'none',
-                                  borderRadius: '3px',
+                                  borderRadius: '4px',
                                   cursor: 'pointer',
-                                  transition: 'background-color 0.2s'
+                                  transition: 'background-color 0.2s',
+                                  whiteSpace: 'nowrap'
                                 }}
                                 onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#fecaca'}
                                 onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#fee2e2'}
                               >
-                                <Trash2 size={12} /> Remove Category
+                                <Trash2 size={14} /> Remove Category
                               </button>
                             </div>
                           </div>
@@ -841,9 +869,9 @@ export default function ProductsServices({ data = {}, updateData }) {
                         <tr className={categoryIndex % 2 === 0 ? "bg-white" : "bg-brown-50/30"}>
                           <td colSpan="4" style={{
                             textAlign: 'center',
-                            padding: '16px',
+                            padding: '20px',
                             color: '#999',
-                            fontSize: '11px'
+                            fontSize: '12px'
                           }}>
                             No services in this category. Click "Add Service" to add one.
                           </td>
@@ -851,7 +879,7 @@ export default function ProductsServices({ data = {}, updateData }) {
                       ) : (
                         (category.services || []).map((service, serviceIndex) => (
                           <tr key={`${categoryIndex}-${serviceIndex}`} className={serviceIndex % 2 === 0 ? "bg-white" : "bg-brown-50/30"}>
-                            <td className="px-3 py-2 border-b" style={{ fontSize: '11px', color: '#5c3a1e' }}>
+                            <td className="px-3 py-2 border-b" style={{ fontSize: '12px', color: '#5c3a1e' }}>
                               {getCategoryLabels(category.categories)}
                             </td>
                             <td className="px-3 py-2 border-b">
@@ -862,12 +890,13 @@ export default function ProductsServices({ data = {}, updateData }) {
                                 placeholder="Service name"
                                 style={{
                                   width: '100%',
-                                  padding: '4px 8px',
+                                  padding: '8px 12px',
                                   border: '1px solid #d6c4a8',
-                                  borderRadius: '3px',
-                                  fontSize: '11px',
+                                  borderRadius: '4px',
+                                  fontSize: '13px',
                                   outline: 'none',
-                                  color: '#3d2b1f'
+                                  color: '#3d2b1f',
+                                  transition: 'border-color 0.2s'
                                 }}
                                 onFocus={(e) => e.currentTarget.style.borderColor = '#8B4513'}
                                 onBlur={(e) => e.currentTarget.style.borderColor = '#d6c4a8'}
@@ -881,14 +910,15 @@ export default function ProductsServices({ data = {}, updateData }) {
                                 rows={2}
                                 style={{
                                   width: '100%',
-                                  padding: '4px 8px',
+                                  padding: '8px 12px',
                                   border: '1px solid #d6c4a8',
-                                  borderRadius: '3px',
-                                  fontSize: '10px',
+                                  borderRadius: '4px',
+                                  fontSize: '12px',
                                   outline: 'none',
                                   resize: 'vertical',
                                   fontFamily: 'inherit',
-                                  color: '#3d2b1f'
+                                  color: '#3d2b1f',
+                                  transition: 'border-color 0.2s'
                                 }}
                                 onFocus={(e) => e.currentTarget.style.borderColor = '#8B4513'}
                                 onBlur={(e) => e.currentTarget.style.borderColor = '#d6c4a8'}
@@ -899,17 +929,18 @@ export default function ProductsServices({ data = {}, updateData }) {
                                 type="button"
                                 onClick={() => removeService(categoryIndex, serviceIndex)}
                                 style={{
-                                  padding: '4px',
+                                  padding: '6px',
                                   color: '#dc2626',
                                   background: 'none',
                                   border: 'none',
                                   cursor: 'pointer',
-                                  borderRadius: '3px'
+                                  borderRadius: '4px',
+                                  transition: 'background-color 0.2s'
                                 }}
                                 onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#fee2e2'}
                                 onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                               >
-                                <Trash2 size={14} />
+                                <Trash2 size={18} />
                               </button>
                             </td>
                           </tr>
@@ -921,9 +952,9 @@ export default function ProductsServices({ data = {}, updateData }) {
                     <tr>
                       <td colSpan="4" style={{
                         textAlign: 'center',
-                        padding: '24px',
+                        padding: '32px',
                         color: '#999',
-                        fontSize: '12px',
+                        fontSize: '13px',
                         backgroundColor: '#fdfaf5'
                       }}>
                         No service categories added yet. Click "Add Category" to get started.
@@ -944,14 +975,14 @@ export default function ProductsServices({ data = {}, updateData }) {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
           <div>
             <FormField label="Preferred Delivery Mode" required>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 {deliveryModes.map(mode => (
                   <label key={mode} style={{
                     display: 'flex',
                     alignItems: 'center',
-                    gap: '8px',
+                    gap: '10px',
                     cursor: 'pointer',
-                    fontSize: '12px',
+                    fontSize: '13px',
                     color: '#3d2b1f'
                   }}>
                     <input
@@ -959,8 +990,8 @@ export default function ProductsServices({ data = {}, updateData }) {
                       checked={(data.deliveryModes || []).includes(mode)}
                       onChange={() => handleCheckboxChange('deliveryModes', mode)}
                       style={{
-                        width: '16px',
-                        height: '16px',
+                        width: '18px',
+                        height: '18px',
                         accentColor: '#8B4513',
                         cursor: 'pointer'
                       }}
@@ -974,14 +1005,14 @@ export default function ProductsServices({ data = {}, updateData }) {
 
           <div>
             <FormField label="Lead Time (from contract award to start)" required>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
                 <div>
                   <label style={{
                     display: 'block',
-                    fontSize: '11px',
+                    fontSize: '12px',
                     fontWeight: '600',
                     color: '#5c3a1e',
-                    marginBottom: '3px'
+                    marginBottom: '4px'
                   }}>
                     Minimum Time
                   </label>
@@ -995,10 +1026,10 @@ export default function ProductsServices({ data = {}, updateData }) {
                       min="0"
                       style={{
                         flex: 1,
-                        padding: '6px 10px',
+                        padding: '8px 12px',
                         border: '1px solid #d6c4a8',
                         borderRadius: '4px 0 0 4px',
-                        fontSize: '12px',
+                        fontSize: '13px',
                         outline: 'none',
                         transition: 'border-color 0.2s',
                         color: '#3d2b1f'
@@ -1011,12 +1042,12 @@ export default function ProductsServices({ data = {}, updateData }) {
                       value={data.minLeadTimeUnit || "days"}
                       onChange={handleChange}
                       style={{
-                        padding: '6px 10px',
+                        padding: '8px 12px',
                         border: '1px solid #d6c4a8',
                         borderLeft: 'none',
                         borderRadius: '0 4px 4px 0',
                         backgroundColor: 'white',
-                        fontSize: '12px',
+                        fontSize: '13px',
                         outline: 'none',
                         cursor: 'pointer',
                         color: '#3d2b1f'
@@ -1032,10 +1063,10 @@ export default function ProductsServices({ data = {}, updateData }) {
                 <div>
                   <label style={{
                     display: 'block',
-                    fontSize: '11px',
+                    fontSize: '12px',
                     fontWeight: '600',
                     color: '#5c3a1e',
-                    marginBottom: '3px'
+                    marginBottom: '4px'
                   }}>
                     Maximum Time
                   </label>
@@ -1049,10 +1080,10 @@ export default function ProductsServices({ data = {}, updateData }) {
                       min="0"
                       style={{
                         flex: 1,
-                        padding: '6px 10px',
+                        padding: '8px 12px',
                         border: '1px solid #d6c4a8',
                         borderRadius: '4px 0 0 4px',
-                        fontSize: '12px',
+                        fontSize: '13px',
                         outline: 'none',
                         transition: 'border-color 0.2s',
                         color: '#3d2b1f'
@@ -1065,12 +1096,12 @@ export default function ProductsServices({ data = {}, updateData }) {
                       value={data.maxLeadTimeUnit || "days"}
                       onChange={handleChange}
                       style={{
-                        padding: '6px 10px',
+                        padding: '8px 12px',
                         border: '1px solid #d6c4a8',
                         borderLeft: 'none',
                         borderRadius: '0 4px 4px 0',
                         backgroundColor: 'white',
-                        fontSize: '12px',
+                        fontSize: '13px',
                         outline: 'none',
                         cursor: 'pointer',
                         color: '#3d2b1f'
@@ -1086,14 +1117,14 @@ export default function ProductsServices({ data = {}, updateData }) {
               </div>
               {(data.minLeadTime || data.maxLeadTime) && (
                 <div style={{
-                  marginTop: '8px',
-                  padding: '6px 10px',
+                  marginTop: '10px',
+                  padding: '8px 14px',
                   backgroundColor: '#eff6ff',
                   borderRadius: '4px',
                   border: '1px solid #bfdbfe'
                 }}>
                   <p style={{
-                    fontSize: '11px',
+                    fontSize: '12px',
                     color: '#1e40af',
                     margin: 0
                   }}>
@@ -1125,14 +1156,15 @@ export default function ProductsServices({ data = {}, updateData }) {
             placeholder="e.g., NGO Contracts and youth development programs, Corporate / IAD departments seeking online training delivery, Government departments, education and youth development..."
             style={{
               width: '100%',
-              padding: '8px 10px',
+              padding: '10px 14px',
               border: '1px solid #d6c4a8',
               borderRadius: '4px',
-              fontSize: '12px',
+              fontSize: '13px',
               outline: 'none',
               resize: 'vertical',
               fontFamily: 'inherit',
-              color: '#3d2b1f'
+              color: '#3d2b1f',
+              transition: 'border-color 0.2s'
             }}
             onFocus={(e) => e.currentTarget.style.borderColor = '#8B4513'}
             onBlur={(e) => e.currentTarget.style.borderColor = '#d6c4a8'}
@@ -1154,10 +1186,10 @@ export default function ProductsServices({ data = {}, updateData }) {
             display: 'inline-flex',
             alignItems: 'center',
             gap: '8px',
-            padding: '6px 12px',
+            padding: '8px 16px',
             borderRadius: '4px',
-            marginBottom: '12px',
-            fontSize: '11px',
+            marginBottom: '16px',
+            fontSize: '12px',
             fontWeight: '600',
             backgroundColor: revenueOver100 ? '#fff1f0' : totalRevenuePercent === 100 ? '#f0faf0' : '#fdf6ee',
             border: `1px solid ${revenueOver100 ? '#ffccc7' : totalRevenuePercent === 100 ? '#b7eb8f' : '#d6c4a8'}`,
@@ -1189,7 +1221,7 @@ export default function ProductsServices({ data = {}, updateData }) {
                 <th style={thStyle}>Revenue %</th>
                 <th style={thStyle}>Industry</th>
                 <th style={thStyle}>Growth Potential</th>
-                <th style={thStyle} style={{ width: '40px' }}>Actions</th>
+                <th style={thStyle} style={{ width: '50px' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -1203,12 +1235,13 @@ export default function ProductsServices({ data = {}, updateData }) {
                       placeholder="Client name"
                       style={{
                         width: '100%',
-                        padding: '4px 8px',
+                        padding: '8px 10px',
                         border: '1px solid #d6c4a8',
-                        borderRadius: '3px',
-                        fontSize: '11px',
+                        borderRadius: '4px',
+                        fontSize: '12px',
                         outline: 'none',
-                        color: '#3d2b1f'
+                        color: '#3d2b1f',
+                        transition: 'border-color 0.2s'
                       }}
                       onFocus={(e) => e.currentTarget.style.borderColor = '#8B4513'}
                       onBlur={(e) => e.currentTarget.style.borderColor = '#d6c4a8'}
@@ -1220,13 +1253,14 @@ export default function ProductsServices({ data = {}, updateData }) {
                       onChange={(e) => updateClient(index, "clientType", e.target.value)}
                       style={{
                         width: '100%',
-                        padding: '4px 8px',
+                        padding: '8px 10px',
                         border: '1px solid #d6c4a8',
-                        borderRadius: '3px',
-                        fontSize: '11px',
+                        borderRadius: '4px',
+                        fontSize: '12px',
                         backgroundColor: 'white',
                         outline: 'none',
-                        color: '#3d2b1f'
+                        color: '#3d2b1f',
+                        transition: 'border-color 0.2s'
                       }}
                       onFocus={(e) => e.currentTarget.style.borderColor = '#8B4513'}
                       onBlur={(e) => e.currentTarget.style.borderColor = '#d6c4a8'}
@@ -1247,19 +1281,20 @@ export default function ProductsServices({ data = {}, updateData }) {
                       placeholder="Contact number"
                       style={{
                         width: '100%',
-                        padding: '4px 8px',
+                        padding: '8px 10px',
                         border: '1px solid #d6c4a8',
-                        borderRadius: '3px',
-                        fontSize: '11px',
+                        borderRadius: '4px',
+                        fontSize: '12px',
                         outline: 'none',
-                        color: '#3d2b1f'
+                        color: '#3d2b1f',
+                        transition: 'border-color 0.2s'
                       }}
                       onFocus={(e) => e.currentTarget.style.borderColor = '#8B4513'}
                       onBlur={(e) => e.currentTarget.style.borderColor = '#d6c4a8'}
                     />
                   </td>
                   <td className="px-3 py-2 border-b">
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                       <input
                         type="number"
                         value={client.revenuePercentage || ""}
@@ -1271,21 +1306,22 @@ export default function ProductsServices({ data = {}, updateData }) {
                         min="0"
                         max="100"
                         style={{
-                          width: '60px',
-                          padding: '4px 8px',
+                          width: '70px',
+                          padding: '8px 10px',
                           border: '1px solid #d6c4a8',
-                          borderRadius: '3px',
-                          fontSize: '11px',
+                          borderRadius: '4px',
+                          fontSize: '12px',
                           outline: 'none',
-                          color: '#3d2b1f'
+                          color: '#3d2b1f',
+                          transition: 'border-color 0.2s'
                         }}
                         onFocus={(e) => e.currentTarget.style.borderColor = '#8B4513'}
                         onBlur={(e) => e.currentTarget.style.borderColor = '#d6c4a8'}
                       />
-                      <span style={{ fontSize: '11px', color: '#5c3a1e', fontWeight: '600' }}>%</span>
+                      <span style={{ fontSize: '12px', color: '#5c3a1e', fontWeight: '600' }}>%</span>
                     </div>
                   </td>
-                  <td className="px-3 py-2 border-b" style={{ minWidth: '140px' }}>
+                  <td className="px-3 py-2 border-b" style={{ minWidth: '160px' }}>
                     <MultiSelect
                       options={industryOptions}
                       selected={client.industries || []}
@@ -1307,15 +1343,16 @@ export default function ProductsServices({ data = {}, updateData }) {
                         rows={1}
                         style={{
                           width: '100%',
-                          marginTop: '4px',
-                          padding: '4px 8px',
+                          marginTop: '6px',
+                          padding: '6px 10px',
                           border: '1px solid #d6c4a8',
-                          borderRadius: '3px',
-                          fontSize: '10px',
+                          borderRadius: '4px',
+                          fontSize: '11px',
                           outline: 'none',
                           resize: 'vertical',
                           fontFamily: 'inherit',
-                          color: '#3d2b1f'
+                          color: '#3d2b1f',
+                          transition: 'border-color 0.2s'
                         }}
                         onFocus={(e) => e.currentTarget.style.borderColor = '#8B4513'}
                         onBlur={(e) => e.currentTarget.style.borderColor = '#d6c4a8'}
@@ -1327,17 +1364,18 @@ export default function ProductsServices({ data = {}, updateData }) {
                       type="button"
                       onClick={() => removeClient(index)}
                       style={{
-                        padding: '4px',
+                        padding: '6px',
                         color: '#dc2626',
                         background: 'none',
                         border: 'none',
                         cursor: 'pointer',
-                        borderRadius: '3px'
+                        borderRadius: '4px',
+                        transition: 'background-color 0.2s'
                       }}
                       onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#fee2e2'}
                       onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                     >
-                      <Trash2 size={16} />
+                      <Trash2 size={18} />
                     </button>
                   </td>
                 </tr>
@@ -1346,9 +1384,9 @@ export default function ProductsServices({ data = {}, updateData }) {
                 <tr>
                   <td colSpan="7" style={{
                     textAlign: 'center',
-                    padding: '32px',
+                    padding: '40px',
                     color: '#999',
-                    fontSize: '12px',
+                    fontSize: '13px',
                     backgroundColor: '#fdfaf5'
                   }}>
                     No clients added yet. Click "Add Client" to get started.
