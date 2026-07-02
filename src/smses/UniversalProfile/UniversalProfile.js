@@ -26,12 +26,11 @@ const sections = [
   { id: "entityOverview", label: "Entity\nOverview" },
   { id: "productsServices", label: "Products &\nServices" },
   { id: "ownershipManagement", label: "Ownership &\nManagement" },
-
   { id: "legalCompliance", label: "Legal &\nCompliance" },
   { id: "operationsOverview", label: "Operations\nOverview" },
   { id: "financialOverview", label: "Financial\nOverview" },
   { id: "governance", label: "Governance" },
-    { id: "contactDetails", label: "Contact\nDetails" },
+  { id: "contactDetails", label: "Contact\nDetails" },
   { id: "howDidYouHear", label: "How Did\nYou Hear" },
   { id: "documents", label: "Document\nUpload" },
   { id: "declarationConsent", label: "Declaration &\nConsent" },
@@ -48,7 +47,6 @@ const sectionValidations = {
       data.legalStructure &&
       data.entitySize &&
       data.financialYearEnd &&
-      data.fullTimeEmployees >= 0 &&
       data.yearsInOperation >= 0 &&
       data.operationStage &&
       Array.isArray(data.economicSectors) && data.economicSectors.length > 0 &&
@@ -61,7 +59,7 @@ const sectionValidations = {
 
   contactDetails: (data) => {
     const requiredFields = [
-      data.contactTitle, data.contactName, data.position, data.contactId,
+      data.contactTitle, data.contactName, data.position,
       data.businessPhone, data.mobile, data.email, data.physicalAddress,
     ]
     const hasAllRequired = requiredFields.every((field) => typeof field === "string" && field.trim() !== "")
@@ -169,19 +167,26 @@ export default function UniversalProfile() {
     entityOverview: {
       registeredName: "", tradingName: "", registrationNumber: "", entityType: "",
       legalStructure: "", entitySize: "", financialYearEnd: "",
-      fullTimeEmployees: "", partTimeEmployees: "", yearsInOperation: "",
-      operationStage: "", economicSectors: [], businessDescription: "",
-      operatingCountries: [], operatingProvinces: [],
-      companyLogo: "", companyLetterhead: "",
-      orgStructure: "", orgStructureFileName: "", orgStructureUpdatedAt: "",
+      yearsInOperation: "", operationStage: "", economicSectors: [], 
+      businessDescription: "", operatingCountries: [], operatingProvinces: [],
+      memberOfAssociation: "", industryAssociations: [], industryAssociationsOther: "",
+      brandsOwned: "", brandsRepresented: "", holdsFranchises: "", holdsAgencies: "",
+      companyLogo: "", companyLetterhead: "", orgStructure: "",
     },
 
     ownershipManagement: {
-      shareholders: [{ name: "", idRegNo: "", country: "", shareholding: "", issuedShares: "", race: "", gender: "", isYouth: false, isDisabled: false, idDocument: null }],
-      directors: [{ name: "", id: "", position: "", nationality: "", isExec: false, doc: null, committeeMembership: [], customCommittee: "" }],
-      executives: [],
+      shareholders: [{ name: "", country: "", shareholding: "", issuedShares: "", race: "", gender: "", isYouth: false, isDisabled: false, isAlsoDirector: false, doa: "", linkedin: "" }],
+      directors: [{ name: "", roles: [], customRole: "", nationality: "", linkedin: "", execType: "", race: "", gender: "", isYouth: false, isDisabled: false, committeeMembership: [], customCommittee: "", doa: "", cv: null }],
+      executives: [{ name: "", position: "", customPosition: "", department: "", nationality: "", linkedin: "", race: "", gender: "", isYouth: false, isDisabled: false, doa: "", cv: null }],
+      employees: [{ name: "", qualification: "", role: "", customRole: "", isCertificationCompulsory: "no" }],
       totalAuthorisedShares: "",
       totalIssuedShares: "",
+      permanentEmployees: "",
+      contractEmployees: "",
+      internshipEmployees: "",
+      temporaryEmployees: "",
+      activeInterests: [],
+      previousInterests: [],
       businessLeadership: { ownerLed: "", primaryMotivation: "", growthAmbition: "", founderFullTime: "", opennessToAdvice: "", decisionGovernance: "" },
     },
 
@@ -190,42 +195,66 @@ export default function UniversalProfile() {
     legalCompliance: {
       taxNumber: "", taxClearancePin: "", payeNumber: "", vatNumber: "",
       uifStatus: "", uifNumber: "", coidaNumber: "", bbbeeLevel: "",
-      industryAccreditations: [], industryAccreditationsOther: "",
       pendingLegalJudgments: "", pendingLegalJudgmentsDetails: "",
-      taxClearanceCert: [], vatCertificate: [], bbbeeCert: [], otherCerts: [], industryAccreditationDocs: [],
     },
 
     operationsOverview: {
-      multipleSuppliers: "", contingencyPlan: "", trackPerformanceMetrics: "",
-      threeSuccessfulDeliveries: "", hasCapacityToIncrease: "",
+      outsourcesValueChain: "", outsourcedServices: "", outsourcedValue: "", outsourcedCurrency: "ZAR",
+      importExport: "none", importExportValue: "", importExportCurrency: "ZAR",
+      operatesOnContract: "", totalContractValue: "", contractCurrency: "ZAR",
+      multipleSuppliers: "", contingencyPlan: "", 
+      supplier1Name: "", supplier1Contact: "",
+      supplier2Name: "", supplier2Contact: "",
+      supplier3Name: "", supplier3Contact: "",
+      premisesStatus: "", leaseExpiryDate: "", premisesType: "", premisesSize: "",
+      hasBranches: "", numberOfBranches: "", branchLocations: "", branchStaff: "",
+      industryAccreditations: [], industryAccreditationsOther: "",
+      trackPerformanceMetrics: "", threeSuccessfulDeliveries: "", hasCapacityToIncrease: "",
       hasFormalProcedures: "", hasMajorIncidents: "", operationalChallenges: "",
     },
 
     financialOverview: {
-      generatesRevenue: "", annualRevenue: "", currentValuation: "",
+      annualRevenue: "", currentValuation: "", existingDebt: "",
+      incomeCurrency: "ZAR",
+      incomeTurnoverCurrent: "", incomeCOGSCurrent: "", incomeGrossProfitCurrent: "",
+      incomeOperatingProfitCurrent: "", incomeNetProfitCurrent: "",
+      incomeTurnoverPrevious: "", incomeCOGSPrevious: "", incomeGrossProfitPrevious: "",
+      incomeOperatingProfitPrevious: "", incomeNetProfitPrevious: "",
+      balanceCurrentAssetsCurrent: "", balanceTotalAssetsCurrent: "",
+      balanceCurrentLiabilitiesCurrent: "", balanceLongTermLiabilitiesCurrent: "",
+      balanceEquityCurrent: "", balanceTotalLiabilitiesCurrent: "",
+      balanceCurrentAssetsPrevious: "", balanceTotalAssetsPrevious: "",
+      balanceCurrentLiabilitiesPrevious: "", balanceLongTermLiabilitiesPrevious: "",
+      balanceEquityPrevious: "", balanceTotalLiabilitiesPrevious: "",
       hasAccountingSoftware: "", accountingSoftwareName: "",
-      profitabilityStatus: "", revenueTrend: "",
-      existingDebt: "", existingDebtStatus: "",
-      fundraisingHistory: "",
       booksUpToDate: "", booksUpToDateDetails: "",
       hasManagementAccounts: "", latestManagementAccounts: "", managementAccountsDocs: [],
+      isInsured: "", insuranceBrokerName: "", insuranceBrokerContact: "", insuranceContactPerson: "",
       hasFinancialStatements: "", financialStatementsYears: [], financialStatementsDocs: [],
       financialsAudited: "", auditedFinancialsDocs: [],
-      additionalFinancialNotes: "",
+      salesTerms: "", hasOverdraft: "", overdraftValue: "", overdraftUtilised: "",
+      directorsSurety: "", debtorsCeded: "", financialYearEnd: "", bonds: "",
       financialChallenges: [], financialChallengesElaboration: "",
-      seekingFunding: "", supportTypeNeeded: [],
+      seekingFunding: "", fundraisingHistory: "", supportTypeNeeded: [],
     },
 
     governance: {
       governanceChecklist: {},
-      hasConflictResolution: "", ethicsTrainingFrequency: "", lastEthicsTrainingDate: "",
+      membersHaveMultipleBusinesses: "",
+      conflictOfInterest: [],
+      ethicsTrainingFrequency: "",
+      lastEthicsTrainingDate: "",
       strategicClarity: {},
       riskManagement: {},
       transparencyReporting: {},
+      adverseListings: "",
+      adverseListingsDetails: "",
+      courtNotices: "",
+      courtNoticesDetails: "",
     },
 
     productsServices: {
-      entityType: "smse", offeringType: "", productCategories: [], serviceCategories: [],
+      offeringType: "", productCategories: [], serviceCategories: [],
       deliveryModes: [], minLeadTime: "", minLeadTimeUnit: "days",
       maxLeadTime: "", maxLeadTimeUnit: "days", targetMarket: "", keyClients: [],
     },
@@ -370,52 +399,37 @@ export default function UniversalProfile() {
       lastEditedAt: new Date().toISOString(), lastEditedByRole: userRole,
       editHistory: [...existingHistory, editLogEntry],
     }
-    const triggerSections = ["enterpriseReadiness", "documentUpload", "entityOverview", "legalCompliance", "governance", "contactDetails", "financialOverview"]
-    // WITH THIS:
 
-if (section) {
-  const triggerPayload = {}
-
-  // Legitimacy: contactDetails (website, email, socials, address) + entityOverview (years, stage) + productsServices (key clients)
-  const legitimacySections = ["contactDetails", "entityOverview", "productsServices"]
-  if (legitimacySections.includes(section)) {
-    triggerPayload.triggerLegitimacyEvaluation = true
-  }
-
-  // Fundability: financialOverview (revenue, debt, audited) + operationsOverview (suppliers, capacity, procedures)
-  const fundabilitySections = ["financialOverview", "operationsOverview"]
-  if (fundabilitySections.includes(section)) {
-    triggerPayload.triggerFundabilityEvaluation = true
-  }
-
-  // Leadership: ownershipManagement (directors, executives, CVs, behaviour questions)
-  const leadershipSections = ["ownershipManagement"]
-  if (leadershipSections.includes(section)) {
-    triggerPayload.triggerLeadershipEvaluation = true
-  }
-
-  // Governance: governance (checklist, strategic clarity, risk, transparency) + ownershipManagement (directors, board)
-  const governanceSections = ["governance", "ownershipManagement"]
-  if (governanceSections.includes(section)) {
-    triggerPayload.triggerGovernanceEvaluation = true
-  }
-
-  // Documents: triggers both legitimacy (BBBEE, registration) and fundability (business plan, credit report, pitch deck)
-  if (section === "documents") {
-    triggerPayload.triggerLegitimacyEvaluation = true
-    triggerPayload.triggerFundabilityEvaluation = true
-  }
-
-  // legalCompliance: legitimacy (BBBEE level, accreditations) + governance (compliance checklist feeds into it)
-  if (section === "legalCompliance") {
-    triggerPayload.triggerLegitimacyEvaluation = true
-    triggerPayload.triggerGovernanceEvaluation = true
-  }
-
-  if (Object.keys(triggerPayload).length > 0) {
-    await setDoc(docRef, triggerPayload, { merge: true })
-  }
-}
+    if (section) {
+      const triggerPayload = {}
+      const legitimacySections = ["contactDetails", "entityOverview", "productsServices"]
+      if (legitimacySections.includes(section)) {
+        triggerPayload.triggerLegitimacyEvaluation = true
+      }
+      const fundabilitySections = ["financialOverview", "operationsOverview"]
+      if (fundabilitySections.includes(section)) {
+        triggerPayload.triggerFundabilityEvaluation = true
+      }
+      const leadershipSections = ["ownershipManagement"]
+      if (leadershipSections.includes(section)) {
+        triggerPayload.triggerLeadershipEvaluation = true
+      }
+      const governanceSections = ["governance", "ownershipManagement"]
+      if (governanceSections.includes(section)) {
+        triggerPayload.triggerGovernanceEvaluation = true
+      }
+      if (section === "documents") {
+        triggerPayload.triggerLegitimacyEvaluation = true
+        triggerPayload.triggerFundabilityEvaluation = true
+      }
+      if (section === "legalCompliance") {
+        triggerPayload.triggerLegitimacyEvaluation = true
+        triggerPayload.triggerGovernanceEvaluation = true
+      }
+      if (Object.keys(triggerPayload).length > 0) {
+        await setDoc(docRef, triggerPayload, { merge: true })
+      }
+    }
     await setDoc(docRef, dataToSave, { merge: true })
     setEditHistory([...existingHistory, editLogEntry])
     setLoading(false)
@@ -430,7 +444,7 @@ if (section) {
       const errors = []
       if (activeSection === "entityOverview") errors.push("Entity Overview section is incomplete. Please fill in all required fields.")
       else if (activeSection === "contactDetails") errors.push("Contact Details section is incomplete. Please fill in all required fields.")
-      else if (activeSection === "operationsOverview") errors.push("Operations Overview section is incomplete. Please answer all 7 questions.")
+      else if (activeSection === "operationsOverview") errors.push("Operations Overview section is incomplete. Please answer all questions.")
       else errors.push(`${sections.find((s) => s.id === activeSection)?.label.replace(/\n/g, " ")} is incomplete or contains invalid fields.`)
       if (activeSection !== "instructions") setValidationModal({ open: true, title: "Please review the following issues:", messages: errors })
       return
@@ -440,75 +454,71 @@ if (section) {
     navigateToNextSection()
   }
 
-const sendConsentConfirmationEmail = async (userEmail, smeName) => {
-  try {
-    const functions = getFunctions();
-    const sendConsentConfirmation = httpsCallable(functions, 'sendConsentConfirmation');
-    await sendConsentConfirmation({
-      userId: auth.currentUser?.uid,
-      email: userEmail,
-      name: smeName
-    });
-    console.log("Consent confirmation email sent");
-  } catch (error) {
-    console.error("Failed to send consent email:", error);
-  }
-};
-
-const handleSubmitProfile = async () => {
-  markSectionAsCompleted("declarationConsent")
-  const { allValid, sectionStatus } = validateAllSections(formData, completedSections)
-  if (!allValid) {
-    const issues = Object.entries(sectionStatus)
-      .filter(([_, status]) => !status.valid || !status.completed)
-      .map(([_, status]) => `❌ ${status.name.replace(/\n/g, " ")} is incomplete or invalid.`)
-    alert("Profile submission blocked:\n\n" + issues.join("\n"))
-    return
-  }
-  
-  try {
-    // 👇 ADD THIS CALL RIGHT HERE - AFTER VALIDATION, BEFORE SAVING
-    const user = auth.currentUser;
-    if (user) {
-      const smeName = formData.entityOverview?.registeredName || "there";
-      const userEmail = formData.contactDetails?.email;
-      
-      if (userEmail) {
-        // Call your cloud function to send consent confirmation email
-        const sendConsentConfirmation = getFunctions().httpsCallable('sendConsentConfirmation');
-        await sendConsentConfirmation({
-          userId: user.uid,
-          email: userEmail,
-          name: smeName
-        }).catch(err => console.error("Consent email failed:", err));
-      }
+  const sendConsentConfirmationEmail = async (userEmail, smeName) => {
+    try {
+      const functions = getFunctions();
+      const sendConsentConfirmation = httpsCallable(functions, 'sendConsentConfirmation');
+      await sendConsentConfirmation({
+        userId: auth.currentUser?.uid,
+        email: userEmail,
+        name: smeName
+      });
+      console.log("Consent confirmation email sent");
+    } catch (error) {
+      console.error("Failed to send consent email:", error);
     }
-    // 👆 END OF ADDED CODE
+  }
+
+  const handleSubmitProfile = async () => {
+    markSectionAsCompleted("declarationConsent")
+    const { allValid, sectionStatus } = validateAllSections(formData, completedSections)
+    if (!allValid) {
+      const issues = Object.entries(sectionStatus)
+        .filter(([_, status]) => !status.valid || !status.completed)
+        .map(([_, status]) => `❌ ${status.name.replace(/\n/g, " ")} is incomplete or invalid.`)
+      alert("Profile submission blocked:\n\n" + issues.join("\n"))
+      return
+    }
     
-    await saveDataToFirebase()
-    const userEmail = formData.contactDetails?.email;
-    const smeName = formData.entityOverview?.registeredName || "there";
+    try {
+      const user = auth.currentUser;
+      if (user) {
+        const smeName = formData.entityOverview?.registeredName || "there";
+        const userEmail = formData.contactDetails?.email;
+        if (userEmail) {
+          const sendConsentConfirmation = getFunctions().httpsCallable('sendConsentConfirmation');
+          await sendConsentConfirmation({
+            userId: user.uid,
+            email: userEmail,
+            name: smeName
+          }).catch(err => console.error("Consent email failed:", err));
+        }
+      }
+      
+      await saveDataToFirebase(null, true)
+      const userEmail = formData.contactDetails?.email;
+      const smeName = formData.entityOverview?.registeredName || "there";
 
-    if (userEmail) {
-      await sendConsentConfirmationEmail(userEmail, smeName);
-    }
+      if (userEmail) {
+        await sendConsentConfirmationEmail(userEmail, smeName);
+      }
 
-    setProfileSubmitted(true)
-    const hasSeenCongratulationsPopup = localStorage.getItem(getUserSpecificKey("hasSeenCongratulationsPopup")) === "true"
-    if (!hasSeenCongratulationsPopup) { 
-      setShowCongratulationsPopup(true)
-      localStorage.setItem(getUserSpecificKey("hasSeenCongratulationsPopup"), "true")
-    } else {
-      setShowSummary(true)
+      setProfileSubmitted(true)
+      const hasSeenCongratulationsPopup = localStorage.getItem(getUserSpecificKey("hasSeenCongratulationsPopup")) === "true"
+      if (!hasSeenCongratulationsPopup) { 
+        setShowCongratulationsPopup(true)
+        localStorage.setItem(getUserSpecificKey("hasSeenCongratulationsPopup"), "true")
+      } else {
+        setShowSummary(true)
+      }
+      setIsEditing(false)
+      window.scrollTo(0, 0)
+    } catch (err) {
+      console.error("Failed to submit profile:", err)
+      alert("Failed to submit profile. Please try again.")
+      setProfileSubmitted(false)
     }
-    setIsEditing(false)
-    window.scrollTo(0, 0)
-  } catch (err) {
-    console.error("Failed to submit profile:", err)
-    alert("Failed to submit profile. Please try again.")
-    setProfileSubmitted(false)
   }
-}
 
   const handleRegistrationComplete = async () => { alert("Your profile has been successfully submitted!"); navigate("/dashboard") }
   const handleNextOnboardingStep = () => { if (currentOnboardingStep < onboardingSteps.length - 1) setCurrentOnboardingStep(currentOnboardingStep + 1); else setShowWelcomePopup(false) }
@@ -642,8 +652,6 @@ const handleSubmitProfile = async () => {
       )}
 
       <h1>My Universal Profile</h1>
-
-
 
       <div className="profile-tracker">
         {isCompanyMember && (

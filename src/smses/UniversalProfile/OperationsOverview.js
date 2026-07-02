@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
+import { HelpCircle, ChevronDown, X, Check } from "lucide-react";
 import "./UniversalProfile.css";
 import FormField from "./form-field";
 
@@ -18,6 +19,115 @@ const importExportOptions = [
   { value: "both", label: "Both" },
   { value: "none", label: "None" },
 ];
+
+// ── Industry Accreditation options ──
+const industryAccreditationOptions = [
+  { value: "ISO 9001", label: "ISO 9001 – Quality Management" },
+  { value: "ISO 14001", label: "ISO 14001 – Environmental Management" },
+  { value: "ISO 45001", label: "ISO 45001 – Occupational Health & Safety" },
+  { value: "ISO 27001", label: "ISO 27001 – Information Security" },
+  { value: "CIDB", label: "CIDB – Construction Industry Development Board" },
+  { value: "NHBRC", label: "NHBRC – National Home Builders Registration Council" },
+  { value: "SACPCMP", label: "SACPCMP – SA Council for Project & Construction Management" },
+  { value: "ECSA", label: "ECSA – Engineering Council of South Africa" },
+  { value: "SABS", label: "SABS – South African Bureau of Standards" },
+  { value: "FSCA", label: "FSCA – Financial Sector Conduct Authority" },
+  { value: "PSIRA", label: "PSIRA – Private Security Industry Regulatory Authority" },
+  { value: "SAICA", label: "SAICA – SA Institute of Chartered Accountants" },
+  { value: "SAIPA", label: "SAIPA – SA Institute of Professional Accountants" },
+  { value: "HPCSA", label: "HPCSA – Health Professions Council of SA" },
+  { value: "Other", label: "Other (please specify)" },
+];
+
+// Multi-Select Dropdown Component
+const MultiSelectDropdown = ({ options, selected = [], onChange, placeholder = "Select options..." }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const toggleOption = (value) => {
+    if (selected.includes(value)) {
+      onChange(selected.filter((v) => v !== value));
+    } else {
+      onChange([...selected, value]);
+    }
+  };
+
+  const removeTag = (e, value) => {
+    e.stopPropagation();
+    onChange(selected.filter((v) => v !== value));
+  };
+
+  return (
+    <div className="relative" ref={dropdownRef}>
+      <div
+        onClick={() => setIsOpen((prev) => !prev)}
+        className="w-full min-h-[42px] px-3 py-2 border border-brown-300 rounded-md cursor-pointer flex flex-wrap items-center gap-1 focus:outline-none focus:ring-2 focus:ring-brown-500 bg-white"
+        style={{ borderColor: "#d6c4a8" }}
+      >
+        {selected.length === 0 ? (
+          <span className="text-gray-400 text-sm">{placeholder}</span>
+        ) : (
+          selected.map((val) => (
+            <span
+              key={val}
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium"
+              style={{ backgroundColor: "#f3ebe0", color: "#6b4c2a", border: "1px solid #d6c4a8" }}
+            >
+              {val === "Other" ? "Other" : val}
+              <button onClick={(e) => removeTag(e, val)} className="hover:opacity-70 transition-opacity" type="button">
+                <X className="w-3 h-3" />
+              </button>
+            </span>
+          ))
+        )}
+        <ChevronDown
+          className={`w-4 h-4 ml-auto flex-shrink-0 transition-transform ${isOpen ? "rotate-180" : ""}`}
+          style={{ color: "#9c7a5a" }}
+        />
+      </div>
+
+      {isOpen && (
+        <div
+          className="absolute z-50 w-full mt-1 bg-white border rounded-md shadow-lg max-h-60 overflow-y-auto"
+          style={{ borderColor: "#d6c4a8" }}
+        >
+          {options.map((option) => {
+            const isSelected = selected.includes(option.value);
+            return (
+              <div
+                key={option.value}
+                onClick={() => toggleOption(option.value)}
+                className="flex items-center gap-2 px-3 py-2 cursor-pointer text-sm hover:bg-amber-50 transition-colors"
+                style={{ color: "#3d2b1f" }}
+              >
+                <div
+                  className="w-4 h-4 rounded flex-shrink-0 flex items-center justify-center border"
+                  style={{
+                    borderColor: isSelected ? "#8b5e3c" : "#d6c4a8",
+                    backgroundColor: isSelected ? "#8b5e3c" : "transparent",
+                  }}
+                >
+                  {isSelected && <Check className="w-3 h-3 text-white" />}
+                </div>
+                <span>{option.label}</span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};
 
 const OperationsOverview = ({ data, updateData }) => {
   const [formData, setFormData] = useState({});
@@ -123,6 +233,12 @@ const OperationsOverview = ({ data, updateData }) => {
   const outsourcesValueChain = formData.outsourcesValueChain;
   const importExport = formData.importExport;
   const operatesOnContract = formData.operatesOnContract;
+  
+  // Industry Accreditations
+  const selectedAccreditations = Array.isArray(formData.industryAccreditations)
+    ? formData.industryAccreditations
+    : [];
+  const showOtherAccreditation = selectedAccreditations.includes("Other");
 
   return (
     <>
@@ -518,10 +634,41 @@ const OperationsOverview = ({ data, updateData }) => {
         </div>
 
         {/* ============================================================ */}
-        {/* SECTION 6: Delivery (Productivity & Reliability) - 3 per row */}
+        {/* SECTION 6: Industry Accreditations - ADDED HERE (2 columns) */}
         {/* ============================================================ */}
         <div>
-          <SectionHeading number="6" title="Delivery (Productivity & Reliability)" />
+          <SectionHeading number="6" title="Industry Accreditations (optional)" />
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
+            <FormField label="Select your accreditations">
+              <MultiSelectDropdown
+                options={industryAccreditationOptions}
+                selected={selectedAccreditations}
+                onChange={(value) => handleInputChange("industryAccreditations", value)}
+                placeholder="Select accreditations..."
+              />
+            </FormField>
+
+            {showOtherAccreditation && (
+              <FormField label="Please specify other accreditation(s)">
+                <input
+                  type="text"
+                  name="industryAccreditationsOther"
+                  value={formData.industryAccreditationsOther || ""}
+                  onChange={(e) => handleInputChange("industryAccreditationsOther", e.target.value)}
+                  placeholder="e.g. SETA accreditation, Industry-specific certification..."
+                  style={inputStyle}
+                />
+              </FormField>
+            )}
+          </div>
+        </div>
+
+        {/* ============================================================ */}
+        {/* SECTION 7: Delivery (Productivity & Reliability) - 3 per row */}
+        {/* ============================================================ */}
+        <div>
+          <SectionHeading number="7" title="Delivery (Productivity & Reliability)" />
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px' }}>
             <FormField label="Do you track operational performance metrics?" required>
@@ -539,10 +686,10 @@ const OperationsOverview = ({ data, updateData }) => {
         </div>
 
         {/* ============================================================ */}
-        {/* SECTION 7: Safety (Risk & Compliance) - 3 per row */}
+        {/* SECTION 8: Safety (Risk & Compliance) - 3 per row */}
         {/* ============================================================ */}
         <div>
-          <SectionHeading number="7" title="Safety (Risk & Compliance)" />
+          <SectionHeading number="8" title="Safety (Risk & Compliance)" />
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px' }}>
             <FormField label="Do you have formal safety, risk, or compliance procedures?" required>
@@ -556,10 +703,10 @@ const OperationsOverview = ({ data, updateData }) => {
         </div>
 
         {/* ============================================================ */}
-        {/* SECTION 8: Operational Challenges - Full Width */}
+        {/* SECTION 9: Operational Challenges - Full Width */}
         {/* ============================================================ */}
         <div>
-          <SectionHeading number="8" title="Operational Challenges" />
+          <SectionHeading number="9" title="Operational Challenges" />
 
           <FormField label="What are your current operational challenges?">
             <textarea
