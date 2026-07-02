@@ -1,27 +1,26 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  FaBuilding, 
-  FaChartLine, 
-  FaHandshake, 
+  FaGraduationCap, 
+  FaUserGraduate, 
   FaArrowRight, 
   FaCheckCircle,
-  FaShieldAlt,
-  FaAward,
-  FaFileContract,
-  FaSearchDollar,
-  FaUserTie,
+  FaBuilding,
   FaClipboardList,
   FaChartBar,
-  FaGraduationCap,
-  FaRocket,
   FaRegClock,
-  FaGlobeAfrica
+  FaGlobeAfrica,
+  FaNetworkWired,
+  FaLightbulb,
+  FaUserTie,
+  FaBriefcase,
+  FaSearchDollar,
+  FaShieldAlt
 } from 'react-icons/fa';
-import Header from './Header';
-import Footer from './Footer';
+import Header from '../Header';
+import Footer from '../Footer';
 
-const SolutionsSMSEs = () => {
+const SolutionsGraduates = () => {
   const navigate = useNavigate();
 
   const colors = {
@@ -36,67 +35,42 @@ const SolutionsSMSEs = () => {
     muted: '#7A6A5E',
     neutral: '#CDC3B8',
     accent: '#C4B09A',
-    green: '#1E7A47',
+    accentBright: '#D4C0B0',
+    brown: '#5D432C',
+    brownLight: '#8A6D52',
+    brownDark: '#372C27',
+    gold: '#C9A96E',
     orange: '#E8831A',
     blue: '#1D5FAA',
-    red: '#BE3B2A',
   };
 
   const keySolutions = [
     {
-      icon: <FaAward size={24} />,
-      title: 'BIG Score',
-      description: 'Get your business scored and benchmarked against industry standards.',
+      icon: <FaBriefcase size={24} />,
+      title: 'Internship Marketplace',
+      description: 'Find and apply to internship opportunities with vetted SMEs.',
+      color: colors.accent,
+    },
+    {
+      icon: <FaUserGraduate size={24} />,
+      title: 'Skills Profiles',
+      description: 'Create a verified profile showcasing your skills and experience.',
       color: colors.primary,
     },
     {
-      icon: <FaFileContract size={24} />,
-      title: 'Compliance Vault',
-      description: 'Store and manage all your compliance documents in one secure place.',
-      color: colors.secondary,
-    },
-    {
       icon: <FaSearchDollar size={24} />,
-      title: 'Funding Matchmaking',
-      description: 'Get matched with funders and investors looking for businesses like yours.',
-      color: colors.amber,
-    },
-    {
-      icon: <FaHandshake size={24} />,
-      title: 'Procurement Matchmaking',
-      description: 'Connect with corporates looking for suppliers and vendors.',
-      color: colors.blue,
-    },
-    {
-      icon: <FaChartBar size={24} />,
-      title: 'Growth Suite',
-      description: 'Track and improve your performance across strategy, finance, operations and ESG.',
-      color: colors.green,
-    },
-    {
-      icon: <FaUserTie size={24} />,
-      title: 'Advisor Marketplace',
-      description: 'Connect with expert advisors who can help you grow your business.',
-      color: colors.orange,
-    },
-    {
-      icon: <FaGraduationCap size={24} />,
-      title: 'Internship Marketplace',
-      description: 'Recruit interns and graduates to build your talent pipeline.',
-      color: colors.accent,
+      title: 'Opportunity Matching',
+      description: 'Get matched with opportunities that fit your skills and career goals.',
+      color: colors.secondary,
     },
   ];
 
-  const whatYouCanDo = [
-    'Build a verified business profile',
-    'Obtain a BIG Score',
-    'Improve compliance and investment readiness',
-    'Access funding opportunities',
-    'Access procurement opportunities',
-    'Connect with advisors and service providers',
-    'Recruit interns and graduates',
-    'Use the Growth Suite to improve performance',
-    'Track strategy, finance, operations and ESG progress',
+  const benefits = [
+    'Create verified profiles',
+    'Showcase skills and experience',
+    'Access internship opportunities',
+    'Match with SMEs and growth businesses',
+    'Build work experience portfolios',
   ];
 
   return (
@@ -116,17 +90,17 @@ const SolutionsSMSEs = () => {
         flex: '1',
         width: '100%',
       }}>
-        {/* Hero Section */}
+        {/* Hero Section - More visible accent color */}
         <section style={{
           position: 'relative',
           borderRadius: '20px',
           overflow: 'hidden',
           marginBottom: '50px',
-          minHeight: '300px',
-          background: `linear-gradient(135deg, ${colors.dark} 0%, rgba(28,20,16,0.95) 100%)`,
+          minHeight: '350px',
+          background: `linear-gradient(135deg, ${colors.dark} 0%, ${colors.brownDark} 100%)`,
           display: 'flex',
           alignItems: 'center',
-          padding: '40px 50px',
+          padding: '50px 60px',
         }}>
           <div style={{
             position: 'absolute',
@@ -134,102 +108,200 @@ const SolutionsSMSEs = () => {
             left: 0,
             right: 0,
             bottom: 0,
-            backgroundImage: 'url(https://images.unsplash.com/photo-1600880292203-757bb62b4baf?w=1400&h=400&fit=crop&crop=center)',
+            backgroundImage: 'url(https://images.unsplash.com/photo-1523240795612-9a054b0db644?w=1400&h=500&fit=crop&crop=center)',
             backgroundSize: 'cover',
             backgroundPosition: 'center',
-            opacity: 0.15,
+            opacity: 0.12,
             zIndex: 0,
+          }} />
+          
+          <div style={{
+            position: 'absolute',
+            bottom: -60,
+            left: -40,
+            width: 350,
+            height: 350,
+            borderRadius: '50%',
+            background: `radial-gradient(circle, ${colors.accent}20, transparent)`,
+            pointerEvents: 'none',
+          }} />
+          
+          <div style={{
+            position: 'absolute',
+            top: -80,
+            right: -30,
+            width: 300,
+            height: 300,
+            borderRadius: '50%',
+            background: `radial-gradient(circle, ${colors.amber}15, transparent)`,
+            pointerEvents: 'none',
           }} />
           
           <div style={{
             position: 'relative',
             zIndex: 1,
-            maxWidth: '650px',
+            maxWidth: '700px',
           }}>
             <div style={{
               display: 'inline-flex',
               alignItems: 'center',
               gap: '10px',
-              background: `${colors.amber}25`,
-              border: `1px solid ${colors.amber}40`,
+              background: `${colors.accent}35`,
+              border: `1px solid ${colors.accent}60`,
               borderRadius: '30px',
-              padding: '6px 18px 6px 12px',
-              marginBottom: '20px',
+              padding: '8px 20px 8px 14px',
+              marginBottom: '24px',
             }}>
               <span style={{
-                width: 8,
-                height: 8,
+                width: 10,
+                height: 10,
                 borderRadius: '50%',
-                background: colors.amber,
+                background: colors.accent,
                 display: 'inline-block',
+                animation: 'pulse 2s infinite',
               }} />
               <span style={{
-                color: colors.amber,
-                fontSize: '0.7rem',
+                color: colors.accent,
+                fontSize: '0.75rem',
                 fontWeight: 700,
-                letterSpacing: '0.08em',
+                letterSpacing: '0.1em',
                 textTransform: 'uppercase',
               }}>
-                Solutions for African SMSEs
+                For Graduates
               </span>
             </div>
             
             <h1 style={{
-              fontSize: 'clamp(2rem, 4vw, 2.8rem)',
+              fontSize: 'clamp(2.2rem, 4.5vw, 3.2rem)',
               fontWeight: 900,
               color: colors.white,
-              margin: '0 0 16px',
+              margin: '0 0 20px',
               lineHeight: 1.1,
               letterSpacing: '-0.02em',
             }}>
-              Build Credibility. <br />
-              <span style={{ color: colors.amber }}>Access Opportunities.</span> <br />
-              Grow with Confidence.
+              Experience Should Not <br />
+              Depend on <span style={{ color: colors.accent }}>Who You</span> <br />
+              Know.
             </h1>
             
             <p style={{
-              fontSize: '1rem',
-              color: 'rgba(255,255,255,0.7)',
-              lineHeight: 1.7,
-              margin: '0 0 24px',
-              maxWidth: '500px',
+              fontSize: '1.1rem',
+              color: 'rgba(255,255,255,0.8)',
+              lineHeight: 1.8,
+              margin: '0 0 30px',
+              maxWidth: '550px',
             }}>
-              SMSEs use BIG Marketplace to build verified profiles, get scored, and unlock funding, procurement, and growth opportunities.
+              BIG helps graduates create verified profiles, showcase skills, and access 
+              internship opportunities with growth businesses across Africa.
             </p>
 
-            <button
-              onClick={() => navigate('/LoginRegister')}
-              style={{
-                background: `linear-gradient(135deg, ${colors.amber}, ${colors.secondary})`,
-                color: colors.white,
-                border: 'none',
-                borderRadius: '50px',
-                padding: '14px 36px',
-                fontSize: '0.95rem',
-                fontWeight: 700,
-                cursor: 'pointer',
-                display: 'inline-flex',
+            <div style={{
+              display: 'flex',
+              gap: '16px',
+              flexWrap: 'wrap',
+              alignItems: 'center',
+            }}>
+              <button
+                onClick={() => navigate('/LoginRegister')}
+                style={{
+                  background: `linear-gradient(135deg, ${colors.accent}, ${colors.accentBright})`,
+                  color: colors.white,
+                  border: 'none',
+                  borderRadius: '50px',
+                  padding: '16px 40px',
+                  fontSize: '1rem',
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  transition: 'all 0.3s ease',
+                  boxShadow: `0 4px 25px ${colors.accent}50`,
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = 'translateY(-3px)';
+                  e.currentTarget.style.boxShadow = `0 8px 35px ${colors.accent}60`;
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = `0 4px 25px ${colors.accent}50`;
+                }}
+              >
+                Get Started Today
+                <FaArrowRight size={14} />
+              </button>
+              
+              <div style={{
+                display: 'flex',
                 alignItems: 'center',
-                gap: '10px',
-                transition: 'all 0.3s ease',
-                boxShadow: `0 4px 20px ${colors.amber}40`,
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.transform = 'translateY(-2px)';
-                e.currentTarget.style.boxShadow = `0 8px 30px ${colors.amber}50`;
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.transform = 'translateY(0)';
-                e.currentTarget.style.boxShadow = `0 4px 20px ${colors.amber}40`;
-              }}
-            >
-              Get Started Today
-              <FaArrowRight size={14} />
-            </button>
+                gap: '6px',
+                color: 'rgba(255,255,255,0.4)',
+                fontSize: '0.85rem',
+              }}>
+                <FaRegClock size={14} /> Quick setup • Free to join
+              </div>
+            </div>
+
+            <div style={{
+              display: 'flex',
+              gap: '30px',
+              marginTop: '28px',
+              flexWrap: 'wrap',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <FaCheckCircle size={14} color={colors.accent} />
+                <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem' }}>
+                  Free for graduates
+                </span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <FaShieldAlt size={14} color={colors.accent} />
+                <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem' }}>
+                  Verified profiles
+                </span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <FaGlobeAfrica size={14} color={colors.accent} />
+                <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem' }}>
+                  Pan-African opportunities
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div style={{
+            position: 'relative',
+            zIndex: 1,
+            marginLeft: 'auto',
+            display: 'none',
+            '@media (min-width: 1024px)': {
+              display: 'block',
+            },
+          }}>
+            <div style={{
+              width: '200px',
+              height: '200px',
+              borderRadius: '50%',
+              background: `linear-gradient(135deg, ${colors.accent}30, ${colors.accentBright}20)`,
+              border: `2px solid ${colors.accent}40`,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexDirection: 'column',
+              padding: '20px',
+            }}>
+              <div style={{ fontSize: '3rem', color: colors.accent, marginBottom: '8px' }}>🎓</div>
+              <div style={{ color: colors.white, fontSize: '0.9rem', fontWeight: 700, textAlign: 'center' }}>
+                Launch Your <br />Career
+              </div>
+              <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem', marginTop: '4px' }}>
+                Powered by BIG
+              </div>
+            </div>
           </div>
         </section>
 
-        {/* What You Can Do Section */}
+        {/* Benefits Section */}
         <section style={{ marginBottom: '50px' }}>
           <div style={{
             textAlign: 'center',
@@ -243,7 +315,7 @@ const SolutionsSMSEs = () => {
               textTransform: 'uppercase',
               marginBottom: '8px',
             }}>
-              What You Can Do
+              Why Graduates Choose BIG
             </p>
             <h2 style={{
               fontSize: 'clamp(1.5rem, 2.5vw, 2rem)',
@@ -251,7 +323,7 @@ const SolutionsSMSEs = () => {
               color: colors.dark,
               margin: 0,
             }}>
-              Everything You Need to <span style={{ color: colors.primary }}>Grow</span>
+              <span style={{ color: colors.accent }}>Build</span> Your Career
             </h2>
           </div>
 
@@ -260,7 +332,7 @@ const SolutionsSMSEs = () => {
             gridTemplateColumns: 'repeat(3, 1fr)',
             gap: '12px',
           }}>
-            {whatYouCanDo.map((item, index) => (
+            {benefits.map((item, index) => (
               <div
                 key={index}
                 style={{
@@ -274,7 +346,7 @@ const SolutionsSMSEs = () => {
                   transition: 'all 0.2s ease',
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = colors.primary;
+                  e.currentTarget.style.borderColor = colors.accent;
                   e.currentTarget.style.transform = 'translateX(4px)';
                 }}
                 onMouseLeave={(e) => {
@@ -282,7 +354,7 @@ const SolutionsSMSEs = () => {
                   e.currentTarget.style.transform = 'translateX(0)';
                 }}
               >
-                <FaCheckCircle size={16} color={colors.primary} />
+                <FaCheckCircle size={16} color={colors.accent} />
                 <span style={{
                   fontSize: '0.85rem',
                   color: colors.dark,
@@ -317,7 +389,7 @@ const SolutionsSMSEs = () => {
               color: colors.dark,
               margin: 0,
             }}>
-              Tools to <span style={{ color: colors.primary }}>Accelerate</span> Your Growth
+              Tools for <span style={{ color: colors.accent }}>Career</span> Success
             </h2>
           </div>
 
@@ -384,7 +456,7 @@ const SolutionsSMSEs = () => {
         {/* CTA Section */}
         <section style={{
           padding: '40px',
-          background: `linear-gradient(135deg, ${colors.primary}, ${colors.secondary})`,
+          background: `linear-gradient(135deg, ${colors.accent}, ${colors.accentBright})`,
           borderRadius: '20px',
           textAlign: 'center',
         }}>
@@ -394,7 +466,7 @@ const SolutionsSMSEs = () => {
             color: colors.white,
             margin: '0 0 12px',
           }}>
-            Ready to Build Your BIG Profile?
+            Ready to Launch Your Career?
           </h2>
           <p style={{
             fontSize: '1rem',
@@ -404,13 +476,13 @@ const SolutionsSMSEs = () => {
             marginLeft: 'auto',
             marginRight: 'auto',
           }}>
-            Join thousands of African SMSEs already growing with BIG Marketplace.
+            Join BIG Marketplace and connect with opportunities that will kickstart your career.
           </p>
           <button
             onClick={() => navigate('/LoginRegister')}
             style={{
               background: colors.white,
-              color: colors.primary,
+              color: colors.accent,
               border: 'none',
               borderRadius: '50px',
               padding: '16px 48px',
@@ -432,7 +504,7 @@ const SolutionsSMSEs = () => {
               e.currentTarget.style.boxShadow = '0 4px 20px rgba(0,0,0,0.15)';
             }}
           >
-            Register Now <FaArrowRight size={14} />
+            Get Started <FaArrowRight size={14} />
           </button>
         </section>
       </div>
@@ -442,4 +514,4 @@ const SolutionsSMSEs = () => {
   );
 };
 
-export default SolutionsSMSEs;
+export default SolutionsGraduates;

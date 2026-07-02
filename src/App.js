@@ -48,6 +48,15 @@ import Archive from "./admin/pages/Archive"
 import InvestorSettings from "./Investor/Settings/Setttings"
 import CatalystSettings from "./catalyst/CatalystSettings/supportSettings"
 
+// Solutions Pages
+import SolutionsOverview from "./main_pages/Solutions/SolutionsOverview"
+import SolutionsSMSEs from "./main_pages/Solutions/SolutionsSMSEs"
+import SolutionsInvestors from "./main_pages/Solutions/SolutionsInvestors"
+import SolutionsCorporates from "./main_pages/Solutions/SolutionsCorporates"
+import SolutionsCatalysts from "./main_pages/Solutions/SolutionsCatalysts"
+import SolutionsGraduates from "./main_pages/Solutions/SolutionsGraduates"
+import SolutionsAdvisors from "./main_pages/Solutions/SolutionsAdvisors"
+
 // Billing and Payment Components
 import MySubscriptions from "./smses/BillingInformation/subscriptions"
 import InvestorsSubscriptions from "./Investor/BillingAndPayments/subscriptions"
@@ -877,6 +886,15 @@ function App() {
         <Route path="/verify-email" element={<EmailVerification />} />
         <Route path="/card/:cardId" element={<CardLandingPage />} />
 
+        {/* Solutions Routes - Public */}
+        <Route path="/solutions" element={<SolutionsOverview />} />
+        <Route path="/solutions/smes" element={<SolutionsSMSEs />} />
+        <Route path="/solutions/investors" element={<SolutionsInvestors />} />
+        <Route path="/solutions/corporates" element={<SolutionsCorporates />} />
+        <Route path="/solutions/catalysts" element={<SolutionsCatalysts />} />
+        <Route path="/solutions/graduates" element={<SolutionsGraduates />} />
+        <Route path="/solutions/advisors" element={<SolutionsAdvisors />} />
+
         {/* Admin Notion Routes */}
         <Route path="/admin/articles" element={withAdminProtection(ArticleManagement)} />
         <Route path="/admin/notion/delivery" element={withAdminProtection(Delivery)} />
@@ -1169,8 +1187,8 @@ function App() {
         <Route path="/associator" element={<Navigate to="/associator-dashboard" replace />} />
         <Route path="/associator-universal-profile" element={<Navigate to="/associator-profile/instructions" replace />} />
         <Route path="/governance-calendar" element={withProtection(GovernanceCalendar, {}, renderSMERoute)} />
-      <Route path="/raps-overview" element={withProtection(RapsOverview, {}, renderSMERoute)} />
-      <Route path="/raps-actions" element={withProtection(RapsActions, {}, renderSMERoute)} />
+        <Route path="/raps-overview" element={withProtection(RapsOverview, {}, renderSMERoute)} />
+        <Route path="/raps-actions" element={withProtection(RapsActions, {}, renderSMERoute)} />
 
       </Routes>
     </Router>
