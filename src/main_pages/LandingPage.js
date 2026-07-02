@@ -91,31 +91,37 @@ const HeroScoreWidget = () => (
     <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20}}>
       <div>
         <div style={{fontSize:"0.7rem",color:"rgba(255,255,255,0.55)",fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:4}}>Your BIG Score</div>
-        <div style={{fontSize:"2.2rem",fontWeight:900,color:"#fff",lineHeight:1}}>61<span style={{fontSize:"1rem",fontWeight:500,color:"rgba(255,255,255,0.5)"}}>/100</span></div>
-        <div style={{marginTop:6,display:"inline-flex",alignItems:"center",gap:5,background:C.orange+"33",border:`1px solid ${C.orange}55`,borderRadius:20,padding:"3px 10px"}}>
-          <span style={{width:6,height:6,borderRadius:"50%",background:C.orange,display:"inline-block"}}/>
-          <span style={{fontSize:"0.68rem",fontWeight:700,color:C.orange}}>Progressing</span>
+        <div style={{fontSize:"2.2rem",fontWeight:900,color:"#fff",lineHeight:1}}>80<span style={{fontSize:"1rem",fontWeight:500,color:"rgba(255,255,255,0.5)"}}>/100</span></div>
+        <div style={{marginTop:6,display:"inline-flex",alignItems:"center",gap:5,background:C.green+"33",border:`1px solid ${C.green}55`,borderRadius:20,padding:"3px 10px"}}>
+          <span style={{width:6,height:6,borderRadius:"50%",background:C.green,display:"inline-block"}}/>
+          <span style={{fontSize:"0.68rem",fontWeight:700,color:C.green}}>Strong</span>
         </div>
       </div>
-      <ScoreRing pct={61} size={100}/>
+      <ScoreRing pct={80} size={100}/>
     </div>
     {[
-      {label:"Compliance",  pct:29, color:C.red},
-      {label:"Legitimacy",  pct:90, color:C.green},
-      {label:"Leadership",  pct:72, color:C.orange},
-      {label:"Governance",  pct:90, color:C.green},
-      {label:"Capital Appeal",pct:65,color:C.orange},
-    ].map(d=>(
-      <div key={d.label} style={{marginBottom:9}}>
-        <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
-          <span style={{fontSize:"0.72rem",color:"rgba(255,255,255,0.7)",fontWeight:500}}>{d.label}</span>
-          <span style={{fontSize:"0.72rem",fontWeight:700,color:d.color}}>{d.pct}%</span>
+      {label:"Compliance score",  pct:29, color:C.red, weight:28},
+      {label:"Legitimacy score",  pct:90, color:C.green, weight:13},
+      {label:"Leadership & Governance score",  pct:58, color:C.orange, weight:10},
+      {label:"Operational Strength score",  pct:70, color:C.orange, weight:14},
+      {label:"Capital appeal score", pct:45, color:C.orange, weight:35},
+    ].map(d=>{
+      const contribution = Math.round((d.pct/100) * d.weight);
+      return (
+        <div key={d.label} style={{marginBottom:9}}>
+          <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+            <span style={{fontSize:"0.72rem",color:"rgba(255,255,255,0.7)",fontWeight:500}}>{d.label}</span>
+            <span style={{fontSize:"0.72rem",fontWeight:700,color:d.color}}>{d.pct}% × {d.weight}% wt = {contribution}%</span>
+          </div>
+          <div style={{height:5,background:"rgba(255,255,255,0.1)",borderRadius:3,overflow:"hidden"}}>
+            <div style={{width:`${d.pct}%`,height:"100%",background:d.color,borderRadius:3}}/>
+          </div>
         </div>
-        <div style={{height:5,background:"rgba(255,255,255,0.1)",borderRadius:3,overflow:"hidden"}}>
-          <div style={{width:`${d.pct}%`,height:"100%",background:d.color,borderRadius:3}}/>
-        </div>
-      </div>
-    ))}
+      );
+    })}
+    <div style={{marginTop:12, borderTop:"1px solid rgba(255,255,255,0.1)", paddingTop:12, textAlign:"center"}}>
+      <span style={{fontSize:"0.65rem", color:"rgba(255,255,255,0.5)"}}>Still anticipating to be matched — that's why the score is low, but the process is easy!</span>
+    </div>
   </div>
 )
 
@@ -184,11 +190,11 @@ const InvestorSidebar = ({ active="matches" }) => {
 const SMSEDashboard = () => {
   const [bdOpen,setBdOpen]=useState(false)
   const subScores=[
-    {label:"Compliance score",  dot:C.red,   pct:29, weight:32,color:C.red},
+    {label:"Compliance score",  dot:C.red,   pct:29, weight:28,color:C.red},
     {label:"Legitimacy score",  dot:C.green, pct:90, weight:13,color:C.green},
-    {label:"Leadership score",  dot:C.orange,pct:72, weight:10,color:C.orange},
-    {label:"Governance score",  dot:C.green, pct:90, weight:13,color:C.green},
-    {label:"Capital appeal score",dot:C.orange,pct:65,weight:32,color:C.orange},
+    {label:"Leadership & Governance score", dot:C.orange,pct:58, weight:10,color:C.orange},
+    {label:"Operational Strength score",dot:C.orange,pct:70, weight:14,color:C.orange},
+    {label:"Capital appeal score",dot:C.orange,pct:45, weight:35,color:C.orange},
   ]
   return (
     <div style={{display:"flex",borderRadius:14,overflow:"hidden",boxShadow:"0 8px 40px rgba(28,20,16,0.18)",border:`1px solid ${C.border}`,width:"100%"}}>
@@ -284,11 +290,45 @@ const SMSEDashboard = () => {
               <FaCommentDots size={14} color={C.muted}/>
             </div>
             <div style={{background:C.cream,borderRadius:10,padding:"14px",marginBottom:12,display:"flex",alignItems:"center",gap:14}}>
-              <span style={{fontSize:"2rem",fontWeight:900,color:C.dark}}>2</span>
+              <span style={{fontSize:"2rem",fontWeight:900,color:C.dark}}>3</span>
               <div>
-                <div style={{display:"flex",gap:2,marginBottom:4}}>{[1,2,3,4].map(i=><FaStar key={i} size={12} color="#F59E0B"/>)}<FaStar size={12} color={C.border}/></div>
-                <div style={{fontSize:"0.7rem",fontWeight:700,color:C.secondary}}>4.0 Commended</div>
-                <div style={{fontSize:"0.6rem",color:C.muted}}>Reviews</div>
+                <div style={{display:"flex",gap:2,marginBottom:4}}>{[1,2,3].map(i=><FaStar key={i} size={12} color="#F59E0B"/>)}<FaStar size={12} color={C.border}/><FaStar size={12} color={C.border}/></div>
+                <div style={{fontSize:"0.7rem",fontWeight:700,color:C.secondary}}>3.0 Good</div>
+                <div style={{fontSize:"0.6rem",color:C.muted}}>From 12 reviews</div>
+              </div>
+            </div>
+            <div style={{display:"flex",flexDirection:"column",gap:4,marginBottom:8}}>
+              <div style={{display:"flex",alignItems:"center",gap:6, background:C.white, padding:"6px 8px",borderRadius:6,border:`1px solid ${C.border}`}}>
+                <img src="https://randomuser.me/api/portraits/women/68.jpg" alt="Reviewer" style={{width:24,height:24,borderRadius:"50%",objectFit:"cover"}}/>
+                <div style={{flex:1}}>
+                  <div style={{display:"flex",alignItems:"center",gap:4,fontSize:"0.65rem",fontWeight:600,color:C.dark}}>Thandi M. <span style={{fontWeight:400,color:C.muted}}>| Verified</span></div>
+                  <div style={{display:"flex",gap:1}}>{[1,2,3].map(i=><FaStar key={i} size={8} color="#F59E0B"/>)}<FaStar size={8} color={C.border}/><FaStar size={8} color={C.border}/></div>
+                </div>
+              </div>
+              <div style={{display:"flex",alignItems:"center",gap:6, background:C.white, padding:"6px 8px",borderRadius:6,border:`1px solid ${C.border}`}}>
+                <img src="https://randomuser.me/api/portraits/men/52.jpg" alt="Reviewer" style={{width:24,height:24,borderRadius:"50%",objectFit:"cover"}}/>
+                <div style={{flex:1}}>
+                  <div style={{display:"flex",alignItems:"center",gap:4,fontSize:"0.65rem",fontWeight:600,color:C.dark}}>Sipho K. <span style={{fontWeight:400,color:C.muted}}>| Verified</span></div>
+                  <div style={{display:"flex",gap:1}}>{[1,2,3].map(i=><FaStar key={i} size={8} color="#F59E0B"/>)}<FaStar size={8} color={C.border}/><FaStar size={8} color={C.border}/></div>
+                </div>
+              </div>
+              <div style={{display:"flex",alignItems:"center",gap:6, background:C.white, padding:"6px 8px",borderRadius:6,border:`1px solid ${C.border}`}}>
+                <img src="https://randomuser.me/api/portraits/women/43.jpg" alt="Reviewer" style={{width:24,height:24,borderRadius:"50%",objectFit:"cover"}}/>
+                <div style={{flex:1}}>
+                  <div style={{display:"flex",alignItems:"center",gap:4,fontSize:"0.65rem",fontWeight:600,color:C.dark}}>Nomsa D. <span style={{fontWeight:400,color:C.muted}}>| Verified</span></div>
+                  <div style={{display:"flex",gap:1}}>{[1,2,3,4].map(i=><FaStar key={i} size={8} color="#F59E0B"/>)}<FaStar size={8} color={C.border}/></div>
+                </div>
+              </div>
+              <div style={{display:"flex",alignItems:"center",gap:6, background:C.orangeBg, padding:"6px 8px",borderRadius:6,border:`1px solid ${C.orange}44`}}>
+                <img src="https://randomuser.me/api/portraits/men/32.jpg" alt="Advisor" style={{width:24,height:24,borderRadius:"50%",objectFit:"cover"}}/>
+                <div style={{flex:1}}>
+                  <div style={{display:"flex",alignItems:"center",gap:4,fontSize:"0.65rem",fontWeight:600,color:C.dark}}>Advisor: Mandla N. <span style={{fontWeight:400,color:C.muted}}>| Strategic Advisor</span></div>
+                  <div style={{display:"flex",gap:1,alignItems:"center"}}>
+                    {[1,2,3].map(i=><FaStar key={i} size={8} color="#F59E0B"/>)}
+                    <FaStar size={8} color={C.border}/><FaStar size={8} color={C.border}/>
+                    <span style={{fontSize:"0.55rem",color:C.muted,marginLeft:4}}>Still anticipating to be matched — that's why the score is low, but the process is easy!</span>
+                  </div>
+                </div>
               </div>
             </div>
             <button style={{width:"100%",background:C.green,color:"#fff",border:"none",borderRadius:8,padding:"8px",fontSize:"0.7rem",fontWeight:700,cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",gap:5}}><FaStar size={10}/> Great Feedback</button>
@@ -1069,7 +1109,7 @@ const LandingPage = () => {
                 <Link to="/HowItWorks" className="lp-w">See How It Works</Link>
               </div>
               <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
-                {[[<MdVerified size={15}/>,"AI-Powered Scoring"],[<FaShieldAlt size={13}/>,"Verified Businesses"],[<FaLock size={12}/>,"POPIA Compliant"]].map(([ic,tx])=>(
+                {[[<MdVerified size={15}/>,"AI-Powered Scoring"],[<FaShieldAlt size={13}/>,"Verified Businesses"],[<FaLock size={12}/>,"POPIA Compliant"],[<FaShieldAlt size={13}/>,"Advanced Security"]].map(([ic,tx])=>(
                   <div key={tx} style={{display:"flex",alignItems:"center",gap:7,background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.14)",borderRadius:10,padding:"7px 14px"}}>
                     <span style={{color:C.amber,display:"flex"}}>{ic}</span>
                     <span style={{fontSize:"0.76rem",color:"rgba(255,255,255,0.8)",fontWeight:600}}>{tx}</span>
@@ -1204,7 +1244,7 @@ const LandingPage = () => {
           <div className="g3" style={{display:"grid",gridTemplateColumns:mobile?"1fr":"repeat(3,1fr)",gap:20}}>
             {[
               {icon:<FaUsers size={18}/>,    color:C.primary,   title:"Built With, Not Just For",  body:"Before writing code, we consulted 30+ stakeholders to design a platform grounded in African entrepreneurs realities."},
-              {icon:<FaBuilding size={18}/>, color:C.secondary, title:"Decades of Expertise",       body:"Our team brings decades of combined experience in SME growth, finance, and innovation across Africa."},
+              {icon:<FaBuilding size={18}/>, color:C.secondary, title:"Decades of Expertise",       body:"Our team brings decades of combined experience in management consulting, SME growth, finance, and innovation across Africa."},
               {icon:<FaHandshake size={18}/>,color:C.amber,     title:"Solving for More",           body:"We are not just solving for access — we are solving for readiness, trust, and scale across the continent."},
             ].map(c=>(
               <div key={c.title} style={{background:C.cream,borderRadius:18,padding:"24px 20px",border:`1px solid ${C.border}`}}>

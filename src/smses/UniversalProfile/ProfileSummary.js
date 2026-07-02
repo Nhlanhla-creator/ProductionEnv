@@ -25,12 +25,6 @@ import {
   Layers,
   Truck,
   Briefcase,
-  Calendar,
-  User,
-  BriefcaseBusiness,
-  GraduationCap,
-  BookOpen,
-  Building2,
 } from "lucide-react"
 
 const ProfileSummary = ({ data, onEdit }) => {
@@ -54,21 +48,29 @@ const ProfileSummary = ({ data, onEdit }) => {
   const formatLabel = (value) => {
     if (!value) return "Not provided"
     if (typeof value === "boolean") return value ? "Yes" : "No"
-    return value.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
+    if (typeof value === "object") return "Not provided"
+    try {
+      return String(value).replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())
+    } catch {
+      return "Not provided"
+    }
   }
 
   const formatDate = (value) => {
     if (!value) return "Not provided"
+    if (typeof value === "object") return "Not provided"
     try {
       const date = new Date(value)
+      if (isNaN(date.getTime())) return value
       return date.toLocaleDateString("en-ZA", { year: "numeric", month: "short", day: "numeric" })
     } catch {
-      return value
+      return "Not provided"
     }
   }
 
   const renderDocumentLink = (url, label = "View Document") => {
     if (!url) return "No document uploaded"
+    if (typeof url !== "string") return "Invalid document"
     return (
       <div
         style={{ display: "flex", alignItems: "center", gap: "8px", padding: "8px 12px", background: "linear-gradient(135deg, #a67c52, #7d5a50)", color: "#faf7f2", borderRadius: "8px", fontSize: "14px", fontWeight: "500", cursor: "pointer", maxWidth: "fit-content" }}
@@ -81,6 +83,7 @@ const ProfileSummary = ({ data, onEdit }) => {
 
   const renderLinkedInLink = (url) => {
     if (!url) return "Not provided"
+    if (typeof url !== "string") return "Not provided"
     return (
       <div
         style={{ display: "flex", alignItems: "center", gap: "6px", padding: "6px 10px", background: "linear-gradient(135deg, #0077b5, #005582)", color: "#ffffff", borderRadius: "6px", fontSize: "12px", fontWeight: "500", cursor: "pointer", maxWidth: "fit-content" }}
@@ -134,29 +137,39 @@ const ProfileSummary = ({ data, onEdit }) => {
     )
   }
 
-  const renderFieldGrid = (fields) => (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px" }}>
-      {fields.map((item, i) => (
-        <div key={i} style={fieldCardStyle}>
-          <span style={fieldLabelStyle}>{item.label}</span>
-          <span style={fieldValueStyle}>{item.value || "Not provided"}</span>
-        </div>
-      ))}
-    </div>
-  )
+  const renderFieldGrid = (fields) => {
+    const safeFields = fields.filter(item => {
+      if (item.value && typeof item.value === "object") {
+        return false
+      }
+      return true
+    })
+    return (
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px" }}>
+        {safeFields.map((item, i) => (
+          <div key={i} style={fieldCardStyle}>
+            <span style={fieldLabelStyle}>{item.label}</span>
+            <span style={fieldValueStyle}>{item.value || "Not provided"}</span>
+          </div>
+        ))}
+      </div>
+    )
+  }
 
   // Helper to render dropdown-based question sections in summary
   const renderQuestionSummary = (title, questions, dataObj) => {
     if (!dataObj || Object.keys(dataObj).length === 0) return null
-    const hasValues = questions.some(q => dataObj[q.field])
+    const safeDataObj = dataObj || {}
+    const hasValues = questions.some(q => safeDataObj[q.field])
     if (!hasValues) return null
     return (
       <div style={{ marginTop: "20px" }}>
         <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginBottom: "12px" }}>{title}</h3>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "12px" }}>
           {questions.map((q) => {
-            const val = dataObj[q.field]
+            const val = safeDataObj[q.field]
             if (!val) return null
+            if (typeof val === "object") return null
             const optLabel = q.options?.find(o => o.value === val)?.label || formatLabel(val)
             return (
               <div key={q.field} style={{ padding: "10px 14px", background: "rgba(166,124,82,0.05)", borderRadius: "8px", border: "1px solid rgba(200,182,166,0.2)" }}>
@@ -307,7 +320,6 @@ const ProfileSummary = ({ data, onEdit }) => {
     )
   }
 
-  // ── Products & Services Section ──────────────────────────────────────────
   // ── Products & Services Section ──────────────────────────────────────────
   const renderProductsServices = () => {
     const ps = data?.productsServices || {}
@@ -1061,6 +1073,7 @@ const ProfileSummary = ({ data, onEdit }) => {
 
             {/* ── Legal & Compliance ─────────────────────────────────── */}
             {renderLegalCompliance()}
+
             {/* ── Financial Overview ─────────────────────────────────── */}
             <div style={sectionCardStyle}>
               {renderSectionHeader("financialOverview", DollarSign, "Financial Overview")}
@@ -1311,10 +1324,8 @@ const ProfileSummary = ({ data, onEdit }) => {
                 </div>
               )}
             </div>
-          
 
             {/* ── Operations Overview ─────────────────────────────────── */}
-                     {/* ── Operations Overview ─────────────────────────────────── */}
             <div style={sectionCardStyle}>
               {renderSectionHeader("operationsOverview", FileCheck, "Operations Overview")}
               {expandedSections.operationsOverview && (
@@ -1353,7 +1364,7 @@ const ProfileSummary = ({ data, onEdit }) => {
                     </div>
                   </div>
 
-                  {/* Outsourcing & Value Chain */}
+                  {/* 1. Outsourcing & Value Chain */}
                   {data?.operationsOverview?.outsourcesValueChain && (
                     <>
                       <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginTop: "24px", marginBottom: "12px" }}>1. Outsourcing & Value Chain</h3>
@@ -1382,7 +1393,7 @@ const ProfileSummary = ({ data, onEdit }) => {
                     </>
                   )}
 
-                  {/* Import/Export */}
+                  {/* 2. Import / Export */}
                   {data?.operationsOverview?.importExport && data?.operationsOverview?.importExport !== "none" && (
                     <>
                       <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginTop: "24px", marginBottom: "12px" }}>2. Import / Export</h3>
@@ -1403,7 +1414,7 @@ const ProfileSummary = ({ data, onEdit }) => {
                     </>
                   )}
 
-                  {/* Contract Operations */}
+                  {/* 3. Contract Operations */}
                   {data?.operationsOverview?.operatesOnContract && (
                     <>
                       <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginTop: "24px", marginBottom: "12px" }}>3. Contract Operations</h3>
@@ -1426,7 +1437,7 @@ const ProfileSummary = ({ data, onEdit }) => {
                     </>
                   )}
 
-                  {/* Supplier References */}
+                  {/* 4. Supplier References */}
                   {(data?.operationsOverview?.supplier1Name || data?.operationsOverview?.supplier2Name || data?.operationsOverview?.supplier3Name) && (
                     <>
                       <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginTop: "24px", marginBottom: "12px" }}>4. Supplier References</h3>
@@ -1447,7 +1458,7 @@ const ProfileSummary = ({ data, onEdit }) => {
                     </>
                   )}
 
-                  {/* Premises & Facilities */}
+                  {/* 5. Premises & Facilities */}
                   {data?.operationsOverview?.premisesStatus && (
                     <>
                       <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginTop: "24px", marginBottom: "12px" }}>5. Premises & Facilities</h3>
@@ -1494,7 +1505,7 @@ const ProfileSummary = ({ data, onEdit }) => {
                     </>
                   )}
 
-                  {/* Industry Accreditations */}
+                  {/* 6. Industry Accreditations */}
                   {data?.operationsOverview?.industryAccreditations?.length > 0 && (
                     <>
                       <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginTop: "24px", marginBottom: "12px" }}>6. Industry Accreditations</h3>
@@ -1511,7 +1522,7 @@ const ProfileSummary = ({ data, onEdit }) => {
                     </>
                   )}
 
-                  {/* Operational Challenges */}
+                  {/* 9. Operational Challenges */}
                   {data?.operationsOverview?.operationalChallenges && (
                     <>
                       <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginTop: "24px", marginBottom: "12px" }}>9. Operational Challenges</h3>
@@ -1523,6 +1534,7 @@ const ProfileSummary = ({ data, onEdit }) => {
                 </div>
               )}
             </div>
+
             {/* ── Governance ─────────────────────────────────────────── */}
             <div style={sectionCardStyle}>
               {renderSectionHeader("governance", FileCheck, "Governance")}
