@@ -28,7 +28,28 @@ export const DOCUMENT_MAPPING = {
   "Loan Agreements": { id: "loanAgreements", category: DOCUMENT_CATEGORIES.ADDITIONAL },
   "Pitch Deck": { id: "pitchDeck", category: DOCUMENT_CATEGORIES.ADDITIONAL },
   "Previous Program Reports": { id: "previousProgramReports", category: DOCUMENT_CATEGORIES.ADDITIONAL },
-  "Support Letters / Endorsements": { id: "supportLetters", category: DOCUMENT_CATEGORIES.ADDITIONAL }
+  "Support Letters / Endorsements": { id: "supportLetters", category: DOCUMENT_CATEGORIES.ADDITIONAL },
+
+  // NEW GOVERNANCE & HR DOCUMENTS - Added to ADDITIONAL
+  "Employment Contract": { id: "employment_contract", category: DOCUMENT_CATEGORIES.ADDITIONAL },
+  "Non-Disclosure Agreement (NDA)": { id: "nda", category: DOCUMENT_CATEGORIES.ADDITIONAL },
+  "Employee Code of Conduct": { id: "employee_code_of_conduct", category: DOCUMENT_CATEGORIES.ADDITIONAL },
+  "Memorandum of Understanding (MOU)": { id: "mou", category: DOCUMENT_CATEGORIES.ADDITIONAL },
+  "Supplier Contracts": { id: "supplier_contracts", category: DOCUMENT_CATEGORIES.ADDITIONAL },
+  "Ethics Policy": { id: "ethics_policy", category: DOCUMENT_CATEGORIES.ADDITIONAL },
+  "Whistleblowing Policy": { id: "whistleblowing_policy", category: DOCUMENT_CATEGORIES.ADDITIONAL },
+  "Leave Policy": { id: "leave_policy", category: DOCUMENT_CATEGORIES.ADDITIONAL },
+  "Disciplinary & Grievance Policy": { id: "disciplinary_grievance_policy", category: DOCUMENT_CATEGORIES.ADDITIONAL },
+  "Health & Safety Policy": { id: "health_safety_policy", category: DOCUMENT_CATEGORIES.ADDITIONAL },
+  "Privacy & Data Protection Policy": { id: "privacy_data_protection_policy", category: DOCUMENT_CATEGORIES.ADDITIONAL },
+  "Remote Work Policy": { id: "remote_work_policy", category: DOCUMENT_CATEGORIES.ADDITIONAL },
+  "Conflict of Interest Policy": { id: "conflict_of_interest_policy", category: DOCUMENT_CATEGORIES.ADDITIONAL },
+  "Intellectual Property Protection": { id: "intellectual_property_protection", category: DOCUMENT_CATEGORIES.ADDITIONAL },
+  "Social Media Use Policy": { id: "social_media_use_policy", category: DOCUMENT_CATEGORIES.ADDITIONAL },
+  "Expense Reimbursement Policy": { id: "expense_reimbursement_policy", category: DOCUMENT_CATEGORIES.ADDITIONAL },
+  "Overtime & Compensation Policy": { id: "overtime_compensation_policy", category: DOCUMENT_CATEGORIES.ADDITIONAL },
+  "Termination Policy": { id: "termination_policy", category: DOCUMENT_CATEGORIES.ADDITIONAL },
+  "Performance Review Policy": { id: "performance_review_policy", category: DOCUMENT_CATEGORIES.ADDITIONAL }
 };
 
 export const DOCUMENT_PATHS = Object.keys(DOCUMENT_MAPPING).reduce((acc, label) => {
