@@ -337,8 +337,20 @@ const scoreRiskManagement = (profileData) => {
     { clear_ownership: 5, shared_unclear: 2, no_ownership_defined: 0 },
     rm.riskOwnership
   );
- 
-  const raw = (identScore + assessScore + mitScore + bcpScore + crisisScore + ownScore) / 6;
+
+  // Legal & reputational risk — adverseListings / courtNotices live at the top
+  // level of profileData.governance (set in the "Risk & Legal" section of the
+  // Governance form), not inside the riskManagement sub-object. "Yes" on
+  // either is an active, unresolved risk signal, so it pulls this score down;
+  // "No" on both is a clean bill; unanswered is treated as neutral (not
+  // penalized, since silence isn't evidence either way).
+  const gov = profileData?.governance || {};
+  let legalRiskScore = 2.5; // neutral default when unanswered
+  if (gov.adverseListings === "No" && gov.courtNotices === "No") legalRiskScore = 5;
+  else if (gov.adverseListings === "Yes" || gov.courtNotices === "Yes") legalRiskScore = 0;
+  else if (gov.adverseListings === "No" || gov.courtNotices === "No") legalRiskScore = 3.5;
+
+  const raw = (identScore + assessScore + mitScore + bcpScore + crisisScore + ownScore + legalRiskScore) / 7;
   return { score: pct5(raw), max: 100 };
 };
  
@@ -396,13 +408,37 @@ const scoreTransparencyReporting = (profileData) => {
 const POLICY_ITEMS = [
   // Agreements (5)
   "employmentContract", "nda", "mou", "suppliercontract", "customerAgreements",
-  // Policy Essentials (7)
+  // Policy Essentials (8) — briberyCorruptionPolicy added
   "codeOfConduct", "ethicsPolicy", "whistleblowingPolicy", "leavePolicy",
-  "disciplinaryPolicy", "healthSafetyPolicy", "privacyPolicy",
+  "disciplinaryPolicy", "healthSafetyPolicy", "privacyPolicy", "briberyCorruptionPolicy",
   // Specialised Policies (8)
   "remoteWorkPolicy", "conflictInterestPolicy", "ipProtection", "socialMediaPolicy",
   "expensePolicy", "overtimePolicy", "terminationPolicy", "performancePolicy",
 ];
+
+const POLICY_LABELS = {
+  employmentContract: "Employment Contracts",
+  nda: "Non-Disclosure Agreements (NDA)",
+  mou: "Memorandums of Understanding (MOU)",
+  suppliercontract: "Supplier Contracts",
+  customerAgreements: "Customer Agreements",
+  codeOfConduct: "Code of Conduct",
+  ethicsPolicy: "Ethics Policy",
+  whistleblowingPolicy: "Whistleblowing Policy",
+  leavePolicy: "Leave Policy",
+  disciplinaryPolicy: "Disciplinary Policy",
+  healthSafetyPolicy: "Health & Safety Policy",
+  privacyPolicy: "Privacy Policy",
+  briberyCorruptionPolicy: "Bribery and Corruption Policy",
+  remoteWorkPolicy: "Remote Work Policy",
+  conflictInterestPolicy: "Conflict of Interest Policy",
+  ipProtection: "IP Protection Policy",
+  socialMediaPolicy: "Social Media Policy",
+  expensePolicy: "Expense Policy",
+  overtimePolicy: "Overtime Policy",
+  terminationPolicy: "Termination Policy",
+  performancePolicy: "Performance Policy",
+};
  
 
 
@@ -411,8 +447,19 @@ const scorePoliciesDocumentation = (profileData) => {
   const completed = POLICY_ITEMS.filter((k) => checklist[k] === true).length;
   const score = Math.round((completed / POLICY_ITEMS.length) * 100);
  
-  // hasConflictResolution: "Yes" | "No"  ← capital Y (from Governance.jsx select)
-  const conflictBonus = profileData?.governance?.hasConflictResolution === "Yes" ? 5 : 0;
+  // Conflict-of-interest disclosure quality — replaces the old
+  // "hasConflictResolution" field, which isn't part of the Governance form
+  // at all (it doesn't exist in profileData.governance) and always silently
+  // evaluated to 0. The real signal is membersHaveMultipleBusinesses +
+  // whether those interests were actually disclosed in conflictOfInterest.
+  const membersHaveMultipleBusinesses = profileData?.governance?.membersHaveMultipleBusinesses;
+  const conflictEntries = profileData?.governance?.conflictOfInterest || [];
+  const hasDisclosedConflicts = conflictEntries.some((e) => e?.personName && e?.companyName);
+  let conflictBonus;
+  if (membersHaveMultipleBusinesses === "No") conflictBonus = 5; // no conflicts to disclose
+  else if (membersHaveMultipleBusinesses === "Yes" && hasDisclosedConflicts) conflictBonus = 5; // disclosed transparently
+  else if (membersHaveMultipleBusinesses === "Yes" && !hasDisclosedConflicts) conflictBonus = 0; // conflict exists, undisclosed — red flag
+  else conflictBonus = 2; // not answered — unknown
   // ethicsTrainingFrequency: "Weekly"|"Monthly"|"Quarterly"|"Bi-annually"|"Annually"|"As needed"|"None"
   const ethicsBonus = lookup(
     { Weekly: 5, Monthly: 5, Quarterly: 4, "Bi-annually": 3, Annually: 2, "As needed": 1, None: 0 },
@@ -517,6 +564,24 @@ const buildGovernancePrompt = (profileData, pisCalc, stage, recommendation) => {
  
   const checklist = profileData?.governance?.governanceChecklist || {};
   const completedPolicies = POLICY_ITEMS.filter((k) => checklist[k] === true).length;
+  const missingPolicyKeys = POLICY_ITEMS.filter((k) => checklist[k] !== true);
+  const missingPolicyNames = missingPolicyKeys.map((k) => POLICY_LABELS[k] || k);
+
+  // Conflict of Interest — Governance form's "Conflict of Interest" section
+  const membersHaveMultipleBusinesses = profileData?.governance?.membersHaveMultipleBusinesses;
+  const conflictEntries = profileData?.governance?.conflictOfInterest || [];
+  const disclosedConflicts = conflictEntries.filter((e) => e?.personName && e?.companyName);
+  const conflictSummary = disclosedConflicts.length > 0
+    ? disclosedConflicts.map((e) => `${e.personName} — ${e.otherPositions || "role not specified"} at ${e.companyName}${e.businessType ? ` (${e.businessType})` : ""}`).join("; ")
+    : (membersHaveMultipleBusinesses === "Yes"
+        ? "NONE DISCLOSED despite indicating members have other businesses — undisclosed conflict of interest risk"
+        : "None");
+
+  // Risk & Legal — Governance form's "Risk & Legal" section
+  const adverseListings = profileData?.governance?.adverseListings;
+  const adverseListingsDetails = profileData?.governance?.adverseListingsDetails;
+  const courtNotices = profileData?.governance?.courtNotices;
+  const courtNoticesDetails = profileData?.governance?.courtNoticesDetails;
  
   const allDirs   = profileData?.ownershipManagement?.directors || [];
   const directors = allDirs.filter((d) => d?.name && d.name.trim() !== "");
@@ -548,6 +613,9 @@ const buildGovernancePrompt = (profileData, pisCalc, stage, recommendation) => {
 You are a senior governance analyst evaluating an SME for investment readiness.
 Assess governance maturity across 5 categories. Use ONLY the data provided.
 Respond strictly in the structured format below.
+IMPORTANT: In the Risk Management section specifically, you MUST explain the
+concrete business risk created by each policy listed as missing — don't just
+note that it's absent, say what could go wrong because of it.
  
 === BUSINESS CONTEXT ===
 Company: ${profileData?.entityOverview?.registeredName || "Unknown"}
@@ -582,6 +650,9 @@ Risk Mitigation: ${rm.riskMitigation || "no_clear_approach"}
 Business Continuity: ${rm.businessContinuity || "none"}
 Crisis Preparedness: ${rm.crisisPreparedness || "reactive_unprepared"}
 Risk Ownership: ${rm.riskOwnership || "no_ownership_defined"}
+Missing Policies (risk exposure factors — ${missingPolicyNames.length} of ${POLICY_ITEMS.length} not in place): ${missingPolicyNames.length > 0 ? missingPolicyNames.join(", ") : "None — full policy set in place"}
+Adverse Listings: ${adverseListings || "Not specified"}${adverseListings === "Yes" ? ` — Details: ${adverseListingsDetails || "Not provided"}` : ""}
+Court Notices / Legal Proceedings: ${courtNotices || "Not specified"}${courtNotices === "Yes" ? ` — Details: ${courtNoticesDetails || "Not provided"}` : ""}
  
 === 3. TRANSPARENCY & REPORTING ===
 Reporting Frequency: ${tr.reportingFrequency || "ad_hoc_none"}
@@ -598,7 +669,8 @@ Management Accounts: ${mgmtAccounts}
  
 === 4. POLICIES & DOCUMENTATION ===
 Governance Checklist: ${completedPolicies} of ${POLICY_ITEMS.length} policies in place
-Conflict Resolution Procedures: ${profileData?.governance?.hasConflictResolution || "No"}
+Members Have Other Business Interests (Conflict Potential): ${membersHaveMultipleBusinesses || "Not specified"}
+Conflict of Interest Disclosures: ${conflictSummary}
 Ethics Training Frequency: ${profileData?.governance?.ethicsTrainingFrequency || "None"}
 Last Ethics Training: ${profileData?.governance?.lastEthicsTrainingDate || "Not recorded"}
  
@@ -631,8 +703,10 @@ How to Improve:
 Score: X/5
 Confidence: High | Medium | Low
 Confidence Rationale: (one sentence)
-Evidence: (one sentence)
-Assessment: (2-3 sentences)
+Evidence: (one sentence citing specific data)
+Assessment: (2-3 sentences covering the 6 risk-management fields above)
+Missing Policy Risk: For EVERY item listed under "Missing Policies" above, state in one short sentence the concrete business risk that gap creates (e.g. "No Health & Safety Policy → exposes the business to workplace-incident liability and possible regulatory penalties"; "No Whistleblowing Policy → misconduct or fraud may go unreported"). If no policies are missing, say so explicitly instead of listing risks.
+Legal & Reputational Flags: If Adverse Listings or Court Notices above is "Yes", explain in one sentence per flag what risk this creates for funders/partners (e.g. "Active court proceedings create contingent liability and reputational risk for investors"). If both are "No", say so explicitly. If unanswered, say the risk is unverified rather than assuming it's clean.
 How to Improve:
 - (action 1)
 - (action 2)
@@ -653,6 +727,7 @@ Confidence: High | Medium | Low
 Confidence Rationale: (one sentence)
 Evidence: (one sentence)
 Assessment: (2-3 sentences)
+Conflict of Interest Flag: If "Members Have Other Business Interests" is Yes but no disclosures are listed, explicitly call this out as an undisclosed-conflict red flag and explain the risk it poses to trust and governance integrity. If disclosures are present, briefly note whether they appear adequately documented. If members have no other business interests, say so explicitly.
 How to Improve:
 - (action 1)
 - (action 2)
