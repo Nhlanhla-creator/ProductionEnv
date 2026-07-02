@@ -79,7 +79,7 @@ export const SummaryReportCard = ({ userId: propUserId, styles = {}, apiKey }) =
 
       try {
         // STEP 1: Check if there's a trigger flag asking for a fresh evaluation
-        const shouldTriggerNew = await checkTriggerFundabilityEvaluation(userId);
+        const shouldTriggerNew = await checkAnyEvaluationTrigger(userId);
 
         if (shouldTriggerNew) {
           // Trigger wins – always regenerate
@@ -189,15 +189,30 @@ export const SummaryReportCard = ({ userId: propUserId, styles = {}, apiKey }) =
     }
   };
 
-  const checkTriggerFundabilityEvaluation = async (userId) => {
+  // Was named "...Fundability..." but only ever checked triggerLegitimacyEvaluation
+  // — the summary would silently miss regeneration whenever a governance,
+  // leadership, operational, or fundability trigger fired on its own. Now
+  // checks every trigger flag that any of the 5 pillar cards can set,
+  // including the shared triggerGovernanceEvaluation flag Operational
+  // Strength piggybacks on for now.
+  const ALL_TRIGGER_FLAGS = [
+    "triggerComplianceEvaluation",
+    "triggerLegitimacyEvaluation",
+    "triggerGovernanceEvaluation",
+    "triggerLeadershipEvaluation",
+    "triggerOperationalEvaluation",
+    "triggerFundabilityEvaluation",
+  ];
+
+  const checkAnyEvaluationTrigger = async (userId) => {
     try {
       const profileRef = doc(db, "universalProfiles", userId);
       const profileSnap = await getDoc(profileRef);
-      return profileSnap.exists()
-        ? profileSnap.data().triggerLegitimacyEvaluation === true
-        : false;
+      if (!profileSnap.exists()) return false;
+      const data = profileSnap.data();
+      return ALL_TRIGGER_FLAGS.some((flag) => data[flag] === true);
     } catch (error) {
-      console.error("checkTriggerFundabilityEvaluation error:", error);
+      console.error("checkAnyEvaluationTrigger error:", error);
       return false;
     }
   };
@@ -205,7 +220,8 @@ export const SummaryReportCard = ({ userId: propUserId, styles = {}, apiKey }) =
   const resetTrigger = async (userId) => {
     try {
       const profileRef = doc(db, "universalProfiles", userId);
-      await setDoc(profileRef, { triggerLegitimacyEvaluation: false }, { merge: true });
+      const resetPayload = Object.fromEntries(ALL_TRIGGER_FLAGS.map((flag) => [flag, false]));
+      await setDoc(profileRef, resetPayload, { merge: true });
     } catch (error) {
       console.error("resetTrigger error:", error);
     }
@@ -236,9 +252,8 @@ export const SummaryReportCard = ({ userId: propUserId, styles = {}, apiKey }) =
     if (!reportData) return false;
     const hasScores =
       reportData.overallScore > 0 ||
-      reportData.governanceScore > 0 ||
-      reportData.leadershipScore > 0 ||
-      reportData.profileEvaluationScore > 0;
+      reportData.governanceLeadershipScore > 0 ||
+      reportData.operationalScore > 0;
     const hasStructuredContent =
       reportData.structuredContent &&
       Object.keys(reportData.structuredContent).length > 0;
@@ -270,9 +285,8 @@ export const SummaryReportCard = ({ userId: propUserId, styles = {}, apiKey }) =
         overallScore: 0,
         bigScore: 0,
         fundabilityStatus: "Assessment Incomplete",
-        governanceScore: 0,
-        leadershipScore: 0,
-        profileEvaluationScore: 0,
+        governanceLeadershipScore: 0,
+        operationalScore: 0,
         weightedAverageScore: 0,
         detailedScores: [],
         improvementSuggestions: [],
@@ -288,6 +302,7 @@ export const SummaryReportCard = ({ userId: propUserId, styles = {}, apiKey }) =
         profile: false,
         governance: false,
         leadership: false,
+        operational: false,
       };
 
       // Combined evaluations
@@ -307,24 +322,29 @@ export const SummaryReportCard = ({ userId: propUserId, styles = {}, apiKey }) =
       }
 
       // All individual evaluations in parallel
-      const [fundSnap, legitSnap, profileSnap, governanceSnap, leadershipSnap, bigEvalSnap] =
+      const [fundSnap, legitSnap, profileSnap, governanceSnap, leadershipSnap, operationalSnap, bigEvalSnap] =
   await Promise.all([
     getDoc(doc(db, "aiFundabilityEvaluations", userId)),
     getDoc(doc(db, "aiLegitimacyEvaluation", userId)),
     getDoc(doc(db, "universalProfiles", userId)),
     getDoc(doc(db, "aiGovernanceEvaluation", userId)),
     getDoc(doc(db, "aiLeadershipEvaluation", userId)),
+    getDoc(doc(db, "aiOperationalEvaluations", userId)),
     getDoc(doc(db, "bigEvaluations", userId)),
   ]);
 // ── Authoritative scores from bigEvaluations ──────────────────────
+// big-score.js now saves scores.governanceLeadership and scores.operational
+// (the combined Leadership & Governance card + standalone Operational
+// Strength card) — NOT scores.governance / scores.leadership / scores.pis,
+// which no longer exist in this document. Reading those old keys always
+// silently resolved to undefined.
 if (bigEvalSnap.exists()) {
   const bigEvalData = bigEvalSnap.data();
   const scores = bigEvalData.scores || {};
   newReportData.bigScore            = scores.bigScore       ?? 0;  // ← explicit bigScore
   newReportData.overallScore        = scores.bigScore       ?? newReportData.overallScore;
-  newReportData.governanceScore     = scores.governance     ?? newReportData.governanceScore;
-  newReportData.leadershipScore     = scores.leadership     ?? newReportData.leadershipScore;
-  newReportData.profileEvaluationScore = scores.pis         ?? newReportData.profileEvaluationScore;
+  newReportData.governanceLeadershipScore = scores.governanceLeadership ?? newReportData.governanceLeadershipScore;
+  newReportData.operationalScore    = scores.operational    ?? newReportData.operationalScore;
   newReportData.complianceScore     = scores.compliance     ?? 0;
   newReportData.legitimacyScore     = scores.legitimacy     ?? 0;
   newReportData.fundabilityScore    = scores.fundability    ?? 0;
@@ -354,7 +374,6 @@ if (bigEvalSnap.exists()) {
   // Only use profile scores as fallback if bigEvaluations didn't provide them
   if (!bigEvalSnap.exists()) {
     newReportData.overallScore = profileData.bigScore || newReportData.overallScore;
-    newReportData.profileEvaluationScore = profileData.pisScore || 0;
     if (!availableData.combinedEvaluations) {
       newReportData.fundabilityStatus = getScoreLevel(newReportData.overallScore).level;
     }
@@ -448,34 +467,49 @@ if (bigEvalSnap.exists()) {
   newReportData.rejectedDocs = rejectedDocs;
 }
 
+      // aiGovernanceEvaluation / aiLeadershipEvaluation only ever store
+      // { result, timestamp, profileSnapshot } — there is no numeric score
+      // field on either doc, so reading governanceData.governanceScore or
+      // leadershipData.leadershipScore always silently resolved to 0. The
+      // real combined Leadership & Governance number lives in bigEvaluations
+      // (handled above); these two docs are only used here for their raw AI
+      // text, which feeds the "Leadership & Governance Evaluation" section
+      // of the improvement summary below.
       if (governanceSnap.exists()) {
         availableData.governance = true;
-        const governanceData = governanceSnap.data() || {};
-        newReportData.aiEvaluations.governance = governanceData;
-        newReportData.governanceScore = governanceData.governanceScore || 0;
+        newReportData.aiEvaluations.governance = governanceSnap.data() || {};
       } else {
-        newReportData.missingSections.push("Governance Evaluation");
+        newReportData.missingSections.push("Leadership & Governance Evaluation");
       }
 
       if (leadershipSnap.exists()) {
-  availableData.leadership = true;
-  const leadershipData = leadershipSnap.data() || {};
-  newReportData.aiEvaluations.leadership = leadershipData;
-  // Only use this score if bigEvaluations didn't already set it
-  if (!bigEvalSnap.exists()) {
-    newReportData.leadershipScore = leadershipData.leadershipScore || 0;
-  }
-} else {
-  newReportData.missingSections.push("Leadership Evaluation");
-}
+        availableData.leadership = true;
+        newReportData.aiEvaluations.leadership = leadershipSnap.data() || {};
+      } else if (!governanceSnap.exists()) {
+        // Avoid double-listing "missing" when both docs are absent — the
+        // combined card fires both AI calls together, so if one is missing
+        // both usually are.
+      } else {
+        newReportData.missingSections.push("Leadership & Governance Evaluation");
+      }
 
-      // Weighted average
+      // aiOperationalEvaluations similarly only stores { result, timestamp }
+      // — the numeric Operational Strength score comes from bigEvaluations.
+      if (operationalSnap.exists()) {
+        availableData.operational = true;
+        newReportData.aiEvaluations.operational = operationalSnap.data() || {};
+      } else {
+        newReportData.missingSections.push("Operational Strength Evaluation");
+      }
+
+      // Weighted average — only used as a fallback when bigEvaluations
+      // itself hasn't been computed yet; once it exists, its own bigScore
+      // is authoritative and this block is skipped.
       const scores = [];
-      if (availableData.governance) scores.push(newReportData.governanceScore);
-      if (availableData.leadership) scores.push(newReportData.leadershipScore);
-      if (availableData.profile) scores.push(newReportData.profileEvaluationScore);
+      if (newReportData.governanceLeadershipScore) scores.push(newReportData.governanceLeadershipScore);
+      if (newReportData.operationalScore) scores.push(newReportData.operationalScore);
 
-      if (scores.length > 0) {
+      if (scores.length > 0 && !availableData.combinedEvaluations) {
         newReportData.weightedAverageScore =
           scores.reduce((a, b) => a + b, 0) / scores.length;
         if (!availableData.combinedEvaluations) {
@@ -602,10 +636,9 @@ const rejectedDocsText = (reportData.rejectedDocs || []).length
 
 Compliance: ${reportData.complianceScore ?? "N/A"}
 Legitimacy: ${reportData.legitimacyScore ?? "N/A"}
-Leadership: ${reportData.leadershipScore ?? "N/A"}
-Fundability: ${reportData.fundabilityScore ?? "N/A"}
-Governance: ${reportData.governanceScore ?? "N/A"}
-PIS Score: ${reportData.profileEvaluationScore ?? "N/A"}
+Leadership & Governance: ${reportData.governanceLeadershipScore ?? "N/A"}
+Operational Strength: ${reportData.operationalScore ?? "N/A"}
+Capital Appeal (Fundability): ${reportData.fundabilityScore ?? "N/A"}
 `.trim();
 
 const combinedText = `
@@ -618,11 +651,12 @@ ${reportData.aiEvaluations.fundability?.result || ""}
 AI Legitimacy Analysis:
 ${reportData.aiEvaluations.legitimacy?.result || ""}
 
-Governance Evaluation:
+Leadership & Governance Evaluation:
 ${reportData.aiEvaluations.governance?.result || ""}
-
-Leadership Evaluation:
 ${reportData.aiEvaluations.leadership?.result || ""}
+
+Operational Strength Evaluation:
+${reportData.aiEvaluations.operational?.result || ""}
 
 Compliance Score Breakdown:
 ${complianceRubricText}
@@ -683,11 +717,11 @@ You are an expert business analyst. Summarize key improvement areas grouped unde
 - [Improvement 1]
 - [Improvement 2]
 
-### Governance Evaluation
+### Leadership & Governance Evaluation
 - [Improvement 1]
 - [Improvement 2]
 
-### Leadership Evaluation
+### Operational Strength Evaluation
 - [Improvement 1]
 - [Improvement 2]
 
@@ -738,29 +772,23 @@ Keep it concise, professional, and actionable.
 
   const generateIntelligentFallback = (reportData) => {
     const scores = {
-      governance: reportData.governanceScore || 0,
-      leadership: reportData.leadershipScore || 0,
-      profile: reportData.profileEvaluationScore || 0,
+      governanceLeadership: reportData.governanceLeadershipScore || 0,
+      operational: reportData.operationalScore || 0,
       overall: reportData.overallScore || 0,
     };
 
     const sortedScores = Object.entries(scores).sort(([, a], [, b]) => a - b);
 
     const priorityMap = {
-      governance: {
-        title: "Governance Structure",
+      governanceLeadership: {
+        title: "Leadership & Governance",
         description:
-          "Strengthen your governance framework with clear policies, decision-making processes, and accountability measures to build investor confidence.",
+          "Strengthen board structure, decision-making processes, and leadership credentials to build investor confidence.",
       },
-      leadership: {
-        title: "Leadership Development",
+      operational: {
+        title: "Operational Strength",
         description:
-          "Enhance leadership team capabilities by showcasing experience, expertise, and strategic vision to demonstrate strong business stewardship.",
-      },
-      profile: {
-        title: "Company Profile",
-        description:
-          "Enhance your company profile by showcasing team expertise, operational achievements, and governance structure to build investor confidence.",
+          "Shore up supplier continuity, premises fit, delivery reliability, and safety/compliance procedures to demonstrate you can execute reliably.",
       },
       overall: {
         title: "Overall Readiness",
@@ -926,10 +954,9 @@ Keep it concise, professional, and actionable.
 
 <div class="score-card"><div class="score-value">${reportData.complianceScore ?? 0}%</div><div class="score-label">Compliance</div></div>
 <div class="score-card"><div class="score-value">${reportData.legitimacyScore ?? 0}</div><div class="score-label">Legitimacy</div></div>
-<div class="score-card"><div class="score-value">${reportData.leadershipScore ?? 0}</div><div class="score-label">Leadership</div></div>
-<div class="score-card"><div class="score-value">${reportData.fundabilityScore ?? 0}</div><div class="score-label">Fundability</div></div>
-<div class="score-card"><div class="score-value">${reportData.governanceScore ?? 0}</div><div class="score-label">Governance</div></div>
-<div class="score-card"><div class="score-value">${reportData.profileEvaluationScore ?? 0}</div><div class="score-label">PIS Score</div></div>
+<div class="score-card"><div class="score-value">${reportData.governanceLeadershipScore ?? 0}</div><div class="score-label">Leadership & Governance</div></div>
+<div class="score-card"><div class="score-value">${reportData.operationalScore ?? 0}</div><div class="score-label">Operational Strength</div></div>
+<div class="score-card"><div class="score-value">${reportData.fundabilityScore ?? 0}</div><div class="score-label">Capital Appeal</div></div>
             </div>
             <div style="text-align:center;margin-bottom:30px;"><span class="status-badge">Status: ${reportData.fundabilityStatus}</span></div>
             <h2 style="font-size:1.8rem;color:#3E2723;margin-bottom:20px;font-weight:600;">Key Improvement Areas</h2>

@@ -24,9 +24,9 @@ import { useFirebaseFunctions } from "./hooks";
 import { useSolvencyScore } from '../hooks/useSolvencyScore';
 import { normalizeSolvencyScore } from '../MyGrowthTools/financial/data_utils/solvencyScoreUtils';
 
-const GRANT_KEYWORDS  = ["grant", "grants"];
-const DEBT_KEYWORDS   = ["debt", "loan"];
-const PO_KEYWORDS     = ["purchase_order", "purchaseorder", "po", "supply_chain", "supplychain"];
+const GRANT_KEYWORDS = ["grant", "grants"];
+const DEBT_KEYWORDS = ["debt", "loan"];
+const PO_KEYWORDS = ["purchase_order", "purchaseorder", "po", "supply_chain", "supplychain"];
 const EQUITY_KEYWORDS = [
   "equity", "convertible", "hybrid", "revenue-based", "revenue_based",
   "secondary", "special",
@@ -44,17 +44,17 @@ function detectFundingTier(profileData) {
     .map((s) => s.toLowerCase());
 
   const supportFocus = profileData?.useOfFunds?.additionalSupportFocus || "";
-  const amountStr    = profileData?.useOfFunds?.amountRequested || "";
-  const amountNum    = parseInt(amountStr.replace(/[^\d]/g, ""), 10) || 0;
+  const amountStr = profileData?.useOfFunds?.amountRequested || "";
+  const amountNum = parseInt(amountStr.replace(/[^\d]/g, ""), 10) || 0;
 
-  const hasPO     = instruments.some((i) => PO_KEYWORDS.some((k) => i.includes(k)));
-  const hasDebt   = instruments.some((i) => DEBT_KEYWORDS.some((k) => i.includes(k)));
-  const hasGrant  = instruments.some((i) => GRANT_KEYWORDS.some((k) => i.includes(k)));
+  const hasPO = instruments.some((i) => PO_KEYWORDS.some((k) => i.includes(k)));
+  const hasDebt = instruments.some((i) => DEBT_KEYWORDS.some((k) => i.includes(k)));
+  const hasGrant = instruments.some((i) => GRANT_KEYWORDS.some((k) => i.includes(k)));
   const hasEquity = instruments.some((i) => EQUITY_KEYWORDS.some((k) => i.includes(k)));
 
-  const hasESDFunder    = funderTypes.some((f) => ESD_FUNDER_KEYWORDS.some((k) => f.includes(k)));
+  const hasESDFunder = funderTypes.some((f) => ESD_FUNDER_KEYWORDS.some((k) => f.includes(k)));
   const hasSupportFocus = !!supportFocus;
-  const isLargeAmount   = amountNum > 10_000_000;
+  const isLargeAmount = amountNum > 10_000_000;
 
   if (!instruments.length && !hasSupportFocus) return null;
 
@@ -86,14 +86,14 @@ function getFundabilitySubWeights(tier) {
   switch (tier) {
     case "A":
       return {
-        businessPlan      : 25,
-        pitchDeck         : 20,
-        impactMandate     : 40,
-        creditworthiness  : 15,
-        guarantees        : 0,
+        businessPlan: 25,
+        pitchDeck: 20,
+        impactMandate: 40,
+        creditworthiness: 15,
+        guarantees: 0,
         financialResilience: 0,
         _excluded: {
-          guarantees        : "Non-repayable funding — collateral security is not required.",
+          guarantees: "Non-repayable funding — collateral security is not required.",
           financialResilience: "Financial resilience metrics are not assessed at grant level.",
         },
         _reduced: {
@@ -103,29 +103,29 @@ function getFundabilitySubWeights(tier) {
 
     case "B":
       return {
-        businessPlan      : 20,
-        pitchDeck         : 10,
-        impactMandate     : 10,
-        creditworthiness  : 30,
-        guarantees        : 30,
+        businessPlan: 20,
+        pitchDeck: 10,
+        impactMandate: 10,
+        creditworthiness: 30,
+        guarantees: 30,
         financialResilience: 0,
         _excluded: {},
         _reduced: {
-          pitchDeck    : "Reduced — pitch readiness is secondary to credit strength and collateral for PO/debt finance.",
+          pitchDeck: "Reduced — pitch readiness is secondary to credit strength and collateral for PO/debt finance.",
           impactMandate: "Reduced — social impact is a secondary consideration for purchase-order or debt finance.",
         },
       };
 
     case "C":
       return {
-        businessPlan      : 25,
-        pitchDeck         : 20,
-        impactMandate     : 40,
-        creditworthiness  : 15,
-        guarantees        : 0,
+        businessPlan: 25,
+        pitchDeck: 20,
+        impactMandate: 40,
+        creditworthiness: 15,
+        guarantees: 0,
         financialResilience: 0,
         _excluded: {
-          guarantees        : "ESD / support programmes do not require collateral from applicants.",
+          guarantees: "ESD / support programmes do not require collateral from applicants.",
           financialResilience: "Financial resilience is not assessed for accelerator or ESD programmes.",
         },
         _reduced: {
@@ -135,15 +135,15 @@ function getFundabilitySubWeights(tier) {
 
     case "D":
       return {
-        businessPlan      : 20,
-        pitchDeck         : 10,
-        impactMandate     : 10,
-        creditworthiness  : 25,
-        guarantees        : 15,
+        businessPlan: 20,
+        pitchDeck: 10,
+        impactMandate: 10,
+        creditworthiness: 25,
+        guarantees: 15,
         financialResilience: 20,
         _excluded: {},
         _reduced: {
-          pitchDeck    : "Reduced — investor communications matter but fundamentals dominate at serious ticket sizes.",
+          pitchDeck: "Reduced — investor communications matter but fundamentals dominate at serious ticket sizes.",
           impactMandate: "Reduced — ESG / impact is a qualifier, not the primary investment criterion.",
         },
       };
@@ -153,47 +153,108 @@ function getFundabilitySubWeights(tier) {
   }
 }
 
+// Financial Strength sub-component weights — mirrors the structure of
+// getFundabilitySubWeights, but this one isn't tier-dependent: every
+// business gets scored on all five dimensions regardless of funding stage.
+const FINANCIAL_STRENGTH_SUBWEIGHTS = {
+  revenueProfitability: 30, // Income Statement: turnover, COGS, gross/operating/net profit, trend
+  balanceSheetStrength: 20, // Balance Sheet: assets, liabilities, equity, debt-to-equity shape
+  managementSystems: 20, // Accounting software, books up to date, management accounts
+  credibilityCompliance: 20, // Financial statements, audited/reviewed, insurance
+  debtLiabilitiesProfile: 10, // Overdraft usage, director surety, ceded debtors, existing debt
+};
+
+const FINANCIAL_STRENGTH_INTERNAL_ROWS = [
+  { name: "Revenue & Profitability", weight: "30%", why: "Income statement trend (turnover, COGS, gross/operating/net profit, YoY movement) is the clearest signal of a going concern." },
+  { name: "Balance Sheet Strength", weight: "20%", why: "Assets, liabilities and equity position show what the business actually owns versus owes." },
+  { name: "Financial Management & Systems", weight: "20%", why: "Accounting software, up-to-date books and management accounts indicate the numbers can be trusted." },
+  { name: "Financial Credibility & Compliance", weight: "20%", why: "Availability of financial statements, audit/review status, and insurance coverage signal third-party verifiability." },
+  { name: "Debt & Liabilities Profile", weight: "10%", why: "Overdraft reliance, director suretyships and ceded debtors reveal hidden risk not visible in headline numbers." },
+];
+
+const renderFinancialStrengthInternalTable = () => (
+  <div style={{ overflowX: "auto" }}>
+    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
+      <thead>
+        <tr style={{ backgroundColor: "#d7ccc8" }}>
+          <th style={{ padding: "7px 10px", textAlign: "left", color: "#5d4037", fontWeight: "600", minWidth: "180px" }}>Sub-component</th>
+          <th style={{ padding: "7px 10px", textAlign: "center", color: "#5d4037", fontWeight: "600", borderLeft: "1px solid #c5b8b0", minWidth: "70px" }}>Weight</th>
+          <th style={{ padding: "7px 10px", textAlign: "left", color: "#5d4037", fontWeight: "600", borderLeft: "1px solid #c5b8b0" }}>Why</th>
+        </tr>
+      </thead>
+      <tbody>
+        {FINANCIAL_STRENGTH_INTERNAL_ROWS.map((row, i) => (
+          <tr key={i} style={{ backgroundColor: i % 2 === 0 ? "white" : "#faf8f6" }}>
+            <td style={{ padding: "7px 10px", color: "#5d4037" }}>{row.name}</td>
+            <td style={{ padding: "7px 10px", textAlign: "center", color: "#5d4037", borderLeft: "1px solid #d7ccc8", fontWeight: "600" }}>{row.weight}</td>
+            <td style={{ padding: "7px 10px", color: "#6d4c41", fontStyle: "italic", fontSize: "11px", borderLeft: "1px solid #d7ccc8" }}>{row.why}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  </div>
+);
+
+// Two separate interpretation scales — Financial Strength reads as balance-sheet
+// health, Fundability reads as investment readiness. They can diverge a lot
+// (e.g. a solid, profitable business that's never raised money and has no
+// pitch deck: high Financial Strength, low Fundability).
+const getFinancialStrengthLevel = (score) => {
+  if (score > 90) return { level: "Financially robust", color: "#1B5E20" };
+  if (score >= 81) return { level: "Financially sound", color: "#4CAF50" };
+  if (score >= 61) return { level: "Adequate financial base", color: "#FF9800" };
+  if (score >= 41) return { level: "Financial vulnerabilities", color: "#F44336" };
+  return { level: "Weak financial foundation", color: "#B71C1C" };
+};
+
+const getFundabilityLevel = (score) => {
+  if (score > 90) return { level: "Highly fundable", color: "#1B5E20" };
+  if (score >= 81) return { level: "Strong investment case", color: "#4CAF50" };
+  if (score >= 61) return { level: "Moderate potential", color: "#FF9800" };
+  if (score >= 41) return { level: "Basic potential", color: "#F44336" };
+  return { level: "Needs development", color: "#B71C1C" };
+};
 export function FundabilityScoreCard({
   styles = {},
   profileData,
   onScoreUpdate,
   apiKey,
 }) {
-  const [showModal, setShowModal]                   = useState(false);
-  const [fundabilityScore, setFundabilityScore]     = useState(0);
-  const [scoreBreakdown, setScoreBreakdown]         = useState([]);
+  const [showModal, setShowModal] = useState(false);
+  const [fundabilityScore, setFundabilityScore] = useState(0);
+  const [scoreBreakdown, setScoreBreakdown] = useState([]);
   const [aiEvaluationResult, setAiEvaluationResult] = useState("");
-  const [isEvaluating, setIsEvaluating]             = useState(false);
-  const [evaluationError, setEvaluationError]       = useState("");
-  const [showAboutScore, setShowAboutScore]         = useState(false);
+  const [isEvaluating, setIsEvaluating] = useState(false);
+  const [evaluationError, setEvaluationError] = useState("");
+  const [showAboutScore, setShowAboutScore] = useState(false);
   const [showScoreBreakdown, setShowScoreBreakdown] = useState(false);
   const [showDetailedAnalysis, setShowDetailedAnalysis] = useState(false);
-  const [confidenceScores, setConfidenceScores]     = useState({});
-  const [evidenceMap, setEvidenceMap]               = useState({});
-  const [confRationaleMap, setConfRationaleMap]     = useState({});
+  const [confidenceScores, setConfidenceScores] = useState({});
+  const [evidenceMap, setEvidenceMap] = useState({});
+  const [confRationaleMap, setConfRationaleMap] = useState({});
 
-  const [businessPlanAnalysis, setBusinessPlanAnalysis]             = useState(null);
-  const [pitchDeckAnalysis, setPitchDeckAnalysis]                   = useState(null);
-  const [creditReportAnalysis, setCreditReportAnalysis]             = useState(null);
-  const [guaranteesAnalysis, setGuaranteesAnalysis]                 = useState(null);
+  const [businessPlanAnalysis, setBusinessPlanAnalysis] = useState(null);
+  const [pitchDeckAnalysis, setPitchDeckAnalysis] = useState(null);
+  const [creditReportAnalysis, setCreditReportAnalysis] = useState(null);
+  const [guaranteesAnalysis, setGuaranteesAnalysis] = useState(null);
   const [financialResilienceAnalysis, setFinancialResilienceAnalysis] = useState(null);
-  const [isFundingDataLoaded, setIsFundingDataLoaded]               = useState(false);
+  const [isFundingDataLoaded, setIsFundingDataLoaded] = useState(false);
 
   const [hasAppliedForFunding, setHasAppliedForFunding] = useState(false);
-  const [fundingTier, setFundingTier]                   = useState(null);
+  const [fundingTier, setFundingTier] = useState(null);
   const [fundingCheckComplete, setFundingCheckComplete] = useState(false);
-  const [isReevaluating, setIsReevaluating]             = useState(false);
-  const [triggeredByAuto, setTriggeredByAuto]           = useState(false);
+  const [isReevaluating, setIsReevaluating] = useState(false);
+  const [triggeredByAuto, setTriggeredByAuto] = useState(false);
 
-  const hasReevaluated          = useRef(false);
-  const isReevaluatingRef       = useRef(false);
+  const hasReevaluated = useRef(false);
+  const isReevaluatingRef = useRef(false);
   const fundingCheckCompleteRef = useRef(false);
-  const isFundingDataLoadedRef  = useRef(false);
+  const isFundingDataLoadedRef = useRef(false);
 
-  const { 
-    loadLatestSolvencyScore, 
+  const {
+    loadLatestSolvencyScore,
     solvencyScore,
-    solvencyScoreBreakdown 
+    solvencyScoreBreakdown
   } = useSolvencyScore(auth?.currentUser);
 
   const [solvencyAnalysis, setSolvencyAnalysis] = useState(null);
@@ -213,11 +274,11 @@ export function FundabilityScoreCard({
   const checkFundingApplicationStatus = useCallback(async () => {
     if (!auth?.currentUser?.uid || fundingCheckComplete) return;
     try {
-      const userId        = auth.currentUser.uid;
+      const userId = auth.currentUser.uid;
       const universalSnap = await getDoc(doc(db, "universalProfiles", userId));
 
       if (universalSnap.exists()) {
-        const data              = universalSnap.data();
+        const data = universalSnap.data();
         const completedSections = data.completedSections || {};
 
         const requiredFundingSections = [
@@ -254,7 +315,7 @@ export function FundabilityScoreCard({
   useEffect(() => {
     if (auth?.currentUser?.uid) checkFundingApplicationStatus();
   }, [auth?.currentUser?.uid, checkFundingApplicationStatus]);
-const [dataLoadedAt, setDataLoadedAt] = useState(null);
+  const [dataLoadedAt, setDataLoadedAt] = useState(null);
 
   const fetchFundingApplicationData = useCallback(async () => {
     try {
@@ -265,10 +326,10 @@ const [dataLoadedAt, setDataLoadedAt] = useState(null);
         const snap = await getDocs(query(collection(db, "aiEvaluations"), where("userId", "==", userId)));
         if (!snap.empty) {
           const d = snap.docs[0].data();
-          const content  = d?.evaluation?.content || "";
+          const content = d?.evaluation?.content || "";
           const rawScore = d?.evaluation?.score || 0;
-const score = Math.round(rawScore);
-          const isValid  = score > 0 && content.trim().length > 0;
+          const score = Math.round(rawScore);
+          const isValid = score > 0 && content.trim().length > 0;
           setBusinessPlanAnalysis({ score, rawScore, content, isValid });
           if (isValid) loadedCount++;
         }
@@ -278,8 +339,8 @@ const score = Math.round(rawScore);
         const snap = await getDocs(query(collection(db, "aiPitchEvaluations"), where("userId", "==", userId)));
         if (!snap.empty) {
           const d = snap.docs[0].data();
-          const content          = d?.evaluation?.content          || "";
-          const score            = d?.evaluation?.score            || 0;
+          const content = d?.evaluation?.content || "";
+          const score = d?.evaluation?.score || 0;
           const operationalScore = d?.evaluation?.operationalScore || 0;
           const isValid = score > 0 && content.trim().length > 0;
           setPitchDeckAnalysis({ score, operationalScore, content, isValid });
@@ -291,18 +352,18 @@ const score = Math.round(rawScore);
         const snap = await getDocs(query(collection(db, "creditAnalyses"), where("userId", "==", userId)));
         if (!snap.empty) {
           const d = snap.docs[0].data();
-          const content       = d?.evaluation?.content       || "";
-        const score = d?.evaluation?.analysisResult?.creditScore 
-  ?? d?.evaluation?.score 
-  ?? 0;
+          const content = d?.evaluation?.content || "";
+          const score = d?.evaluation?.analysisResult?.creditScore
+            ?? d?.evaluation?.score
+            ?? 0;
 
-const label = d?.evaluation?.analysisResult?.creditRating 
-  ?? d?.evaluation?.label 
-  ?? "";
-         const isCreditReport = d?.evaluation?.analysisResult?.isCreditReport 
-  ?? d?.evaluation?.isCreditReport 
-  ?? d?.isCreditReport 
-  ?? false;
+          const label = d?.evaluation?.analysisResult?.creditRating
+            ?? d?.evaluation?.label
+            ?? "";
+          const isCreditReport = d?.evaluation?.analysisResult?.isCreditReport
+            ?? d?.evaluation?.isCreditReport
+            ?? d?.isCreditReport
+            ?? false;
 
 
           const isValid = isCreditReport === true && score > 0 && content.trim().length > 0;
@@ -346,9 +407,9 @@ const label = d?.evaluation?.analysisResult?.creditRating
           const debtToEquity = parseFloat(rawMetrics.debtToEquity) || 0;
           const debtToAssets = parseFloat(rawMetrics.debtToAssets) || 0;
           const interestCoverage = parseFloat(rawMetrics.interestCoverage) || 0;
-          
+
           let calculatedSolvencyScore = 0;
-          
+
           let navScore = 0;
           if (nav > 100) navScore = 100;
           else if (nav > 50) navScore = 90;
@@ -356,7 +417,7 @@ const label = d?.evaluation?.analysisResult?.creditRating
           else if (nav > 1) navScore = 60;
           else if (nav > 0) navScore = nav * 50;
           else navScore = 0;
-          
+
           let equityScore = 0;
           if (equityRatio >= 70) equityScore = 95;
           else if (equityRatio >= 60) equityScore = 85;
@@ -364,7 +425,7 @@ const label = d?.evaluation?.analysisResult?.creditRating
           else if (equityRatio >= 40) equityScore = 55;
           else if (equityRatio >= 30) equityScore = 35;
           else equityScore = Math.max(0, equityRatio);
-          
+
           let dteScore = 0;
           const deviation = Math.abs(debtToEquity - 1.0);
           if (deviation <= 0.3) dteScore = 90;
@@ -372,13 +433,13 @@ const label = d?.evaluation?.analysisResult?.creditRating
           else if (deviation <= 1.0) dteScore = 55;
           else if (deviation <= 1.5) dteScore = 35;
           else dteScore = Math.max(0, 100 - deviation * 10);
-          
+
           calculatedSolvencyScore = Math.round(
             (navScore * 0.4) + (equityScore * 0.35) + (dteScore * 0.25)
           );
-          
+
           const normalizedScore = normalizeSolvencyScore(calculatedSolvencyScore);
-          
+
           setSolvencyAnalysis({
             score: calculatedSolvencyScore,
             normalizedScore: normalizedScore,
@@ -387,7 +448,7 @@ const label = d?.evaluation?.analysisResult?.creditRating
             rawMetrics,
             isValid: calculatedSolvencyScore > 0
           });
-          
+
           if (calculatedSolvencyScore > 0) loadedCount++;
         } else {
           setSolvencyAnalysis({ score: 0, normalizedScore: 0, nav: 0, equityRatio: 0, debtToEquity: 0, debtToAssets: 0, interestCoverage: 0, isValid: false });
@@ -416,9 +477,9 @@ const label = d?.evaluation?.analysisResult?.creditRating
     const checkAndRun = async () => {
       try {
         const aiEvalRef = doc(db, "aiFundabilityEvaluations", auth.currentUser.uid);
-        const aiSnap    = await getDoc(aiEvalRef);
+        const aiSnap = await getDoc(aiEvalRef);
         if (aiSnap.exists() && aiSnap.data().result && aiSnap.data().includedFundingData === false) {
-          hasReevaluated.current    = true;
+          hasReevaluated.current = true;
           isReevaluatingRef.current = true;
           setIsReevaluating(true);
           setEvaluationError("Updating analysis with funding application materials...");
@@ -436,23 +497,23 @@ const label = d?.evaluation?.analysisResult?.creditRating
         console.error("Auto re-evaluation error:", error);
         setIsReevaluating(false);
         isReevaluatingRef.current = false;
-        hasReevaluated.current    = true;
+        hasReevaluated.current = true;
         setEvaluationError("");
       }
     };
     checkAndRun();
   }, [hasAppliedForFunding, isFundingDataLoaded, aiEvaluationResult,
-      auth?.currentUser?.uid, apiKey, isEvaluating, fundingTier]);
+    auth?.currentUser?.uid, apiKey, isEvaluating, fundingTier]);
 
   useEffect(() => {
     if (profileData && aiEvaluationResult) {
       if (hasAppliedForFunding && !isFundingDataLoaded) return;
-      
+
       const result = calculateFundabilityScore(profileData, aiEvaluationResult);
-      
+
       const aiScores = parseAiEvaluationScores(aiEvaluationResult);
-      if (aiScores._confidence)   setConfidenceScores(aiScores._confidence);
-      if (aiScores._evidence)     setEvidenceMap(aiScores._evidence);
+      if (aiScores._confidence) setConfidenceScores(aiScores._confidence);
+      if (aiScores._evidence) setEvidenceMap(aiScores._evidence);
       if (aiScores._confRationale) setConfRationaleMap(aiScores._confRationale);
 
       setFundabilityScore(result.totalScore);
@@ -463,16 +524,16 @@ const label = d?.evaluation?.analysisResult?.creditRating
     businessPlanAnalysis, pitchDeckAnalysis, creditReportAnalysis,
     guaranteesAnalysis, financialResilienceAnalysis,
     hasAppliedForFunding, isFundingDataLoaded, fundingTier, dataLoadedAt]);
-    
+
   const parseAiEvaluationScores = (text) => {
     const categories = {
-      financialStrength:     ["Financial Strength"],
-      impactMandate:         ["Impact & Mandate Alignment"],
-      businessPlanAnalysis:  ["Business Plan / Investment Case", "Business Plan Quality"],
-      pitchDeckScore:        ["Pitch Readiness / Pitch Deck", "Pitch Deck Effectiveness"],
-      creditReport:          ["Creditworthiness"],
-      guarantees:            ["Guarantees / Collateral"],
-      financialResilience:   ["Financial Resilience & Efficiency"],
+      financialStrength: ["Financial Strength"],
+      impactMandate: ["Impact & Mandate Alignment"],
+      businessPlanAnalysis: ["Business Plan / Investment Case", "Business Plan Quality"],
+      pitchDeckScore: ["Pitch Readiness / Pitch Deck", "Pitch Deck Effectiveness"],
+      creditReport: ["Creditworthiness"],
+      guarantees: ["Guarantees / Collateral"],
+      financialResilience: ["Financial Resilience & Efficiency"],
     };
 
     const scores = {};
@@ -496,13 +557,13 @@ const label = d?.evaluation?.analysisResult?.creditRating
         const chunk = chunks.find((c) => new RegExp(`###\\s*\\d+\\.\\s*${label}`, "i").test(c));
         if (!chunk) continue;
 
-        const confMatch    = chunk.match(/Confidence\s*:\s*(High|Medium|Low)/i);
+        const confMatch = chunk.match(/Confidence\s*:\s*(High|Medium|Low)/i);
         const confRatMatch = chunk.match(/Confidence Rationale\s*:\s*([^\n]+)/i);
-        const evidenceMatch= chunk.match(/Evidence\s*:\s*([^\n]+)/i);
+        const evidenceMatch = chunk.match(/Evidence\s*:\s*([^\n]+)/i);
 
-        if (confMatch)    confidenceMap[key]   = confMatch[1];
+        if (confMatch) confidenceMap[key] = confMatch[1];
         if (confRatMatch) confRationaleMap[key] = confRatMatch[1].trim();
-        if (evidenceMatch) evidenceMap[key]     = evidenceMatch[1].trim();
+        if (evidenceMatch) evidenceMap[key] = evidenceMatch[1].trim();
 
         const scoreMatch =
           chunk.match(/\*\*Score:\*\*\s*(\d)/i) ||
@@ -519,8 +580,8 @@ const label = d?.evaluation?.analysisResult?.creditRating
         : 0;
     });
 
-    scores._confidence   = confidenceMap;
-    scores._evidence     = evidenceMap;
+    scores._confidence = confidenceMap;
+    scores._evidence = evidenceMap;
     scores._confRationale = confRationaleMap;
     return scores;
   };
@@ -545,7 +606,7 @@ const label = d?.evaluation?.analysisResult?.creditRating
     const weightings = weightingsByStage[stage];
     const aiScores = aiEvaluationResult ? parseAiEvaluationScores(aiEvaluationResult) : {};
     const subW = getFundabilitySubWeights(fundingTier);
-    
+
     const overallWeights = {
       // Operational Strength has been removed. Its 30% (with funding) / 45% (without
       // funding) has been folded fully into the remaining core category — Fundability
@@ -553,11 +614,11 @@ const label = d?.evaluation?.analysisResult?.creditRating
       financialStrength: hasAppliedForFunding && fundingTier ? 40 : (weightings?.financialStrength || 0),
       fundability: hasAppliedForFunding && fundingTier ? 60 : 0,
     };
-    
+
     const categoryMappings = [
       { key: "financialStrength", name: "Financial Strength", isCore: true },
     ];
-    
+
     if (hasAppliedForFunding && fundingTier && subW) {
       categoryMappings.push(
         { key: "businessPlanAnalysis", name: "Business Plan / Investment Case", weight: subW.businessPlan, reductionNote: subW._reduced?.businessPlan, isFundability: true },
@@ -572,10 +633,10 @@ const label = d?.evaluation?.analysisResult?.creditRating
         { key: "impactMandate", name: "Impact & Mandate Alignment", isCore: true }
       );
     }
-    
+
     const colors = ["#8D6E63", "#6D4C41", "#A67C52", "#D7CCC8", "#4E342E", "#795548", "#5D4037", "#3E2723"];
     const breakdown = [];
-    
+
     // Index 0 is always the sole core category now: Financial Strength.
     {
       const cat = categoryMappings[0];
@@ -589,13 +650,13 @@ const label = d?.evaluation?.analysisResult?.creditRating
         tier: null, active: true, excluded: false, exclusionNote: null, reductionNote: null,
       });
     }
-    
+
     if (hasAppliedForFunding && fundingTier && subW) {
       const fundabilityWeight = overallWeights.fundability;
       for (let i = 1; i < categoryMappings.length; i++) {
         const cat = categoryMappings[i];
         let rawScore = 0, percent = 0, sourceType = "ai";
-        
+
         if (cat.key === "financialResilience" && solvencyAnalysis?.isValid) {
           rawScore = solvencyAnalysis.normalizedScore || 0;
           percent = (rawScore / 5) * 100;
@@ -604,11 +665,11 @@ const label = d?.evaluation?.analysisResult?.creditRating
           rawScore = aiScores[cat.key] ?? 0;
           percent = (rawScore / 5) * 100;
         }
-        
+
         const weightWithinBlock = cat.weight || 0;
         const isExcluded = cat.isExcluded || weightWithinBlock === 0;
         const weightedContribution = isExcluded ? 0 : (percent / 100) * (weightWithinBlock / 100) * fundabilityWeight;
-        
+
         breakdown.push({
           name: cat.name, score: isExcluded ? 0 : Math.round(percent),
           weight: weightWithinBlock, weightedScore: Math.round(weightedContribution),
@@ -632,7 +693,7 @@ const label = d?.evaluation?.analysisResult?.creditRating
         });
       }
     }
-    
+
     const totalScore = Math.round(breakdown.reduce((sum, item) => sum + (item.weightedScore || 0), 0));
     return {
       totalScore: Math.min(Math.max(isNaN(totalScore) ? 0 : totalScore, 0), 100),
@@ -644,19 +705,54 @@ const label = d?.evaluation?.analysisResult?.creditRating
     let out = "";
 
     out += `\n=== FINANCIAL STRENGTH ===\n`;
-    out += `Annual Revenue: ${data?.financialOverview?.annualRevenue || "Not provided"}\n`;
-    out += `Profitability: ${data?.financialOverview?.profitabilityStatus || "No"}\n`;
-    out += `Financials available: ${data?.enterpriseReadiness?.hasFinancials || "No"}\n`;
-    out += `Audited financials: ${data?.enterpriseReadiness?.hasAuditedFinancials || "No"}\n`;
-    out += `Accounting software: ${data?.financialOverview?.hasAccountingSoftware || "Not specified"}\n`;
-    out += `Books up to date: ${data?.financialOverview?.booksUpToDate || "Not confirmed"}\n`;
+
+    out += `\n-- Revenue & Profitability (weight 30%) --\n`;
+    out += `Currency: ${data?.financialOverview?.incomeCurrency || "ZAR"}\n`;
+    out += `Turnover — current: ${data?.financialOverview?.incomeTurnoverCurrent || "Not provided"}, previous: ${data?.financialOverview?.incomeTurnoverPrevious || "Not provided"}\n`;
+    out += `COGS — current: ${data?.financialOverview?.incomeCOGSCurrent || "Not provided"}, previous: ${data?.financialOverview?.incomeCOGSPrevious || "Not provided"}\n`;
+    out += `Gross Profit — current: ${data?.financialOverview?.incomeGrossProfitCurrent || "Not provided"}, previous: ${data?.financialOverview?.incomeGrossProfitPrevious || "Not provided"}\n`;
+    out += `Operating Profit — current: ${data?.financialOverview?.incomeOperatingProfitCurrent || "Not provided"}, previous: ${data?.financialOverview?.incomeOperatingProfitPrevious || "Not provided"}\n`;
+    out += `Net Profit — current: ${data?.financialOverview?.incomeNetProfitCurrent || "Not provided"}, previous: ${data?.financialOverview?.incomeNetProfitPrevious || "Not provided"}\n`;
+    out += `Annual Revenue (declared): ${data?.financialOverview?.annualRevenue || "Not provided"}\n`;
+    out += `Profitability: ${data?.financialOverview?.profitabilityStatus || "Not specified"}\n`;
+    out += `Revenue trend (12 months): ${data?.financialOverview?.revenueTrend || "Not specified"}\n`;
+
+    out += `\n-- Balance Sheet Strength (weight 20%) --\n`;
+    out += `Current Assets — current: ${data?.financialOverview?.balanceCurrentAssetsCurrent || "Not provided"}, previous: ${data?.financialOverview?.balanceCurrentAssetsPrevious || "Not provided"}\n`;
+    out += `Total Assets — current: ${data?.financialOverview?.balanceTotalAssetsCurrent || "Not provided"}, previous: ${data?.financialOverview?.balanceTotalAssetsPrevious || "Not provided"}\n`;
+    out += `Current Liabilities — current: ${data?.financialOverview?.balanceCurrentLiabilitiesCurrent || "Not provided"}, previous: ${data?.financialOverview?.balanceCurrentLiabilitiesPrevious || "Not provided"}\n`;
+    out += `Long Term Liabilities — current: ${data?.financialOverview?.balanceLongTermLiabilitiesCurrent || "Not provided"}, previous: ${data?.financialOverview?.balanceLongTermLiabilitiesPrevious || "Not provided"}\n`;
+    out += `Equity — current: ${data?.financialOverview?.balanceEquityCurrent || "Not provided"}, previous: ${data?.financialOverview?.balanceEquityPrevious || "Not provided"}\n`;
+    out += `Total Liabilities — current: ${data?.financialOverview?.balanceTotalLiabilitiesCurrent || "Not provided"}, previous: ${data?.financialOverview?.balanceTotalLiabilitiesPrevious || "Not provided"}\n`;
     out += `Existing debt: ${data?.financialOverview?.existingDebt || "Not specified"}\n`;
-    out += `Credit report available: ${data?.financialOverview?.hasCreditReport || "No"}\n`;
+
+    out += `\n-- Financial Management & Systems (weight 20%) --\n`;
+    out += `Accounting software: ${data?.financialOverview?.hasAccountingSoftware || "Not specified"}${data?.financialOverview?.accountingSoftwareName ? ` (${data.financialOverview.accountingSoftwareName})` : ""}\n`;
+    out += `Books up to date: ${data?.financialOverview?.booksUpToDate || "Not confirmed"}${data?.financialOverview?.booksUpToDateDetails ? ` — ${data.financialOverview.booksUpToDateDetails}` : ""}\n`;
     out += `Management accounts: ${data?.financialOverview?.hasManagementAccounts || "Not provided"}\n`;
     out += `Latest management accounts: ${data?.financialOverview?.latestManagementAccounts || "N/A"}\n`;
+
+    out += `\n-- Financial Credibility & Compliance (weight 20%) --\n`;
     out += `Financial statements available: ${data?.financialOverview?.hasFinancialStatements || "No"}\n`;
     out += `Years of financial statements: ${(data?.financialOverview?.financialStatementsYears || []).join(", ") || "None"}\n`;
-    out += `Revenue trend (12 months): ${data?.financialOverview?.revenueTrend || "Not specified"}\n`;
+    out += `Audited/reviewed status: ${data?.financialOverview?.financialsAudited || "Not specified"}\n`;
+    out += `Insured: ${data?.financialOverview?.isInsured || "Not specified"}\n`;
+    out += `Financial year end: ${data?.financialOverview?.financialYearEnd || "Not specified"}\n`;
+    out += `Credit report available: ${data?.financialOverview?.hasCreditReport || "No"}\n`;
+
+    out += `\n-- Debt & Liabilities Profile (weight 10%) --\n`;
+    out += `Payment terms to clients: ${data?.financialOverview?.salesTerms || "Not specified"}\n`;
+    out += `Overdraft facility: ${data?.financialOverview?.hasOverdraft || "Not specified"}${data?.financialOverview?.hasOverdraft === "yes" ? ` (value: ${data?.financialOverview?.overdraftValue || "N/A"}, utilised: ${data?.financialOverview?.overdraftUtilised || "N/A"})` : ""}\n`;
+    out += `Directors' personal surety signed: ${data?.financialOverview?.directorsSurety || "Not specified"}\n`;
+    out += `Debtors ceded/factored: ${data?.financialOverview?.debtorsCeded || "Not specified"}\n`;
+    out += `Bonds: ${data?.financialOverview?.bonds || "None disclosed"}\n`;
+
+    out += `\n-- Financial Challenges & Support Intent (context only, not scored) --\n`;
+    out += `Current financial challenges: ${(data?.financialOverview?.financialChallenges || []).join(", ") || "None reported"}\n`;
+    out += `Challenges detail: ${data?.financialOverview?.financialChallengesElaboration || "N/A"}\n`;
+    out += `Seeking funding: ${data?.financialOverview?.seekingFunding || "Not specified"}\n`;
+    out += `Fundraising history: ${data?.financialOverview?.fundraisingHistory || "None disclosed"}\n`;
+    out += `Support types needed: ${(data?.financialOverview?.supportTypeNeeded || []).join(", ") || "None reported"}\n`;
 
     try {
       const finSnap = await getDoc(doc(db, "aiFinancialEvaluations", auth.currentUser.uid));
@@ -670,7 +766,7 @@ const label = d?.evaluation?.analysisResult?.creditRating
           }
         }
       }
-    } catch (_) {}
+    } catch (_) { }
 
     out += `\n=== IMPACT & MANDATE ALIGNMENT ===\n`;
     out += `Black ownership: ${data?.socialImpact?.blackOwnership || 0}%\n`;
@@ -767,7 +863,7 @@ const label = d?.evaluation?.analysisResult?.creditRating
 
   const runAiEvaluation = async (userId) => {
     if (!apiKey?.trim()) { setEvaluationError("API key not configured."); return; }
-    if (!profileData)    { setEvaluationError("No profile data."); return; }
+    if (!profileData) { setEvaluationError("No profile data."); return; }
 
     if (hasAppliedForFunding && !isFundingDataLoaded) {
       setEvaluationError("Loading funding application data...");
@@ -793,21 +889,21 @@ const label = d?.evaluation?.analysisResult?.creditRating
 
       const tierInstructions =
         tier === "A" ? "TIER A (Grant): Business Plan, Pitch Deck, Impact & Mandate are primary. Creditworthiness at REDUCED weight. Guarantees = 0. Financial Resilience = 0.\n"
-        : tier === "B" ? "TIER B (PO/Debt): Creditworthiness and Guarantees are PRIMARY. Financial Resilience included. Impact & Mandate and Pitch Deck at REDUCED weight.\n"
-        : tier === "C" ? "TIER C (ESD/Support): Grant-equivalent evaluation. Business Plan, Pitch Deck, Impact & Mandate are primary. Creditworthiness at REDUCED weight. Guarantees = 0. Financial Resilience = 0.\n"
-        : tier === "D" ? "TIER D (Full/Serious Funding): ALL sub-components active. Financial Resilience & Efficiency is CRITICAL. Pitch Deck and Impact at REDUCED weight.\n"
-        : "";
+          : tier === "B" ? "TIER B (PO/Debt): Creditworthiness and Guarantees are PRIMARY. Financial Resilience included. Impact & Mandate and Pitch Deck at REDUCED weight.\n"
+            : tier === "C" ? "TIER C (ESD/Support): Grant-equivalent evaluation. Business Plan, Pitch Deck, Impact & Mandate are primary. Creditworthiness at REDUCED weight. Guarantees = 0. Financial Resilience = 0.\n"
+              : tier === "D" ? "TIER D (Full/Serious Funding): ALL sub-components active. Financial Resilience & Efficiency is CRITICAL. Pitch Deck and Impact at REDUCED weight.\n"
+                : "";
 
       let categoriesToEvaluate = "";
-      
+
       if (hasAppliedForFunding && tier) {
         categoriesToEvaluate = `
 ### 1. Financial Strength
 **Score:** [0-5]
-**Evidence:** [cite exact fields used]
+**Evidence:** [cite exact fields used, across all five sub-dimensions: Revenue & Profitability (30%), Balance Sheet Strength (20%), Financial Management & Systems (20%), Financial Credibility & Compliance (20%), Debt & Liabilities Profile (10%)]
 **Confidence:** [High | Medium | Low]
 **Confidence Rationale:** [one sentence]
-**Rationale:** [explanation based only on provided data]
+**Rationale:** [explanation weighing all five sub-dimensions above, not just revenue]
 **How to Improve:** 
 - → [Section]: [specific action]
 
@@ -910,10 +1006,10 @@ INPUT DATA:
 ${evalData}`;
 
       const result = await sendMessageToChatGPT(combinedMessage);
-      
+
       const aiScores = parseAiEvaluationScores(result);
       if (hasAppliedForFunding && tier) validateFundingScores(aiScores);
-      
+
       return result;
     } catch (error) {
       console.error("AI Evaluation error:", error);
@@ -950,7 +1046,7 @@ ${evalData}`;
   useEffect(() => {
     if (!auth?.currentUser?.uid || !apiKey) return;
 
-    const docRef    = doc(db, "universalProfiles", auth.currentUser.uid);
+    const docRef = doc(db, "universalProfiles", auth.currentUser.uid);
     const aiEvalRef = doc(db, "aiFundabilityEvaluations", auth.currentUser.uid);
 
     const unsubscribe = onSnapshot(docRef, async (docSnap) => {
@@ -1007,7 +1103,7 @@ ${evalData}`;
 
     return () => unsubscribe();
   }, [auth?.currentUser?.uid, apiKey, isEvaluating, hasAppliedForFunding,
-      isFundingDataLoaded, fundingCheckComplete, profileData, fundingTier]);
+    isFundingDataLoaded, fundingCheckComplete, profileData, fundingTier]);
 
   const getProgressBarColor = (score) => {
     if (score > 90) return "#1B5E20";
@@ -1033,26 +1129,35 @@ ${evalData}`;
   // e.g. pre-seed previously: financialStrength 25, operations 40, impactMandate 35.
   const weightingsByStage = {
     "pre-seed": { financialStrength: 42, impactMandate: 58, businessPlan: 0, pitchDeck: 0, creditworthiness: 0, guarantees: 0, financialResilience: 0 },
-    seed:       { financialStrength: 54, impactMandate: 46, businessPlan: 0, pitchDeck: 0, creditworthiness: 0, guarantees: 0, financialResilience: 0 },
-    seriesa:    { financialStrength: 64, impactMandate: 36, businessPlan: 0, pitchDeck: 0, creditworthiness: 0, guarantees: 0, financialResilience: 0 },
-    seriesb:    { financialStrength: 73, impactMandate: 27, businessPlan: 0, pitchDeck: 0, creditworthiness: 0, guarantees: 0, financialResilience: 0 },
-    growth:     { financialStrength: 81, impactMandate: 19, businessPlan: 0, pitchDeck: 0, creditworthiness: 0, guarantees: 0, financialResilience: 0 },
-    maturity:   { financialStrength: 88, impactMandate: 12, businessPlan: 0, pitchDeck: 0, creditworthiness: 0, guarantees: 0, financialResilience: 0 },
+    seed: { financialStrength: 54, impactMandate: 46, businessPlan: 0, pitchDeck: 0, creditworthiness: 0, guarantees: 0, financialResilience: 0 },
+    seriesa: { financialStrength: 64, impactMandate: 36, businessPlan: 0, pitchDeck: 0, creditworthiness: 0, guarantees: 0, financialResilience: 0 },
+    seriesb: { financialStrength: 73, impactMandate: 27, businessPlan: 0, pitchDeck: 0, creditworthiness: 0, guarantees: 0, financialResilience: 0 },
+    growth: { financialStrength: 81, impactMandate: 19, businessPlan: 0, pitchDeck: 0, creditworthiness: 0, guarantees: 0, financialResilience: 0 },
+    maturity: { financialStrength: 88, impactMandate: 12, businessPlan: 0, pitchDeck: 0, creditworthiness: 0, guarantees: 0, financialResilience: 0 },
   };
 
   const getScoreLevel = (score) => {
-    if (score > 90)  return { level: "Highly fundable",       color: "#1B5E20", icon: CheckCircle };
+    if (score > 90) return { level: "Highly fundable", color: "#1B5E20", icon: CheckCircle };
     if (score >= 81) return { level: "Strong investment case", color: "#4CAF50", icon: CheckCircle };
-    if (score >= 61) return { level: "Moderate potential",    color: "#FF9800", icon: TrendingUp };
-    if (score >= 41) return { level: "Basic potential",       color: "#F44336", icon: AlertCircle };
-    return               { level: "Needs development",        color: "#B71C1C", icon: AlertCircle };
+    if (score >= 61) return { level: "Moderate potential", color: "#FF9800", icon: TrendingUp };
+    if (score >= 41) return { level: "Basic potential", color: "#F44336", icon: AlertCircle };
+    return { level: "Needs development", color: "#B71C1C", icon: AlertCircle };
   };
+  // scoreLevel keeps driving the overall ring; these two drive the split view
+  const financialStrengthItem = scoreBreakdown.find((r) => r.name === "Financial Strength");
+  const financialStrengthScore = financialStrengthItem?.score || 0;
+  const financialStrengthLevel = getFinancialStrengthLevel(financialStrengthScore);
 
+  const fundabilityWeightedSum = scoreBreakdown
+    .filter((r) => r.tier != null)
+    .reduce((sum, r) => sum + (r.weightedScore || 0), 0);
+  const fundabilityGroupScore = fundingTier ? Math.round(fundabilityWeightedSum / 0.6) : 0;
+  const fundabilityLevel = getFundabilityLevel(fundabilityGroupScore);
   const scoreLevel = getScoreLevel(fundabilityScore);
 
   const formatAiResult = (text) => {
     if (!text) return null;
-    const cleaned  = text.replace(/\*\*(.*?)\*\*/g, "$1");
+    const cleaned = text.replace(/\*\*(.*?)\*\*/g, "$1");
     const sections = cleaned.split(/(?=###\s)/g);
 
     return sections.map((section, index) => {
@@ -1074,19 +1179,19 @@ ${evalData}`;
           ? trimmed.slice(trimmed.indexOf(header) + header.length).replace(/^###\s*/, "").trim()
           : trimmed.split("\n").slice(1).join("\n");
 
-        const evidenceMatch   = content.match(/Evidence\s*:\s*([^\n]+)/i);
+        const evidenceMatch = content.match(/Evidence\s*:\s*([^\n]+)/i);
         const confidenceMatch = content.match(/Confidence\s*:\s*(High|Medium|Low)/i);
-        const confRatMatch    = content.match(/Confidence Rationale\s*:\s*([^\n]+)/i);
+        const confRatMatch = content.match(/Confidence Rationale\s*:\s*([^\n]+)/i);
         const confidenceLevel = confidenceMatch?.[1] || null;
 
         const confidenceColor =
-          confidenceLevel === "High"   ? { bg: "#e8f5e9", text: "#1B5E20" } :
-          confidenceLevel === "Medium" ? { bg: "#fff3e0", text: "#E65100" } :
-          confidenceLevel === "Low"    ? { bg: "#ffebee", text: "#B71C1C" } : null;
+          confidenceLevel === "High" ? { bg: "#e8f5e9", text: "#1B5E20" } :
+            confidenceLevel === "Medium" ? { bg: "#fff3e0", text: "#E65100" } :
+              confidenceLevel === "Low" ? { bg: "#ffebee", text: "#B71C1C" } : null;
 
-        const impIdx      = content.toLowerCase().indexOf("how to improve");
+        const impIdx = content.toLowerCase().indexOf("how to improve");
         const mainContent = impIdx !== -1 ? content.substring(0, impIdx) : content;
-        const impContent  = impIdx !== -1 ? content.substring(impIdx)    : "";
+        const impContent = impIdx !== -1 ? content.substring(impIdx) : "";
         const mainCleaned = mainContent
           .replace(/Evidence\s*:\s*[^\n]+\n?/i, "")
           .replace(/Confidence\s*:\s*[^\n]+\n?/i, "")
@@ -1163,47 +1268,47 @@ ${evalData}`;
   // Rows: Sub-component | Grants/Catalyst | PO (<10M) | All other + Pos>10M | Why
   const FUNDABILITY_INTERNAL_ROWS = [
     {
-      name:        "Investment Case Strength",
-      grantsW:     "25%",
-      poW:         "20%",
-      allOtherW:   "25%",
-      why:         "Foundation of funding decision",
+      name: "Investment Case Strength",
+      grantsW: "25%",
+      poW: "20%",
+      allOtherW: "25%",
+      why: "Foundation of funding decision",
     },
     {
-      name:        "Pitch Readiness",
-      grantsW:     "20%",
-      poW:         "10%",
-      allOtherW:   "10%",
-      why:         "Communication matters",
+      name: "Pitch Readiness",
+      grantsW: "20%",
+      poW: "10%",
+      allOtherW: "10%",
+      why: "Communication matters",
     },
     {
-      name:        "Impact & Mandate Alignment",
-      grantsW:     "40%",
-      poW:         "10%",
-      allOtherW:   "15%",
-      why:         "Critical for SA/ESG funding",
+      name: "Impact & Mandate Alignment",
+      grantsW: "40%",
+      poW: "10%",
+      allOtherW: "15%",
+      why: "Critical for SA/ESG funding",
     },
     {
-      name:        "Creditworthiness",
-      grantsW:     "15%",
-      poW:         "30%",
-      allOtherW:   "10%",
-      why:         "Risk filter",
+      name: "Creditworthiness",
+      grantsW: "15%",
+      poW: "30%",
+      allOtherW: "10%",
+      why: "Risk filter",
     },
     {
-      name:        "Guarantees/Collateral",
-      grantsW:     "0%",
-      poW:         "20%",
-      allOtherW:   "10%",
-      why:         "Debt funding = collateral-driven. DFIs / banks = risk mitigation first",
+      name: "Guarantees/Collateral",
+      grantsW: "0%",
+      poW: "20%",
+      allOtherW: "10%",
+      why: "Debt funding = collateral-driven. DFIs / banks = risk mitigation first",
     },
     {
-      name:        "Financial Resilience & Efficiency (solvency, liquidity, leverage ratios)",
-      grantsW:     "0%",
-      poW:         "0%",
-      allOtherW:   "30%",
-      why:         'For serious funding (>R10m), we move from "basic fundability" → "underwriting-grade fundability"',
-      note:        "These come from growth suite. For all other funding instruments (not grant of PO<10M), they should also get a message to subscribe to growth suite first before they can be matched.",
+      name: "Financial Resilience & Efficiency (solvency, liquidity, leverage ratios)",
+      grantsW: "0%",
+      poW: "0%",
+      allOtherW: "30%",
+      why: 'For serious funding (>R10m), we move from "basic fundability" → "underwriting-grade fundability"',
+      note: "These come from growth suite. For all other funding instruments (not grant of PO<10M), they should also get a message to subscribe to growth suite first before they can be matched.",
     },
   ];
 
@@ -1283,7 +1388,7 @@ ${evalData}`;
       <div style={{ background: "linear-gradient(135deg, #ffffff 0%, #faf8f6 100%)", borderRadius: "20px", boxShadow: "0 8px 32px rgba(141, 110, 99, 0.15)", border: "1px solid #e8ddd6", overflow: "hidden", position: "relative", width: "100%", minWidth: "210px" }}>
         <div style={{ background: "linear-gradient(135deg, #8d6e63 0%, #6d4c41 100%)", padding: "24px 30px 20px 30px", color: "white", position: "relative" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
-            <h2 style={{ margin: "0", fontSize: "16px", fontWeight: "700", letterSpacing: "0.5px", whiteSpace: "nowrap" }}>Financial Strength</h2>
+            <h2 style={{ margin: "0", fontSize: "16px", fontWeight: "700", letterSpacing: "0.5px", whiteSpace: "nowrap" }}>Capital Appeal</h2>
             <DollarSign size={24} style={{ opacity: 0.8 }} />
           </div>
           <p style={{ margin: "0", fontSize: "13px", opacity: "0.9" }}>Investment readiness assessment</p>
@@ -1304,7 +1409,7 @@ ${evalData}`;
 
           <button onClick={() => setShowModal(true)} style={{ width: "100%", padding: "12px 16px", borderRadius: "10px", background: "linear-gradient(135deg, #5d4037 0%, #4a2c20 100%)", color: "white", marginTop: "15px", border: "none", fontWeight: "600", fontSize: "12px", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", gap: "6px", transition: "all 0.3s ease", boxShadow: "0 4px 16px rgba(93,64,55,0.3)", whiteSpace: "nowrap" }}
             onMouseOver={(e) => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 6px 20px rgba(93,64,55,0.4)"; }}
-            onMouseOut={(e)  => { e.currentTarget.style.transform = "translateY(0px)";  e.currentTarget.style.boxShadow = "0 4px 16px rgba(93,64,55,0.3)"; }}>
+            onMouseOut={(e) => { e.currentTarget.style.transform = "translateY(0px)"; e.currentTarget.style.boxShadow = "0 4px 16px rgba(93,64,55,0.3)"; }}>
             <span>Score breakdown</span>
             <ChevronDown size={16} />
           </button>
@@ -1425,14 +1530,42 @@ ${evalData}`;
                     </div>
 
                     {/* Score interpretation */}
-                    <div style={{ backgroundColor: "#efebe9", padding: "14px", borderRadius: "8px", borderLeft: "4px solid #8d6e63" }}>
-                      <p style={{ fontWeight: "bold", marginBottom: "8px", color: "#6d4c41" }}>Score interpretation:</p>
-                      <ul style={{ margin: "0", paddingLeft: "20px" }}>
-                        {[["91–100%","Highly fundable"],["81–90%","Strong investment case"],["61–80%","Moderate potential"],["41–60%","Basic potential"],["0–40%","Needs development"]].map(([r,l]) => (
-                          <li key={r} style={{ marginBottom: "4px" }}><strong>{r}:</strong> {l}</li>
-                        ))}
-                      </ul>
+                    {/* ── Financial Strength — internal weighting + its own interpretation ── */}
+                    <div style={{ backgroundColor: "#efebe9", padding: "14px", borderRadius: "8px", marginBottom: "16px", borderLeft: "4px solid #8d6e63" }}>
+                      <p style={{ fontWeight: "bold", marginBottom: "4px", color: "#6d4c41" }}>Financial Strength (Internal Weighting)</p>
+                      <p style={{ fontSize: "11px", color: "#8d6e63", marginBottom: "10px", fontStyle: "italic" }}>
+                        Applies to every business, regardless of funding stage or tier.
+                      </p>
+                      {renderFinancialStrengthInternalTable()}
+                      <div style={{ marginTop: "12px" }}>
+                        <p style={{ fontWeight: "bold", marginBottom: "8px", color: "#6d4c41", fontSize: "13px" }}>Financial Strength interpretation:</p>
+                        <ul style={{ margin: "0", paddingLeft: "20px", fontSize: "13px" }}>
+                          {[["91–100%", "Financially robust"], ["81–90%", "Financially sound"], ["61–80%", "Adequate financial base"], ["41–60%", "Financial vulnerabilities"], ["0–40%", "Weak financial foundation"]].map(([r, l]) => (
+                            <li key={r} style={{ marginBottom: "4px" }}><strong>{r}:</strong> {l}</li>
+                          ))}
+                        </ul>
+                      </div>
                     </div>
+
+                    {/* ── Fundability — internal weighting + its own interpretation ── */}
+                    {/* <div style={{ backgroundColor: "#efebe9", padding: "14px", borderRadius: "8px", marginBottom: "16px", borderLeft: "4px solid #8d6e63" }}>
+                      <p style={{ fontWeight: "bold", marginBottom: "4px", color: "#6d4c41" }}>
+                        Fundability (Internal Weighting)
+                        {fundingTier && <span style={{ fontSize: "11px", fontWeight: "400", color: "#8d6e63", marginLeft: "8px" }}>— your active tier column is highlighted</span>}
+                      </p>
+                      <p style={{ fontSize: "11px", color: "#8d6e63", marginBottom: "10px", fontStyle: "italic" }}>
+                        Tier A &amp; C → Grants/Catalyst column · Tier B → PO (&lt;10M) column · Tier D → All other + Pos&gt;10M column
+                      </p>
+                      {renderFundabilityInternalTable()}
+                      <div style={{ marginTop: "12px" }}>
+                        <p style={{ fontWeight: "bold", marginBottom: "8px", color: "#6d4c41", fontSize: "13px" }}>Fundability interpretation:</p>
+                        <ul style={{ margin: "0", paddingLeft: "20px", fontSize: "13px" }}>
+                          {[["91–100%", "Highly fundable"], ["81–90%", "Strong investment case"], ["61–80%", "Moderate potential"], ["41–60%", "Basic potential"], ["0–40%", "Needs development"]].map(([r, l]) => (
+                            <li key={r} style={{ marginBottom: "4px" }}><strong>{r}:</strong> {l}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div> */}
                   </div>
                 )}
               </div>
@@ -1457,6 +1590,24 @@ ${evalData}`;
                           {group === "Fundability" && (
                             <div style={{ fontSize: "12px", fontWeight: "700", color: "#8d6e63", textTransform: "uppercase", letterSpacing: "1px", marginBottom: "6px", paddingLeft: "4px" }}>
                               Fundability · Tier {fundingTier} — {TIER_LABELS[fundingTier] || "N/A"}
+                            </div>
+                          )}
+                          {group === "Financial Strength" && (
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px", paddingLeft: "4px" }}>
+                              <span style={{ fontSize: "12px", fontWeight: "700", color: "#8d6e63", textTransform: "uppercase", letterSpacing: "1px" }}>Financial Strength</span>
+                              <span style={{ fontSize: "11px", fontWeight: "600", color: financialStrengthLevel.color, backgroundColor: `${financialStrengthLevel.color}15`, padding: "2px 10px", borderRadius: "12px" }}>
+                                {financialStrengthScore}% · {financialStrengthLevel.level}
+                              </span>
+                            </div>
+                          )}
+                          {group === "Fundability" && fundingTier && (
+                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px", paddingLeft: "4px" }}>
+                              <span style={{ fontSize: "12px", fontWeight: "700", color: "#8d6e63", textTransform: "uppercase", letterSpacing: "1px" }}>
+                                Fundability · Tier {fundingTier} — {TIER_LABELS[fundingTier]}
+                              </span>
+                              <span style={{ fontSize: "11px", fontWeight: "600", color: fundabilityLevel.color, backgroundColor: `${fundabilityLevel.color}15`, padding: "2px 10px", borderRadius: "12px" }}>
+                                {fundabilityGroupScore}% · {fundabilityLevel.level}
+                              </span>
                             </div>
                           )}
                           {groupRows.map((item, i) => (
@@ -1528,11 +1679,11 @@ ${evalData}`;
                       </div>
                     ) : (
                       <div style={{ color: "#5d4037", lineHeight: "1.6" }}>
-                        {fundabilityScore > 90  && <p><strong>Exceptional investment opportunity.</strong> Outstanding fundability across all key criteria.</p>}
+                        {fundabilityScore > 90 && <p><strong>Exceptional investment opportunity.</strong> Outstanding fundability across all key criteria.</p>}
                         {fundabilityScore >= 81 && fundabilityScore <= 90 && <p><strong>Very attractive investment case.</strong> Strong fundamentals with minor areas to enhance.</p>}
                         {fundabilityScore >= 61 && fundabilityScore <= 80 && <p><strong>Moderate potential.</strong> Solid foundations but several areas need strengthening.</p>}
                         {fundabilityScore >= 41 && fundabilityScore <= 60 && <p><strong>Basic potential.</strong> Substantial development needed across key areas.</p>}
-                        {fundabilityScore <= 40  && <p><strong>Fundamental improvements required.</strong> Significant strengthening needed before pursuing funding.</p>}
+                        {fundabilityScore <= 40 && <p><strong>Fundamental improvements required.</strong> Significant strengthening needed before pursuing funding.</p>}
                       </div>
                     )}
                     {evaluationError && (
