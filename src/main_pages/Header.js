@@ -7,7 +7,9 @@ const Header = ({ onLoginClick }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [isHowItWorksOpen, setIsHowItWorksOpen] = useState(false);
+  const [isSolutionsOpen, setIsSolutionsOpen] = useState(false);
   const dropdownRef = useRef(null);
+  const solutionsDropdownRef = useRef(null);
 
   // Check if device is mobile on mount and resize
   useEffect(() => {
@@ -33,11 +35,14 @@ const Header = ({ onLoginClick }) => {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Close dropdown when clicking outside
+  // Close dropdowns when clicking outside
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setIsHowItWorksOpen(false);
+      }
+      if (solutionsDropdownRef.current && !solutionsDropdownRef.current.contains(event.target)) {
+        setIsSolutionsOpen(false);
       }
     };
     
@@ -61,6 +66,7 @@ const Header = ({ onLoginClick }) => {
   const handleLoginClick = () => {
     setIsMobileMenuOpen(false);
     setIsHowItWorksOpen(false);
+    setIsSolutionsOpen(false);
     if (onLoginClick) {
       onLoginClick();
     } else {
@@ -77,6 +83,7 @@ const Header = ({ onLoginClick }) => {
     }
     setIsMobileMenuOpen(false);
     setIsHowItWorksOpen(false);
+    setIsSolutionsOpen(false);
   };
 
   // How It Works dropdown items - from Landing Page "Who benefits from BIG?"
@@ -89,13 +96,25 @@ const Header = ({ onLoginClick }) => {
     { label: 'For Interns', path: '/HowItWorksInterns' },
   ];
 
-  // Navigation items - UPDATED: Home, BIG Score, How It Works, BIG Pulse, BIG Academy, Contact Us
+  // Solutions dropdown items
+  const solutionsItems = [
+    { label: 'Overview', path: '/solutions' },
+    { label: 'For SMSEs', path: '/solutions/smes' },
+    { label: 'For Investors', path: '/solutions/investors' },
+    { label: 'For Corporates', path: '/solutions/corporates' },
+    { label: 'For Catalysts', path: '/solutions/catalysts' },
+    { label: 'For Graduates', path: '/solutions/graduates' },
+    { label: 'For Advisors', path: '/solutions/advisors' },
+  ];
+
+  // Navigation items - UPDATED: Home, Solutions, BIG Score, How It Works, BIG Pulse, BIG Academy, Contact Us
   const navItems = [
     { label: 'Home', path: '/' },
+    // Solutions is handled separately as a dropdown
     { label: 'BIG Score', path: '/BigScorePage' },
     // How It Works is handled separately as a dropdown
-    { label: 'BIG Pulse', path: '/InsightsPage' },  // Renamed from "Insights" to "BIG Pulse"
-    { label: 'BIG Academy', path: '/CharmSchool' }, // Renamed from "CSI @BIG" to "BIG Academy"
+    { label: 'BIG Pulse', path: '/InsightsPage' },
+    { label: 'BIG Academy', path: '/CharmSchool' },
     { label: 'Contact Us', path: '/ContactPage' },
   ];
 
@@ -135,15 +154,15 @@ const Header = ({ onLoginClick }) => {
     },
     nav: {
       display: 'flex',
-      gap: window.innerWidth <= 1024 ? '0.5rem' : '0.8rem',
+      gap: window.innerWidth <= 1024 ? '0.4rem' : '0.8rem',
       alignItems: 'center',
       justifyContent: 'center',
     },
     navButton: {
-      minWidth: window.innerWidth <= 1024 ? '80px' : '95px',
-      padding: window.innerWidth <= 1024 ? '0.4rem 0.7rem' : '0.5rem 1rem',
+      minWidth: window.innerWidth <= 1024 ? '75px' : '95px',
+      padding: window.innerWidth <= 1024 ? '0.4rem 0.6rem' : '0.5rem 1rem',
       textAlign: 'center',
-      fontSize: window.innerWidth <= 1024 ? '0.82rem' : '0.9rem',
+      fontSize: window.innerWidth <= 1024 ? '0.78rem' : '0.9rem',
       whiteSpace: 'nowrap',
       backgroundColor: '#5D432C',
       color: 'white',
@@ -155,10 +174,10 @@ const Header = ({ onLoginClick }) => {
       letterSpacing: '0.2px',
     },
     dropdownButton: {
-      minWidth: window.innerWidth <= 1024 ? '80px' : '95px',
-      padding: window.innerWidth <= 1024 ? '0.4rem 0.7rem' : '0.5rem 1rem',
+      minWidth: window.innerWidth <= 1024 ? '75px' : '95px',
+      padding: window.innerWidth <= 1024 ? '0.4rem 0.6rem' : '0.5rem 1rem',
       textAlign: 'center',
-      fontSize: window.innerWidth <= 1024 ? '0.82rem' : '0.9rem',
+      fontSize: window.innerWidth <= 1024 ? '0.78rem' : '0.9rem',
       whiteSpace: 'nowrap',
       backgroundColor: '#5D432C',
       color: 'white',
@@ -420,7 +439,64 @@ const Header = ({ onLoginClick }) => {
               Home
             </button>
 
-            {/* BIG Score - Second */}
+            {/* Solutions Dropdown - Second */}
+            <div 
+              ref={solutionsDropdownRef}
+              style={{ position: 'relative' }}
+              onMouseEnter={() => setIsSolutionsOpen(true)}
+              onMouseLeave={() => setIsSolutionsOpen(false)}
+            >
+              <button
+                className="nav-btn dropdown-btn"
+                style={{
+                  ...styles.dropdownButton,
+                  backgroundColor: isSolutionsOpen ? '#372C27' : '#5D432C',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = '#372C27';
+                  e.currentTarget.style.transform = 'translateY(-1px)';
+                  e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
+                }}
+                onMouseLeave={(e) => {
+                  if (!isSolutionsOpen) {
+                    e.currentTarget.style.backgroundColor = '#5D432C';
+                  }
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = 'none';
+                }}
+              >
+                Solutions
+                <span style={{
+                  ...styles.dropdownArrow,
+                  transform: isSolutionsOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                }}>▼</span>
+              </button>
+
+              <div style={{
+                ...styles.dropdownMenu,
+                ...(isSolutionsOpen ? styles.dropdownMenuOpen : {}),
+              }}>
+                {solutionsItems.map((item) => (
+                  <button
+                    key={item.label}
+                    style={styles.dropdownItem}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.backgroundColor = '#F5F0E8';
+                      e.currentTarget.style.color = '#754A2D';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.backgroundColor = 'transparent';
+                      e.currentTarget.style.color = '#372C27';
+                    }}
+                    onClick={() => handleNavigation(item.path)}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* BIG Score - Third */}
             <button
               className="nav-btn"
               onClick={() => handleNavigation('/BigScorePage')}
@@ -439,7 +515,7 @@ const Header = ({ onLoginClick }) => {
               BIG Score
             </button>
 
-            {/* How It Works Dropdown - Third */}
+            {/* How It Works Dropdown - Fourth */}
             <div 
               ref={dropdownRef}
               style={{ position: 'relative' }}
@@ -496,7 +572,7 @@ const Header = ({ onLoginClick }) => {
               </div>
             </div>
 
-            {/* BIG Pulse - Fourth (renamed from Insights) */}
+            {/* BIG Pulse - Fifth */}
             <button
               className="nav-btn"
               onClick={() => handleNavigation('/InsightsPage')}
@@ -515,7 +591,7 @@ const Header = ({ onLoginClick }) => {
               BIG Pulse
             </button>
 
-            {/* BIG Academy - Fifth (renamed from CSI @BIG) */}
+            {/* BIG Academy - Sixth */}
             <button
               className="nav-btn"
               onClick={() => handleNavigation('/CharmSchool')}
@@ -534,7 +610,7 @@ const Header = ({ onLoginClick }) => {
               BIG Academy
             </button>
 
-            {/* Contact Us - Sixth */}
+            {/* Contact Us - Seventh */}
             <button
               className="nav-btn"
               onClick={() => handleNavigation('/ContactPage')}
@@ -631,7 +707,46 @@ const Header = ({ onLoginClick }) => {
           Home
         </button>
 
-        {/* BIG Score - Second in mobile */}
+        {/* Solutions - Second in mobile */}
+        <div>
+          <button
+            style={styles.mobileDropdownHeader}
+            onClick={() => {
+              const items = document.getElementById('mobileSolutionsDropdownItems');
+              if (items) {
+                const isOpen = items.style.maxHeight === '400px';
+                items.style.maxHeight = isOpen ? '0' : '400px';
+              }
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.backgroundColor = '#372C27';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = '#5D432C';
+            }}
+          >
+            Solutions ▼
+          </button>
+          <div id="mobileSolutionsDropdownItems" style={styles.mobileDropdownItems}>
+            {solutionsItems.map((item) => (
+              <button
+                key={item.label}
+                style={styles.mobileDropdownItem}
+                onClick={() => handleNavigation(item.path)}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.backgroundColor = '#EAE2D8';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.backgroundColor = '#F5F0E8';
+                }}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* BIG Score - Third in mobile */}
         <button
           style={styles.mobileNavButton}
           onClick={() => handleNavigation('/BigScorePage')}
@@ -645,7 +760,7 @@ const Header = ({ onLoginClick }) => {
           BIG Score
         </button>
 
-        {/* How It Works - Third in mobile */}
+        {/* How It Works - Fourth in mobile */}
         <div>
           <button
             style={styles.mobileDropdownHeader}
@@ -684,7 +799,7 @@ const Header = ({ onLoginClick }) => {
           </div>
         </div>
 
-        {/* BIG Pulse - Fourth in mobile (renamed from Insights) */}
+        {/* BIG Pulse - Fifth in mobile */}
         <button
           style={styles.mobileNavButton}
           onClick={() => handleNavigation('/InsightsPage')}
@@ -698,7 +813,7 @@ const Header = ({ onLoginClick }) => {
           BIG Pulse
         </button>
 
-        {/* BIG Academy - Fifth in mobile (renamed from CSI @BIG) */}
+        {/* BIG Academy - Sixth in mobile */}
         <button
           style={styles.mobileNavButton}
           onClick={() => handleNavigation('/CharmSchool')}
@@ -712,7 +827,7 @@ const Header = ({ onLoginClick }) => {
           BIG Academy
         </button>
 
-        {/* Contact Us - Sixth in mobile */}
+        {/* Contact Us - Seventh in mobile */}
         <button
           style={styles.mobileNavButton}
           onClick={() => handleNavigation('/ContactPage')}
@@ -788,7 +903,8 @@ const Header = ({ onLoginClick }) => {
         }
 
         /* Mobile menu scroll */
-        #mobileDropdownItems {
+        #mobileDropdownItems,
+        #mobileSolutionsDropdownItems {
           transition: max-height 0.3s ease;
           overflow: hidden;
         }
@@ -835,9 +951,9 @@ const Header = ({ onLoginClick }) => {
         /* Small desktop screens */
         @media (max-width: 1024px) {
           .nav-btn {
-            font-size: 0.78rem !important;
-            padding: 0.35rem 0.6rem !important;
-            min-width: 75px !important;
+            font-size: 0.75rem !important;
+            padding: 0.3rem 0.5rem !important;
+            min-width: 65px !important;
           }
           
           .login-btn {
