@@ -566,7 +566,7 @@ const HowItWorksInterns = () => {
                 lineHeight: 1.6,
                 margin: 0,
               }}>
-                Your CV, qualifications, and personal documents are encrypted with <strong>AES-256</strong> and protected during transmission with <strong>TLS 1.3</strong>.
+                Your CV, qualifications, and personal documents are encrypted using enterprise-grade standards and protected during transmission.
               </p>
             </div>
 
@@ -613,7 +613,7 @@ const HowItWorksInterns = () => {
                 lineHeight: 1.6,
                 margin: 0,
               }}>
-                You control who sees your profile. <strong>POPIA compliant</strong> data handling ensures your privacy rights are respected.
+                You control who sees your profile. Protection of Personal Information Act (POPIA) compliant data handling ensures your privacy rights are respected.
               </p>
             </div>
 
@@ -660,11 +660,11 @@ const HowItWorksInterns = () => {
                 lineHeight: 1.6,
                 margin: 0,
               }}>
-                Your identity verification data is <strong>securely processed</strong> and never shared without your explicit consent.
+                Your identity verification data is securely processed and never shared without your explicit consent.
               </p>
             </div>
 
-            {/* Block 4: Data Deletion Rights */}
+            {/* Block 4: Career Data Ownership */}
             <div style={{
               background: colors.light,
               borderRadius: '14px',
@@ -707,7 +707,7 @@ const HowItWorksInterns = () => {
                 lineHeight: 1.6,
                 margin: 0,
               }}>
-                Request full deletion of your profile and career data. Removed within <strong>7 business days</strong>. You're always in control.
+                Request full deletion of your profile and career data. Removed within 7 business days. You're always in control.
               </p>
             </div>
           </div>
@@ -735,7 +735,7 @@ const HowItWorksInterns = () => {
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <FaRegClock size={16} color={colors.amber} />
-              <span style={{ fontSize: '0.8rem', color: colors.muted }}>24/7 Data Monitoring</span>
+              <span style={{ fontSize: '0.8rem', color: colors.muted }}>Continuous Monitoring</span>
             </div>
           </div>
         </section>

@@ -678,7 +678,7 @@ const HowItWorksSMSE = () => {
             gridTemplateColumns: 'repeat(4, 1fr)',
             gap: '20px',
           }}>
-            {/* Block 1: Business Document Encryption */}
+            {/* Block 1: Enterprise Encryption */}
             <div style={{
               background: colors.light,
               borderRadius: '14px',
@@ -713,7 +713,7 @@ const HowItWorksSMSE = () => {
                 color: colors.dark,
                 margin: '0 0 6px',
               }}>
-                Business Document Encryption
+                Enterprise Encryption
               </h4>
               <p style={{
                 fontSize: '0.82rem',
@@ -721,7 +721,7 @@ const HowItWorksSMSE = () => {
                 lineHeight: 1.6,
                 margin: 0,
               }}>
-                All documents and data encrypted with <strong>AES-256</strong> at rest and <strong>TLS 1.3</strong> in transit.
+                All business information is encrypted both in transit and at rest using enterprise-grade security standards.
               </p>
             </div>
 
@@ -760,7 +760,7 @@ const HowItWorksSMSE = () => {
                 color: colors.dark,
                 margin: '0 0 6px',
               }}>
-                POPIA Compliant
+                POPIA Compliance
               </h4>
               <p style={{
                 fontSize: '0.82rem',
@@ -768,11 +768,11 @@ const HowItWorksSMSE = () => {
                 lineHeight: 1.6,
                 margin: 0,
               }}>
-                Fully compliant with <strong>POPIA 4 of 2013</strong>. Data stored securely in South African data centers.
+                Designed with privacy and compliance in mind, including consent management and secure handling of personal information in accordance with the Protection of Personal Information Act (POPIA).
               </p>
             </div>
 
-            {/* Block 3: Payment Security */}
+            {/* Block 3: Role-Based Access Controls */}
             <div style={{
               background: colors.light,
               borderRadius: '14px',
@@ -799,7 +799,7 @@ const HowItWorksSMSE = () => {
                 color: colors.amber,
                 marginBottom: '14px',
               }}>
-                <FaCreditCard size={22} />
+                <FaUserSecret size={22} />
               </div>
               <h4 style={{
                 fontSize: '0.95rem',
@@ -807,7 +807,7 @@ const HowItWorksSMSE = () => {
                 color: colors.dark,
                 margin: '0 0 6px',
               }}>
-                Payment Security
+                Role-Based Access Controls
               </h4>
               <p style={{
                 fontSize: '0.82rem',
@@ -815,11 +815,11 @@ const HowItWorksSMSE = () => {
                 lineHeight: 1.6,
                 margin: 0,
               }}>
-                Payments via <strong>Peach Payments</strong> with bank-grade encryption. We never store your payment details.
+                Sensitive information is only accessible to authorised users based on permissions and business relationships. Your data stays protected.
               </p>
             </div>
 
-            {/* Block 4: Data Ownership */}
+            {/* Block 4: You Own Your Data */}
             <div style={{
               background: colors.light,
               borderRadius: '14px',
@@ -846,7 +846,7 @@ const HowItWorksSMSE = () => {
                 color: colors.orange,
                 marginBottom: '14px',
               }}>
-                <FaUserSecret size={22} />
+                <FaDatabase size={22} />
               </div>
               <h4 style={{
                 fontSize: '0.95rem',
@@ -862,7 +862,7 @@ const HowItWorksSMSE = () => {
                 lineHeight: 1.6,
                 margin: 0,
               }}>
-                Request full deletion anytime. Removed within <strong>7 business days</strong>. No data retained without consent.
+                Your information remains yours. You can export or request deletion of your data at any time. Removed within 7 business days.
               </p>
             </div>
           </div>
@@ -890,7 +890,7 @@ const HowItWorksSMSE = () => {
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <FaRegClock size={16} color={colors.amber} />
-              <span style={{ fontSize: '0.8rem', color: colors.muted }}>24/7 Security Monitoring</span>
+              <span style={{ fontSize: '0.8rem', color: colors.muted }}>Continuous Monitoring</span>
             </div>
           </div>
         </section>

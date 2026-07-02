@@ -748,7 +748,7 @@ const CharmSchool = () => {
               }}
             >
               <FiUserPlus size={isMobile ? 16 : 18} />
-              Register Now
+              Join Waiting List for the Next Event
             </button>
             <button 
               style={styles.heroButtonSecondary}
@@ -801,13 +801,13 @@ const CharmSchool = () => {
             </div>
           </div>
 
-          {/* Stats */}
+          {/* Stats - Updated with new values */}
           <div style={styles.statsGrid}>
             {[
-              { number: '500+', label: 'Graduates Trained' },
-              { number: '200+', label: 'SMEs Matched' },
-              { number: '85%', label: 'Employability Rate' },
-              { number: '50+', label: 'Sponsors & Partners' },
+              { number: '12+', label: 'Curriculum Modules' },
+              { number: '10+', label: 'Industry Mentors' },
+              { number: '3', label: 'Career Pathways' },
+              { number: '5+', label: 'Opportunity Types' },
             ].map((stat, index) => (
               <div key={index} style={styles.statCard}>
                 <div style={styles.statNumber}>{stat.number}</div>
@@ -842,7 +842,7 @@ const CharmSchool = () => {
                 }}
               >
                 <FiUserPlus size={isMobile ? 16 : 18} />
-                Register Now
+                Join Waiting List for the Next Event
               </button>
               <button 
                 style={{...styles.primaryButton, backgroundColor: 'transparent', color: '#7C4D2A', border: '2px solid #7C4D2A'}}

@@ -572,7 +572,7 @@ const HowItWorksCorporates = () => {
             gridTemplateColumns: 'repeat(4, 1fr)',
             gap: '20px',
           }}>
-            {/* Block 1: Corporate Data Protection */}
+            {/* Block 1: Corporate Data Encryption */}
             <div style={{
               background: colors.light,
               borderRadius: '14px',
@@ -615,7 +615,7 @@ const HowItWorksCorporates = () => {
                 lineHeight: 1.6,
                 margin: 0,
               }}>
-                All corporate data encrypted with <strong>AES-256</strong> at rest and <strong>TLS 1.3</strong> in transit. Your strategic information stays confidential.
+                All corporate data is encrypted using enterprise-grade standards in transit and at rest. Your strategic information stays confidential.
               </p>
             </div>
 
@@ -662,11 +662,11 @@ const HowItWorksCorporates = () => {
                 lineHeight: 1.6,
                 margin: 0,
               }}>
-                Fully compliant with <strong>POPIA 4 of 2013</strong>. All data stored securely in South African data centers.
+                Fully compliant with the Protection of Personal Information Act (POPIA). Data is hosted on secure cloud infrastructure with regional data residency controls.
               </p>
             </div>
 
-            {/* Block 3: Supplier Vetting Security */}
+            {/* Block 3: Verified Supplier Network */}
             <div style={{
               background: colors.light,
               borderRadius: '14px',
@@ -709,7 +709,7 @@ const HowItWorksCorporates = () => {
                 lineHeight: 1.6,
                 margin: 0,
               }}>
-                Every SME undergoes <strong>rigorous verification</strong> before being approved for corporate partnerships.
+                Every SME undergoes rigorous verification before being approved for corporate partnerships.
               </p>
             </div>
 
@@ -756,7 +756,7 @@ const HowItWorksCorporates = () => {
                 lineHeight: 1.6,
                 margin: 0,
               }}>
-                All impact metrics are <strong>securely tracked and verified</strong>. Generate auditable reports for CSI/ESD compliance.
+                All impact metrics are securely tracked and verified. Generate auditable reports for CSI/ESD compliance.
               </p>
             </div>
           </div>
@@ -780,11 +780,11 @@ const HowItWorksCorporates = () => {
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <FaFileContract size={16} color={colors.green} />
-              <span style={{ fontSize: '0.8rem', color: colors.muted }}>NDA-Protected Access</span>
+              <span style={{ fontSize: '0.8rem', color: colors.muted }}>Role-Based Access Controls</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <FaRegClock size={16} color={colors.amber} />
-              <span style={{ fontSize: '0.8rem', color: colors.muted }}>Audit-Ready Reports</span>
+              <span style={{ fontSize: '0.8rem', color: colors.muted }}>Continuous Monitoring</span>
             </div>
           </div>
         </section>
