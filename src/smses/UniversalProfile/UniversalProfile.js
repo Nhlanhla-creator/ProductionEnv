@@ -190,7 +190,11 @@ export default function UniversalProfile() {
       businessLeadership: { ownerLed: "", primaryMotivation: "", growthAmbition: "", founderFullTime: "", opennessToAdvice: "", decisionGovernance: "" },
     },
 
-    contactDetails: { sameAsPhysical: false },
+    contactDetails: { 
+      contactTitle: "", contactName: "", position: "", 
+      businessPhone: "", mobile: "", email: "", 
+      physicalAddress: "", sameAsPhysical: false, postalAddress: "" 
+    },
 
     legalCompliance: {
       taxNumber: "", taxClearancePin: "", payeNumber: "", vatNumber: "",
@@ -567,12 +571,24 @@ export default function UniversalProfile() {
         const docRef = doc(db, "universalProfiles", effectiveUserId)
         const docSnap = await getDoc(docRef)
         if (docSnap.exists()) {
-          const data = docSnap.data(); setProfileData(data)
+          const data = docSnap.data(); 
+          setProfileData(data)
           if (data.completedSections) {
             setCompletedSections((prev) => ({ ...prev, instructions: true, ...data.completedSections }))
             localStorage.setItem(getUserSpecificKey("universalProfileCompletedSections"), JSON.stringify(data.completedSections))
           }
-          setFormData((prev) => ({ ...prev, ...data }))
+          // Merge saved data with default formData to ensure all fields exist
+          setFormData((prev) => {
+            const merged = { ...prev }
+            Object.keys(data).forEach(key => {
+              if (merged[key] && typeof merged[key] === 'object' && !Array.isArray(merged[key])) {
+                merged[key] = { ...merged[key], ...data[key] }
+              } else {
+                merged[key] = data[key]
+              }
+            })
+            return merged
+          })
           const isComplete = data?.declarationConsent?.accuracy && data?.declarationConsent?.dataProcessing && data?.declarationConsent?.termsConditions
           if (isComplete && !isEditing) { setProfileSubmitted(true); setShowSummary(true) }
         } else {
