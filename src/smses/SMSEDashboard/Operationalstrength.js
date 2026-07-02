@@ -17,15 +17,30 @@ import { useFirebaseFunctions } from "./hooks";
 
 // ─────────────────────────────────────────────────────────────────────────
 // Operational Strength — standalone card.
-// Scored ENTIRELY from OperationsOverview.js — nothing else. That form has
-// exactly 3 sections + 1 free-text field:
-//   1. Supplier & Continuity Risk  (multipleSuppliers, contingencyPlan)
+// Scored ENTIRELY from OperationsOverview.js — nothing else. That form now
+// has 8 sections; 4 are objectively gradable and scored, the other 4 are
+// exposure/context data folded into the AI's narrative only (see note below):
+//   SCORED:
+//   1. Supplier & Continuity Risk (multipleSuppliers, contingencyPlan,
+//      + supplier reference count as evidence of real diversification)
 //   2. Delivery (Productivity & Reliability) (trackPerformanceMetrics,
 //      threeSuccessfulDeliveries, hasCapacityToIncrease)
-//   3. Safety (Risk & Compliance)  (hasFormalProcedures, hasMajorIncidents)
-//   + operationalChallenges (free text — narrative context only, not scored,
-//     since there's no way to turn open text into an objective 0-5 without
-//     the AI inventing criteria that were never actually asked)
+//   3. Safety (Risk & Compliance) (hasFormalProcedures, hasMajorIncidents)
+//   4. Premises & Facilities (premisesStatus, leaseExpiryDate, premisesType,
+//      premisesSize, hasBranches) — including a "docking point" if the
+//      declared premises type doesn't fit the business's sector (e.g. a
+//      manufacturing business with no factory/workshop/warehouse), or if a
+//      rented premises' lease is expiring soon with no continuity signal
+//   CONTEXT ONLY (not scored — see rationale below):
+//   - Outsourcing & Value Chain, Import/Export, Contract Operations,
+//     Operational Challenges (free text)
+//   These four are either free text or genuinely double-edged signals (e.g.
+//   importing/exporting can be a strength — market diversification — or a
+//   risk — forex/logistics exposure — and there's no way to tell which from
+//   a yes/no answer alone). Scoring them 0-5 would mean inventing a value
+//   judgement the form itself doesn't support, so instead they're passed to
+//   the AI as narrative context for its Final Analysis and Rationale text,
+//   not as a graded category.
 // Category 4 of 5 in the taxonomy:
 //   1. Compliance   2. Legitimacy   3. Leadership & Governance
 //   4. Operational Strength (this file)   5. Financial Strength / Capital Appeal
@@ -35,14 +50,28 @@ import { useFirebaseFunctions } from "./hooks";
 // That field is NOT part of the Operations Overview page — it's collected on
 // Entity Overview — so scoring it here made this card claim to read data it
 // never actually fetched from this section. Removed. Every sub-score below
-// is one of the 7 literal questions on OperationsOverview.js, nothing else.
+// is a literal field on OperationsOverview.js, nothing else.
 // ─────────────────────────────────────────────────────────────────────────
 
 const SUB_COMPONENTS = [
-  { key: "supplierContinuity", name: "Supplier & Continuity Risk", weight: 30 },
-  { key: "delivery",           name: "Delivery (Productivity & Reliability)", weight: 40 },
-  { key: "safety",             name: "Safety (Risk & Compliance)", weight: 30 },
+  { key: "supplierContinuity", name: "Supplier & Continuity Risk", weight: 25 },
+  { key: "delivery",           name: "Delivery (Productivity & Reliability)", weight: 30 },
+  { key: "safety",             name: "Safety (Risk & Compliance)", weight: 20 },
+  { key: "premises",           name: "Premises & Facilities", weight: 25 },
 ];
+
+// Sectors where a business realistically needs production/storage/workshop
+// space — used only to sanity-check whether the declared premises type fits
+// the declared business, never to penalize services/professional businesses
+// for reasonably working out of an office.
+const PHYSICAL_SECTOR_KEYWORDS = [
+  "manufactur", "agricult", "construction", "mining", "logistics",
+  "warehous", "food", "industrial", "fabrication", "processing",
+];
+
+const sectorNeedsPhysicalPremises = (sectors = []) =>
+  (sectors || []).some((s) => PHYSICAL_SECTOR_KEYWORDS.some((k) => (s || "").toLowerCase().includes(k)));
+
 
 export function OperationalStrengthScoreCard({ styles, profileData, onScoreUpdate, apiKey }) {
   const { callFunction } = useFirebaseFunctions();
@@ -63,12 +92,13 @@ export function OperationalStrengthScoreCard({ styles, profileData, onScoreUpdat
     return () => (document.body.style.overflow = "");
   }, [showModal]);
 
-  // ── Parse the AI's 3 scored sections out of its markdown response ──
+  // ── Parse the AI's 4 scored sections out of its markdown response ──
   const parseAiEvaluationScores = (text) => {
     const categories = {
       supplierContinuity: ["Supplier & Continuity Risk"],
       delivery:            ["Delivery (Productivity & Reliability)", "Delivery"],
       safety:               ["Safety (Risk & Compliance)", "Safety"],
+      premises:             ["Premises & Facilities", "Premises"],
     };
 
     const cleanedText = text.replace(/\*\*(.*?)\*\*/g, "$1");
@@ -121,9 +151,13 @@ export function OperationalStrengthScoreCard({ styles, profileData, onScoreUpdat
     const ops = data?.operationsOverview || {};
     const yesNo = (v) => (v === true || v === "yes" || v === "Yes") ? 1 : 0;
 
-    // 1. Supplier & Continuity Risk — Q1 multipleSuppliers, Q2 contingencyPlan
+    // 1. Supplier & Continuity Risk — multipleSuppliers, contingencyPlan,
+    // and (if multipleSuppliers=yes) whether named supplier references were
+    // actually provided — a "yes" with zero named suppliers is weaker
+    // evidence than a "yes" backed by real supplier names.
+    const namedSuppliers = [1, 2, 3].filter((n) => ops?.[`supplier${n}Name`]).length;
     const supplierContinuity =
-      (yesNo(ops.multipleSuppliers) ? 2.5 : 0) +
+      (yesNo(ops.multipleSuppliers) ? (namedSuppliers > 0 ? 2.5 : 1.5) : 0) +
       (yesNo(ops.contingencyPlan) ? 2.5 : 0);
 
     // 2. Delivery — Q3 trackPerformanceMetrics, Q4 threeSuccessfulDeliveries, Q5 hasCapacityToIncrease
@@ -137,7 +171,52 @@ export function OperationalStrengthScoreCard({ styles, profileData, onScoreUpdat
       (yesNo(ops.hasFormalProcedures) ? 2.5 : 0) +
       (ops.hasMajorIncidents === "no" || ops.hasMajorIncidents === false ? 2.5 : 0);
 
-    return { supplierContinuity, delivery, safety };
+    // 4. Premises & Facilities — Section 5: premisesStatus, leaseExpiryDate,
+    // premisesType, premisesSize, hasBranches. `entitySectors` is pulled from
+    // Entity Overview deliberately — not as operational data itself, but as
+    // the only way to sanity-check whether the declared premises type fits
+    // the declared business. That's a genuine cross-check, not a mislabeled
+    // fake-source bug like the old fullTimeEmployees case.
+    const entitySectors = data?.entityOverview?.economicSectors || [];
+    const needsPhysical = sectorNeedsPhysicalPremises(entitySectors);
+    const fitPremisesTypes = ["warehouse", "factory", "workshop"];
+    const hasFitPremises = fitPremisesTypes.includes(ops.premisesType);
+
+    let premises = 0;
+
+    // Stability of tenure (max 1.5)
+    if (ops.premisesStatus === "owned") {
+      premises += 1.5;
+    } else if (ops.premisesStatus === "rented") {
+      const expiry = ops.leaseExpiryDate ? new Date(ops.leaseExpiryDate) : null;
+      const monthsToExpiry = expiry && !isNaN(expiry) ? (expiry - new Date()) / (1000 * 60 * 60 * 24 * 30) : null;
+      if (monthsToExpiry === null) premises += 0.75;       // status given, expiry unknown — partial credit
+      else if (monthsToExpiry > 6) premises += 1.25;       // lease secure for a while
+      else premises += 0.25;                                // DOCKED — lease expiring soon, continuity risk
+    }
+
+    // Premises fit-for-purpose (max 2) — the actual "docking point": a
+    // physical-goods business (manufacturing, agriculture, construction,
+    // logistics, etc.) declaring only office/retail/blank premises loses
+    // points here, since it can't realistically run production without
+    // production space.
+    if (needsPhysical) {
+      premises += hasFitPremises ? 2 : 0.25;
+    } else {
+      premises += ops.premisesType ? 1.5 : 1;
+    }
+
+    // Declared scale signal (max 1)
+    premises += Number(ops.premisesSize) > 0 ? 1 : 0.5;
+
+    // Branch data completeness (max 0.5) — only relevant if hasBranches
+    if (ops.hasBranches === "yes") {
+      premises += (ops.numberOfBranches && ops.branchLocations) ? 0.5 : 0.15;
+    } else {
+      premises += 0.5; // no branches declared — nothing to penalize
+    }
+
+    return { supplierContinuity, delivery, safety, premises: Math.min(5, premises) };
   };
 
   const calculateOperationalScore = (data, aiEvaluationResultText = "") => {
@@ -181,30 +260,71 @@ export function OperationalStrengthScoreCard({ styles, profileData, onScoreUpdat
     }
   }, [profileData, aiEvaluationResult]);
 
-  // Every line below is one literal field from OperationsOverview.js,
-  // grouped under the same 3 section headers used on that page, using the
-  // actual question wording so the AI can't mistake this for richer data
-  // than what was really collected.
+  // Every line below is one literal field from OperationsOverview.js, grouped
+  // under the same section headers used on that page, using the actual
+  // question wording so the AI can't mistake this for richer data than what
+  // was really collected.
   const prepareDataForEvaluation = (data) => {
     const ops = data?.operationsOverview || {};
+    const entitySectors = (data?.entityOverview?.economicSectors || []).join(", ") || "Not specified";
     let out = "";
 
     out += `\n=== OPERATIONAL STRENGTH (source: Operations Overview form) ===\n`;
+    out += `Declared business sector(s) (from Entity Overview, for premises-fit context only): ${entitySectors}\n`;
 
-    out += `\n--- Section 1: Supplier & Continuity Risk ---\n`;
-    out += `Q1. Relies on more than one key supplier for critical inputs/services: ${ops?.multipleSuppliers || "Not specified"}\n`;
-    out += `Q2. Has a documented contingency or continuity plan: ${ops?.contingencyPlan || "Not specified"}\n`;
+    out += `\n--- Section 1: Outsourcing & Value Chain (context only — do not score) ---\n`;
+    out += `Contracts out part of value chain: ${ops?.outsourcesValueChain || "Not specified"}\n`;
+    if (ops?.outsourcesValueChain === "yes") {
+      out += `Outsourced services: ${ops?.outsourcedServices || "Not specified"}\n`;
+      out += `Annual value of outsourced services: ${ops?.outsourcedValue ? `${ops.outsourcedValue} ${ops.outsourcedCurrency || "ZAR"}` : "Not specified"}\n`;
+    }
 
-    out += `\n--- Section 2: Delivery (Productivity & Reliability) ---\n`;
-    out += `Q3. Tracks operational performance metrics: ${ops?.trackPerformanceMetrics || "Not specified"}\n`;
-    out += `Q4. Delivered at least three contracts successfully in the past 12 months: ${ops?.threeSuccessfulDeliveries || "Not specified"}\n`;
-    out += `Q5. Has capacity to increase output without compromising quality: ${ops?.hasCapacityToIncrease || "Not specified"}\n`;
+    out += `\n--- Section 2: Import / Export (context only — do not score) ---\n`;
+    out += `Import/Export status: ${ops?.importExport || "none"}\n`;
+    if (ops?.importExport && ops.importExport !== "none") {
+      out += `Annual import/export value: ${ops?.importExportValue ? `${ops.importExportValue} ${ops.importExportCurrency || "ZAR"}` : "Not specified"}\n`;
+    }
 
-    out += `\n--- Section 3: Safety (Risk & Compliance) ---\n`;
-    out += `Q6. Has formal safety, risk, or compliance procedures: ${ops?.hasFormalProcedures || "Not specified"}\n`;
-    out += `Q7. Experienced major operational incidents in the past 24 months: ${ops?.hasMajorIncidents || "Not specified"}\n`;
+    out += `\n--- Section 3: Contract Operations (context only — do not score) ---\n`;
+    out += `Operates on a contract basis: ${ops?.operatesOnContract || "Not specified"}\n`;
+    if (ops?.operatesOnContract === "yes") {
+      out += `Total contracts value: ${ops?.totalContractValue ? `${ops.totalContractValue} ${ops.contractCurrency || "ZAR"}` : "Not specified"}\n`;
+    }
 
-    out += `\n--- Operational Challenges (free text, context only — do not score this on its own) ---\n`;
+    out += `\n--- Section 4: Supplier & Continuity Risk (SCORED) ---\n`;
+    out += `Q. Relies on more than one key supplier for critical inputs/services: ${ops?.multipleSuppliers || "Not specified"}\n`;
+    out += `Q. Has a documented contingency or continuity plan: ${ops?.contingencyPlan || "Not specified"}\n`;
+    if (ops?.multipleSuppliers === "yes") {
+      const suppliers = [1, 2, 3]
+        .map((n) => ops?.[`supplier${n}Name`])
+        .filter(Boolean);
+      out += `Named supplier references provided: ${suppliers.length > 0 ? suppliers.join(", ") : "None provided despite indicating multiple suppliers"}\n`;
+    }
+
+    out += `\n--- Section 5: Premises & Facilities (SCORED) ---\n`;
+    out += `Premises status: ${ops?.premisesStatus || "Not specified"}\n`;
+    if (ops?.premisesStatus === "rented") {
+      out += `Lease expiry date: ${ops?.leaseExpiryDate || "Not specified"}\n`;
+    }
+    out += `Premises type: ${ops?.premisesType || "Not specified"}\n`;
+    out += `Premises size: ${ops?.premisesSize ? `${ops.premisesSize} sqm` : "Not specified"}\n`;
+    out += `Has other branches: ${ops?.hasBranches || "Not specified"}\n`;
+    if (ops?.hasBranches === "yes") {
+      out += `Number of branches: ${ops?.numberOfBranches || "Not specified"}\n`;
+      out += `Branch location(s): ${ops?.branchLocations || "Not specified"}\n`;
+      out += `Staff at branches: ${ops?.branchStaff || "Not specified"}\n`;
+    }
+
+    out += `\n--- Section 6: Delivery (Productivity & Reliability) (SCORED) ---\n`;
+    out += `Q. Tracks operational performance metrics: ${ops?.trackPerformanceMetrics || "Not specified"}\n`;
+    out += `Q. Delivered at least three contracts successfully in the past 12 months: ${ops?.threeSuccessfulDeliveries || "Not specified"}\n`;
+    out += `Q. Has capacity to increase output without compromising quality: ${ops?.hasCapacityToIncrease || "Not specified"}\n`;
+
+    out += `\n--- Section 7: Safety (Risk & Compliance) (SCORED) ---\n`;
+    out += `Q. Has formal safety, risk, or compliance procedures: ${ops?.hasFormalProcedures || "Not specified"}\n`;
+    out += `Q. Experienced major operational incidents in the past 24 months: ${ops?.hasMajorIncidents || "Not specified"}\n`;
+
+    out += `\n--- Section 8: Operational Challenges (free text, context only — do not score) ---\n`;
     out += `${ops?.operationalChallenges || "Not specified"}\n`;
 
     return out;
@@ -236,39 +356,49 @@ ABSOLUTE SCORE RULES — NEVER VIOLATE:
 1. Only reference data explicitly provided in the input below. Do not invent, assume, or infer any operational detail — like team size, technology, headcount, or revenue — that isn't in this input; none of that is collected on this form.
 2. If a field says "Not specified", treat it as unproven, not as a positive signal.
 3. A score of 0 is valid and expected when there is no supporting evidence.
-4. There are exactly 3 scored categories below, matching the 3 sections of the Operations Overview form. Do not add, rename, or split them further.
+4. There are exactly 4 scored categories below: Supplier & Continuity Risk, Premises & Facilities, Delivery, and Safety. Sections marked "context only" (Outsourcing & Value Chain, Import/Export, Contract Operations, Operational Challenges) must NOT be given their own score — they may only be referenced in the Final Analysis at the end, since they're either free text or genuinely double-edged (e.g. importing/exporting can be a strength or a risk depending on context the form doesn't capture).
 
 Categories to evaluate:
 
 ### 1. Supplier & Continuity Risk
 **Score:** [0-5]
-**Evidence:** [cite only Q1 multiple-suppliers and Q2 contingency-plan answers]
+**Evidence:** [cite only the multiple-suppliers, contingency-plan, and named supplier reference answers from Section 4]
 **Confidence:** [High | Medium | Low]
 **Confidence Rationale:** [one sentence]
-**Rationale:** [explanation based only on Q1 and Q2]
+**Rationale:** [explanation based only on Section 4 data]
 **How to Improve:** 
-- → [Operations Overview, Section 1]: [specific action]
+- → [Operations Overview, Section 4]: [specific action]
 
-### 2. Delivery (Productivity & Reliability)
+### 2. Premises & Facilities
 **Score:** [0-5]
-**Evidence:** [cite only Q3 performance-tracking, Q4 successful-deliveries, and Q5 capacity-to-increase answers]
+**Evidence:** [cite only the premises status, lease expiry, premises type/size, and branch answers from Section 5]
 **Confidence:** [High | Medium | Low]
 **Confidence Rationale:** [one sentence]
-**Rationale:** [explanation based only on Q3, Q4, and Q5]
+**Rationale:** [explanation based only on Section 5 data]
+**Premises Fit Flag:** Compare the declared premises type against the declared business sector(s) at the top of the input. If the business is in a sector that typically needs production/storage space (e.g. manufacturing, agriculture, construction, logistics, food, industrial) but the declared premises type is office/retail/blank, explicitly call this out as a docking point and explain the operational risk (e.g. "no factory/workshop declared for a manufacturing business — production capacity is unverified"). If premises status is "rented" and the lease expiry date is within roughly 6 months, explicitly call out the continuity risk of an unrenewed lease. If neither applies, say so explicitly instead of inventing a flag.
 **How to Improve:** 
-- → [Operations Overview, Section 2]: [specific action]
+- → [Operations Overview, Section 5]: [specific action]
 
-### 3. Safety (Risk & Compliance)
+### 3. Delivery (Productivity & Reliability)
 **Score:** [0-5]
-**Evidence:** [cite only Q6 formal-procedures and Q7 major-incidents answers]
+**Evidence:** [cite only the performance-tracking, successful-deliveries, and capacity-to-increase answers from Section 6]
 **Confidence:** [High | Medium | Low]
 **Confidence Rationale:** [one sentence]
-**Rationale:** [explanation based only on Q6 and Q7]
+**Rationale:** [explanation based only on Section 6 data]
 **How to Improve:** 
-- → [Operations Overview, Section 3]: [specific action]
+- → [Operations Overview, Section 6]: [specific action]
+
+### 4. Safety (Risk & Compliance)
+**Score:** [0-5]
+**Evidence:** [cite only the formal-procedures and major-incidents answers from Section 7]
+**Confidence:** [High | Medium | Low]
+**Confidence Rationale:** [one sentence]
+**Rationale:** [explanation based only on Section 7 data]
+**How to Improve:** 
+- → [Operations Overview, Section 7]: [specific action]
 
 ### Overall Assessment
-**Final Analysis:** [Brief summary referencing only the 7 answers and the operational challenges text provided — do not reference anything else.]
+**Final Analysis:** [Brief summary. You may reference the context-only sections (Outsourcing & Value Chain, Import/Export, Contract Operations, Operational Challenges) here as qualitative color, but do not assign them a score or let them affect the 4 category scores above.]
 
 INPUT DATA:
 ${evalData}`;
@@ -492,7 +622,10 @@ ${evalData}`;
                 {showAboutScore && (
                   <div style={{ backgroundColor: "#f5f2f0", padding: "20px", color: "#5d4037" }}>
                     <p style={{ marginBottom: "16px", lineHeight: "1.6" }}>
-                      Operational Strength measures whether this business can reliably execute and deliver — supplier &amp; continuity risk, delivery reliability, and safety/compliance, drawn entirely from the Operations Overview form. It is one of the five pillars of the overall BIG Score, alongside Compliance, Legitimacy, Leadership &amp; Governance, and Financial Strength / Capital Appeal.
+                      Operational Strength measures whether this business can reliably execute and deliver — supplier &amp; continuity risk, premises &amp; facilities, delivery reliability, and safety/compliance, drawn entirely from the Operations Overview form. It is one of the five pillars of the overall BIG Score, alongside Compliance, Legitimacy, Leadership &amp; Governance, and Financial Strength / Capital Appeal.
+                    </p>
+                    <p style={{ marginBottom: "16px", lineHeight: "1.6", fontSize: "13px", fontStyle: "italic" }}>
+                      Outsourcing &amp; Value Chain, Import/Export, and Contract Operations are shown as context in the detailed analysis but aren't scored on their own — they're genuinely double-edged (e.g. importing can mean market diversification or forex exposure) and the form doesn't capture enough to say which.
                     </p>
                     <div style={{ backgroundColor: "#efebe9", padding: "14px", borderRadius: "8px", borderLeft: "4px solid #8d6e63" }}>
                       <p style={{ fontWeight: "bold", marginBottom: "8px", color: "#6d4c41" }}>Sub-component weighting:</p>

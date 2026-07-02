@@ -348,7 +348,7 @@ export function ComplianceScoreCard({ styles, profileData, onScoreUpdate }) {
                 whiteSpace: "nowrap",
               }}
             >
-              Compliance Score
+              Compliance
             </h2>
             <FileCheck size={24} style={{ opacity: 0.8 }} />
           </div>

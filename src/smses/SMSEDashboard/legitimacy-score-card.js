@@ -70,7 +70,6 @@ export function LegitimacyScoreCard({ styles, profileData, onScoreUpdate, apiKey
         const body = findSectionBody(label)
 
         if (body) {
-          // Extract evidence
           const evidencePatterns = [
             /Evidence:?\s*([^\n]+)/i,
             /Based on:?\s*([^\n]+)/i,
@@ -81,7 +80,6 @@ export function LegitimacyScoreCard({ styles, profileData, onScoreUpdate, apiKey
             if (mm) { evidence = mm[1].trim(); break }
           }
 
-          // Extract confidence
           const confidencePatterns = [
             /Confidence:?\s*(High|Medium|Low)/i,
             /Confidence level:?\s*(High|Medium|Low)/i
@@ -91,7 +89,6 @@ export function LegitimacyScoreCard({ styles, profileData, onScoreUpdate, apiKey
             if (mm) { confidence = mm[1]; break }
           }
 
-          // Extract score
           const scorePatterns = [
             /Score\s*:\s*(\d(?:\.\d)?)/i,
             /(\d(?:\.\d)?)\s*\/\s*5/i,
@@ -103,7 +100,6 @@ export function LegitimacyScoreCard({ styles, profileData, onScoreUpdate, apiKey
           }
         }
 
-        // Fallback patterns for your specific format
         const exactPattern = new RegExp(`\\*\\*\\d+\\.\\s*${label}\\s*:\\s*Score\\s+(\\d+)\\*\\*`, "i")
         const match = text.match(exactPattern)
         if (match && match[1]) {
@@ -118,7 +114,6 @@ export function LegitimacyScoreCard({ styles, profileData, onScoreUpdate, apiKey
       if (confidence) confidenceMap[key] = confidence
     })
 
-    // Extract overall confidence and evidence
     let overallConfidence = "Medium"
     let overallEvidence = null
 
@@ -128,7 +123,6 @@ export function LegitimacyScoreCard({ styles, profileData, onScoreUpdate, apiKey
     const evidenceMatch = cleanedText.match(/Evidence\s*Summary:?\s*([^\n]+)/i)
     if (evidenceMatch) overallEvidence = evidenceMatch[1].trim()
 
-    // Extract normalized score
     const normalizedPatterns = [
       /Normalized Score:\s*[:=]?\s*\(?(\d+)\/\d+\)?\s*\*\s*100\s*=\s*(\d+)/i,
       /Normalized Score:\s*[:=]?\s*(\d+)/i,
@@ -144,7 +138,6 @@ export function LegitimacyScoreCard({ styles, profileData, onScoreUpdate, apiKey
       }
     }
 
-    // Update state
     setConfidenceScores(confidenceMap)
     setEvidenceTraceability(evidenceMap)
 
@@ -167,7 +160,6 @@ export function LegitimacyScoreCard({ styles, profileData, onScoreUpdate, apiKey
           return
         }
       }
-      // If no saved result, run new evaluation
       console.log("No saved result found, running new evaluation")
       await runAiEvaluation()
     } catch (error) {
@@ -187,7 +179,6 @@ export function LegitimacyScoreCard({ styles, profileData, onScoreUpdate, apiKey
           console.log("Trigger detected: Running legitimacy AI evaluation...")
           setTriggeredByAuto(true)
           await runAiEvaluation()
-          // Reset the trigger to prevent repeated evaluations
           await updateDoc(docRef, {
             triggerLegitimacyEvaluation: false,
           })
@@ -218,7 +209,6 @@ export function LegitimacyScoreCard({ styles, profileData, onScoreUpdate, apiKey
     setShowDetailedAnalysis(true)
   }
 
-  // AI Evaluation Function
   const sendMessageToChatGPT = async (message) => {
     try {
       const functions = getFunctions();
@@ -238,15 +228,14 @@ export function LegitimacyScoreCard({ styles, profileData, onScoreUpdate, apiKey
     }
   };
 
-  // -- Helpers: normalize social links (accepts URL or handle) --
   const SOCIAL_BASE = {
     facebook: "https://facebook.com/",
     x: "https://x.com/",
-    twitter: "https://twitter.com/", // fallback if you ever store 'twitter'
+    twitter: "https://twitter.com/",
     linkedin: "https://www.linkedin.com/in/",
     instagram: "https://instagram.com/",
     youtube: "https://youtube.com/",
-    website: "", // pass through
+    website: "",
   }
 
   const cleanStr = (v) => (typeof v === "string" ? v.trim() : "")
@@ -255,13 +244,10 @@ export function LegitimacyScoreCard({ styles, profileData, onScoreUpdate, apiKey
     const v = cleanStr(value)
     if (!v) return ""
 
-    // Return URLs as-is
     if (/^https?:\/\//i.test(v)) return v
 
-    // Remove leading '@' for handles
     const handle = v.replace(/^@/, "")
 
-    // Pick base URL
     const base =
       platform === "x"
         ? SOCIAL_BASE.x
@@ -269,13 +255,11 @@ export function LegitimacyScoreCard({ styles, profileData, onScoreUpdate, apiKey
           ? SOCIAL_BASE.twitter
           : SOCIAL_BASE[platform] ?? ""
 
-    // Website gets passed through (if someone typed a bare domain, prefix https)
     if (platform === "website") {
       if (/^https?:\/\//i.test(handle)) return handle
       return `https://${handle}`
     }
 
-    // Construct normalized URL from handle
     return base ? `${base}${handle}` : handle
   }
 
@@ -296,7 +280,6 @@ export function LegitimacyScoreCard({ styles, profileData, onScoreUpdate, apiKey
           setTriggeredByAuto(true)
           const result = await runAiEvaluation(userId)
           await updateDoc(profileRef, { triggerLegitimacyEvaluation: false })
-          // Save result to aiLegitimacyEvaluation
           await updateDoc(aiEvalRef, {
             result,
             timestamp: new Date(),
@@ -312,7 +295,6 @@ export function LegitimacyScoreCard({ styles, profileData, onScoreUpdate, apiKey
           setShowDetailedAnalysis(true)
         }
       }
-      // ALWAYS try to load saved AI evaluation result
       try {
         const aiSnap = await getDoc(aiEvalRef)
         if (aiSnap.exists()) {
@@ -320,7 +302,6 @@ export function LegitimacyScoreCard({ styles, profileData, onScoreUpdate, apiKey
           if (saved.result) {
             console.log("Loading saved AI evaluation result")
             setAiEvaluationResult(saved.result)
-            // Don't automatically show the evaluation, just set the result
           }
         }
       } catch (error) {
@@ -346,7 +327,6 @@ export function LegitimacyScoreCard({ styles, profileData, onScoreUpdate, apiKey
     try {
       const evaluationData = prepareDataForAiEvaluation(profileData)
 
-      // Enhanced system prompt with guardrails and improved "How to Improve" section
       const systemPrompt = `You are a board-level business analyst evaluating business legitimacy.
     
 CRITICAL RULES:
@@ -409,6 +389,7 @@ Track Record platform actions:
 - Products & Services section → add key clients with industry and revenue contribution
 - Financial Overview section → update annual revenue
 - Financial Overview section → confirm revenue generation status
+- Entity Overview section → add brands owned under Brand Assets
 - 💡 Having named clients with known industries signals real commercial activity, even at early stage
 
 Third-Party Validation platform actions:
@@ -420,6 +401,8 @@ Third-Party Validation platform actions:
 - Document Upload section → upload support/reference letters
 - Products & Services section → add named key clients to increase bonus points
 - Enterprise Readiness section → confirm mentor/business advisor
+- Entity Overview section → indicate industry association membership under Business Details
+- Entity Overview section → add brands represented, franchises, or agencies held under Brand Assets
 
 SCORING RUBRIC (use strictly):
 - 0 = No evidence or very poor
@@ -441,6 +424,7 @@ INDUSTRY CONTEXT RULES FOR TRACK RECORD:
 - Growth stage (3-6 years): 3-5 clients expected for a 4/5. 2 clients = 3/5.
 - Scaling/Mature: Larger portfolios expected.
 - RULE: Always factor in operation stage when scoring. Penalising a 4-year startup for having 2 clients is incorrect — that is normal and healthy for the stage.
+- MEANING OF "BRANDS OWNED": if the business owns one or more proprietary brands (Entity Overview → Brand Assets → "Brands Owned"), this is evidence of built commercial assets beyond just trading history — treat a filled-in "Brands Owned" field as a positive Track Record signal, on top of years-in-operation and named clients, not a replacement for them.
 
 INDUSTRY CONTEXT RULES FOR IDENTITY MARKERS:
 - A business email on the company domain (e.g. @khanyisaagri.co.za), a website, logo, physical address, and proof of address together constitute a PERFECT 5/5. Do not look for additional items beyond these five to justify a lower score.
@@ -448,6 +432,8 @@ INDUSTRY CONTEXT RULES FOR IDENTITY MARKERS:
 INDUSTRY CONTEXT RULES FOR THIRD-PARTY VALIDATION:
 - BBBEE + Company Registration + Tax Clearance + at least 1 industry accreditation + support letters = 5/5 base score. Do not penalise for missing optional items when all critical documents are present.
 - Startup stage businesses are NOT expected to have awards, media features, or multiple accreditations. Presence of BBBEE, registration, tax clearance, and any accreditation is outstanding for this stage.
+- MEANING OF INDUSTRY ASSOCIATION MEMBERSHIP: membership of a recognised industry or trade association (Entity Overview → Business Details → "member of any industry association") is a genuine third-party validation signal — a business had to apply and be accepted by an external body. Treat confirmed membership with at least one named association as comparable in weight to holding one industry accreditation document.
+- MEANING OF BRANDS REPRESENTED / FRANCHISES / AGENCIES: "Brands Represented", "Holds Franchises", and "Holds Agencies" (Entity Overview → Brand Assets) all indicate that an external, established company (a brand owner, franchisor, or principal) has formally vetted and entrusted this business to represent or operate under their name. This is third-party validation by definition — another company staked its reputation on this business. Treat a "yes" to holding franchises or agencies, or a filled-in "Brands Represented" field, as a positive Third-Party Validation signal, distinct from and additive to BBBEE/registration/tax/accreditation documents — do not let it substitute for missing compliance documents, but do credit it as genuine external validation in its own right.
 
 
 OUTPUT FORMAT - YOU MUST FOLLOW THIS EXACTLY:
@@ -476,9 +462,9 @@ OUTPUT FORMAT - YOU MUST FOLLOW THIS EXACTLY:
 
 ### 3. Track Record
 **Score:** [0-5]
-**Evidence:** [Cite specific data: Years in operation = X, Named clients = Y with industries, Revenue = Z]
+**Evidence:** [Cite specific data: Years in operation = X, Named clients = Y with industries, Revenue = Z, Brands owned = V]
 **Confidence:** [High/Medium/Low]
-**Rationale:** [2-3 sentences. Score ONLY based on: (1) years in operation, (2) quality and number of named clients and their industries, (3) revenue figures. IGNORE paying customer status entirely — it is not provided and is not relevant to this score. Named clients with known industries are strong evidence of commercial activity.]
+**Rationale:** [2-3 sentences. Score based on: (1) years in operation, (2) quality and number of named clients and their industries, (3) revenue figures, (4) any brands owned as evidence of built commercial assets. IGNORE paying customer status entirely — it is not provided and is not relevant to this score. Named clients with known industries are strong evidence of commercial activity.]
 **How to Improve:** 
 - → [Platform Section Name]: [specific action with measurable goal]
 - → [Platform Section Name]: [specific action with measurable goal]
@@ -488,9 +474,9 @@ OUTPUT FORMAT - YOU MUST FOLLOW THIS EXACTLY:
 ### 4. Third-Party Validation
 **Score:** [0-5] (base score, max 5)
 **Bonus Points:** [+0 to +5 from client references, does not affect base score]
-**Evidence:** [Cite: BBBEE = X, Company Reg = Y, Tax Clearance = Z, Industry Accreditations = W, Support Letters = V, Client References = U]
+**Evidence:** [Cite: BBBEE = X, Company Reg = Y, Tax Clearance = Z, Industry Accreditations = W, Support Letters = V, Client References = U, Industry Association = T, Brands Represented/Franchises/Agencies = S]
 **Confidence:** [High/Medium/Low]
-**Rationale:** [2-3 sentences]
+**Rationale:** [2-3 sentences. Explicitly note whether industry association membership and/or brands represented/franchises/agencies contributed to this score, since both are genuine third-party validation signals distinct from compliance documents.]
 **How to Improve:** 
 - → [Platform Section Name]: [specific action with measurable goal]
 - → [Platform Section Name]: [specific action with measurable goal]
@@ -507,7 +493,6 @@ OUTPUT FORMAT - YOU MUST FOLLOW THIS EXACTLY:
 
       const result = await sendMessageToChatGPT(combinedMessage)
 
-      // Optional: Two-pass validation
       try {
         const validationPrompt = `Review this legitimacy analysis and identify ANY claims that are NOT directly supported by the provided data. List them:
 
@@ -538,7 +523,6 @@ If all claims are supported, respond with "VALIDATION PASSED". If unsupported cl
   const prepareDataForAiEvaluation = (data) => {
     let evaluationData = ""
 
-    // Identity Markers
     evaluationData += `\n=== IDENTITY MARKERS ===\n`
     evaluationData += `Website: ${data?.contactDetails?.website || "Not provided"}\n`
     evaluationData += `Email: ${data?.contactDetails?.email || "Not provided"}\n`
@@ -551,7 +535,6 @@ If all claims are supported, respond with "VALIDATION PASSED". If unsupported cl
 evaluationData += `Proof of Address: ${proofOfAddressAvailable ? "Available" : "Not provided"}\n`
 
 
-    // Digital Presence
     evaluationData += `\n=== DIGITAL PRESENCE ===\n`
 
     const socialsRaw = {
@@ -576,14 +559,11 @@ evaluationData += `Proof of Address: ${proofOfAddressAvailable ? "Available" : "
       evaluationData += `${label}: ${presentOrNot(url)}\n`
     })
 
-    // Simple count for the AI to use in scoring Digital Presence
     const socialPresentCount = Object.values(socialsNorm).filter(Boolean).length
     evaluationData += `Social Links Present (out of 6): ${socialPresentCount}\n`
 evaluationData += `WhatsApp Business: ${data?.contactDetails?.businessWhatsApp || data?.contactDetails?.whatsApp ? "Available" : "Not provided"}\n`
-    // Keep your visibility hint
     evaluationData += `Online Visibility: ${socialsNorm["Website"] ? "Present" : "Limited"}\n`
 
-    // Track Record
     evaluationData += `\n=== TRACK RECORD ===\n`
     evaluationData += `Years in Operation: ${data?.entityOverview?.yearsInOperation || "Not specified"}\n`
     evaluationData += `Operation Stage: ${data?.entityOverview?.operationStage || "Not specified"}\n`
@@ -598,6 +578,7 @@ evaluationData += `WhatsApp Business: ${data?.contactDetails?.businessWhatsApp |
     evaluationData += `Number of Named Clients: ${(data?.productsServices?.keyClients || []).filter(c => c?.name).length}\n`
     evaluationData += `Annual Revenue: ${data?.financialOverview?.annualRevenue || "Not provided"}\n`
     evaluationData += `Generates Revenue: ${data?.financialOverview?.generatesRevenue || "Not specified"}\n`
+    evaluationData += `Brands Owned: ${data?.entityOverview?.brandsOwned || "Not provided"}\n`
 
     evaluationData += `\n=== THIRD-PARTY VALIDATION ===\n`
 
@@ -613,14 +594,12 @@ const companyRegAvailable = !!(
 )
 evaluationData += `Company Registration: ${companyRegAvailable ? "Available" : "Not provided"}\n`
 
-    // Tax Clearance: single upload
     const taxClearanceAvailable = !!(
   data?.documents?.taxClearanceCert?.[0] ||
   data?.legalCompliance?.taxClearanceCert
 )
 evaluationData += `Tax Clearance Certificate: ${taxClearanceAvailable ? "Available" : "Not provided"}\n`
 
-    // Industry Accreditations: multi-upload stored at documents.industryAccreditations_multiple
   const accreditationDocs = data?.documents?.industryAccreditationDocs_multiple || []
 const accreditationDocsCount = accreditationDocs.filter(d => d?.url).length
 const accreditationNames = data?.legalCompliance?.industryAccreditations || []
@@ -631,7 +610,6 @@ evaluationData += `Industry Accreditations: ${accreditationTotal > 0
   ? `${accreditationTotal} document(s) — ${accreditationNames.join(", ") || "uploaded"}` 
   : "Not provided"}\n`
 
-    // Support Letters / Client References: multi-upload stored at documents.clientReferencesAndSupportLetters_multiple
     const supportLetterDocs = 
   data?.documents?.["Client References & Support Letters_multiple"] ||
   data?.documents?.clientReferencesAndSupportLetters_multiple || []
@@ -644,13 +622,28 @@ evaluationData += `Support Letters: ${supportLetterCount > 0
 
     evaluationData += `Has Mentor: ${data?.enterpriseReadiness?.hasMentor || "Not specified"}\n`
 
+    // Industry Association membership — genuine third-party validation: an
+    // external body reviewed and accepted this business as a member.
+    const isAssocMember = data?.entityOverview?.memberOfAssociation === "yes"
+    const assocList = data?.entityOverview?.industryAssociations || []
+    const assocOther = data?.entityOverview?.industryAssociationsOther
+    evaluationData += `Industry Association Membership: ${isAssocMember
+      ? `Yes — ${[...assocList.filter(a => a !== "Other"), assocOther].filter(Boolean).join(", ") || "member (not specified)"}`
+      : "Not a member / not specified"}\n`
+
+    // Brands Represented / Franchises / Agencies — another established
+    // company (brand owner, franchisor, or principal) formally vetted and
+    // entrusted this business to represent or operate under their name.
+    evaluationData += `Brands Represented: ${data?.entityOverview?.brandsRepresented || "Not provided"}\n`
+    evaluationData += `Holds Franchises: ${data?.entityOverview?.holdsFranchises || "Not specified"}\n`
+    evaluationData += `Holds Agencies: ${data?.entityOverview?.holdsAgencies || "Not specified"}\n`
+
     const keyClients = data?.productsServices?.keyClients || []
     const clientReferenceCount = keyClients.filter(c => c?.name).length
     evaluationData += `\n[BONUS — does not affect base score, max +5 points]\n`
     evaluationData += `Client References / Key Clients Listed: ${clientReferenceCount}\n`
     evaluationData += `Client Reference Bonus: ${clientReferenceCount >= 3 ? "+5 pts" : clientReferenceCount === 2 ? "+3 pts" : clientReferenceCount === 1 ? "+2 pts" : "+0 pts"}\n`
 
-    // Additional context
     evaluationData += `\n=== ADDITIONAL CONTEXT ===\n`
     evaluationData += `Business Description: ${data?.entityOverview?.businessDescription || data?.productsServices?.companyProfile || "Not provided"}\n`
     evaluationData += `Industry: ${data?.entityOverview?.industry || "Not specified"}\n`
@@ -659,13 +652,12 @@ evaluationData += `Support Letters: ${supportLetterCount > 0
     return evaluationData
   }
 
-  // Function to get progress bar color based on score with updated color scheme
   const getProgressBarColor = (score) => {
-    if (score > 90) return "#1B5E20" // Dark green
-    if (score >= 81) return "#4CAF50" // Green
-    if (score >= 61) return "#FF9800" // Orange
-    if (score >= 41) return "#F44336" // Red
-    return "#B71C1C" // Dark red
+    if (score > 90) return "#1B5E20"
+    if (score >= 81) return "#4CAF50"
+    if (score >= 61) return "#FF9800"
+    if (score >= 41) return "#F44336"
+    return "#B71C1C"
   }
 
  const mapStageToCategory = (stage) => {
@@ -678,7 +670,6 @@ evaluationData += `Support Letters: ${supportLetterCount > 0
   return "startup"
 }
 
-  // UPDATED WEIGHTINGS: Team & leadership removed, others redistributed
 const weightingsByStage = {
   "startup":    { foundational: 35, digital: 25, track: 15, thirdParty: 25 },
   "growth":     { foundational: 28, digital: 22, track: 25, thirdParty: 25 },
@@ -725,7 +716,6 @@ const weightingsByStage = {
     return { totalScore, breakdown }
   }
 
-  // Updated score levels with new labels and descriptions
   const getScoreLevel = (score) => {
     if (score >= 91)
       return {
@@ -766,27 +756,22 @@ const weightingsByStage = {
   const scoreLevel = getScoreLevel(legitimacyScore)
   const ScoreIcon = scoreLevel.icon
 
-  // UPDATED: Format AI result with improvement actions styling matching fundability-score-card
   const formatAiResult = (result) => {
     const cleanedResult = result.replace(/\*\*(.*?)\*\*/g, "$1")
 
-    // Split by major sections (### headers)
     const sections = cleanedResult.split(/(?=###\s)/g)
 
     return sections.map((section, index) => {
       const trimmed = section.trim()
       if (!trimmed) return null
 
-      // Check if this is a category section with "How to Improve"
       const isCategorySection = /^###\s+\d+\./.test(trimmed)
 
       if (isCategorySection) {
-        // Split the category section into parts
         const lines = trimmed.split('\n').filter(line => line.trim())
         const header = lines[0]
         const content = lines.slice(1).join('\n')
 
-        // Extract improvement section with special styling
         const improvementIndex = content.toLowerCase().indexOf('how to improve')
         let mainContent = content
         let improvementContent = ''
@@ -798,18 +783,15 @@ const weightingsByStage = {
 
         return (
           <div key={index} style={{ marginBottom: "20px", border: "1px solid #e8d8cf", borderRadius: "8px", overflow: "hidden" }}>
-            {/* Header */}
             <div style={{ backgroundColor: "#8d6e63", color: "white", padding: "12px 16px", fontWeight: "bold" }}>
               {header.replace('###', '').trim()}
             </div>
 
-            {/* Main Content */}
             <div style={{ padding: "16px", backgroundColor: "white" }}>
               <div style={{ whiteSpace: "pre-wrap", lineHeight: "1.6", color: "#5d4037", marginBottom: improvementContent ? "15px" : "0" }}>
                 {mainContent}
               </div>
 
-              {/* Improvement Section with Special Styling - MATCHING FUNDABILITY SCORE CARD */}
               {improvementContent && (
                 <div style={{
                   backgroundColor: "#f8f4f0",
@@ -843,7 +825,6 @@ const weightingsByStage = {
         )
       }
 
-      // Regular section formatting (for overall assessment, etc.)
       return (
         <div key={index} style={{ marginBottom: "15px" }}>
           <div style={{
@@ -865,7 +846,6 @@ const weightingsByStage = {
 
   return (
     <>
-      {/* Enhanced Outside Card Design */}
       <div
         style={{
           background: "linear-gradient(135deg, #ffffff 0%, #faf8f6 100%)",
@@ -874,11 +854,10 @@ const weightingsByStage = {
           border: "1px solid #e8ddd6",
           overflow: "hidden",
           position: "relative",
-          width: "100%", // Add this line to make it full width
-          minWidth: "210px", // Add this for minimum width
+          width: "100%",
+          minWidth: "210px",
         }}
       >
-        {/* Header with gradient */}
         <div
           style={{
             background: "linear-gradient(135deg, #8d6e63 0%, #6d4c41 100%)",
@@ -904,7 +883,7 @@ const weightingsByStage = {
                 whiteSpace: "nowrap",
               }}
             >
-              Legitimacy Score
+              Legitimacy
             </h2>
 
           </div>
@@ -919,7 +898,6 @@ const weightingsByStage = {
             Business credibility assessment
           </p>
 
-          {/* Decorative elements */}
           <div
             style={{
               position: "absolute",
@@ -945,7 +923,6 @@ const weightingsByStage = {
           ></div>
         </div>
 
-        {/* Main Content Area */}
         <div
           style={{
             padding: "24px",
@@ -953,7 +930,6 @@ const weightingsByStage = {
             textAlign: "center",
           }}
         >
-          {/* Score Circle with Connected Badge */}
           <div
             style={{
               position: "relative",
@@ -961,7 +937,6 @@ const weightingsByStage = {
               marginBottom: "24px",
             }}
           >
-            {/* Main Score Circle */}
             <div
               style={{
                 position: "relative",
@@ -999,7 +974,6 @@ const weightingsByStage = {
                 }}
               ></span>
 
-              {/* Animated ring */}
               <div
                 style={{
                   position: "absolute",
@@ -1014,7 +988,6 @@ const weightingsByStage = {
               ></div>
             </div>
 
-            {/* Connected Status Badge */}
             <div
               style={{
                 position: "absolute",
@@ -1038,7 +1011,6 @@ const weightingsByStage = {
             </div>
           </div>
 
-          {/* Action Buttons */}
           <div
             style={{
               display: "flex",
@@ -1046,7 +1018,6 @@ const weightingsByStage = {
               marginTop: "16px",
             }}
           >
-            {/* Action Button */}
             <button
               onClick={() => setShowModal(true)}
               style={{
@@ -1083,7 +1054,6 @@ const weightingsByStage = {
           </div>
         </div>
 
-        {/* CSS Animations */}
         <style jsx>{`
           @keyframes pulse {
             0% {
@@ -1102,7 +1072,6 @@ const weightingsByStage = {
         `}</style>
       </div>
 
-      {/* Enhanced Modal */}
       {showModal && (
         <div
           style={{
@@ -1313,7 +1282,6 @@ const weightingsByStage = {
                 )}
               </div>
 
-              {/* About the Legitimacy Score section */}
               <div
                 style={{
                   marginTop: "20px",
@@ -1379,11 +1347,13 @@ const weightingsByStage = {
                           <strong>Digital presence (29%):</strong> Social media presence and online discoverability
                         </li>
                         <li style={{ marginBottom: "6px" }}>
-                          <strong>Track record (21%):</strong> Years of operation, client portfolio, and revenue history
+                          <strong>Track record (21%):</strong> Years of operation, client portfolio, revenue history, and
+                          brands owned
                         </li>
                         <li style={{ marginBottom: "6px" }}>
-                          <strong>Third-party validations (14%):</strong> Industry certifications, accreditations, and
-                          compliance certificates
+                          <strong>Third-party validations (14%):</strong> Industry certifications, accreditations,
+                          compliance certificates, industry association membership, and brands represented / franchises /
+                          agencies held
                         </li>
                       </ul>
                     </div>
@@ -1449,7 +1419,6 @@ const weightingsByStage = {
                 )}
               </div>
 
-              {/* Score Breakdown Section */}
               <div
                 style={{
                   marginTop: "20px",
@@ -1586,7 +1555,6 @@ const weightingsByStage = {
                 )}
               </div>
 
-              {/* Detailed Analysis Section */}
               <div
                 style={{
                   marginTop: "20px",

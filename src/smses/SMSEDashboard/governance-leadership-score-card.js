@@ -270,15 +270,63 @@ export function GovernanceLeadershipScoreCard({ styles, profileData, onScoreUpda
       console.error("Error fetching CV data:", e)
     }
 
+    // ── Ownership & Management structure — feeds Leadership Structure ──
+    const om = profileData?.ownershipManagement || {}
+    const bl = om.businessLeadership || {}
+    const validShareholders = (om.shareholders || []).filter((s) => s?.name && s.name.trim() !== "")
+    const validDirectors = (om.directors || []).filter((d) => d?.name && d.name.trim() !== "")
+    const validExecutives = (om.executives || []).filter((e) => e?.name && e.name.trim() !== "")
+    const shareholderCount = validShareholders.length
+
+    const execSplit = validDirectors.reduce(
+      (acc, d) => {
+        if (d.execType === "Executive") acc.exec++
+        else if (d.execType === "Non-Executive") acc.nonExec++
+        else acc.unspecified++
+        return acc
+      },
+      { exec: 0, nonExec: 0, unspecified: 0 }
+    )
+
+    // ── Conflict of interest signal — feeds Leadership Behaviour ──
+    // A shareholder/director/executive with a declared ACTIVE interest in
+    // another operating business is a potential conflict of interest. This
+    // is a distinct data source from Governance.js's own conflict-of-interest
+    // section — both should be weighed, but this one is specifically tied to
+    // named individuals via the Ownership & Management "Interests Declaration".
+    const activeInterests = om.activeInterests || []
+    const previousInterests = om.previousInterests || []
+    const activeConflicts = activeInterests.filter((i) => i?.assignedTo && i.businessStatus && i.businessStatus !== "Closed")
+    const conflictSummary = activeConflicts.length > 0
+      ? activeConflicts.map((i) => `${i.assignedTo} — active interest in ${i.companyName || "unnamed company"} (status: ${i.businessStatus})`).join("; ")
+      : "None declared"
+
+    const employeeSummary = `Permanent: ${om.permanentEmployees || 0}, Contract: ${om.contractEmployees || 0}, Internship: ${om.internshipEmployees || 0}, Temporary: ${om.temporaryEmployees || 0}`
+
     return `
 STARTUP LEADERSHIP EVALUATION
 
 Founder/Director Profiles:
 ${cvText || "No CVs uploaded."}
 
-Business Leadership Data:
-Decision Governance: ${profileData?.ownershipManagement?.businessLeadership?.decisionGovernance || "Not specified"}
-Openness to Advice: ${profileData?.ownershipManagement?.businessLeadership?.opennessToAdvice || "Not specified"}
+Business Leadership Data (all 6 questions):
+Owner-Led Structure: ${bl.ownerLed || "Not specified"}
+Primary Motivation: ${bl.primaryMotivation || "Not specified"}
+Growth Ambition (5yr): ${bl.growthAmbition || "Not specified"}
+Founder Full-Time Involvement: ${bl.founderFullTime || "Not specified"}
+Openness to Advice: ${bl.opennessToAdvice || "Not specified"}
+Decision Governance: ${bl.decisionGovernance || "Not specified"}
+
+Ownership & Management Structure:
+Number of Shareholders: ${shareholderCount}${shareholderCount > 8 ? " — NOTE: a shareholder count this high for an SME can signal fragmented decision-making, slower governance, and dilution risk; treat this as a structure risk factor rather than automatically positive." : ""}
+Number of Directors: ${validDirectors.length} (Executive: ${execSplit.exec}, Non-Executive: ${execSplit.nonExec}, Unspecified: ${execSplit.unspecified})
+Number of Executives (management team beyond the board): ${validExecutives.length}
+Employee Composition: ${employeeSummary}
+
+Conflict of Interest Signal (from Interests Declaration):
+Active outside business interests held by shareholders/directors/executives: ${conflictSummary}
+Previous (closed) interests declared: ${previousInterests.length}
+${activeConflicts.length > 0 ? "NOTE: Named individuals with active interests in other operating businesses represent a potential conflict of interest for this business. Factor this into Leadership Behaviour — note whether it appears to be transparently disclosed here (it is, since it's declared) versus whether the scale or nature of the interest raises concern (e.g. an active director also running a business in a similar sector)." : ""}
 
 RESPONSE FORMAT (follow exactly):
 
@@ -290,12 +338,12 @@ Evidence: (cite specific data)
 ### 2. Leadership Structure
 Score: X/5
 Confidence: High | Medium | Low
-Evidence: (cite specific data)
+Evidence: (cite specific data — including shareholder count/concentration, director exec/non-exec balance, and management team depth)
 
 ### 3. Leadership Behaviour
 Score: X/5
 Confidence: High | Medium | Low
-Evidence: (cite specific data)
+Evidence: (cite specific data — including openness to advice and any conflict-of-interest signal from declared active business interests)
 `
   }
 
