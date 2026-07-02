@@ -308,6 +308,7 @@ const ProfileSummary = ({ data, onEdit }) => {
   }
 
   // ── Products & Services Section ──────────────────────────────────────────
+  // ── Products & Services Section ──────────────────────────────────────────
   const renderProductsServices = () => {
     const ps = data?.productsServices || {}
     
@@ -1060,105 +1061,249 @@ const ProfileSummary = ({ data, onEdit }) => {
 
             {/* ── Legal & Compliance ─────────────────────────────────── */}
             {renderLegalCompliance()}
-
             {/* ── Financial Overview ─────────────────────────────────── */}
             <div style={sectionCardStyle}>
               {renderSectionHeader("financialOverview", DollarSign, "Financial Overview")}
               {expandedSections.financialOverview && (
                 <div style={sectionContentStyle}>
                   <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginBottom: "12px" }}>A. Financial Performance</h3>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px", marginBottom: "20px" }}>
-                    <div style={fieldCardStyle}>
-                      <span style={fieldLabelStyle}>Generates Revenue</span>
-                      <span style={fieldValueStyle}>{formatLabel(data?.financialOverview?.generatesRevenue)}</span>
-                    </div>
-                    <div style={fieldCardStyle}>
-                      <span style={fieldLabelStyle}>Annual Revenue</span>
-                      <span style={fieldValueStyle}>{data?.financialOverview?.annualRevenue || "Not provided"}</span>
-                    </div>
-                    <div style={fieldCardStyle}>
-                      <span style={fieldLabelStyle}>Profitability Status</span>
-                      <span style={fieldValueStyle}>{formatLabel(data?.financialOverview?.profitabilityStatus)}</span>
-                    </div>
-                    <div style={fieldCardStyle}>
-                      <span style={fieldLabelStyle}>Revenue Trend</span>
-                      <span style={fieldValueStyle}>{formatLabel(data?.financialOverview?.revenueTrend)}</span>
-                    </div>
-                    <div style={fieldCardStyle}>
-                      <span style={fieldLabelStyle}>Current Valuation</span>
-                      <span style={fieldValueStyle}>{data?.financialOverview?.currentValuation || "Not provided"}</span>
-                    </div>
+                  
+                  {/* Income Statement */}
+                  <h4 style={{ fontSize: "14px", fontWeight: "600", color: "#5c3a1e", marginBottom: "8px", marginTop: "12px" }}>Income Statement</h4>
+                  <div style={{ ...fieldCardStyle, overflowX: "auto", marginBottom: "16px" }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
+                      <thead>
+                        <tr style={{ borderBottom: "2px solid #c8b6a6", backgroundColor: "#5c3a1e" }}>
+                          <th style={{ padding: "8px 10px", textAlign: "left", color: "#ffffff", fontWeight: "600", fontSize: "10px" }}>Line Item</th>
+                          <th style={{ padding: "8px 10px", textAlign: "right", color: "#ffffff", fontWeight: "600", fontSize: "10px" }}>Current Value</th>
+                          <th style={{ padding: "8px 10px", textAlign: "right", color: "#ffffff", fontWeight: "600", fontSize: "10px" }}>Previous Year</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {[
+                          { label: "Currency", current: data?.financialOverview?.incomeCurrency || "ZAR", previous: "" },
+                          { label: "Turnover / Revenue", current: data?.financialOverview?.incomeTurnoverCurrent, previous: data?.financialOverview?.incomeTurnoverPrevious },
+                          { label: "Cost of Goods Sold", current: data?.financialOverview?.incomeCOGSCurrent, previous: data?.financialOverview?.incomeCOGSPrevious },
+                          { label: "Gross Profit", current: data?.financialOverview?.incomeGrossProfitCurrent, previous: data?.financialOverview?.incomeGrossProfitPrevious, highlight: true },
+                          { label: "Operating Profit", current: data?.financialOverview?.incomeOperatingProfitCurrent, previous: data?.financialOverview?.incomeOperatingProfitPrevious },
+                          { label: "Net Profit", current: data?.financialOverview?.incomeNetProfitCurrent, previous: data?.financialOverview?.incomeNetProfitPrevious, highlight: true },
+                        ].map((row, idx) => {
+                          if (!row.current && !row.previous && row.label !== "Currency") return null
+                          return (
+                            <tr key={idx} style={{ borderBottom: "1px solid #e6d7c3", backgroundColor: row.highlight ? "#f9f7f3" : "transparent" }}>
+                              <td style={{ padding: "6px 10px", fontWeight: row.highlight ? "600" : "400", color: "#4a352f" }}>{row.label}</td>
+                              <td style={{ padding: "6px 10px", textAlign: "right", color: "#4a352f" }}>{row.current || (row.label === "Currency" ? "ZAR" : "Not provided")}</td>
+                              <td style={{ padding: "6px 10px", textAlign: "right", color: "#4a352f" }}>{row.previous || (row.label === "Currency" ? "" : "Not provided")}</td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Balance Sheet */}
+                  <h4 style={{ fontSize: "14px", fontWeight: "600", color: "#5c3a1e", marginBottom: "8px", marginTop: "12px" }}>Balance Sheet</h4>
+                  <div style={{ ...fieldCardStyle, overflowX: "auto", marginBottom: "16px" }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
+                      <thead>
+                        <tr style={{ borderBottom: "2px solid #c8b6a6", backgroundColor: "#5c3a1e" }}>
+                          <th style={{ padding: "8px 10px", textAlign: "left", color: "#ffffff", fontWeight: "600", fontSize: "10px" }}>Line Item</th>
+                          <th style={{ padding: "8px 10px", textAlign: "right", color: "#ffffff", fontWeight: "600", fontSize: "10px" }}>Current Value</th>
+                          <th style={{ padding: "8px 10px", textAlign: "right", color: "#ffffff", fontWeight: "600", fontSize: "10px" }}>Previous Year</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {[
+                          { label: "Current Assets", current: data?.financialOverview?.balanceCurrentAssetsCurrent, previous: data?.financialOverview?.balanceCurrentAssetsPrevious },
+                          { label: "Total Assets", current: data?.financialOverview?.balanceTotalAssetsCurrent, previous: data?.financialOverview?.balanceTotalAssetsPrevious, highlight: true },
+                          { label: "Current Liabilities", current: data?.financialOverview?.balanceCurrentLiabilitiesCurrent, previous: data?.financialOverview?.balanceCurrentLiabilitiesPrevious },
+                          { label: "Long Term Liabilities", current: data?.financialOverview?.balanceLongTermLiabilitiesCurrent, previous: data?.financialOverview?.balanceLongTermLiabilitiesPrevious },
+                          { label: "Equity", current: data?.financialOverview?.balanceEquityCurrent, previous: data?.financialOverview?.balanceEquityPrevious },
+                          { label: "Total Liabilities", current: data?.financialOverview?.balanceTotalLiabilitiesCurrent, previous: data?.financialOverview?.balanceTotalLiabilitiesPrevious, highlight: true },
+                        ].map((row, idx) => {
+                          if (!row.current && !row.previous) return null
+                          return (
+                            <tr key={idx} style={{ borderBottom: "1px solid #e6d7c3", backgroundColor: row.highlight ? "#f9f7f3" : "transparent" }}>
+                              <td style={{ padding: "6px 10px", fontWeight: row.highlight ? "600" : "400", color: "#4a352f" }}>{row.label}</td>
+                              <td style={{ padding: "6px 10px", textAlign: "right", color: "#4a352f" }}>{row.current || "Not provided"}</td>
+                              <td style={{ padding: "6px 10px", textAlign: "right", color: "#4a352f" }}>{row.previous || "Not provided"}</td>
+                            </tr>
+                          )
+                        })}
+                      </tbody>
+                    </table>
                   </div>
 
                   <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginBottom: "12px", marginTop: "20px" }}>B. Financial Management & Systems</h3>
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px", marginBottom: "20px" }}>
                     <div style={fieldCardStyle}>
-                      <span style={fieldLabelStyle}>Accounting Software</span>
-                      <span style={fieldValueStyle}>{formatLabel(data?.financialOverview?.hasAccountingSoftware)}</span>
-                    </div>
-                    <div style={fieldCardStyle}>
-                      <span style={fieldLabelStyle}>Software Name</span>
-                      <span style={fieldValueStyle}>{data?.financialOverview?.accountingSoftwareName || "N/A"}</span>
-                    </div>
-                    <div style={fieldCardStyle}>
                       <span style={fieldLabelStyle}>Books Up to Date</span>
                       <span style={fieldValueStyle}>{formatLabel(data?.financialOverview?.booksUpToDate)}</span>
                     </div>
+                    {data?.financialOverview?.booksUpToDateDetails && (
+                      <div style={fieldCardStyle}>
+                        <span style={fieldLabelStyle}>Books Up to Date Details</span>
+                        <span style={fieldValueStyle}>{data?.financialOverview?.booksUpToDateDetails}</span>
+                      </div>
+                    )}
                     <div style={fieldCardStyle}>
                       <span style={fieldLabelStyle}>Management Accounts</span>
                       <span style={fieldValueStyle}>{formatLabel(data?.financialOverview?.hasManagementAccounts)}</span>
                     </div>
+                    {data?.financialOverview?.latestManagementAccounts && (
+                      <div style={fieldCardStyle}>
+                        <span style={fieldLabelStyle}>Latest Management Accounts</span>
+                        <span style={fieldValueStyle}>{data?.financialOverview?.latestManagementAccounts}</span>
+                      </div>
+                    )}
+                    {data?.financialOverview?.managementAccountsDocs?.length > 0 && (
+                      <div style={fieldCardStyle}>
+                        <span style={fieldLabelStyle}>Management Accounts Docs</span>
+                        <span style={fieldValueStyle}>{data?.financialOverview?.managementAccountsDocs.length} file(s) uploaded</span>
+                      </div>
+                    )}
                   </div>
 
                   <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginBottom: "12px", marginTop: "20px" }}>C. Financial Credibility</h3>
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px", marginBottom: "20px" }}>
                     <div style={fieldCardStyle}>
+                      <span style={fieldLabelStyle}>Accounting Software</span>
+                      <span style={fieldValueStyle}>{formatLabel(data?.financialOverview?.hasAccountingSoftware)}</span>
+                    </div>
+                    {data?.financialOverview?.accountingSoftwareName && (
+                      <div style={fieldCardStyle}>
+                        <span style={fieldLabelStyle}>Software Name</span>
+                        <span style={fieldValueStyle}>{data?.financialOverview?.accountingSoftwareName}</span>
+                      </div>
+                    )}
+                    <div style={fieldCardStyle}>
+                      <span style={fieldLabelStyle}>Insured</span>
+                      <span style={fieldValueStyle}>{data?.financialOverview?.isInsured === "yes" ? "✅ Yes" : data?.financialOverview?.isInsured === "no" ? "❌ No" : "Not provided"}</span>
+                    </div>
+                    {data?.financialOverview?.isInsured === "yes" && (
+                      <>
+                        <div style={fieldCardStyle}>
+                          <span style={fieldLabelStyle}>Insurance Broker</span>
+                          <span style={fieldValueStyle}>{data?.financialOverview?.insuranceBrokerName || "Not provided"}</span>
+                        </div>
+                        <div style={fieldCardStyle}>
+                          <span style={fieldLabelStyle}>Insurance Contact</span>
+                          <span style={fieldValueStyle}>{data?.financialOverview?.insuranceBrokerContact || "Not provided"}</span>
+                        </div>
+                      </>
+                    )}
+                    <div style={fieldCardStyle}>
                       <span style={fieldLabelStyle}>Financial Statements</span>
                       <span style={fieldValueStyle}>{formatLabel(data?.financialOverview?.hasFinancialStatements)}</span>
                     </div>
+                    {data?.financialOverview?.financialStatementsYears?.length > 0 && (
+                      <div style={fieldCardStyle}>
+                        <span style={fieldLabelStyle}>Financial Statements Years</span>
+                        <span style={fieldValueStyle}>{data?.financialOverview?.financialStatementsYears.join(" • ")}</span>
+                      </div>
+                    )}
+                    {data?.financialOverview?.financialStatementsDocs?.length > 0 && (
+                      <div style={fieldCardStyle}>
+                        <span style={fieldLabelStyle}>Financial Statements Docs</span>
+                        <span style={fieldValueStyle}>{data?.financialOverview?.financialStatementsDocs.length} file(s) uploaded</span>
+                      </div>
+                    )}
                     <div style={fieldCardStyle}>
                       <span style={fieldLabelStyle}>Financials Audited</span>
                       <span style={fieldValueStyle}>{formatLabel(data?.financialOverview?.financialsAudited)}</span>
                     </div>
-                    <div style={fieldCardStyle}>
-                      <span style={fieldLabelStyle}>Existing Debt Status</span>
-                      <span style={fieldValueStyle}>{formatLabel(data?.financialOverview?.existingDebtStatus)}</span>
-                    </div>
-                    <div style={fieldCardStyle}>
-                      <span style={fieldLabelStyle}>Existing Debt Amount</span>
-                      <span style={fieldValueStyle}>{data?.financialOverview?.existingDebt || "N/A"}</span>
-                    </div>
+                    {data?.financialOverview?.auditedFinancialsDocs?.length > 0 && (
+                      <div style={fieldCardStyle}>
+                        <span style={fieldLabelStyle}>Audited Financials Docs</span>
+                        <span style={fieldValueStyle}>{data?.financialOverview?.auditedFinancialsDocs.length} file(s) uploaded</span>
+                      </div>
+                    )}
+                    {data?.financialOverview?.auditorCompanyName && (
+                      <div style={fieldCardStyle}>
+                        <span style={fieldLabelStyle}>Auditor</span>
+                        <span style={fieldValueStyle}>{data?.financialOverview?.auditorCompanyName}</span>
+                      </div>
+                    )}
                   </div>
 
+                  {/* Liabilities */}
+                  <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginBottom: "12px", marginTop: "20px" }}>Liabilities</h3>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px", marginBottom: "20px" }}>
+                    {data?.financialOverview?.salesTerms && (
+                      <div style={fieldCardStyle}>
+                        <span style={fieldLabelStyle}>Sales Terms</span>
+                        <span style={fieldValueStyle}>{data?.financialOverview?.salesTerms}</span>
+                      </div>
+                    )}
+                    <div style={fieldCardStyle}>
+                      <span style={fieldLabelStyle}>Has Overdraft</span>
+                      <span style={fieldValueStyle}>{data?.financialOverview?.hasOverdraft === "yes" ? "✅ Yes" : data?.financialOverview?.hasOverdraft === "no" ? "❌ No" : "Not provided"}</span>
+                    </div>
+                    {data?.financialOverview?.hasOverdraft === "yes" && (
+                      <>
+                        <div style={fieldCardStyle}>
+                          <span style={fieldLabelStyle}>Overdraft Value</span>
+                          <span style={fieldValueStyle}>{data?.financialOverview?.overdraftValue || "Not provided"}</span>
+                        </div>
+                        <div style={fieldCardStyle}>
+                          <span style={fieldLabelStyle}>Overdraft Utilised</span>
+                          <span style={fieldValueStyle}>{formatLabel(data?.financialOverview?.overdraftUtilised)}</span>
+                        </div>
+                      </>
+                    )}
+                    <div style={fieldCardStyle}>
+                      <span style={fieldLabelStyle}>Directors Surety</span>
+                      <span style={fieldValueStyle}>{data?.financialOverview?.directorsSurety === "yes" ? "✅ Yes" : data?.financialOverview?.directorsSurety === "no" ? "❌ No" : "Not provided"}</span>
+                    </div>
+                    <div style={fieldCardStyle}>
+                      <span style={fieldLabelStyle}>Debtors Ceded</span>
+                      <span style={fieldValueStyle}>{data?.financialOverview?.debtorsCeded === "yes" ? "✅ Yes" : data?.financialOverview?.debtorsCeded === "no" ? "❌ No" : "Not provided"}</span>
+                    </div>
+                    {data?.financialOverview?.bonds && (
+                      <div style={fieldCardStyle}>
+                        <span style={fieldLabelStyle}>Bonds</span>
+                        <span style={fieldValueStyle}>{data?.financialOverview?.bonds}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Financial Challenges */}
                   {(data?.financialOverview?.financialChallenges?.length > 0 || data?.financialOverview?.financialChallengesElaboration) && (
                     <>
                       <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginBottom: "12px", marginTop: "20px" }}>D. Financial Challenges</h3>
                       {data?.financialOverview?.financialChallenges?.length > 0 && (
                         <div style={{ ...fieldCardStyle, marginBottom: "12px" }}>
                           <span style={fieldLabelStyle}>Challenges</span>
-                          <span style={fieldValueStyle}>{data.financialOverview.financialChallenges.map(c => formatLabel(c)).join(" • ")}</span>
+                          <span style={fieldValueStyle}>{data?.financialOverview?.financialChallenges.map(c => formatLabel(c)).join(" • ")}</span>
                         </div>
                       )}
                       {data?.financialOverview?.financialChallengesElaboration && (
                         <div style={{ background: "rgba(166,124,82,0.1)", borderRadius: "12px", padding: "16px", border: "1px solid rgba(166,124,82,0.2)" }}>
                           <span style={{ ...fieldLabelStyle, fontWeight: "700" }}>Elaboration</span>
-                          <p style={{ fontSize: "14px", color: "#4a352f", lineHeight: "1.6", margin: 0 }}>{data.financialOverview.financialChallengesElaboration}</p>
+                          <p style={{ fontSize: "14px", color: "#4a352f", lineHeight: "1.6", margin: 0 }}>{data?.financialOverview?.financialChallengesElaboration}</p>
                         </div>
                       )}
                     </>
                   )}
 
+                  {/* Support Intent */}
                   <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginBottom: "12px", marginTop: "20px" }}>E. Support Intent</h3>
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px" }}>
                     <div style={fieldCardStyle}>
                       <span style={fieldLabelStyle}>Seeking Funding</span>
                       <span style={fieldValueStyle}>{formatLabel(data?.financialOverview?.seekingFunding)}</span>
                     </div>
+                    {data?.financialOverview?.fundraisingHistory && (
+                      <div style={fieldCardStyle}>
+                        <span style={fieldLabelStyle}>Fundraising History</span>
+                        <span style={fieldValueStyle}>{data?.financialOverview?.fundraisingHistory}</span>
+                      </div>
+                    )}
                     <div style={fieldCardStyle}>
                       <span style={fieldLabelStyle}>Support Type Needed</span>
                       <span style={fieldValueStyle}>
                         {data?.financialOverview?.supportTypeNeeded?.length > 0 
-                          ? data.financialOverview.supportTypeNeeded.map(s => formatLabel(s)).join(" • ") 
+                          ? data?.financialOverview?.supportTypeNeeded.map(s => formatLabel(s)).join(" • ") 
                           : "None"}
                       </span>
                     </div>
@@ -1166,14 +1311,18 @@ const ProfileSummary = ({ data, onEdit }) => {
                 </div>
               )}
             </div>
+          
 
             {/* ── Operations Overview ─────────────────────────────────── */}
+                     {/* ── Operations Overview ─────────────────────────────────── */}
             <div style={sectionCardStyle}>
               {renderSectionHeader("operationsOverview", FileCheck, "Operations Overview")}
               {expandedSections.operationsOverview && (
                 <div style={sectionContentStyle}>
                   <p style={{ fontSize: "14px", color: "#7d5a50", marginBottom: "20px", fontWeight: "500", fontStyle: "italic" }}>BIG Score – Operational Strength (Risk-Based Yes/No Model)</p>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px", marginBottom: "20px" }}>
+                  
+                  {/* BIG Score Questions */}
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px", marginBottom: "24px" }}>
                     <div style={fieldCardStyle}>
                       <span style={fieldLabelStyle}>Q1. Multiple Key Suppliers</span>
                       <span style={fieldValueStyle}>{data?.operationsOverview?.multipleSuppliers === "yes" ? "✅ Yes" : data?.operationsOverview?.multipleSuppliers === "no" ? "❌ No" : "Not answered"}</span>
@@ -1207,7 +1356,7 @@ const ProfileSummary = ({ data, onEdit }) => {
                   {/* Outsourcing & Value Chain */}
                   {data?.operationsOverview?.outsourcesValueChain && (
                     <>
-                      <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginTop: "24px", marginBottom: "12px" }}>Outsourcing & Value Chain</h3>
+                      <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginTop: "24px", marginBottom: "12px" }}>1. Outsourcing & Value Chain</h3>
                       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px", marginBottom: "12px" }}>
                         <div style={fieldCardStyle}>
                           <span style={fieldLabelStyle}>Outsources Value Chain</span>
@@ -1236,7 +1385,7 @@ const ProfileSummary = ({ data, onEdit }) => {
                   {/* Import/Export */}
                   {data?.operationsOverview?.importExport && data?.operationsOverview?.importExport !== "none" && (
                     <>
-                      <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginTop: "24px", marginBottom: "12px" }}>Import / Export</h3>
+                      <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginTop: "24px", marginBottom: "12px" }}>2. Import / Export</h3>
                       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px", marginBottom: "16px" }}>
                         <div style={fieldCardStyle}>
                           <span style={fieldLabelStyle}>Import/Export Status</span>
@@ -1257,7 +1406,7 @@ const ProfileSummary = ({ data, onEdit }) => {
                   {/* Contract Operations */}
                   {data?.operationsOverview?.operatesOnContract && (
                     <>
-                      <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginTop: "24px", marginBottom: "12px" }}>Contract Operations</h3>
+                      <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginTop: "24px", marginBottom: "12px" }}>3. Contract Operations</h3>
                       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px", marginBottom: "16px" }}>
                         <div style={fieldCardStyle}>
                           <span style={fieldLabelStyle}>Operates on Contract</span>
@@ -1280,7 +1429,7 @@ const ProfileSummary = ({ data, onEdit }) => {
                   {/* Supplier References */}
                   {(data?.operationsOverview?.supplier1Name || data?.operationsOverview?.supplier2Name || data?.operationsOverview?.supplier3Name) && (
                     <>
-                      <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginTop: "24px", marginBottom: "12px" }}>Supplier References</h3>
+                      <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginTop: "24px", marginBottom: "12px" }}>4. Supplier References</h3>
                       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px" }}>
                         {[1, 2, 3].map(num => {
                           const name = data?.operationsOverview?.[`supplier${num}Name`]
@@ -1301,7 +1450,7 @@ const ProfileSummary = ({ data, onEdit }) => {
                   {/* Premises & Facilities */}
                   {data?.operationsOverview?.premisesStatus && (
                     <>
-                      <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginTop: "24px", marginBottom: "12px" }}>Premises & Facilities</h3>
+                      <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginTop: "24px", marginBottom: "12px" }}>5. Premises & Facilities</h3>
                       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "16px", marginBottom: "12px" }}>
                         <div style={fieldCardStyle}>
                           <span style={fieldLabelStyle}>Premises Status</span>
@@ -1348,7 +1497,7 @@ const ProfileSummary = ({ data, onEdit }) => {
                   {/* Industry Accreditations */}
                   {data?.operationsOverview?.industryAccreditations?.length > 0 && (
                     <>
-                      <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginTop: "24px", marginBottom: "12px" }}>Industry Accreditations</h3>
+                      <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginTop: "24px", marginBottom: "12px" }}>6. Industry Accreditations</h3>
                       <div style={fieldCardStyle}>
                         <span style={fieldValueStyle}>
                           {data?.operationsOverview?.industryAccreditations.map(a => formatLabel(a)).join(" • ")}
@@ -1365,7 +1514,7 @@ const ProfileSummary = ({ data, onEdit }) => {
                   {/* Operational Challenges */}
                   {data?.operationsOverview?.operationalChallenges && (
                     <>
-                      <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginTop: "24px", marginBottom: "12px" }}>Operational Challenges</h3>
+                      <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4a352f", marginTop: "24px", marginBottom: "12px" }}>9. Operational Challenges</h3>
                       <div style={{ background: "rgba(166,124,82,0.1)", borderRadius: "12px", padding: "16px", border: "1px solid rgba(166,124,82,0.2)" }}>
                         <p style={{ fontSize: "14px", color: "#4a352f", lineHeight: "1.6", margin: 0 }}>{data?.operationsOverview?.operationalChallenges}</p>
                       </div>
@@ -1374,7 +1523,6 @@ const ProfileSummary = ({ data, onEdit }) => {
                 </div>
               )}
             </div>
-
             {/* ── Governance ─────────────────────────────────────────── */}
             <div style={sectionCardStyle}>
               {renderSectionHeader("governance", FileCheck, "Governance")}
