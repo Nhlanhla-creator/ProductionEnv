@@ -247,893 +247,891 @@ const FinancialOverview = ({ data, updateData, apiKey, onEvaluationComplete }) =
         <h3>A. Financial Performance (Reality)</h3>
       </div>
 
-      {/* Current Value Input - Now for amount, not year */}
-     
-
-      {/* Income Statement Table - Dark brown header matching Ownership Management */}
-      <div style={{ marginBottom: "2rem" }}>
-        <h4 style={{ color: "#8b5e3c", marginBottom: "1rem", fontWeight: "600" }}>Income Statement</h4>
-        <div style={{ overflowX: "auto" }}>
-          <table
-            style={{
-              width: "100%",
-              maxWidth: "700px",
-              borderCollapse: "collapse",
-              border: "1px solid #d6c4a8",
-              fontSize: "14px",
-            }}
-          >
-            <thead>
-              <tr style={{ backgroundColor: "#5c3a1e" }}>
-                <th style={thStyle}></th>
-                <th style={thStyleRight}>Current Value</th>
-                <th style={thStyleRight}>Previous Financial Year</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td
-                  style={{
-                    padding: "8px 12px",
-                    borderBottom: "1px solid #d6c4a8",
-                    fontWeight: "500",
-                  }}
-                >
-                  Currency
-                </td>
-                <td
-                  style={{
-                    padding: "8px 12px",
-                    borderBottom: "1px solid #d6c4a8",
-                    textAlign: "right",
-                  }}
-                >
-                  <select
-                    value={data.incomeCurrency || "ZAR"}
-                    onChange={(e) => handleInputChange("incomeCurrency", e.target.value)}
+      {/* Financial Statements Side by Side */}
+      <div style={{ display: "flex", gap: "2rem", flexWrap: "wrap", marginBottom: "2rem" }}>
+        {/* Income Statement Table */}
+        <div style={{ flex: "1 1 45%", minWidth: "300px" }}>
+          <h4 style={{ color: "#8b5e3c", marginBottom: "1rem", fontWeight: "600" }}>Income Statement</h4>
+          <div style={{ overflowX: "auto" }}>
+            <table
+              style={{
+                width: "100%",
+                borderCollapse: "collapse",
+                border: "1px solid #d6c4a8",
+                fontSize: "14px",
+              }}
+            >
+              <thead>
+                <tr style={{ backgroundColor: "#5c3a1e" }}>
+                  <th style={thStyle}></th>
+                  <th style={thStyleRight}>Current Value</th>
+                  <th style={thStyleRight}>Previous Financial Year</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td
                     style={{
-                      width: "100%",
-                      maxWidth: "120px",
-                      padding: "6px",
-                      border: "1px solid #d6c4a8",
-                      borderRadius: "4px",
+                      padding: "8px 12px",
+                      borderBottom: "1px solid #d6c4a8",
+                      fontWeight: "500",
                     }}
                   >
-                    <option value="ZAR">ZAR (R)</option>
-                    <option value="USD">USD ($)</option>
-                    <option value="EUR">EUR (€)</option>
-                    <option value="GBP">GBP (£)</option>
-                  </select>
-                </td>
-                <td
-                  style={{
-                    padding: "8px 12px",
-                    borderBottom: "1px solid #d6c4a8",
-                    textAlign: "right",
-                  }}
-                ></td>
-              </tr>
-              <tr>
-                <td
-                  style={{
-                    padding: "8px 12px",
-                    borderBottom: "1px solid #d6c4a8",
-                    fontWeight: "500",
-                  }}
-                >
-                  Turnover / Revenue
-                </td>
-                <td
-                  style={{
-                    padding: "8px 12px",
-                    borderBottom: "1px solid #d6c4a8",
-                    textAlign: "right",
-                  }}
-                >
-                  <input
-                    type="text"
-                    value={currencyValues.incomeTurnoverCurrent}
-                    onChange={(e) =>
-                      handleCurrencyChange("incomeTurnoverCurrent", e.target.value)
-                    }
-                    onBlur={(e) =>
-                      handleCurrencyBlur("incomeTurnoverCurrent", e.target.value)
-                    }
-                    onFocus={(e) =>
-                      handleCurrencyFocus("incomeTurnoverCurrent", e.target.value)
-                    }
+                    Currency
+                  </td>
+                  <td
                     style={{
-                      width: "100%",
-                      maxWidth: "160px",
-                      padding: "6px",
-                      border: "1px solid #d6c4a8",
-                      borderRadius: "4px",
+                      padding: "8px 12px",
+                      borderBottom: "1px solid #d6c4a8",
                       textAlign: "right",
                     }}
-                    placeholder="R 0"
-                  />
-                </td>
-                <td
-                  style={{
-                    padding: "8px 12px",
-                    borderBottom: "1px solid #d6c4a8",
-                    textAlign: "right",
-                  }}
-                >
-                  <input
-                    type="text"
-                    value={currencyValues.incomeTurnoverPrevious}
-                    onChange={(e) =>
-                      handleCurrencyChange("incomeTurnoverPrevious", e.target.value)
-                    }
-                    onBlur={(e) =>
-                      handleCurrencyBlur("incomeTurnoverPrevious", e.target.value)
-                    }
-                    onFocus={(e) =>
-                      handleCurrencyFocus("incomeTurnoverPrevious", e.target.value)
-                    }
+                  >
+                    <select
+                      value={data.incomeCurrency || "ZAR"}
+                      onChange={(e) => handleInputChange("incomeCurrency", e.target.value)}
+                      style={{
+                        width: "100%",
+                        maxWidth: "120px",
+                        padding: "6px",
+                        border: "1px solid #d6c4a8",
+                        borderRadius: "4px",
+                      }}
+                    >
+                      <option value="ZAR">ZAR (R)</option>
+                      <option value="USD">USD ($)</option>
+                      <option value="EUR">EUR (€)</option>
+                      <option value="GBP">GBP (£)</option>
+                    </select>
+                  </td>
+                  <td
                     style={{
-                      width: "100%",
-                      maxWidth: "160px",
-                      padding: "6px",
-                      border: "1px solid #d6c4a8",
-                      borderRadius: "4px",
+                      padding: "8px 12px",
+                      borderBottom: "1px solid #d6c4a8",
                       textAlign: "right",
                     }}
-                    placeholder="R 0"
-                  />
-                </td>
-              </tr>
-              <tr>
-                <td
-                  style={{
-                    padding: "8px 12px",
-                    borderBottom: "1px solid #d6c4a8",
-                    fontWeight: "500",
-                  }}
-                >
-                  Cost of Goods Sold
-                </td>
-                <td
-                  style={{
-                    padding: "8px 12px",
-                    borderBottom: "1px solid #d6c4a8",
-                    textAlign: "right",
-                  }}
-                >
-                  <input
-                    type="text"
-                    value={currencyValues.incomeCOGSCurrent}
-                    onChange={(e) =>
-                      handleCurrencyChange("incomeCOGSCurrent", e.target.value)
-                    }
-                    onBlur={(e) =>
-                      handleCurrencyBlur("incomeCOGSCurrent", e.target.value)
-                    }
-                    onFocus={(e) =>
-                      handleCurrencyFocus("incomeCOGSCurrent", e.target.value)
-                    }
+                  ></td>
+                </tr>
+                <tr>
+                  <td
                     style={{
-                      width: "100%",
-                      maxWidth: "160px",
-                      padding: "6px",
-                      border: "1px solid #d6c4a8",
-                      borderRadius: "4px",
+                      padding: "8px 12px",
+                      borderBottom: "1px solid #d6c4a8",
+                      fontWeight: "500",
+                    }}
+                  >
+                    Turnover / Revenue
+                  </td>
+                  <td
+                    style={{
+                      padding: "8px 12px",
+                      borderBottom: "1px solid #d6c4a8",
                       textAlign: "right",
                     }}
-                    placeholder="R 0"
-                  />
-                </td>
-                <td
-                  style={{
-                    padding: "8px 12px",
-                    borderBottom: "1px solid #d6c4a8",
-                    textAlign: "right",
-                  }}
-                >
-                  <input
-                    type="text"
-                    value={currencyValues.incomeCOGSPrevious}
-                    onChange={(e) =>
-                      handleCurrencyChange("incomeCOGSPrevious", e.target.value)
-                    }
-                    onBlur={(e) =>
-                      handleCurrencyBlur("incomeCOGSPrevious", e.target.value)
-                    }
-                    onFocus={(e) =>
-                      handleCurrencyFocus("incomeCOGSPrevious", e.target.value)
-                    }
+                  >
+                    <input
+                      type="text"
+                      value={currencyValues.incomeTurnoverCurrent}
+                      onChange={(e) =>
+                        handleCurrencyChange("incomeTurnoverCurrent", e.target.value)
+                      }
+                      onBlur={(e) =>
+                        handleCurrencyBlur("incomeTurnoverCurrent", e.target.value)
+                      }
+                      onFocus={(e) =>
+                        handleCurrencyFocus("incomeTurnoverCurrent", e.target.value)
+                      }
+                      style={{
+                        width: "100%",
+                        maxWidth: "160px",
+                        padding: "6px",
+                        border: "1px solid #d6c4a8",
+                        borderRadius: "4px",
+                        textAlign: "right",
+                      }}
+                      placeholder="R 0"
+                    />
+                  </td>
+                  <td
                     style={{
-                      width: "100%",
-                      maxWidth: "160px",
-                      padding: "6px",
-                      border: "1px solid #d6c4a8",
-                      borderRadius: "4px",
+                      padding: "8px 12px",
+                      borderBottom: "1px solid #d6c4a8",
                       textAlign: "right",
                     }}
-                    placeholder="R 0"
-                  />
-                </td>
-              </tr>
-              <tr style={{ backgroundColor: "#f9f7f3" }}>
-                <td
-                  style={{
-                    padding: "8px 12px",
-                    borderBottom: "1px solid #d6c4a8",
-                    fontWeight: "600",
-                  }}
-                >
-                  Gross Profit
-                </td>
-                <td
-                  style={{
-                    padding: "8px 12px",
-                    borderBottom: "1px solid #d6c4a8",
-                    textAlign: "right",
-                  }}
-                >
-                  <input
-                    type="text"
-                    value={currencyValues.incomeGrossProfitCurrent}
-                    onChange={(e) =>
-                      handleCurrencyChange("incomeGrossProfitCurrent", e.target.value)
-                    }
-                    onBlur={(e) =>
-                      handleCurrencyBlur("incomeGrossProfitCurrent", e.target.value)
-                    }
-                    onFocus={(e) =>
-                      handleCurrencyFocus("incomeGrossProfitCurrent", e.target.value)
-                    }
+                  >
+                    <input
+                      type="text"
+                      value={currencyValues.incomeTurnoverPrevious}
+                      onChange={(e) =>
+                        handleCurrencyChange("incomeTurnoverPrevious", e.target.value)
+                      }
+                      onBlur={(e) =>
+                        handleCurrencyBlur("incomeTurnoverPrevious", e.target.value)
+                      }
+                      onFocus={(e) =>
+                        handleCurrencyFocus("incomeTurnoverPrevious", e.target.value)
+                      }
+                      style={{
+                        width: "100%",
+                        maxWidth: "160px",
+                        padding: "6px",
+                        border: "1px solid #d6c4a8",
+                        borderRadius: "4px",
+                        textAlign: "right",
+                      }}
+                      placeholder="R 0"
+                    />
+                  </td>
+                </tr>
+                <tr>
+                  <td
                     style={{
-                      width: "100%",
-                      maxWidth: "160px",
-                      padding: "6px",
-                      border: "1px solid #d6c4a8",
-                      borderRadius: "4px",
+                      padding: "8px 12px",
+                      borderBottom: "1px solid #d6c4a8",
+                      fontWeight: "500",
+                    }}
+                  >
+                    Cost of Goods Sold
+                  </td>
+                  <td
+                    style={{
+                      padding: "8px 12px",
+                      borderBottom: "1px solid #d6c4a8",
                       textAlign: "right",
                     }}
-                    placeholder="R 0"
-                  />
-                </td>
-                <td
-                  style={{
-                    padding: "8px 12px",
-                    borderBottom: "1px solid #d6c4a8",
-                    textAlign: "right",
-                  }}
-                >
-                  <input
-                    type="text"
-                    value={currencyValues.incomeGrossProfitPrevious}
-                    onChange={(e) =>
-                      handleCurrencyChange("incomeGrossProfitPrevious", e.target.value)
-                    }
-                    onBlur={(e) =>
-                      handleCurrencyBlur("incomeGrossProfitPrevious", e.target.value)
-                    }
-                    onFocus={(e) =>
-                      handleCurrencyFocus("incomeGrossProfitPrevious", e.target.value)
-                    }
+                  >
+                    <input
+                      type="text"
+                      value={currencyValues.incomeCOGSCurrent}
+                      onChange={(e) =>
+                        handleCurrencyChange("incomeCOGSCurrent", e.target.value)
+                      }
+                      onBlur={(e) =>
+                        handleCurrencyBlur("incomeCOGSCurrent", e.target.value)
+                      }
+                      onFocus={(e) =>
+                        handleCurrencyFocus("incomeCOGSCurrent", e.target.value)
+                      }
+                      style={{
+                        width: "100%",
+                        maxWidth: "160px",
+                        padding: "6px",
+                        border: "1px solid #d6c4a8",
+                        borderRadius: "4px",
+                        textAlign: "right",
+                      }}
+                      placeholder="R 0"
+                    />
+                  </td>
+                  <td
                     style={{
-                      width: "100%",
-                      maxWidth: "160px",
-                      padding: "6px",
-                      border: "1px solid #d6c4a8",
-                      borderRadius: "4px",
+                      padding: "8px 12px",
+                      borderBottom: "1px solid #d6c4a8",
                       textAlign: "right",
                     }}
-                    placeholder="R 0"
-                  />
-                </td>
-              </tr>
-              <tr>
-                <td
-                  style={{
-                    padding: "8px 12px",
-                    borderBottom: "1px solid #d6c4a8",
-                    fontWeight: "500",
-                  }}
-                >
-                  Operating Profit
-                </td>
-                <td
-                  style={{
-                    padding: "8px 12px",
-                    borderBottom: "1px solid #d6c4a8",
-                    textAlign: "right",
-                  }}
-                >
-                  <input
-                    type="text"
-                    value={currencyValues.incomeOperatingProfitCurrent}
-                    onChange={(e) =>
-                      handleCurrencyChange("incomeOperatingProfitCurrent", e.target.value)
-                    }
-                    onBlur={(e) =>
-                      handleCurrencyBlur("incomeOperatingProfitCurrent", e.target.value)
-                    }
-                    onFocus={(e) =>
-                      handleCurrencyFocus("incomeOperatingProfitCurrent", e.target.value)
-                    }
+                  >
+                    <input
+                      type="text"
+                      value={currencyValues.incomeCOGSPrevious}
+                      onChange={(e) =>
+                        handleCurrencyChange("incomeCOGSPrevious", e.target.value)
+                      }
+                      onBlur={(e) =>
+                        handleCurrencyBlur("incomeCOGSPrevious", e.target.value)
+                      }
+                      onFocus={(e) =>
+                        handleCurrencyFocus("incomeCOGSPrevious", e.target.value)
+                      }
+                      style={{
+                        width: "100%",
+                        maxWidth: "160px",
+                        padding: "6px",
+                        border: "1px solid #d6c4a8",
+                        borderRadius: "4px",
+                        textAlign: "right",
+                      }}
+                      placeholder="R 0"
+                    />
+                  </td>
+                </tr>
+                <tr style={{ backgroundColor: "#f9f7f3" }}>
+                  <td
                     style={{
-                      width: "100%",
-                      maxWidth: "160px",
-                      padding: "6px",
-                      border: "1px solid #d6c4a8",
-                      borderRadius: "4px",
+                      padding: "8px 12px",
+                      borderBottom: "1px solid #d6c4a8",
+                      fontWeight: "600",
+                    }}
+                  >
+                    Gross Profit
+                  </td>
+                  <td
+                    style={{
+                      padding: "8px 12px",
+                      borderBottom: "1px solid #d6c4a8",
                       textAlign: "right",
                     }}
-                    placeholder="R 0"
-                  />
-                </td>
-                <td
-                  style={{
-                    padding: "8px 12px",
-                    borderBottom: "1px solid #d6c4a8",
-                    textAlign: "right",
-                  }}
-                >
-                  <input
-                    type="text"
-                    value={currencyValues.incomeOperatingProfitPrevious}
-                    onChange={(e) =>
-                      handleCurrencyChange("incomeOperatingProfitPrevious", e.target.value)
-                    }
-                    onBlur={(e) =>
-                      handleCurrencyBlur("incomeOperatingProfitPrevious", e.target.value)
-                    }
-                    onFocus={(e) =>
-                      handleCurrencyFocus("incomeOperatingProfitPrevious", e.target.value)
-                    }
+                  >
+                    <input
+                      type="text"
+                      value={currencyValues.incomeGrossProfitCurrent}
+                      onChange={(e) =>
+                        handleCurrencyChange("incomeGrossProfitCurrent", e.target.value)
+                      }
+                      onBlur={(e) =>
+                        handleCurrencyBlur("incomeGrossProfitCurrent", e.target.value)
+                      }
+                      onFocus={(e) =>
+                        handleCurrencyFocus("incomeGrossProfitCurrent", e.target.value)
+                      }
+                      style={{
+                        width: "100%",
+                        maxWidth: "160px",
+                        padding: "6px",
+                        border: "1px solid #d6c4a8",
+                        borderRadius: "4px",
+                        textAlign: "right",
+                      }}
+                      placeholder="R 0"
+                    />
+                  </td>
+                  <td
                     style={{
-                      width: "100%",
-                      maxWidth: "160px",
-                      padding: "6px",
-                      border: "1px solid #d6c4a8",
-                      borderRadius: "4px",
+                      padding: "8px 12px",
+                      borderBottom: "1px solid #d6c4a8",
                       textAlign: "right",
                     }}
-                    placeholder="R 0"
-                  />
-                </td>
-              </tr>
-              <tr style={{ backgroundColor: "#f9f7f3" }}>
-                <td
-                  style={{
-                    padding: "8px 12px",
-                    borderBottom: "2px solid #5c3a1e",
-                    fontWeight: "600",
-                  }}
-                >
-                  Net Profit
-                </td>
-                <td
-                  style={{
-                    padding: "8px 12px",
-                    borderBottom: "2px solid #5c3a1e",
-                    textAlign: "right",
-                  }}
-                >
-                  <input
-                    type="text"
-                    value={currencyValues.incomeNetProfitCurrent}
-                    onChange={(e) =>
-                      handleCurrencyChange("incomeNetProfitCurrent", e.target.value)
-                    }
-                    onBlur={(e) =>
-                      handleCurrencyBlur("incomeNetProfitCurrent", e.target.value)
-                    }
-                    onFocus={(e) =>
-                      handleCurrencyFocus("incomeNetProfitCurrent", e.target.value)
-                    }
+                  >
+                    <input
+                      type="text"
+                      value={currencyValues.incomeGrossProfitPrevious}
+                      onChange={(e) =>
+                        handleCurrencyChange("incomeGrossProfitPrevious", e.target.value)
+                      }
+                      onBlur={(e) =>
+                        handleCurrencyBlur("incomeGrossProfitPrevious", e.target.value)
+                      }
+                      onFocus={(e) =>
+                        handleCurrencyFocus("incomeGrossProfitPrevious", e.target.value)
+                      }
+                      style={{
+                        width: "100%",
+                        maxWidth: "160px",
+                        padding: "6px",
+                        border: "1px solid #d6c4a8",
+                        borderRadius: "4px",
+                        textAlign: "right",
+                      }}
+                      placeholder="R 0"
+                    />
+                  </td>
+                </tr>
+                <tr>
+                  <td
                     style={{
-                      width: "100%",
-                      maxWidth: "160px",
-                      padding: "6px",
-                      border: "1px solid #d6c4a8",
-                      borderRadius: "4px",
+                      padding: "8px 12px",
+                      borderBottom: "1px solid #d6c4a8",
+                      fontWeight: "500",
+                    }}
+                  >
+                    Operating Profit
+                  </td>
+                  <td
+                    style={{
+                      padding: "8px 12px",
+                      borderBottom: "1px solid #d6c4a8",
                       textAlign: "right",
                     }}
-                    placeholder="R 0"
-                  />
-                </td>
-                <td
-                  style={{
-                    padding: "8px 12px",
-                    borderBottom: "2px solid #5c3a1e",
-                    textAlign: "right",
-                  }}
-                >
-                  <input
-                    type="text"
-                    value={currencyValues.incomeNetProfitPrevious}
-                    onChange={(e) =>
-                      handleCurrencyChange("incomeNetProfitPrevious", e.target.value)
-                    }
-                    onBlur={(e) =>
-                      handleCurrencyBlur("incomeNetProfitPrevious", e.target.value)
-                    }
-                    onFocus={(e) =>
-                      handleCurrencyFocus("incomeNetProfitPrevious", e.target.value)
-                    }
+                  >
+                    <input
+                      type="text"
+                      value={currencyValues.incomeOperatingProfitCurrent}
+                      onChange={(e) =>
+                        handleCurrencyChange("incomeOperatingProfitCurrent", e.target.value)
+                      }
+                      onBlur={(e) =>
+                        handleCurrencyBlur("incomeOperatingProfitCurrent", e.target.value)
+                      }
+                      onFocus={(e) =>
+                        handleCurrencyFocus("incomeOperatingProfitCurrent", e.target.value)
+                      }
+                      style={{
+                        width: "100%",
+                        maxWidth: "160px",
+                        padding: "6px",
+                        border: "1px solid #d6c4a8",
+                        borderRadius: "4px",
+                        textAlign: "right",
+                      }}
+                      placeholder="R 0"
+                    />
+                  </td>
+                  <td
                     style={{
-                      width: "100%",
-                      maxWidth: "160px",
-                      padding: "6px",
-                      border: "1px solid #d6c4a8",
-                      borderRadius: "4px",
+                      padding: "8px 12px",
+                      borderBottom: "1px solid #d6c4a8",
                       textAlign: "right",
                     }}
-                    placeholder="R 0"
-                  />
-                </td>
-              </tr>
-            </tbody>
-          </table>
+                  >
+                    <input
+                      type="text"
+                      value={currencyValues.incomeOperatingProfitPrevious}
+                      onChange={(e) =>
+                        handleCurrencyChange("incomeOperatingProfitPrevious", e.target.value)
+                      }
+                      onBlur={(e) =>
+                        handleCurrencyBlur("incomeOperatingProfitPrevious", e.target.value)
+                      }
+                      onFocus={(e) =>
+                        handleCurrencyFocus("incomeOperatingProfitPrevious", e.target.value)
+                      }
+                      style={{
+                        width: "100%",
+                        maxWidth: "160px",
+                        padding: "6px",
+                        border: "1px solid #d6c4a8",
+                        borderRadius: "4px",
+                        textAlign: "right",
+                      }}
+                      placeholder="R 0"
+                    />
+                  </td>
+                </tr>
+                <tr style={{ backgroundColor: "#f9f7f3" }}>
+                  <td
+                    style={{
+                      padding: "8px 12px",
+                      borderBottom: "2px solid #5c3a1e",
+                      fontWeight: "600",
+                    }}
+                  >
+                    Net Profit
+                  </td>
+                  <td
+                    style={{
+                      padding: "8px 12px",
+                      borderBottom: "2px solid #5c3a1e",
+                      textAlign: "right",
+                    }}
+                  >
+                    <input
+                      type="text"
+                      value={currencyValues.incomeNetProfitCurrent}
+                      onChange={(e) =>
+                        handleCurrencyChange("incomeNetProfitCurrent", e.target.value)
+                      }
+                      onBlur={(e) =>
+                        handleCurrencyBlur("incomeNetProfitCurrent", e.target.value)
+                      }
+                      onFocus={(e) =>
+                        handleCurrencyFocus("incomeNetProfitCurrent", e.target.value)
+                      }
+                      style={{
+                        width: "100%",
+                        maxWidth: "160px",
+                        padding: "6px",
+                        border: "1px solid #d6c4a8",
+                        borderRadius: "4px",
+                        textAlign: "right",
+                      }}
+                      placeholder="R 0"
+                    />
+                  </td>
+                  <td
+                    style={{
+                      padding: "8px 12px",
+                      borderBottom: "2px solid #5c3a1e",
+                      textAlign: "right",
+                    }}
+                  >
+                    <input
+                      type="text"
+                      value={currencyValues.incomeNetProfitPrevious}
+                      onChange={(e) =>
+                        handleCurrencyChange("incomeNetProfitPrevious", e.target.value)
+                      }
+                      onBlur={(e) =>
+                        handleCurrencyBlur("incomeNetProfitPrevious", e.target.value)
+                      }
+                      onFocus={(e) =>
+                        handleCurrencyFocus("incomeNetProfitPrevious", e.target.value)
+                      }
+                      style={{
+                        width: "100%",
+                        maxWidth: "160px",
+                        padding: "6px",
+                        border: "1px solid #d6c4a8",
+                        borderRadius: "4px",
+                        textAlign: "right",
+                      }}
+                      placeholder="R 0"
+                    />
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
 
-      {/* Balance Sheet Table - Dark brown header matching Ownership Management */}
-      <div style={{ marginBottom: "2rem" }}>
-        <h4 style={{ color: "#8b5e3c", marginBottom: "1rem", fontWeight: "600" }}>Balance Sheet</h4>
-        <div style={{ overflowX: "auto" }}>
-          <table
-            style={{
-              width: "100%",
-              maxWidth: "700px",
-              borderCollapse: "collapse",
-              border: "1px solid #d6c4a8",
-              fontSize: "14px",
-            }}
-          >
-            <thead>
-              <tr style={{ backgroundColor: "#5c3a1e" }}>
-                <th style={thStyle}></th>
-                <th style={thStyleRight}>Current Value</th>
-                <th style={thStyleRight}>Previous Financial Year</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td
-                  style={{
-                    padding: "8px 12px",
-                    borderBottom: "1px solid #d6c4a8",
-                    fontWeight: "500",
-                  }}
-                >
-                  Current Assets
-                </td>
-                <td
-                  style={{
-                    padding: "8px 12px",
-                    borderBottom: "1px solid #d6c4a8",
-                    textAlign: "right",
-                  }}
-                >
-                  <input
-                    type="text"
-                    value={currencyValues.balanceCurrentAssetsCurrent}
-                    onChange={(e) =>
-                      handleCurrencyChange("balanceCurrentAssetsCurrent", e.target.value)
-                    }
-                    onBlur={(e) =>
-                      handleCurrencyBlur("balanceCurrentAssetsCurrent", e.target.value)
-                    }
-                    onFocus={(e) =>
-                      handleCurrencyFocus("balanceCurrentAssetsCurrent", e.target.value)
-                    }
+        {/* Balance Sheet Table */}
+        <div style={{ flex: "1 1 45%", minWidth: "300px" }}>
+          <h4 style={{ color: "#8b5e3c", marginBottom: "1rem", fontWeight: "600" }}>Balance Sheet</h4>
+          <div style={{ overflowX: "auto" }}>
+            <table
+              style={{
+                width: "100%",
+                borderCollapse: "collapse",
+                border: "1px solid #d6c4a8",
+                fontSize: "14px",
+              }}
+            >
+              <thead>
+                <tr style={{ backgroundColor: "#5c3a1e" }}>
+                  <th style={thStyle}></th>
+                  <th style={thStyleRight}>Current Value</th>
+                  <th style={thStyleRight}>Previous Financial Year</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td
                     style={{
-                      width: "100%",
-                      maxWidth: "160px",
-                      padding: "6px",
-                      border: "1px solid #d6c4a8",
-                      borderRadius: "4px",
+                      padding: "8px 12px",
+                      borderBottom: "1px solid #d6c4a8",
+                      fontWeight: "500",
+                    }}
+                  >
+                    Current Assets
+                  </td>
+                  <td
+                    style={{
+                      padding: "8px 12px",
+                      borderBottom: "1px solid #d6c4a8",
                       textAlign: "right",
                     }}
-                    placeholder="R 0"
-                  />
-                </td>
-                <td
-                  style={{
-                    padding: "8px 12px",
-                    borderBottom: "1px solid #d6c4a8",
-                    textAlign: "right",
-                  }}
-                >
-                  <input
-                    type="text"
-                    value={currencyValues.balanceCurrentAssetsPrevious}
-                    onChange={(e) =>
-                      handleCurrencyChange("balanceCurrentAssetsPrevious", e.target.value)
-                    }
-                    onBlur={(e) =>
-                      handleCurrencyBlur("balanceCurrentAssetsPrevious", e.target.value)
-                    }
-                    onFocus={(e) =>
-                      handleCurrencyFocus("balanceCurrentAssetsPrevious", e.target.value)
-                    }
+                  >
+                    <input
+                      type="text"
+                      value={currencyValues.balanceCurrentAssetsCurrent}
+                      onChange={(e) =>
+                        handleCurrencyChange("balanceCurrentAssetsCurrent", e.target.value)
+                      }
+                      onBlur={(e) =>
+                        handleCurrencyBlur("balanceCurrentAssetsCurrent", e.target.value)
+                      }
+                      onFocus={(e) =>
+                        handleCurrencyFocus("balanceCurrentAssetsCurrent", e.target.value)
+                      }
+                      style={{
+                        width: "100%",
+                        maxWidth: "160px",
+                        padding: "6px",
+                        border: "1px solid #d6c4a8",
+                        borderRadius: "4px",
+                        textAlign: "right",
+                      }}
+                      placeholder="R 0"
+                    />
+                  </td>
+                  <td
                     style={{
-                      width: "100%",
-                      maxWidth: "160px",
-                      padding: "6px",
-                      border: "1px solid #d6c4a8",
-                      borderRadius: "4px",
+                      padding: "8px 12px",
+                      borderBottom: "1px solid #d6c4a8",
                       textAlign: "right",
                     }}
-                    placeholder="R 0"
-                  />
-                </td>
-              </tr>
-              <tr style={{ backgroundColor: "#f9f7f3" }}>
-                <td
-                  style={{
-                    padding: "8px 12px",
-                    borderBottom: "1px solid #d6c4a8",
-                    fontWeight: "600",
-                  }}
-                >
-                  Total Assets
-                </td>
-                <td
-                  style={{
-                    padding: "8px 12px",
-                    borderBottom: "1px solid #d6c4a8",
-                    textAlign: "right",
-                  }}
-                >
-                  <input
-                    type="text"
-                    value={currencyValues.balanceTotalAssetsCurrent}
-                    onChange={(e) =>
-                      handleCurrencyChange("balanceTotalAssetsCurrent", e.target.value)
-                    }
-                    onBlur={(e) =>
-                      handleCurrencyBlur("balanceTotalAssetsCurrent", e.target.value)
-                    }
-                    onFocus={(e) =>
-                      handleCurrencyFocus("balanceTotalAssetsCurrent", e.target.value)
-                    }
+                  >
+                    <input
+                      type="text"
+                      value={currencyValues.balanceCurrentAssetsPrevious}
+                      onChange={(e) =>
+                        handleCurrencyChange("balanceCurrentAssetsPrevious", e.target.value)
+                      }
+                      onBlur={(e) =>
+                        handleCurrencyBlur("balanceCurrentAssetsPrevious", e.target.value)
+                      }
+                      onFocus={(e) =>
+                        handleCurrencyFocus("balanceCurrentAssetsPrevious", e.target.value)
+                      }
+                      style={{
+                        width: "100%",
+                        maxWidth: "160px",
+                        padding: "6px",
+                        border: "1px solid #d6c4a8",
+                        borderRadius: "4px",
+                        textAlign: "right",
+                      }}
+                      placeholder="R 0"
+                    />
+                  </td>
+                </tr>
+                <tr style={{ backgroundColor: "#f9f7f3" }}>
+                  <td
                     style={{
-                      width: "100%",
-                      maxWidth: "160px",
-                      padding: "6px",
-                      border: "1px solid #d6c4a8",
-                      borderRadius: "4px",
+                      padding: "8px 12px",
+                      borderBottom: "1px solid #d6c4a8",
+                      fontWeight: "600",
+                    }}
+                  >
+                    Total Assets
+                  </td>
+                  <td
+                    style={{
+                      padding: "8px 12px",
+                      borderBottom: "1px solid #d6c4a8",
                       textAlign: "right",
                     }}
-                    placeholder="R 0"
-                  />
-                </td>
-                <td
-                  style={{
-                    padding: "8px 12px",
-                    borderBottom: "1px solid #d6c4a8",
-                    textAlign: "right",
-                  }}
-                >
-                  <input
-                    type="text"
-                    value={currencyValues.balanceTotalAssetsPrevious}
-                    onChange={(e) =>
-                      handleCurrencyChange("balanceTotalAssetsPrevious", e.target.value)
-                    }
-                    onBlur={(e) =>
-                      handleCurrencyBlur("balanceTotalAssetsPrevious", e.target.value)
-                    }
-                    onFocus={(e) =>
-                      handleCurrencyFocus("balanceTotalAssetsPrevious", e.target.value)
-                    }
+                  >
+                    <input
+                      type="text"
+                      value={currencyValues.balanceTotalAssetsCurrent}
+                      onChange={(e) =>
+                        handleCurrencyChange("balanceTotalAssetsCurrent", e.target.value)
+                      }
+                      onBlur={(e) =>
+                        handleCurrencyBlur("balanceTotalAssetsCurrent", e.target.value)
+                      }
+                      onFocus={(e) =>
+                        handleCurrencyFocus("balanceTotalAssetsCurrent", e.target.value)
+                      }
+                      style={{
+                        width: "100%",
+                        maxWidth: "160px",
+                        padding: "6px",
+                        border: "1px solid #d6c4a8",
+                        borderRadius: "4px",
+                        textAlign: "right",
+                      }}
+                      placeholder="R 0"
+                    />
+                  </td>
+                  <td
                     style={{
-                      width: "100%",
-                      maxWidth: "160px",
-                      padding: "6px",
-                      border: "1px solid #d6c4a8",
-                      borderRadius: "4px",
+                      padding: "8px 12px",
+                      borderBottom: "1px solid #d6c4a8",
                       textAlign: "right",
                     }}
-                    placeholder="R 0"
-                  />
-                </td>
-              </tr>
-              <tr>
-                <td
-                  style={{
-                    padding: "8px 12px",
-                    borderBottom: "1px solid #d6c4a8",
-                    fontWeight: "500",
-                  }}
-                >
-                  Current Liabilities
-                </td>
-                <td
-                  style={{
-                    padding: "8px 12px",
-                    borderBottom: "1px solid #d6c4a8",
-                    textAlign: "right",
-                  }}
-                >
-                  <input
-                    type="text"
-                    value={currencyValues.balanceCurrentLiabilitiesCurrent}
-                    onChange={(e) =>
-                      handleCurrencyChange(
-                        "balanceCurrentLiabilitiesCurrent",
-                        e.target.value
-                      )
-                    }
-                    onBlur={(e) =>
-                      handleCurrencyBlur("balanceCurrentLiabilitiesCurrent", e.target.value)
-                    }
-                    onFocus={(e) =>
-                      handleCurrencyFocus("balanceCurrentLiabilitiesCurrent", e.target.value)
-                    }
+                  >
+                    <input
+                      type="text"
+                      value={currencyValues.balanceTotalAssetsPrevious}
+                      onChange={(e) =>
+                        handleCurrencyChange("balanceTotalAssetsPrevious", e.target.value)
+                      }
+                      onBlur={(e) =>
+                        handleCurrencyBlur("balanceTotalAssetsPrevious", e.target.value)
+                      }
+                      onFocus={(e) =>
+                        handleCurrencyFocus("balanceTotalAssetsPrevious", e.target.value)
+                      }
+                      style={{
+                        width: "100%",
+                        maxWidth: "160px",
+                        padding: "6px",
+                        border: "1px solid #d6c4a8",
+                        borderRadius: "4px",
+                        textAlign: "right",
+                      }}
+                      placeholder="R 0"
+                    />
+                  </td>
+                </tr>
+                <tr>
+                  <td
                     style={{
-                      width: "100%",
-                      maxWidth: "160px",
-                      padding: "6px",
-                      border: "1px solid #d6c4a8",
-                      borderRadius: "4px",
+                      padding: "8px 12px",
+                      borderBottom: "1px solid #d6c4a8",
+                      fontWeight: "500",
+                    }}
+                  >
+                    Current Liabilities
+                  </td>
+                  <td
+                    style={{
+                      padding: "8px 12px",
+                      borderBottom: "1px solid #d6c4a8",
                       textAlign: "right",
                     }}
-                    placeholder="R 0"
-                  />
-                </td>
-                <td
-                  style={{
-                    padding: "8px 12px",
-                    borderBottom: "1px solid #d6c4a8",
-                    textAlign: "right",
-                  }}
-                >
-                  <input
-                    type="text"
-                    value={currencyValues.balanceCurrentLiabilitiesPrevious}
-                    onChange={(e) =>
-                      handleCurrencyChange(
-                        "balanceCurrentLiabilitiesPrevious",
-                        e.target.value
-                      )
-                    }
-                    onBlur={(e) =>
-                      handleCurrencyBlur("balanceCurrentLiabilitiesPrevious", e.target.value)
-                    }
-                    onFocus={(e) =>
-                      handleCurrencyFocus("balanceCurrentLiabilitiesPrevious", e.target.value)
-                    }
+                  >
+                    <input
+                      type="text"
+                      value={currencyValues.balanceCurrentLiabilitiesCurrent}
+                      onChange={(e) =>
+                        handleCurrencyChange(
+                          "balanceCurrentLiabilitiesCurrent",
+                          e.target.value
+                        )
+                      }
+                      onBlur={(e) =>
+                        handleCurrencyBlur("balanceCurrentLiabilitiesCurrent", e.target.value)
+                      }
+                      onFocus={(e) =>
+                        handleCurrencyFocus("balanceCurrentLiabilitiesCurrent", e.target.value)
+                      }
+                      style={{
+                        width: "100%",
+                        maxWidth: "160px",
+                        padding: "6px",
+                        border: "1px solid #d6c4a8",
+                        borderRadius: "4px",
+                        textAlign: "right",
+                      }}
+                      placeholder="R 0"
+                    />
+                  </td>
+                  <td
                     style={{
-                      width: "100%",
-                      maxWidth: "160px",
-                      padding: "6px",
-                      border: "1px solid #d6c4a8",
-                      borderRadius: "4px",
+                      padding: "8px 12px",
+                      borderBottom: "1px solid #d6c4a8",
                       textAlign: "right",
                     }}
-                    placeholder="R 0"
-                  />
-                </td>
-              </tr>
-              <tr>
-                <td
-                  style={{
-                    padding: "8px 12px",
-                    borderBottom: "1px solid #d6c4a8",
-                    fontWeight: "500",
-                  }}
-                >
-                  Long Term Liabilities
-                </td>
-                <td
-                  style={{
-                    padding: "8px 12px",
-                    borderBottom: "1px solid #d6c4a8",
-                    textAlign: "right",
-                  }}
-                >
-                  <input
-                    type="text"
-                    value={currencyValues.balanceLongTermLiabilitiesCurrent}
-                    onChange={(e) =>
-                      handleCurrencyChange(
-                        "balanceLongTermLiabilitiesCurrent",
-                        e.target.value
-                      )
-                    }
-                    onBlur={(e) =>
-                      handleCurrencyBlur("balanceLongTermLiabilitiesCurrent", e.target.value)
-                    }
-                    onFocus={(e) =>
-                      handleCurrencyFocus("balanceLongTermLiabilitiesCurrent", e.target.value)
-                    }
+                  >
+                    <input
+                      type="text"
+                      value={currencyValues.balanceCurrentLiabilitiesPrevious}
+                      onChange={(e) =>
+                        handleCurrencyChange(
+                          "balanceCurrentLiabilitiesPrevious",
+                          e.target.value
+                        )
+                      }
+                      onBlur={(e) =>
+                        handleCurrencyBlur("balanceCurrentLiabilitiesPrevious", e.target.value)
+                      }
+                      onFocus={(e) =>
+                        handleCurrencyFocus("balanceCurrentLiabilitiesPrevious", e.target.value)
+                      }
+                      style={{
+                        width: "100%",
+                        maxWidth: "160px",
+                        padding: "6px",
+                        border: "1px solid #d6c4a8",
+                        borderRadius: "4px",
+                        textAlign: "right",
+                      }}
+                      placeholder="R 0"
+                    />
+                  </td>
+                </tr>
+                <tr>
+                  <td
                     style={{
-                      width: "100%",
-                      maxWidth: "160px",
-                      padding: "6px",
-                      border: "1px solid #d6c4a8",
-                      borderRadius: "4px",
+                      padding: "8px 12px",
+                      borderBottom: "1px solid #d6c4a8",
+                      fontWeight: "500",
+                    }}
+                  >
+                    Long Term Liabilities
+                  </td>
+                  <td
+                    style={{
+                      padding: "8px 12px",
+                      borderBottom: "1px solid #d6c4a8",
                       textAlign: "right",
                     }}
-                    placeholder="R 0"
-                  />
-                </td>
-                <td
-                  style={{
-                    padding: "8px 12px",
-                    borderBottom: "1px solid #d6c4a8",
-                    textAlign: "right",
-                  }}
-                >
-                  <input
-                    type="text"
-                    value={currencyValues.balanceLongTermLiabilitiesPrevious}
-                    onChange={(e) =>
-                      handleCurrencyChange(
-                        "balanceLongTermLiabilitiesPrevious",
-                        e.target.value
-                      )
-                    }
-                    onBlur={(e) =>
-                      handleCurrencyBlur("balanceLongTermLiabilitiesPrevious", e.target.value)
-                    }
-                    onFocus={(e) =>
-                      handleCurrencyFocus("balanceLongTermLiabilitiesPrevious", e.target.value)
-                    }
+                  >
+                    <input
+                      type="text"
+                      value={currencyValues.balanceLongTermLiabilitiesCurrent}
+                      onChange={(e) =>
+                        handleCurrencyChange(
+                          "balanceLongTermLiabilitiesCurrent",
+                          e.target.value
+                        )
+                      }
+                      onBlur={(e) =>
+                        handleCurrencyBlur("balanceLongTermLiabilitiesCurrent", e.target.value)
+                      }
+                      onFocus={(e) =>
+                        handleCurrencyFocus("balanceLongTermLiabilitiesCurrent", e.target.value)
+                      }
+                      style={{
+                        width: "100%",
+                        maxWidth: "160px",
+                        padding: "6px",
+                        border: "1px solid #d6c4a8",
+                        borderRadius: "4px",
+                        textAlign: "right",
+                      }}
+                      placeholder="R 0"
+                    />
+                  </td>
+                  <td
                     style={{
-                      width: "100%",
-                      maxWidth: "160px",
-                      padding: "6px",
-                      border: "1px solid #d6c4a8",
-                      borderRadius: "4px",
+                      padding: "8px 12px",
+                      borderBottom: "1px solid #d6c4a8",
                       textAlign: "right",
                     }}
-                    placeholder="R 0"
-                  />
-                </td>
-              </tr>
-              <tr>
-                <td
-                  style={{
-                    padding: "8px 12px",
-                    borderBottom: "1px solid #d6c4a8",
-                    fontWeight: "500",
-                  }}
-                >
-                  Equity
-                </td>
-                <td
-                  style={{
-                    padding: "8px 12px",
-                    borderBottom: "1px solid #d6c4a8",
-                    textAlign: "right",
-                  }}
-                >
-                  <input
-                    type="text"
-                    value={currencyValues.balanceEquityCurrent}
-                    onChange={(e) =>
-                      handleCurrencyChange("balanceEquityCurrent", e.target.value)
-                    }
-                    onBlur={(e) =>
-                      handleCurrencyBlur("balanceEquityCurrent", e.target.value)
-                    }
-                    onFocus={(e) =>
-                      handleCurrencyFocus("balanceEquityCurrent", e.target.value)
-                    }
+                  >
+                    <input
+                      type="text"
+                      value={currencyValues.balanceLongTermLiabilitiesPrevious}
+                      onChange={(e) =>
+                        handleCurrencyChange(
+                          "balanceLongTermLiabilitiesPrevious",
+                          e.target.value
+                        )
+                      }
+                      onBlur={(e) =>
+                        handleCurrencyBlur("balanceLongTermLiabilitiesPrevious", e.target.value)
+                      }
+                      onFocus={(e) =>
+                        handleCurrencyFocus("balanceLongTermLiabilitiesPrevious", e.target.value)
+                      }
+                      style={{
+                        width: "100%",
+                        maxWidth: "160px",
+                        padding: "6px",
+                        border: "1px solid #d6c4a8",
+                        borderRadius: "4px",
+                        textAlign: "right",
+                      }}
+                      placeholder="R 0"
+                    />
+                  </td>
+                </tr>
+                <tr>
+                  <td
                     style={{
-                      width: "100%",
-                      maxWidth: "160px",
-                      padding: "6px",
-                      border: "1px solid #d6c4a8",
-                      borderRadius: "4px",
+                      padding: "8px 12px",
+                      borderBottom: "1px solid #d6c4a8",
+                      fontWeight: "500",
+                    }}
+                  >
+                    Equity
+                  </td>
+                  <td
+                    style={{
+                      padding: "8px 12px",
+                      borderBottom: "1px solid #d6c4a8",
                       textAlign: "right",
                     }}
-                    placeholder="R 0"
-                  />
-                </td>
-                <td
-                  style={{
-                    padding: "8px 12px",
-                    borderBottom: "1px solid #d6c4a8",
-                    textAlign: "right",
-                  }}
-                >
-                  <input
-                    type="text"
-                    value={currencyValues.balanceEquityPrevious}
-                    onChange={(e) =>
-                      handleCurrencyChange("balanceEquityPrevious", e.target.value)
-                    }
-                    onBlur={(e) =>
-                      handleCurrencyBlur("balanceEquityPrevious", e.target.value)
-                    }
-                    onFocus={(e) =>
-                      handleCurrencyFocus("balanceEquityPrevious", e.target.value)
-                    }
+                  >
+                    <input
+                      type="text"
+                      value={currencyValues.balanceEquityCurrent}
+                      onChange={(e) =>
+                        handleCurrencyChange("balanceEquityCurrent", e.target.value)
+                      }
+                      onBlur={(e) =>
+                        handleCurrencyBlur("balanceEquityCurrent", e.target.value)
+                      }
+                      onFocus={(e) =>
+                        handleCurrencyFocus("balanceEquityCurrent", e.target.value)
+                      }
+                      style={{
+                        width: "100%",
+                        maxWidth: "160px",
+                        padding: "6px",
+                        border: "1px solid #d6c4a8",
+                        borderRadius: "4px",
+                        textAlign: "right",
+                      }}
+                      placeholder="R 0"
+                    />
+                  </td>
+                  <td
                     style={{
-                      width: "100%",
-                      maxWidth: "160px",
-                      padding: "6px",
-                      border: "1px solid #d6c4a8",
-                      borderRadius: "4px",
+                      padding: "8px 12px",
+                      borderBottom: "1px solid #d6c4a8",
                       textAlign: "right",
                     }}
-                    placeholder="R 0"
-                  />
-                </td>
-              </tr>
-              <tr style={{ backgroundColor: "#f9f7f3" }}>
-                <td
-                  style={{
-                    padding: "8px 12px",
-                    borderBottom: "2px solid #5c3a1e",
-                    fontWeight: "600",
-                  }}
-                >
-                  Total Liabilities
-                </td>
-                <td
-                  style={{
-                    padding: "8px 12px",
-                    borderBottom: "2px solid #5c3a1e",
-                    textAlign: "right",
-                  }}
-                >
-                  <input
-                    type="text"
-                    value={currencyValues.balanceTotalLiabilitiesCurrent}
-                    onChange={(e) =>
-                      handleCurrencyChange("balanceTotalLiabilitiesCurrent", e.target.value)
-                    }
-                    onBlur={(e) =>
-                      handleCurrencyBlur("balanceTotalLiabilitiesCurrent", e.target.value)
-                    }
-                    onFocus={(e) =>
-                      handleCurrencyFocus("balanceTotalLiabilitiesCurrent", e.target.value)
-                    }
+                  >
+                    <input
+                      type="text"
+                      value={currencyValues.balanceEquityPrevious}
+                      onChange={(e) =>
+                        handleCurrencyChange("balanceEquityPrevious", e.target.value)
+                      }
+                      onBlur={(e) =>
+                        handleCurrencyBlur("balanceEquityPrevious", e.target.value)
+                      }
+                      onFocus={(e) =>
+                        handleCurrencyFocus("balanceEquityPrevious", e.target.value)
+                      }
+                      style={{
+                        width: "100%",
+                        maxWidth: "160px",
+                        padding: "6px",
+                        border: "1px solid #d6c4a8",
+                        borderRadius: "4px",
+                        textAlign: "right",
+                      }}
+                      placeholder="R 0"
+                    />
+                  </td>
+                </tr>
+                <tr style={{ backgroundColor: "#f9f7f3" }}>
+                  <td
                     style={{
-                      width: "100%",
-                      maxWidth: "160px",
-                      padding: "6px",
-                      border: "1px solid #d6c4a8",
-                      borderRadius: "4px",
+                      padding: "8px 12px",
+                      borderBottom: "2px solid #5c3a1e",
+                      fontWeight: "600",
+                    }}
+                  >
+                    Total Liabilities
+                  </td>
+                  <td
+                    style={{
+                      padding: "8px 12px",
+                      borderBottom: "2px solid #5c3a1e",
                       textAlign: "right",
                     }}
-                    placeholder="R 0"
-                  />
-                </td>
-                <td
-                  style={{
-                    padding: "8px 12px",
-                    borderBottom: "2px solid #5c3a1e",
-                    textAlign: "right",
-                  }}
-                >
-                  <input
-                    type="text"
-                    value={currencyValues.balanceTotalLiabilitiesPrevious}
-                    onChange={(e) =>
-                      handleCurrencyChange("balanceTotalLiabilitiesPrevious", e.target.value)
-                    }
-                    onBlur={(e) =>
-                      handleCurrencyBlur("balanceTotalLiabilitiesPrevious", e.target.value)
-                    }
-                    onFocus={(e) =>
-                      handleCurrencyFocus("balanceTotalLiabilitiesPrevious", e.target.value)
-                    }
+                  >
+                    <input
+                      type="text"
+                      value={currencyValues.balanceTotalLiabilitiesCurrent}
+                      onChange={(e) =>
+                        handleCurrencyChange("balanceTotalLiabilitiesCurrent", e.target.value)
+                      }
+                      onBlur={(e) =>
+                        handleCurrencyBlur("balanceTotalLiabilitiesCurrent", e.target.value)
+                      }
+                      onFocus={(e) =>
+                        handleCurrencyFocus("balanceTotalLiabilitiesCurrent", e.target.value)
+                      }
+                      style={{
+                        width: "100%",
+                        maxWidth: "160px",
+                        padding: "6px",
+                        border: "1px solid #d6c4a8",
+                        borderRadius: "4px",
+                        textAlign: "right",
+                      }}
+                      placeholder="R 0"
+                    />
+                  </td>
+                  <td
                     style={{
-                      width: "100%",
-                      maxWidth: "160px",
-                      padding: "6px",
-                      border: "1px solid #d6c4a8",
-                      borderRadius: "4px",
+                      padding: "8px 12px",
+                      borderBottom: "2px solid #5c3a1e",
                       textAlign: "right",
                     }}
-                    placeholder="R 0"
-                  />
-                </td>
-              </tr>
-            </tbody>
-          </table>
+                  >
+                    <input
+                      type="text"
+                      value={currencyValues.balanceTotalLiabilitiesPrevious}
+                      onChange={(e) =>
+                        handleCurrencyChange("balanceTotalLiabilitiesPrevious", e.target.value)
+                      }
+                      onBlur={(e) =>
+                        handleCurrencyBlur("balanceTotalLiabilitiesPrevious", e.target.value)
+                      }
+                      onFocus={(e) =>
+                        handleCurrencyFocus("balanceTotalLiabilitiesPrevious", e.target.value)
+                      }
+                      style={{
+                        width: "100%",
+                        maxWidth: "160px",
+                        padding: "6px",
+                        border: "1px solid #d6c4a8",
+                        borderRadius: "4px",
+                        textAlign: "right",
+                      }}
+                      placeholder="R 0"
+                    />
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
 
@@ -1146,42 +1144,6 @@ const FinancialOverview = ({ data, updateData, apiKey, onEvaluationComplete }) =
 
       <div className="grid-container">
         <div>
-          {/* Accounting software */}
-          <FormField label="Do you use accounting software?" required>
-            <select
-              name="hasAccountingSoftware"
-              value={data.hasAccountingSoftware || ""}
-              onChange={(e) => {
-                handleInputChange("hasAccountingSoftware", e.target.value);
-                if (e.target.value === "no")
-                  handleInputChange("accountingSoftwareName", "");
-              }}
-              className="form-select"
-              required
-            >
-              <option value="">Select</option>
-              <option value="yes">Yes (e.g. Xero, Sage)</option>
-              <option value="basic_tools">Basic tools (Excel/manual)</option>
-              <option value="no">No</option>
-            </select>
-          </FormField>
-
-          {data.hasAccountingSoftware === "yes" && (
-            <FormField label="Which accounting software do you use?" required>
-              <input
-                type="text"
-                name="accountingSoftwareName"
-                value={data.accountingSoftwareName || ""}
-                onChange={(e) =>
-                  handleInputChange("accountingSoftwareName", e.target.value)
-                }
-                className="form-input"
-                placeholder="e.g., QuickBooks, Xero, Sage, Pastel"
-                required={data.hasAccountingSoftware === "yes"}
-              />
-            </FormField>
-          )}
-
           {/* Books up to date */}
           <FormField label="Are your books up to date?" required>
             <select
@@ -1278,6 +1240,42 @@ const FinancialOverview = ({ data, updateData, apiKey, onEvaluationComplete }) =
 
       <div className="grid-container">
         <div>
+          {/* Accounting software - MOVED HERE */}
+          <FormField label="Do you use accounting software?" required>
+            <select
+              name="hasAccountingSoftware"
+              value={data.hasAccountingSoftware || ""}
+              onChange={(e) => {
+                handleInputChange("hasAccountingSoftware", e.target.value);
+                if (e.target.value === "no")
+                  handleInputChange("accountingSoftwareName", "");
+              }}
+              className="form-select"
+              required
+            >
+              <option value="">Select</option>
+              <option value="yes">Yes (e.g. Xero, Sage)</option>
+              <option value="basic_tools">Basic tools (Excel/manual)</option>
+              <option value="no">No</option>
+            </select>
+          </FormField>
+
+          {data.hasAccountingSoftware === "yes" && (
+            <FormField label="Which accounting software do you use?" required>
+              <input
+                type="text"
+                name="accountingSoftwareName"
+                value={data.accountingSoftwareName || ""}
+                onChange={(e) =>
+                  handleInputChange("accountingSoftwareName", e.target.value)
+                }
+                className="form-input"
+                placeholder="e.g., QuickBooks, Xero, Sage, Pastel"
+                required={data.hasAccountingSoftware === "yes"}
+              />
+            </FormField>
+          )}
+
           {/* Insured */}
           <FormField label="Are you insured?" required>
             <select
@@ -1351,7 +1349,9 @@ const FinancialOverview = ({ data, updateData, apiKey, onEvaluationComplete }) =
               </FormField>
             </div>
           )}
+        </div>
 
+        <div>
           {/* Financial statements */}
           <FormField label="Do you have financial statements available?" required>
             <select
@@ -1399,9 +1399,7 @@ const FinancialOverview = ({ data, updateData, apiKey, onEvaluationComplete }) =
               </div>
             </>
           )}
-        </div>
 
-        <div>
           {/* Audited financials */}
           <FormField
             label="Are your financials audited or independently reviewed?"
