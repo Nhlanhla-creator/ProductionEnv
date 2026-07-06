@@ -135,7 +135,7 @@ const SolutionsCorporates = () => {
         'Using Marketplace and portfolio intelligence to maintain visibility and create ongoing opportunities.'
       ],
       capabilities: [
-        'SME diagnostics and intake assessments',
+        'Business diagnostics and intake assessments',
         'Readiness and maturity scoring',
         'Compliance and legitimacy verification',
         'Development planning and tracking',
@@ -178,11 +178,11 @@ const SolutionsCorporates = () => {
     },
     {
       id: 'talent',
-      label: 'Graduate Placement & Talent',
+      label: 'Internship & Talent Placement',
       icon: <FaUserGraduate size={18} />,
       color: colors.amber,
       description: 'Turning Potential into Experience',
-      intro: "Every year graduates struggle to gain experience. At the same time, SMEs struggle to access affordable talent. BIG connects graduates, SMEs, sponsors, and employers through a shared ecosystem designed around outcomes rather than placements alone.",
+      intro: "Every year graduates struggle to gain experience. At the same time, businesses struggle to access affordable talent. BIG connects interns, businesses, sponsors, and employers through a shared ecosystem designed around outcomes rather than placements alone.",
       questions: [
         'Who should we support?',
         'Where should they be placed?',
@@ -196,7 +196,7 @@ const SolutionsCorporates = () => {
         'Using portfolio intelligence to measure long-term outcomes.'
       ],
       capabilities: [
-        'Graduate profiling and onboarding',
+        'Intern and graduate profiling and onboarding',
         'Internship and placement matching',
         'Sponsor dashboards',
         'Progress tracking',
@@ -490,7 +490,7 @@ const SolutionsCorporates = () => {
                 'Suppliers remain difficult to assess and onboard.',
                 'Development programmes struggle to produce procurement-ready businesses.',
                 'Impact programmes struggle to measure long-term outcomes.',
-                'Graduate programmes struggle to connect talent with meaningful opportunities.',
+                'Internship programmes struggle to connect talent with meaningful opportunities.',
                 'Data sits across spreadsheets, emails, portals, and disconnected systems.'
               ].map((item, idx) => (
                 <div

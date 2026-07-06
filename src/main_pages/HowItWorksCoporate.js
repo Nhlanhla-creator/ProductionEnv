@@ -135,7 +135,7 @@ const HowItWorksCorporates = () => {
               margin: '0 0 28px',
               maxWidth: '500px',
             }}>
-              Source Smart. Partner Deep. Amplify Real Impact. Connect with verified SMEs aligned to your ESD and CSI goals.
+              Source Smart. Partner Deep. Amplify Real Impact. Connect with verified businesses aligned to your ESD and CSI goals.
             </p>
 
             <div style={{
@@ -169,7 +169,7 @@ const HowItWorksCorporates = () => {
                   e.currentTarget.style.boxShadow = `0 4px 20px ${colors.amber}40`;
                 }}
               >
-                Explore SMEs
+                Explore Businesses
                 <FaArrowRight size={14} />
               </button>
             </div>
@@ -218,10 +218,10 @@ const HowItWorksCorporates = () => {
               {
                 icon: <FaUsers size={26} />,
                 number: '02',
-                title: 'Access Vetted SMEs',
+                title: 'Access Vetted Businesses',
                 description: 'Find verified businesses aligned with your goals.',
                 details: ['BIG Score verification', 'Impact alignment', 'Track progress', 'Filter by indicators'],
-                subtext: '🔍 Find your perfect SME partners',
+                subtext: '🔍 Find your perfect business partners',
                 color: colors.secondary,
               },
               {
@@ -366,7 +366,7 @@ const HowItWorksCorporates = () => {
             marginLeft: 'auto',
             marginRight: 'auto',
           }}>
-            Join leading corporations sourcing and supporting SMEs through BIG.
+            Join leading corporations sourcing and supporting businesses through BIG.
           </p>
           <button
             onClick={handleButtonClick}
@@ -434,13 +434,13 @@ const HowItWorksCorporates = () => {
             {[
               {
                 title: 'Sponsor Accelerators',
-                description: 'Learn how corporates sponsor SME accelerator programs through BIG.',
+                description: 'Learn how corporates sponsor business accelerator programs through BIG.',
                 video: '/Corporate_Accelerators.mp4',
                 poster: 'https://images.unsplash.com/photo-1542744173-8e7e53415bb0?w=400&h=225&fit=crop',
               },
               {
                 title: 'Supplier Development',
-                description: 'Discover how to develop your supply chain with vetted SMEs.',
+                description: 'Discover how to develop your supply chain with vetted businesses.',
                 video: '/Corporate_Supplier.mp4',
                 poster: 'https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?w=400&h=225&fit=crop',
               },
@@ -709,7 +709,7 @@ const HowItWorksCorporates = () => {
                 lineHeight: 1.6,
                 margin: 0,
               }}>
-                Every SME undergoes rigorous verification before being approved for corporate partnerships.
+                Every business undergoes rigorous verification before being approved for corporate partnerships.
               </p>
             </div>
 

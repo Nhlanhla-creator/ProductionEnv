@@ -112,7 +112,7 @@ const HowItWorksCatalysts = () => {
                 letterSpacing: '0.08em',
                 textTransform: 'uppercase',
               }}>
-                For Catalysts
+                For Catalysts & Business Associations
               </span>
             </div>
             
@@ -135,7 +135,7 @@ const HowItWorksCatalysts = () => {
               margin: '0 0 28px',
               maxWidth: '500px',
             }}>
-              Identify. Nurture. Track. Supercharge your cohort with verified, high-potential SMEs.
+              Identify. Nurture. Track. Supercharge your cohort with verified, high-potential businesses.
             </p>
 
             <div style={{
@@ -218,7 +218,7 @@ const HowItWorksCatalysts = () => {
               {
                 icon: <FaUserFriends size={26} />,
                 number: '02',
-                title: 'Recruit SMEs',
+                title: 'Recruit Participants',
                 description: 'Auto-matched applicants based on your criteria.',
                 details: ['Auto-matched applicants', 'View score history', 'Assess potential', 'Comprehensive profiles'],
                 subtext: '🔍 Find the perfect fit for your program',
@@ -366,7 +366,7 @@ const HowItWorksCatalysts = () => {
             marginLeft: 'auto',
             marginRight: 'auto',
           }}>
-            Join the leading catalysts transforming SME development through BIG.
+            Join the leading catalysts transforming business development through BIG.
           </p>
           <button
             onClick={handleButtonClick}

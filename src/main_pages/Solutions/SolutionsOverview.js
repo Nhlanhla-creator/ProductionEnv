@@ -50,12 +50,12 @@ const SolutionsOverview = () => {
 
   const stakeholderCards = [
     {
-      id: 'smes',
+      id: 'businesses',
       icon: <FaBuilding size={32} />,
-      title: 'For SMSEs',
+      title: 'For Businesses & NPOs',
       subtitle: 'Build credibility. Access opportunities. Grow with confidence.',
-      description: 'Get verified, get scored, and unlock funding, procurement, and growth opportunities.',
-      path: '/solutions/smes',
+      description: 'Commercial businesses seeking growth, markets, suppliers, funding, partnerships, etc. and NGOs/NPOs that are not primarily operating as catalysts.',
+      path: '/solutions/businesses',
       gradient: `linear-gradient(135deg, ${colors.primary}, ${colors.secondary})`,
       color: colors.primary,
       features: ['BIG Score', 'Compliance Vault', 'Funding Matchmaking', 'Growth Suite'],
@@ -76,7 +76,7 @@ const SolutionsOverview = () => {
       icon: <FaHandshake size={32} />,
       title: 'For Corporates',
       subtitle: 'Build stronger suppliers and stronger ecosystems.',
-      description: 'Streamline procurement, supplier development, and transformation programs.',
+      description: 'Large companies looking for suppliers, innovation, partnerships, or ESD opportunities.',
       path: '/solutions/corporates',
       gradient: `linear-gradient(135deg, ${colors.brownDark}, ${colors.brown})`,
       color: colors.brownDark,
@@ -85,24 +85,24 @@ const SolutionsOverview = () => {
     {
       id: 'catalysts',
       icon: <FaRocket size={32} />,
-      title: 'For Catalysts',
+      title: 'For Catalysts & Business Associations',
       subtitle: 'Move from program management to ecosystem intelligence.',
-      description: 'Accelerate, incubate, and track impact across your entire ecosystem.',
+      description: 'Catalyst and Business Association Organisations that enable business growth (ESD programmes, incubators, accelerators, development agencies, industry associations, universities, consultants, etc.).',
       path: '/solutions/catalysts',
       gradient: `linear-gradient(135deg, ${colors.orange}, ${colors.amber})`,
       color: colors.orange,
       features: ['Programme Intelligence', 'Cohort Management', 'Growth Suite', 'Portfolio Intelligence'],
     },
     {
-      id: 'graduates',
+      id: 'interns',
       icon: <FaUserGraduate size={32} />,
-      title: 'For Graduates',
+      title: 'For Interns & Internship Sponsors',
       subtitle: 'Experience should not depend on who you know.',
-      description: 'Create verified profiles, showcase skills, and access internship opportunities.',
-      path: '/solutions/graduates',
+      description: 'Connect interns with businesses for experiential learning and create sustainable talent pipelines. Interns gain practical experience while sponsors build future-ready workforces.',
+      path: '/solutions/interns',
       gradient: `linear-gradient(135deg, ${colors.accent}, ${colors.brownLight})`,
       color: colors.accent,
-      features: ['Internship Marketplace', 'Skills Profiles', 'Opportunity Matching'],
+      features: ['Internship Marketplace', 'Skills Profiles', 'Opportunity Matching', 'Talent Pipelines'],
     },
     {
       id: 'advisors',
@@ -235,7 +235,7 @@ const SolutionsOverview = () => {
               margin: '0 0 20px',
               maxWidth: '550px',
             }}>
-              BIG Marketplace provides trust infrastructure, intelligence and growth support for every participant in the SME ecosystem.
+              BIG Marketplace provides trust infrastructure, intelligence and growth support for every participant in the business ecosystem.
             </p>
 
             <div style={{
@@ -471,7 +471,7 @@ const SolutionsOverview = () => {
             {[
               {
                 icon: <FaBuilding size={22} color={colors.primary} />,
-                problem: 'SMEs cannot find capital.',
+                problem: 'Businesses cannot find capital.',
                 solution: 'BIG connects them to funders.',
               },
               {
@@ -486,8 +486,8 @@ const SolutionsOverview = () => {
               },
               {
                 icon: <FaUserGraduate size={22} color={colors.accent} />,
-                problem: 'Graduates cannot find experience.',
-                solution: 'BIG connects them to SMEs.',
+                problem: 'Interns cannot find experience.',
+                solution: 'BIG connects them to businesses.',
               },
               {
                 icon: <FaClipboardList size={22} color={colors.orange} />,
@@ -588,7 +588,7 @@ const SolutionsOverview = () => {
             marginLeft: 'auto',
             marginRight: 'auto',
           }}>
-            Whether you're an SME, investor, corporate, catalyst, graduate, or advisor — there's a place for you.
+            Whether you're a business, investor, corporate, catalyst, intern, or advisor — there's a place for you.
           </p>
           <button
             onClick={() => navigate('/LoginRegister')}

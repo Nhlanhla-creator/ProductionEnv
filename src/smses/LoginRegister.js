@@ -21,6 +21,9 @@ import {
   AlertTriangle,
   Eye,
   EyeOff,
+  Handshake,
+  Building,
+  Globe,
 } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
@@ -53,51 +56,61 @@ const PASSWORD_REQUIREMENTS = {
   requireSpecialChars: true,
 };
 
-// Role cards configuration
+// Role cards configuration - UPDATED with new roles
 const ROLE_CARDS = [
   {
-    id: "SMSEs",
-    title: "Small Medium and Social Enterprise",
+    id: "Business",
+    title: "Business",
     icon: <Briefcase size={20} />,
-    hoverInfo:
-      "Access funding opportunities to accelerate your growth journey.",
+    hoverInfo: "Commercial businesses seeking growth, markets, suppliers, funding, partnerships, etc.",
+  },
+  {
+    id: "NonProfit",
+    title: "Non-Profit",
+    icon: <HeartHandshake size={20} />,
+    hoverInfo: "NGOs/NPOs that are not primarily operating as catalysts.",
   },
   {
     id: "Investor",
-    title: "Funder/Investors",
+    title: "Investor/Funder",
     icon: <TrendingUp size={20} />,
-    hoverInfo:
-      "Discover investment opportunities, connect with promising startups",
+    hoverInfo: "Banks, VCs, angel investors, DFIs, grant makers.",
   },
   {
-    id: "Interns",
-    title: "Interns",
-    icon: <GraduationCap size={20} />,
-    hoverInfo: "Gain valuable experience, learn from industry experts",
+    id: "Corporate",
+    title: "Corporate",
+    icon: <Building size={20} />,
+    hoverInfo: "Large companies looking for suppliers, innovation, partnerships, or ESD opportunities.",
+  },
+  {
+    id: "Catalyst",
+    title: "Catalyst",
+    icon: <Rocket size={20} />,
+    hoverInfo: "Organisations that enable business growth (ESD programmes, incubators, accelerators, development agencies, industry associations, universities, consultants, etc.).",
   },
   {
     id: "Advisors",
     title: "Advisor",
     icon: <Users size={20} />,
-    hoverInfo: "Offer your expertise to growing businesses",
+    hoverInfo: "Offer your expertise to growing businesses.",
   },
   {
-    id: "Accelerators",
-    title: "Catalyst",
-    icon: <Building2 size={20} />,
-    hoverInfo: "Connect with innovative startups, provide mentorship",
+    id: "Interns",
+    title: "Intern",
+    icon: <GraduationCap size={20} />,
+    hoverInfo: "Gain valuable experience, learn from industry experts.",
   },
   {
-    id: "ProgramSponsor",
-    title: "Program Sponsor",
+    id: "InternSponsor",
+    title: "Intern Sponsor",
     icon: <Award size={20} />,
-    hoverInfo: "Offer jobs to interns, support entrepreneurial programs",
+    hoverInfo: "Sponsor internship programs and build talent pipelines.",
   },
   {
-    id: "Associator",
-    title: "Associator",
-    icon: <HeartHandshake size={20} />,
-    hoverInfo: "Network, collaborate, and build meaningful partnerships",
+    id: "BusinessAssociation",
+    title: "Business Association",
+    icon: <Globe size={20} />,
+    hoverInfo: "Network, collaborate, and build meaningful partnerships across the business ecosystem.",
   },
 ];
 
@@ -259,6 +272,16 @@ export default function LoginRegister() {
 
   const getRoleIcon = (roleValue) => {
     const iconMap = {
+      "Business": <Briefcase size={16} />,
+      "Non-Profit": <HeartHandshake size={16} />,
+      "Investor/Funder": <Rocket size={16} />,
+      "Corporate": <Building size={16} />,
+      "Catalyst": <Building2 size={16} />,
+      "Advisor": <Users size={16} />,
+      "Intern": <GraduationCap size={16} />,
+      "Intern Sponsor": <Award size={16} />,
+      "Business Association": <Globe size={16} />,
+      // Backward compatibility
       "Small and Medium Social Enterprises": <Briefcase size={16} />,
       SMSEs: <Briefcase size={16} />,
       SMSE: <Briefcase size={16} />,
@@ -269,7 +292,8 @@ export default function LoginRegister() {
       Catalyst: <Building2 size={16} />,
       Interns: <GraduationCap size={16} />,
       ProgramSponsor: <Award size={16} />,
-      Association: <HeartHandshake size={16} />,
+      Association: <Globe size={16} />,
+      Associator: <Globe size={16} />,
       Admin: <TrendingUp size={16} />
     };
     return iconMap[roleValue] || <Smile size={16} />;
@@ -277,6 +301,16 @@ export default function LoginRegister() {
 
   const navigateToRoleDashboard = (role) => {
     const routeMap = {
+      "Business": "/profile",
+      "Non-Profit": "/profile",
+      "Investor/Funder": "/investor-profile",
+      "Corporate": "/corporate-profile",
+      "Catalyst": "/support-profile",
+      "Advisor": "/advisor-profile",
+      "Intern": "/intern-profile",
+      "Intern Sponsor": "/intern-sponsor-profile",
+      "Business Association": "/associator-profile",
+      // Backward compatibility
       Investor: "/investor-profile",
       INVESTOR: "/investor-profile",
       "Small and Medium Social Enterprises": "/profile",
@@ -290,11 +324,10 @@ export default function LoginRegister() {
       Catalyst: "/support-profile",
       Interns: "/intern-profile",
       INTERN: "/intern-profile",
-      ProgramSponsor: "/program-sponsor-profile",
-      PROGRAM_SPONSOR: "/program-sponsor-profile",
-     Associator: "/associator-profile",
-ASSOCIATION: "/associator-profile",
-Association: "/associator-profile",  // ← add this
+      ProgramSponsor: "/intern-sponsor-profile",
+      PROGRAM_SPONSOR: "/intern-sponsor-profile",
+      Associator: "/associator-profile",
+      Association: "/associator-profile",
       Admin: "/admin/dashboard",
       admin: "/admin/dashboard",
       ADMIN: "/admin/dashboard",
@@ -304,7 +337,7 @@ Association: "/associator-profile",  // ← add this
 
   // Event handlers
   const handleRoleSelect = (roleId) => {
-    if (roleId === "Advisors") {
+    if (roleId === "Advisor") {
       setShowAdvisorCriteria(true);
       return;
     }
@@ -319,9 +352,9 @@ Association: "/associator-profile",  // ← add this
   const handleAdvisorCriteriaAccept = () => {
     setShowAdvisorCriteria(false);
     setRoles((prev) =>
-      prev.includes("Advisors")
-        ? prev.filter((r) => r !== "Advisors")
-        : [...prev, "Advisors"]
+      prev.includes("Advisor")
+        ? prev.filter((r) => r !== "Advisor")
+        : [...prev, "Advisor"]
     );
     setErrors((prev) => ({ ...prev, role: "" }));
   };
@@ -796,6 +829,16 @@ By using this platform, you confirm that you:
 
   const getRoleDashboardName = (role) => {
     const dashboardMap = {
+      "Business": "Business Dashboard",
+      "Non-Profit": "Non-Profit Dashboard",
+      "Investor/Funder": "Investor Dashboard",
+      "Corporate": "Corporate Dashboard",
+      "Catalyst": "Catalyst Dashboard",
+      "Advisor": "Advisor Dashboard",
+      "Intern": "Intern Dashboard",
+      "Intern Sponsor": "Intern Sponsor Dashboard",
+      "Business Association": "Business Association Dashboard",
+      // Backward compatibility
       "Small and Medium Social Enterprises": "SMSEs Dashboard",
       SMSEs: "SMSEs Dashboard",
       SMSE: "SMSEs Dashboard",
@@ -806,9 +849,9 @@ By using this platform, you confirm that you:
       Accelerators: "Catalyst Dashboard",
       Catalyst: "Catalyst Dashboard",
       Interns: "Intern Dashboard",
-      ProgramSponsor: "Program Sponsor Dashboard",
-      Association: "Association Dashboard",
-     association: "Association Dashboard",
+      ProgramSponsor: "Intern Sponsor Dashboard",
+      Association: "Business Association Dashboard",
+      Associator: "Business Association Dashboard",
       Admin: "Admin Dashboard",
       admin: "Admin Dashboard",
       ADMIN: "Admin Dashboard",
@@ -818,8 +861,17 @@ By using this platform, you confirm that you:
 
   const getRoleDescription = (role) => {
     const descriptionMap = {
-      "Small and Medium Social Enterprises":
-        "Access funding, growth tools, and partnerships",
+      "Business": "Access funding, growth tools, and partnerships",
+      "Non-Profit": "Access resources and partnerships for social impact",
+      "Investor/Funder": "Discover investment opportunities and manage portfolio",
+      "Corporate": "Source suppliers, innovation, and ESD opportunities",
+      "Catalyst": "Support business growth and drive innovation",
+      "Advisor": "Connect with businesses and offer expertise",
+      "Intern": "Access internship opportunities and career development",
+      "Intern Sponsor": "Sponsor internship programs and build talent pipelines",
+      "Business Association": "Network, collaborate, and build meaningful partnerships",
+      // Backward compatibility
+      "Small and Medium Social Enterprises": "Access funding, growth tools, and partnerships",
       SMSEs: "Access funding, growth tools, and partnerships",
       SMSE: "Access funding, growth tools, and partnerships",
       SME: "Access funding, growth tools, and partnerships",
@@ -830,6 +882,7 @@ By using this platform, you confirm that you:
       Interns: "Access internship opportunities and career development",
       ProgramSponsor: "Manage intern programs and track placements",
       Associator: "Network, collaborate, and build meaningful partnerships",
+      Association: "Network, collaborate, and build meaningful partnerships",
       Admin: "Manage platform users, settings, and analytics",
       admin: "Manage platform users, settings, and analytics",
     };

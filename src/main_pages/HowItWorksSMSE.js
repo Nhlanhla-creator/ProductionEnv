@@ -121,7 +121,7 @@ const HowItWorksSMSE = () => {
                 letterSpacing: '0.08em',
                 textTransform: 'uppercase',
               }}>
-                For African SMSEs
+                For African Businesses
               </span>
             </div>
             
@@ -134,7 +134,7 @@ const HowItWorksSMSE = () => {
               letterSpacing: '-0.02em',
             }}>
               How <span style={{ color: colors.amber }}>BIG</span> Works <br />
-              for SMSEs
+              for Businesses
             </h1>
             
             <p style={{
@@ -144,7 +144,7 @@ const HowItWorksSMSE = () => {
               margin: '0 0 28px',
               maxWidth: '500px',
             }}>
-              Get Scored. Get Matched. Grow. Join thousands of African SMEs unlocking funding and opportunities through our AI-powered platform.
+              Get Scored. Get Matched. Grow. Join thousands of African businesses unlocking funding and opportunities through our AI-powered platform.
             </p>
 
             <div style={{
@@ -202,7 +202,7 @@ const HowItWorksSMSE = () => {
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <FaCheckCircle size={14} color={colors.amber} />
                 <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem' }}>
-                  Trusted by 500+ SMEs
+                  Trusted by 500+ Businesses
                 </span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -464,7 +464,7 @@ const HowItWorksSMSE = () => {
             marginLeft: 'auto',
             marginRight: 'auto',
           }}>
-            Join thousands of African SMSEs already using BIG to unlock funding and opportunities.
+            Join thousands of African businesses already using BIG to unlock funding and opportunities.
           </p>
           <button
             onClick={handleGetScoreClick}
@@ -527,7 +527,7 @@ const HowItWorksSMSE = () => {
               color: colors.muted,
               marginTop: '6px',
             }}>
-              Watch these short videos to understand how we help SMSEs grow
+              Watch these short videos to understand how we help businesses grow
             </p>
           </div>
 

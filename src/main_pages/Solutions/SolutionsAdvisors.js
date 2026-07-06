@@ -61,7 +61,7 @@ const SolutionsAdvisors = () => {
     {
       icon: <FaChartBar size={24} />,
       title: 'Growth Suite Integration',
-      description: 'Support SMEs more effectively using shared intelligence and insights.',
+      description: 'Support businesses more effectively using shared intelligence and insights.',
       color: colors.secondary,
     },
   ];
@@ -79,7 +79,7 @@ const SolutionsAdvisors = () => {
     'Access qualified leads',
     'Reduce acquisition costs',
     'Build long-term client relationships',
-    'Support SMEs more effectively using shared intelligence',
+    'Support businesses more effectively using shared intelligence',
   ];
 
   return (
@@ -176,7 +176,7 @@ const SolutionsAdvisors = () => {
                 letterSpacing: '0.1em',
                 textTransform: 'uppercase',
               }}>
-                For Advisors
+                For Advisors & Service Providers
               </span>
             </div>
             
@@ -272,7 +272,7 @@ const SolutionsAdvisors = () => {
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <FaGlobeAfrica size={14} color={colors.amber} />
                 <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem' }}>
-                  African SME ecosystem
+                  African business ecosystem
                 </span>
               </div>
             </div>

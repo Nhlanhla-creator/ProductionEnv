@@ -80,7 +80,7 @@ const SolutionsCatalysts = () => {
 
   const capabilities = [
     'Application management',
-    'Pre-vetting',
+    'Participant pre-vetting',
     'Cohort management',
     'Performance tracking',
     'Alumni visibility',
@@ -181,7 +181,7 @@ const SolutionsCatalysts = () => {
                 letterSpacing: '0.1em',
                 textTransform: 'uppercase',
               }}>
-                For Catalysts
+                For Catalysts & Business Associations
               </span>
             </div>
             
@@ -205,7 +205,7 @@ const SolutionsCatalysts = () => {
               margin: '0 0 30px',
               maxWidth: '550px',
             }}>
-              BIG enables accelerators, incubators, and ecosystem builders to scale their 
+              BIG enables accelerators, incubators, ecosystem builders, and business associations to scale their 
               impact with data-driven intelligence and powerful program management tools.
             </p>
 
@@ -559,7 +559,7 @@ const SolutionsCatalysts = () => {
             marginLeft: 'auto',
             marginRight: 'auto',
           }}>
-            Join leading accelerators and incubators using BIG to drive ecosystem growth.
+            Join leading accelerators, incubators, and business associations using BIG to drive ecosystem growth.
           </p>
           <button
             onClick={() => navigate('/LoginRegister')}
