@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   FaHandshake, 
@@ -18,13 +18,17 @@ import {
   FaGraduationCap,
   FaRocket,
   FaDatabase,
-  FaLightbulb
+  FaLightbulb,
+  FaBriefcase,
+  FaHeart,
+  FaUserGraduate
 } from 'react-icons/fa';
 import Header from '../Header';
 import Footer from '../Footer';
 
 const SolutionsCorporates = () => {
   const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState(0);
 
   const colors = {
     dark: '#1C1410',
@@ -79,27 +83,129 @@ const SolutionsCorporates = () => {
     },
   ];
 
-  const areas = [
+  const tabData = [
     {
-      title: 'Procurement & Supply Chain',
-      items: ['Pre-vetted supplier pipeline', 'Supplier risk visibility', 'Compliance management', 'Supplier performance intelligence'],
+      id: 'procurement',
+      label: 'Procurement & Supply Chain',
+      icon: <FaHandshake size={18} />,
       color: colors.brown,
+      description: 'Supplier Intelligence and Performance Infrastructure',
+      intro: "Modern procurement teams don't suffer from a lack of suppliers. They suffer from a lack of trusted, procurement-ready suppliers.",
+      questions: [
+        'Can we shortlist them?',
+        'Can we onboard them?',
+        'Can we improve them?',
+        'Can we create opportunities for them?'
+      ],
+      questionDetails: [
+        'Using BIG Score, our AI-assisted supplier intelligence and desktop pre-vetting engine.',
+        'Using BIG Verified, our enhanced validation process combining technology, verification partners, and due diligence expertise.',
+        'Using Growth Suite to support supplier performance, operational maturity, governance, and scalability.',
+        'Using Marketplace matching to align suppliers with procurement opportunities and sourcing requirements.'
+      ],
+      capabilities: [
+        'Supplier pre-vetting and intelligence',
+        'Compliance management and document vault',
+        'Automated expiry tracking and reminders',
+        'Supplier matching and discovery',
+        'RFP and sourcing support',
+        'Portfolio analytics and reporting',
+        'Supplier performance monitoring',
+        'Development and intervention tracking',
+        'Supply chain risk visibility'
+      ]
     },
     {
-      title: 'Enterprise & Supplier Development',
-      items: ['SME onboarding', 'Cohort management', 'Development tracking', 'Impact reporting', 'Post-programme support'],
+      id: 'esd',
+      label: 'Enterprise & Supplier Development',
+      icon: <FaBuilding size={18} />,
       color: colors.primary,
+      description: 'From Programme Activity to Supplier Outcomes',
+      intro: "Many supplier development programmes measure participation. Few measure outcomes. Attendance, workshops, and graduation rates are easy to report. Revenue growth, procurement conversion, business survival, and second customers are much harder.",
+      questions: [
+        'Who should enter the programme?',
+        'Who is genuinely procurement or investment ready?',
+        'Is the support actually working?',
+        'What happens after graduation?'
+      ],
+      questionDetails: [
+        'Using BIG Score to identify businesses with the highest potential and readiness.',
+        'Using BIG Verified to validate claims and reduce programme risk.',
+        'Using Growth Suite to measure operational, financial, and strategic progress over time.',
+        'Using Marketplace and portfolio intelligence to maintain visibility and create ongoing opportunities.'
+      ],
+      capabilities: [
+        'SME diagnostics and intake assessments',
+        'Readiness and maturity scoring',
+        'Compliance and legitimacy verification',
+        'Development planning and tracking',
+        'Post-programme monitoring',
+        'Impact reporting',
+        'Procurement pipeline integration',
+        'Capital readiness tracking',
+        'Longitudinal outcome measurement'
+      ]
     },
     {
-      title: 'CSI & CSR',
-      items: ['Beneficiary onboarding', 'Programme intelligence', 'Outcomes tracking', 'ESG reporting'],
+      id: 'csi',
+      label: 'CSI, CSR & Impact',
+      icon: <FaHeart size={18} />,
       color: colors.brownDark,
+      description: 'Measuring Outcomes Beyond Spend',
+      intro: "Most organisations can report how much money was spent. Far fewer can confidently report what changed. Impact teams increasingly need evidence of outcomes, sustainability, and long-term community value creation.",
+      questions: [
+        'Who are we supporting?',
+        'Are interventions creating measurable change?',
+        'Can we validate impact claims?',
+        'What happens after funding ends?'
+      ],
+      questionDetails: [
+        'Using BIG Score to understand baseline conditions and identify priorities.',
+        'Using Growth Suite to track progress over time.',
+        'Using BIG Verified and supporting evidence collection.',
+        'Using Marketplace to connect beneficiaries to new opportunities and support ecosystems.'
+      ],
+      capabilities: [
+        'Beneficiary onboarding and profiling',
+        'Impact baseline assessments',
+        'Outcome tracking',
+        'Evidence collection',
+        'Portfolio reporting',
+        'Longitudinal impact measurement',
+        'Community intelligence dashboards',
+        'ESG and sustainability reporting support'
+      ]
     },
     {
-      title: 'HR & Talent',
-      items: ['Internship management', 'Graduate placement', 'SME talent pipelines'],
+      id: 'talent',
+      label: 'Graduate Placement & Talent',
+      icon: <FaUserGraduate size={18} />,
       color: colors.amber,
-    },
+      description: 'Turning Potential into Experience',
+      intro: "Every year graduates struggle to gain experience. At the same time, SMEs struggle to access affordable talent. BIG connects graduates, SMEs, sponsors, and employers through a shared ecosystem designed around outcomes rather than placements alone.",
+      questions: [
+        'Who should we support?',
+        'Where should they be placed?',
+        'Are they developing?',
+        'What happened afterwards?'
+      ],
+      questionDetails: [
+        'Using profiles, assessments, and matching intelligence.',
+        'Using capability and opportunity matching.',
+        'Using Growth Suite and structured progress tracking.',
+        'Using portfolio intelligence to measure long-term outcomes.'
+      ],
+      capabilities: [
+        'Graduate profiling and onboarding',
+        'Internship and placement matching',
+        'Sponsor dashboards',
+        'Progress tracking',
+        'Skills development monitoring',
+        'Outcome measurement',
+        'Employer feedback loops',
+        'Talent pipeline analytics'
+      ]
+    }
   ];
 
   return (
@@ -119,7 +225,7 @@ const SolutionsCorporates = () => {
         flex: '1',
         width: '100%',
       }}>
-        {/* Hero Section - Improved */}
+        {/* Hero Section */}
         <section style={{
           position: 'relative',
           borderRadius: '20px',
@@ -208,9 +314,9 @@ const SolutionsCorporates = () => {
               lineHeight: 1.1,
               letterSpacing: '-0.02em',
             }}>
-              Build Stronger Suppliers. <br />
-              <span style={{ color: colors.amber }}>Build Stronger</span> <br />
-              Ecosystems.
+              Building Better Suppliers, <br />
+              <span style={{ color: colors.amber }}>Better Programmes</span> <br />
+              and Better Outcomes
             </h1>
             
             <p style={{
@@ -220,8 +326,9 @@ const SolutionsCorporates = () => {
               margin: '0 0 30px',
               maxWidth: '550px',
             }}>
-              BIG supports procurement, supplier development, and transformation teams 
-              with intelligent, data-driven solutions for sustainable growth.
+              Corporates across Africa are investing billions into supplier development, transformation, 
+              community impact, and talent programmes. BIG provides the trust infrastructure, intelligence, 
+              and execution layer that connects these ecosystems together.
             </p>
 
             <div style={{
@@ -330,7 +437,99 @@ const SolutionsCorporates = () => {
           </div>
         </section>
 
-        {/* Areas Section */}
+        {/* The Challenge Section */}
+        <section style={{ marginBottom: '50px' }}>
+          <div style={{
+            background: colors.white,
+            borderRadius: '16px',
+            padding: '40px',
+            border: `1px solid ${colors.border}`,
+          }}>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '12px',
+              marginBottom: '16px',
+            }}>
+              <div style={{
+                width: '40px',
+                height: '40px',
+                borderRadius: '10px',
+                background: `${colors.amber}15`,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: colors.amber,
+              }}>
+                <FaClipboardList size={20} />
+              </div>
+              <h3 style={{
+                fontSize: '1.2rem',
+                fontWeight: 700,
+                color: colors.dark,
+                margin: 0,
+              }}>
+                The Challenge
+              </h3>
+            </div>
+            <p style={{
+              fontSize: '1rem',
+              color: colors.muted,
+              lineHeight: 1.8,
+              marginBottom: '16px',
+            }}>
+              Corporates across Africa are investing billions into supplier development, transformation, community impact, and talent programmes.
+              Yet many face the same challenge:
+            </p>
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(2, 1fr)',
+              gap: '12px',
+            }}>
+              {[
+                'Suppliers remain difficult to assess and onboard.',
+                'Development programmes struggle to produce procurement-ready businesses.',
+                'Impact programmes struggle to measure long-term outcomes.',
+                'Graduate programmes struggle to connect talent with meaningful opportunities.',
+                'Data sits across spreadsheets, emails, portals, and disconnected systems.'
+              ].map((item, idx) => (
+                <div
+                  key={idx}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: '10px',
+                    padding: '12px 16px',
+                    background: `${colors.light}`,
+                    borderRadius: '8px',
+                    fontSize: '0.9rem',
+                    color: colors.dark,
+                    lineHeight: 1.5,
+                  }}
+                >
+                  <span style={{
+                    color: colors.amber,
+                    fontWeight: 700,
+                    fontSize: '1.1rem',
+                    lineHeight: 1,
+                  }}>•</span>
+                  {item}
+                </div>
+              ))}
+            </div>
+            <p style={{
+              fontSize: '1rem',
+              color: colors.dark,
+              lineHeight: 1.8,
+              marginTop: '16px',
+              fontWeight: 600,
+            }}>
+              BIG Marketplace provides the trust infrastructure, intelligence, and execution layer that connects these ecosystems together.
+            </p>
+          </div>
+        </section>
+
+        {/* Tabs Section */}
         <section style={{ marginBottom: '50px' }}>
           <div style={{
             textAlign: 'center',
@@ -344,7 +543,7 @@ const SolutionsCorporates = () => {
               textTransform: 'uppercase',
               marginBottom: '8px',
             }}>
-              What We Support
+              Our Corporate Solutions
             </p>
             <h2 style={{
               fontSize: 'clamp(1.5rem, 2.5vw, 2rem)',
@@ -352,90 +551,288 @@ const SolutionsCorporates = () => {
               color: colors.dark,
               margin: 0,
             }}>
-              End-to-End <span style={{ color: colors.brown }}>Corporate</span> Solutions
+              <span style={{ color: colors.brown }}>End-to-End</span> Solutions for Every Department
             </h2>
           </div>
 
+          {/* Tab Navigation */}
           <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(2, 1fr)',
-            gap: '20px',
+            display: 'flex',
+            gap: '4px',
+            background: colors.white,
+            borderRadius: '14px',
+            padding: '6px',
+            border: `1px solid ${colors.border}`,
+            marginBottom: '30px',
+            overflowX: 'auto',
+            flexWrap: 'nowrap',
           }}>
-            {areas.map((area, index) => (
-              <div
-                key={index}
+            {tabData.map((tab, index) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(index)}
                 style={{
-                  background: colors.white,
-                  borderRadius: '14px',
-                  padding: '24px',
-                  border: `1px solid ${colors.border}`,
-                  transition: 'all 0.3s ease',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.transform = 'translateY(-4px)';
-                  e.currentTarget.style.boxShadow = '0 8px 30px rgba(28,20,16,0.08)';
-                  e.currentTarget.style.borderColor = area.color;
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = 'translateY(0)';
-                  e.currentTarget.style.boxShadow = 'none';
-                  e.currentTarget.style.borderColor = colors.border;
-                }}
-              >
-                <div style={{
                   display: 'flex',
                   alignItems: 'center',
                   gap: '10px',
-                  marginBottom: '12px',
+                  padding: '14px 24px',
+                  borderRadius: '10px',
+                  border: 'none',
+                  background: activeTab === index ? tab.color : 'transparent',
+                  color: activeTab === index ? colors.white : colors.muted,
+                  fontWeight: activeTab === index ? 700 : 500,
+                  fontSize: '0.85rem',
+                  cursor: 'pointer',
+                  transition: 'all 0.3s ease',
+                  whiteSpace: 'nowrap',
+                  flex: '1',
+                  justifyContent: 'center',
+                  minWidth: '120px',
+                }}
+                onMouseEnter={(e) => {
+                  if (activeTab !== index) {
+                    e.currentTarget.style.background = `${tab.color}10`;
+                    e.currentTarget.style.color = tab.color;
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (activeTab !== index) {
+                    e.currentTarget.style.background = 'transparent';
+                    e.currentTarget.style.color = colors.muted;
+                  }
+                }}
+              >
+                <span style={{ 
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                }}>
+                  {tab.icon}
+                </span>
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Tab Content */}
+          {tabData.map((tab, index) => (
+            <div
+              key={tab.id}
+              style={{
+                display: activeTab === index ? 'block' : 'none',
+                animation: 'fadeIn 0.4s ease',
+              }}
+            >
+              <div style={{
+                background: colors.white,
+                borderRadius: '16px',
+                padding: '40px',
+                border: `1px solid ${colors.border}`,
+              }}>
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '14px',
+                  marginBottom: '8px',
                 }}>
                   <div style={{
-                    width: '36px',
-                    height: '36px',
-                    borderRadius: '8px',
-                    background: `${area.color}15`,
+                    width: '48px',
+                    height: '48px',
+                    borderRadius: '12px',
+                    background: `${tab.color}15`,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    color: area.color,
+                    color: tab.color,
                   }}>
-                    {area.title.includes('Procurement') ? <FaHandshake size={18} /> :
-                     area.title.includes('Enterprise') ? <FaBuilding size={18} /> :
-                     area.title.includes('CSI') ? <FaGlobeAfrica size={18} /> :
-                     <FaUsers size={18} />}
+                    {tab.icon}
                   </div>
+                  <div>
+                    <h3 style={{
+                      fontSize: '1.4rem',
+                      fontWeight: 800,
+                      color: colors.dark,
+                      margin: 0,
+                    }}>
+                      {tab.label}
+                    </h3>
+                    <p style={{
+                      fontSize: '0.9rem',
+                      color: colors.muted,
+                      margin: '4px 0 0',
+                    }}>
+                      {tab.description}
+                    </p>
+                  </div>
+                </div>
+
+                <div style={{
+                  borderTop: `1px solid ${colors.border}`,
+                  marginTop: '20px',
+                  paddingTop: '24px',
+                }}>
+                  <p style={{
+                    fontSize: '1rem',
+                    color: colors.dark,
+                    lineHeight: 1.8,
+                    marginBottom: '24px',
+                  }}>
+                    {tab.intro}
+                  </p>
+
                   <h4 style={{
                     fontSize: '1rem',
                     fontWeight: 700,
                     color: colors.dark,
-                    margin: 0,
+                    marginBottom: '16px',
                   }}>
-                    {area.title}
+                    Key Questions Answered:
                   </h4>
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(2, 1fr)',
+                    gap: '16px',
+                    marginBottom: '28px',
+                  }}>
+                    {tab.questions.map((question, idx) => (
+                      <div
+                        key={idx}
+                        style={{
+                          background: `${tab.color}08`,
+                          borderRadius: '10px',
+                          padding: '16px 20px',
+                          borderLeft: `4px solid ${tab.color}`,
+                        }}
+                      >
+                        <p style={{
+                          fontWeight: 700,
+                          color: colors.dark,
+                          fontSize: '0.95rem',
+                          margin: '0 0 6px',
+                        }}>
+                          {question}
+                        </p>
+                        <p style={{
+                          fontSize: '0.85rem',
+                          color: colors.muted,
+                          margin: 0,
+                          lineHeight: 1.6,
+                        }}>
+                          {tab.questionDetails[idx]}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+
+                  <h4 style={{
+                    fontSize: '1rem',
+                    fontWeight: 700,
+                    color: colors.dark,
+                    marginBottom: '14px',
+                  }}>
+                    Key Capabilities:
+                  </h4>
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(3, 1fr)',
+                    gap: '10px',
+                  }}>
+                    {tab.capabilities.map((capability, idx) => (
+                      <div
+                        key={idx}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          padding: '10px 14px',
+                          background: colors.light,
+                          borderRadius: '8px',
+                          fontSize: '0.85rem',
+                          color: colors.dark,
+                        }}
+                      >
+                        <FaCheckCircle size={12} color={tab.color} />
+                        {capability}
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                <ul style={{
-                  listStyle: 'none',
-                  padding: 0,
-                  margin: 0,
-                }}>
-                  {area.items.map((item, idx) => (
-                    <li
-                      key={idx}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '8px',
-                        padding: '4px 0',
-                        fontSize: '0.85rem',
-                        color: colors.muted,
-                      }}
-                    >
-                      <FaCheckCircle size={12} color={area.color} />
-                      {item}
-                    </li>
-                  ))}
-                </ul>
               </div>
-            ))}
+            </div>
+          ))}
+        </section>
+
+        {/* Why BIG Section */}
+        <section style={{ marginBottom: '50px' }}>
+          <div style={{
+            background: `linear-gradient(135deg, ${colors.light}, ${colors.cream})`,
+            borderRadius: '16px',
+            padding: '40px',
+            border: `1px solid ${colors.border}`,
+          }}>
+            <div style={{
+              textAlign: 'center',
+              marginBottom: '24px',
+            }}>
+              <h2 style={{
+                fontSize: 'clamp(1.5rem, 2.5vw, 2rem)',
+                fontWeight: 800,
+                color: colors.dark,
+                margin: 0,
+              }}>
+                Why <span style={{ color: colors.brown }}>BIG Marketplace</span>?
+              </h2>
+            </div>
+            <p style={{
+              fontSize: '1rem',
+              color: colors.muted,
+              lineHeight: 1.8,
+              textAlign: 'center',
+              maxWidth: '650px',
+              margin: '0 auto 24px',
+            }}>
+              Most organisations already have systems. The problem is that those systems rarely talk to each other.
+              BIG doesn't replace what works. BIG connects what exists.
+            </p>
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(3, 1fr)',
+              gap: '16px',
+            }}>
+              {[
+                'Trust infrastructure',
+                'Supplier intelligence',
+                'Performance optimisation',
+                'Portfolio visibility',
+                'Opportunity creation',
+                'Ecosystem analytics'
+              ].map((item, idx) => (
+                <div
+                  key={idx}
+                  style={{
+                    background: colors.white,
+                    borderRadius: '10px',
+                    padding: '16px 20px',
+                    textAlign: 'center',
+                    border: `1px solid ${colors.border}`,
+                    fontWeight: 600,
+                    color: colors.dark,
+                    fontSize: '0.95rem',
+                  }}
+                >
+                  {item}
+                </div>
+              ))}
+            </div>
+            <p style={{
+              fontSize: '0.95rem',
+              color: colors.brown,
+              textAlign: 'center',
+              marginTop: '20px',
+              fontWeight: 700,
+            }}>
+              Into a single, connected platform.
+            </p>
           </div>
         </section>
 
@@ -453,7 +850,7 @@ const SolutionsCorporates = () => {
               textTransform: 'uppercase',
               marginBottom: '8px',
             }}>
-              Key Solutions
+              The BIG Framework
             </p>
             <h2 style={{
               fontSize: 'clamp(1.5rem, 2.5vw, 2rem)',
@@ -522,6 +919,59 @@ const SolutionsCorporates = () => {
                 </p>
               </div>
             ))}
+          </div>
+        </section>
+
+        {/* Building Africa's Trust Economy Section */}
+        <section style={{ marginBottom: '50px' }}>
+          <div style={{
+            background: `linear-gradient(135deg, ${colors.dark}, ${colors.brownDark})`,
+            borderRadius: '16px',
+            padding: '40px',
+            textAlign: 'center',
+          }}>
+            <div style={{ marginBottom: '16px' }}>
+              <FaGlobeAfrica size={40} color={colors.amber} />
+            </div>
+            <h2 style={{
+              fontSize: 'clamp(1.5rem, 2.5vw, 2rem)',
+              fontWeight: 800,
+              color: colors.white,
+              margin: '0 0 16px',
+            }}>
+              Building Africa's Trust Economy
+            </h2>
+            <p style={{
+              fontSize: '1rem',
+              color: 'rgba(255,255,255,0.85)',
+              lineHeight: 1.8,
+              maxWidth: '650px',
+              margin: '0 auto 20px',
+            }}>
+              BIG Marketplace exists to help organisations move from fragmented processes and isolated interventions 
+              toward connected ecosystems that create measurable outcomes.
+            </p>
+            <div style={{
+              display: 'flex',
+              gap: '16px',
+              justifyContent: 'center',
+              flexWrap: 'wrap',
+            }}>
+              <div style={{
+                color: 'rgba(255,255,255,0.6)',
+                fontSize: '0.9rem',
+                fontStyle: 'italic',
+              }}>
+                "Because growth shouldn't be accidental."
+              </div>
+              <div style={{
+                color: 'rgba(255,255,255,0.6)',
+                fontSize: '0.9rem',
+                fontStyle: 'italic',
+              }}>
+                "And impact shouldn't disappear when the programme ends."
+              </div>
+            </div>
           </div>
         </section>
 
