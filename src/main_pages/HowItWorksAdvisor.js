@@ -112,7 +112,7 @@ const HowItWorksAdvisors = () => {
                 letterSpacing: '0.08em',
                 textTransform: 'uppercase',
               }}>
-                For Advisors
+                For Advisors & Service Providers
               </span>
             </div>
             
@@ -135,7 +135,7 @@ const HowItWorksAdvisors = () => {
               margin: '0 0 28px',
               maxWidth: '500px',
             }}>
-              Guide. Mentor. Transform Businesses. Connect with high-potential SMEs and grow your advisory practice.
+              Guide. Mentor. Transform Businesses. Connect with high-potential businesses and grow your advisory practice.
             </p>
 
             <div style={{
@@ -227,7 +227,7 @@ const HowItWorksAdvisors = () => {
               {
                 icon: <FaHandshake size={26} />,
                 number: '03',
-                title: 'Connect with SMEs',
+                title: 'Connect with Businesses',
                 description: 'Receive requests from vetted businesses.',
                 details: ['Receive requests', 'Review BIG Score', 'Accept engagements', 'Use platform tools'],
                 subtext: '🔍 Work with aligned businesses',
@@ -237,8 +237,8 @@ const HowItWorksAdvisors = () => {
                 icon: <FaChartLine size={26} />,
                 number: '04',
                 title: 'Track Impact',
-                description: 'See SME progress and grow your network.',
-                details: ['See SME progress', 'Get visibility', 'Access opportunities', 'Build portfolio'],
+                description: 'See business progress and grow your network.',
+                details: ['See business progress', 'Get visibility', 'Access opportunities', 'Build portfolio'],
                 subtext: '📈 Grow your professional network',
                 color: colors.green,
               },

@@ -47,7 +47,7 @@ const CharmSchool = () => {
     setOpenAccordion(openAccordion === index ? null : index);
   };
 
-  // FAQ Data
+  // FAQ Data - Updated with business terminology
   const faqData = {
     graduates: [
       { 
@@ -60,7 +60,7 @@ const CharmSchool = () => {
       },
       { 
         q: "How will this help me get a job?", 
-        a: "The programme makes you stand out in interviews, helps you make strong first impressions, and positions you as a standout candidate for SME placement through BIG Marketplace." 
+        a: "The programme makes you stand out in interviews, helps you make strong first impressions, and positions you as a standout candidate for business placement through BIG Marketplace." 
       },
       { 
         q: "What kind of support will I receive after the programme?", 
@@ -78,15 +78,15 @@ const CharmSchool = () => {
       },
       { 
         q: "How can I access Charm-Certified graduates?", 
-        a: "SMEs registered on BIG Marketplace can select from pre-trained graduates, sponsor specific candidates, or participate in our talent matching programme." 
+        a: "Businesses registered on BIG Marketplace can select from pre-trained graduates, sponsor specific candidates, or participate in our talent matching programme." 
       },
       { 
-        q: "What is the cost benefit for my SME?", 
+        q: "What is the cost benefit for my business?", 
         a: "By hiring Charm-Certified graduates, you reduce onboarding costs, improve team productivity, and gain professionally trained staff who integrate faster and require less hand-holding." 
       },
       { 
         q: "Can I request specific training for graduates?", 
-        a: "Yes, we offer customised training packages for SMEs looking to develop graduates with specific skill sets aligned with their business needs." 
+        a: "Yes, we offer customised training packages for businesses looking to develop graduates with specific skill sets aligned with their business needs." 
       },
       { 
         q: "How quickly can graduates start adding value?", 
@@ -100,7 +100,7 @@ const CharmSchool = () => {
       },
       { 
         q: "How is my sponsorship impact measured?", 
-        a: "We provide comprehensive impact reports showing graduate employment rates, SME growth metrics, and social return on investment. You'll see exactly how your contribution creates change." 
+        a: "We provide comprehensive impact reports showing graduate employment rates, business growth metrics, and social return on investment. You'll see exactly how your contribution creates change." 
       },
       { 
         q: "Can I sponsor specific graduates or regions?", 
@@ -111,13 +111,13 @@ const CharmSchool = () => {
         a: "Sponsors receive branding on all Charm School materials, recognition during events, inclusion in PR campaigns, and opportunities for employee engagement through mentorship programmes." 
       },
       { 
-        q: "How does sponsorship strengthen SMEs?", 
-        a: "Your sponsorship creates a pipeline of work-ready talent that SMEs can access, helping them scale faster while reducing their recruitment and training costs." 
+        q: "How does sponsorship strengthen businesses?", 
+        a: "Your sponsorship creates a pipeline of work-ready talent that businesses can access, helping them scale faster while reducing their recruitment and training costs." 
       },
     ],
   };
 
-  // What You'll Learn Data
+  // What You'll Learn Data - Updated with business terminology
   const learnTopics = {
     graduates: [
       'Executive Presence & Personal Branding - Carry yourself with professionalism and confidence',
@@ -127,7 +127,7 @@ const CharmSchool = () => {
       'Professional Etiquette & Workplace Readiness - Understand the expectations and behaviours that employers value'
     ],
     smes: [
-      'Executive Presence - Represent your SME with confidence',
+      'Executive Presence - Represent your business with confidence',
       'Communication & Public Speaking - Handle clients, suppliers, and internal teams professionally',
       'Leadership Skills & EI - Show maturity and initiative in a small, agile team',
       'Professional Conduct - Understand workplace behaviour, expectations, and accountability',
@@ -135,11 +135,11 @@ const CharmSchool = () => {
     ],
     sponsors: [
       'Direct, measurable social impact aligned with CSI/CSR objectives',
-      'Strengthen high-growth SMEs with work-ready talent',
+      'Strengthen high-growth businesses with work-ready talent',
       'Create employment pathways for young professionals',
       'Brand visibility & social good credibility',
       'Access to BIG Marketplace\'s talent ecosystem',
-      'Impact reports showing outcomes, employment, and SME placements'
+      'Impact reports showing outcomes, employment, and business placements'
     ]
   };
 
@@ -727,12 +727,12 @@ const CharmSchool = () => {
           </h1>
           
           <p style={styles.heroSubtitle}>
-            Preparing Work-Ready Talent to Power South Africa's SMEs
+            Preparing Work-Ready Talent to Power South Africa's Businesses
           </p>
           
           <p style={styles.heroDescription}>
             The Charm School develops confident, capable graduates who are ready to contribute from Day One — 
-            strengthening SMEs, empowering young professionals, and enabling sponsors to drive real economic impact.
+            strengthening businesses, empowering young professionals, and enabling sponsors to drive real economic impact.
           </p>
           
           <div style={styles.heroButtons}>
@@ -787,14 +787,14 @@ const CharmSchool = () => {
             </div>
             <div style={styles.whatIsContent}>
               <p style={styles.whatIsText}>
-                <strong>Charm School is more than training — it's an ecosystem solution</strong> for talent development, SME capacity, and social impact.
+                <strong>Charm School is more than training — it's an ecosystem solution</strong> for talent development, business capacity, and social impact.
               </p>
               <p style={styles.whatIsText}>
                 By equipping graduates with essential soft skills, professional presence, and workplace readiness, 
-                we create a pipeline of polished, confident young professionals prepared to thrive in fast-paced SME environments.
+                we create a pipeline of polished, confident young professionals prepared to thrive in fast-paced business environments.
               </p>
               <div style={styles.whatIsHighlight}>
-                <strong>💡 The BIG Charm School</strong> — graduates gain employability, SMEs gain ready-to-perform talent, 
+                <strong>💡 The BIG Charm School</strong> — graduates gain employability, businesses gain ready-to-perform talent, 
                 and sponsors play a vital role in building stronger businesses, reducing youth unemployment, and 
                 accelerating South Africa's economic growth.
               </div>
@@ -866,7 +866,7 @@ const CharmSchool = () => {
         <div style={styles.section}>
           <h2 style={styles.sectionTitle}>Who Is <span style={{ color: '#7C4D2A' }}>Charm School</span> For?</h2>
           <p style={styles.sectionSubtitle}>
-            Whether you're a graduate looking to stand out, an SME seeking talent, or a sponsor wanting to make an impact — Charm School is for you.
+            Whether you're a graduate looking to stand out, a business seeking talent, or a sponsor wanting to make an impact — Charm School is for you.
           </p>
 
           <div style={styles.tabNavigation}>
@@ -882,7 +882,7 @@ const CharmSchool = () => {
               onClick={() => setActiveTab('smes')}
             >
               <FaBuilding size={isMobile ? 14 : 16} />
-              For SMEs
+              For Businesses
             </button>
             <button 
               style={activeTab === 'sponsors' ? styles.tabButtonActive : styles.tabButton}
@@ -936,14 +936,14 @@ const CharmSchool = () => {
                 <div style={styles.tabHighlight}>
                   <p style={styles.tabHighlightText}>
                     <strong>Why Join?</strong> Stand out in interviews • Make strong first impressions • 
-                    Build confidence in workplace settings • Position yourself for SME placement • 
+                    Build confidence in workplace settings • Position yourself for business placement • 
                     Gain a prestigious certification
                   </p>
                 </div>
               </>
             )}
 
-            {/* SMEs TAB */}
+            {/* BUSINESSES TAB (formerly SMEs) */}
             {activeTab === 'smes' && (
               <>
                 <h3 style={styles.tabTitle}>
@@ -951,8 +951,8 @@ const CharmSchool = () => {
                   Access Work-Ready Graduates
                 </h3>
                 <p style={styles.tabDescription}>
-                  Growing SMEs don't just need talent — they need graduates who arrive polished, confident, and ready to contribute immediately. 
-                  Charm School prepares young professionals to thrive in fast-paced SME environments.
+                  Growing businesses don't just need talent — they need graduates who arrive polished, confident, and ready to contribute immediately. 
+                  Charm School prepares young professionals to thrive in fast-paced business environments.
                 </p>
                 
                 <h4 style={{ fontSize: isMobile ? '1rem' : '1.1rem', fontWeight: 700, color: '#1C1410', marginBottom: '0.5rem' }}>
@@ -984,7 +984,7 @@ const CharmSchool = () => {
                 <div style={styles.toolkitSection}>
                   <h4 style={styles.toolkitTitle}>🏢 Get Access to the Charm-Certified Talent Pool</h4>
                   <p style={{ fontSize: isMobile ? '0.85rem' : '0.95rem', color: '#7A6A5E', marginBottom: '0.5rem' }}>
-                    SMEs on BIG Marketplace can:
+                    Businesses on BIG Marketplace can:
                   </p>
                   <div style={styles.toolkitList}>
                     <div style={styles.toolkitItem}>• Select pre-trained graduates</div>
@@ -1004,7 +1004,7 @@ const CharmSchool = () => {
                   Drive Measurable CSI/ESD Impact
                 </h3>
                 <p style={styles.tabDescription}>
-                  Sponsor a graduate. Strengthen SMEs. Create real impact. Your sponsorship helps a graduate gain confidence, 
+                  Sponsor a graduate. Strengthen businesses. Create real impact. Your sponsorship helps a graduate gain confidence, 
                   professionalism, and skills that dramatically increase their employability — funding a career, not just training.
                 </p>
                 
@@ -1031,15 +1031,15 @@ const CharmSchool = () => {
                     <div style={styles.toolkitItem}>• Digital handbook & templates</div>
                     <div style={styles.toolkitItem}>• Professional development toolkit</div>
                     <div style={styles.toolkitItem}>• Access to BIG Marketplace</div>
-                    <div style={styles.toolkitItem}>• Priority SME placement support</div>
+                    <div style={styles.toolkitItem}>• Priority business placement support</div>
                   </div>
                 </div>
 
                 <div style={styles.tabHighlight}>
                   <p style={styles.tabHighlightText}>
                     <strong>🎯 Sponsorship = Impact at Three Levels:</strong> 
-                    The Graduate (confidence & employability) • The SME (work-ready talent) • 
-                    The Economy (job creation & stronger SMEs)
+                    The Graduate (confidence & employability) • The Business (work-ready talent) • 
+                    The Economy (job creation & stronger businesses)
                   </p>
                 </div>
               </>
@@ -1056,7 +1056,7 @@ const CharmSchool = () => {
             Find answers to the most common questions about Charm School
           </p>
 
-          {/* Graduates & SMEs FAQ */}
+          {/* Graduates & Businesses FAQ */}
           <div style={styles.faqGrid}>
             {/* Graduates FAQ */}
             <div>
@@ -1082,11 +1082,11 @@ const CharmSchool = () => {
               ))}
             </div>
 
-            {/* SMEs FAQ */}
+            {/* Businesses FAQ (formerly SMEs) */}
             <div>
               <div style={styles.faqHeader}>
                 <FaBuilding size={22} color="#7C4D2A" />
-                <h3 style={styles.faqTitle}>For SMEs</h3>
+                <h3 style={styles.faqTitle}>For Businesses</h3>
               </div>
               {faqData.smes.map((item, index) => (
                 <div key={index} style={styles.accordionItem}>

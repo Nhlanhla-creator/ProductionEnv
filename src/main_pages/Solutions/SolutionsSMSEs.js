@@ -170,7 +170,7 @@ const SolutionsSMSEs = () => {
                 letterSpacing: '0.08em',
                 textTransform: 'uppercase',
               }}>
-                Solutions for African SMSEs
+                Solutions for African Businesses
               </span>
             </div>
             
@@ -194,7 +194,7 @@ const SolutionsSMSEs = () => {
               margin: '0 0 24px',
               maxWidth: '500px',
             }}>
-              SMSEs use BIG Marketplace to build verified profiles, get scored, and unlock funding, procurement, and growth opportunities.
+              Businesses use BIG Marketplace to build verified profiles, get scored, and unlock funding, procurement, and growth opportunities.
             </p>
 
             <button
@@ -404,7 +404,7 @@ const SolutionsSMSEs = () => {
             marginLeft: 'auto',
             marginRight: 'auto',
           }}>
-            Join thousands of African SMSEs already growing with BIG Marketplace.
+            Join thousands of African businesses already growing with BIG Marketplace.
           </p>
           <button
             onClick={() => navigate('/LoginRegister')}

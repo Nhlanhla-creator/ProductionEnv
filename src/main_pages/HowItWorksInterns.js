@@ -112,7 +112,7 @@ const HowItWorksInterns = () => {
                 letterSpacing: '0.08em',
                 textTransform: 'uppercase',
               }}>
-                For Interns
+                For Interns & Internship Sponsors
               </span>
             </div>
             
@@ -125,7 +125,7 @@ const HowItWorksInterns = () => {
               letterSpacing: '-0.02em',
             }}>
               How <span style={{ color: colors.amber }}>BIG</span> Works <br />
-              for Interns
+              for Interns & Sponsors
             </h1>
             
             <p style={{
@@ -135,7 +135,7 @@ const HowItWorksInterns = () => {
               margin: '0 0 28px',
               maxWidth: '500px',
             }}>
-              Empower Your Future. Build Your Experience. Grow Your BIG Score. Launch your career with purpose.
+              Empower Your Future. Build Your Experience. Grow Your BIG Score. Launch your career with purpose or build sustainable talent pipelines.
             </p>
 
             <div style={{
@@ -196,7 +196,7 @@ const HowItWorksInterns = () => {
               margin: 0,
               letterSpacing: '-0.01em',
             }}>
-              Launch Your Career in <span style={{ color: colors.primary }}>4 Simple Steps</span>
+              Launch Your Career or Build Talent Pipelines in <span style={{ color: colors.primary }}>4 Simple Steps</span>
             </h2>
           </div>
           
@@ -365,7 +365,7 @@ const HowItWorksInterns = () => {
             color: colors.white,
             margin: '0 0 12px',
           }}>
-            Ready to Launch Your Career?
+            Ready to Launch Your Career or Build Your Talent Pipeline?
           </h2>
           <p style={{
             fontSize: '1rem',
@@ -375,7 +375,7 @@ const HowItWorksInterns = () => {
             marginLeft: 'auto',
             marginRight: 'auto',
           }}>
-            Join the next generation of talent building their careers through BIG.
+            Join the next generation of talent and sponsors building careers through BIG.
           </p>
           <button
             onClick={handleButtonClick}

@@ -69,7 +69,7 @@ const RegModal = ({ onClose, isMobile }) => (
   </div>
 )
 
-const ScoreRing = ({ pct=61, size=110 }) => {
+const ScoreRing = ({ pct=80, size=110 }) => {
   const r=(size/2)-10, circ=2*Math.PI*r, dash=(pct/100)*circ
   return (
     <div style={{position:"relative",width:size,height:size,flexShrink:0}}>
@@ -85,46 +85,52 @@ const ScoreRing = ({ pct=61, size=110 }) => {
   )
 }
 
-const HeroScoreWidget = () => (
-  <div style={{background:"rgba(255,255,255,0.06)",backdropFilter:"blur(20px)",border:"1px solid rgba(255,255,255,0.14)",borderRadius:20,padding:"24px",minWidth:320,maxWidth:360,flexShrink:0}}>
-    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20}}>
-      <div>
-        <div style={{fontSize:"0.7rem",color:"rgba(255,255,255,0.55)",fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:4}}>Your BIG Score</div>
-        <div style={{fontSize:"2.2rem",fontWeight:900,color:"#fff",lineHeight:1}}>80<span style={{fontSize:"1rem",fontWeight:500,color:"rgba(255,255,255,0.5)"}}>/100</span></div>
-        <div style={{marginTop:6,display:"inline-flex",alignItems:"center",gap:5,background:C.green+"33",border:`1px solid ${C.green}55`,borderRadius:20,padding:"3px 10px"}}>
-          <span style={{width:6,height:6,borderRadius:"50%",background:C.green,display:"inline-block"}}/>
-          <span style={{fontSize:"0.68rem",fontWeight:700,color:C.green}}>Strong</span>
+const HeroScoreWidget = () => {
+  const components = [
+    {label:"Compliance score", pct:80, weight:28, color:C.red},
+    {label:"Legitimacy score", pct:85, weight:13, color:C.green},
+    {label:"Leadership & Governance score", pct:70, weight:10, color:C.orange},
+    {label:"Operational Strength score", pct:75, weight:14, color:C.orange},
+    {label:"Capital appeal score", pct:80, weight:35, color:C.orange},
+  ]
+  
+  const totalScore = 80
+  
+  return (
+    <div style={{background:"rgba(255,255,255,0.06)",backdropFilter:"blur(20px)",border:"1px solid rgba(255,255,255,0.14)",borderRadius:20,padding:"24px",minWidth:320,maxWidth:360,flexShrink:0}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:20}}>
+        <div>
+          <div style={{fontSize:"0.7rem",color:"rgba(255,255,255,0.55)",fontWeight:700,letterSpacing:"0.1em",textTransform:"uppercase",marginBottom:4}}>Your BIG Score</div>
+          <div style={{fontSize:"2.2rem",fontWeight:900,color:"#fff",lineHeight:1}}>{totalScore}<span style={{fontSize:"1rem",fontWeight:500,color:"rgba(255,255,255,0.5)"}}>/100</span></div>
+          <div style={{marginTop:6,display:"inline-flex",alignItems:"center",gap:5,background:C.green+"33",border:`1px solid ${C.green}55`,borderRadius:20,padding:"3px 10px"}}>
+            <span style={{width:6,height:6,borderRadius:"50%",background:C.green,display:"inline-block"}}/>
+            <span style={{fontSize:"0.68rem",fontWeight:700,color:C.green}}>Strong</span>
+          </div>
         </div>
+        <ScoreRing pct={totalScore} size={100}/>
       </div>
-      <ScoreRing pct={80} size={100}/>
-    </div>
-    {[
-      {label:"Compliance score",  pct:29, color:C.red, weight:28},
-      {label:"Legitimacy score",  pct:90, color:C.green, weight:13},
-      {label:"Leadership & Governance score",  pct:58, color:C.orange, weight:10},
-      {label:"Operational Strength score",  pct:70, color:C.orange, weight:14},
-      {label:"Capital appeal score", pct:45, color:C.orange, weight:35},
-    ].map(d=>{
-      const contribution = Math.round((d.pct/100) * d.weight);
-      return (
-        <div key={d.label} style={{marginBottom:9}}>
-          <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
-            <span style={{fontSize:"0.72rem",color:"rgba(255,255,255,0.7)",fontWeight:500}}>{d.label}</span>
-            <span style={{fontSize:"0.72rem",fontWeight:700,color:d.color}}>{d.pct}% × {d.weight}% wt = {contribution}%</span>
+      {components.map(d=>{
+        const contribution = Math.round((d.pct/100) * d.weight);
+        return (
+          <div key={d.label} style={{marginBottom:9}}>
+            <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+              <span style={{fontSize:"0.72rem",color:"rgba(255,255,255,0.7)",fontWeight:500}}>{d.label}</span>
+              <span style={{fontSize:"0.72rem",fontWeight:700,color:d.color}}>{d.pct}% × {d.weight}% wt = {contribution}%</span>
+            </div>
+            <div style={{height:5,background:"rgba(255,255,255,0.1)",borderRadius:3,overflow:"hidden"}}>
+              <div style={{width:`${d.pct}%`,height:"100%",background:d.color,borderRadius:3}}/>
+            </div>
           </div>
-          <div style={{height:5,background:"rgba(255,255,255,0.1)",borderRadius:3,overflow:"hidden"}}>
-            <div style={{width:`${d.pct}%`,height:"100%",background:d.color,borderRadius:3}}/>
-          </div>
-        </div>
-      );
-    })}
-    <div style={{marginTop:12, borderTop:"1px solid rgba(255,255,255,0.1)", paddingTop:12, textAlign:"center"}}>
-      <span style={{fontSize:"0.65rem", color:"rgba(255,255,255,0.5)"}}>Still anticipating to be matched — that's why the score is low, but the process is easy!</span>
+        );
+      })}
+      <div style={{marginTop:12, borderTop:"1px solid rgba(255,255,255,0.1)", paddingTop:12, textAlign:"center"}}>
+        <span style={{fontSize:"0.65rem", color:"rgba(255,255,255,0.5)"}}>Still anticipating to be matched — that's why the score is low, but the process is easy!</span>
+      </div>
     </div>
-  </div>
-)
+  )
+}
 
-const SMSESidebar = ({ active="score" }) => {
+const BusinessSidebar = ({ active="score" }) => {
   const items=[
     {id:"home",   icon:<FaHome size={14}/>,          label:"Home"},
     {id:"profile",icon:<FaUser size={14}/>,           label:"My Profile"},
@@ -143,7 +149,7 @@ const SMSESidebar = ({ active="score" }) => {
         <div style={{width:34,height:34,borderRadius:10,background:C.primary,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:900,color:"#fff",fontSize:"0.9rem"}}>A</div>
         <div>
           <div style={{color:"#fff",fontWeight:700,fontSize:"0.82rem",lineHeight:1.2}}>Amara Holdings</div>
-          <div style={{color:C.accent,fontSize:"0.63rem",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.06em"}}>SMSE Dashboard</div>
+          <div style={{color:C.accent,fontSize:"0.63rem",fontWeight:600,textTransform:"uppercase",letterSpacing:"0.06em"}}>Business Dashboard</div>
         </div>
       </div>
       {items.map(it=>(
@@ -186,18 +192,20 @@ const InvestorSidebar = ({ active="matches" }) => {
   )
 }
 
-const SMSEDashboard = () => {
+const BusinessDashboard = () => {
   const [bdOpen,setBdOpen]=useState(false)
   const subScores=[
-    {label:"Compliance score",  dot:C.red,   pct:29, weight:28,color:C.red},
-    {label:"Legitimacy score",  dot:C.green, pct:90, weight:13,color:C.green},
-    {label:"Leadership & Governance score", dot:C.orange,pct:58, weight:10,color:C.orange},
-    {label:"Operational Strength score",dot:C.orange,pct:70, weight:14,color:C.orange},
-    {label:"Capital appeal score",dot:C.orange,pct:45, weight:35,color:C.orange},
+    {label:"Compliance score",  dot:C.red,   pct:80, weight:28, color:C.red},
+    {label:"Legitimacy score",  dot:C.green, pct:85, weight:13, color:C.green},
+    {label:"Leadership & Governance score", dot:C.orange, pct:70, weight:10, color:C.orange},
+    {label:"Operational Strength score", dot:C.orange, pct:75, weight:14, color:C.orange},
+    {label:"Capital appeal score", dot:C.orange, pct:80, weight:35, color:C.orange},
   ]
+  const totalScore = 80
+  
   return (
     <div style={{display:"flex",borderRadius:14,overflow:"hidden",boxShadow:"0 8px 40px rgba(28,20,16,0.18)",border:`1px solid ${C.border}`,width:"100%"}}>
-      <SMSESidebar active="score"/>
+      <BusinessSidebar active="score"/>
       <div style={{flex:1,background:"#F5F0E8",minWidth:0}}>
         <div style={{background:C.white,borderBottom:`1px solid ${C.border}`,padding:"10px 18px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
           <div style={{display:"flex",alignItems:"center",gap:12}}>
@@ -251,10 +259,10 @@ const SMSEDashboard = () => {
               <div style={{position:"relative",width:80,height:80}}>
                 <svg width={80} height={80} style={{transform:"rotate(-90deg)"}}>
                   <circle cx={40} cy={40} r={32} fill="none" stroke="#ECE5DE" strokeWidth={8}/>
-                  <circle cx={40} cy={40} r={32} fill="none" stroke={C.orange} strokeWidth={8} strokeLinecap="round" strokeDasharray={`${0.61*2*Math.PI*32} ${2*Math.PI*32}`}/>
+                  <circle cx={40} cy={40} r={32} fill="none" stroke={C.orange} strokeWidth={8} strokeLinecap="round" strokeDasharray={`${(totalScore/100)*2*Math.PI*32} ${2*Math.PI*32}`}/>
                 </svg>
                 <div style={{position:"absolute",inset:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
-                  <span style={{fontSize:"1.1rem",fontWeight:900,color:C.dark,lineHeight:1}}>61%</span>
+                  <span style={{fontSize:"1.1rem",fontWeight:900,color:C.dark,lineHeight:1}}>{totalScore}%</span>
                 </div>
               </div>
             </div>
@@ -280,6 +288,7 @@ const SMSEDashboard = () => {
                     <div style={{fontSize:"0.58rem",color:C.muted,marginTop:1}}>{s.pct}% x {s.weight}% wt = {Math.round(s.pct*s.weight/100)}%</div>
                   </div>
                 ))}
+                <div style={{fontSize:"0.65rem",fontWeight:700,color:C.primary,marginTop:6}}>Total Score: {totalScore}%</div>
               </div>
             )}
           </div>
@@ -298,28 +307,28 @@ const SMSEDashboard = () => {
             </div>
             <div style={{display:"flex",flexDirection:"column",gap:4,marginBottom:8}}>
               <div style={{display:"flex",alignItems:"center",gap:6, background:C.white, padding:"6px 8px",borderRadius:6,border:`1px solid ${C.border}`}}>
-                <img src="https://randomuser.me/api/portraits/women/68.jpg" alt="Reviewer" style={{width:24,height:24,borderRadius:"50%",objectFit:"cover"}}/>
+                <div style={{width:24,height:24,borderRadius:"50%",background:"#D4A574",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:700,fontSize:"0.7rem"}}>T</div>
                 <div style={{flex:1}}>
                   <div style={{display:"flex",alignItems:"center",gap:4,fontSize:"0.65rem",fontWeight:600,color:C.dark}}>Thandi M. <span style={{fontWeight:400,color:C.muted}}>| Verified</span></div>
                   <div style={{display:"flex",gap:1}}>{[1,2,3].map(i=><FaStar key={i} size={8} color="#F59E0B"/>)}<FaStar size={8} color={C.border}/><FaStar size={8} color={C.border}/></div>
                 </div>
               </div>
               <div style={{display:"flex",alignItems:"center",gap:6, background:C.white, padding:"6px 8px",borderRadius:6,border:`1px solid ${C.border}`}}>
-                <img src="https://randomuser.me/api/portraits/men/52.jpg" alt="Reviewer" style={{width:24,height:24,borderRadius:"50%",objectFit:"cover"}}/>
+                <div style={{width:24,height:24,borderRadius:"50%",background:"#5A8A7A",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:700,fontSize:"0.7rem"}}>S</div>
                 <div style={{flex:1}}>
                   <div style={{display:"flex",alignItems:"center",gap:4,fontSize:"0.65rem",fontWeight:600,color:C.dark}}>Sipho K. <span style={{fontWeight:400,color:C.muted}}>| Verified</span></div>
                   <div style={{display:"flex",gap:1}}>{[1,2,3].map(i=><FaStar key={i} size={8} color="#F59E0B"/>)}<FaStar size={8} color={C.border}/><FaStar size={8} color={C.border}/></div>
                 </div>
               </div>
               <div style={{display:"flex",alignItems:"center",gap:6, background:C.white, padding:"6px 8px",borderRadius:6,border:`1px solid ${C.border}`}}>
-                <img src="https://randomuser.me/api/portraits/women/43.jpg" alt="Reviewer" style={{width:24,height:24,borderRadius:"50%",objectFit:"cover"}}/>
+                <div style={{width:24,height:24,borderRadius:"50%",background:"#B8860B",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:700,fontSize:"0.7rem"}}>N</div>
                 <div style={{flex:1}}>
                   <div style={{display:"flex",alignItems:"center",gap:4,fontSize:"0.65rem",fontWeight:600,color:C.dark}}>Nomsa D. <span style={{fontWeight:400,color:C.muted}}>| Verified</span></div>
                   <div style={{display:"flex",gap:1}}>{[1,2,3,4].map(i=><FaStar key={i} size={8} color="#F59E0B"/>)}<FaStar size={8} color={C.border}/></div>
                 </div>
               </div>
               <div style={{display:"flex",alignItems:"center",gap:6, background:C.orangeBg, padding:"6px 8px",borderRadius:6,border:`1px solid ${C.orange}44`}}>
-                <img src="https://randomuser.me/api/portraits/men/32.jpg" alt="Advisor" style={{width:24,height:24,borderRadius:"50%",objectFit:"cover"}}/>
+                <div style={{width:24,height:24,borderRadius:"50%",background:C.primary,display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontWeight:700,fontSize:"0.7rem"}}>M</div>
                 <div style={{flex:1}}>
                   <div style={{display:"flex",alignItems:"center",gap:4,fontSize:"0.65rem",fontWeight:600,color:C.dark}}>Advisor: Mandla N. <span style={{fontWeight:400,color:C.muted}}>| Strategic Advisor</span></div>
                   <div style={{display:"flex",gap:1,alignItems:"center"}}>
@@ -412,7 +421,7 @@ const InvestorDashboard = () => {
           <div style={{background:C.white,borderRadius:"0 8px 8px 8px",border:`1px solid ${C.border}`,overflowX:"auto",marginBottom:14}}>
             <table style={{width:"100%",borderCollapse:"collapse",fontSize:"0.68rem",tableLayout:"auto"}}>
               <thead><tr style={{background:C.cream}}>
-                {["SMSE Name","Location","Sector","Stage","Funding Required","Equity Offered","Guarantees","Support Required","Application Date","% Match","Big Score"].map(h=>(
+                {["Business Name","Location","Sector","Stage","Funding Required","Equity Offered","Guarantees","Support Required","Application Date","% Match","Big Score"].map(h=>(
                   <th key={h} style={{padding:"8px 9px",textAlign:"left",color:C.muted,fontWeight:700,borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap",fontSize:"0.63rem"}}>{h}</th>
                 ))}
               </tr></thead>
@@ -438,507 +447,6 @@ const InvestorDashboard = () => {
     </div>
   )
 }
-
-// ====================== FAQ SECTION COMPONENT ======================
-const FAQSection = ({ isMobile }) => {
-  const [activeTab, setActiveTab] = useState('general')
-  const [openQuestion, setOpenQuestion] = useState(null)
-
-  const faqData = {
-    general: [
-      {
-        question: "What is BIG Marketplace Africa?",
-        answer: "BIG Marketplace Africa is a comprehensive platform that connects SMEs with investors, advisors, catalysts, interns, and other businesses. We use our proprietary BIG Score to create intelligent matches between stakeholders, simplifying connections and driving business growth across Africa."
-      },
-      {
-        question: "Who can register on the platform?",
-        answer: "The following stakeholders can register: SMEs, Investors/Funders, Advisors (Experts and Consultants), Graduates (for Internship roles), Catalysts (Accelerators, Incubators), Program Sponsors, Corporates, and Suppliers/Service Providers."
-      },
-      {
-        question: "Can SMEs become advisors on the platform?",
-        answer: "No, SMEs cannot register as advisors. SMEs are the primary beneficiaries who receive advice, funding, and support. However, SMEs can register as suppliers to other businesses, offer services to other SMEs, or purchase from other SMEs as customers."
-      },
-      {
-        question: "Is registration free?",
-        answer: "Yes, we offer a free Basic plan for all users. We also have Standard and Premium subscription plans with additional features, plus various add-ons for specific needs."
-      },
-      {
-        question: "Can I update my profile later?",
-        answer: "Yes. You can edit your profile, update documents, and modify your preferences anytime through your dashboard."
-      },
-      {
-        question: "How do I contact support?",
-        answer: "For all technical, billing, or policy-related inquiries: support@bigmarketplace.africa"
-      }
-    ],
-    funding: [
-      {
-        question: "How does funding matching work?",
-        answer: "Our platform uses intelligent matching similar to dating apps: Investors set their investment criteria, SMEs complete their profiles and get a BIG Score, our algorithm matches investors with the most compatible SMEs, and highest matches appear at the top of investor dashboards."
-      },
-      {
-        question: "What type of funding can I apply for?",
-        answer: "SMEs can apply for various funding types: Equity Investment, Debt Financing, Grants, and Growth funding opportunities."
-      },
-      {
-        question: "How long does funding matching take?",
-        answer: "Initial matching happens instantly. Feedback on specific applications typically takes 2–4 weeks, depending on profile completeness and investor response times."
-      },
-      {
-        question: "What documents do I need for funding applications?",
-        answer: "Typically required: Business registration documents, Financial summaries or revenue reports, Pitch deck or business plan, Compliance certificates, and Growth strategy documentation."
-      },
-      {
-        question: "How does the BIG Score impact funding success?",
-        answer: "The BIG Score significantly improves funding success by providing data-driven legitimacy assessment, enhancing investor confidence, reducing due diligence time, and highlighting growth potential and compliance readiness."
-      }
-    ],
-    stakeholders: [
-      {
-        section: "Advisors",
-        questions: [
-          {
-            question: "How do SMEs connect with advisors?",
-            answer: "SMEs can apply for advisory services through their dashboard. Our matching system connects them with qualified advisors based on business needs, industry expertise, and BIG Score compatibility."
-          },
-          {
-            question: "What types of advisory services are available?",
-            answer: "Advisors provide expertise in business strategy, financial management, marketing, operations, technology, legal matters, and more."
-          },
-          {
-            question: "How are advisors selected and verified?",
-            answer: "All advisors undergo rigorous verification including professional credential checks, experience validation, reference checks, and platform orientation."
-          }
-        ]
-      },
-      {
-        section: "Interns & Graduates",
-        questions: [
-          {
-            question: "How does the internship program work?",
-            answer: "Graduates apply and create profiles, program sponsors review candidates, SMEs post opportunities, and our system matches graduates with SMEs based on skills and BIG Score."
-          },
-          {
-            question: "Who can apply for internships?",
-            answer: "Graduates and students seeking practical experience can apply. They undergo verification and receive a BIG Score to ensure quality matching."
-          },
-          {
-            question: "What support do interns receive?",
-            answer: "Interns receive comprehensive support including program sponsor funding, SME mentorship, platform resources, and career development opportunities."
-          }
-        ]
-      },
-      {
-        section: "Catalysts",
-        questions: [
-          {
-            question: "What are catalysts and what do they do?",
-            answer: "Catalysts are growth enablers like accelerators and incubators who help SMEs scale operations, provide strategic guidance, and facilitate partnerships."
-          },
-          {
-            question: "How do catalysts connect with SMEs?",
-            answer: "Our matching system connects catalysts with SMEs based on growth stage, industry focus, and specific program criteria through the BIG Score system."
-          }
-        ]
-      },
-      {
-        section: "Services & Suppliers",
-        questions: [
-          {
-            question: "How do SMEs offer or request services?",
-            answer: "SMEs can both list and request products or services through their profiles. Our matching system connects businesses based on compatibility and specific needs."
-          },
-          {
-            question: "What types of services can be offered?",
-            answer: "SMEs can offer products like laptops and equipment, professional services, manufacturing, digital services, and logistics services."
-          }
-        ]
-      }
-    ],
-    subscriptions: [
-      {
-        question: "What subscription plans are available?",
-        answer: "We offer three main subscription tiers: Basic Plan (Free), Standard Plan, and Premium Plan. Each plan offers different features and capabilities to suit various business needs."
-      },
-      {
-        question: "What add-on services are available?",
-        answer: "Additional services include: API Access to BIG Score engine, Branded SME Portfolio Pages, Co-branded Calls for Applications, Custom BIG Score benchmarks, and other specialized services."
-      },
-      {
-        question: "How do I manage my subscription?",
-        answer: "You can easily manage your subscription through your account dashboard: Upgrade or downgrade your plan, Cancel your subscription, Update payment methods, View billing history and invoices, and Manage add-on services."
-      },
-      {
-        question: "What are BIG Growth Tools?",
-        answer: "BIG Growth Tools are curated resources designed to boost your BIG Score: Compliance toolkits (legal templates, policy essentials), Legitimacy boosters (digital foundation, brand identity), Capital appeal enhancers (financial readiness, investment packs), and Governance strengtheners (advisory readiness, board toolkits)."
-      }
-    ],
-    policy: [
-      {
-        section: "Privacy & Data Protection",
-        questions: [
-          {
-            question: "How does Big Marketplace Africa protect my personal information?",
-            answer: "We use industry-standard security measures including encryption, secure servers, and access controls to protect your personal information. All data is stored in secure environments with regular security audits."
-          },
-          {
-            question: "Is my card information safe when I make a payment?",
-            answer: "Yes, we use PCI-compliant payment processors and never store your full card details on our servers. All payment transactions are encrypted and processed through secure payment gateways."
-          },
-          {
-            question: "Do you share my data with third parties?",
-            answer: "We do not sell your personal data. We only share information with trusted third parties when necessary for platform functionality (e.g., payment processing) or when required by law."
-          },
-          {
-            question: "What type of personal data do you collect from users and vendors?",
-            answer: "We collect only necessary information including contact details, business information, verification documents, and platform usage data to provide and improve our services."
-          },
-          {
-            question: "How can I request that my personal data be deleted or updated?",
-            answer: "You can update most information through your account settings. For data deletion requests, please contact our support team at support@bigmarketplace.africa."
-          },
-          {
-            question: "Is my information encrypted during transactions?",
-            answer: "Yes, all data transmitted between your device and our servers is encrypted using SSL/TLS encryption protocols to ensure secure communication."
-          }
-        ]
-      },
-      {
-        section: "Refund & Return Policy",
-        questions: [
-          {
-            question: "What is your refund policy for digital subscriptions or plans?",
-            answer: "Digital subscriptions can be refunded within 14 days of purchase if no services have been utilized. Refunds are processed on a case-by-case basis for exceptional circumstances."
-          },
-          {
-            question: "Can I cancel my subscription and get a refund?",
-            answer: "You can cancel your subscription at any time. Refunds for unused portions are available within the first 14 days of the billing cycle."
-          },
-          {
-            question: "How long does it take to process a refund?",
-            answer: "Refunds are typically processed within 7-10 business days after approval. The time to appear in your account depends on your financial institution."
-          }
-        ]
-      },
-      {
-        section: "Terms of Service & General Policies",
-        questions: [
-          {
-            question: "What are the terms and conditions for using Big Marketplace Africa?",
-            answer: "Our comprehensive Terms of Service govern platform usage, covering user responsibilities, prohibited activities, intellectual property, and dispute resolution. These are available on our website."
-          },
-          {
-            question: "Are there any restrictions on what vendors can sell?",
-            answer: "Yes, we prohibit illegal items, dangerous goods, counterfeit products, and services that violate local laws or our community guidelines."
-          },
-          {
-            question: "How do I report a policy violation or fraudulent activity?",
-            answer: "Use the 'Help' feature on any listing or profile, or contact our support team immediately at support@bigmarketplace.africa with details of the violation."
-          }
-        ]
-      }
-    ],
-    bigScore: [
-      {
-        question: "What is the BIG Score?",
-        answer: "The BIG Score is our proprietary scoring system that evaluates businesses and individuals based on multiple factors including legitimacy, growth potential, compliance, and readiness for opportunities."
-      },
-      {
-        question: "How does the BIG Score improve matching?",
-        answer: "The BIG Score enhances matching by providing objective assessment of credibility, identifying growth potential and readiness, ensuring compatibility between stakeholders, and reducing risk for investors and partners."
-      },
-      {
-        question: "Do all users get a BIG Score?",
-        answer: "Yes, all registered participants receive relevant scores: SMEs get comprehensive business scores, Advisors receive credibility scores, Graduates/interns get performance metrics, and all scores help ensure quality matches."
-      },
-      {
-        question: "Can I improve my BIG Score?",
-        answer: "Yes, your BIG Score is dynamic and can be improved by: Completing your profile with accurate information, Using BIG Growth Tools to address specific areas, Maintaining good platform engagement, Building positive relationships with partners, and Demonstrating growth and compliance."
-      },
-      {
-        question: "How do BIG Growth Tools help improve my score?",
-        answer: "BIG Growth Tools are specifically designed to boost different aspects of your score: Compliance tools address legal and policy requirements, Legitimacy tools enhance your professional presence, Capital appeal tools strengthen your funding readiness, and Governance tools build proper business structure."
-      }
-    ]
-  }
-
-  const toggleQuestion = (index) => {
-    setOpenQuestion(openQuestion === index ? null : index)
-  }
-
-  const renderStakeholdersContent = () => {
-    return faqData.stakeholders.map((section, sectionIndex) => (
-      <div key={sectionIndex} style={{marginBottom:16}}>
-        <h4 style={{fontSize:"0.85rem",fontWeight:700,color:C.primary,margin:"0 0 8px",display:"flex",alignItems:"center",gap:8}}>
-          {section.section === "Advisors" && <FaUserTie size={14} />}
-          {section.section === "Interns & Graduates" && <FaGraduationCap size={14} />}
-          {section.section === "Catalysts" && <FaRocket size={14} />}
-          {section.section === "Services & Suppliers" && <FaTools size={14} />}
-          {section.section}
-        </h4>
-        {section.questions.map((item, index) => {
-          const globalIndex = sectionIndex * 10 + index
-          return (
-            <FAQItem 
-              key={globalIndex}
-              isOpen={openQuestion === globalIndex}
-              onClick={() => toggleQuestion(globalIndex)}
-              question={item.question}
-              answer={item.answer}
-            />
-          )
-        })}
-      </div>
-    ))
-  }
-
-  const renderPolicyContent = () => {
-    return faqData.policy.map((section, sectionIndex) => (
-      <div key={sectionIndex} style={{marginBottom:16}}>
-        <h4 style={{fontSize:"0.85rem",fontWeight:700,color:C.primary,margin:"0 0 8px",display:"flex",alignItems:"center",gap:8}}>
-          {section.section === "Privacy & Data Protection" && <FaLock size={14} />}
-          {section.section === "Refund & Return Policy" && <FaReceipt size={14} />}
-          {section.section === "Terms of Service & General Policies" && <FaFileContract size={14} />}
-          {section.section}
-        </h4>
-        {section.questions.map((item, index) => {
-          const globalIndex = sectionIndex * 20 + index
-          return (
-            <FAQItem 
-              key={globalIndex}
-              isOpen={openQuestion === globalIndex}
-              onClick={() => toggleQuestion(globalIndex)}
-              question={item.question}
-              answer={item.answer}
-            />
-          )
-        })}
-      </div>
-    ))
-  }
-
-  const renderContent = () => {
-    if (activeTab === 'stakeholders') {
-      return renderStakeholdersContent()
-    }
-    if (activeTab === 'policy') {
-      return renderPolicyContent()
-    }
-    return faqData[activeTab].map((item, index) => (
-      <FAQItem 
-        key={index}
-        isOpen={openQuestion === index}
-        onClick={() => toggleQuestion(index)}
-        question={item.question}
-        answer={item.answer}
-      />
-    ))
-  }
-
-  const tabs = [
-    { id: 'general', label: 'General', icon: <FaShieldAlt size={12} /> },
-    { id: 'funding', label: 'Funding', icon: <FaChartLine size={12} /> },
-    { id: 'stakeholders', label: 'Stakeholders', icon: <FaUsers size={12} /> },
-    { id: 'subscriptions', label: 'Subscriptions', icon: <FaCreditCard size={12} /> },
-    { id: 'policy', label: 'Policy', icon: <FaFileContract size={12} /> },
-    { id: 'bigScore', label: 'BIG Score', icon: <FaStar size={12} /> },
-  ]
-
-  return (
-    <div style={{
-      background: "rgba(255,255,255,0.92)",
-      backdropFilter: "blur(8px)",
-      borderRadius: 20,
-      boxShadow: "0 8px 36px rgba(28,20,16,0.08)",
-      padding: isMobile ? "20px 16px" : "28px 32px",
-      border: "1px solid rgba(0,0,0,0.04)",
-      maxWidth: 900,
-      margin: "0 auto",
-    }}>
-      {/* Header with human imagery */}
-      <div style={{display:"flex",alignItems:"center",gap:14,marginBottom:isMobile?16:24,flexWrap:"wrap"}}>
-        <div style={{
-          width: isMobile ? 44 : 56,
-          height: isMobile ? 44 : 56,
-          borderRadius: "50%",
-          background: `linear-gradient(135deg, ${C.primary}, ${C.secondary})`,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          color: "#fff",
-          fontSize: isMobile ? "1.2rem" : "1.5rem",
-          fontWeight: 700,
-          flexShrink: 0,
-        }}>
-          ?
-        </div>
-        <div>
-          <h3 style={{fontSize:isMobile?"1.1rem":"1.3rem",fontWeight:800,color:C.dark,margin:0}}>
-            Frequently Asked Questions
-          </h3>
-          <p style={{fontSize:"0.78rem",color:C.muted,margin:"2px 0 0",display:"flex",alignItems:"center",gap:5}}>
-            <FaInfoCircle size={10} /> Find answers about our platform, matching, and how we protect your data
-          </p>
-        </div>
-      </div>
-
-      {/* Tabs */}
-      <div style={{
-        display:"flex",
-        gap:6,
-        flexWrap:"wrap",
-        marginBottom:isMobile?16:20,
-        borderBottom:`1px solid ${C.border}`,
-        paddingBottom:isMobile?10:14,
-      }}>
-        {tabs.map(tab => (
-          <button
-            key={tab.id}
-            onClick={() => { setActiveTab(tab.id); setOpenQuestion(null) }}
-            style={{
-              padding: isMobile ? "6px 12px" : "8px 18px",
-              background: activeTab === tab.id ? C.primary : "transparent",
-              color: activeTab === tab.id ? "#fff" : C.muted,
-              border: activeTab === tab.id ? "none" : `1px solid ${C.border}`,
-              borderRadius: 20,
-              cursor: "pointer",
-              fontSize: isMobile ? "0.7rem" : "0.78rem",
-              fontWeight: activeTab === tab.id ? 700 : 500,
-              display: "flex",
-              alignItems: "center",
-              gap: 5,
-              transition: "all 0.2s",
-              fontFamily: "inherit",
-            }}
-          >
-            {tab.icon} {tab.label}
-          </button>
-        ))}
-      </div>
-
-      {/* FAQ List */}
-      <div style={{display:"flex",flexDirection:"column",gap:8}}>
-        {renderContent()}
-      </div>
-
-      {/* Data privacy explanation - emotionally engaging */}
-      <div style={{
-        marginTop: isMobile ? 16 : 24,
-        padding: isMobile ? "14px 16px" : "18px 24px",
-        background: `linear-gradient(135deg, ${C.cream}, ${C.white})`,
-        borderRadius: 12,
-        border: `1px solid ${C.border}`,
-        position: "relative",
-        overflow: "hidden",
-      }}>
-        <div style={{
-          position: "absolute",
-          right: -20,
-          top: -20,
-          width: 80,
-          height: 80,
-          borderRadius: "50%",
-          background: `${C.primary}08`,
-          pointerEvents: "none",
-        }} />
-        <div style={{display:"flex",alignItems:"flex-start",gap:12,position:"relative",zIndex:1}}>
-          <div style={{
-            width: 36,
-            height: 36,
-            borderRadius: "50%",
-            background: C.primary + "15",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            flexShrink: 0,
-            marginTop: 2,
-          }}>
-            <FaLock size={16} color={C.primary} />
-          </div>
-          <div>
-            <h4 style={{fontSize:"0.85rem",fontWeight:700,color:C.dark,margin:"0 0 4px"}}>
-              Your Data, Your Trust — We Take It Seriously
-            </h4>
-            <p style={{fontSize:"0.75rem",color:C.muted,lineHeight:1.6,margin:0}}>
-              BIG Marketplace collects only essential data to connect you with the right opportunities. 
-              Your information is <strong style={{color:C.dark}}>encrypted</strong>, never sold, and only shared with your consent. 
-              We're committed to <strong style={{color:C.dark}}>POPIA compliance</strong> and transparent data practices — 
-              because your journey to growth deserves a foundation of trust.
-            </p>
-            <div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:8}}>
-              <span style={{fontSize:"0.6rem",background:C.primary+"10",color:C.primary,padding:"2px 10px",borderRadius:10,fontWeight:600}}>🔒 Data Encryption</span>
-              <span style={{fontSize:"0.6rem",background:C.green+"10",color:C.green,padding:"2px 10px",borderRadius:10,fontWeight:600}}>✓ POPIA Compliant</span>
-              <span style={{fontSize:"0.6rem",background:C.amber+"10",color:C.secondary,padding:"2px 10px",borderRadius:10,fontWeight:600}}>🛡️ Secure Servers</span>
-              <span style={{fontSize:"0.6rem",background:C.blue+"10",color:C.blue,padding:"2px 10px",borderRadius:10,fontWeight:600}}>📋 Data Control</span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-const FAQItem = ({ isOpen, onClick, question, answer }) => {
-  return (
-    <div style={{
-      border: `1px solid ${isOpen ? C.primary : C.border}`,
-      borderRadius: 10,
-      overflow: "hidden",
-      transition: "all 0.3s",
-      background: isOpen ? C.white : "transparent",
-    }}>
-      <button
-        onClick={onClick}
-        style={{
-          width: "100%",
-          padding: "12px 16px",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          background: "transparent",
-          border: "none",
-          cursor: "pointer",
-          fontSize: "0.82rem",
-          fontWeight: isOpen ? 700 : 500,
-          color: C.dark,
-          textAlign: "left",
-          fontFamily: "inherit",
-          transition: "all 0.2s",
-        }}
-      >
-        <span>{question}</span>
-        <span style={{
-          color: isOpen ? C.primary : C.muted,
-          fontSize: "1.1rem",
-          flexShrink: 0,
-          marginLeft: 12,
-          transition: "transform 0.3s",
-          transform: isOpen ? "rotate(180deg)" : "rotate(0)",
-        }}>
-          {isOpen ? <MdRemove size={18} /> : <MdAdd size={18} />}
-        </span>
-      </button>
-      <div style={{
-        maxHeight: isOpen ? 500 : 0,
-        overflow: "hidden",
-        transition: "maxHeight 0.4s ease, padding 0.3s ease",
-        padding: isOpen ? "0 16px 14px" : "0 16px",
-        borderTop: isOpen ? `1px solid ${C.border}` : "none",
-      }}>
-        <p style={{
-          fontSize: "0.78rem",
-          color: C.muted,
-          lineHeight: 1.7,
-          margin: 0,
-          whiteSpace: "pre-line",
-        }}>
-          {answer}
-        </p>
-      </div>
-    </div>
-  )
-}
-// ====================== END FAQ SECTION ======================
 
 // ====================== MOBILE NOTICE BANNER ======================
 const MobileNotice = ({ onClose }) => {
@@ -1015,7 +523,7 @@ const LandingPage = () => {
   const [showModal,setShowModal]=useState(false)
   const [winW,setWinW]=useState(window.innerWidth)
   const [regOpen,setRegOpen]=useState(false)
-  const [activeTab,setActiveTab]=useState("smse")
+  const [activeTab,setActiveTab]=useState("business")
   const [showMobileNotice, setShowMobileNotice] = useState(true)
 
   useEffect(()=>{ const r=()=>setWinW(window.innerWidth); window.addEventListener("resize",r); return ()=>window.removeEventListener("resize",r) },[])
@@ -1025,25 +533,24 @@ const LandingPage = () => {
   const go=()=>regOpen?navigate("/loginRegister"):setShowModal(true)
 
   const benefits=[
-    {title:"SMSEs",     icon:<FaUsers size={18}/>,             color:C.primary,   tagline:"Be Seen. Be Matched. Grow.",        desc:"Get matched with funders, service providers, and strategic support through one universal profile.",   link:"/HowItWorksSMSE",      tip:"Small, Medium and Social Enterprises."},
-    {title:"Investors", icon:<FaUserTie size={18}/>,           color:C.secondary, tagline:"Discover. Verify. Invest.",          desc:"Access verified, investment-ready SMEs with transparent scoring and predictive insights.",              link:"/HowItWorksInvestors", tip:"VCs, angel investors, and impact investors."},
-    {title:"Corporates",icon:<MdCorporateFare size={18}/>,     color:"#4A3728",   tagline:"Source. Partner. Amplify Impact.",   desc:"Accelerate CSI and ESD impact by sourcing verified SMSEs that align with your strategic goals.",          link:"/HowItWorksCorporates",tip:"Large companies sourcing via CSI or ESD."},
-    {title:"Catalysts", icon:<FaHandHoldingHeart size={18}/>,  color:"#8B6914",   tagline:"Accelerate. Mentor. Fund. Track.",   desc:"Support high-potential SMEs and monitor cohort outcomes via the BIG Score.",                            link:"/HowItWorksCatalysts", tip:"Incubators, accelerators, and development agencies."},
-    {title:"Advisors",  icon:<FaUserTie size={18}/>,           color:"#5A5A5A",   tagline:"Guide. Mentor. Get Recognised.",     desc:"Connect with businesses that need your expertise and grow your advisory practice.",                       link:"/HowItWorksAdvisors",  tip:"Strategic advisors matched to businesses."},
-    {title:"Interns",   icon:<FaUsers size={18}/>,             color:"#8A8A8A",   tagline:"Learn. Grow. Get Experience.",       desc:"Gain practical experience working with high-potential SMEs and build your professional network.",          link:"/HowItWorksInterns",   tip:"Students and graduates seeking practical experience."},
+    {title:"Businesses & NPOs", icon:<FaUsers size={18}/>, color:C.primary, tagline:"Be Seen. Be Matched. Grow.", desc:"Commercial businesses seeking growth, markets, suppliers, funding, partnerships, etc. and NGOs/NPOs that are not primarily operating as catalysts.", link:"/HowItWorksSMSE", tip:"SMEs, startups, growing enterprises, and non-profits."},
+    {title:"Investors", icon:<FaUserTie size={18}/>, color:C.secondary, tagline:"Discover. Verify. Invest.", desc:"Access verified, investment-ready businesses with transparent scoring and predictive insights.", link:"/HowItWorksInvestors", tip:"VCs, angel investors, and impact investors."},
+    {title:"Corporates",icon:<MdCorporateFare size={18}/>, color:"#4A3728", tagline:"Source. Partner. Amplify Impact.", desc:"Large companies looking for suppliers, innovation, partnerships, or ESD opportunities.", link:"/HowItWorksCorporates", tip:"Large companies sourcing via CSI or ESD."},
+    {title:"Catalyst & Business Association Organisations", icon:<FaHandHoldingHeart size={18}/>, color:"#8B6914", tagline:"Accelerate. Mentor. Fund. Track.", desc:"Organisations that enable business growth (ESD programmes, incubators, accelerators, development agencies, industry associations, universities, consultants, etc.)", link:"/HowItWorksCatalysts", tip:"Incubators, accelerators, and development agencies."},
+    {title:"Advisors", icon:<FaUserTie size={18}/>, color:"#5A5A5A", tagline:"Guide. Mentor. Get Recognised.", desc:"Connect with businesses that need your expertise and grow your advisory practice.", link:"/HowItWorksAdvisors", tip:"Strategic advisors matched to businesses."},
+    {title:"Interns & Sponsors", icon:<FaUsers size={18}/>, color:"#8A8A8A", tagline:"Learn. Grow. Get Experience.", desc:"Students, graduates, and internship sponsors connecting for practical experience and talent development.", link:"/HowItWorksInterns", tip:"Students, graduates, and internship sponsors."},
   ]
   const steps=[
-    {n:"01",icon:<FaUser size={18}/>,     title:"Create Your Profile",    desc:"Sign up, upload your business details, and get verified across all key areas."},
+    {n:"01",icon:<FaUser size={18}/>, title:"Create Your Profile", desc:"Sign up, upload your business details, and get verified across all key areas."},
     {n:"02",icon:<FaChartBar size={18}/>, title:"Receive Your BIG Score", desc:"Our AI evaluates your business across five weighted dimensions."},
-    {n:"03",icon:<FaHandshake size={18}/>,title:"Unlock Opportunities",   desc:"Connect with funders, partners, and support programmes matched to your stage."},
-    {n:"04",icon:<FaChartLine size={18}/>,title:"Grow Your Business",     desc:"Track progress, improve your score, and scale with expert support."},
+    {n:"03",icon:<FaHandshake size={18}/>, title:"Unlock Opportunities", desc:"Connect with funders, partners, and support programmes matched to your stage."},
+    {n:"04",icon:<FaChartLine size={18}/>, title:"Grow Your Business", desc:"Track progress, improve your score, and scale with expert support."},
   ]
-  const testimonials=[
-    {name:"Sipho M.", role:"Manufacturing Business", img:"https://randomuser.me/api/portraits/men/45.jpg",   stars:5, quote:"BIG Marketplace gave us credibility and connected us with the right investors. It is a complete game changer for African SMEs."},
-    {name:"Lebo K.",  role:"Agri Business Founder",  img:"https://randomuser.me/api/portraits/women/32.jpg", stars:5, quote:"The BIG Score helped us understand our strengths and gave us the confidence to grow and apply for funding."},
-    {name:"Thabo D.", role:"Impact Investor",         img:"https://randomuser.me/api/portraits/men/68.jpg",   stars:5, quote:"As an investor, I trust the data. BIG helps me find businesses with real verified potential."},
+  const testimonials = [
+    {name:"Sipho M.", role:"Manufacturing Business", stars:5, quote:"BIG Marketplace gave us credibility and connected us with the right investors. It is a complete game changer for African businesses."},
+    {name:"Lebo K.", role:"Agri Business Founder", stars:5, quote:"The BIG Score helped us understand our strengths and gave us the confidence to grow and apply for funding."},
+    {name:"Advisor Review", role:"Strategic Advisor", stars:3, quote:"BIG Marketplace has been instrumental in connecting us with the right advisory support and funding opportunities. The platform has opened doors we didn't know existed."},
   ]
-
 
   const css=`
     *{box-sizing:border-box}
@@ -1101,7 +608,7 @@ const LandingPage = () => {
                 <br/>for Growth.
               </h1>
               <p style={{fontSize:mobile?"1rem":"1.15rem",margin:"0 0 32px",color:"rgba(255,255,255,0.72)",lineHeight:1.7,maxWidth:500}}>
-                BIG Marketplace connects African SMEs to funders, partners, and opportunities through one AI-powered credibility score.
+                BIG Marketplace connects African businesses to funders, partners, and opportunities through one AI-powered credibility score.
               </p>
               <div style={{display:"flex",gap:14,flexWrap:"wrap",marginBottom:40}}>
                 <button className="lp-a" onClick={go}>{regOpen?"Join Now — It's Free":"Get Your BIG Score"}</button>
@@ -1138,7 +645,7 @@ const LandingPage = () => {
                 <FaBullseye size={24} color={C.primary} />
               </div>
               <h3 style={{fontSize:"1.3rem",fontWeight:700,marginBottom:"12px",color:C.dark,textTransform:"uppercase"}}>Our Vision</h3>
-              <p style={{fontSize:"0.9rem",lineHeight:"1.6",color:C.dark}}><strong>To corporatise Africa's boldest SMEs.</strong></p>
+              <p style={{fontSize:"0.9rem",lineHeight:"1.6",color:C.dark}}><strong>To corporatise Africa's boldest businesses.</strong></p>
             </div>
             <div className="vm-card" style={{borderTop:`4px solid ${C.secondary}`}}>
               <div className="vm-icon-wrap" style={{backgroundColor:`${C.secondary}20`,borderColor:C.secondary}}>
@@ -1218,19 +725,20 @@ const LandingPage = () => {
             <p style={{color:C.secondary,fontWeight:700,fontSize:"0.74rem",letterSpacing:"0.14em",textTransform:"uppercase",marginBottom:10}}>Proven across Africa</p>
             <h2 style={{fontSize:mobile?"1.7rem":"2.2rem",fontWeight:800,color:C.dark,margin:0,letterSpacing:"-0.01em"}}>Trusted by founders and investors</h2>
           </div>
-          <div className="g3" style={{display:"grid",gridTemplateColumns:mobile?"1fr":"repeat(3,1fr)",gap:20,marginBottom:40}}>
+          <div className="g3" style={{display:"grid",gridTemplateColumns:mobile?"1fr":"repeat(3,1fr)",gap:20}}>
             {testimonials.map(t=>(
               <div key={t.name} className="tc">
                 <div style={{display:"flex",gap:2,marginBottom:14}}>{Array(t.stars).fill(0).map((_,i)=><FaStar key={i} size={14} color="#F59E0B"/>)}</div>
                 <p style={{fontSize:"0.88rem",color:C.dark,lineHeight:1.7,margin:"0 0 20px"}}>"{t.quote}"</p>
                 <div style={{display:"flex",alignItems:"center",gap:12,paddingTop:16,borderTop:`1px solid ${C.border}`}}>
-                  <img src={t.img} alt={t.name} style={{width:40,height:40,borderRadius:12,objectFit:"cover",border:`2px solid ${C.border}`}}/>
+                  <div style={{width:40,height:40,borderRadius:12,background:C.primary+"20",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700,color:C.primary,fontSize:"0.9rem",border:`2px solid ${C.border}`}}>
+                    {t.name.charAt(0)}
+                  </div>
                   <div><div style={{fontSize:"0.86rem",fontWeight:700,color:C.dark}}>{t.name}</div><div style={{fontSize:"0.74rem",color:C.muted}}>{t.role}</div></div>
                 </div>
               </div>
             ))}
           </div>
-         
         </div>
       </section>
 
@@ -1242,9 +750,9 @@ const LandingPage = () => {
           </div>
           <div className="g3" style={{display:"grid",gridTemplateColumns:mobile?"1fr":"repeat(3,1fr)",gap:20}}>
             {[
-              {icon:<FaUsers size={18}/>,    color:C.primary,   title:"Built With, Not Just For",  body:"Before writing code, we consulted 30+ stakeholders to design a platform grounded in African entrepreneurs realities."},
-              {icon:<FaBuilding size={18}/>, color:C.secondary, title:"Decades of Expertise",       body:"Our team brings decades of combined experience in management consulting, SME growth, finance, and innovation across Africa."},
-              {icon:<FaHandshake size={18}/>,color:C.amber,     title:"Solving for More",           body:"We are not just solving for access — we are solving for readiness, trust, and scale across the continent."},
+              {icon:<FaUsers size={18}/>, color:C.primary, title:"Built With, Not Just For", body:"Before writing code, we consulted 30+ stakeholders to design a platform grounded in African entrepreneurs realities."},
+              {icon:<FaBuilding size={18}/>, color:C.secondary, title:"Decades of Expertise", body:"Our team brings decades of combined experience in management consulting, business growth, finance, and innovation across Africa."},
+              {icon:<FaHandshake size={18}/>, color:C.amber, title:"Solving for More", body:"We are not just solving for access — we are solving for readiness, trust, and scale across the continent."},
             ].map(c=>(
               <div key={c.title} style={{background:C.cream,borderRadius:18,padding:"24px 20px",border:`1px solid ${C.border}`}}>
                 <div style={{width:44,height:44,borderRadius:14,background:`${c.color}14`,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:14,color:c.color}}>{c.icon}</div>
@@ -1255,8 +763,6 @@ const LandingPage = () => {
           </div>
         </div>
       </section>
-
-    
 
       {/* CTA SECTION */}
       <section style={{padding:mobile?"56px 20px":"80px 40px",background:`linear-gradient(135deg, ${C.dark} 0%, #3D2A1A 100%)`,textAlign:"center",position:"relative",overflow:"hidden"}}>

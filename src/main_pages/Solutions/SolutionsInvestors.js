@@ -46,7 +46,7 @@ const SolutionsInvestors = () => {
     {
       icon: <FaSearchDollar size={24} />,
       title: 'Pre-Vetted Funding Pipeline',
-      description: 'Access a pipeline of thoroughly vetted SMEs ready for investment.',
+      description: 'Access a pipeline of thoroughly vetted businesses ready for investment.',
       color: colors.brown,
     },
     {

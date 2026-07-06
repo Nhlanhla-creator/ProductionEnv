@@ -48,7 +48,7 @@ const SolutionsGraduates = () => {
     {
       icon: <FaBriefcase size={24} />,
       title: 'Internship Marketplace',
-      description: 'Find and apply to internship opportunities with vetted SMEs.',
+      description: 'Find and apply to internship opportunities with vetted businesses.',
       color: colors.accent,
     },
     {
@@ -69,7 +69,7 @@ const SolutionsGraduates = () => {
     'Create verified profiles',
     'Showcase skills and experience',
     'Access internship opportunities',
-    'Match with SMEs and growth businesses',
+    'Match with businesses and growth organisations',
     'Build work experience portfolios',
   ];
 
@@ -167,7 +167,7 @@ const SolutionsGraduates = () => {
                 letterSpacing: '0.1em',
                 textTransform: 'uppercase',
               }}>
-                For Graduates
+                For Interns & Internship Sponsors
               </span>
             </div>
             
@@ -191,8 +191,8 @@ const SolutionsGraduates = () => {
               margin: '0 0 30px',
               maxWidth: '550px',
             }}>
-              BIG helps graduates create verified profiles, showcase skills, and access 
-              internship opportunities with growth businesses across Africa.
+              BIG helps interns create verified profiles, showcase skills, and access 
+              opportunities with growth businesses across Africa. Sponsors build sustainable talent pipelines.
             </p>
 
             <div style={{
@@ -251,7 +251,7 @@ const SolutionsGraduates = () => {
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <FaCheckCircle size={14} color={colors.accent} />
                 <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem' }}>
-                  Free for graduates
+                  Free for interns
                 </span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -315,7 +315,7 @@ const SolutionsGraduates = () => {
               textTransform: 'uppercase',
               marginBottom: '8px',
             }}>
-              Why Graduates Choose BIG
+              Why Interns & Sponsors Choose BIG
             </p>
             <h2 style={{
               fontSize: 'clamp(1.5rem, 2.5vw, 2rem)',
@@ -323,7 +323,7 @@ const SolutionsGraduates = () => {
               color: colors.dark,
               margin: 0,
             }}>
-              <span style={{ color: colors.accent }}>Build</span> Your Career
+              <span style={{ color: colors.accent }}>Build</span> Your Career & Talent Pipeline
             </h2>
           </div>
 
@@ -466,7 +466,7 @@ const SolutionsGraduates = () => {
             color: colors.white,
             margin: '0 0 12px',
           }}>
-            Ready to Launch Your Career?
+            Ready to Launch Your Career or Build Your Talent Pipeline?
           </h2>
           <p style={{
             fontSize: '1rem',
@@ -476,7 +476,7 @@ const SolutionsGraduates = () => {
             marginLeft: 'auto',
             marginRight: 'auto',
           }}>
-            Join BIG Marketplace and connect with opportunities that will kickstart your career.
+            Join BIG Marketplace and connect with opportunities that will kickstart your career or help you find the right talent.
           </p>
           <button
             onClick={() => navigate('/LoginRegister')}

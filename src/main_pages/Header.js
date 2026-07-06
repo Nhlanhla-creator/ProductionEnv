@@ -86,9 +86,9 @@ const Header = ({ onLoginClick }) => {
     setIsSolutionsOpen(false);
   };
 
-  // How It Works dropdown items - from Landing Page "Who benefits from BIG?"
+  // How It Works dropdown items - UPDATED LABELS ONLY, PATHS UNCHANGED
   const howItWorksItems = [
-    { label: 'For SMSEs', path: '/HowItWorksSMSE' },
+    { label: 'For Businesses', path: '/HowItWorksSMSE' },
     { label: 'For Investors', path: '/HowItWorksInvestors' },
     { label: 'For Corporates', path: '/HowItWorksCorporates' },
     { label: 'For Catalysts', path: '/HowItWorksCatalysts' },
@@ -96,26 +96,15 @@ const Header = ({ onLoginClick }) => {
     { label: 'For Interns', path: '/HowItWorksInterns' },
   ];
 
-  // Solutions dropdown items
+  // Solutions dropdown items - UPDATED LABELS ONLY, PATHS UNCHANGED
   const solutionsItems = [
     { label: 'Overview', path: '/solutions' },
-    { label: 'For SMSEs', path: '/solutions/smes' },
+    { label: 'For Businesses', path: '/solutions/smes' },
+    { label: 'For Business Associations', path: '/solutions/catalysts' },
     { label: 'For Investors', path: '/solutions/investors' },
     { label: 'For Corporates', path: '/solutions/corporates' },
     { label: 'For Catalysts', path: '/solutions/catalysts' },
-    { label: 'For Graduates', path: '/solutions/graduates' },
-    { label: 'For Advisors', path: '/solutions/advisors' },
-  ];
-
-  // Navigation items - UPDATED: Home, Solutions, BIG Score, How It Works, BIG Pulse, BIG Academy, Contact Us
-  const navItems = [
-    { label: 'Home', path: '/' },
-    // Solutions is handled separately as a dropdown
-    { label: 'BIG Score', path: '/BigScorePage' },
-    // How It Works is handled separately as a dropdown
-    { label: 'BIG Pulse', path: '/InsightsPage' },
-    { label: 'BIG Academy', path: '/CharmSchool' },
-    { label: 'Contact Us', path: '/ContactPage' },
+    { label: 'For Interns', path: '/solutions/graduates' },
   ];
 
   const styles = {
@@ -438,6 +427,24 @@ const Header = ({ onLoginClick }) => {
             >
               Home
             </button>
+              {/* BIG Score - Third */}
+            <button
+              className="nav-btn"
+              onClick={() => handleNavigation('/BigScorePage')}
+              style={styles.navButton}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.backgroundColor = '#372C27';
+                e.currentTarget.style.transform = 'translateY(-1px)';
+                e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.backgroundColor = '#5D432C';
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = 'none';
+              }}
+            >
+              BIG Score
+            </button>
 
             {/* Solutions Dropdown - Second */}
             <div 
@@ -496,24 +503,7 @@ const Header = ({ onLoginClick }) => {
               </div>
             </div>
 
-            {/* BIG Score - Third */}
-            <button
-              className="nav-btn"
-              onClick={() => handleNavigation('/BigScorePage')}
-              style={styles.navButton}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.backgroundColor = '#372C27';
-                e.currentTarget.style.transform = 'translateY(-1px)';
-                e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.backgroundColor = '#5D432C';
-                e.currentTarget.style.transform = 'translateY(0)';
-                e.currentTarget.style.boxShadow = 'none';
-              }}
-            >
-              BIG Score
-            </button>
+          
 
             {/* How It Works Dropdown - Fourth */}
             <div 

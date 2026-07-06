@@ -1232,7 +1232,7 @@ const BIGScorePage = () => {
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <FaUsers size={16} color={colors.amber} />
               <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem' }}>
-                Trusted by 500+ SMEs
+                Trusted by 500+ Businesses
               </span>
             </div>
           </div>
@@ -1384,7 +1384,7 @@ const BIGScorePage = () => {
             }}>
               <strong>Consumer finance has TransUnion and Experian</strong> — global systems that measure personal creditworthiness.<br />
               <strong>Corporates have Moody's, Fitch, and S&P</strong> — rating frameworks that measure institutional risk.<br />
-              <strong>SMEs have "The BIG Score"</strong> — a shared metric that lets funders, corporates, and partners speak the same language of readiness and reliability.
+              <strong>Businesses have "The BIG Score"</strong> — a shared metric that lets funders, corporates, and partners speak the same language of readiness and reliability.
             </p>
           </div>
         </section>
@@ -1415,7 +1415,7 @@ const BIGScorePage = () => {
             margin: '0 auto 32px',
             lineHeight: 1.6,
           }}>
-            Our AI-powered framework scores every SME across five core dimensions — giving funders, partners, and programs a complete view of business readiness.
+            Our AI-powered framework scores every business across five core dimensions — giving funders, partners, and programs a complete view of business readiness.
           </p>
 
           <div style={{
