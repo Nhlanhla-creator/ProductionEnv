@@ -52,6 +52,7 @@ const SolutionsOverview = () => {
     {
       id: 'businesses',
       icon: <FaBuilding size={32} />,
+      image: 'https://images.unsplash.com/photo-1600880292203-757bb62b4baf?auto=format&fit=crop&w=400&h=250&q=80',
       title: 'For Businesses & NPOs',
       subtitle: 'Build credibility. Access opportunities. Grow with confidence.',
       description: 'Commercial businesses seeking growth, markets, suppliers, funding, partnerships, etc. and NGOs/NPOs that are not primarily operating as catalysts.',
@@ -63,6 +64,7 @@ const SolutionsOverview = () => {
     {
       id: 'investors',
       icon: <FaChartLine size={32} />,
+      image: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=400&h=250&q=80',
       title: 'For Investors',
       subtitle: 'Better deal flow. Better decisions. Better outcomes.',
       description: 'Access pre-vetted opportunities and reduce screening time with data-driven insights.',
@@ -74,6 +76,7 @@ const SolutionsOverview = () => {
     {
       id: 'corporates',
       icon: <FaHandshake size={32} />,
+      image: 'https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=400&h=250&q=80',
       title: 'For Corporates',
       subtitle: 'Build stronger suppliers and stronger ecosystems.',
       description: 'Large companies looking for suppliers, innovation, partnerships, or ESD opportunities.',
@@ -85,7 +88,8 @@ const SolutionsOverview = () => {
     {
       id: 'catalysts',
       icon: <FaRocket size={32} />,
-      title: 'For Catalysts & Business Associations',
+      image: 'https://images.unsplash.com/photo-1557804506-669a67965ba0?auto=format&fit=crop&w=400&h=250&q=80',
+      title: 'For Catalysts,Associations & Member Organisations',
       subtitle: 'Move from program management to ecosystem intelligence.',
       description: 'Catalyst and Business Association Organisations that enable business growth (ESD programmes, incubators, accelerators, development agencies, industry associations, universities, consultants, etc.).',
       path: '/solutions/catalysts',
@@ -96,6 +100,7 @@ const SolutionsOverview = () => {
     {
       id: 'interns',
       icon: <FaUserGraduate size={32} />,
+      image: 'https://images.unsplash.com/photo-1523240795612-9a054b0db644?auto=format&fit=crop&w=400&h=250&q=80',
       title: 'For Interns & Internship Sponsors',
       subtitle: 'Experience should not depend on who you know.',
       description: 'Connect interns with businesses for experiential learning and create sustainable talent pipelines. Interns gain practical experience while sponsors build future-ready workforces.',
@@ -107,6 +112,7 @@ const SolutionsOverview = () => {
     {
       id: 'advisors',
       icon: <FaUserTie size={32} />,
+      image: 'https://images.unsplash.com/photo-1524178232363-1fb2b075b655?auto=format&fit=crop&w=400&h=250&q=80',
       title: 'For Advisors & Service Providers',
       subtitle: 'Work with businesses that are serious about growth.',
       description: 'Access qualified leads and build long-term client relationships.',
@@ -156,7 +162,7 @@ const SolutionsOverview = () => {
             left: 0,
             right: 0,
             bottom: 0,
-            backgroundImage: 'url(https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=1400&h=400&fit=crop&crop=center)',
+            backgroundImage: 'url(https://images.unsplash.com/photo-1504384308090-c894fdcc538d?w=1400&h=400&fit=crop&crop=center)',
             backgroundSize: 'cover',
             backgroundPosition: 'center',
             opacity: 0.2,
@@ -341,22 +347,68 @@ const SolutionsOverview = () => {
                   e.currentTarget.style.borderColor = colors.border;
                 }}
               >
+                {/* Card Image */}
                 <div style={{
-                  width: '56px',
-                  height: '56px',
-                  borderRadius: '14px',
+                  width: '100%',
+                  height: '160px',
+                  borderRadius: '12px',
+                  overflow: 'hidden',
+                  marginBottom: '16px',
+                  position: 'relative',
+                }}>
+                  <img 
+                    src={card.image} 
+                    alt={card.title}
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'cover',
+                      transition: 'transform 0.5s ease',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.transform = 'scale(1.05)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.transform = 'scale(1)';
+                    }}
+                    loading="lazy"
+                    onError={(e) => {
+                      e.target.style.display = 'none';
+                      // Show fallback icon
+                      const fallback = e.target.parentElement.querySelector('.fallback-icon');
+                      if (fallback) fallback.style.display = 'flex';
+                    }}
+                  />
+                  <div className="fallback-icon" style={{
+                    display: 'none',
+                    width: '100%',
+                    height: '100%',
+                    background: `${card.color}15`,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    fontSize: '3rem',
+                    color: card.color,
+                  }}>
+                    {card.icon}
+                  </div>
+                </div>
+
+                <div style={{
+                  width: '48px',
+                  height: '48px',
+                  borderRadius: '12px',
                   background: `${card.color}15`,
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   color: card.color,
-                  marginBottom: '16px',
+                  marginBottom: '12px',
                 }}>
                   {card.icon}
                 </div>
 
                 <h3 style={{
-                  fontSize: '1.15rem',
+                  fontSize: '1.1rem',
                   fontWeight: 800,
                   color: colors.dark,
                   margin: '0 0 4px',
@@ -365,7 +417,7 @@ const SolutionsOverview = () => {
                 </h3>
 
                 <p style={{
-                  fontSize: '0.82rem',
+                  fontSize: '0.8rem',
                   fontWeight: 600,
                   color: card.color,
                   margin: '0 0 10px',
