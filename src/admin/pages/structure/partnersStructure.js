@@ -45,19 +45,19 @@ export const PARTNERS_STRUCTURE = {
   },
 
   "Corporates ESD": {
-    type: "file",
+    type: "table",
     icon: "building",
     accept: ".pdf,.docx,.doc,.xlsx,.xls",
     maxSize: 10485760,
-    description: "Upload corporate ESD partnerships database (PDF/Word/Excel, max 10MB)"
+    description: "Manage corporate ESD partnerships database / spreadsheet"
   },
 
   "Government": {
-    type: "file",
+    type: "table",
     icon: "landmark",
     accept: ".pdf,.docx,.doc,.xlsx,.xls",
     maxSize: 10485760,
-    description: "Upload government partnerships database (PDF/Word/Excel, max 10MB)"
+    description: "Manage government partnerships database / spreadsheet"
   },
 
   "MOUs Agreements": {
