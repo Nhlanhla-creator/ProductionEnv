@@ -141,22 +141,22 @@ const ContactFormPage = () => {
     setOpenQuestion(openQuestion === index ? null : index);
   };
 
-  // Complete FAQ Data - exactly as in FAQPage
+  // Complete FAQ Data - updated with business terminology
   const faqData = {
     general: [
       {
         question: "What is BIG Marketplace Africa?",
-        answer: "BIG Marketplace Africa is a comprehensive platform that connects SMEs with investors, advisors, catalysts, interns, and other businesses. We use our proprietary BIG Score to create intelligent matches between stakeholders, simplifying connections and driving business growth across Africa.",
+        answer: "BIG Marketplace Africa is a comprehensive platform that connects businesses with investors, advisors, catalysts, interns, and other businesses. We use our proprietary BIG Score to create intelligent matches between stakeholders, simplifying connections and driving business growth across Africa.",
         icon: <FaQuestionCircle />
       },
       {
         question: "Who can register on the platform?",
-        answer: "The following stakeholders can register:\n• SMEs (Small and Medium Enterprises)\n• Investors/Funders\n• Advisors (Experts and Consultants)\n• Graduates (for Internship roles)\n• Catalysts (Accelerators, Incubators)\n• Program Sponsors\n• Corporates\n• Suppliers and Service Providers",
+        answer: "The following stakeholders can register:\n• Businesses\n• Investors/Funders\n• Advisors (Experts and Consultants)\n• Interns & Internship Sponsors\n• Catalysts (Accelerators, Incubators)\n• Corporates\n• Suppliers and Service Providers",
         icon: <FaUserCheck />
       },
       {
-        question: "Can SMEs become advisors on the platform?",
-        answer: "No, SMEs cannot register as advisors. SMEs are the primary beneficiaries who receive advice, funding, and support. However, SMEs can:\n• Register as suppliers to other businesses\n• Offer services to other SMEs\n• Purchase from other SMEs as customers\nThey receive guidance from dedicated professional advisors on the platform.",
+        question: "Can businesses become advisors on the platform?",
+        answer: "No, businesses cannot register as advisors. Businesses are the primary beneficiaries who receive advice, funding, and support. However, businesses can:\n• Register as suppliers to other businesses\n• Offer services to other businesses\n• Purchase from other businesses as customers\nThey receive guidance from dedicated professional advisors on the platform.",
         icon: <FaUserTie />
       },
       {
@@ -178,12 +178,12 @@ const ContactFormPage = () => {
     funding: [
       {
         question: "How does funding matching work?",
-        answer: "Our platform uses intelligent matching similar to dating apps:\n• Investors set their investment criteria\n• SMEs complete their profiles and get a BIG Score\n• Our algorithm matches investors with the most compatible SMEs\n• Highest matches appear at the top of investor dashboards\n• We simplify the process by pre-screening and scoring all SMEs",
+        answer: "Our platform uses intelligent matching similar to dating apps:\n• Investors set their investment criteria\n• Businesses complete their profiles and get a BIG Score\n• Our algorithm matches investors with the most compatible businesses\n• Highest matches appear at the top of investor dashboards\n• We simplify the process by pre-screening and scoring all businesses",
         icon: <FaChartLine />
       },
       {
         question: "What type of funding can I apply for?",
-        answer: "SMEs can apply for various funding types:\n• Equity Investment\n• Debt Financing\n• Grants\n• Growth funding opportunities",
+        answer: "Businesses can apply for various funding types:\n• Equity Investment\n• Debt Financing\n• Grants\n• Growth funding opportunities",
         icon: <FaMoneyBillWave />
       },
       {
@@ -207,8 +207,8 @@ const ContactFormPage = () => {
         section: "Advisors",
         questions: [
           {
-            question: "How do SMEs connect with advisors?",
-            answer: "SMEs can apply for advisory services through their dashboard. Our matching system connects them with qualified advisors based on business needs, industry expertise, and BIG Score compatibility.",
+            question: "How do businesses connect with advisors?",
+            answer: "Businesses can apply for advisory services through their dashboard. Our matching system connects them with qualified advisors based on business needs, industry expertise, and BIG Score compatibility.",
             icon: <FaUserTie />
           },
           {
@@ -224,21 +224,21 @@ const ContactFormPage = () => {
         ]
       },
       {
-        section: "Interns & Graduates",
+        section: "Interns & Internship Sponsors",
         questions: [
           {
             question: "How does the internship program work?",
-            answer: "Graduates apply and create profiles, program sponsors review candidates, SMEs post opportunities, and our system matches graduates with SMEs based on skills and BIG Score.",
+            answer: "Interns apply and create profiles, program sponsors review candidates, businesses post opportunities, and our system matches interns with businesses based on skills and BIG Score.",
             icon: <FaGraduationCap />
           },
           {
             question: "Who can apply for internships?",
-            answer: "Graduates and students seeking practical experience can apply. They undergo verification and receive a BIG Score to ensure quality matching.",
+            answer: "Interns and students seeking practical experience can apply. They undergo verification and receive a BIG Score to ensure quality matching.",
             icon: <FaUserCheck />
           },
           {
             question: "What support do interns receive?",
-            answer: "Interns receive comprehensive support including program sponsor funding, SME mentorship, platform resources, and career development opportunities.",
+            answer: "Interns receive comprehensive support including program sponsor funding, business mentorship, platform resources, and career development opportunities.",
             icon: <FaUsers />
           }
         ]
@@ -248,12 +248,12 @@ const ContactFormPage = () => {
         questions: [
           {
             question: "What are catalysts and what do they do?",
-            answer: "Catalysts are growth enablers like accelerators and incubators who help SMEs scale operations, provide strategic guidance, and facilitate partnerships.",
+            answer: "Catalysts are growth enablers like accelerators and incubators who help businesses scale operations, provide strategic guidance, and facilitate partnerships.",
             icon: <FaRocket />
           },
           {
-            question: "How do catalysts connect with SMEs?",
-            answer: "Our matching system connects catalysts with SMEs based on growth stage, industry focus, and specific program criteria through the BIG Score system.",
+            question: "How do catalysts connect with businesses?",
+            answer: "Our matching system connects catalysts with businesses based on growth stage, industry focus, and specific program criteria through the BIG Score system.",
             icon: <FaHandshake />
           }
         ]
@@ -262,18 +262,18 @@ const ContactFormPage = () => {
         section: "Services & Suppliers",
         questions: [
           {
-            question: "How do SMEs offer or request services?",
-            answer: "SMEs can both list and request products or services through their profiles. Our matching system connects businesses based on compatibility and specific needs.",
+            question: "How do businesses offer or request services?",
+            answer: "Businesses can both list and request products or services through their profiles. Our matching system connects businesses based on compatibility and specific needs.",
             icon: <FaTools />
           },
           {
             question: "What types of services can be offered?",
-            answer: "SMEs can offer products like laptops and equipment, professional services, manufacturing, digital services, and logistics services.",
+            answer: "Businesses can offer products like laptops and equipment, professional services, manufacturing, digital services, and logistics services.",
             icon: <FaTruck />
           },
           {
             question: "How are service deliveries handled?",
-            answer: "Delivery terms are agreed directly between SMEs. We facilitate connections but don't manage shipping or logistics directly.",
+            answer: "Delivery terms are agreed directly between businesses. We facilitate connections but don't manage shipping or logistics directly.",
             icon: <FaHandshake />
           }
         ]
@@ -287,7 +287,7 @@ const ContactFormPage = () => {
       },
       {
         question: "What add-on services are available?",
-        answer: "Additional services include:\n• API Access to BIG Score engine\n• Branded SME Portfolio Pages\n• Co-branded Calls for Applications\n• Custom BIG Score benchmarks\n• And other specialized services",
+        answer: "Additional services include:\n• API Access to BIG Score engine\n• Branded Business Portfolio Pages\n• Co-branded Calls for Applications\n• Custom BIG Score benchmarks\n• And other specialized services",
         icon: <FaCogs />
       },
       {
@@ -426,7 +426,7 @@ const ContactFormPage = () => {
       },
       {
         question: "Do all users get a BIG Score?",
-        answer: "Yes, all registered participants receive relevant scores:\n• SMEs get comprehensive business scores\n• Advisors receive credibility scores\n• Graduates/interns get performance metrics\n• All scores help ensure quality matches",
+        answer: "Yes, all registered participants receive relevant scores:\n• Businesses get comprehensive business scores\n• Advisors receive credibility scores\n• Interns get performance metrics\n• All scores help ensure quality matches",
         icon: <FaUserCheck />
       },
       {
@@ -453,7 +453,7 @@ const ContactFormPage = () => {
         <div key={sectionIndex} style={styles.faqSection}>
           <h4 style={styles.faqSectionTitle}>
             {section.section === "Advisors" && <FaUserTie />}
-            {section.section === "Interns & Graduates" && <FaGraduationCap />}
+            {section.section === "Interns & Internship Sponsors" && <FaGraduationCap />}
             {section.section === "Catalysts" && <FaRocket />}
             {section.section === "Services & Suppliers" && <FaTools />}
             {section.section}
@@ -1404,7 +1404,7 @@ const styles = {
     padding: '0 1.5rem',
     maxHeight: '0',
     overflow: 'hidden',
-    transition: 'max-height 0.4s ease, padding 0.4s ease',
+    transition: 'maxHeight 0.4s ease, padding 0.4s ease',
     background: 'rgba(239, 235, 233, 0.3)',
     borderTop: '0 solid transparent',
   },

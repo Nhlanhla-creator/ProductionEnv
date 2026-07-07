@@ -23,7 +23,13 @@ import {
   FaTimes,
   FaCertificate,
   FaHandshake,
-  FaClipboardCheck
+  FaClipboardCheck,
+  FaCrown,
+  FaBriefcase,
+  FaBalanceScale,
+  FaInfoCircle,
+  FaTrendingUp,
+  FaAlertCircle
 } from 'react-icons/fa';
 
 const BIGScorePage = () => {
@@ -33,6 +39,10 @@ const BIGScorePage = () => {
   const [bannerLoaded, setBannerLoaded] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
   const [expandedSections, setExpandedSections] = useState({});
+  const [showSampleReport, setShowSampleReport] = useState(false);
+  const [showAboutScore, setShowAboutScore] = useState(false);
+  const [showScoreBreakdown, setShowScoreBreakdown] = useState(false);
+  const [showDetailedAnalysis, setShowDetailedAnalysis] = useState(false);
 
   useEffect(() => {
     const timer = setTimeout(() => setBannerLoaded(true), 300);
@@ -75,44 +85,77 @@ const BIGScorePage = () => {
     }));
   };
 
+  const getScoreLevel = (score) => {
+    if (!score && score !== 0) return { level: "Calculating...", color: "#9E9E9E", description: "" };
+    if (score >= 91) return { level: "Exceptional", color: "#1B5E20", description: "Your business is highly prepared for major opportunities" };
+    if (score >= 81) return { level: "Strong", color: "#4CAF50", description: "Well-positioned for scaling and funding" };
+    if (score >= 61) return { level: "Progressing", color: "#FF9800", description: "On track with solid foundations" };
+    if (score >= 41) return { level: "Foundational", color: "#F44336", description: "Core building blocks are in place" };
+    return { level: "Emerging", color: "#B71C1C", description: "Early stages of readiness" };
+  };
+
+  const getProgressBarColor = (score) => {
+    if (score > 90) return "#1B5E20";
+    if (score >= 81) return "#4CAF50";
+    if (score >= 61) return "#FF9800";
+    if (score >= 41) return "#F44336";
+    return "#B71C1C";
+  };
+
   const scoreData = {
     bigScore: {
       title: "The BIG SCORE",
       description: "The Score That Earns You Trust — Before You Even Pitch",
+      overall: {
+        components: [
+          { label: "Compliance score", pct: 29, weight: 28, color: colors.red },
+          { label: "Legitimacy score", pct: 90, weight: 13, color: colors.green },
+          { label: "Leadership & Governance score", pct: 58, weight: 10, color: colors.orange },
+          { label: "Operational Strength score", pct: 70, weight: 14, color: colors.primary },
+          { label: "Capital appeal score", pct: 45, weight: 35, color: colors.amber },
+        ],
+        total: 52
+      },
       components: [
         {
           id: 'compliance',
           title: "Compliance Score",
           icon: <FaShieldAlt size={24} />,
-          color: colors.primary,
+          color: colors.red,
           description: "Whether a business meets core legal, regulatory, and tax requirements.",
           detailedDescription: "🧱 This is the foundation of your BIG Score — no compliance, no credibility.",
           calculationMethod: "Our AI analyzes official documents, government records, and compliance certifications to verify your business's legal standing.",
+          score: 29,
+          weight: 28,
+          weightedScore: 8,
           weightings: {
             seed: { value: "20%", description: "Focus on basic legal compliance" },
             growth: { value: "15%", description: "Expanded regulatory requirements" },
             maturity: { value: "15%", description: "Full compliance expected" }
           },
+          scoreInterpretation: [
+            { range: "91-100%", level: "Fully Compliant", description: "Ready for all opportunities" },
+            { range: "81-90%", level: "Highly Compliant", description: "Minor gaps to address" },
+            { range: "61-80%", level: "Mostly Compliant", description: "Some documentation needed" },
+            { range: "41-60%", level: "Partially Compliant", description: "Significant gaps present" },
+            { range: "0-40%", level: "Non-Compliant", description: "Substantial work required" }
+          ],
           subComponents: [
             {
-              title: "Document Uploads",
-              description: "Verification of required business documents",
+              title: "Required Documents",
+              description: "Documents verified",
               items: [
-                "Business Registration Verified",
-                "Tax Compliance confirmed",
-                "VAT compliance verified",
-                "Proof of Business Address",
-                "Director identities verified",
-                "Ownership structure verified",
-                "BBBEE certificate valid",
-                "Bank Account valid",
-                "Company Letterhead",
-                "COID"
+                { label: "Company Registration Certificate", weight: "15%", status: "missing" },
+                { label: "SARS Tax Clearance", weight: "15%", status: "missing" },
+                { label: "B-BBEE Certification", weight: "15%", status: "verified" },
+                { label: "COIDA Registration", weight: "5%", status: "missing" },
+                { label: "Business Bank Account", weight: "15%", status: "missing" },
+                { label: "Share Register", weight: "10%", status: "missing" },
+                { label: "Director IDs", weight: "10%", status: "verified" },
+                { label: "Proof of Address", weight: "5%", status: "missing" },
+                { label: "Industry Licenses", weight: "5%", status: "missing" },
+                { label: "Complete business profile", weight: "10%", status: "verified" }
               ]
-            },
-            {
-              title: "Profile Completion",
-              description: "Completeness of business profile information"
             }
           ]
         },
@@ -120,190 +163,204 @@ const BIGScorePage = () => {
           id: 'legitimacy',
           title: "Legitimacy Score",
           icon: <FaCheckCircle size={24} />,
-          color: colors.secondary,
-          description: "How professionally and credibly your business presents itself.",
-          detailedDescription: "🎯 Funders look beyond paperwork. This score shows you mean business.",
-          calculationMethod: "We evaluate digital footprint, customer reviews, media presence, and partnership history.",
+          color: colors.green,
+          description: "How professionally and credibly your business presents itself in the market.",
+          detailedDescription: "🎯 The legitimacy score assesses how professionally and credibly a business presents itself in the market — beyond just legal compliance. It focuses on brand presence, digital identity, and operational transparency that help build trust with funders, partners, and clients.",
+          calculationMethod: "We evaluate professional website presence, digital identity, track record, and third-party validations.",
+          score: 90,
+          weight: 13,
+          weightedScore: 12,
           weightings: {
-            seed: { value: "20%", description: "Basic legitimacy checks" },
-            growth: { value: "15%", description: "Expanded track record evaluation" },
-            maturity: { value: "15%", description: "Comprehensive reputation analysis" }
+            seed: { value: "36%", description: "Foundational business identity" },
+            growth: { value: "29%", description: "Digital presence & discoverability" },
+            maturity: { value: "21%", description: "Track record indicators" }
           },
+          scoreInterpretation: [
+            { range: "91-100%", level: "Market Leader", description: "Exceptional credibility and strong market presence" },
+            { range: "81-90%", level: "Trusted Brand", description: "Well-established professional identity" },
+            { range: "61-80%", level: "Emerging Force", description: "Good foundations with room for refinement" },
+            { range: "41-60%", level: "Building Credibility", description: "Key elements exist but gaps remain" },
+            { range: "0-40%", level: "Early Stage Identity", description: "Foundational improvements needed" }
+          ],
           subComponents: [
             {
               title: "Foundational Business Identity",
-              description: "Professional website, domain email, branded materials",
+              weight: "28%",
+              description: "Professional website, business email, logo, and company materials",
               items: ["Professional Website", "Domain Email", "Branded Materials", "Registered Address"]
             },
             {
               title: "Digital Presence & Discoverability",
-              description: "Website, social media, searchability",
+              weight: "22%",
+              description: "Social media presence and online discoverability",
               items: ["Website Presence", "Social Media Activity", "Search Visibility"]
             },
             {
               title: "Track Record Indicators",
-              description: "Years in operation, client portfolio, repeat clients",
-              items: ["Years in Operation", "Client Portfolio", "Repeat Clients", "Turnover History"]
+              weight: "25%",
+              description: "Years of operation, client portfolio, revenue history",
+              items: ["Years in Operation", "Client Portfolio", "Revenue History"]
             },
             {
               title: "Third-Party Validations",
-              description: "Accreditations, memberships, awards, media features",
-              items: ["Accreditations", "Professional Memberships", "Awards", "Media Features"]
-            },
-            {
-              title: "Reputation and Social Proof",
-              description: "Online reviews, testimonials, press mentions",
-              items: ["Online Reviews", "Testimonials", "Press Mentions"]
-            },
-            {
-              title: "Team & Leadership",
-              description: "Visible leadership team, LinkedIn presence, team growth",
-              items: ["Leadership Visibility", "LinkedIn Presence", "Team Growth"]
+              weight: "25%",
+              description: "Industry certifications, accreditations, and memberships",
+              items: ["Industry Certifications", "Accreditations", "Compliance Certificates", "Industry Memberships"]
             }
           ]
         },
         {
-          id: 'leadership',
-          title: "Leadership Score",
+          id: 'leadershipGovernance',
+          title: "Leadership & Governance Score",
           icon: <FaUserTie size={24} />,
-          color: colors.amber,
-          description: "The leadership capabilities and experience of business owners and key executives.",
-          detailedDescription: "👑 This score assesses readiness to lead teams, attract investment, and scale operations effectively.",
-          calculationMethod: "We analyze leadership profiles, management experience, team composition, and professional credentials.",
+          color: colors.orange,
+          description: "Can we trust the people and decision-making structures behind this business?",
+          detailedDescription: "Leadership & Governance answers one question for a funder: can we trust the people and decision-making structures behind this business? It combines ownership structure, leadership quality, and governance maturity into a single comprehensive view.",
+          calculationMethod: "We assess ownership structure, leadership credentials and behavior, and governance maturity across strategic planning, risk management, and policy frameworks.",
+          score: 58,
+          weight: 10,
+          weightedScore: 6,
           weightings: {
-            seed: { value: "15%", description: "Founding team evaluation" },
-            growth: { value: "20%", description: "Developing leadership structure" },
-            maturity: { value: "20%", description: "Professional leadership expected" }
+            seed: { value: "25%", description: "Ownership & Structure" },
+            growth: { value: "40%", description: "Leadership Quality" },
+            maturity: { value: "35%", description: "Governance Maturity" }
           },
+          scoreInterpretation: [
+            { range: "91-100%", level: "Exceptional Governance", description: "Trusted people and robust decision-making structures" },
+            { range: "81-90%", level: "Strong Leadership", description: "Well-established leadership and governance" },
+            { range: "61-80%", level: "Developing", description: "Good foundations with room for growth" },
+            { range: "41-60%", level: "Building", description: "Key elements exist but gaps remain" },
+            { range: "0-40%", level: "Emerging", description: "Foundational improvements needed" }
+          ],
           subComponents: [
             {
-              title: "Leadership Experience",
-              description: "Years of management experience, positions held",
-              items: ["Management Tenure", "Leadership Roles", "Organizational Complexity"]
+              title: "Ownership & Structure",
+              weight: "25%",
+              description: "Directors, shareholders and succession readiness",
+              items: ["Board Composition", "Executive/Non-Executive Mix", "Decision Governance", "Advisory Structure", "Succession Readiness"]
             },
             {
-              title: "Team Management",
-              description: "Scale of teams led, organizational structure",
-              items: ["Team Size Managed", "Organizational Structure", "Revenue Responsibility"]
+              title: "Leadership Quality",
+              weight: "40%",
+              description: "Leadership credentials, structure, and behavior",
+              items: [
+                "Leadership Credentials (40%) - Founder experience, qualifications, industry expertise",
+                "Leadership Structure (30%) - Team composition and hierarchy",
+                "Leadership Behavior (30%) - Ambition, learning mindset, execution capability"
+              ]
             },
             {
-              title: "Recognition & Education",
-              description: "Educational qualifications, certifications, awards",
-              items: ["Formal Education", "Professional Certifications", "Industry Awards"]
-            },
-            {
-              title: "Team & Leadership Visibility",
-              description: "Professional profiles, leadership visibility",
-              items: ["Professional Profiles", "Leadership Visibility", "Team Composition"]
+              title: "Governance Maturity",
+              weight: "35%",
+              description: "Board structure, policies, reporting, and risk management",
+              items: [
+                "Strategic Planning (25%) - Long-term vision and business plans",
+                "Risk Management (15%) - Risk identification and mitigation",
+                "Transparency and Reporting (15%) - Financial reporting and stakeholder communication",
+                "Policies & Documentation (20%) - Essential business policies and frameworks"
+              ]
             }
-          ],
-          scoreInterpretation: [
-            { range: "91-100%", level: "Visionary Leadership", description: "Proven ability to lead complex organizations" },
-            { range: "81-90%", level: "Seasoned Leadership", description: "Excellent management strength" },
-            { range: "61-80%", level: "Rising Leadership", description: "Strong foundations with clear potential" },
-            { range: "41-60%", level: "Developing Leadership", description: "Growing experience" },
-            { range: "0-40%", level: "Foundational Leadership", description: "Building capabilities" }
           ]
         },
         {
-          id: 'governance',
-          title: "Governance Score",
+          id: 'operationalStrength',
+          title: "Operational Strength Score",
           icon: <FaBuilding size={24} />,
-          color: colors.green,
-          description: "Whether a business is ready to establish or improve its governance structures.",
-          detailedDescription: "🏛️ This score combines Public Interest Score with governance maturity assessment.",
-          calculationMethod: "We assess board structure, strategic planning, risk management, transparency practices, and policy frameworks.",
+          color: colors.primary,
+          description: "Can this business reliably execute and deliver?",
+          detailedDescription: "Operational Strength measures whether this business can reliably execute and deliver — supplier & continuity risk, premises & facilities, delivery reliability, and safety/compliance, drawn entirely from the Operations Overview form.",
+          calculationMethod: "We assess supplier continuity risk, delivery reliability, safety compliance, and premises/facilities quality.",
+          score: 70,
+          weight: 14,
+          weightedScore: 10,
           weightings: {
-            seed: { value: "15%", description: "Basic governance evaluation" },
-            growth: { value: "20%", description: "Developing governance structures" },
-            maturity: { value: "20%", description: "Mature governance expected" }
+            seed: { value: "25%", description: "Supplier & Continuity Risk" },
+            growth: { value: "30%", description: "Delivery (Productivity & Reliability)" },
+            maturity: { value: "20%", description: "Safety (Risk & Compliance)" }
           },
+          scoreInterpretation: [
+            { range: "91-100%", level: "Operational Excellence", description: "Highly reliable and efficient operations" },
+            { range: "81-90%", level: "Strong Operations", description: "Well-established operational capacity" },
+            { range: "61-80%", level: "Developing Operations", description: "Good foundations with room for improvement" },
+            { range: "41-60%", level: "Building Operations", description: "Key elements exist but gaps remain" },
+            { range: "0-40%", level: "Emerging Operations", description: "Substantial operational improvements needed" }
+          ],
           subComponents: [
             {
-              title: "Board Structure & Functionality",
-              description: "Composition, roles, and effectiveness",
-              items: ["Board Composition", "Role Clarity", "Meeting Effectiveness"]
+              title: "Supplier & Continuity Risk",
+              weight: "25%",
+              description: "Supplier reliability and business continuity",
+              items: ["Supplier Diversity", "Continuity Planning", "Supply Chain Resilience"]
             },
             {
-              title: "Strategic Planning",
-              description: "Long-term vision, business plans",
-              items: ["Strategic Direction", "Business Planning", "Performance Review"]
+              title: "Delivery (Productivity & Reliability)",
+              weight: "30%",
+              description: "Productivity metrics and delivery reliability",
+              items: ["Productivity Metrics", "Delivery Track Record", "Quality Control"]
             },
             {
-              title: "Risk Management",
-              description: "Risk identification, assessment, mitigation",
-              items: ["Risk Framework", "Business Continuity", "Crisis Preparedness"]
+              title: "Safety (Risk & Compliance)",
+              weight: "20%",
+              description: "Safety protocols and compliance",
+              items: ["Safety Protocols", "Compliance Records", "Risk Mitigation"]
             },
             {
-              title: "Transparency & Reporting",
-              description: "Financial reporting, stakeholder communication",
-              items: ["Financial Reporting", "Stakeholder Communications", "Disclosure Standards"]
-            },
-            {
-              title: "Policies & Documentation",
-              description: "Essential business policies, employment contracts",
-              items: ["Policy Framework", "Employment Contracts", "Compliance Documentation"]
+              title: "Premises & Facilities",
+              weight: "25%",
+              description: "Physical infrastructure and facilities",
+              items: ["Facility Quality", "Infrastructure", "Operational Capacity"]
             }
-          ],
-          scoreInterpretation: [
-            { range: "91-100%", level: "Governance Excellence", description: "Exceptional governance maturity" },
-            { range: "81-90%", level: "Strong Governance", description: "Well-established governance framework" },
-            { range: "61-80%", level: "Developing Governance", description: "Good foundations with room for refinement" },
-            { range: "41-60%", level: "Emerging Governance", description: "Basic elements with significant gaps" },
-            { range: "0-40%", level: "Foundational Stage", description: "Structures require substantial development" }
           ]
         },
         {
-          id: 'capital',
+          id: 'capitalAppeal',
           title: "Capital Appeal Score",
           icon: <FaMoneyBillWave size={24} />,
-          color: colors.orange,
-          description: "How attractive a business is to potential investors and lenders.",
-          detailedDescription: "💰 This score evaluates investment readiness and risk profile.",
-          calculationMethod: "Financial statements are analyzed using machine learning models that compare your metrics with industry benchmarks.",
+          color: colors.amber,
+          description: "A business's ability to absorb, deploy, and return capital.",
+          detailedDescription: "The Capital Appeal Score measures a business's ability to absorb, deploy, and return capital. It assesses financial strength and fundability. The fundability sub-component weights adapt automatically to your funding type (tier).",
+          calculationMethod: "Financial statements are analyzed using machine learning models that compare your metrics with industry benchmarks. Fundability is assessed based on investment case strength, pitch readiness, and impact alignment.",
+          score: 45,
+          weight: 35,
+          weightedScore: 16,
           weightings: {
-            seed: { value: "30%", description: "Early-stage investment appeal" },
-            growth: { value: "30%", description: "Growth-stage funding potential" },
-            maturity: { value: "30%", description: "Mature-stage investment readiness" }
+            seed: { value: "40%", description: "Financial Strength" },
+            growth: { value: "60%", description: "Fundability (when seeking funding)" },
+            maturity: { value: "30%", description: "Financial Resilience & Efficiency (for serious funding)" }
           },
-          subComponents: [
-            {
-              title: "Financial Readiness",
-              description: "Accounting systems, compliance, up-to-date records",
-              items: ["Accounting Systems", "Financial Compliance", "Record Keeping"]
-            },
-            {
-              title: "Financial Strength",
-              description: "Revenue growth, profitability, audited financials",
-              items: ["Revenue Growth", "Profitability", "Audited Financials"]
-            },
-            {
-              title: "Operational Strength",
-              description: "Business processes, infrastructure, operational maturity",
-              items: ["Operational Efficiency", "Business Model Strength", "Infrastructure"]
-            },
-            {
-              title: "Impact Proof",
-              description: "Job creation, HDG inclusion, environmental responsibility",
-              items: ["Job Creation", "HDG Inclusion", "Environmental Impact"]
-            },
-            {
-              title: "Pitch & Business Plan Quality",
-              description: "Investment narrative clarity, market analysis",
-              items: ["Business Plan Quality", "Market Analysis", "Competitive Advantage"]
-            },
-            {
-              title: "Guarantees & Security",
-              description: "Forward contracts, payment guarantees, asset-backed security",
-              items: ["Forward Contracts", "Payment Guarantees", "Asset Security"]
-            }
-          ],
           scoreInterpretation: [
             { range: "91-100%", level: "Highly Fundable", description: "Exceptional investment opportunity" },
             { range: "81-90%", level: "Strong Investment Case", description: "Very attractive to funders" },
-            { range: "61-80%", level: "Moderate Potential", description: "Shows promise with some improvements" },
-            { range: "41-60%", level: "Basic Potential", description: "Significant improvements needed" },
-            { range: "0-40%", level: "Needs Development", description: "Fundamental changes required" }
+            { range: "61-80%", level: "Adequate Financial Base", description: "Moderate potential with some improvements" },
+            { range: "41-60%", level: "Financial Vulnerabilities", description: "Significant improvements needed" },
+            { range: "0-40%", level: "Weak Financial Foundation", description: "Fundamental changes required" }
+          ],
+          subComponents: [
+            {
+              title: "Financial Strength (40%)",
+              weight: "40%",
+              description: "Core signal of viability",
+              items: [
+                "Revenue & Profitability (30%) - Income statement trends",
+                "Balance Sheet Strength (20%) - Assets, liabilities, and equity",
+                "Financial Management & Systems (20%) - Accounting software and bookkeeping",
+                "Financial Credibility & Compliance (20%) - Audits and insurance",
+                "Debt & Liabilities Profile (10%) - Hidden risk exposure"
+              ]
+            },
+            {
+              title: "Fundability (60% - when seeking funding)",
+              weight: "60%",
+              description: "Trust + investor confidence (activated on funding application)",
+              items: [
+                "Investment Case Strength (25%) - Foundation of funding decision",
+                "Pitch Readiness (10%) - Communication and presentation",
+                "Impact & Mandate Alignment (10%) - ESG/SA funding alignment",
+                "Creditworthiness (25%) - Risk filter",
+                "Guarantees/Collateral (15%) - Debt funding collateral",
+                "Financial Resilience & Efficiency (15%) - Solvency, liquidity, leverage"
+              ]
+            }
           ]
         }
       ]
@@ -391,45 +448,21 @@ const BIGScorePage = () => {
           flexWrap: 'wrap',
           marginBottom: '10px',
         }}>
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '4px',
-            background: `${component.color}10`,
-            padding: '2px 6px',
-            borderRadius: '16px',
-            fontSize: '0.55rem',
-            fontWeight: 600,
-            color: component.color,
-          }}>
-            <span>Seed: {component.weightings.seed.value}</span>
-          </div>
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '4px',
-            background: `${component.color}10`,
-            padding: '2px 6px',
-            borderRadius: '16px',
-            fontSize: '0.55rem',
-            fontWeight: 600,
-            color: component.color,
-          }}>
-            <span>Growth: {component.weightings.growth.value}</span>
-          </div>
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '4px',
-            background: `${component.color}10`,
-            padding: '2px 6px',
-            borderRadius: '16px',
-            fontSize: '0.55rem',
-            fontWeight: 600,
-            color: component.color,
-          }}>
-            <span>Mature: {component.weightings.maturity.value}</span>
-          </div>
+          {Object.entries(component.weightings || {}).map(([key, val]) => (
+            <div key={key} style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              background: `${component.color}10`,
+              padding: '2px 6px',
+              borderRadius: '16px',
+              fontSize: '0.55rem',
+              fontWeight: 600,
+              color: component.color,
+            }}>
+              <span>{key.charAt(0).toUpperCase() + key.slice(1)}: {val.value}</span>
+            </div>
+          ))}
         </div>
 
         <button
@@ -464,6 +497,539 @@ const BIGScorePage = () => {
         >
           Learn More <FaArrowRight size={10} />
         </button>
+      </div>
+    );
+  };
+
+  // Sample Report Modal
+  const SampleReportModal = () => {
+    const scoreLevel = getScoreLevel(52);
+    const breakdown = [
+      { name: "Compliance score", score: 29, weight: 28, weightedScore: 8, color: colors.red },
+      { name: "Legitimacy score", score: 90, weight: 13, weightedScore: 12, color: colors.green },
+      { name: "Leadership & Governance score", score: 58, weight: 10, weightedScore: 6, color: colors.orange },
+      { name: "Operational Strength score", score: 70, weight: 14, weightedScore: 10, color: colors.primary },
+      { name: "Capital appeal score", score: 45, weight: 35, weightedScore: 16, color: colors.amber },
+    ];
+
+    return (
+      <div
+        style={{
+          position: "fixed",
+          top: "0",
+          left: "0",
+          right: "0",
+          bottom: "0",
+          backgroundColor: "rgba(0, 0, 0, 0.5)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: "999999",
+          padding: "20px",
+        }}
+        onClick={(e) => {
+          if (e.target === e.currentTarget) {
+            setShowSampleReport(false);
+            document.body.style.overflow = 'auto';
+          }
+        }}
+      >
+        <div
+          style={{
+            position: "relative",
+            backgroundColor: "#ffffff",
+            borderRadius: "12px",
+            boxShadow: "0 10px 25px rgba(0, 0, 0, 0.15)",
+            zIndex: "999999",
+            maxHeight: "90vh",
+            overflowY: "auto",
+            width: "90%",
+            maxWidth: "600px",
+            border: "1px solid #ccc",
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            onClick={() => {
+              setShowSampleReport(false);
+              document.body.style.overflow = 'auto';
+            }}
+            style={{
+              position: "absolute",
+              top: "15px",
+              right: "15px",
+              background: "#fff",
+              border: "2px solid #ddd",
+              fontSize: "20px",
+              cursor: "pointer",
+              color: "#666",
+              zIndex: "999999",
+              width: "35px",
+              height: "35px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              borderRadius: "50%",
+              fontWeight: "bold",
+            }}
+          >
+            {"×"}
+          </button>
+          <div style={{ padding: "30px 20px 20px 20px" }}>
+            <h3
+              style={{
+                margin: "0 0 20px 0",
+                fontSize: "24px",
+                fontWeight: "600",
+                color: "#5d4037",
+                textAlign: "center",
+              }}
+            >
+              BIG Score Breakdown
+            </h3>
+            <div
+              style={{
+                textAlign: "center",
+                marginBottom: "30px",
+                padding: "20px",
+                background: "linear-gradient(135deg, #fdf8f6 0%, #f3e8dc 100%)",
+                borderRadius: "12px",
+                border: "1px solid #d6b88a",
+              }}
+            >
+              <div
+                style={{
+                  display: "inline-flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  width: "120px",
+                  height: "120px",
+                  border: `4px solid ${scoreLevel.color}`,
+                  borderRadius: "50%",
+                  background: "white",
+                  boxShadow: "0 4px 12px rgba(139, 69, 19, 0.2)",
+                  marginBottom: "15px",
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: "28px",
+                    fontWeight: "700",
+                    color: "#5d4037",
+                    lineHeight: "1",
+                  }}
+                >
+                  52%
+                </span>
+                <span
+                  style={{
+                    color: scoreLevel.color,
+                    fontSize: "12px",
+                    fontWeight: "600",
+                    marginTop: "4px",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.5px",
+                  }}
+                >
+                  {scoreLevel.level}
+                </span>
+              </div>
+              <div
+                style={{
+                  fontSize: "16px",
+                  color: "#6d4c41",
+                }}
+              >
+                <span>Business stage: </span>
+                <span
+                  style={{
+                    fontWeight: "600",
+                    color: "#5d4037",
+                    textTransform: "capitalize",
+                  }}
+                >
+                  Growth
+                </span>
+              </div>
+            </div>
+
+            {/* About the BIG Score section */}
+            <div
+              style={{
+                marginTop: "20px",
+                border: "1px solid #d7ccc8",
+                borderRadius: "8px",
+                overflow: "hidden",
+              }}
+            >
+              <div
+                style={{
+                  backgroundColor: "#8d6e63",
+                  color: "white",
+                  padding: "12px 16px",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  cursor: "pointer",
+                  fontWeight: "bold",
+                }}
+                onClick={() => setShowAboutScore(!showAboutScore)}
+              >
+                <span>About the BIG score</span>
+                <FaChevronDown
+                  size={20}
+                  style={{
+                    transform: showAboutScore ? "rotate(180deg)" : "rotate(0deg)",
+                    transition: "transform 0.2s ease",
+                  }}
+                />
+              </div>
+              {showAboutScore && (
+                <div
+                  style={{
+                    backgroundColor: "#f5f2f0",
+                    padding: "20px",
+                    color: "#5d4037",
+                  }}
+                >
+                  <p style={{ marginBottom: "16px", lineHeight: "1.6" }}>
+                    The BIG score combines your compliance, legitimacy, leadership &amp; governance, operational
+                    strength, and capital appeal scores into one comprehensive business readiness metric that
+                    reflects your overall organizational maturity and market readiness.
+                  </p>
+                  <div
+                    style={{
+                      backgroundColor: "#efebe9",
+                      padding: "16px",
+                      borderRadius: "8px",
+                      marginBottom: "16px",
+                      borderLeft: "4px solid #8d6e63",
+                    }}
+                  >
+                    <p style={{ fontWeight: "bold", marginBottom: "8px", color: "#6d4c41" }}>Five key components:</p>
+                    <ul style={{ margin: "0", paddingLeft: "20px", color: "#5d4037" }}>
+                      <li style={{ marginBottom: "6px" }}>
+                        <strong>Compliance score:</strong> Legal and regulatory documentation and compliance status
+                      </li>
+                      <li style={{ marginBottom: "6px" }}>
+                        <strong>Legitimacy score:</strong> Business credibility, professionalism, and market presence
+                      </li>
+                      <li style={{ marginBottom: "6px" }}>
+                        <strong>Leadership &amp; Governance score:</strong> Ownership and board structure, founder
+                        and leadership quality, and governance maturity — can we trust the people and
+                        decision-making structures?
+                      </li>
+                      <li style={{ marginBottom: "6px" }}>
+                        <strong>Operational Strength score:</strong> Supplier &amp; continuity risk, delivery
+                        reliability, and safety/compliance — can this business reliably execute?
+                      </li>
+                      <li style={{ marginBottom: "6px" }}>
+                        <strong>Capital Appeal score:</strong> Investment readiness, financial health, and growth
+                        potential
+                      </li>
+                    </ul>
+                  </div>
+                  <div
+                    style={{
+                      backgroundColor: "#efebe9",
+                      padding: "16px",
+                      borderRadius: "8px",
+                      marginBottom: "16px",
+                      borderLeft: "4px solid #8d6e63",
+                    }}
+                  >
+                    <p style={{ fontWeight: "bold", marginBottom: "8px", color: "#6d4c41" }}>Score interpretation:</p>
+                    <ul style={{ margin: "0", paddingLeft: "20px", color: "#5d4037" }}>
+                      <li style={{ marginBottom: "4px" }}>
+                        <strong>91-100%:</strong> Exceptional - Your business is highly prepared for major opportunities
+                      </li>
+                      <li style={{ marginBottom: "4px" }}>
+                        <strong>81-90%:</strong> Strong - Well-positioned for scaling, funding, and strategic partnerships
+                      </li>
+                      <li style={{ marginBottom: "4px" }}>
+                        <strong>61-80%:</strong> Progressing - On track with solid foundations
+                      </li>
+                      <li style={{ marginBottom: "4px" }}>
+                        <strong>41-60%:</strong> Foundational - Core building blocks are in place
+                      </li>
+                      <li style={{ marginBottom: "4px" }}>
+                        <strong>0-40%:</strong> Emerging - Early stages of readiness
+                      </li>
+                    </ul>
+                  </div>
+                  <div
+                    style={{
+                      backgroundColor: "#efebe9",
+                      padding: "16px",
+                      borderRadius: "8px",
+                      marginBottom: "16px",
+                      borderLeft: "4px solid #8d6e63",
+                    }}
+                  >
+                    <p style={{ fontWeight: "bold", marginBottom: "8px", color: "#6d4c41" }}>Weighted assessment:</p>
+                    <p style={{ margin: "0", color: "#5d4037" }}>
+                      Compliance and Capital Appeal receive the highest weights as they represent the
+                      fundamental legal foundation and investment attractiveness that drive business opportunities.
+                    </p>
+                  </div>
+                  <p style={{ marginBottom: "0", lineHeight: "1.6", fontStyle: "italic", color: "#6d4c41" }}>
+                    Your BIG score provides a comprehensive view of your business readiness across all critical
+                    dimensions that matter to investors, partners, and stakeholders.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Score Breakdown Section */}
+            <div
+              style={{
+                marginTop: "20px",
+                border: "1px solid #d7ccc8",
+                borderRadius: "8px",
+                overflow: "hidden",
+              }}
+            >
+              <div
+                style={{
+                  backgroundColor: "#8d6e63",
+                  color: "white",
+                  padding: "12px 16px",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  cursor: "pointer",
+                  fontWeight: "bold",
+                }}
+                onClick={() => setShowScoreBreakdown(!showScoreBreakdown)}
+              >
+                <span>Score breakdown</span>
+                <FaChevronDown
+                  size={20}
+                  style={{
+                    transform: showScoreBreakdown ? "rotate(180deg)" : "rotate(0deg)",
+                    transition: "transform 0.2s ease",
+                  }}
+                />
+              </div>
+              {showScoreBreakdown && (
+                <div
+                  style={{
+                    backgroundColor: "#f5f2f0",
+                    padding: "20px",
+                    color: "#5d4037",
+                  }}
+                >
+                  {breakdown.map((item, index) => (
+                    <div
+                      key={index}
+                      style={{
+                        padding: "15px",
+                        borderBottom: index < breakdown.length - 1 ? "1px solid #e8d8cf" : "none",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        background: "white",
+                        marginBottom: "5px",
+                        borderRadius: "8px",
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          flex: "1",
+                        }}
+                      >
+                        <div
+                          style={{
+                            backgroundColor: item.color,
+                            width: "12px",
+                            height: "12px",
+                            borderRadius: "50%",
+                            marginRight: "12px",
+                            flexShrink: "0",
+                          }}
+                        ></div>
+                        <div>
+                          <div
+                            style={{
+                              fontWeight: "600",
+                              color: "#5d4037",
+                              fontSize: "14px",
+                              marginBottom: "2px",
+                            }}
+                          >
+                            {item.name}
+                          </div>
+                          <div
+                            style={{
+                              fontSize: "12px",
+                              color: "#8d6e63",
+                              fontStyle: "italic",
+                            }}
+                          >
+                            {item.score}% × {item.weight}% weight = {item.weightedScore}%
+                          </div>
+                        </div>
+                      </div>
+                      <div
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "12px",
+                        }}
+                      >
+                        <div
+                          style={{
+                            width: "80px",
+                            height: "8px",
+                            background: "#f3e8dc",
+                            borderRadius: "4px",
+                            overflow: "hidden",
+                            border: "1px solid #d6b88a",
+                          }}
+                        >
+                          <div
+                            style={{
+                              width: `${item.score}%`,
+                              backgroundColor: getProgressBarColor(item.score),
+                              height: "100%",
+                              borderRadius: "4px",
+                              transition: "width 0.3s ease",
+                            }}
+                          ></div>
+                        </div>
+                        <span
+                          style={{
+                            fontWeight: "600",
+                            color: "#5d4037",
+                            fontSize: "14px",
+                            minWidth: "35px",
+                            textAlign: "right",
+                          }}
+                        >
+                          {item.score}%
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Detailed Analysis Section */}
+            <div
+              style={{
+                marginTop: "20px",
+                border: "1px solid #d7ccc8",
+                borderRadius: "8px",
+                overflow: "hidden",
+              }}
+            >
+              <div
+                style={{
+                  backgroundColor: "#8d6e63",
+                  color: "white",
+                  padding: "12px 16px",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  cursor: "pointer",
+                  fontWeight: "bold",
+                }}
+                onClick={() => setShowDetailedAnalysis(!showDetailedAnalysis)}
+              >
+                <span>Detailed analysis</span>
+                <FaChevronDown
+                  size={20}
+                  style={{
+                    transform: showDetailedAnalysis ? "rotate(180deg)" : "rotate(0deg)",
+                    transition: "transform 0.2s ease",
+                  }}
+                />
+              </div>
+              {showDetailedAnalysis && (
+                <div
+                  style={{
+                    backgroundColor: "#f5f2f0",
+                    padding: "20px",
+                    color: "#5d4037",
+                  }}
+                >
+                  <div style={{ color: "#5d4037", lineHeight: "1.6" }}>
+                    <p style={{ margin: "0 0 12px 0" }}>
+                      <strong>Fair business readiness with improvement opportunities.</strong> While you have
+                      established foundations in several areas, significant gaps remain that may limit access to
+                      premium opportunities. Focus on strengthening your weakest scores - particularly compliance
+                      and capital appeal - to improve your overall market position.
+                    </p>
+                    <div
+                      style={{
+                        backgroundColor: "#efebe9",
+                        padding: "16px",
+                        borderRadius: "8px",
+                        marginTop: "12px",
+                      }}
+                    >
+                      <p style={{ fontWeight: "bold", marginBottom: "8px", color: "#6d4c41" }}>
+                        Key recommendations:
+                      </p>
+                      <ul style={{ margin: "0", paddingLeft: "20px", color: "#5d4037" }}>
+                        <li style={{ marginBottom: "4px" }}>
+                          <strong>Compliance (29%):</strong> Upload missing documents like Company Registration and SARS Tax Clearance
+                        </li>
+                        <li style={{ marginBottom: "4px" }}>
+                          <strong>Capital Appeal (45%):</strong> Strengthen your investment case and financial documentation
+                        </li>
+                        <li style={{ marginBottom: "4px" }}>
+                          <strong>Leadership & Governance (58%):</strong> Build governance structures and document policies
+                        </li>
+                        <li style={{ marginBottom: "4px" }}>
+                          <strong>Operational Strength (70%):</strong> Enhance supplier reliability and delivery processes
+                        </li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div style={{ marginTop: "24px", textAlign: "center" }}>
+              <button
+                onClick={() => navigate('/LoginRegister')}
+                style={{
+                  width: "100%",
+                  padding: "14px 24px",
+                  borderRadius: "10px",
+                  background: "linear-gradient(135deg, #8d6e63 0%, #6d4c41 100%)",
+                  color: "white",
+                  border: "none",
+                  fontWeight: "700",
+                  fontSize: "15px",
+                  cursor: "pointer",
+                  transition: "all 0.3s ease",
+                  boxShadow: "0 6px 20px rgba(141, 110, 99, 0.4)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "8px",
+                }}
+                onMouseOver={(e) => {
+                  e.target.style.transform = "translateY(-2px)";
+                  e.target.style.boxShadow = "0 8px 25px rgba(141, 110, 99, 0.5)";
+                }}
+                onMouseOut={(e) => {
+                  e.target.style.transform = "translateY(0px)";
+                  e.target.style.boxShadow = "0 6px 20px rgba(141, 110, 99, 0.4)";
+                }}
+              >
+                <span>Get Your Actual BIG Score</span>
+                <FaArrowRight size={16} />
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     );
   };
@@ -613,6 +1179,10 @@ const BIGScorePage = () => {
               Get Your BIG Score Now <FaArrowRight size={14} />
             </button>
             <button
+              onClick={() => {
+                setShowSampleReport(true);
+                document.body.style.overflow = 'hidden';
+              }}
               style={{
                 background: 'rgba(255,255,255,0.1)',
                 color: colors.white,
@@ -662,12 +1232,15 @@ const BIGScorePage = () => {
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <FaUsers size={16} color={colors.amber} />
               <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem' }}>
-                Trusted by 500+ SMEs
+                Trusted by 500+ Businesses
               </span>
             </div>
           </div>
         </div>
       </section>
+
+      {/* Sample Report Modal */}
+      {showSampleReport && <SampleReportModal />}
 
       {/* Main Content */}
       <div style={{
@@ -676,7 +1249,7 @@ const BIGScorePage = () => {
         padding: isMobile ? '24px 16px 40px' : '40px 20px 60px',
       }}>
 
-        {/* What is BIG Score Section - With Real Images */}
+        {/* What is BIG Score Section */}
         <section style={{
           backgroundColor: colors.white,
           borderRadius: '20px',
@@ -811,12 +1384,12 @@ const BIGScorePage = () => {
             }}>
               <strong>Consumer finance has TransUnion and Experian</strong> — global systems that measure personal creditworthiness.<br />
               <strong>Corporates have Moody's, Fitch, and S&P</strong> — rating frameworks that measure institutional risk.<br />
-              <strong>SMEs have "The BIG Score"</strong> — a shared metric that lets funders, corporates, and partners speak the same language of readiness and reliability.
+              <strong>Businesses have "The BIG Score"</strong> — a shared metric that lets funders, corporates, and partners speak the same language of readiness and reliability.
             </p>
           </div>
         </section>
 
-        {/* Score Components Section - Responsive grid */}
+        {/* Score Components Section */}
         <section style={{
           backgroundColor: colors.dark,
           borderRadius: '20px',
@@ -842,12 +1415,12 @@ const BIGScorePage = () => {
             margin: '0 auto 32px',
             lineHeight: 1.6,
           }}>
-            Our AI-powered framework scores every SME across five core dimensions — giving funders, partners, and programs a complete view of business readiness.
+            Our AI-powered framework scores every business across five core dimensions — giving funders, partners, and programs a complete view of business readiness.
           </p>
 
           <div style={{
             display: 'grid',
-            gridTemplateColumns: isMobile ? '1fr' : isMobile ? '1fr 1fr' : 'repeat(5, 1fr)',
+            gridTemplateColumns: isMobile ? '1fr' : 'repeat(5, 1fr)',
             gap: isMobile ? '12px' : '16px',
           }}>
             {scoreData.bigScore.components.map((component, index) => (
@@ -963,8 +1536,6 @@ const BIGScorePage = () => {
             </div>
           </div>
         </section>
-
-       
       </div>
 
       <Footer />
@@ -1097,48 +1668,22 @@ const BIGScorePage = () => {
                 gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)',
                 gap: isMobile ? '8px' : '12px',
               }}>
-                <div style={{
-                  background: colors.light,
-                  borderRadius: '10px',
-                  padding: isMobile ? '12px' : '16px',
-                  textAlign: 'center',
-                  borderLeft: `3px solid ${colors.primary}`,
-                }}>
-                  <div style={{ fontSize: isMobile ? '1rem' : '1.2rem', fontWeight: 800, color: colors.primary }}>
-                    {popupContent.weightings.seed.value}
+                {Object.entries(popupContent.weightings || {}).map(([key, val]) => (
+                  <div key={key} style={{
+                    background: colors.light,
+                    borderRadius: '10px',
+                    padding: isMobile ? '12px' : '16px',
+                    textAlign: 'center',
+                    borderLeft: `3px solid ${popupContent.color || colors.primary}`,
+                  }}>
+                    <div style={{ fontSize: isMobile ? '1rem' : '1.2rem', fontWeight: 800, color: popupContent.color || colors.primary }}>
+                      {val.value}
+                    </div>
+                    <div style={{ fontSize: isMobile ? '0.7rem' : '0.8rem', color: colors.muted }}>
+                      {val.description}
+                    </div>
                   </div>
-                  <div style={{ fontSize: isMobile ? '0.7rem' : '0.8rem', color: colors.muted }}>
-                    {popupContent.weightings.seed.description}
-                  </div>
-                </div>
-                <div style={{
-                  background: colors.light,
-                  borderRadius: '10px',
-                  padding: isMobile ? '12px' : '16px',
-                  textAlign: 'center',
-                  borderLeft: `3px solid ${colors.secondary}`,
-                }}>
-                  <div style={{ fontSize: isMobile ? '1rem' : '1.2rem', fontWeight: 800, color: colors.secondary }}>
-                    {popupContent.weightings.growth.value}
-                  </div>
-                  <div style={{ fontSize: isMobile ? '0.7rem' : '0.8rem', color: colors.muted }}>
-                    {popupContent.weightings.growth.description}
-                  </div>
-                </div>
-                <div style={{
-                  background: colors.light,
-                  borderRadius: '10px',
-                  padding: isMobile ? '12px' : '16px',
-                  textAlign: 'center',
-                  borderLeft: `3px solid ${colors.amber}`,
-                }}>
-                  <div style={{ fontSize: isMobile ? '1rem' : '1.2rem', fontWeight: 800, color: colors.amber }}>
-                    {popupContent.weightings.maturity.value}
-                  </div>
-                  <div style={{ fontSize: isMobile ? '0.7rem' : '0.8rem', color: colors.muted }}>
-                    {popupContent.weightings.maturity.description}
-                  </div>
-                </div>
+                ))}
               </div>
             </div>
 
@@ -1175,6 +1720,16 @@ const BIGScorePage = () => {
                         marginBottom: '4px',
                       }}>
                         {sub.title}
+                        {sub.weight && (
+                          <span style={{
+                            fontSize: '0.7rem',
+                            fontWeight: 600,
+                            color: popupContent.color || colors.primary,
+                            marginLeft: '8px',
+                          }}>
+                            ({sub.weight})
+                          </span>
+                        )}
                       </h4>
                       <p style={{
                         fontSize: isMobile ? '0.7rem' : '0.75rem',
@@ -1190,21 +1745,42 @@ const BIGScorePage = () => {
                           flexWrap: 'wrap',
                           gap: '4px',
                         }}>
-                          {sub.items.slice(0, isMobile ? 3 : 4).map((item, i) => (
-                            <span
-                              key={i}
-                              style={{
-                                fontSize: '0.6rem',
-                                background: `${popupContent.color || colors.primary}15`,
-                                color: popupContent.color || colors.primary,
-                                padding: '2px 8px',
-                                borderRadius: '12px',
-                                fontWeight: 500,
-                              }}
-                            >
-                              {item}
-                            </span>
-                          ))}
+                          {sub.items.slice(0, isMobile ? 3 : 4).map((item, i) => {
+                            if (typeof item === 'object' && item !== null) {
+                              const statusColor = item.status === 'verified' ? colors.green : colors.red;
+                              return (
+                                <span
+                                  key={i}
+                                  style={{
+                                    fontSize: '0.6rem',
+                                    background: `${statusColor}15`,
+                                    color: statusColor,
+                                    padding: '2px 8px',
+                                    borderRadius: '12px',
+                                    fontWeight: 500,
+                                    border: `1px solid ${statusColor}30`,
+                                  }}
+                                >
+                                  {item.label} ({item.weight})
+                                </span>
+                              );
+                            }
+                            return (
+                              <span
+                                key={i}
+                                style={{
+                                  fontSize: '0.6rem',
+                                  background: `${popupContent.color || colors.primary}15`,
+                                  color: popupContent.color || colors.primary,
+                                  padding: '2px 8px',
+                                  borderRadius: '12px',
+                                  fontWeight: 500,
+                                }}
+                              >
+                                {item}
+                              </span>
+                            );
+                          })}
                           {sub.items.length > (isMobile ? 3 : 4) && (
                             <span style={{
                               fontSize: '0.6rem',

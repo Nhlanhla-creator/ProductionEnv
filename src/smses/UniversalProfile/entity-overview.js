@@ -834,16 +834,12 @@ export default function EntityOverview({ data = {}, updateData }) {
         <FormField label="Years in Operation" required>
           <input type="number" name="yearsInOperation" value={formData.yearsInOperation || ""} onChange={handleChange} min="0" step="0.5" style={inputStyle} required />
         </FormField>
-
-        <FormField label="CIPC Annual Return">
-          <input type="text" name="cipcAnnualReturn" value={formData.cipcAnnualReturn || ""} onChange={handleChange} style={inputStyle} placeholder="e.g., 2024-01-15" />
-        </FormField>
       </div>
 
       {/* ============================================================ */}
       {/* SECTION 2: Business Details - 3 per row */}
       {/* ============================================================ */}
-      <SectionHeading title="Business Details" />
+      <SectionHeading title="Business Classification" />
 
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px' }}>
         <FormField label="Business Stage" required>

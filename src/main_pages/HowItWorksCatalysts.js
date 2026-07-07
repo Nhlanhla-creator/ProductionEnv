@@ -112,7 +112,7 @@ const HowItWorksCatalysts = () => {
                 letterSpacing: '0.08em',
                 textTransform: 'uppercase',
               }}>
-                For Catalysts
+                For Catalysts & Business Associations
               </span>
             </div>
             
@@ -135,7 +135,7 @@ const HowItWorksCatalysts = () => {
               margin: '0 0 28px',
               maxWidth: '500px',
             }}>
-              Identify. Nurture. Track. Supercharge your cohort with verified, high-potential SMEs.
+              Identify. Nurture. Track. Supercharge your cohort with verified, high-potential businesses.
             </p>
 
             <div style={{
@@ -218,7 +218,7 @@ const HowItWorksCatalysts = () => {
               {
                 icon: <FaUserFriends size={26} />,
                 number: '02',
-                title: 'Recruit SMEs',
+                title: 'Recruit Participants',
                 description: 'Auto-matched applicants based on your criteria.',
                 details: ['Auto-matched applicants', 'View score history', 'Assess potential', 'Comprehensive profiles'],
                 subtext: '🔍 Find the perfect fit for your program',
@@ -366,7 +366,7 @@ const HowItWorksCatalysts = () => {
             marginLeft: 'auto',
             marginRight: 'auto',
           }}>
-            Join the leading catalysts transforming SME development through BIG.
+            Join the leading catalysts transforming business development through BIG.
           </p>
           <button
             onClick={handleButtonClick}
@@ -557,7 +557,7 @@ const HowItWorksCatalysts = () => {
                 lineHeight: 1.6,
                 margin: 0,
               }}>
-                All participant profiles and progress data encrypted with <strong>AES-256</strong> at rest and <strong>TLS 1.3</strong> in transit.
+                All participant profiles and progress data are encrypted using enterprise-grade standards in transit and at rest.
               </p>
             </div>
 
@@ -604,7 +604,7 @@ const HowItWorksCatalysts = () => {
                 lineHeight: 1.6,
                 margin: 0,
               }}>
-                Your program structure, criteria, and participant lists remain <strong>confidential</strong> with NDA-protected access.
+                Your program structure, criteria, and participant lists remain confidential with role-based access controls.
               </p>
             </div>
 
@@ -651,11 +651,11 @@ const HowItWorksCatalysts = () => {
                 lineHeight: 1.6,
                 margin: 0,
               }}>
-                All impact metrics are <strong>securely tracked and verified</strong>. Generate auditable program reports.
+                All impact metrics are securely tracked and verified. Generate auditable program reports.
               </p>
             </div>
 
-            {/* Block 4: Compliance Ready */}
+            {/* Block 4: POPIA Compliance */}
             <div style={{
               background: colors.light,
               borderRadius: '14px',
@@ -698,7 +698,7 @@ const HowItWorksCatalysts = () => {
                 lineHeight: 1.6,
                 margin: 0,
               }}>
-                Fully compliant with <strong>POPIA 4 of 2013</strong>. All program data stored securely in South African data centers.
+                Fully compliant with the Protection of Personal Information Act (POPIA). Data is hosted on secure cloud infrastructure with regional data residency controls.
               </p>
             </div>
           </div>
@@ -722,11 +722,11 @@ const HowItWorksCatalysts = () => {
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <FaFileContract size={16} color={colors.green} />
-              <span style={{ fontSize: '0.8rem', color: colors.muted }}>NDA-Protected Access</span>
+              <span style={{ fontSize: '0.8rem', color: colors.muted }}>Role-Based Access Controls</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <FaRegClock size={16} color={colors.amber} />
-              <span style={{ fontSize: '0.8rem', color: colors.muted }}>Audit-Ready Reports</span>
+              <span style={{ fontSize: '0.8rem', color: colors.muted }}>Continuous Monitoring</span>
             </div>
           </div>
         </section>

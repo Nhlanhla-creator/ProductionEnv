@@ -6,11 +6,13 @@ import { getAuth } from "firebase/auth";
 import { doc, getDoc, setDoc, addDoc, collection } from "firebase/firestore";
 import { db } from "../../firebaseConfig";
 import { getFunctions, httpsCallable } from "firebase/functions";
+import { useLocation } from "react-router-dom";
 
 const functions = getFunctions();
 
 
 const GovernanceCalendar = (activeSection, isInvestorView ) => {
+  const location = useLocation();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showAddModal, setShowAddModal] = useState(false);
@@ -103,6 +105,27 @@ useEffect(() => {
     return () => unsubscribe();
   }, []);
   
+  useEffect(() => {
+  // Check if there's a meeting query param
+  const params = new URLSearchParams(location.search);
+  const meetingId = params.get("meeting");
+  
+  if (meetingId && meetings.length > 0) {
+    const meeting = meetings.find(m => m.id === meetingId);
+    if (meeting) {
+      // Auto-select the meeting
+      setShowDetailsModal(meeting);
+      // Highlight the date on the calendar
+      const instance = meeting.instances?.[0];
+      if (instance) {
+        const date = new Date(instance.date);
+        setSelectedDate(date);
+        setCurrentDate(date);
+      }
+    }
+  }
+}, [location.search, meetings]);
+
   const getRandomColor = () => {
     const colors = ["#607D8B", "#795548", "#009688", "#673AB7", "#3F51B5", "#CDDC39", "#FFC107"];
     const randomIndex = Math.floor(Math.random() * colors.length);
@@ -2098,6 +2121,81 @@ const SpinKeyframes = () => (
           </div>
         </div>
         
+        {/* Actions Section in Meeting Details Modal */}
+<div style={detailsSectionStyles}>
+  <div style={detailsLabelStyles}>Actions</div>
+  {showDetailsModal.actions && showDetailsModal.actions.length > 0 ? (
+    <div>
+      {showDetailsModal.actions.map((action) => (
+        <div
+          key={action.id}
+          style={{
+            padding: "8px 12px",
+            backgroundColor: "#f7f3f0",
+            borderRadius: "6px",
+            marginBottom: "6px",
+            borderLeft: `4px solid ${
+              action.status === "completed" ? "#4CAF50" :
+              action.status === "in-progress" ? "#2196F3" : "#FF9800"
+            }`,
+          }}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <span style={{ fontSize: "13px", fontWeight: "500", color: "#4a352f" }}>
+              {action.title}
+            </span>
+            <span
+              style={{
+                fontSize: "11px",
+                padding: "2px 8px",
+                borderRadius: "10px",
+                backgroundColor:
+                  action.status === "completed" ? "#E8F5E9" :
+                  action.status === "in-progress" ? "#E3F2FD" : "#FFF3E0",
+                color:
+                  action.status === "completed" ? "#2E7D32" :
+                  action.status === "in-progress" ? "#0D47A1" : "#E65100",
+              }}
+            >
+              {action.status === "completed" ? "Done" :
+               action.status === "in-progress" ? "In Progress" : "Open"}
+            </span>
+          </div>
+          {action.assignedTo && (
+            <div style={{ fontSize: "11px", color: "#8d6e63", marginTop: "2px" }}>
+              👤 {action.assignedTo}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  ) : (
+    <div style={{ fontSize: "13px", color: "#8d6e63", fontStyle: "italic" }}>
+      No actions created yet.
+    </div>
+  )}
+  <div style={{ marginTop: "12px" }}>
+    <button
+      onClick={() => {
+        window.location.href = `/raps-actions?meeting=${showDetailsModal.id}`;
+      }}
+      style={{
+        padding: "8px 16px",
+        backgroundColor: "#7d5a50",
+        color: "white",
+        border: "none",
+        borderRadius: "6px",
+        cursor: "pointer",
+        fontSize: "13px",
+        fontWeight: "500",
+        width: "100%",
+      }}
+    >
+      📋 View All Actions for this Meeting
+    </button>
+  </div>
+</div>
+
         {/* Action Buttons - Only show Delete for future meetings */}
         {(() => {
           const isPastMeeting = new Date(showDetailsModal.instances?.[0]?.date) < new Date();
