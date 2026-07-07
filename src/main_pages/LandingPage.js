@@ -720,12 +720,7 @@ const LandingPage = () => {
               <p style={{fontSize:"0.9rem",lineHeight:"1.6",color:C.dark}}><strong>To make growth accessible — not accidental — for Africa's most promising enterprises.</strong></p>
             </div>
           </div>
-          <div style={{textAlign:"center"}}>
-            <p style={{fontSize:mobile?"1rem":"1.1rem",fontWeight:600,marginBottom:"25px",color:C.primary,textTransform:"uppercase"}}>
-              We're building a continent-wide trust economy. Join us.
-            </p>
-            <button className="lp-b" onClick={go}>See Solutions</button>
-          </div>
+         
         </div>
         <div style={{position:"absolute",bottom:0,left:0,right:0,height:"20px",background:`linear-gradient(to right, ${C.primary}, ${C.secondary})`,clipPath:"polygon(0 30%, 100% 0, 100% 100%, 0 100%)"}}/>
       </section>
