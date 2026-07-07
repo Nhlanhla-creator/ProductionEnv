@@ -140,8 +140,8 @@ export const loadAllContent = async () => {
     querySnapshot.forEach((docSnap) => {
       const data = docSnap.data();
       const pathKey = data.path.join(' > ');
-      // Only mark as having content if there are actual files
-      if (!data.files || data.files.length === 0) return;
+      // Only mark as having content if there are actual files or table data
+      if ((!data.files || data.files.length === 0) && data.type !== 'table') return;
       content[pathKey] = {
         ...data,
         createdAt: data.createdAt?.toDate?.() || new Date(data.createdAt),
@@ -274,6 +274,31 @@ export const loadDatabaseEntries = async (path) => {
     return entries;
   } catch (error) {
     console.error('❌ Error loading database entries:', error);
+    throw error;
+  }
+};
+
+export const saveTableContent = async (path, tableData) => {
+  try {
+    const user = getCurrentUser();
+    const docId = getDocId(user.uid, path);
+    const docRef = doc(db, PARTNERS_COLLECTION, docId);
+    
+    // Check if doc exists to preserve createdAt
+    const docSnap = await getDoc(docRef);
+    
+    await setDoc(docRef, {
+      userId: user.uid,
+      path,
+      type: 'table',
+      tableData,
+      updatedAt: serverTimestamp(),
+      createdAt: docSnap.exists() ? docSnap.data().createdAt : serverTimestamp()
+    }, { merge: true });
+    
+    return { success: true };
+  } catch (error) {
+    console.error('❌ Error saving table content:', error);
     throw error;
   }
 };

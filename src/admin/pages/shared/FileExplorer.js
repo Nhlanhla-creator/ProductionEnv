@@ -10,7 +10,10 @@ import {
   Table,
   Plus,
   Trash2,
-  FolderPlus
+  FolderPlus,
+  ChevronLeft,
+  Maximize2,
+  Minimize2
 } from 'lucide-react';
 
 const FileExplorerItem = memo(({
@@ -33,7 +36,7 @@ const FileExplorerItem = memo(({
   const isSelected  = selectedPath?.join(' > ') === pathKey;
   const isFolder    = item.type === 'folder';
   const isChecklist  = item.type === 'checklist';
-  const isQATable    = item.type === 'qa-table';
+  const isQATable    = item.type === 'qa-table' || item.type === 'table' || item.type === 'database';
   const hasContent  = contentStatus[pathKey];
   const isCustom    = !!item._custom;
   const showActions = hovered || isSelected;
@@ -205,8 +208,59 @@ export const FileExplorer = memo(({
   onSelectItem,
   onAddItem,
   onDeleteItem,
-  contentStatus = {}
+  contentStatus = {},
+  explorerState = 'normal',
+  onToggleState
 }) => {
+  if (explorerState === 'minimized') {
+    return (
+      <div style={{
+        background: 'white',
+        borderRadius: 8,
+        border: '1px solid var(--medium-brown)',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        padding: '16px 0',
+        height: '100%',
+        gap: 20
+      }}>
+        <button
+          onClick={() => onToggleState('normal')}
+          title="Expand File Explorer"
+          style={{
+            background: 'transparent',
+            border: 'none',
+            color: 'var(--primary-brown)',
+            cursor: 'pointer',
+            padding: 8,
+            borderRadius: 6,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            transition: 'background 0.2s'
+          }}
+          onMouseEnter={e => e.currentTarget.style.background = 'var(--pale-brown)'}
+          onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+        >
+          <ChevronRight size={20} />
+        </button>
+        <div style={{
+          writingMode: 'vertical-rl',
+          textTransform: 'uppercase',
+          fontSize: 11,
+          fontWeight: 600,
+          color: 'var(--text-brown)',
+          letterSpacing: '1.5px',
+          userSelect: 'none',
+          opacity: 0.7
+        }}>
+          Working Repository
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{
       background: 'white',
@@ -224,30 +278,77 @@ export const FileExplorer = memo(({
         justifyContent: 'space-between',
         gap: 8
       }}>
-        <span style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-brown)' }}>
+        <span style={{ fontWeight: 600, fontSize: 14, color: 'var(--text-brown)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', flex: 1 }}>
           Working Repository
         </span>
-        {onAddItem && (
-          <button
-            onClick={() => onAddItem([])}
-            title="Add a top-level folder or file"
-            style={{
-              padding: '6px 10px',
-              background: 'var(--primary-brown)',
-              color: 'white',
-              border: 'none',
-              borderRadius: 6,
-              cursor: 'pointer',
-              fontSize: 12,
-              fontWeight: 500,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 4
-            }}
-          >
-            <FolderPlus size={14} /> New
-          </button>
-        )}
+        
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+          {onToggleState && (
+            <div style={{ display: 'flex', gap: 2, marginRight: 4 }}>
+              <button
+                onClick={() => onToggleState(explorerState === 'maximized' ? 'normal' : 'maximized')}
+                title={explorerState === 'maximized' ? "Restore Size" : "Maximize Explorer"}
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'var(--text-brown)',
+                  cursor: 'pointer',
+                  padding: 4,
+                  display: 'flex',
+                  alignItems: 'center',
+                  borderRadius: 4,
+                  transition: 'background 0.2s'
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = 'var(--medium-brown)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+              >
+                {explorerState === 'maximized' ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
+              </button>
+              
+              <button
+                onClick={() => onToggleState('minimized')}
+                title="Minimize / Collapse"
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'var(--text-brown)',
+                  cursor: 'pointer',
+                  padding: 4,
+                  display: 'flex',
+                  alignItems: 'center',
+                  borderRadius: 4,
+                  transition: 'background 0.2s'
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = 'var(--medium-brown)'}
+                onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+              >
+                <ChevronLeft size={13} />
+              </button>
+            </div>
+          )}
+
+          {onAddItem && (
+            <button
+              onClick={() => onAddItem([])}
+              title="Add a top-level folder or file"
+              style={{
+                padding: '6px 10px',
+                background: 'var(--primary-brown)',
+                color: 'white',
+                border: 'none',
+                borderRadius: 6,
+                cursor: 'pointer',
+                fontSize: 12,
+                fontWeight: 500,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4
+              }}
+            >
+              <FolderPlus size={14} /> New
+            </button>
+          )}
+        </div>
       </div>
 
       <div style={{ padding: '8px 0' }}>
