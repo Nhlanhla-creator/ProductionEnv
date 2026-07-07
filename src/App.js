@@ -343,7 +343,7 @@ import CatalystSubscriptions from "catalyst/CatalystBillingAndPayments/catalyst-
 import BillingHistoryCatalyst from "catalyst/CatalystBillingAndPayments/billing-history-catalyst"
 import AdvisorApplicationManager from "smses/AdvisorApplication/AdvisorApplicationManager"
 import GovernanceCalendar from "smses/MyGrowthTools/GovernanceCalendar"
-import RapsActions from "smses/MyGrowthTools/RapsActions"
+import * as RapsActions from 'smses/MyGrowthTools/RapsActions';
 import RapsOverview from "smses/MyGrowthTools/RapsOverview"
 
 // Initial Data States
