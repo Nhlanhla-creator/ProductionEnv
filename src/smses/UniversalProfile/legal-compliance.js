@@ -26,24 +26,6 @@ const uifStatusOptions = [
   { value: "In progress / Awaiting confirmation", label: "In progress / Awaiting confirmation" },
 ]
 
-const industryAccreditationOptions = [
-  { value: "ISO 9001", label: "ISO 9001 – Quality Management" },
-  { value: "ISO 14001", label: "ISO 14001 – Environmental Management" },
-  { value: "ISO 45001", label: "ISO 45001 – Occupational Health & Safety" },
-  { value: "ISO 27001", label: "ISO 27001 – Information Security" },
-  { value: "CIDB", label: "CIDB – Construction Industry Development Board" },
-  { value: "NHBRC", label: "NHBRC – National Home Builders Registration Council" },
-  { value: "SACPCMP", label: "SACPCMP – SA Council for Project & Construction Management" },
-  { value: "ECSA", label: "ECSA – Engineering Council of South Africa" },
-  { value: "SABS", label: "SABS – South African Bureau of Standards" },
-  { value: "FSCA", label: "FSCA – Financial Sector Conduct Authority" },
-  { value: "PSIRA", label: "PSIRA – Private Security Industry Regulatory Authority" },
-  { value: "SAICA", label: "SAICA – SA Institute of Chartered Accountants" },
-  { value: "SAIPA", label: "SAIPA – SA Institute of Professional Accountants" },
-  { value: "HPCSA", label: "HPCSA – Health Professions Council of SA" },
-  { value: "Other", label: "Other (please specify)" },
-]
-
 // Tooltip Component
 const Tooltip = ({ children, content, position = "top" }) => {
   const [isVisible, setIsVisible] = useState(false)
@@ -71,96 +53,6 @@ const Tooltip = ({ children, content, position = "top" }) => {
                 : "bottom-full left-1/2 -translate-x-1/2 -mb-1"
             }`}
           />
-        </div>
-      )}
-    </div>
-  )
-}
-
-// Multi-Select Dropdown Component
-const MultiSelectDropdown = ({ options, selected = [], onChange, placeholder = "Select options..." }) => {
-  const [isOpen, setIsOpen] = useState(false)
-  const dropdownRef = useRef(null)
-
-  useEffect(() => {
-    const handleClickOutside = (e) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
-        setIsOpen(false)
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside)
-    return () => document.removeEventListener("mousedown", handleClickOutside)
-  }, [])
-
-  const toggleOption = (value) => {
-    if (selected.includes(value)) {
-      onChange(selected.filter((v) => v !== value))
-    } else {
-      onChange([...selected, value])
-    }
-  }
-
-  const removeTag = (e, value) => {
-    e.stopPropagation()
-    onChange(selected.filter((v) => v !== value))
-  }
-
-  return (
-    <div className="relative" ref={dropdownRef}>
-      <div
-        onClick={() => setIsOpen((prev) => !prev)}
-        className="w-full min-h-[42px] px-3 py-2 border border-brown-300 rounded-md cursor-pointer flex flex-wrap items-center gap-1 focus:outline-none focus:ring-2 focus:ring-brown-500 bg-white"
-        style={{ borderColor: "#d6c4a8" }}
-      >
-        {selected.length === 0 ? (
-          <span className="text-gray-400 text-sm">{placeholder}</span>
-        ) : (
-          selected.map((val) => (
-            <span
-              key={val}
-              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium"
-              style={{ backgroundColor: "#f3ebe0", color: "#6b4c2a", border: "1px solid #d6c4a8" }}
-            >
-              {val === "Other" ? "Other" : val}
-              <button onClick={(e) => removeTag(e, val)} className="hover:opacity-70 transition-opacity" type="button">
-                <X className="w-3 h-3" />
-              </button>
-            </span>
-          ))
-        )}
-        <ChevronDown
-          className={`w-4 h-4 ml-auto flex-shrink-0 transition-transform ${isOpen ? "rotate-180" : ""}`}
-          style={{ color: "#9c7a5a" }}
-        />
-      </div>
-
-      {isOpen && (
-        <div
-          className="absolute z-50 w-full mt-1 bg-white border rounded-md shadow-lg max-h-60 overflow-y-auto"
-          style={{ borderColor: "#d6c4a8" }}
-        >
-          {options.map((option) => {
-            const isSelected = selected.includes(option.value)
-            return (
-              <div
-                key={option.value}
-                onClick={() => toggleOption(option.value)}
-                className="flex items-center gap-2 px-3 py-2 cursor-pointer text-sm hover:bg-amber-50 transition-colors"
-                style={{ color: "#3d2b1f" }}
-              >
-                <div
-                  className="w-4 h-4 rounded flex-shrink-0 flex items-center justify-center border"
-                  style={{
-                    borderColor: isSelected ? "#8b5e3c" : "#d6c4a8",
-                    backgroundColor: isSelected ? "#8b5e3c" : "transparent",
-                  }}
-                >
-                  {isSelected && <Check className="w-3 h-3 text-white" />}
-                </div>
-                <span>{option.label}</span>
-              </div>
-            )
-          })}
         </div>
       )}
     </div>
@@ -229,11 +121,6 @@ export default function LegalCompliance({ data = {}, updateData }) {
           const profileData = docSnap.data()
           if (profileData.legalCompliance) {
             const legalData = profileData.legalCompliance
-            if (typeof legalData.industryAccreditations === "string") {
-              legalData.industryAccreditations = legalData.industryAccreditations
-                ? legalData.industryAccreditations.split(",").map((s) => s.trim()).filter(Boolean)
-                : []
-            }
             setFormData(legalData)
             updateData(legalData)
           } else {
@@ -268,15 +155,13 @@ export default function LegalCompliance({ data = {}, updateData }) {
       payeNumber: "",
       bbbeeLevel: "",
       coidaNumber: "",
-      industryAccreditations: [],
-      industryAccreditationsOther: "",
+      cipcAnnualReturn: "",
       pendingLegalJudgments: "",
       pendingLegalJudgmentsDetails: "",
       taxClearanceCert: [],
       vatCertificate: [],
       bbbeeCert: [],
       otherCerts: [],
-      industryAccreditationDocs: [],
     }
   }
 
@@ -290,13 +175,6 @@ export default function LegalCompliance({ data = {}, updateData }) {
     const { name, value } = e.target
     const updatedData = { ...formData, [name]: value }
     if (name === "uifStatus" && value !== "Registered") updatedData.uifNumber = ""
-    setFormData(updatedData)
-    updateData(updatedData)
-  }
-
-  const handleAccreditationsChange = (selectedValues) => {
-    const updatedData = { ...formData, industryAccreditations: selectedValues }
-    if (!selectedValues.includes("Other")) updatedData.industryAccreditationsOther = ""
     setFormData(updatedData)
     updateData(updatedData)
   }
@@ -316,11 +194,6 @@ export default function LegalCompliance({ data = {}, updateData }) {
     updateData(updatedData)
   }
 
-  const selectedAccreditations = Array.isArray(formData.industryAccreditations)
-    ? formData.industryAccreditations
-    : []
-  const showOtherInput = selectedAccreditations.includes("Other")
-
   if (isLoading) {
     return (
       <div className="legal-compliance-loading">
@@ -334,158 +207,151 @@ export default function LegalCompliance({ data = {}, updateData }) {
     <div>
       <h2 className="text-2xl font-bold text-brown-800 mb-6">Legal & Compliance</h2>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+      {/* 3 COLUMN GRID LAYOUT */}
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px' }}>
 
-        {/* LEFT COLUMN */}
-        <div>
-          <FormField label="Tax Number">
+        {/* ROW 1: Tax Number, Tax Clearance PIN, PAYE Number */}
+        <FormField label="Tax Number">
+          <input
+            type="text"
+            name="taxNumber"
+            value={formData.taxNumber || ""}
+            onChange={handleChange}
+            className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
+            required
+          />
+        </FormField>
+
+        <FormField label="Tax Clearance Number / PIN">
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
             <input
               type="text"
-              name="taxNumber"
-              value={formData.taxNumber || ""}
+              name="taxClearancePin"
+              value={formData.taxClearancePin || ""}
               onChange={handleChange}
-              className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
-              required
-            />
-          </FormField>
-
-          <FormField label="Tax Clearance Number / PIN">
-            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-              <input
-                type="text"
-                name="taxClearancePin"
-                value={formData.taxClearancePin || ""}
-                onChange={handleChange}
-                placeholder="e.g. 0000000000000"
-                className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
-              />
-              <Tooltip
-                content="Your Tax Clearance PIN is issued by SARS and can be verified on eFiling. It confirms your business's tax compliance status."
-                position="top"
-              >
-                <HelpCircle className="w-4 h-4 text-brown-400 cursor-help hover:text-brown-600 transition-colors flex-shrink-0" />
-              </Tooltip>
-            </div>
-          </FormField>
-
-          <FormField label="PAYE Number">
-            <input
-              type="text"
-              name="payeNumber"
-              value={formData.payeNumber || ""}
-              onChange={handleChange}
+              placeholder="e.g. 0000000000000"
               className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
             />
-          </FormField>
-
-          <FormField label="VAT Number">
-            <input
-              type="text"
-              name="vatNumber"
-              value={formData.vatNumber || ""}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
-            />
-          </FormField>
-
-          <FormField label="UIF Status">
-            <select
-              name="uifStatus"
-              value={formData.uifStatus || ""}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
-              required
+            <Tooltip
+              content="Your Tax Clearance PIN is issued by SARS and can be verified on eFiling. It confirms your business's tax compliance status."
+              position="top"
             >
-              <option value="">Select UIF Status</option>
-              {uifStatusOptions.map((option) => (
-                <option key={option.value} value={option.value}>{option.label}</option>
-              ))}
-            </select>
-          </FormField>
-
-          {formData.uifStatus === "Registered" && (
-            <FormField label="UIF Reference Number">
-              <input
-                type="text"
-                name="uifNumber"
-                value={formData.uifNumber || ""}
-                onChange={handleChange}
-                className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
-                required
-              />
-            </FormField>
-          )}
-
-          <div>
-            <div className="flex items-center gap-1 mb-2">
-              <label className="block text-sm font-medium text-brown-700">
-                COIDA No. (if applicable)
-              </label>
-              <Tooltip
-                content="Compensation for Occupational Injuries and Diseases Act number. Required if you have employees and need to register for workplace injury compensation insurance."
-                position="top"
-              >
-                <HelpCircle className="w-3.5 h-3.5 text-brown-400 cursor-help hover:text-brown-600 transition-colors" />
-              </Tooltip>
-            </div>
-            <input
-              type="text"
-              name="coidaNumber"
-              value={formData.coidaNumber || ""}
-              onChange={handleChange}
-              className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
-            />
+              <HelpCircle className="w-4 h-4 text-brown-400 cursor-help hover:text-brown-600 transition-colors flex-shrink-0" />
+            </Tooltip>
           </div>
+        </FormField>
+
+        <FormField label="PAYE Number">
+          <input
+            type="text"
+            name="payeNumber"
+            value={formData.payeNumber || ""}
+            onChange={handleChange}
+            className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
+          />
+        </FormField>
+
+        {/* ROW 2: VAT Number, COIDA Number, B-BBEE Level */}
+        <FormField label="VAT Number">
+          <input
+            type="text"
+            name="vatNumber"
+            value={formData.vatNumber || ""}
+            onChange={handleChange}
+            className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
+          />
+        </FormField>
+
+        <div>
+          <div className="flex items-center gap-1 mb-2">
+            <label className="block text-sm font-medium text-brown-700">
+              COIDA No. (if applicable)
+            </label>
+            <Tooltip
+              content="Compensation for Occupational Injuries and Diseases Act number. Required if you have employees and need to register for workplace injury compensation insurance."
+              position="top"
+            >
+              <HelpCircle className="w-3.5 h-3.5 text-brown-400 cursor-help hover:text-brown-600 transition-colors" />
+            </Tooltip>
+          </div>
+          <input
+            type="text"
+            name="coidaNumber"
+            value={formData.coidaNumber || ""}
+            onChange={handleChange}
+            className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
+          />
         </div>
 
-        {/* RIGHT COLUMN */}
-        <div>
-          <FormField label="B-BBEE Level">
-            <select
-              name="bbbeeLevel"
-              value={formData.bbbeeLevel || ""}
+        <FormField label="B-BBEE Level">
+          <select
+            name="bbbeeLevel"
+            value={formData.bbbeeLevel || ""}
+            onChange={handleChange}
+            className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
+            required
+          >
+            <option value="">Select Level</option>
+            {bbbeeOptions.map((option) => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
+          </select>
+        </FormField>
+
+        {/* ROW 3: UIF Status, UIF Number (conditional), CIPC Annual Return */}
+        <FormField label="UIF Status">
+          <select
+            name="uifStatus"
+            value={formData.uifStatus || ""}
+            onChange={handleChange}
+            className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
+            required
+          >
+            <option value="">Select UIF Status</option>
+            {uifStatusOptions.map((option) => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
+          </select>
+        </FormField>
+
+        {formData.uifStatus === "Registered" ? (
+          <FormField label="UIF Reference Number">
+            <input
+              type="text"
+              name="uifNumber"
+              value={formData.uifNumber || ""}
               onChange={handleChange}
               className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
               required
-            >
-              <option value="">Select Level</option>
-              {bbbeeOptions.map((option) => (
-                <option key={option.value} value={option.value}>{option.label}</option>
-              ))}
-            </select>
-          </FormField>
-
-          <FormField label="Industry Accreditations (optional)">
-            <MultiSelectDropdown
-              options={industryAccreditationOptions}
-              selected={selectedAccreditations}
-              onChange={handleAccreditationsChange}
-              placeholder="Select accreditations..."
             />
           </FormField>
+        ) : (
+          <div style={{ visibility: 'hidden' }}> {/* Placeholder to maintain grid alignment */} </div>
+        )}
 
-          {showOtherInput && (
-            <FormField label="Please specify other accreditation(s)">
-              <input
-                type="text"
-                name="industryAccreditationsOther"
-                value={formData.industryAccreditationsOther || ""}
-                onChange={handleChange}
-                placeholder="e.g. SETA accreditation, Industry-specific certification..."
-                className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
-              />
-            </FormField>
-          )}
+        <FormField label="CIPC Annual Return">
+          <input
+            type="date"
+            name="cipcAnnualReturn"
+            value={formData.cipcAnnualReturn || ""}
+            onChange={handleChange}
+            className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
+          />
+        </FormField>
 
-          {/* Pending Legal Judgments */}
+        {/* ROW 4: Pending Legal Judgments (spans all 3 columns) */}
+        <div style={{ gridColumn: 'span 3' }}>
           <FormField label="Are there any pending legal judgments against directors / shareholders?">
             <YesNoRadio
               value={formData.pendingLegalJudgments || ""}
               onChange={(val) => handleYesNo("pendingLegalJudgments", val)}
             />
           </FormField>
+        </div>
 
-          {formData.pendingLegalJudgments === "Yes" && (
+        {/* ROW 5: Pending Legal Judgments Details (conditional, spans all 3 columns) */}
+        {formData.pendingLegalJudgments === "Yes" && (
+          <div style={{ gridColumn: 'span 3' }}>
             <FormField label="Please elaborate">
               <textarea
                 name="pendingLegalJudgmentsDetails"
@@ -497,8 +363,9 @@ export default function LegalCompliance({ data = {}, updateData }) {
                 style={{ resize: "vertical", fontFamily: "inherit", fontSize: "14px" }}
               />
             </FormField>
-          )}
-        </div>
+          </div>
+        )}
+
       </div>
     </div>
   )

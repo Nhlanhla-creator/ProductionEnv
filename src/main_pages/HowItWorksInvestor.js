@@ -145,7 +145,7 @@ const HowItWorksInvestors = () => {
               margin: '0 0 28px',
               maxWidth: '500px',
             }}>
-              Discover. Verify. Invest with Confidence. Access verified, investment-ready SMEs with transparent scoring and predictive insights.
+              Discover. Verify. Invest with Confidence. Access verified, investment-ready businesses with transparent scoring and predictive insights.
             </p>
 
             <div style={{
@@ -190,7 +190,7 @@ const HowItWorksInvestors = () => {
                 color: 'rgba(255,255,255,0.5)',
                 fontSize: '0.85rem',
               }}>
-                <FaClock size={14} /> Verified SMEs • Ready to Fund
+                <FaClock size={14} /> Verified Businesses • Ready to Fund
               </div>
             </div>
 
@@ -203,7 +203,7 @@ const HowItWorksInvestors = () => {
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <FaCheckCircle size={14} color={colors.amber} />
                 <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem' }}>
-                  500+ Verified SMEs
+                  500+ Verified Businesses
                 </span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -279,7 +279,7 @@ const HowItWorksInvestors = () => {
               margin: 0,
               letterSpacing: '-0.01em',
             }}>
-              Find Fund-Ready SMEs in <span style={{ color: colors.primary }}>4 Simple Steps</span>
+              Find Fund-Ready Businesses in <span style={{ color: colors.primary }}>4 Simple Steps</span>
             </h2>
             <p style={{
               fontSize: '0.95rem',
@@ -317,17 +317,17 @@ const HowItWorksInvestors = () => {
               {
                 icon: <FaFileAlt size={26} />,
                 number: '03',
-                title: 'Review Pre-Vetted SMEs',
+                title: 'Review Pre-Vetted Businesses',
                 description: 'Access detailed profiles of verified businesses.',
                 details: ['Filter by BIG Score', 'Check compliance readiness', 'View pitch decks', 'Score breakdowns'],
-                subtext: '📊 Every SME is pre-screened.',
+                subtext: '📊 Every business is pre-screened.',
                 color: colors.amber,
               },
               {
                 icon: <FaMoneyBillWave size={26} />,
                 number: '04',
                 title: 'Connect & Deploy',
-                description: 'Message SMEs, track portfolio, and deploy capital.',
+                description: 'Message businesses, track portfolio, and deploy capital.',
                 details: ['Direct messaging', 'Request introductions', 'Track portfolio', 'View analytics'],
                 subtext: '🚀 Fund faster. Fund smarter.',
                 color: colors.green,
@@ -465,7 +465,7 @@ const HowItWorksInvestors = () => {
             marginLeft: 'auto',
             marginRight: 'auto',
           }}>
-            Join the growing community of investors discovering vetted SMEs through BIG.
+            Join the growing community of investors discovering vetted businesses through BIG.
           </p>
           <button
             onClick={handleButtonClick}
@@ -620,7 +620,7 @@ const HowItWorksInvestors = () => {
             gridTemplateColumns: 'repeat(4, 1fr)',
             gap: '20px',
           }}>
-            {/* Block 1: SME Verification */}
+            {/* Block 1: Verified Businesses Only */}
             <div style={{
               background: colors.light,
               borderRadius: '14px',
@@ -655,7 +655,7 @@ const HowItWorksInvestors = () => {
                 color: colors.dark,
                 margin: '0 0 6px',
               }}>
-                Verified SMEs Only
+                Verified Businesses Only
               </h4>
               <p style={{
                 fontSize: '0.82rem',
@@ -663,11 +663,11 @@ const HowItWorksInvestors = () => {
                 lineHeight: 1.6,
                 margin: 0,
               }}>
-                Every SME undergoes <strong>rigorous verification</strong> before appearing on the platform. No unverified businesses.
+                Every business undergoes rigorous verification before appearing on the platform. No unverified businesses.
               </p>
             </div>
 
-            {/* Block 2: Data Protection */}
+            {/* Block 2: Investment Data Encryption */}
             <div style={{
               background: colors.light,
               borderRadius: '14px',
@@ -710,11 +710,11 @@ const HowItWorksInvestors = () => {
                 lineHeight: 1.6,
                 margin: 0,
               }}>
-                All investment data encrypted with <strong>AES-256</strong> at rest and <strong>TLS 1.3</strong> in transit. Your deal flow is protected.
+                All investment data is encrypted using enterprise-grade standards in transit and at rest. Your deal flow is protected.
               </p>
             </div>
 
-            {/* Block 3: Confidentiality */}
+            {/* Block 3: Strict Confidentiality */}
             <div style={{
               background: colors.light,
               borderRadius: '14px',
@@ -757,7 +757,7 @@ const HowItWorksInvestors = () => {
                 lineHeight: 1.6,
                 margin: 0,
               }}>
-                <strong>NDA-protected</strong> access for all investor data. Your investment activity and portfolio details remain private.
+                NDA-protected access for all investor data. Your investment activity and portfolio details remain private.
               </p>
             </div>
 
@@ -804,7 +804,7 @@ const HowItWorksInvestors = () => {
                 lineHeight: 1.6,
                 margin: 0,
               }}>
-                All SME profiles include <strong>verified documents, score breakdowns, and compliance checks</strong> — ready for your due diligence.
+                All business profiles include verified documents, score breakdowns, and compliance checks — ready for your due diligence.
               </p>
             </div>
           </div>
@@ -828,11 +828,11 @@ const HowItWorksInvestors = () => {
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <FaShieldAlt size={16} color={colors.green} />
-              <span style={{ fontSize: '0.8rem', color: colors.muted }}>POPIA Compliant</span>
+              <span style={{ fontSize: '0.8rem', color: colors.muted }}>Role-Based Access Controls</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <FaRegClock size={16} color={colors.amber} />
-              <span style={{ fontSize: '0.8rem', color: colors.muted }}>Secure Transaction Logging</span>
+              <span style={{ fontSize: '0.8rem', color: colors.muted }}>Continuous Monitoring</span>
             </div>
           </div>
         </section>

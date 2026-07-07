@@ -112,7 +112,7 @@ const HowItWorksAdvisors = () => {
                 letterSpacing: '0.08em',
                 textTransform: 'uppercase',
               }}>
-                For Advisors
+                For Advisors & Service Providers
               </span>
             </div>
             
@@ -135,7 +135,7 @@ const HowItWorksAdvisors = () => {
               margin: '0 0 28px',
               maxWidth: '500px',
             }}>
-              Guide. Mentor. Transform Businesses. Connect with high-potential SMEs and grow your advisory practice.
+              Guide. Mentor. Transform Businesses. Connect with high-potential businesses and grow your advisory practice.
             </p>
 
             <div style={{
@@ -227,7 +227,7 @@ const HowItWorksAdvisors = () => {
               {
                 icon: <FaHandshake size={26} />,
                 number: '03',
-                title: 'Connect with SMEs',
+                title: 'Connect with Businesses',
                 description: 'Receive requests from vetted businesses.',
                 details: ['Receive requests', 'Review BIG Score', 'Accept engagements', 'Use platform tools'],
                 subtext: '🔍 Work with aligned businesses',
@@ -237,8 +237,8 @@ const HowItWorksAdvisors = () => {
                 icon: <FaChartLine size={26} />,
                 number: '04',
                 title: 'Track Impact',
-                description: 'See SME progress and grow your network.',
-                details: ['See SME progress', 'Get visibility', 'Access opportunities', 'Build portfolio'],
+                description: 'See business progress and grow your network.',
+                details: ['See business progress', 'Get visibility', 'Access opportunities', 'Build portfolio'],
                 subtext: '📈 Grow your professional network',
                 color: colors.green,
               },
@@ -566,7 +566,7 @@ const HowItWorksAdvisors = () => {
                 lineHeight: 1.6,
                 margin: 0,
               }}>
-                Your credentials and professional documents are encrypted with <strong>AES-256</strong> and protected with <strong>TLS 1.3</strong>.
+                Your credentials and professional documents are encrypted using enterprise-grade standards and protected during transmission.
               </p>
             </div>
 
@@ -613,11 +613,11 @@ const HowItWorksAdvisors = () => {
                 lineHeight: 1.6,
                 margin: 0,
               }}>
-                Your client engagements and communications remain <strong>confidential</strong> with NDA-protected access.
+                Your client engagements and communications remain confidential with role-based access controls.
               </p>
             </div>
 
-            {/* Block 3: Reputation Security */}
+            {/* Block 3: Reputation Protection */}
             <div style={{
               background: colors.light,
               borderRadius: '14px',
@@ -660,11 +660,11 @@ const HowItWorksAdvisors = () => {
                 lineHeight: 1.6,
                 margin: 0,
               }}>
-                Your ratings and reviews are <strong>securely verified</strong>. Only authenticated clients can leave feedback.
+                Your ratings and reviews are securely verified. Only authenticated clients can leave feedback.
               </p>
             </div>
 
-            {/* Block 4: Data Ownership */}
+            {/* Block 4: You Own Your Data */}
             <div style={{
               background: colors.light,
               borderRadius: '14px',
@@ -707,7 +707,7 @@ const HowItWorksAdvisors = () => {
                 lineHeight: 1.6,
                 margin: 0,
               }}>
-                Request full deletion of your profile and advisory data. Removed within <strong>7 business days</strong>.
+                Request full deletion of your profile and advisory data. Removed within 7 business days. You're always in control.
               </p>
             </div>
           </div>
@@ -735,7 +735,7 @@ const HowItWorksAdvisors = () => {
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <FaRegClock size={16} color={colors.amber} />
-              <span style={{ fontSize: '0.8rem', color: colors.muted }}>Secure Engagement Logging</span>
+              <span style={{ fontSize: '0.8rem', color: colors.muted }}>Continuous Monitoring</span>
             </div>
           </div>
         </section>

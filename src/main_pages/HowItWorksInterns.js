@@ -112,7 +112,7 @@ const HowItWorksInterns = () => {
                 letterSpacing: '0.08em',
                 textTransform: 'uppercase',
               }}>
-                For Interns
+                For Interns & Internship Sponsors
               </span>
             </div>
             
@@ -125,7 +125,7 @@ const HowItWorksInterns = () => {
               letterSpacing: '-0.02em',
             }}>
               How <span style={{ color: colors.amber }}>BIG</span> Works <br />
-              for Interns
+              for Interns & Sponsors
             </h1>
             
             <p style={{
@@ -135,7 +135,7 @@ const HowItWorksInterns = () => {
               margin: '0 0 28px',
               maxWidth: '500px',
             }}>
-              Empower Your Future. Build Your Experience. Grow Your BIG Score. Launch your career with purpose.
+              Empower Your Future. Build Your Experience. Grow Your BIG Score. Launch your career with purpose or build sustainable talent pipelines.
             </p>
 
             <div style={{
@@ -196,7 +196,7 @@ const HowItWorksInterns = () => {
               margin: 0,
               letterSpacing: '-0.01em',
             }}>
-              Launch Your Career in <span style={{ color: colors.primary }}>4 Simple Steps</span>
+              Launch Your Career or Build Talent Pipelines in <span style={{ color: colors.primary }}>4 Simple Steps</span>
             </h2>
           </div>
           
@@ -365,7 +365,7 @@ const HowItWorksInterns = () => {
             color: colors.white,
             margin: '0 0 12px',
           }}>
-            Ready to Launch Your Career?
+            Ready to Launch Your Career or Build Your Talent Pipeline?
           </h2>
           <p style={{
             fontSize: '1rem',
@@ -375,7 +375,7 @@ const HowItWorksInterns = () => {
             marginLeft: 'auto',
             marginRight: 'auto',
           }}>
-            Join the next generation of talent building their careers through BIG.
+            Join the next generation of talent and sponsors building careers through BIG.
           </p>
           <button
             onClick={handleButtonClick}
@@ -566,7 +566,7 @@ const HowItWorksInterns = () => {
                 lineHeight: 1.6,
                 margin: 0,
               }}>
-                Your CV, qualifications, and personal documents are encrypted with <strong>AES-256</strong> and protected during transmission with <strong>TLS 1.3</strong>.
+                Your CV, qualifications, and personal documents are encrypted using enterprise-grade standards and protected during transmission.
               </p>
             </div>
 
@@ -613,7 +613,7 @@ const HowItWorksInterns = () => {
                 lineHeight: 1.6,
                 margin: 0,
               }}>
-                You control who sees your profile. <strong>POPIA compliant</strong> data handling ensures your privacy rights are respected.
+                You control who sees your profile. Protection of Personal Information Act (POPIA) compliant data handling ensures your privacy rights are respected.
               </p>
             </div>
 
@@ -660,11 +660,11 @@ const HowItWorksInterns = () => {
                 lineHeight: 1.6,
                 margin: 0,
               }}>
-                Your identity verification data is <strong>securely processed</strong> and never shared without your explicit consent.
+                Your identity verification data is securely processed and never shared without your explicit consent.
               </p>
             </div>
 
-            {/* Block 4: Data Deletion Rights */}
+            {/* Block 4: Career Data Ownership */}
             <div style={{
               background: colors.light,
               borderRadius: '14px',
@@ -707,7 +707,7 @@ const HowItWorksInterns = () => {
                 lineHeight: 1.6,
                 margin: 0,
               }}>
-                Request full deletion of your profile and career data. Removed within <strong>7 business days</strong>. You're always in control.
+                Request full deletion of your profile and career data. Removed within 7 business days. You're always in control.
               </p>
             </div>
           </div>
@@ -735,7 +735,7 @@ const HowItWorksInterns = () => {
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <FaRegClock size={16} color={colors.amber} />
-              <span style={{ fontSize: '0.8rem', color: colors.muted }}>24/7 Data Monitoring</span>
+              <span style={{ fontSize: '0.8rem', color: colors.muted }}>Continuous Monitoring</span>
             </div>
           </div>
         </section>

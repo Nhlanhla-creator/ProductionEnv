@@ -135,7 +135,7 @@ const HowItWorksCorporates = () => {
               margin: '0 0 28px',
               maxWidth: '500px',
             }}>
-              Source Smart. Partner Deep. Amplify Real Impact. Connect with verified SMEs aligned to your ESD and CSI goals.
+              Source Smart. Partner Deep. Amplify Real Impact. Connect with verified businesses aligned to your ESD and CSI goals.
             </p>
 
             <div style={{
@@ -169,7 +169,7 @@ const HowItWorksCorporates = () => {
                   e.currentTarget.style.boxShadow = `0 4px 20px ${colors.amber}40`;
                 }}
               >
-                Explore SMEs
+                Explore Businesses
                 <FaArrowRight size={14} />
               </button>
             </div>
@@ -218,10 +218,10 @@ const HowItWorksCorporates = () => {
               {
                 icon: <FaUsers size={26} />,
                 number: '02',
-                title: 'Access Vetted SMEs',
+                title: 'Access Vetted Businesses',
                 description: 'Find verified businesses aligned with your goals.',
                 details: ['BIG Score verification', 'Impact alignment', 'Track progress', 'Filter by indicators'],
-                subtext: '🔍 Find your perfect SME partners',
+                subtext: '🔍 Find your perfect business partners',
                 color: colors.secondary,
               },
               {
@@ -366,7 +366,7 @@ const HowItWorksCorporates = () => {
             marginLeft: 'auto',
             marginRight: 'auto',
           }}>
-            Join leading corporations sourcing and supporting SMEs through BIG.
+            Join leading corporations sourcing and supporting businesses through BIG.
           </p>
           <button
             onClick={handleButtonClick}
@@ -434,13 +434,13 @@ const HowItWorksCorporates = () => {
             {[
               {
                 title: 'Sponsor Accelerators',
-                description: 'Learn how corporates sponsor SME accelerator programs through BIG.',
+                description: 'Learn how corporates sponsor business accelerator programs through BIG.',
                 video: '/Corporate_Accelerators.mp4',
                 poster: 'https://images.unsplash.com/photo-1542744173-8e7e53415bb0?w=400&h=225&fit=crop',
               },
               {
                 title: 'Supplier Development',
-                description: 'Discover how to develop your supply chain with vetted SMEs.',
+                description: 'Discover how to develop your supply chain with vetted businesses.',
                 video: '/Corporate_Supplier.mp4',
                 poster: 'https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?w=400&h=225&fit=crop',
               },
@@ -572,7 +572,7 @@ const HowItWorksCorporates = () => {
             gridTemplateColumns: 'repeat(4, 1fr)',
             gap: '20px',
           }}>
-            {/* Block 1: Corporate Data Protection */}
+            {/* Block 1: Corporate Data Encryption */}
             <div style={{
               background: colors.light,
               borderRadius: '14px',
@@ -615,7 +615,7 @@ const HowItWorksCorporates = () => {
                 lineHeight: 1.6,
                 margin: 0,
               }}>
-                All corporate data encrypted with <strong>AES-256</strong> at rest and <strong>TLS 1.3</strong> in transit. Your strategic information stays confidential.
+                All corporate data is encrypted using enterprise-grade standards in transit and at rest. Your strategic information stays confidential.
               </p>
             </div>
 
@@ -662,11 +662,11 @@ const HowItWorksCorporates = () => {
                 lineHeight: 1.6,
                 margin: 0,
               }}>
-                Fully compliant with <strong>POPIA 4 of 2013</strong>. All data stored securely in South African data centers.
+                Fully compliant with the Protection of Personal Information Act (POPIA). Data is hosted on secure cloud infrastructure with regional data residency controls.
               </p>
             </div>
 
-            {/* Block 3: Supplier Vetting Security */}
+            {/* Block 3: Verified Supplier Network */}
             <div style={{
               background: colors.light,
               borderRadius: '14px',
@@ -709,7 +709,7 @@ const HowItWorksCorporates = () => {
                 lineHeight: 1.6,
                 margin: 0,
               }}>
-                Every SME undergoes <strong>rigorous verification</strong> before being approved for corporate partnerships.
+                Every business undergoes rigorous verification before being approved for corporate partnerships.
               </p>
             </div>
 
@@ -756,7 +756,7 @@ const HowItWorksCorporates = () => {
                 lineHeight: 1.6,
                 margin: 0,
               }}>
-                All impact metrics are <strong>securely tracked and verified</strong>. Generate auditable reports for CSI/ESD compliance.
+                All impact metrics are securely tracked and verified. Generate auditable reports for CSI/ESD compliance.
               </p>
             </div>
           </div>
@@ -780,11 +780,11 @@ const HowItWorksCorporates = () => {
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <FaFileContract size={16} color={colors.green} />
-              <span style={{ fontSize: '0.8rem', color: colors.muted }}>NDA-Protected Access</span>
+              <span style={{ fontSize: '0.8rem', color: colors.muted }}>Role-Based Access Controls</span>
             </div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <FaRegClock size={16} color={colors.amber} />
-              <span style={{ fontSize: '0.8rem', color: colors.muted }}>Audit-Ready Reports</span>
+              <span style={{ fontSize: '0.8rem', color: colors.muted }}>Continuous Monitoring</span>
             </div>
           </div>
         </section>
