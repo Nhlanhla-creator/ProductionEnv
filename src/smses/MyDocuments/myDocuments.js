@@ -1087,7 +1087,6 @@ const handleFileUpload = async (docLabel, file) => {
    ];
 
    const legitimacyDocuments = [
-     "Industry Accreditations",
      "Client References & Support Letters",
      "Company Profile / Brochure",
    ];
@@ -1125,10 +1124,16 @@ const handleFileUpload = async (docLabel, file) => {
      "5 Year Budget",
      "Business Plan",
      "Pitch Deck",
-     "Industry Accreditations",
      "Loan Agreements",
      "Guarantee/Collateral"
    ];
+
+
+    const operationsDocuments = [
+     "Industry Accreditations",
+    
+   ];
+
 
    const matchFilter =
      filter === "all" ||
@@ -1137,6 +1142,7 @@ const handleFileUpload = async (docLabel, file) => {
      (filter === "Legitimacy" && legitimacyDocuments.includes(docLabel)) ||
      (filter === "Leadership" && leadershipDocuments.includes(docLabel)) ||
      (filter === "Governance" && governanceDocuments.includes(docLabel)) ||
+      (filter === "Operations" && operationsDocuments.includes(docLabel)) ||
      (filter === "Capital Appeal" && capitalAppealDocuments.includes(docLabel));
 
    const matchStatusFilter =
@@ -1956,7 +1962,7 @@ const badgeStyles = (status) => {
            boxSizing: "border-box"
          }}>
            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-             {["all", "Compliance", "Legitimacy", "Leadership", "Governance", "Capital Appeal"].map((type) => (
+             {["all", "Compliance", "Capital Appeal", "Governance", "Legitimacy", "Leadership", "Operations", ].map((type) => (
                <button
                  key={type}
                  onClick={() => setFilter(type)}
