@@ -24,9 +24,9 @@ import AllSponsors from "./admin/pages/AllSponsors"
 import Subscriptions from "./admin/pages/Subscriptions"
 import QRCodes from "./admin/pages/QRCodes"
 import CardLandingPage from "./admin/pages/CardLandingPage"
-import MainUsers from "./admin/pages/MainUsers"
-
 // Admin Settings Subcategory Components
+import ArticleManagement from "./admin/pages/ArticleManagement";
+
 import AdminUsers from "./admin/pages/AdminUserManagement"
 import ApprovalWorkflows from "./admin/pages/ApprovalWorkflows"
 import PaymentGateway from "./admin/pages/PaymentGatewaySettings"
@@ -47,6 +47,16 @@ import ReportingAnalytics from "./admin/pages/ReportingAnalytics"
 import Archive from "./admin/pages/Archive"
 import InvestorSettings from "./Investor/Settings/Setttings"
 import CatalystSettings from "./catalyst/CatalystSettings/supportSettings"
+
+// Solutions Pages
+import SolutionsOverview from "./main_pages/Solutions/SolutionsOverview"
+import SolutionsSMSEs from "./main_pages/Solutions/SolutionsSMSEs"
+import SolutionsInvestors from "./main_pages/Solutions/SolutionsInvestors"
+import SolutionsCorporates from "./main_pages/Solutions/SolutionsCorporates"
+import SolutionsCatalysts from "./main_pages/Solutions/SolutionsCatalysts"
+import SolutionsGraduates from "./main_pages/Solutions/SolutionsGraduates"
+import SolutionsAdvisors from "./main_pages/Solutions/SolutionsAdvisors"
+import SolutionsAssociations from "./main_pages/Solutions/SolutionsAssociations" 
 
 // Billing and Payment Components
 import MySubscriptions from "./smses/BillingInformation/subscriptions"
@@ -90,7 +100,7 @@ import InternProgramAffiliation from "./Interns/UniversalProfileIntern/ProgramAf
 import InternRequiredDocuments from "./Interns/UniversalProfileIntern/RequiredDocuments"
 import InternDeclarationConsent from "./Interns/UniversalProfileIntern/Declaration&Consent"
 // Intern Application Components
-import InternApplication from "./smses/InternApplication/internapplication"
+import InternApplicationManager from "./smses/InternApplication/InternApplicationManager"
 import InternJobOverview from "./smses/InternApplication/JobOverview"
 import InternInternshipRequest from "./smses/InternApplication/InternshipRequest"
 import InternMatchingAgreement from "./smses/InternApplication/MatchingAgreement"
@@ -141,6 +151,7 @@ import AssociatorDocuments from "./associator/MyDocuments/documents"
 import AssociatorBillings from "./associator/MyBillings/billings"
 import AssociatorPortfolio from "./associator/MyPortfolios/portfolio"
 import AssociatorInsights from "./associator/BigInsights/insights"
+import AssociateSettings from "associator/Settings/settings"
 // Associator Universal Profile Components
 import AssociatorUniversalProfile from "./associator/UniversalProfile/AssociatorUniversalProfile"
 import AssociatorInstructions from "./associator/UniversalProfile/Instructions"
@@ -152,6 +163,12 @@ import SMSEEcosystem from "./associator/MyMemberEcosystem/SMSEEcosystem"
 import InvestorEcosystem from "./associator/MyMemberEcosystem/InvestorEcosystem"
 import AdvisorEcosystem from "./associator/MyMemberEcosystem/AdvisorEcosystem"
 import CatalystEcosystem from "./associator/MyMemberEcosystem/CatalystEcosystem"
+// Associator Admin Dashboard Sub-pages (New)
+import AssociationSubscriptions from "./associator/MyDashboard/Subscriptions"
+import AssociationAdminGovernance from "./associator/MyDashboard/AdminGovernance"
+import AssociationUsersMarketplace from "./associator/MyDashboard/UsersMarketplace"
+import AssociationPilotsCaseStudies from "./associator/MyDashboard/PilotsCaseStudies"
+import AssociationSurveys from "./associator/MyDashboard/Surveys"
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Public Pages
@@ -167,6 +184,8 @@ import HowItWorksAdvisors from "./main_pages/HowItWorksAdvisor"
 import HowItWorksInterns from "main_pages/HowItWorksInterns"
 import HomeContactFormPage from "./main_pages/SMEs/HomeContact"
 import FAQPage from "./main_pages/FAQs"
+import HowItWorksAssociations from "./main_pages/HowItWorksAssociations"
+
 import HomePage from "./main_pages/SMEs/HomePage"
 import ContactPage from "./main_pages/Contact"
 import InsightsPage from "./main_pages/Insights"
@@ -225,6 +244,7 @@ import Profile from "./smses/UniversalProfile/UniversalProfile"
 import FindMatches from "./smses/MyMatches/FindMatches"
 import MyDocuments from "./smses/MyDocuments/myDocuments"
 import GrowthEnabler from "./smses/MyGrowthTools/shop"
+
 import Messages from "./smses/Messages/Messages"
 import Calendar from "./smses/MyCalender/Calendar"
 import Settings from "./smses/Settings/Settings"
@@ -286,9 +306,6 @@ import OpportunityMatchesPage from "./smses/MyOpportunityMatches/opportunity-mat
 
 // Growth Tools Components
 import GrowthSuiteLanding from "./smses/MyGrowthTools/Growthsuitelanding"
-import GovernanceCalendar from "./smses/MyGrowthTools/GovernanceCalendar"
-import RapsActions from "smses/MyGrowthTools/RapsActions"
-import RapsOverview from "smses/MyGrowthTools/RapsOverview"
 import OverallCompanyHealth from "./smses/MyGrowthTools/OverallCompanyHealth"
 import ShopToolsPage from "./smses/MyGrowthTools/shop"
 import MyToolsPage from "./smses/MyGrowthTools/my-tools"
@@ -326,6 +343,10 @@ import CatalystMessages from "./catalyst/CatalystMessages/Messages"
 import BillingInfoCatalyst from "catalyst/CatalystBillingAndPayments/billing-info-catalyst"
 import CatalystSubscriptions from "catalyst/CatalystBillingAndPayments/catalyst-subscription"
 import BillingHistoryCatalyst from "catalyst/CatalystBillingAndPayments/billing-history-catalyst"
+import AdvisorApplicationManager from "smses/AdvisorApplication/AdvisorApplicationManager"
+import GovernanceCalendar from "smses/MyGrowthTools/GovernanceCalendar"
+import * as RapsActions from 'smses/MyGrowthTools/RapsActions';
+import RapsOverview from "smses/MyGrowthTools/RapsOverview"
 
 // Initial Data States
 const initialFormData = {
@@ -410,10 +431,6 @@ function App() {
   const [showSummary, setShowSummary] = useState(false)
   const companyName = "Acme Inc"
   const { user, loading } = useAuth()
-
-  if (loading) {
-    return <SkeletonLoader />
-  }
 
   const updateFormData = (section, data) => {
     setFormData((prev) => ({ ...prev, [section]: { ...prev[section], ...data } }))
@@ -565,12 +582,20 @@ function App() {
   // ─── Advisor Layout ───────────────────────────────────────────────────────────
   const AdvisorLayout = ({ children }) => {
     const location = useLocation()
+    const [collapsed, setCollapsed] = useState(true)
+    useEffect(() => {
+      const check = () => setCollapsed(document.body.classList.contains("sidebar-collapsed"))
+      check()
+      const obs = new MutationObserver(check)
+      obs.observe(document.body, { attributes: true, attributeFilter: ["class"] })
+      return () => obs.disconnect()
+    }, [])
     return (
       <div className="app-layout">
         <AdvisorSidebar companyName={companyName} />
-        <div className="main-content">
+        <div className={`${styles.mainContent} ${collapsed ? styles.sidebarCollapsed : styles.sidebarExpanded}`}>
           <AdvisorHeader companyName={companyName} profileImage={profileImage} setProfileImage={setProfileImage} />
-          <div className="page-content">{children}</div>
+          <div>{children}</div>
         </div>
       </div>
     )
@@ -579,12 +604,20 @@ function App() {
   // ─── Intern Layout ────────────────────────────────────────────────────────────
   const InternLayout = ({ children }) => {
     const location = useLocation()
+    const [collapsed, setCollapsed] = useState(true)
+    useEffect(() => {
+      const check = () => setCollapsed(document.body.classList.contains("sidebar-collapsed"))
+      check()
+      const obs = new MutationObserver(check)
+      obs.observe(document.body, { attributes: true, attributeFilter: ["class"] })
+      return () => obs.disconnect()
+    }, [])
     return (
       <div className="app-layout">
         <InternSidebar companyName={companyName} />
-        <div className="main-content">
+        <div className={`${styles.mainContent} ${collapsed ? styles.sidebarCollapsed : styles.sidebarExpanded}`}>
           <InternHeader companyName={companyName} profileImage={profileImage} setProfileImage={setProfileImage} />
-          <div className="page-content">{children}</div>
+          <div>{children}</div>
         </div>
       </div>
     )
@@ -593,10 +626,18 @@ function App() {
   // ─── Program Sponsor Layout ───────────────────────────────────────────────────
   const ProgramSponsorLayout = ({ children }) => {
     const location = useLocation()
+    const [collapsed, setCollapsed] = useState(true)
+    useEffect(() => {
+      const check = () => setCollapsed(document.body.classList.contains("sidebar-collapsed"))
+      check()
+      const obs = new MutationObserver(check)
+      obs.observe(document.body, { attributes: true, attributeFilter: ["class"] })
+      return () => obs.disconnect()
+    }, [])
     return (
       <div className="app-layout">
         <ProgramSponsorSidebar companyName={companyName} />
-        <div className="main-content">
+        <div className={`${styles.mainContent} ${collapsed ? styles.sidebarCollapsed : styles.sidebarExpanded}`}>
           <ProgramSponsorHeader companyName={companyName} profileImage={profileImage} setProfileImage={setProfileImage} />
           <div>{children}</div>
         </div>
@@ -843,11 +884,23 @@ function App() {
         <Route path="/HeaderProgram" element={<HeaderProgram />} />
         <Route path="/BookSession" element={<BookSession />} />
         <Route path="/HomePageAdvisor" element={<HomePageAdvisor />} />
+        <Route path="/HowItWorksAssociations" element={<HowItWorksAssociations />} />
         <Route path="/CharmSchool" element={<CharmSchool />} />
         <Route path="/verify-email" element={<EmailVerification />} />
         <Route path="/card/:cardId" element={<CardLandingPage />} />
 
+        {/* Solutions Routes - Public */}
+        <Route path="/solutions" element={<SolutionsOverview />} />
+        <Route path="/solutions/smes" element={<SolutionsSMSEs />} />
+        <Route path="/solutions/investors" element={<SolutionsInvestors />} />
+        <Route path="/solutions/corporates" element={<SolutionsCorporates />} />
+        <Route path="/solutions/catalysts" element={<SolutionsCatalysts />} />
+        <Route path="/solutions/graduates" element={<SolutionsGraduates />} />
+        <Route path="/solutions/advisors" element={<SolutionsAdvisors />} />
+        <Route path="/solutions/associations" element={<SolutionsAssociations />} />
+
         {/* Admin Notion Routes */}
+        <Route path="/admin/articles" element={withAdminProtection(ArticleManagement)} />
         <Route path="/admin/notion/delivery" element={withAdminProtection(Delivery)} />
         <Route path="/admin/notion/governance" element={withAdminProtection(AdminGovernance)} />
         <Route path="/admin/notion/growth" element={withAdminProtection(Growth)} />
@@ -865,7 +918,6 @@ function App() {
         <Route path="/admin" element={<Navigate to="/Auth" replace />} />
         <Route path="/admin/dashboard" element={withAdminProtection(AdminDashboard)} />
         <Route path="/admin/smes" element={withAdminProtection(AllSMEs)} />
-        <Route path="/admin/main-users" element={withAdminProtection(MainUsers)} />
         <Route path="/admin/investors" element={withAdminProtection(AllInvestors)} />
         <Route path="/admin/catalysts" element={withAdminProtection(AllCatalysts)} />
         <Route path="/admin/advisors" element={withAdminProtection(AllAdvisors)} />
@@ -904,9 +956,6 @@ function App() {
 
         {/* Growth Suite Routes */}
         <Route path="/growth-suite-landing" element={withProtection(GrowthSuiteLanding, {}, renderSMERoute)} />
-         <Route path="/governance-calendar" element={withProtection(GovernanceCalendar, {}, renderSMERoute)} />
-          <Route path="/raps-overview" element={withProtection(RapsOverview, {}, renderSMERoute)} />
-          <Route path="/raps-actions" element={withProtection(RapsActions, {}, renderSMERoute)} />
         <Route path="/overall-company-health" element={withProtection(OverallCompanyHealth, {}, renderSMERoute)} />
         <Route path="/Strategy" element={withProtection(Strategy, {}, renderSMERoute)} />
         <Route path="/FinancialPerformance" element={withProtection(FinancialPerformance, {}, renderSMERoute)} />
@@ -1019,14 +1068,14 @@ function App() {
         <Route path="/applications/products-services" element={withProtection(ProductApplicationManager, {}, renderSMERoute)} />
         <Route path="/applications/product/:section" element={withProtection(ProductApplicationManager, {}, renderSMERoute)} />
         <Route path="/applications/product-application" element={<Navigate to="/applications/product" replace />} />
-        <Route path="/applications/advisory" element={withProtection(AdvisoryApplication, {}, renderSMERoute)} />
-        <Route path="/applications/advisors" element={withProtection(AdvisoryApplication, {}, renderSMERoute)} />
-        <Route path="/applications/advisory/:section" element={withProtection(AdvisoryApplication, {}, renderSMERoute)} />
+        <Route path="/applications/advisory" element={withProtection(AdvisorApplicationManager, {}, renderSMERoute)} />
+        <Route path="/applications/advisors" element={withProtection(AdvisorApplicationManager, {}, renderSMERoute)} />
+        <Route path="/applications/advisory/:section" element={withProtection(AdvisorApplicationManager, {}, renderSMERoute)} />
 
         {/* Intern Application Routes */}
-        <Route path="/applications/intern" element={withProtection(InternApplication, {}, renderSMERoute)} />
-        <Route path="/applications/interns" element={withProtection(InternApplication, {}, renderSMERoute)} />
-        <Route path="/applications/intern/:section" element={withProtection(InternApplication, {}, renderSMERoute)} />
+        <Route path="/applications/intern" element={withProtection(InternApplicationManager, {}, renderSMERoute)} />
+        <Route path="/applications/interns" element={withProtection(InternApplicationManager, {}, renderSMERoute)} />
+        <Route path="/applications/intern/:section" element={withProtection(InternApplicationManager, {}, renderSMERoute)} />
         <Route path="/applications/intern/instructions" element={withProtection(Instructions, {}, renderSMERoute)} />
         <Route path="/applications/intern/job-overview" element={withProtection(InternJobOverview, {}, renderSMERoute)} />
         <Route path="/applications/intern/internship-request" element={withProtection(InternInternshipRequest, {}, renderSMERoute)} />
@@ -1080,11 +1129,11 @@ function App() {
 
         {/* Insights Routes */}
         <Route path="/insights" element={withProtection(BigInsights, {}, renderSMERoute)} />
-        <Route path="/investor-insights" element={withProtection(InvestorInsights, {}, renderInvestorRoute)} />
+        <Route path="/investor-insights" element={withProtection(InvestorInsights, { isInvestorProfile: true }, renderInvestorRoute)} />
         <Route path="/advisor-insights" element={withProtection(AdvisorInsights, {}, renderAdvisorRoute)} />
         <Route path="/intern-insights" element={withProtection(InternInsights, {}, renderInternRoute)} />
         <Route path="/program-sponsor-insights" element={withProtection(ProgramSponsorInsights, {}, renderProgramSponsorRoute)} />
-        <Route path="/support-insights" element={withProtection(CatalystInsights, {}, renderSupportProgramRoute)} />
+        <Route path="/support-insights" element={withProtection(CatalystInsights, { isCatalystProfile: true }, renderSupportProgramRoute)} />
 
         {/* ─── Associator Dashboard Routes ──────────────────────────────────────── */}
         <Route path="/associator-dashboard" element={withProtection(AssociatorDashboard, {}, renderAssociatorRoute)} />
@@ -1097,6 +1146,7 @@ function App() {
         <Route path="/associator-billings" element={withProtection(AssociatorBillings, {}, renderAssociatorRoute)} />
         <Route path="/associator-portfolio" element={withProtection(AssociatorPortfolio, {}, renderAssociatorRoute)} />
         <Route path="/associator-insights" element={withProtection(AssociatorInsights, {}, renderAssociatorRoute)} />
+        <Route path = "/associator-settings" element = {withProtection(AssociateSettings, {}, renderAssociatorRoute)} />
 
         {/* Associator Universal Profile Sub-Routes */}
         <Route path="/associator-profile/instructions" element={renderAssociatorProfileSection(AssociatorInstructions, "instructions")} />
@@ -1114,6 +1164,13 @@ function App() {
         <Route path="/associator-ecosystem/investor" element={withProtection(InvestorEcosystem, {}, renderAssociatorRoute)} />
         <Route path="/associator-ecosystem/advisor" element={withProtection(AdvisorEcosystem, {}, renderAssociatorRoute)} />
         <Route path="/associator-ecosystem/catalyst" element={withProtection(CatalystEcosystem, {}, renderAssociatorRoute)} />
+
+        {/* ─── Associator Admin Dashboard Routes (New) ───────────────────────────── */}
+        <Route path="/associator-dashboard/subscriptions" element={withProtection(AssociationSubscriptions, {}, renderAssociatorRoute)} />
+        <Route path="/associator-dashboard/governance" element={withProtection(AssociationAdminGovernance, {}, renderAssociatorRoute)} />
+        <Route path="/associator-dashboard/marketplace" element={withProtection(AssociationUsersMarketplace, {}, renderAssociatorRoute)} />
+        <Route path="/associator-dashboard/pilot" element={withProtection(AssociationPilotsCaseStudies, {}, renderAssociatorRoute)} />
+        <Route path="/associator-dashboard/surveys" element={withProtection(AssociationSurveys, {}, renderAssociatorRoute)} />
         {/* ──────────────────────────────────────────────────────────────────────── */}
 
         {/* Redirects */}
@@ -1133,6 +1190,10 @@ function App() {
         <Route path="/applications/intern-application" element={<Navigate to="/applications/intern" replace />} />
         <Route path="/associator" element={<Navigate to="/associator-dashboard" replace />} />
         <Route path="/associator-universal-profile" element={<Navigate to="/associator-profile/instructions" replace />} />
+        <Route path="/governance-calendar" element={withProtection(GovernanceCalendar, {}, renderSMERoute)} />
+        <Route path="/raps-overview" element={withProtection(RapsOverview, {}, renderSMERoute)} />
+        <Route path="/raps-actions" element={withProtection(RapsActions, {}, renderSMERoute)} />
+
       </Routes>
     </Router>
   )

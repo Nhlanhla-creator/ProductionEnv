@@ -45,36 +45,42 @@ const SolutionsInvestors = () => {
   const keySolutions = [
     {
       icon: <FaSearchDollar size={24} />,
+      image: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=400&h=250&q=80',
       title: 'Pre-Vetted Funding Pipeline',
       description: 'Access a pipeline of thoroughly vetted businesses ready for investment.',
       color: colors.brown,
     },
     {
       icon: <FaChartLine size={24} />,
+      image: 'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?auto=format&fit=crop&w=400&h=250&q=80',
       title: 'BIG Score',
       description: 'Evaluate opportunities quickly with our standardized scoring system.',
       color: colors.primary,
     },
     {
       icon: <FaClipboardList size={24} />,
+      image: 'https://images.unsplash.com/photo-1554224155-6726b3ff858f?auto=format&fit=crop&w=400&h=250&q=80',
       title: 'Due Diligence Support',
       description: 'Streamline your due diligence process with pre-verified documentation.',
       color: colors.secondary,
     },
     {
       icon: <FaDatabase size={24} />,
+      image: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=400&h=250&q=80',
       title: 'Portfolio Intelligence',
       description: 'Monitor and track your portfolio companies post-investment.',
       color: colors.brownDark,
     },
     {
       icon: <FaChartBar size={24} />,
+      image: 'https://images.unsplash.com/photo-1504868584819-f8e8b4b6d7e3?auto=format&fit=crop&w=400&h=250&q=80',
       title: 'Growth Suite',
       description: 'Support portfolio growth with data-driven insights and tools.',
       color: colors.amber,
     },
     {
       icon: <FaLightbulb size={24} />,
+      image: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=400&h=250&q=80',
       title: 'Market Intelligence',
       description: 'Stay ahead with real-time market insights and trends.',
       color: colors.gold,
@@ -107,7 +113,7 @@ const SolutionsInvestors = () => {
         flex: '1',
         width: '100%',
       }}>
-        {/* Hero Section - Improved */}
+        {/* Hero Section with Abstract Image */}
         <section style={{
           position: 'relative',
           borderRadius: '20px',
@@ -157,234 +163,248 @@ const SolutionsInvestors = () => {
           <div style={{
             position: 'relative',
             zIndex: 1,
-            maxWidth: '700px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            width: '100%',
+            gap: '40px',
           }}>
             <div style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '10px',
-              background: `${colors.amber}30`,
-              border: `1px solid ${colors.amber}50`,
-              borderRadius: '30px',
-              padding: '8px 20px 8px 14px',
-              marginBottom: '24px',
+              maxWidth: '600px',
             }}>
-              <span style={{
-                width: 10,
-                height: 10,
-                borderRadius: '50%',
-                background: colors.amber,
-                display: 'inline-block',
-                animation: 'pulse 2s infinite',
-              }} />
-              <span style={{
-                color: colors.amber,
-                fontSize: '0.75rem',
-                fontWeight: 700,
-                letterSpacing: '0.1em',
-                textTransform: 'uppercase',
+              <div style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '10px',
+                background: `${colors.amber}30`,
+                border: `1px solid ${colors.amber}50`,
+                borderRadius: '30px',
+                padding: '8px 20px 8px 14px',
+                marginBottom: '24px',
               }}>
-                For Investors
-              </span>
-            </div>
-            
-            <h1 style={{
-              fontSize: 'clamp(2.2rem, 4.5vw, 3.2rem)',
-              fontWeight: 900,
-              color: colors.white,
-              margin: '0 0 20px',
-              lineHeight: 1.1,
-              letterSpacing: '-0.02em',
-            }}>
-              Better Deal Flow. <br />
-              <span style={{ color: colors.amber }}>Better Decisions.</span> <br />
-              Better Outcomes.
-            </h1>
-            
-            <p style={{
-              fontSize: '1.1rem',
-              color: 'rgba(255,255,255,0.8)',
-              lineHeight: 1.8,
-              margin: '0 0 30px',
-              maxWidth: '550px',
-            }}>
-              BIG helps investors access pre-vetted opportunities, reduce screening time, 
-              and make better investment decisions with data-driven insights.
-            </p>
-
-            <div style={{
-              display: 'flex',
-              gap: '16px',
-              flexWrap: 'wrap',
-              alignItems: 'center',
-            }}>
-              <button
-                onClick={() => navigate('/LoginRegister')}
-                style={{
-                  background: `linear-gradient(135deg, ${colors.amber}, ${colors.gold})`,
-                  color: colors.white,
-                  border: 'none',
-                  borderRadius: '50px',
-                  padding: '16px 40px',
-                  fontSize: '1rem',
+                <span style={{
+                  width: 10,
+                  height: 10,
+                  borderRadius: '50%',
+                  background: colors.amber,
+                  display: 'inline-block',
+                  animation: 'pulse 2s infinite',
+                }} />
+                <span style={{
+                  color: colors.amber,
+                  fontSize: '0.75rem',
                   fontWeight: 700,
-                  cursor: 'pointer',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '12px',
-                  transition: 'all 0.3s ease',
-                  boxShadow: `0 4px 25px ${colors.amber}50`,
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.transform = 'translateY(-3px)';
-                  e.currentTarget.style.boxShadow = `0 8px 35px ${colors.amber}60`;
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = 'translateY(0)';
-                  e.currentTarget.style.boxShadow = `0 4px 25px ${colors.amber}50`;
-                }}
-              >
-                Get Started Today
-                <FaArrowRight size={14} />
-              </button>
+                  letterSpacing: '0.1em',
+                  textTransform: 'uppercase',
+                }}>
+                  For Investors
+                </span>
+              </div>
               
+              <h1 style={{
+                fontSize: 'clamp(2rem, 4vw, 3.2rem)',
+                fontWeight: 900,
+                color: colors.white,
+                margin: '0 0 20px',
+                lineHeight: 1.1,
+                letterSpacing: '-0.02em',
+              }}>
+                Better Deal Flow. <br />
+                <span style={{ color: colors.amber }}>Better Decisions.</span> <br />
+                Better Outcomes.
+              </h1>
+              
+              <p style={{
+                fontSize: '1.1rem',
+                color: 'rgba(255,255,255,0.8)',
+                lineHeight: 1.8,
+                margin: '0 0 30px',
+                maxWidth: '550px',
+              }}>
+                BIG helps investors access pre-vetted opportunities, reduce screening time, 
+                and make better investment decisions with data-driven insights.
+              </p>
+
               <div style={{
                 display: 'flex',
+                gap: '16px',
+                flexWrap: 'wrap',
                 alignItems: 'center',
-                gap: '6px',
-                color: 'rgba(255,255,255,0.4)',
-                fontSize: '0.85rem',
               }}>
-                <FaRegClock size={14} /> Quick setup • Free to join
+                <button
+                  onClick={() => navigate('/LoginRegister')}
+                  style={{
+                    background: `linear-gradient(135deg, ${colors.amber}, ${colors.gold})`,
+                    color: colors.white,
+                    border: 'none',
+                    borderRadius: '50px',
+                    padding: '16px 40px',
+                    fontSize: '1rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    transition: 'all 0.3s ease',
+                    boxShadow: `0 4px 25px ${colors.amber}50`,
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.transform = 'translateY(-3px)';
+                    e.currentTarget.style.boxShadow = `0 8px 35px ${colors.amber}60`;
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = 'translateY(0)';
+                    e.currentTarget.style.boxShadow = `0 4px 25px ${colors.amber}50`;
+                  }}
+                >
+                  Get Started Today
+                  <FaArrowRight size={14} />
+                </button>
+              </div>
+
+              <div style={{
+                display: 'flex',
+                gap: '30px',
+                marginTop: '28px',
+                flexWrap: 'wrap',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <FaCheckCircle size={14} color={colors.amber} />
+                  <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem' }}>
+                    Trusted by leading investors
+                  </span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <FaShieldAlt size={14} color={colors.amber} />
+                  <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem' }}>
+                    Verified opportunities
+                  </span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <FaGlobeAfrica size={14} color={colors.amber} />
+                  <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem' }}>
+                    African market focus
+                  </span>
+                </div>
               </div>
             </div>
 
+            {/* Hero Image - Abstract Business Growth */}
             <div style={{
-              display: 'flex',
-              gap: '30px',
-              marginTop: '28px',
-              flexWrap: 'wrap',
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <FaCheckCircle size={14} color={colors.amber} />
-                <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem' }}>
-                  Trusted by leading investors
-                </span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <FaShieldAlt size={14} color={colors.amber} />
-                <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem' }}>
-                  Verified opportunities
-                </span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <FaGlobeAfrica size={14} color={colors.amber} />
-                <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem' }}>
-                  African market focus
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <div style={{
-            position: 'relative',
-            zIndex: 1,
-            marginLeft: 'auto',
-            display: 'none',
-            '@media (min-width: 1024px)': {
-              display: 'block',
-            },
-          }}>
-            <div style={{
-              width: '200px',
-              height: '200px',
-              borderRadius: '50%',
-              background: `linear-gradient(135deg, ${colors.amber}30, ${colors.gold}20)`,
+              flex: '0 0 320px',
+              height: '260px',
+              borderRadius: '16px',
+              overflow: 'hidden',
               border: `2px solid ${colors.amber}30`,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexDirection: 'column',
-              padding: '20px',
             }}>
-              <div style={{ fontSize: '3rem', color: colors.amber, marginBottom: '8px' }}>📈</div>
-              <div style={{ color: colors.white, fontSize: '0.9rem', fontWeight: 700, textAlign: 'center' }}>
-                Smarter <br />Investing
-              </div>
-              <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem', marginTop: '4px' }}>
-                Powered by BIG
-              </div>
+              <img 
+                src="https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=600&h=400&q=80"
+                alt="Investment Deal Flow"
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'cover',
+                }}
+                loading="lazy"
+              />
             </div>
           </div>
         </section>
 
-        {/* Benefits Section */}
+        {/* Benefits Section with Abstract Image */}
         <section style={{ marginBottom: '50px' }}>
           <div style={{
-            textAlign: 'center',
-            marginBottom: '32px',
-          }}>
-            <p style={{
-              color: colors.secondary,
-              fontWeight: 700,
-              fontSize: '0.75rem',
-              letterSpacing: '0.14em',
-              textTransform: 'uppercase',
-              marginBottom: '8px',
-            }}>
-              Why Investors Choose BIG
-            </p>
-            <h2 style={{
-              fontSize: 'clamp(1.5rem, 2.5vw, 2rem)',
-              fontWeight: 800,
-              color: colors.dark,
-              margin: 0,
-            }}>
-              <span style={{ color: colors.brown }}>Smart</span> Investment Decisions
-            </h2>
-          </div>
-
-          <div style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(3, 1fr)',
-            gap: '12px',
+            gridTemplateColumns: '1fr 1fr',
+            gap: '40px',
+            alignItems: 'center',
           }}>
-            {benefits.map((item, index) => (
-              <div
-                key={index}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '10px',
-                  padding: '12px 16px',
-                  background: colors.white,
-                  borderRadius: '10px',
-                  border: `1px solid ${colors.border}`,
-                  transition: 'all 0.2s ease',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = colors.brown;
-                  e.currentTarget.style.transform = 'translateX(4px)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = colors.border;
-                  e.currentTarget.style.transform = 'translateX(0)';
-                }}
-              >
-                <FaCheckCircle size={16} color={colors.brown} />
-                <span style={{
-                  fontSize: '0.85rem',
-                  color: colors.dark,
-                  fontWeight: 500,
+            <div>
+              <div style={{
+                marginBottom: '16px',
+              }}>
+                <p style={{
+                  color: colors.secondary,
+                  fontWeight: 700,
+                  fontSize: '0.75rem',
+                  letterSpacing: '0.14em',
+                  textTransform: 'uppercase',
+                  marginBottom: '4px',
                 }}>
-                  {item}
-                </span>
+                  Why Investors Choose BIG
+                </p>
+                <h2 style={{
+                  fontSize: 'clamp(1.3rem, 2vw, 1.8rem)',
+                  fontWeight: 800,
+                  color: colors.dark,
+                  margin: 0,
+                }}>
+                  <span style={{ color: colors.brown }}>Smart</span> Investment Decisions
+                </h2>
               </div>
-            ))}
+
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr',
+                gap: '10px',
+              }}>
+                {benefits.map((item, index) => (
+                  <div
+                    key={index}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      padding: '10px 14px',
+                      background: colors.white,
+                      borderRadius: '10px',
+                      border: `1px solid ${colors.border}`,
+                      transition: 'all 0.2s ease',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.borderColor = colors.brown;
+                      e.currentTarget.style.transform = 'translateX(4px)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.borderColor = colors.border;
+                      e.currentTarget.style.transform = 'translateX(0)';
+                    }}
+                  >
+                    <FaCheckCircle size={14} color={colors.brown} />
+                    <span style={{
+                      fontSize: '0.78rem',
+                      color: colors.dark,
+                      fontWeight: 500,
+                    }}>
+                      {item}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Side Image - Abstract Financial Growth */}
+            <div style={{
+              borderRadius: '16px',
+              overflow: 'hidden',
+              height: '280px',
+              boxShadow: '0 8px 40px rgba(28,20,16,0.1)',
+            }}>
+              <img 
+                src="https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?auto=format&fit=crop&w=800&h=500&q=80"
+                alt="Financial Growth Chart"
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'cover',
+                }}
+                loading="lazy"
+              />
+            </div>
           </div>
         </section>
 
-        {/* Key Solutions Section */}
+        {/* Key Solutions Section with Images */}
         <section style={{ marginBottom: '50px' }}>
           <div style={{
             textAlign: 'center',
@@ -421,13 +441,13 @@ const SolutionsInvestors = () => {
                 style={{
                   background: colors.white,
                   borderRadius: '14px',
-                  padding: '24px 20px',
+                  overflow: 'hidden',
                   border: `1px solid ${colors.border}`,
                   transition: 'all 0.3s ease',
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.transform = 'translateY(-4px)';
-                  e.currentTarget.style.boxShadow = '0 8px 30px rgba(28,20,16,0.08)';
+                  e.currentTarget.style.transform = 'translateY(-6px)';
+                  e.currentTarget.style.boxShadow = '0 12px 40px rgba(28,20,16,0.1)';
                   e.currentTarget.style.borderColor = solution.color;
                 }}
                 onMouseLeave={(e) => {
@@ -437,34 +457,65 @@ const SolutionsInvestors = () => {
                 }}
               >
                 <div style={{
-                  width: '48px',
-                  height: '48px',
-                  borderRadius: '12px',
-                  background: `${solution.color}15`,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: solution.color,
-                  marginBottom: '12px',
+                  height: '140px',
+                  overflow: 'hidden',
+                  position: 'relative',
                 }}>
-                  {solution.icon}
+                  <img 
+                    src={solution.image}
+                    alt={solution.title}
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'cover',
+                      transition: 'transform 0.5s ease',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.transform = 'scale(1.05)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.transform = 'scale(1)';
+                    }}
+                    loading="lazy"
+                    onError={(e) => {
+                      e.target.style.display = 'none';
+                    }}
+                  />
                 </div>
-                <h4 style={{
-                  fontSize: '1rem',
-                  fontWeight: 700,
-                  color: colors.dark,
-                  margin: '0 0 6px',
+
+                <div style={{
+                  padding: '16px 20px 20px',
                 }}>
-                  {solution.title}
-                </h4>
-                <p style={{
-                  fontSize: '0.85rem',
-                  color: colors.muted,
-                  lineHeight: 1.6,
-                  margin: 0,
-                }}>
-                  {solution.description}
-                </p>
+                  <div style={{
+                    width: '44px',
+                    height: '44px',
+                    borderRadius: '10px',
+                    background: `${solution.color}15`,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: solution.color,
+                    marginBottom: '10px',
+                  }}>
+                    {solution.icon}
+                  </div>
+                  <h4 style={{
+                    fontSize: '0.95rem',
+                    fontWeight: 700,
+                    color: colors.dark,
+                    margin: '0 0 4px',
+                  }}>
+                    {solution.title}
+                  </h4>
+                  <p style={{
+                    fontSize: '0.82rem',
+                    color: colors.muted,
+                    lineHeight: 1.6,
+                    margin: 0,
+                  }}>
+                    {solution.description}
+                  </p>
+                </div>
               </div>
             ))}
           </div>
@@ -472,57 +523,76 @@ const SolutionsInvestors = () => {
 
         {/* CTA Section */}
         <section style={{
-          padding: '40px',
+          position: 'relative',
+          padding: '50px',
           background: `linear-gradient(135deg, ${colors.brown}, ${colors.brownLight})`,
           borderRadius: '20px',
           textAlign: 'center',
+          overflow: 'hidden',
         }}>
-          <h2 style={{
-            fontSize: 'clamp(1.3rem, 2vw, 1.8rem)',
-            fontWeight: 800,
-            color: colors.white,
-            margin: '0 0 12px',
+          <div style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundImage: 'url(https://images.unsplash.com/photo-1460925895917-afdab827c52f?auto=format&fit=crop&w=1400&h=400&q=80)',
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            opacity: 0.08,
+          }} />
+          
+          <div style={{
+            position: 'relative',
+            zIndex: 1,
           }}>
-            Ready to Invest Smarter?
-          </h2>
-          <p style={{
-            fontSize: '1rem',
-            color: 'rgba(255,255,255,0.85)',
-            margin: '0 0 24px',
-            maxWidth: '450px',
-            marginLeft: 'auto',
-            marginRight: 'auto',
-          }}>
-            Join BIG Marketplace and access better deal flow with less risk.
-          </p>
-          <button
-            onClick={() => navigate('/LoginRegister')}
-            style={{
-              background: colors.white,
-              color: colors.brown,
-              border: 'none',
-              borderRadius: '50px',
-              padding: '16px 48px',
+            <h2 style={{
+              fontSize: 'clamp(1.3rem, 2vw, 1.8rem)',
+              fontWeight: 800,
+              color: colors.white,
+              margin: '0 0 12px',
+            }}>
+              Ready to Invest Smarter?
+            </h2>
+            <p style={{
               fontSize: '1rem',
-              fontWeight: 700,
-              cursor: 'pointer',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '12px',
-              transition: 'all 0.3s ease',
-              boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.transform = 'translateY(-3px)';
-              e.currentTarget.style.boxShadow = '0 8px 30px rgba(0,0,0,0.25)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.transform = 'translateY(0)';
-              e.currentTarget.style.boxShadow = '0 4px 20px rgba(0,0,0,0.15)';
-            }}
-          >
-            Get Started <FaArrowRight size={14} />
-          </button>
+              color: 'rgba(255,255,255,0.85)',
+              margin: '0 0 24px',
+              maxWidth: '450px',
+              marginLeft: 'auto',
+              marginRight: 'auto',
+            }}>
+              Join BIG Marketplace and access better deal flow with less risk.
+            </p>
+            <button
+              onClick={() => navigate('/LoginRegister')}
+              style={{
+                background: colors.white,
+                color: colors.brown,
+                border: 'none',
+                borderRadius: '50px',
+                padding: '16px 48px',
+                fontSize: '1rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '12px',
+                transition: 'all 0.3s ease',
+                boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = 'translateY(-3px)';
+                e.currentTarget.style.boxShadow = '0 8px 30px rgba(0,0,0,0.25)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = '0 4px 20px rgba(0,0,0,0.15)';
+              }}
+            >
+              Get Started <FaArrowRight size={14} />
+            </button>
+          </div>
         </section>
       </div>
 
