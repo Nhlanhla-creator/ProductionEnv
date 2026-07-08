@@ -61,7 +61,8 @@ const CleanupFirestore = () => {
           const files = data.files || [];
 
           // Case 1: doc has no files — delete entirely (stale empty doc)
-          if (files.length === 0) {
+          // Exception: Do not delete if it is a table-type document (which uses tableData instead of files)
+          if (files.length === 0 && data.type !== 'table') {
             await deleteDoc(doc(db, collName, docSnap.id));
             deleted++;
             totalDeleted++;

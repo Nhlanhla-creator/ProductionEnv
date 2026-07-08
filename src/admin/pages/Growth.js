@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { FileExplorer } from './shared/FileExplorer';
 import { FileUploader } from './shared/FileUploader';
+import { SpreadsheetEditor } from './shared/SpreadsheetEditor';
 import { CreateItemDialog } from './shared/CreateItemDialog';
 import { useCustomStructure } from './shared/useCustomStructure';
 import {
@@ -14,7 +15,8 @@ import {
   loadAllContent,
   loadUserStructure,
   saveUserStructure,
-  deleteContent
+  deleteContent,
+  saveTableContent
 } from './services/growth';
 import { useAuth } from '../../smses/hooks/useAuth';
 import { AlertCircle } from 'lucide-react';
@@ -29,6 +31,7 @@ const Growth = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [explorerState, setExplorerState] = useState('normal');
   // Custom structure (folders/file entries created on the frontend)
   const {
     mergedStructure,
@@ -203,6 +206,27 @@ const Growth = () => {
     }
   }, [selectedPath, user]);
 
+  const handleSaveTable = useCallback(async (tableData) => {
+    if (!selectedPath || !user) return;
+    try {
+      await saveTableContent(selectedPath, tableData);
+      
+      const pathKey = selectedPath.join(' > ');
+      setContentStatus(prev => ({
+        ...prev,
+        [pathKey]: true
+      }));
+
+      setCurrentContent(prev => ({
+        ...prev,
+        tableData
+      }));
+    } catch (error) {
+      console.error('Error saving table:', error);
+      alert('Failed to save table. Please try again.');
+    }
+  }, [selectedPath, user]);
+
   const handleCloseEditor = useCallback(() => {
     setSelectedPath(null);
     setSelectedItem(null);
@@ -342,9 +366,12 @@ const Growth = () => {
 
         <div style={{
           display: 'grid',
-          gridTemplateColumns: selectedPath ? '350px 1fr' : '1fr',
+          gridTemplateColumns: selectedPath 
+            ? (explorerState === 'minimized' ? '48px 1fr' : (explorerState === 'maximized' ? '550px 1fr' : '350px 1fr'))
+            : '1fr',
           gap: 20,
-          height: 'calc(100vh - 160px)'
+          height: 'calc(100vh - 160px)',
+          transition: 'grid-template-columns 0.2s ease-in-out'
         }}>
           {/* File Explorer */}
           <FileExplorer
@@ -356,19 +383,31 @@ const Growth = () => {
             onAddItem={handleAddItem}
             onDeleteItem={handleDeleteItem}
             contentStatus={contentStatus}
+            explorerState={explorerState}
+            onToggleState={setExplorerState}
           />
 
           {/* Content Editor */}
           {selectedPath && selectedItem && (
-            <FileUploader
-              path={selectedPath}
-              itemConfig={selectedItem}
-              content={currentContent}
-              onUpload={handleUploadFile}
-              onDelete={handleDeleteFile}
-              onClose={handleCloseEditor}
-              isUploading={isUploading}
-            />
+            selectedItem.type === 'table' ? (
+              <SpreadsheetEditor
+                path={selectedPath}
+                itemConfig={selectedItem}
+                content={currentContent}
+                onSave={handleSaveTable}
+                onClose={handleCloseEditor}
+              />
+            ) : (
+              <FileUploader
+                path={selectedPath}
+                itemConfig={selectedItem}
+                content={currentContent}
+                onUpload={handleUploadFile}
+                onDelete={handleDeleteFile}
+                onClose={handleCloseEditor}
+                isUploading={isUploading}
+              />
+            )
           )}
 
           {/* Empty state */}

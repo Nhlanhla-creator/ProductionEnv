@@ -112,7 +112,46 @@ export const loadContent = async (path) => {
     const docRef = doc(db, COLLECTION, docId);
     const docSnap = await getDoc(docRef);
 
-    if (!docSnap.exists()) return null;
+    if (!docSnap.exists()) {
+      // Automatic migration:
+      // If we are loading Growth > Business Development > Target List > Corporate or Government,
+      // check if they exist under the old paths in partners_content
+      const pathString = path.join(' > ');
+      if (pathString === 'Business Development > Target List > Corporate' || pathString === 'Business Development > Target List > Government') {
+        const oldPath = pathString.endsWith('Corporate') ? ['Corporates ESD'] : ['Government'];
+        // Sanitize old path
+        const oldSanitized = oldPath.map(s => s.toLowerCase().replace(/\s+/g, '_')).join('|');
+        const oldDocId = `${user.uid}_${oldSanitized}`;
+        const oldDocRef = doc(db, 'partners_content', oldDocId);
+        const oldDocSnap = await getDoc(oldDocRef);
+        if (oldDocSnap.exists()) {
+          const oldData = oldDocSnap.data();
+          // Write migrated doc to growth_content
+          const migratedData = {
+            userId: user.uid,
+            path,
+            type: 'table',
+            tableData: oldData.tableData || null,
+            createdAt: oldData.createdAt || serverTimestamp(),
+            updatedAt: serverTimestamp()
+          };
+          await setDoc(docRef, migratedData);
+          // Delete old document to clean up partners_content
+          try {
+            await deleteDoc(oldDocRef);
+            console.log(`Successfully migrated and deleted old document at ${oldDocId}`);
+          } catch (delErr) {
+            console.warn('Failed to delete old document after migration:', delErr);
+          }
+          return {
+            ...migratedData,
+            createdAt: migratedData.createdAt?.toDate?.() || new Date(migratedData.createdAt),
+            updatedAt: migratedData.updatedAt?.toDate?.() || new Date(migratedData.updatedAt)
+          };
+        }
+      }
+      return null;
+    }
 
     const data = docSnap.data();
     return {
@@ -136,8 +175,8 @@ export const loadAllContent = async () => {
     querySnapshot.forEach((docSnap) => {
       const data = docSnap.data();
       const pathKey = data.path.join(' > ');
-      // Only mark as having content if there are actual files
-      if (!data.files || data.files.length === 0) return;
+      // Only mark as having content if there are actual files or table data
+      if ((!data.files || data.files.length === 0) && data.type !== 'table') return;
       content[pathKey] = {
         ...data,
         createdAt: data.createdAt?.toDate?.() || new Date(data.createdAt),
@@ -171,6 +210,31 @@ export const deleteContent = async (path) => {
     return { success: true };
   } catch (error) {
     console.error('❌ Error deleting content:', error);
+    throw error;
+  }
+};
+
+export const saveTableContent = async (path, tableData) => {
+  try {
+    const user = getCurrentUser();
+    const docId = getDocId(user.uid, path);
+    const docRef = doc(db, COLLECTION, docId);
+    
+    // Check if doc exists to preserve createdAt
+    const docSnap = await getDoc(docRef);
+    
+    await setDoc(docRef, {
+      userId: user.uid,
+      path,
+      type: 'table',
+      tableData,
+      updatedAt: serverTimestamp(),
+      createdAt: docSnap.exists() ? docSnap.data().createdAt : serverTimestamp()
+    }, { merge: true });
+    
+    return { success: true };
+  } catch (error) {
+    console.error('❌ Error saving table content:', error);
     throw error;
   }
 };
