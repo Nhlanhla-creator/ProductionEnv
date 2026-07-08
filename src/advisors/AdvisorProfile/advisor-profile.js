@@ -107,7 +107,6 @@ const onboardingSteps = [
 
 export default function AdvisorProfile() {
   const navigate = useNavigate()
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
   const [activeSection, setActiveSection] = useState("instructions")
   const [profileSubmitted, setProfileSubmitted] = useState(false)
   const [showSummary, setShowSummary] = useState(false)
@@ -228,19 +227,6 @@ export default function AdvisorProfile() {
   useEffect(() => { localStorage.setItem("advisorProfileData", JSON.stringify(formData)) }, [formData])
   useEffect(() => { localStorage.setItem("advisorProfileCompletedSections", JSON.stringify(completedSections)) }, [completedSections])
   useEffect(() => { localStorage.setItem("advisorProfileSubmitted", profileSubmitted.toString()) }, [profileSubmitted])
-
-  useEffect(() => {
-    const observer = new MutationObserver((mutations) => {
-      mutations.forEach((mutation) => {
-        if (mutation.type === "attributes" && mutation.attributeName === "class") {
-          setIsSidebarCollapsed(document.body.classList.contains("sidebar-collapsed"))
-        }
-      })
-    })
-    observer.observe(document.body, { attributes: true, attributeFilter: ["class"] })
-    setIsSidebarCollapsed(document.body.classList.contains("sidebar-collapsed"))
-    return () => observer.disconnect()
-  }, [])
 
   const updateFormData = (section, data) => {
     setFormData((prev) => ({ ...prev, [section]: { ...prev[section], ...data } }))
@@ -422,9 +408,9 @@ export default function AdvisorProfile() {
       className="universal-profile-container"
       style={{
         padding: "70px 20px 20px",
-        marginLeft: isSidebarCollapsed ? "100px" : "270px",
+        marginLeft: "0",
         transition: "margin-left 0.3s ease",
-        width: `calc(100vw - ${isSidebarCollapsed ? "100px" : "270px"})`,
+        width: `calc(100vw)`,
         boxSizing: "border-box",
         minHeight: "100vh",
         backgroundColor: "#f5f7fa",

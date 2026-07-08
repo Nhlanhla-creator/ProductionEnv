@@ -462,7 +462,7 @@ export const SpreadsheetEditor = ({ path, itemConfig, content, onSave, onClose }
               gap: 6
             }}
           >
-            <Download size={14} /> Export
+            <Upload size={14} /> Export
           </button>
 
           <button
@@ -481,7 +481,7 @@ export const SpreadsheetEditor = ({ path, itemConfig, content, onSave, onClose }
               gap: 6
             }}
           >
-            <Upload size={14} /> Import
+            <Download size={14} /> Import
           </button>
           <input
             type="file"
