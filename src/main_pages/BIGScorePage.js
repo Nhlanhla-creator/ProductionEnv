@@ -29,11 +29,31 @@ import {
   FaBalanceScale,
   FaInfoCircle,
   FaTrendingUp,
-  FaAlertCircle
+  FaAlertCircle,
+  FaPalette,
+  FaFileContract,
+  FaCalculator,
+  FaClipboardList,
+  FaUserCog,
+  FaToolbox,
+  FaUsersCog,
+  FaExternalLinkAlt,
+  FaDesktop,
+  FaMobileAlt,
+  FaChartPie,
+  FaBook,
+  FaPenFancy,
+  FaSitemap,
+  FaCogs,
+  FaUserGraduate,
+  FaHandHoldingUsd,
+  FaLayerGroup
 } from 'react-icons/fa';
+import { MdDashboard, MdBusiness, MdDescription, MdTrendingUp as MdTrendingUpIcon } from 'react-icons/md';
 
 const BIGScorePage = () => {
   const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState('score');
   const [showPopup, setShowPopup] = useState(false);
   const [popupContent, setPopupContent] = useState(null);
   const [bannerLoaded, setBannerLoaded] = useState(false);
@@ -366,6 +386,58 @@ const BIGScorePage = () => {
       ]
     }
   };
+
+  // Improvement Tools Data - Simplified Guide
+  const improvementTools = [
+    {
+      category: "Legitimacy Tools",
+      icon: <FaCheckCircle size={20} />,
+      color: colors.secondary,
+      description: "Build trust with professional branding and digital presence.",
+      examples: "Logo design, Brand Board, Business Card Template, Email Signature, Company Brochure, Letterhead Design, Professional Website",
+      image: "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=400&h=200&fit=crop&crop=center"
+    },
+    {
+      category: "Compliance Templates",
+      icon: <FaFileContract size={20} />,
+      color: colors.red,
+      description: "Meet legal and regulatory requirements with professional templates.",
+      examples: "CIPC Registration, Ownership Structure, SARS Tax Registration, Director's Register, Labour Compliance, POPIA Compliance, B-BBEE Certification",
+      image: "https://images.unsplash.com/photo-1554224155-6726b3ff858f?w=400&h=200&fit=crop&crop=center"
+    },
+    {
+      category: "Capital Appeal Tools",
+      icon: <FaMoneyBillWave size={20} />,
+      color: colors.amber,
+      description: "Make your business attractive to investors and funders.",
+      examples: "Financial Model Template, KPI Dashboard, Budgeting Guide, Baseline Establishment Course, Business Plan Template, Business Model Canvas",
+      image: "https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?w=400&h=200&fit=crop&crop=center"
+    },
+    {
+      category: "Leadership & Governance Tools",
+      icon: <FaUserTie size={20} />,
+      color: colors.orange,
+      description: "Build proper structures and leadership frameworks.",
+      examples: "Employee Code of Conduct, Leave Policy, Disciplinary Policy, Health & Safety Policy, Privacy Policy, Remote Work Policy, Conflict of Interest Policy, IP Protection, Performance Review Policy",
+      image: "https://images.unsplash.com/photo-1524178232363-1fb2b075b655?w=400&h=200&fit=crop&crop=center"
+    },
+    {
+      category: "Operational Strength Tools",
+      icon: <FaBuilding size={20} />,
+      color: colors.primary,
+      description: "Strengthen your ability to execute and deliver reliably.",
+      examples: "Operational Checklist, Supplier Management Template, Quality Control Checklist, Business Continuity Plan, Performance Management Course",
+      image: "https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?w=400&h=200&fit=crop&crop=center"
+    },
+    {
+      category: "HR Templates",
+      icon: <FaUsersCog size={20} />,
+      color: colors.blue,
+      description: "Streamline human resources with professional templates.",
+      examples: "Employment Contract (Basic), NDA (Non-Disclosure Agreement), MOU (Memorandum of Understanding)",
+      image: "https://images.unsplash.com/photo-1521791136064-7986c2920216?w=400&h=200&fit=crop&crop=center"
+    }
+  ];
 
   const openPopup = (content) => {
     setPopupContent(content);
@@ -1242,6 +1314,94 @@ const BIGScorePage = () => {
       {/* Sample Report Modal */}
       {showSampleReport && <SampleReportModal />}
 
+      {/* Tabs - WITH SPACING FIX */}
+      <div style={{
+        maxWidth: '1100px',
+        margin: '0 auto',
+        padding: isMobile ? '0 16px' : '0 20px',
+        marginTop: isMobile ? '20px' : '40px',
+        position: 'relative',
+        zIndex: 2,
+      }}>
+        <div style={{
+          display: 'flex',
+          background: colors.white,
+          borderRadius: '16px',
+          overflow: 'hidden',
+          boxShadow: '0 4px 20px rgba(28,20,16,0.08)',
+          border: `1px solid ${colors.border}`,
+        }}>
+          <button
+            onClick={() => setActiveTab('score')}
+            style={{
+              flex: 1,
+              padding: isMobile ? '14px 12px' : '18px 24px',
+              background: activeTab === 'score' ? colors.primary : 'transparent',
+              color: activeTab === 'score' ? colors.white : colors.muted,
+              border: 'none',
+              fontSize: isMobile ? '0.8rem' : '0.95rem',
+              fontWeight: activeTab === 'score' ? 700 : 600,
+              cursor: 'pointer',
+              transition: 'all 0.3s ease',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px',
+              fontFamily: 'inherit',
+            }}
+            onMouseEnter={(e) => {
+              if (activeTab !== 'score') {
+                e.currentTarget.style.background = colors.light;
+                e.currentTarget.style.color = colors.dark;
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (activeTab !== 'score') {
+                e.currentTarget.style.background = 'transparent';
+                e.currentTarget.style.color = colors.muted;
+              }
+            }}
+          >
+            <FaChartLine size={isMobile ? 14 : 18} />
+            The BIG Score
+          </button>
+          <button
+            onClick={() => setActiveTab('improve')}
+            style={{
+              flex: 1,
+              padding: isMobile ? '14px 12px' : '18px 24px',
+              background: activeTab === 'improve' ? colors.primary : 'transparent',
+              color: activeTab === 'improve' ? colors.white : colors.muted,
+              border: 'none',
+              fontSize: isMobile ? '0.8rem' : '0.95rem',
+              fontWeight: activeTab === 'improve' ? 700 : 600,
+              cursor: 'pointer',
+              transition: 'all 0.3s ease',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px',
+              fontFamily: 'inherit',
+            }}
+            onMouseEnter={(e) => {
+              if (activeTab !== 'improve') {
+                e.currentTarget.style.background = colors.light;
+                e.currentTarget.style.color = colors.dark;
+              }
+            }}
+            onMouseLeave={(e) => {
+              if (activeTab !== 'improve') {
+                e.currentTarget.style.background = 'transparent';
+                e.currentTarget.style.color = colors.muted;
+              }
+            }}
+          >
+            <FaRocket size={isMobile ? 14 : 18} />
+            How to Improve Your BIG Score
+          </button>
+        </div>
+      </div>
+
       {/* Main Content */}
       <div style={{
         maxWidth: '1100px',
@@ -1249,293 +1409,574 @@ const BIGScorePage = () => {
         padding: isMobile ? '24px 16px 40px' : '40px 20px 60px',
       }}>
 
-        {/* What is BIG Score Section */}
-        <section style={{
-          backgroundColor: colors.white,
-          borderRadius: '20px',
-          padding: isMobile ? '24px 16px' : '40px',
-          marginBottom: '40px',
-          boxShadow: '0 4px 20px rgba(28,20,16,0.06)',
-        }}>
-          <h2 style={{
-            fontSize: isMobile ? 'clamp(1.3rem, 5vw, 1.8rem)' : 'clamp(1.5rem, 2.5vw, 2rem)',
-            fontWeight: 800,
-            color: colors.dark,
-            textAlign: 'center',
-            marginBottom: '12px',
-            letterSpacing: '-0.01em',
-          }}>
-            What Makes the <span style={{ color: colors.primary }}>BIG Score</span>... BIG?
-          </h2>
-          <p style={{
-            textAlign: 'center',
-            color: colors.muted,
-            fontSize: isMobile ? '0.85rem' : '0.95rem',
-            maxWidth: '600px',
-            margin: '0 auto 32px',
-            lineHeight: 1.6,
-          }}>
-            A standardized score that validates your business's readiness and trustworthiness — across compliance, governance, and legitimacy.
-          </p>
+        {activeTab === 'score' ? (
+          <>
+            {/* What is BIG Score Section */}
+            <section style={{
+              backgroundColor: colors.white,
+              borderRadius: '20px',
+              padding: isMobile ? '24px 16px' : '40px',
+              marginBottom: '40px',
+              boxShadow: '0 4px 20px rgba(28,20,16,0.06)',
+            }}>
+              <h2 style={{
+                fontSize: isMobile ? 'clamp(1.3rem, 5vw, 1.8rem)' : 'clamp(1.5rem, 2.5vw, 2rem)',
+                fontWeight: 800,
+                color: colors.dark,
+                textAlign: 'center',
+                marginBottom: '12px',
+                letterSpacing: '-0.01em',
+              }}>
+                What Makes the <span style={{ color: colors.primary }}>BIG Score</span>... BIG?
+              </h2>
+              <p style={{
+                textAlign: 'center',
+                color: colors.muted,
+                fontSize: isMobile ? '0.85rem' : '0.95rem',
+                maxWidth: '600px',
+                margin: '0 auto 32px',
+                lineHeight: 1.6,
+              }}>
+                A standardized score that validates your business's readiness and trustworthiness — across compliance, governance, and legitimacy.
+              </p>
 
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)',
-            gap: '20px',
-          }}>
-            {[
-              {
-                image: 'https://images.unsplash.com/photo-1552664730-d307ca884978?w=400&h=300&fit=crop&crop=center',
-                title: 'Business Credibility',
-                description: 'Validates your business readiness and trustworthiness across all key dimensions.',
-                color: colors.primary,
-              },
-              {
-                image: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=400&h=300&fit=crop&crop=center',
-                title: 'Growth Roadmap',
-                description: 'Highlights strengths, flags risks, and reveals what you need to improve.',
-                color: colors.secondary,
-              },
-              {
-                image: 'https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?w=400&h=300&fit=crop&crop=center',
-                title: 'Risk Assessment',
-                description: 'Enables investors and partners to make data-backed decisions with confidence.',
-                color: colors.amber,
-              },
-            ].map((item, index) => (
-              <div
-                key={index}
-                style={{
-                  background: colors.white,
-                  borderRadius: '16px',
-                  overflow: 'hidden',
-                  boxShadow: '0 4px 20px rgba(28,20,16,0.08)',
-                  transition: 'transform 0.3s ease, box-shadow 0.3s ease',
-                  borderTop: `4px solid ${item.color}`,
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.transform = 'translateY(-6px)';
-                  e.currentTarget.style.boxShadow = '0 12px 40px rgba(28,20,16,0.15)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = 'translateY(0)';
-                  e.currentTarget.style.boxShadow = '0 4px 20px rgba(28,20,16,0.08)';
-                }}
-              >
-                <div style={{
-                  height: isMobile ? '160px' : '180px',
-                  overflow: 'hidden',
-                }}>
-                  <img
-                    src={item.image}
-                    alt={item.title}
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)',
+                gap: '20px',
+              }}>
+                {[
+                  {
+                    image: 'https://images.unsplash.com/photo-1552664730-d307ca884978?w=400&h=300&fit=crop&crop=center',
+                    title: 'Business Credibility',
+                    description: 'Validates your business readiness and trustworthiness across all key dimensions.',
+                    color: colors.primary,
+                  },
+                  {
+                    image: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=400&h=300&fit=crop&crop=center',
+                    title: 'Growth Roadmap',
+                    description: 'Highlights strengths, flags risks, and reveals what you need to improve.',
+                    color: colors.secondary,
+                  },
+                  {
+                    image: 'https://images.unsplash.com/photo-1454165804606-c3d57bc86b40?w=400&h=300&fit=crop&crop=center',
+                    title: 'Risk Assessment',
+                    description: 'Enables investors and partners to make data-backed decisions with confidence.',
+                    color: colors.amber,
+                  },
+                ].map((item, index) => (
+                  <div
+                    key={index}
                     style={{
-                      width: '100%',
-                      height: '100%',
-                      objectFit: 'cover',
-                      transition: 'transform 0.5s ease',
+                      background: colors.white,
+                      borderRadius: '16px',
+                      overflow: 'hidden',
+                      boxShadow: '0 4px 20px rgba(28,20,16,0.08)',
+                      transition: 'transform 0.3s ease, box-shadow 0.3s ease',
+                      borderTop: `4px solid ${item.color}`,
                     }}
                     onMouseEnter={(e) => {
-                      e.currentTarget.style.transform = 'scale(1.05)';
+                      e.currentTarget.style.transform = 'translateY(-6px)';
+                      e.currentTarget.style.boxShadow = '0 12px 40px rgba(28,20,16,0.15)';
                     }}
                     onMouseLeave={(e) => {
-                      e.currentTarget.style.transform = 'scale(1)';
+                      e.currentTarget.style.transform = 'translateY(0)';
+                      e.currentTarget.style.boxShadow = '0 4px 20px rgba(28,20,16,0.08)';
                     }}
-                  />
-                </div>
-                <div style={{
-                  padding: isMobile ? '16px' : '24px',
+                  >
+                    <div style={{
+                      height: isMobile ? '160px' : '180px',
+                      overflow: 'hidden',
+                    }}>
+                      <img
+                        src={item.image}
+                        alt={item.title}
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          objectFit: 'cover',
+                          transition: 'transform 0.5s ease',
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.transform = 'scale(1.05)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.transform = 'scale(1)';
+                        }}
+                      />
+                    </div>
+                    <div style={{
+                      padding: isMobile ? '16px' : '24px',
+                      textAlign: 'center',
+                    }}>
+                      <h3 style={{
+                        fontSize: isMobile ? '1rem' : '1.1rem',
+                        fontWeight: 700,
+                        color: colors.dark,
+                        marginBottom: '8px',
+                      }}>
+                        {item.title}
+                      </h3>
+                      <p style={{
+                        fontSize: isMobile ? '0.8rem' : '0.85rem',
+                        color: colors.muted,
+                        lineHeight: 1.5,
+                        margin: 0,
+                      }}>
+                        {item.description}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{
+                background: colors.light,
+                borderRadius: '12px',
+                padding: isMobile ? '16px' : '24px',
+                marginTop: '24px',
+                borderLeft: `4px solid ${colors.amber}`,
+              }}>
+                <p style={{
+                  fontSize: isMobile ? '0.85rem' : '0.95rem',
+                  lineHeight: 1.7,
+                  color: colors.dark,
+                  margin: 0,
                   textAlign: 'center',
+                }}>
+                  <strong>Consumer finance has TransUnion and Experian</strong> — global systems that measure personal creditworthiness.<br />
+                  <strong>Corporates have Moody's, Fitch, and S&P</strong> — rating frameworks that measure institutional risk.<br />
+                  <strong>Businesses have "The BIG Score"</strong> — a shared metric that lets funders, corporates, and partners speak the same language of readiness and reliability.
+                </p>
+              </div>
+            </section>
+
+            {/* Score Components Section */}
+            <section style={{
+              backgroundColor: colors.dark,
+              borderRadius: '20px',
+              padding: isMobile ? '24px 16px' : '40px',
+              marginBottom: '40px',
+              backgroundImage: 'radial-gradient(circle at 20% 50%, rgba(160,112,62,0.15) 0%, transparent 70%)',
+            }}>
+              <h2 style={{
+                fontSize: isMobile ? 'clamp(1.3rem, 5vw, 1.8rem)' : 'clamp(1.5rem, 2.5vw, 2rem)',
+                fontWeight: 800,
+                color: colors.white,
+                textAlign: 'center',
+                marginBottom: '8px',
+                letterSpacing: '-0.01em',
+              }}>
+                What Makes Up Your <span style={{ color: colors.amber }}>BIG Score</span>?
+              </h2>
+              <p style={{
+                textAlign: 'center',
+                color: 'rgba(255,255,255,0.6)',
+                fontSize: isMobile ? '0.85rem' : '0.95rem',
+                maxWidth: '600px',
+                margin: '0 auto 32px',
+                lineHeight: 1.6,
+              }}>
+                Our AI-powered framework scores every business across five core dimensions — giving funders, partners, and programs a complete view of business readiness.
+              </p>
+
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: isMobile ? '1fr' : 'repeat(5, 1fr)',
+                gap: isMobile ? '12px' : '16px',
+              }}>
+                {scoreData.bigScore.components.map((component, index) => (
+                  <ScoreCard key={index} component={component} />
+                ))}
+              </div>
+            </section>
+
+            {/* Why BIG Score Works Section */}
+            <section style={{
+              backgroundColor: colors.white,
+              borderRadius: '20px',
+              padding: isMobile ? '24px 16px' : '40px',
+              marginBottom: '40px',
+              boxShadow: '0 4px 20px rgba(28,20,16,0.06)',
+            }}>
+              <h2 style={{
+                fontSize: isMobile ? 'clamp(1.3rem, 5vw, 1.8rem)' : 'clamp(1.5rem, 2.5vw, 2rem)',
+                fontWeight: 800,
+                color: colors.dark,
+                textAlign: 'center',
+                marginBottom: '32px',
+                letterSpacing: '-0.01em',
+              }}>
+                Why the <span style={{ color: colors.primary }}>BIG Score</span> Works
+              </h2>
+
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, 1fr)',
+                gap: '24px',
+              }}>
+                {/* Problems */}
+                <div style={{
+                  background: colors.redBg,
+                  borderRadius: '16px',
+                  padding: isMobile ? '16px' : '24px',
+                  border: `1px solid ${colors.red}30`,
                 }}>
                   <h3 style={{
                     fontSize: isMobile ? '1rem' : '1.1rem',
                     fontWeight: 700,
-                    color: colors.dark,
-                    marginBottom: '8px',
+                    color: colors.red,
+                    marginBottom: '16px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
                   }}>
-                    {item.title}
+                    <span style={{ fontSize: '1.3rem' }}>✕</span> Traditional Challenges
                   </h3>
-                  <p style={{
-                    fontSize: isMobile ? '0.8rem' : '0.85rem',
-                    color: colors.muted,
-                    lineHeight: 1.5,
-                    margin: 0,
+                  {[
+                    'Subjective Judgement — Unstructured interviews, inconsistent criteria',
+                    'Static Reports — PDF-based, instantly outdated',
+                    'Opaque Criteria — No visibility into what\'s being scored',
+                    'Manual Admin — Slow, inconsistent, prone to error'
+                  ].map((item, index) => (
+                    <div
+                      key={index}
+                      style={{
+                        padding: isMobile ? '10px 12px' : '12px 16px',
+                        background: 'rgba(255,255,255,0.6)',
+                        borderRadius: '8px',
+                        marginBottom: '8px',
+                        fontSize: isMobile ? '0.8rem' : '0.85rem',
+                        color: colors.dark,
+                        lineHeight: 1.4,
+                      }}
+                    >
+                      {item}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Solutions */}
+                <div style={{
+                  background: colors.greenBg,
+                  borderRadius: '16px',
+                  padding: isMobile ? '16px' : '24px',
+                  border: `1px solid ${colors.green}30`,
+                }}>
+                  <h3 style={{
+                    fontSize: isMobile ? '1rem' : '1.1rem',
+                    fontWeight: 700,
+                    color: colors.green,
+                    marginBottom: '16px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
                   }}>
-                    {item.description}
-                  </p>
+                    <span style={{ fontSize: '1.3rem' }}>✓</span> BIG Score Solutions
+                  </h3>
+                  {[
+                    'AI-Driven Objectivity — Removes bias, uses consistent validated metrics',
+                    'Live Score Tracking — See performance evolve over time',
+                    'Transparent Weightings — Know what matters and what to improve',
+                    'Automated Verification — Fast, consistent, and auditable process'
+                  ].map((item, index) => (
+                    <div
+                      key={index}
+                      style={{
+                        padding: isMobile ? '10px 12px' : '12px 16px',
+                        background: 'rgba(255,255,255,0.6)',
+                        borderRadius: '8px',
+                        marginBottom: '8px',
+                        fontSize: isMobile ? '0.8rem' : '0.85rem',
+                        color: colors.dark,
+                        lineHeight: 1.4,
+                      }}
+                    >
+                      {item}
+                    </div>
+                  ))}
                 </div>
               </div>
-            ))}
-          </div>
+            </section>
+          </>
+        ) : (
+          // Improve Your BIG Score Tab
+          <>
+            {/* Introduction */}
+            <section style={{
+              backgroundColor: colors.white,
+              borderRadius: '20px',
+              padding: isMobile ? '24px 16px' : '40px',
+              marginBottom: '40px',
+              boxShadow: '0 4px 20px rgba(28,20,16,0.06)',
+            }}>
+              <h2 style={{
+                fontSize: isMobile ? 'clamp(1.3rem, 5vw, 1.8rem)' : 'clamp(1.5rem, 2.5vw, 2rem)',
+                fontWeight: 800,
+                color: colors.dark,
+                textAlign: 'center',
+                marginBottom: '12px',
+                letterSpacing: '-0.01em',
+              }}>
+                Boost Your <span style={{ color: colors.primary }}>BIG Score</span>
+              </h2>
+              <p style={{
+                textAlign: 'center',
+                color: colors.muted,
+                fontSize: isMobile ? '0.85rem' : '0.95rem',
+                maxWidth: '650px',
+                margin: '0 auto 24px',
+                lineHeight: 1.6,
+              }}>
+                Use these targeted growth tools to improve specific areas of your BIG Score. 
+                Higher scores lead to better funding opportunities, stronger corporate partnerships, and accelerated business growth.
+              </p>
 
-          <div style={{
-            background: colors.light,
-            borderRadius: '12px',
-            padding: isMobile ? '16px' : '24px',
-            marginTop: '24px',
-            borderLeft: `4px solid ${colors.amber}`,
-          }}>
-            <p style={{
-              fontSize: isMobile ? '0.85rem' : '0.95rem',
-              lineHeight: 1.7,
-              color: colors.dark,
-              margin: 0,
+              <div style={{
+                background: colors.light,
+                borderRadius: '12px',
+                padding: isMobile ? '16px' : '24px',
+                borderLeft: `4px solid ${colors.amber}`,
+              }}>
+                <p style={{
+                  fontSize: isMobile ? '0.85rem' : '0.95rem',
+                  lineHeight: 1.7,
+                  color: colors.dark,
+                  margin: 0,
+                  textAlign: 'center',
+                }}>
+                  <strong>💡 How to use this guide:</strong> Each category below shows tools that can help you improve a specific area of your BIG Score. 
+                  Choose the tools that address your weakest scores first.
+                </p>
+              </div>
+            </section>
+
+            {/* Improvement Tools Table */}
+            <section style={{
+              backgroundColor: colors.white,
+              borderRadius: '20px',
+              padding: isMobile ? '16px' : '32px',
+              marginBottom: '40px',
+              boxShadow: '0 4px 20px rgba(28,20,16,0.06)',
+              overflow: 'hidden',
+            }}>
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr',
+                gap: isMobile ? '20px' : '24px',
+              }}>
+                {improvementTools.map((tool, index) => (
+                  <div
+                    key={index}
+                    style={{
+                      background: colors.white,
+                      borderRadius: '16px',
+                      overflow: 'hidden',
+                      border: `1px solid ${colors.border}`,
+                      transition: 'all 0.3s ease',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.transform = 'translateY(-4px)';
+                      e.currentTarget.style.boxShadow = '0 8px 30px rgba(28,20,16,0.1)';
+                      e.currentTarget.style.borderColor = tool.color;
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.transform = 'translateY(0)';
+                      e.currentTarget.style.boxShadow = 'none';
+                      e.currentTarget.style.borderColor = colors.border;
+                    }}
+                  >
+                    {/* Image */}
+                    <div style={{
+                      height: isMobile ? '140px' : '160px',
+                      overflow: 'hidden',
+                      position: 'relative',
+                    }}>
+                      <img 
+                        src={tool.image}
+                        alt={tool.category}
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          objectFit: 'cover',
+                        }}
+                        loading="lazy"
+                      />
+                      <div style={{
+                        position: 'absolute',
+                        top: 12,
+                        left: 12,
+                        width: '40px',
+                        height: '40px',
+                        borderRadius: '10px',
+                        background: `${tool.color}dd`,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: colors.white,
+                      }}>
+                        {tool.icon}
+                      </div>
+                    </div>
+
+                    {/* Content */}
+                    <div style={{
+                      padding: isMobile ? '16px 18px' : '20px 24px',
+                    }}>
+                      <h3 style={{
+                        fontSize: isMobile ? '1rem' : '1.1rem',
+                        fontWeight: 700,
+                        color: tool.color,
+                        margin: '0 0 4px',
+                      }}>
+                        {tool.category}
+                      </h3>
+                      <p style={{
+                        fontSize: isMobile ? '0.8rem' : '0.85rem',
+                        color: colors.muted,
+                        margin: '0 0 10px',
+                        lineHeight: 1.5,
+                      }}>
+                        {tool.description}
+                      </p>
+                      <div style={{
+                        background: colors.light,
+                        borderRadius: '8px',
+                        padding: isMobile ? '10px 12px' : '12px 16px',
+                      }}>
+                        <p style={{
+                          fontSize: isMobile ? '0.7rem' : '0.75rem',
+                          color: colors.muted,
+                          margin: 0,
+                          fontWeight: 500,
+                        }}>
+                          <span style={{ fontWeight: 600, color: tool.color }}>Includes:</span> {tool.examples}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            {/* Find Help Section - UPDATED TEXT */}
+            <section style={{
+              backgroundColor: colors.dark,
+              borderRadius: '20px',
+              padding: isMobile ? '32px 20px' : '50px 40px',
+              marginBottom: '40px',
               textAlign: 'center',
+              backgroundImage: 'radial-gradient(circle at 50% 30%, rgba(160,112,62,0.15) 0%, transparent 70%)',
             }}>
-              <strong>Consumer finance has TransUnion and Experian</strong> — global systems that measure personal creditworthiness.<br />
-              <strong>Corporates have Moody's, Fitch, and S&P</strong> — rating frameworks that measure institutional risk.<br />
-              <strong>Businesses have "The BIG Score"</strong> — a shared metric that lets funders, corporates, and partners speak the same language of readiness and reliability.
-            </p>
-          </div>
-        </section>
-
-        {/* Score Components Section */}
-        <section style={{
-          backgroundColor: colors.dark,
-          borderRadius: '20px',
-          padding: isMobile ? '24px 16px' : '40px',
-          marginBottom: '40px',
-          backgroundImage: 'radial-gradient(circle at 20% 50%, rgba(160,112,62,0.15) 0%, transparent 70%)',
-        }}>
-          <h2 style={{
-            fontSize: isMobile ? 'clamp(1.3rem, 5vw, 1.8rem)' : 'clamp(1.5rem, 2.5vw, 2rem)',
-            fontWeight: 800,
-            color: colors.white,
-            textAlign: 'center',
-            marginBottom: '8px',
-            letterSpacing: '-0.01em',
-          }}>
-            What Makes Up Your <span style={{ color: colors.amber }}>BIG Score</span>?
-          </h2>
-          <p style={{
-            textAlign: 'center',
-            color: 'rgba(255,255,255,0.6)',
-            fontSize: isMobile ? '0.85rem' : '0.95rem',
-            maxWidth: '600px',
-            margin: '0 auto 32px',
-            lineHeight: 1.6,
-          }}>
-            Our AI-powered framework scores every business across five core dimensions — giving funders, partners, and programs a complete view of business readiness.
-          </p>
-
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: isMobile ? '1fr' : 'repeat(5, 1fr)',
-            gap: isMobile ? '12px' : '16px',
-          }}>
-            {scoreData.bigScore.components.map((component, index) => (
-              <ScoreCard key={index} component={component} />
-            ))}
-          </div>
-        </section>
-
-        {/* Why BIG Score Works Section */}
-        <section style={{
-          backgroundColor: colors.white,
-          borderRadius: '20px',
-          padding: isMobile ? '24px 16px' : '40px',
-          marginBottom: '40px',
-          boxShadow: '0 4px 20px rgba(28,20,16,0.06)',
-        }}>
-          <h2 style={{
-            fontSize: isMobile ? 'clamp(1.3rem, 5vw, 1.8rem)' : 'clamp(1.5rem, 2.5vw, 2rem)',
-            fontWeight: 800,
-            color: colors.dark,
-            textAlign: 'center',
-            marginBottom: '32px',
-            letterSpacing: '-0.01em',
-          }}>
-            Why the <span style={{ color: colors.primary }}>BIG Score</span> Works
-          </h2>
-
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, 1fr)',
-            gap: '24px',
-          }}>
-            {/* Problems */}
-            <div style={{
-              background: colors.redBg,
-              borderRadius: '16px',
-              padding: isMobile ? '16px' : '24px',
-              border: `1px solid ${colors.red}30`,
-            }}>
-              <h3 style={{
-                fontSize: isMobile ? '1rem' : '1.1rem',
-                fontWeight: 700,
-                color: colors.red,
-                marginBottom: '16px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
+              <h2 style={{
+                fontSize: isMobile ? 'clamp(1.3rem, 5vw, 1.8rem)' : 'clamp(1.5rem, 2.5vw, 2rem)',
+                fontWeight: 800,
+                color: colors.white,
+                marginBottom: '12px',
+                letterSpacing: '-0.01em',
               }}>
-                <span style={{ fontSize: '1.3rem' }}>✕</span> Traditional Challenges
-              </h3>
-              {[
-                'Subjective Judgement — Unstructured interviews, inconsistent criteria',
-                'Static Reports — PDF-based, instantly outdated',
-                'Opaque Criteria — No visibility into what\'s being scored',
-                'Manual Admin — Slow, inconsistent, prone to error'
-              ].map((item, index) => (
-                <div
-                  key={index}
+                We're Here to <span style={{ color: colors.amber }}>Help You Grow</span>
+              </h2>
+              <p style={{
+                fontSize: isMobile ? '0.9rem' : '1rem',
+                color: 'rgba(255,255,255,0.7)',
+                maxWidth: '650px',
+                margin: '0 auto 24px',
+                lineHeight: 1.6,
+              }}>
+                The tools above are offered by us to help you improve your BIG Score. 
+                Need assistance implementing them? Our expert advisors and service providers are ready to guide you every step of the way.
+              </p>
+              <div style={{
+                display: 'flex',
+                gap: isMobile ? '12px' : '16px',
+                flexWrap: 'wrap',
+                justifyContent: 'center',
+              }}>
+                <button
+                  onClick={() => navigate('/find-advisors')}
                   style={{
-                    padding: isMobile ? '10px 12px' : '12px 16px',
-                    background: 'rgba(255,255,255,0.6)',
-                    borderRadius: '8px',
-                    marginBottom: '8px',
-                    fontSize: isMobile ? '0.8rem' : '0.85rem',
-                    color: colors.dark,
-                    lineHeight: 1.4,
+                    background: `linear-gradient(135deg, ${colors.amber}, ${colors.secondary})`,
+                    color: colors.white,
+                    border: 'none',
+                    borderRadius: '50px',
+                    padding: isMobile ? '12px 24px' : '14px 36px',
+                    fontSize: isMobile ? '0.85rem' : '0.95rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    transition: 'all 0.3s ease',
+                    boxShadow: `0 4px 20px ${colors.amber}40`,
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.transform = 'translateY(-2px)';
+                    e.currentTarget.style.boxShadow = `0 8px 30px ${colors.amber}50`;
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = 'translateY(0)';
+                    e.currentTarget.style.boxShadow = `0 4px 20px ${colors.amber}40`;
                   }}
                 >
-                  {item}
-                </div>
-              ))}
-            </div>
-
-            {/* Solutions */}
-            <div style={{
-              background: colors.greenBg,
-              borderRadius: '16px',
-              padding: isMobile ? '16px' : '24px',
-              border: `1px solid ${colors.green}30`,
-            }}>
-              <h3 style={{
-                fontSize: isMobile ? '1rem' : '1.1rem',
-                fontWeight: 700,
-                color: colors.green,
-                marginBottom: '16px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-              }}>
-                <span style={{ fontSize: '1.3rem' }}>✓</span> BIG Score Solutions
-              </h3>
-              {[
-                'AI-Driven Objectivity — Removes bias, uses consistent validated metrics',
-                'Live Score Tracking — See performance evolve over time',
-                'Transparent Weightings — Know what matters and what to improve',
-                'Automated Verification — Fast, consistent, and auditable process'
-              ].map((item, index) => (
-                <div
-                  key={index}
+                  Find an Advisor <FaArrowRight size={14} />
+                </button>
+                <button
+                  onClick={() => navigate('/find-service-providers')}
                   style={{
-                    padding: isMobile ? '10px 12px' : '12px 16px',
-                    background: 'rgba(255,255,255,0.6)',
-                    borderRadius: '8px',
-                    marginBottom: '8px',
-                    fontSize: isMobile ? '0.8rem' : '0.85rem',
-                    color: colors.dark,
-                    lineHeight: 1.4,
+                    background: 'rgba(255,255,255,0.1)',
+                    color: colors.white,
+                    border: `1px solid rgba(255,255,255,0.2)`,
+                    borderRadius: '50px',
+                    padding: isMobile ? '12px 24px' : '14px 36px',
+                    fontSize: isMobile ? '0.85rem' : '0.95rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    transition: 'all 0.3s ease',
+                    backdropFilter: 'blur(8px)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = 'rgba(255,255,255,0.2)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'rgba(255,255,255,0.1)';
                   }}
                 >
-                  {item}
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
+                  Find a Service Provider <FaArrowRight size={14} />
+                </button>
+                <button
+                  onClick={() => navigate('/find-catalysts')}
+                  style={{
+                    background: 'rgba(255,255,255,0.1)',
+                    color: colors.white,
+                    border: `1px solid rgba(255,255,255,0.2)`,
+                    borderRadius: '50px',
+                    padding: isMobile ? '12px 24px' : '14px 36px',
+                    fontSize: isMobile ? '0.85rem' : '0.95rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    transition: 'all 0.3s ease',
+                    backdropFilter: 'blur(8px)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '10px',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = 'rgba(255,255,255,0.2)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'rgba(255,255,255,0.1)';
+                  }}
+                >
+                  Find a Catalyst <FaArrowRight size={14} />
+                </button>
+              </div>
+            </section>
+          </>
+        )}
       </div>
 
       <Footer />
@@ -1894,11 +2335,11 @@ const BIGScorePage = () => {
         }
         ::-webkit-scrollbar-track {
           background: ${colors.light};
-          border-radius: 3px;
+          borderRadius: 3px;
         }
         ::-webkit-scrollbar-thumb {
           background: ${colors.secondary};
-          border-radius: 3px;
+          borderRadius: 3px;
         }
         ::-webkit-scrollbar-thumb:hover {
           background: ${colors.primary};

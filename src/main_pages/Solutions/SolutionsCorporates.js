@@ -53,30 +53,35 @@ const SolutionsCorporates = () => {
   const keySolutions = [
     {
       icon: <FaNetworkWired size={24} />,
+      image: 'https://images.unsplash.com/photo-1556761175-4b46a572b786?auto=format&fit=crop&w=400&h=250&q=80',
       title: 'ESD Platform',
       description: 'Manage enterprise and supplier development programs end-to-end.',
       color: colors.brown,
     },
     {
       icon: <FaSearchDollar size={24} />,
+      image: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=400&h=250&q=80',
       title: 'Supplier Intelligence',
       description: 'Access pre-vetted supplier pipelines with full visibility and risk assessment.',
       color: colors.primary,
     },
     {
       icon: <FaDatabase size={24} />,
+      image: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=400&h=250&q=80',
       title: 'Portfolio Intelligence',
       description: 'Track supplier performance and development outcomes across your portfolio.',
       color: colors.secondary,
     },
     {
       icon: <FaGraduationCap size={24} />,
+      image: 'https://images.unsplash.com/photo-1523240795612-9a054b0db644?auto=format&fit=crop&w=400&h=250&q=80',
       title: 'Internship Management',
       description: 'Manage internship programs and build talent pipelines efficiently.',
       color: colors.brownDark,
     },
     {
       icon: <FaLightbulb size={24} />,
+      image: 'https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?auto=format&fit=crop&w=400&h=250&q=80',
       title: 'Market Intelligence',
       description: 'Stay informed with real-time market trends and ecosystem insights.',
       color: colors.amber,
@@ -225,7 +230,7 @@ const SolutionsCorporates = () => {
         flex: '1',
         width: '100%',
       }}>
-        {/* Hero Section */}
+        {/* Hero Section with Image */}
         <section style={{
           position: 'relative',
           borderRadius: '20px',
@@ -275,164 +280,161 @@ const SolutionsCorporates = () => {
           <div style={{
             position: 'relative',
             zIndex: 1,
-            maxWidth: '700px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            width: '100%',
+            gap: '40px',
           }}>
             <div style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '10px',
-              background: `${colors.amber}30`,
-              border: `1px solid ${colors.amber}50`,
-              borderRadius: '30px',
-              padding: '8px 20px 8px 14px',
-              marginBottom: '24px',
+              maxWidth: '600px',
             }}>
-              <span style={{
-                width: 10,
-                height: 10,
-                borderRadius: '50%',
-                background: colors.amber,
-                display: 'inline-block',
-                animation: 'pulse 2s infinite',
-              }} />
-              <span style={{
-                color: colors.amber,
-                fontSize: '0.75rem',
-                fontWeight: 700,
-                letterSpacing: '0.1em',
-                textTransform: 'uppercase',
+              <div style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '10px',
+                background: `${colors.amber}30`,
+                border: `1px solid ${colors.amber}50`,
+                borderRadius: '30px',
+                padding: '8px 20px 8px 14px',
+                marginBottom: '24px',
               }}>
-                For Corporates
-              </span>
-            </div>
-            
-            <h1 style={{
-              fontSize: 'clamp(2.2rem, 4.5vw, 3.2rem)',
-              fontWeight: 900,
-              color: colors.white,
-              margin: '0 0 20px',
-              lineHeight: 1.1,
-              letterSpacing: '-0.02em',
-            }}>
-              Building Better Suppliers, <br />
-              <span style={{ color: colors.amber }}>Better Programmes</span> <br />
-              and Better Outcomes
-            </h1>
-            
-            <p style={{
-              fontSize: '1.1rem',
-              color: 'rgba(255,255,255,0.8)',
-              lineHeight: 1.8,
-              margin: '0 0 30px',
-              maxWidth: '550px',
-            }}>
-              Corporates across Africa are investing billions into supplier development, transformation, 
-              community impact, and talent programmes. BIG provides the trust infrastructure, intelligence, 
-              and execution layer that connects these ecosystems together.
-            </p>
-
-            <div style={{
-              display: 'flex',
-              gap: '16px',
-              flexWrap: 'wrap',
-              alignItems: 'center',
-            }}>
-              <button
-                onClick={() => navigate('/LoginRegister')}
-                style={{
-                  background: `linear-gradient(135deg, ${colors.amber}, ${colors.gold})`,
-                  color: colors.white,
-                  border: 'none',
-                  borderRadius: '50px',
-                  padding: '16px 40px',
-                  fontSize: '1rem',
+                <span style={{
+                  width: 10,
+                  height: 10,
+                  borderRadius: '50%',
+                  background: colors.amber,
+                  display: 'inline-block',
+                  animation: 'pulse 2s infinite',
+                }} />
+                <span style={{
+                  color: colors.amber,
+                  fontSize: '0.75rem',
                   fontWeight: 700,
-                  cursor: 'pointer',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '12px',
-                  transition: 'all 0.3s ease',
-                  boxShadow: `0 4px 25px ${colors.amber}50`,
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.transform = 'translateY(-3px)';
-                  e.currentTarget.style.boxShadow = `0 8px 35px ${colors.amber}60`;
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = 'translateY(0)';
-                  e.currentTarget.style.boxShadow = `0 4px 25px ${colors.amber}50`;
-                }}
-              >
-                Get Started Today
-                <FaArrowRight size={14} />
-              </button>
+                  letterSpacing: '0.1em',
+                  textTransform: 'uppercase',
+                }}>
+                  For Corporates
+                </span>
+              </div>
               
+              <h1 style={{
+                fontSize: 'clamp(2rem, 4vw, 3.2rem)',
+                fontWeight: 900,
+                color: colors.white,
+                margin: '0 0 20px',
+                lineHeight: 1.1,
+                letterSpacing: '-0.02em',
+              }}>
+                Building Better Suppliers, <br />
+                <span style={{ color: colors.amber }}>Better Programmes</span> <br />
+                and Better Outcomes
+              </h1>
+              
+              <p style={{
+                fontSize: '1.1rem',
+                color: 'rgba(255,255,255,0.8)',
+                lineHeight: 1.8,
+                margin: '0 0 30px',
+                maxWidth: '550px',
+              }}>
+                Corporates across Africa are investing billions into supplier development, transformation, 
+                community impact, and talent programmes. BIG provides the trust infrastructure, intelligence, 
+                and execution layer that connects these ecosystems together.
+              </p>
+
               <div style={{
                 display: 'flex',
+                gap: '16px',
+                flexWrap: 'wrap',
                 alignItems: 'center',
-                gap: '6px',
-                color: 'rgba(255,255,255,0.4)',
-                fontSize: '0.85rem',
               }}>
-                <FaRegClock size={14} /> Quick setup • Free to join
+                <button
+                  onClick={() => navigate('/LoginRegister')}
+                  style={{
+                    background: `linear-gradient(135deg, ${colors.amber}, ${colors.gold})`,
+                    color: colors.white,
+                    border: 'none',
+                    borderRadius: '50px',
+                    padding: '16px 40px',
+                    fontSize: '1rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    transition: 'all 0.3s ease',
+                    boxShadow: `0 4px 25px ${colors.amber}50`,
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.transform = 'translateY(-3px)';
+                    e.currentTarget.style.boxShadow = `0 8px 35px ${colors.amber}60`;
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = 'translateY(0)';
+                    e.currentTarget.style.boxShadow = `0 4px 25px ${colors.amber}50`;
+                  }}
+                >
+                  Get Started Today
+                  <FaArrowRight size={14} />
+                </button>
+                
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  color: 'rgba(255,255,255,0.4)',
+                  fontSize: '0.85rem',
+                }}>
+                  <FaRegClock size={14} /> Quick setup • Free to join
+                </div>
+              </div>
+
+              <div style={{
+                display: 'flex',
+                gap: '30px',
+                marginTop: '28px',
+                flexWrap: 'wrap',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <FaCheckCircle size={14} color={colors.amber} />
+                  <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem' }}>
+                    Trusted by leading corporates
+                  </span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <FaShieldAlt size={14} color={colors.amber} />
+                  <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem' }}>
+                    Verified suppliers
+                  </span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <FaGlobeAfrica size={14} color={colors.amber} />
+                  <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem' }}>
+                    African supply chain focus
+                  </span>
+                </div>
               </div>
             </div>
 
+            {/* Hero Image */}
             <div style={{
-              display: 'flex',
-              gap: '30px',
-              marginTop: '28px',
-              flexWrap: 'wrap',
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <FaCheckCircle size={14} color={colors.amber} />
-                <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem' }}>
-                  Trusted by leading corporates
-                </span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <FaShieldAlt size={14} color={colors.amber} />
-                <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem' }}>
-                  Verified suppliers
-                </span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <FaGlobeAfrica size={14} color={colors.amber} />
-                <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem' }}>
-                  African supply chain focus
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <div style={{
-            position: 'relative',
-            zIndex: 1,
-            marginLeft: 'auto',
-            display: 'none',
-            '@media (min-width: 1024px)': {
-              display: 'block',
-            },
-          }}>
-            <div style={{
-              width: '200px',
-              height: '200px',
-              borderRadius: '50%',
-              background: `linear-gradient(135deg, ${colors.amber}30, ${colors.gold}20)`,
+              flex: '0 0 320px',
+              height: '260px',
+              borderRadius: '16px',
+              overflow: 'hidden',
               border: `2px solid ${colors.amber}30`,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexDirection: 'column',
-              padding: '20px',
             }}>
-              <div style={{ fontSize: '3rem', color: colors.amber, marginBottom: '8px' }}>🏢</div>
-              <div style={{ color: colors.white, fontSize: '0.9rem', fontWeight: 700, textAlign: 'center' }}>
-                Stronger <br />Ecosystems
-              </div>
-              <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem', marginTop: '4px' }}>
-                Powered by BIG
-              </div>
+              <img 
+                src="https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=600&h=400&q=80"
+                alt="Corporate Office"
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'cover',
+                }}
+                loading="lazy"
+              />
             </div>
           </div>
         </section>
@@ -762,81 +764,9 @@ const SolutionsCorporates = () => {
           ))}
         </section>
 
-        {/* Why BIG Section */}
-        <section style={{ marginBottom: '50px' }}>
-          <div style={{
-            background: `linear-gradient(135deg, ${colors.light}, ${colors.cream})`,
-            borderRadius: '16px',
-            padding: '40px',
-            border: `1px solid ${colors.border}`,
-          }}>
-            <div style={{
-              textAlign: 'center',
-              marginBottom: '24px',
-            }}>
-              <h2 style={{
-                fontSize: 'clamp(1.5rem, 2.5vw, 2rem)',
-                fontWeight: 800,
-                color: colors.dark,
-                margin: 0,
-              }}>
-                Why <span style={{ color: colors.brown }}>BIG Marketplace</span>?
-              </h2>
-            </div>
-            <p style={{
-              fontSize: '1rem',
-              color: colors.muted,
-              lineHeight: 1.8,
-              textAlign: 'center',
-              maxWidth: '650px',
-              margin: '0 auto 24px',
-            }}>
-              Most organisations already have systems. The problem is that those systems rarely talk to each other.
-              BIG doesn't replace what works. BIG connects what exists.
-            </p>
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(3, 1fr)',
-              gap: '16px',
-            }}>
-              {[
-                'Trust infrastructure',
-                'Supplier intelligence',
-                'Performance optimisation',
-                'Portfolio visibility',
-                'Opportunity creation',
-                'Ecosystem analytics'
-              ].map((item, idx) => (
-                <div
-                  key={idx}
-                  style={{
-                    background: colors.white,
-                    borderRadius: '10px',
-                    padding: '16px 20px',
-                    textAlign: 'center',
-                    border: `1px solid ${colors.border}`,
-                    fontWeight: 600,
-                    color: colors.dark,
-                    fontSize: '0.95rem',
-                  }}
-                >
-                  {item}
-                </div>
-              ))}
-            </div>
-            <p style={{
-              fontSize: '0.95rem',
-              color: colors.brown,
-              textAlign: 'center',
-              marginTop: '20px',
-              fontWeight: 700,
-            }}>
-              Into a single, connected platform.
-            </p>
-          </div>
-        </section>
+       
 
-        {/* Key Solutions Section */}
+        {/* Key Solutions Section with Images */}
         <section style={{ marginBottom: '50px' }}>
           <div style={{
             textAlign: 'center',
@@ -873,13 +803,13 @@ const SolutionsCorporates = () => {
                 style={{
                   background: colors.white,
                   borderRadius: '14px',
-                  padding: '24px 20px',
+                  overflow: 'hidden',
                   border: `1px solid ${colors.border}`,
                   transition: 'all 0.3s ease',
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.transform = 'translateY(-4px)';
-                  e.currentTarget.style.boxShadow = '0 8px 30px rgba(28,20,16,0.08)';
+                  e.currentTarget.style.transform = 'translateY(-6px)';
+                  e.currentTarget.style.boxShadow = '0 12px 40px rgba(28,20,16,0.1)';
                   e.currentTarget.style.borderColor = solution.color;
                 }}
                 onMouseLeave={(e) => {
@@ -889,145 +819,144 @@ const SolutionsCorporates = () => {
                 }}
               >
                 <div style={{
-                  width: '48px',
-                  height: '48px',
-                  borderRadius: '12px',
-                  background: `${solution.color}15`,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: solution.color,
-                  marginBottom: '12px',
+                  height: '140px',
+                  overflow: 'hidden',
+                  position: 'relative',
                 }}>
-                  {solution.icon}
+                  <img 
+                    src={solution.image}
+                    alt={solution.title}
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'cover',
+                      transition: 'transform 0.5s ease',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.transform = 'scale(1.05)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.transform = 'scale(1)';
+                    }}
+                    loading="lazy"
+                    onError={(e) => {
+                      e.target.style.display = 'none';
+                    }}
+                  />
                 </div>
-                <h4 style={{
-                  fontSize: '1rem',
-                  fontWeight: 700,
-                  color: colors.dark,
-                  margin: '0 0 6px',
+
+                <div style={{
+                  padding: '16px 20px 20px',
                 }}>
-                  {solution.title}
-                </h4>
-                <p style={{
-                  fontSize: '0.85rem',
-                  color: colors.muted,
-                  lineHeight: 1.6,
-                  margin: 0,
-                }}>
-                  {solution.description}
-                </p>
+                  <div style={{
+                    width: '44px',
+                    height: '44px',
+                    borderRadius: '10px',
+                    background: `${solution.color}15`,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: solution.color,
+                    marginBottom: '10px',
+                  }}>
+                    {solution.icon}
+                  </div>
+                  <h4 style={{
+                    fontSize: '0.95rem',
+                    fontWeight: 700,
+                    color: colors.dark,
+                    margin: '0 0 4px',
+                  }}>
+                    {solution.title}
+                  </h4>
+                  <p style={{
+                    fontSize: '0.82rem',
+                    color: colors.muted,
+                    lineHeight: 1.6,
+                    margin: 0,
+                  }}>
+                    {solution.description}
+                  </p>
+                </div>
               </div>
             ))}
           </div>
         </section>
 
-        {/* Building Africa's Trust Economy Section */}
-        <section style={{ marginBottom: '50px' }}>
+       
+
+        {/* CTA Section */}
+        <section style={{
+          position: 'relative',
+          padding: '50px',
+          background: `linear-gradient(135deg, ${colors.brown}, ${colors.brownLight})`,
+          borderRadius: '20px',
+          textAlign: 'center',
+          overflow: 'hidden',
+        }}>
           <div style={{
-            background: `linear-gradient(135deg, ${colors.dark}, ${colors.brownDark})`,
-            borderRadius: '16px',
-            padding: '40px',
-            textAlign: 'center',
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundImage: 'url(https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=1400&h=400&q=80)',
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            opacity: 0.08,
+          }} />
+          
+          <div style={{
+            position: 'relative',
+            zIndex: 1,
           }}>
-            <div style={{ marginBottom: '16px' }}>
-              <FaGlobeAfrica size={40} color={colors.amber} />
-            </div>
             <h2 style={{
-              fontSize: 'clamp(1.5rem, 2.5vw, 2rem)',
+              fontSize: 'clamp(1.3rem, 2vw, 1.8rem)',
               fontWeight: 800,
               color: colors.white,
-              margin: '0 0 16px',
+              margin: '0 0 12px',
             }}>
-              Building Africa's Trust Economy
+              Ready to Build Stronger Supplier Ecosystems?
             </h2>
             <p style={{
               fontSize: '1rem',
               color: 'rgba(255,255,255,0.85)',
-              lineHeight: 1.8,
-              maxWidth: '650px',
-              margin: '0 auto 20px',
+              margin: '0 0 24px',
+              maxWidth: '450px',
+              marginLeft: 'auto',
+              marginRight: 'auto',
             }}>
-              BIG Marketplace exists to help organisations move from fragmented processes and isolated interventions 
-              toward connected ecosystems that create measurable outcomes.
+              Join leading corporates already using BIG to transform their supply chains.
             </p>
-            <div style={{
-              display: 'flex',
-              gap: '16px',
-              justifyContent: 'center',
-              flexWrap: 'wrap',
-            }}>
-              <div style={{
-                color: 'rgba(255,255,255,0.6)',
-                fontSize: '0.9rem',
-                fontStyle: 'italic',
-              }}>
-                "Because growth shouldn't be accidental."
-              </div>
-              <div style={{
-                color: 'rgba(255,255,255,0.6)',
-                fontSize: '0.9rem',
-                fontStyle: 'italic',
-              }}>
-                "And impact shouldn't disappear when the programme ends."
-              </div>
-            </div>
+            <button
+              onClick={() => navigate('/LoginRegister')}
+              style={{
+                background: colors.white,
+                color: colors.brown,
+                border: 'none',
+                borderRadius: '50px',
+                padding: '16px 48px',
+                fontSize: '1rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '12px',
+                transition: 'all 0.3s ease',
+                boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = 'translateY(-3px)';
+                e.currentTarget.style.boxShadow = '0 8px 30px rgba(0,0,0,0.25)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = '0 4px 20px rgba(0,0,0,0.15)';
+              }}
+            >
+              Get Started <FaArrowRight size={14} />
+            </button>
           </div>
-        </section>
-
-        {/* CTA Section */}
-        <section style={{
-          padding: '40px',
-          background: `linear-gradient(135deg, ${colors.brown}, ${colors.brownLight})`,
-          borderRadius: '20px',
-          textAlign: 'center',
-        }}>
-          <h2 style={{
-            fontSize: 'clamp(1.3rem, 2vw, 1.8rem)',
-            fontWeight: 800,
-            color: colors.white,
-            margin: '0 0 12px',
-          }}>
-            Ready to Build Stronger Supplier Ecosystems?
-          </h2>
-          <p style={{
-            fontSize: '1rem',
-            color: 'rgba(255,255,255,0.85)',
-            margin: '0 0 24px',
-            maxWidth: '450px',
-            marginLeft: 'auto',
-            marginRight: 'auto',
-          }}>
-            Join leading corporates already using BIG to transform their supply chains.
-          </p>
-          <button
-            onClick={() => navigate('/LoginRegister')}
-            style={{
-              background: colors.white,
-              color: colors.brown,
-              border: 'none',
-              borderRadius: '50px',
-              padding: '16px 48px',
-              fontSize: '1rem',
-              fontWeight: 700,
-              cursor: 'pointer',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '12px',
-              transition: 'all 0.3s ease',
-              boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.transform = 'translateY(-3px)';
-              e.currentTarget.style.boxShadow = '0 8px 30px rgba(0,0,0,0.25)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.transform = 'translateY(0)';
-              e.currentTarget.style.boxShadow = '0 4px 20px rgba(0,0,0,0.15)';
-            }}
-          >
-            Get Started <FaArrowRight size={14} />
-          </button>
         </section>
       </div>
 

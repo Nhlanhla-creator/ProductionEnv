@@ -1,8 +1,8 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  FaUserTie, 
-  FaHandshake, 
+  FaUsers, 
+  FaNetworkWired, 
   FaArrowRight, 
   FaCheckCircle,
   FaBuilding,
@@ -11,17 +11,22 @@ import {
   FaChartBar,
   FaRegClock,
   FaGlobeAfrica,
-  FaNetworkWired,
+  FaShieldAlt,
+  FaDatabase,
   FaLightbulb,
-  FaUsers,
-  FaSearchDollar,
+  FaUserTie,
+  FaGraduationCap,
+  FaHandshake,
+  FaRocket,
   FaBriefcase,
-  FaShieldAlt
+  FaSearchDollar,
+  FaFileContract,
+  FaUserGraduate
 } from 'react-icons/fa';
 import Header from '../Header';
 import Footer from '../Footer';
 
-const SolutionsAdvisors = () => {
+const SolutionsAssociations = () => {
   const navigate = useNavigate();
 
   const colors = {
@@ -29,7 +34,6 @@ const SolutionsAdvisors = () => {
     primary: '#7C4D2A',
     secondary: '#A0703E',
     amber: '#D4894A',
-    amberBright: '#E8A85A',
     light: '#F5F0E8',
     cream: '#FAF7F2',
     white: '#FFFFFF',
@@ -43,54 +47,73 @@ const SolutionsAdvisors = () => {
     gold: '#C9A96E',
     orange: '#E8831A',
     blue: '#1D5FAA',
+    green: '#1E7A47',
   };
 
   const keySolutions = [
     {
       icon: <FaUsers size={24} />,
-      image: 'https://images.unsplash.com/photo-1524178232363-1fb2b075b655?auto=format&fit=crop&w=400&h=250&q=80',
-      title: 'Advisor Marketplace',
-      description: 'Connect with businesses that are serious about growth and ready for support.',
-      color: colors.amber,
+      image: 'https://images.unsplash.com/photo-1521791136064-7986c2920216?auto=format&fit=crop&w=400&h=250&q=80',
+      title: 'Membership Management',
+      description: 'Manage your members from one secure platform with online applications, approvals, renewals, and digital member profiles.',
+      features: ['Online applications', 'Approval workflows', 'Member database', 'Renewals & subscriptions', 'Committee management', 'Member directories'],
+      color: colors.primary,
     },
     {
       icon: <FaNetworkWired size={24} />,
-      image: 'https://images.unsplash.com/photo-1521791136064-7986c2920216?auto=format&fit=crop&w=400&h=250&q=80',
-      title: 'Referral Engine',
-      description: 'Get qualified referrals and reduce your client acquisition costs.',
-      color: colors.primary,
+      image: 'https://images.unsplash.com/photo-1557804506-669a67965ba0?auto=format&fit=crop&w=400&h=250&q=80',
+      title: 'Ecosystem Intelligence',
+      description: 'Go beyond administration with member capability mapping, sector intelligence, industry benchmarking, and growth trends.',
+      features: ['Member capability mapping', 'Sector intelligence', 'Industry benchmarking', 'Growth trends', 'Ecosystem analytics', 'Collaboration networks'],
+      color: colors.brown,
+    },
+    {
+      icon: <FaHandshake size={24} />,
+      image: 'https://images.unsplash.com/photo-1504384308090-c894fdcc538d?auto=format&fit=crop&w=400&h=250&q=80',
+      title: 'Opportunity Marketplace',
+      description: 'Help members discover customers, investors, procurement opportunities, advisors, service providers, interns, and strategic partners.',
+      features: ['Customer connections', 'Investor matching', 'Procurement opportunities', 'Advisor access', 'Service providers', 'Strategic partnerships'],
+      color: colors.amber,
+    },
+    {
+      icon: <FaShieldAlt size={24} />,
+      image: 'https://images.unsplash.com/photo-1554224155-6726b3ff858f?auto=format&fit=crop&w=400&h=250&q=80',
+      title: 'Trust & Compliance',
+      description: 'Build confidence across your network with business verification, compliance documents, certifications, and BIG Score management.',
+      features: ['Business verification', 'Compliance documents', 'Certifications', 'Governance information', 'BIG Score', 'Expiry notifications'],
+      color: colors.green,
+    },
+    {
+      icon: <FaRocket size={24} />,
+      image: 'https://images.unsplash.com/photo-1557804506-669a67965ba0?auto=format&fit=crop&w=400&h=250&q=80',
+      title: 'Programme Management',
+      description: 'Run supplier development, incubation, accelerators, export programmes, and member initiatives from one platform.',
+      features: ['Supplier development', 'Incubation programmes', 'Accelerators', 'Export programmes', 'Enterprise development', 'Awards & initiatives'],
+      color: colors.orange,
     },
     {
       icon: <FaChartBar size={24} />,
       image: 'https://images.unsplash.com/photo-1504868584819-f8e8b4b6d7e3?auto=format&fit=crop&w=400&h=250&q=80',
-      title: 'Growth Suite Integration',
-      description: 'Support businesses more effectively using shared intelligence and insights.',
-      color: colors.secondary,
+      title: 'Portfolio & Impact Reporting',
+      description: 'Track membership growth, engagement, programme outcomes, opportunity conversion, and economic impact with real evidence.',
+      features: ['Membership growth', 'Engagement tracking', 'Programme outcomes', 'Opportunity conversion', 'Economic impact', 'Member satisfaction'],
+      color: colors.blue,
     },
   ];
 
-  const audiences = [
-    'Accountants',
-    'Lawyers',
-    'Consultants',
-    'Coaches',
-    'HR specialists',
-    'Technology providers',
-  ];
-
-  const benefits = [
-    'Access qualified leads',
-    'Reduce acquisition costs',
-    'Build long-term client relationships',
-    'Support businesses more effectively using shared intelligence',
-  ];
-
-  const additionalFeatures = [
-    'Credibility building through verified profiles',
-    'Client matching based on needs and expertise',
-    'Shared intelligence for better outcomes',
-    'Long-term relationship development',
-    'Referral network and ecosystem connections'
+  const layerFeatures = [
+    {
+      title: 'Layer 1 — Association Management',
+      description: 'Everything needed to operate your organisation.',
+      items: ['Membership Management', 'Billing', 'Renewals', 'Communications', 'Events', 'Applications', 'Committees', 'Member Directory'],
+      color: colors.primary,
+    },
+    {
+      title: 'Layer 2 — Ecosystem Intelligence',
+      description: 'Everything needed to create value for members.',
+      items: ['BIG Score', 'Compliance', 'Matchmaking', 'Opportunities', 'Portfolio Management', 'Market Intelligence', 'AI Insights', 'Reporting'],
+      color: colors.amber,
+    },
   ];
 
   return (
@@ -110,7 +133,7 @@ const SolutionsAdvisors = () => {
         flex: '1',
         width: '100%',
       }}>
-        {/* Hero Section with Image */}
+        {/* Hero Section */}
         <section style={{
           position: 'relative',
           borderRadius: '20px',
@@ -128,7 +151,7 @@ const SolutionsAdvisors = () => {
             left: 0,
             right: 0,
             bottom: 0,
-            backgroundImage: 'url(https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=1400&h=500&fit=crop&crop=center)',
+            backgroundImage: 'url(https://images.unsplash.com/photo-1557804506-669a67965ba0?w=1400&h=500&fit=crop&crop=center)',
             backgroundSize: 'cover',
             backgroundPosition: 'center',
             opacity: 0.12,
@@ -142,7 +165,7 @@ const SolutionsAdvisors = () => {
             width: 350,
             height: 350,
             borderRadius: '50%',
-            background: `radial-gradient(circle, ${colors.amber}25, transparent)`,
+            background: `radial-gradient(circle, ${colors.amber}20, transparent)`,
             pointerEvents: 'none',
           }} />
           
@@ -153,7 +176,7 @@ const SolutionsAdvisors = () => {
             width: 300,
             height: 300,
             borderRadius: '50%',
-            background: `radial-gradient(circle, ${colors.gold}20, transparent)`,
+            background: `radial-gradient(circle, ${colors.brown}20, transparent)`,
             pointerEvents: 'none',
           }} />
           
@@ -173,8 +196,8 @@ const SolutionsAdvisors = () => {
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: '10px',
-                background: `${colors.amber}35`,
-                border: `1px solid ${colors.amber}60`,
+                background: `${colors.amber}30`,
+                border: `1px solid ${colors.amber}50`,
                 borderRadius: '30px',
                 padding: '8px 20px 8px 14px',
                 marginBottom: '24px',
@@ -194,7 +217,7 @@ const SolutionsAdvisors = () => {
                   letterSpacing: '0.1em',
                   textTransform: 'uppercase',
                 }}>
-                  For Advisors & Service Providers
+                  For Associations & Member Organisations
                 </span>
               </div>
               
@@ -206,9 +229,9 @@ const SolutionsAdvisors = () => {
                 lineHeight: 1.1,
                 letterSpacing: '-0.02em',
               }}>
-                Work with Businesses <br />
-                That Are <span style={{ color: colors.amber }}>Serious</span> <br />
-                About Growth.
+                Solutions for <span style={{ color: colors.amber }}>Associations</span> <br />
+                & Ecosystem <br />
+                Organisations
               </h1>
               
               <p style={{
@@ -218,8 +241,7 @@ const SolutionsAdvisors = () => {
                 margin: '0 0 30px',
                 maxWidth: '550px',
               }}>
-                BIG helps advisors access qualified leads, reduce acquisition costs, and 
-                build long-term client relationships with businesses ready to grow.
+                BIG Marketplace is an all-in-one platform that helps associations manage their operations while unlocking intelligence, collaboration and measurable member value.
               </p>
 
               <div style={{
@@ -231,7 +253,7 @@ const SolutionsAdvisors = () => {
                 <button
                   onClick={() => navigate('/LoginRegister')}
                   style={{
-                    background: `linear-gradient(135deg, ${colors.amber}, ${colors.amberBright})`,
+                    background: `linear-gradient(135deg, ${colors.amber}, ${colors.gold})`,
                     color: colors.white,
                     border: 'none',
                     borderRadius: '50px',
@@ -278,25 +300,24 @@ const SolutionsAdvisors = () => {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <FaCheckCircle size={14} color={colors.amber} />
                   <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem' }}>
-                    Trusted by top advisors
+                    Trusted by leading associations
                   </span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <FaShieldAlt size={14} color={colors.amber} />
                   <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem' }}>
-                    Qualified leads
+                    Data-driven insights
                   </span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                   <FaGlobeAfrica size={14} color={colors.amber} />
                   <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem' }}>
-                    African business ecosystem
+                    Ecosystem-wide impact
                   </span>
                 </div>
               </div>
             </div>
 
-            {/* Hero Image */}
             <div style={{
               flex: '0 0 320px',
               height: '260px',
@@ -305,8 +326,8 @@ const SolutionsAdvisors = () => {
               border: `2px solid ${colors.amber}30`,
             }}>
               <img 
-                src="https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=600&h=400&q=80"
-                alt="Advisor at Work"
+                src="https://images.unsplash.com/photo-1557804506-669a67965ba0?auto=format&fit=crop&w=600&h=400&q=80"
+                alt="Association Collaboration"
                 style={{
                   width: '100%',
                   height: '100%',
@@ -318,198 +339,7 @@ const SolutionsAdvisors = () => {
           </div>
         </section>
 
-        {/* Audiences Section */}
-        <section style={{ marginBottom: '50px' }}>
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: '1fr 1fr',
-            gap: '40px',
-            alignItems: 'center',
-          }}>
-            <div>
-              <div style={{
-                marginBottom: '16px',
-              }}>
-                <p style={{
-                  color: colors.secondary,
-                  fontWeight: 700,
-                  fontSize: '0.75rem',
-                  letterSpacing: '0.14em',
-                  textTransform: 'uppercase',
-                  marginBottom: '4px',
-                }}>
-                  Who We Serve
-                </p>
-                <h2 style={{
-                  fontSize: 'clamp(1.3rem, 2vw, 1.8rem)',
-                  fontWeight: 800,
-                  color: colors.dark,
-                  margin: 0,
-                }}>
-                  For <span style={{ color: colors.amber }}>Every</span> Type of Advisor
-                </h2>
-              </div>
-
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: '1fr 1fr',
-                gap: '10px',
-              }}>
-                {audiences.map((item, index) => (
-                  <div
-                    key={index}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      padding: '12px 16px',
-                      background: colors.white,
-                      borderRadius: '10px',
-                      border: `1px solid ${colors.border}`,
-                      transition: 'all 0.2s ease',
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.borderColor = colors.amber;
-                      e.currentTarget.style.transform = 'translateX(4px)';
-                      e.currentTarget.style.boxShadow = `0 4px 15px ${colors.amber}20`;
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.borderColor = colors.border;
-                      e.currentTarget.style.transform = 'translateX(0)';
-                      e.currentTarget.style.boxShadow = 'none';
-                    }}
-                  >
-                    <FaCheckCircle size={14} color={colors.amber} />
-                    <span style={{
-                      fontSize: '0.82rem',
-                      color: colors.dark,
-                      fontWeight: 500,
-                    }}>
-                      {item}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Side Image */}
-            <div style={{
-              borderRadius: '16px',
-              overflow: 'hidden',
-              height: '280px',
-              boxShadow: '0 8px 40px rgba(28,20,16,0.1)',
-            }}>
-              <img 
-                src="https://images.unsplash.com/photo-1521791136064-7986c2920216?auto=format&fit=crop&w=800&h=500&q=80"
-                alt="Professional Services Meeting"
-                style={{
-                  width: '100%',
-                  height: '100%',
-                  objectFit: 'cover',
-                }}
-                loading="lazy"
-              />
-            </div>
-          </div>
-        </section>
-
-        {/* Benefits Section */}
-        <section style={{ marginBottom: '50px' }}>
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: '1fr 1fr',
-            gap: '40px',
-            alignItems: 'center',
-          }}>
-            <div style={{
-              order: '2',
-            }}>
-              <div style={{
-                marginBottom: '16px',
-              }}>
-                <p style={{
-                  color: colors.secondary,
-                  fontWeight: 700,
-                  fontSize: '0.75rem',
-                  letterSpacing: '0.14em',
-                  textTransform: 'uppercase',
-                  marginBottom: '4px',
-                }}>
-                  Why Advisors Choose BIG
-                </p>
-                <h2 style={{
-                  fontSize: 'clamp(1.3rem, 2vw, 1.8rem)',
-                  fontWeight: 800,
-                  color: colors.dark,
-                  margin: 0,
-                }}>
-                  <span style={{ color: colors.amber }}>Grow</span> Your Practice
-                </h2>
-              </div>
-
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: '1fr 1fr',
-                gap: '10px',
-              }}>
-                {benefits.map((item, index) => (
-                  <div
-                    key={index}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '8px',
-                      padding: '10px 14px',
-                      background: colors.white,
-                      borderRadius: '10px',
-                      border: `1px solid ${colors.border}`,
-                      transition: 'all 0.2s ease',
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.borderColor = colors.amber;
-                      e.currentTarget.style.transform = 'translateX(4px)';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.borderColor = colors.border;
-                      e.currentTarget.style.transform = 'translateX(0)';
-                    }}
-                  >
-                    <FaCheckCircle size={14} color={colors.amber} />
-                    <span style={{
-                      fontSize: '0.78rem',
-                      color: colors.dark,
-                      fontWeight: 500,
-                    }}>
-                      {item}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Side Image - Left */}
-            <div style={{
-              order: '1',
-              borderRadius: '16px',
-              overflow: 'hidden',
-              height: '280px',
-              boxShadow: '0 8px 40px rgba(28,20,16,0.1)',
-            }}>
-              <img 
-                src="https://images.unsplash.com/photo-1504384308090-c894fdcc538d?auto=format&fit=crop&w=800&h=500&q=80"
-                alt="Business Growth Workspace"
-                style={{
-                  width: '100%',
-                  height: '100%',
-                  objectFit: 'cover',
-                }}
-                loading="lazy"
-              />
-            </div>
-          </div>
-        </section>
-
-        {/* Key Solutions Section with Images */}
+        {/* Key Solutions Section */}
         <section style={{ marginBottom: '50px' }}>
           <div style={{
             textAlign: 'center',
@@ -523,7 +353,7 @@ const SolutionsAdvisors = () => {
               textTransform: 'uppercase',
               marginBottom: '8px',
             }}>
-              Key Solutions
+              Everything You Need to Run Your Association
             </p>
             <h2 style={{
               fontSize: 'clamp(1.5rem, 2.5vw, 2rem)',
@@ -531,7 +361,7 @@ const SolutionsAdvisors = () => {
               color: colors.dark,
               margin: 0,
             }}>
-              Tools for <span style={{ color: colors.amber }}>Advisor</span> Success
+              <span style={{ color: colors.brown }}>Complete</span> Association Solutions
             </h2>
           </div>
 
@@ -616,85 +446,168 @@ const SolutionsAdvisors = () => {
                     fontSize: '0.82rem',
                     color: colors.muted,
                     lineHeight: 1.6,
-                    margin: 0,
+                    margin: '0 0 12px',
                   }}>
                     {solution.description}
                   </p>
+                  <div style={{
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    gap: '4px',
+                  }}>
+                    {solution.features.slice(0, 3).map((feature, idx) => (
+                      <span
+                        key={idx}
+                        style={{
+                          background: `${solution.color}10`,
+                          color: solution.color,
+                          padding: '2px 8px',
+                          borderRadius: '50px',
+                          fontSize: '0.6rem',
+                          fontWeight: 600,
+                        }}
+                      >
+                        {feature}
+                      </span>
+                    ))}
+                    {solution.features.length > 3 && (
+                      <span
+                        style={{
+                          background: `${solution.color}10`,
+                          color: solution.color,
+                          padding: '2px 8px',
+                          borderRadius: '50px',
+                          fontSize: '0.6rem',
+                          fontWeight: 600,
+                        }}
+                      >
+                        +{solution.features.length - 3} more
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
             ))}
           </div>
         </section>
 
-        {/* Additional Features Section */}
+        {/* Two Powerful Layers Section */}
         <section style={{ marginBottom: '50px' }}>
           <div style={{
-            background: `linear-gradient(135deg, ${colors.amber}08, ${colors.gold}08)`,
-            borderRadius: '16px',
-            padding: '40px',
-            border: `1px solid ${colors.amber}20`,
+            textAlign: 'center',
+            marginBottom: '32px',
           }}>
-            <div style={{
-              textAlign: 'center',
-              marginBottom: '24px',
+            <p style={{
+              color: colors.secondary,
+              fontWeight: 700,
+              fontSize: '0.75rem',
+              letterSpacing: '0.14em',
+              textTransform: 'uppercase',
+              marginBottom: '8px',
             }}>
-              <h2 style={{
-                fontSize: 'clamp(1.3rem, 2vw, 1.8rem)',
-                fontWeight: 800,
-                color: colors.dark,
-                margin: 0,
-              }}>
-                Comprehensive <span style={{ color: colors.amber }}>Advisor</span> Solutions
-              </h2>
-            </div>
-            <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(3, 1fr)',
-              gap: '16px',
+              Two Powerful Layers
+            </p>
+            <h2 style={{
+              fontSize: 'clamp(1.5rem, 2.5vw, 2rem)',
+              fontWeight: 800,
+              color: colors.dark,
+              margin: 0,
             }}>
-              {additionalFeatures.map((item, index) => (
-                <div
-                  key={index}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '10px',
-                    padding: '14px 18px',
-                    background: colors.white,
-                    borderRadius: '10px',
-                    border: `1px solid ${colors.border}`,
-                    transition: 'all 0.2s ease',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.borderColor = colors.amber;
-                    e.currentTarget.style.transform = 'translateY(-2px)';
-                    e.currentTarget.style.boxShadow = `0 4px 15px ${colors.amber}15`;
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.borderColor = colors.border;
-                    e.currentTarget.style.transform = 'translateY(0)';
-                    e.currentTarget.style.boxShadow = 'none';
-                  }}
-                >
-                  <FaCheckCircle size={14} color={colors.amber} />
-                  <span style={{
-                    fontSize: '0.85rem',
-                    color: colors.dark,
-                    fontWeight: 500,
+              <span style={{ color: colors.brown }}>One</span> Platform
+            </h2>
+          </div>
+
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr',
+            gap: '24px',
+          }}>
+            {layerFeatures.map((layer, index) => (
+              <div
+                key={index}
+                style={{
+                  background: colors.white,
+                  borderRadius: '16px',
+                  padding: '32px 28px',
+                  border: `2px solid ${layer.color}30`,
+                  transition: 'all 0.3s ease',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = 'translateY(-4px)';
+                  e.currentTarget.style.boxShadow = '0 8px 30px rgba(28,20,16,0.08)';
+                  e.currentTarget.style.borderColor = layer.color;
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = 'translateY(0)';
+                  e.currentTarget.style.boxShadow = 'none';
+                  e.currentTarget.style.borderColor = `${layer.color}30`;
+                }}
+              >
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '12px',
+                  marginBottom: '8px',
+                }}>
+                  <div style={{
+                    width: '8px',
+                    height: '8px',
+                    borderRadius: '50%',
+                    background: layer.color,
+                    display: 'inline-block',
+                  }} />
+                  <h3 style={{
+                    fontSize: '1.2rem',
+                    fontWeight: 800,
+                    color: layer.color,
+                    margin: 0,
                   }}>
-                    {item}
-                  </span>
+                    {layer.title}
+                  </h3>
                 </div>
-              ))}
-            </div>
+                <p style={{
+                  fontSize: '0.9rem',
+                  color: colors.muted,
+                  margin: '0 0 16px',
+                }}>
+                  {layer.description}
+                </p>
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1fr',
+                  gap: '8px',
+                }}>
+                  {layer.items.map((item, idx) => (
+                    <div
+                      key={idx}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        padding: '6px 10px',
+                        background: colors.light,
+                        borderRadius: '6px',
+                        fontSize: '0.8rem',
+                        color: colors.dark,
+                      }}
+                    >
+                      <FaCheckCircle size={12} color={layer.color} />
+                      {item}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
           </div>
         </section>
+
+       
 
         {/* CTA Section */}
         <section style={{
           position: 'relative',
           padding: '50px',
-          background: `linear-gradient(135deg, ${colors.amber}, ${colors.amberBright})`,
+          background: `linear-gradient(135deg, ${colors.brown}, ${colors.brownLight})`,
           borderRadius: '20px',
           textAlign: 'center',
           overflow: 'hidden',
@@ -705,7 +618,7 @@ const SolutionsAdvisors = () => {
             left: 0,
             right: 0,
             bottom: 0,
-            backgroundImage: 'url(https://images.unsplash.com/photo-1522071820081-009f0129c71c?auto=format&fit=crop&w=1400&h=400&q=80)',
+            backgroundImage: 'url(https://images.unsplash.com/photo-1557804506-669a67965ba0?auto=format&fit=crop&w=1400&h=400&q=80)',
             backgroundSize: 'cover',
             backgroundPosition: 'center',
             opacity: 0.08,
@@ -721,7 +634,7 @@ const SolutionsAdvisors = () => {
               color: colors.white,
               margin: '0 0 12px',
             }}>
-              Ready to Grow Your Practice?
+              Ready to Transform Your Association?
             </h2>
             <p style={{
               fontSize: '1rem',
@@ -731,13 +644,13 @@ const SolutionsAdvisors = () => {
               marginLeft: 'auto',
               marginRight: 'auto',
             }}>
-              Join BIG Marketplace and connect with businesses that are serious about growth.
+              Join leading associations already using BIG to streamline operations and grow their ecosystems.
             </p>
             <button
               onClick={() => navigate('/LoginRegister')}
               style={{
                 background: colors.white,
-                color: colors.amber,
+                color: colors.brown,
                 border: 'none',
                 borderRadius: '50px',
                 padding: '16px 48px',
@@ -770,4 +683,4 @@ const SolutionsAdvisors = () => {
   );
 };
 
-export default SolutionsAdvisors;
+export default SolutionsAssociations;
