@@ -2,24 +2,29 @@
 
 import { useMemo, useState, useEffect, useCallback } from "react"
 import { createPortal } from "react-dom"
-import { Eye, MessageSquare, Users, Award, MapPin, Percent, Info, Brain, Settings2, Loader2, CheckCircle, AlertCircle } from "lucide-react"
+import { Eye, MessageSquare, Users, Award, MapPin, Percent, Info, Brain, Settings2, Loader2, CheckCircle, AlertCircle, DollarSign } from "lucide-react"
 import { collection, query, where, onSnapshot } from "firebase/firestore"
 import { db } from "../../firebaseConfig"
-import AdvisorDetailsModal from "./AdvisorDetailsModal"
+import FunderDetailsModal from "./FunderDetailsModal"
 
 // ── Reusable breakdown card ──
 const BreakdownCard = ({ itemKey, item, devMode }) => {
   const labels = {
-    functionalExpertise: "Functional Expertise",
-    advisoryRole: "Advisory Role",
-    compensation: "Compensation",
-    timeCommitment: "Time Commitment",
-    supportFocus: "Support Focus",
-    location: "Location",
-    engagementStyle: "Engagement Style"
+    // Secondary matching keys
+    sectorMatch: "Economic Sector Match",
+    stageMatch: "Funding Stage Fit",
+    ticketMatch: "Ticket Size Fit",
+    instrumentMatch: "Funding Instrument Fit",
+    locationMatch: "Location Alignment",
+    supportMatch: "Support Alignment",
+    // Fallback / legacy keys
+    fundingAlignment: "Funding Alignment",
+    amountFit: "Amount Fit",
+    sectorFit: "Sector Fit",
+    locationPreference: "Location Preference",
   };
 
-  const label = labels[itemKey] || itemKey;
+  const label = labels[itemKey] || itemKey.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
   const score = item.score || 0;
   const color = score >= 75 ? "#388E3C" : score >= 50 ? "#F57C00" : "#D32F2F";
 
@@ -72,20 +77,20 @@ const getStatusDisplay = (status) => {
   return config
 }
 
-const AdvisorMatchesTable = ({
-  advisors: externalAdvisors = [],
+const FundingMatchesTable = ({
+  funders: externalFunders = [],
   applicationId,
   loading: externalLoading = false,
-  emptyMessage = "No matching advisors for this application yet.",
+  emptyMessage = "No matching funders for this application yet.",
   onContact,
   onView,
   dense = false,
   embedded = false,
 }) => {
-  const [fetchedAdvisors, setFetchedAdvisors] = useState([])
+  const [fetchedFunders, setFetchedFunders] = useState([])
   const [fetchLoading, setFetchLoading] = useState(applicationId ? true : false)
-  const [modalAdvisor, setModalAdvisor] = useState(null)
-  const [breakdownAdvisor, setBreakdownAdvisor] = useState(null)
+  const [modalFunder, setModalFunder] = useState(null)
+  const [breakdownFunder, setBreakdownFunder] = useState(null)
   const [mounted, setMounted] = useState(false)
   const [devMode, setDevMode] = useState(false)
   const [contactingId, setContactingId] = useState(null)
@@ -93,16 +98,16 @@ const AdvisorMatchesTable = ({
 
   useEffect(() => { setMounted(true) }, [])
 
-  // Fetch from smseAdvisoryMatches if applicationId is provided
+  // Fetch from smseFundingMatches if applicationId is provided
   useEffect(() => {
     if (!applicationId) {
-      setFetchedAdvisors([])
+      setFetchedFunders([])
       setFetchLoading(false)
       return
     }
 
     const q = query(
-      collection(db, "smseAdvisoryMatches"),
+      collection(db, "smseFundingMatches"),
       where("applicationId", "==", applicationId)
     )
 
@@ -113,11 +118,11 @@ const AdvisorMatchesTable = ({
           id: doc.id,
           ...doc.data(),
         }))
-        setFetchedAdvisors(data)
+        setFetchedFunders(data)
         setFetchLoading(false)
       },
       (err) => {
-        console.error("Error fetching advisor matches:", err)
+        console.error("Error fetching funding matches:", err)
         setFetchLoading(false)
       }
     )
@@ -127,7 +132,7 @@ const AdvisorMatchesTable = ({
 
   // Secret: Ctrl+Alt+P while breakdown modal is open toggles verbose dev labels
   useEffect(() => {
-    if (!breakdownAdvisor) { setDevMode(false); return }
+    if (!breakdownFunder) { setDevMode(false); return }
     const handler = (e) => {
       if (e.ctrlKey && e.altKey && e.key === "p") {
         e.preventDefault()
@@ -136,37 +141,37 @@ const AdvisorMatchesTable = ({
     }
     window.addEventListener("keydown", handler)
     return () => window.removeEventListener("keydown", handler)
-  }, [breakdownAdvisor])
+  }, [breakdownFunder])
 
   // Filter to only show matches with finalScore >= 50
-  const advisors = applicationId ? fetchedAdvisors : externalAdvisors
+  const funders = applicationId ? fetchedFunders : externalFunders
   const loading = applicationId ? fetchLoading : externalLoading
   const denseMode = dense || embedded
 
   const rows = useMemo(() => {
-    const allRows = advisors || []
-    return allRows.filter((advisor) => {
-      const score = advisor.finalScore || 0
+    const allRows = funders || []
+    return allRows.filter((funder) => {
+      const score = funder.finalScore || 0
       if (filterHighMatches) {
         return score >= 70
       }
       return score > 0
     })
-  }, [advisors, filterHighMatches])
+  }, [funders, filterHighMatches])
 
-  const handleView = (advisor) => {
+  const handleView = (funder) => {
     if (onView) {
-      onView(advisor)
+      onView(funder)
       return
     }
-    setModalAdvisor(advisor)
+    setModalFunder(funder)
   }
 
-  const handleContact = async (advisor) => {
-    if (!onContact || advisor.status === "contacted") return
-    setContactingId(advisor.id)
+  const handleContact = async (funder) => {
+    if (!onContact || funder.status === "contacted") return
+    setContactingId(funder.id)
     try {
-      await onContact(advisor)
+      await onContact(funder)
     } catch (err) {
       // Contact failed; user can retry
     } finally {
@@ -174,17 +179,17 @@ const AdvisorMatchesTable = ({
     }
   }
 
-  const advisorName = (a) =>
-    a.profile?.name ||
-    a.advisorName ||
-    a.name ||
-    "Unnamed Advisor"
+  const funderName = (f) =>
+    f.profile?.name ||
+    f.funderName ||
+    f.name ||
+    "Unnamed Funder"
 
-  const advisorLocation = (a) =>
-    a.profile?.location || a.location || "Not specified"
+  const funderLocation = (f) =>
+    f.profile?.location || f.location || "Not specified"
 
-  const advisorExpertise = (a) =>
-    a.profile?.primaryExpertise || a.expertise || "Not specified"
+  const funderType = (f) =>
+    f.profile?.funderType || f.funderType || "Not specified"
 
   const scoreColor = (pct) => {
     if (pct >= 75) return "#2E7D32"
@@ -287,19 +292,19 @@ const AdvisorMatchesTable = ({
           }}
         >
           <colgroup>
-            <col style={{ width: "24%" }} />
+            <col style={{ width: "22%" }} />
+            <col style={{ width: "16%" }} />
+            <col style={{ width: "10%" }} />
+            <col style={{ width: "10%" }} />
+            <col style={{ width: "12%" }} />
+            <col style={{ width: "12%" }} />
             <col style={{ width: "18%" }} />
-            <col style={{ width: "10%" }} />
-            <col style={{ width: "10%" }} />
-            <col style={{ width: "12%" }} />
-            <col style={{ width: "12%" }} />
-            <col style={{ width: "14%" }} />
           </colgroup>
           <thead>
             <tr style={{ backgroundColor: "#5d4037" }}>
               {[
-                { label: "Advisor", Icon: Users },
-                { label: "Expertise", Icon: null },
+                { label: "Funder", Icon: Users },
+                { label: "Type", Icon: null },
                 { label: "Match", Icon: Percent },
                 { label: "Rating", Icon: Award },
                 { label: "Location", Icon: MapPin },
@@ -349,20 +354,20 @@ const AdvisorMatchesTable = ({
                     fontSize: fontSz,
                   }}
                 >
-                  {advisors?.length > 0
-                    ? `Found ${advisors.length} potential advisor(s) but none met the 50% match threshold. Try adjusting your preferences.`
+                  {funders?.length > 0
+                    ? `Found ${funders.length} potential funder(s) but none met the 50% match threshold. Try adjusting your application.`
                     : emptyMessage}
                 </td>
               </tr>
             )}
 
             {!loading &&
-              rows.map((a, idx) => {
-                const pct = a.finalScore || 0
-                const statusInfo = getStatusDisplay(a.status)
+              rows.map((f, idx) => {
+                const pct = f.finalScore || 0
+                const statusInfo = getStatusDisplay(f.status)
                 return (
                   <tr
-                    key={a.id}
+                    key={f.id}
                     style={{
                       borderBottom: idx < rows.length - 1 ? "1px solid #F0E6DA" : "none",
                       transition: "background-color 0.15s",
@@ -377,22 +382,22 @@ const AdvisorMatchesTable = ({
                           textOverflow: "ellipsis",
                           whiteSpace: "nowrap",
                         }}
-                        title={advisorName(a)}
+                        title={funderName(f)}
                       >
-                        {advisorName(a)}
+                        {funderName(f)}
                       </div>
                       <div style={{ display: "flex", gap: 8, marginTop: 2 }}>
-                        {a.hasPrimaryAnalysis && (
+                        {f.hasPrimaryAnalysis && (
                           <span style={{ fontSize: "10px", color: "#388E3C", fontWeight: 500 }}>
-                            Primary {Math.round(a.primaryScore)}%
+                            Primary {Math.round(f.primaryScore)}%
                           </span>
                         )}
-                        {a.secondaryScore != null && (
+                        {f.secondaryScore != null && (
                           <span style={{ fontSize: "10px", color: "#8D6E63", fontWeight: 500 }}>
-                            Prefs {Math.round(a.secondaryScore)}%
+                            Prefs {Math.round(f.secondaryScore)}%
                           </span>
                         )}
-                        {!a.hasPrimaryAnalysis && (
+                        {!f.hasPrimaryAnalysis && (
                           <span style={{ fontSize: "10px", color: "#bbb", fontStyle: "italic" }}>
                             Pending
                           </span>
@@ -415,15 +420,15 @@ const AdvisorMatchesTable = ({
                           overflow: "hidden",
                           textOverflow: "ellipsis",
                         }}
-                        title={advisorExpertise(a)}
+                        title={funderType(f)}
                       >
-                        {advisorExpertise(a)}
+                        {funderType(f)}
                       </span>
                     </td>
 
                     <td
                       style={{ padding: pad, cursor: "pointer" }}
-                      onClick={(e) => { e.stopPropagation(); setBreakdownAdvisor(a) }}
+                      onClick={(e) => { e.stopPropagation(); setBreakdownFunder(f) }}
                       title="Click to view match breakdown"
                     >
                       <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
@@ -447,7 +452,7 @@ const AdvisorMatchesTable = ({
                     </td>
 
                     <td style={{ padding: pad, fontSize: fontSz, color: "#5D4037" }}>
-                      {a.profile?.rating ? `${a.profile.rating} / 5` : "N/A"}
+                      {f.profile?.rating ? `${f.profile.rating} / 5` : "N/A"}
                     </td>
 
                     <td
@@ -459,9 +464,9 @@ const AdvisorMatchesTable = ({
                         textOverflow: "ellipsis",
                         whiteSpace: "nowrap",
                       }}
-                      title={advisorLocation(a)}
+                      title={funderLocation(f)}
                     >
-                      {advisorLocation(a)}
+                      {funderLocation(f)}
                     </td>
 
                     {/* Status column — reactive to Firestore status changes */}
@@ -485,7 +490,7 @@ const AdvisorMatchesTable = ({
                     <td style={{ padding: pad }}>
                       <div style={{ display: "flex", gap: 6, justifyContent: "center" }}>
                         <button
-                          onClick={() => handleView(a)}
+                          onClick={() => handleView(f)}
                           style={{
                             display: "inline-flex",
                             alignItems: "center",
@@ -503,13 +508,13 @@ const AdvisorMatchesTable = ({
                           }}
                           onMouseEnter={(e) => (e.currentTarget.style.transform = "translateY(-1px)")}
                           onMouseLeave={(e) => (e.currentTarget.style.transform = "")}
-                          title={`View details for ${advisorName(a)}`}
+                          title={`View details for ${funderName(f)}`}
                         >
                           <Eye size={12} />
                         </button>
                         {onContact && (() => {
-                          const isContacted = a.status === "contacted"
-                          const isThisContacting = contactingId === a.id
+                          const isContacted = f.status === "contacted"
+                          const isThisContacting = contactingId === f.id
 
                           // Already contacted — show permanent green state
                           if (isContacted) {
@@ -531,7 +536,7 @@ const AdvisorMatchesTable = ({
                                   whiteSpace: "nowrap",
                                   boxShadow: "0 2px 6px rgba(56,142,60,0.3)",
                                 }}
-                                title={`Contacted ${advisorName(a)}`}
+                                title={`Contacted ${funderName(f)}`}
                               >
                                 <CheckCircle size={12} />
                                 Contacted
@@ -568,7 +573,7 @@ const AdvisorMatchesTable = ({
                           // Idle — contact button
                           return (
                             <button
-                              onClick={() => handleContact(a)}
+                              onClick={() => handleContact(f)}
                               style={{
                                 display: "inline-flex",
                                 alignItems: "center",
@@ -587,7 +592,7 @@ const AdvisorMatchesTable = ({
                               }}
                               onMouseEnter={(e) => (e.currentTarget.style.transform = "translateY(-1px)")}
                               onMouseLeave={(e) => (e.currentTarget.style.transform = "")}
-                              title={`Contact ${advisorName(a)}`}
+                              title={`Contact ${funderName(f)}`}
                             >
                               <MessageSquare size={12} />
                             </button>
@@ -602,14 +607,14 @@ const AdvisorMatchesTable = ({
         </table>
       </div>
 
-      <AdvisorDetailsModal
-        advisor={modalAdvisor}
-        isOpen={!!modalAdvisor}
-        onClose={() => setModalAdvisor(null)}
+      <FunderDetailsModal
+        funder={modalFunder}
+        isOpen={!!modalFunder}
+        onClose={() => setModalFunder(null)}
       />
 
       {/* Match Breakdown Modal */}
-      {mounted && breakdownAdvisor && createPortal(
+      {mounted && breakdownFunder && createPortal(
         <div
           style={{
             position: "fixed", top: 0, left: 0, right: 0, bottom: 0,
@@ -617,7 +622,7 @@ const AdvisorMatchesTable = ({
             display: "flex", alignItems: "center", justifyContent: "center",
             zIndex: 1000,
           }}
-          onClick={() => setBreakdownAdvisor(null)}
+          onClick={() => setBreakdownFunder(null)}
         >
           <div
             style={{
@@ -630,13 +635,13 @@ const AdvisorMatchesTable = ({
             {/* Header */}
             <div style={{ padding: "1.5rem 2rem", borderBottom: "2px solid #E8D5C4", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <h3 style={{ margin: 0, fontSize: "1.1rem", fontWeight: 700, color: "#5D2A0A", display: "flex", alignItems: "center", gap: 8 }}>
-                Match Breakdown — {advisorName(breakdownAdvisor)}
+                Match Breakdown — {funderName(breakdownFunder)}
                 {devMode && (
                   <span style={{ fontSize: "0.65rem", fontWeight: 600, color: "#a67c52", background: "rgba(166,124,82,0.12)", border: "1px solid rgba(166,124,82,0.3)", borderRadius: 4, padding: "2px 6px", letterSpacing: "0.5px" }}>DEV</span>
                 )}
               </h3>
               <button
-                onClick={() => setBreakdownAdvisor(null)}
+                onClick={() => setBreakdownFunder(null)}
                 style={{ background: "none", border: "none", fontSize: "1.25rem", cursor: "pointer", color: "#8D6E63" }}
               >
                 ✖
@@ -648,15 +653,15 @@ const AdvisorMatchesTable = ({
               <div style={{ textAlign: "center", marginBottom: "1.5rem", paddingBottom: "1rem", borderBottom: "2px solid #E8D5C4" }}>
                 <div style={{
                   fontSize: "3rem", fontWeight: "bold", marginBottom: "0.5rem",
-                  color: scoreColor(breakdownAdvisor.finalScore || 0),
+                  color: scoreColor(breakdownFunder.finalScore || 0),
                 }}>
-                  {breakdownAdvisor.finalScore || 0}%
+                  {breakdownFunder.finalScore || 0}%
                 </div>
                 <p style={{ fontSize: "1rem", color: "#8D6E63", margin: 0 }}>Overall Match Score</p>
                 <p style={{ fontSize: "0.8rem", color: "#bbb", margin: "4px 0 0" }}>
-                  {breakdownAdvisor.hasPrimaryAnalysis
-                    ? "60% AI Primary + 40% Preferences"
-                    : "Preferences only — run AI for full analysis"}
+                  {breakdownFunder.hasPrimaryAnalysis
+                    ? "60% Primary + 40% Preferences"
+                    : "Preferences only — run Primary Matching for full analysis"}
                 </p>
               </div>
 
@@ -670,91 +675,73 @@ const AdvisorMatchesTable = ({
                   </h4>
                 </div>
 
-                {breakdownAdvisor.primaryBreakdown ? (
-                  <div style={{ background: "#FEFCFA", border: "1px solid #E8D5C4", borderRadius: 8, padding: "1.25rem", borderLeft: `4px solid ${scoreColor(breakdownAdvisor.primaryScore || 0)}` }}>
+                {breakdownFunder.primaryBreakdown ? (
+                  <div style={{ background: "#FEFCFA", border: "1px solid #E8D5C4", borderRadius: 8, padding: "1.25rem", borderLeft: `4px solid ${scoreColor(breakdownFunder.primaryScore || 0)}` }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
                       <span style={{ fontWeight: 600, color: "#5D2A0A" }}>AI Semantic Score</span>
-                      <span style={{ fontSize: "1.5rem", fontWeight: "bold", color: scoreColor(breakdownAdvisor.primaryScore || 0) }}>
-                        {Math.round(breakdownAdvisor.primaryScore || 0)}%
+                      <span style={{ fontSize: "1.5rem", fontWeight: "bold", color: scoreColor(breakdownFunder.primaryScore || 0) }}>
+                        {Math.round(breakdownFunder.primaryScore || 0)}%
                       </span>
                     </div>
                     <div style={{ background: "#E8D5C4", borderRadius: 4, height: 8, overflow: "hidden", marginBottom: "0.75rem" }}>
-                      <div style={{ height: "100%", background: scoreColor(breakdownAdvisor.primaryScore || 0), width: `${breakdownAdvisor.primaryScore || 0}%`, transition: "width 0.3s" }} />
+                      <div style={{ height: "100%", background: scoreColor(breakdownFunder.primaryScore || 0), width: `${breakdownFunder.primaryScore || 0}%`, transition: "width 0.3s" }} />
                     </div>
-                    {breakdownAdvisor.primaryReasoning && (
+                    {breakdownFunder.primaryReasoning && (
                       <div style={{ fontSize: "0.8rem", color: "#5D4037", marginBottom: "0.5rem" }}>
-                        <strong>Reasoning:</strong> {breakdownAdvisor.primaryReasoning}
+                        <strong>Reasoning:</strong> {breakdownFunder.primaryReasoning}
                       </div>
                     )}
 
                     {/* Display matched capabilities */}
-                    {breakdownAdvisor.matchedCapabilities?.length > 0 && (
-                      <div style={{ fontSize: "0.8rem", color: "#5D4037", marginTop: "0.5rem" }}>
-                        <strong>Matched Capabilities:</strong>
-                        <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 4 }}>
-                          {breakdownAdvisor.matchedCapabilities.map((cap, i) => (
-                            <span key={i} style={{ padding: "2px 8px", background: "rgba(56,142,60,0.1)", borderRadius: 10, fontSize: "0.75rem", color: "#388E3C" }}>
-                              {cap}
-                            </span>
-                          ))}
+                    {(() => {
+                      const matchedCaps = breakdownFunder.matchedCapabilities || breakdownFunder.primaryBreakdown?.capabilities || [];
+                      if (matchedCaps.length === 0) return null;
+                      return (
+                        <div style={{ fontSize: "0.8rem", color: "#5D4037", marginTop: "0.5rem" }}>
+                          <strong>Matched Capabilities:</strong>
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 4 }}>
+                            {matchedCaps.map((cap, i) => (
+                              <span key={i} style={{ padding: "2px 8px", background: "rgba(56,142,60,0.1)", borderRadius: 10, fontSize: "0.75rem", color: "#388E3C" }}>
+                                {cap}
+                              </span>
+                            ))}
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      );
+                    })()}
 
                     {/* Individual AI breakdown items */}
                     <div style={{ marginTop: "1rem", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "0.75rem" }}>
-                      {breakdownAdvisor.primaryBreakdown.expertiseRelevance && (
-                        <div style={{ background: "#FEFCFA", border: "1px solid #E8D5C4", borderRadius: 6, padding: "0.75rem" }}>
-                          <div style={{ fontSize: "0.75rem", fontWeight: 600, color: "#5D2A0A" }}>Expertise Relevance</div>
-                          <div style={{ fontSize: "1.1rem", fontWeight: "bold", color: scoreColor(breakdownAdvisor.primaryBreakdown.expertiseRelevance.score) }}>
-                            {Math.round(breakdownAdvisor.primaryBreakdown.expertiseRelevance.score)}%
+                      {Object.entries(breakdownFunder.primaryBreakdown).map(([key, item], i) => {
+                        if (!item || typeof item !== "object" || !("score" in item)) return null;
+
+                        const labels = {
+                          sectorAlignment: "Sector Alignment",
+                          stageAlignment: "Stage Alignment",
+                          missionFit: "Mission Fit",
+                          impactAlignment: "Impact Alignment",
+                          overallNarrativeFit: "Overall Narrative Fit"
+                        };
+
+                        const label = labels[key] || key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+
+                        return (
+                          <div key={i} style={{ background: "#FEFCFA", border: "1px solid #E8D5C4", borderRadius: 6, padding: "0.75rem" }}>
+                            <div style={{ fontSize: "0.75rem", fontWeight: 600, color: "#5D2A0A" }}>{label}</div>
+                            <div style={{ fontSize: "1.1rem", fontWeight: "bold", color: scoreColor(item.score) }}>
+                              {Math.round(item.score)}%
+                            </div>
+                            <div style={{ fontSize: "0.7rem", color: "#8D6E63" }}>{item.reasoning}</div>
                           </div>
-                          <div style={{ fontSize: "0.7rem", color: "#8D6E63" }}>{breakdownAdvisor.primaryBreakdown.expertiseRelevance.reasoning}</div>
-                        </div>
-                      )}
-                      {breakdownAdvisor.primaryBreakdown.industrySectorFit && (
-                        <div style={{ background: "#FEFCFA", border: "1px solid #E8D5C4", borderRadius: 6, padding: "0.75rem" }}>
-                          <div style={{ fontSize: "0.75rem", fontWeight: 600, color: "#5D2A0A" }}>Industry Fit</div>
-                          <div style={{ fontSize: "1.1rem", fontWeight: "bold", color: scoreColor(breakdownAdvisor.primaryBreakdown.industrySectorFit.score) }}>
-                            {Math.round(breakdownAdvisor.primaryBreakdown.industrySectorFit.score)}%
-                          </div>
-                          <div style={{ fontSize: "0.7rem", color: "#8D6E63" }}>{breakdownAdvisor.primaryBreakdown.industrySectorFit.reasoning}</div>
-                        </div>
-                      )}
-                      {breakdownAdvisor.primaryBreakdown.smeStageFit && (
-                        <div style={{ background: "#FEFCFA", border: "1px solid #E8D5C4", borderRadius: 6, padding: "0.75rem" }}>
-                          <div style={{ fontSize: "0.75rem", fontWeight: 600, color: "#5D2A0A" }}>SME Stage Fit</div>
-                          <div style={{ fontSize: "1.1rem", fontWeight: "bold", color: scoreColor(breakdownAdvisor.primaryBreakdown.smeStageFit.score) }}>
-                            {Math.round(breakdownAdvisor.primaryBreakdown.smeStageFit.score)}%
-                          </div>
-                          <div style={{ fontSize: "0.7rem", color: "#8D6E63" }}>{breakdownAdvisor.primaryBreakdown.smeStageFit.reasoning}</div>
-                        </div>
-                      )}
-                      {breakdownAdvisor.primaryBreakdown.impactAlignment && (
-                        <div style={{ background: "#FEFCFA", border: "1px solid #E8D5C4", borderRadius: 6, padding: "0.75rem" }}>
-                          <div style={{ fontSize: "0.75rem", fontWeight: 600, color: "#5D2A0A" }}>Impact Alignment</div>
-                          <div style={{ fontSize: "1.1rem", fontWeight: "bold", color: scoreColor(breakdownAdvisor.primaryBreakdown.impactAlignment.score) }}>
-                            {Math.round(breakdownAdvisor.primaryBreakdown.impactAlignment.score)}%
-                          </div>
-                          <div style={{ fontSize: "0.7rem", color: "#8D6E63" }}>{breakdownAdvisor.primaryBreakdown.impactAlignment.reasoning}</div>
-                        </div>
-                      )}
-                      {breakdownAdvisor.primaryBreakdown.overallNarrativeFit && (
-                        <div style={{ background: "#FEFCFA", border: "1px solid #E8D5C4", borderRadius: 6, padding: "0.75rem" }}>
-                          <div style={{ fontSize: "0.75rem", fontWeight: 600, color: "#5D2A0A" }}>Narrative Fit</div>
-                          <div style={{ fontSize: "1.1rem", fontWeight: "bold", color: scoreColor(breakdownAdvisor.primaryBreakdown.overallNarrativeFit.score) }}>
-                            {Math.round(breakdownAdvisor.primaryBreakdown.overallNarrativeFit.score)}%
-                          </div>
-                          <div style={{ fontSize: "0.7rem", color: "#8D6E63" }}>{breakdownAdvisor.primaryBreakdown.overallNarrativeFit.reasoning}</div>
-                        </div>
-                      )}
+                        );
+                      })}
                     </div>
                   </div>
                 ) : (
                   <div style={{ background: "#f9f5f0", border: "1px dashed #E8D5C4", borderRadius: 8, padding: "1.25rem", textAlign: "center", color: "#8D6E63" }}>
                     <Brain size={24} style={{ opacity: 0.3, marginBottom: 6 }} />
                     <p style={{ margin: 0, fontSize: "0.85rem" }}>Primary analysis pending.</p>
-                    <p style={{ margin: "4px 0 0", fontSize: "0.75rem", color: "#bbb" }}>Run AI Analysis on the Advisor Matches page.</p>
+                    <p style={{ margin: "4px 0 0", fontSize: "0.75rem", color: "#bbb" }}>Run AI Analysis on the Funding Matches page.</p>
                   </div>
                 )}
               </div>
@@ -767,14 +754,14 @@ const AdvisorMatchesTable = ({
                     Secondary Matching
                     {devMode && <span style={{ fontWeight: 400, fontSize: "0.85rem", color: "#8D6E63" }}> (40% weight)</span>}
                   </h4>
-                  <span style={{ marginLeft: "auto", fontSize: "1.25rem", fontWeight: "bold", color: scoreColor(breakdownAdvisor.secondaryScore || 0) }}>
-                    {Math.round(breakdownAdvisor.secondaryScore || 0)}%
+                  <span style={{ marginLeft: "auto", fontSize: "1.25rem", fontWeight: "bold", color: scoreColor(breakdownFunder.secondaryScore || 0) }}>
+                    {Math.round(breakdownFunder.secondaryScore || 0)}%
                   </span>
                 </div>
 
-                {breakdownAdvisor.secondaryBreakdown && (
+                {breakdownFunder.secondaryBreakdown && (
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "1rem" }}>
-                    {Object.entries(breakdownAdvisor.secondaryBreakdown).map(([key, item], i) => (
+                    {Object.entries(breakdownFunder.secondaryBreakdown).map(([key, item], i) => (
                       <BreakdownCard key={i} itemKey={key} item={item} devMode={devMode} />
                     ))}
                   </div>
@@ -788,7 +775,7 @@ const AdvisorMatchesTable = ({
                     padding: "0.75rem 2rem", background: "#5D2A0A", color: "white",
                     border: "none", borderRadius: 6, fontSize: "0.875rem", fontWeight: 500, cursor: "pointer",
                   }}
-                  onClick={() => setBreakdownAdvisor(null)}
+                  onClick={() => setBreakdownFunder(null)}
                 >
                   Close Breakdown
                 </button>
@@ -802,4 +789,4 @@ const AdvisorMatchesTable = ({
   )
 }
 
-export default AdvisorMatchesTable
+export default FundingMatchesTable

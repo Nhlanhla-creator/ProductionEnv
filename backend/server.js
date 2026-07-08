@@ -45,6 +45,7 @@ app.use((req, res, next) => {
 const paymentRoutes = require("./routes/peachPayments");
 
 const tenderRoutes = require("./routes/tenders");
+// const fundingMatchesRoutes = require("./routes/fundingMatches");
 // const supplierMatchingRoutes = require("./routes/supplierMatching");
 // const advisorMatchingRoutes = require("./routes/advisorMatching");
 // const internMatchingRoutes = require("./routes/internMatching");
@@ -218,6 +219,12 @@ app.use("/api/tenders", (req, res, next) => {
   next();
 
 }, tenderRoutes.router);
+
+// Funder matching AI route (local dev/testing path)
+// app.use("/api/funders", (req, res, next) => {
+//   res.setHeader('x-vercel-protection-bypass', '1');
+//   next();
+// }, fundingMatchesRoutes);
 
 // Supplier matching AI route (local dev/testing path)
 // app.use("/api/suppliers", (req, res, next) => {
@@ -482,7 +489,7 @@ app.use((error, req, res, next) => {
 
 // 404 handler
 
-app.use("*", (req, res) => {
+app.use((req, res) => {
 
   res.status(404).json({
 

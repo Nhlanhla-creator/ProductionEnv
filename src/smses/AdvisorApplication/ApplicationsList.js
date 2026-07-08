@@ -48,8 +48,12 @@ const ApplicationsList = ({ onViewSummary, onEditApplication, onCreateNew, embed
       const snapshot = await getDocs(q)
       const counts = {}
       snapshot.forEach(d => {
-        const appId = d.data().applicationId
-        if (appId) counts[appId] = (counts[appId] || 0) + 1
+        const data = d.data()
+        const appId = data.applicationId
+        const finalScore = data.finalScore || 0
+        if (appId && finalScore >= 70) {
+          counts[appId] = (counts[appId] || 0) + 1
+        }
       })
       setMatchCounts(counts)
     } catch (err) {

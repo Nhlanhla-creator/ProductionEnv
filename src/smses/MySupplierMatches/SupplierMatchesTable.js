@@ -66,6 +66,8 @@ const SupplierMatchesTable = ({
   const [breakdownSupplier, setBreakdownSupplier] = useState(null)
   const [mounted, setMounted] = useState(false)
   const [devMode, setDevMode] = useState(false)
+  const [filterHighMatches, setFilterHighMatches] = useState(true)
+
   useEffect(() => { setMounted(true) }, [])
 
   // Secret: Ctrl+Alt+P while breakdown modal is open toggles verbose dev labels
@@ -81,7 +83,16 @@ const SupplierMatchesTable = ({
     return () => window.removeEventListener("keydown", handler)
   }, [breakdownSupplier])
 
-  const rows = useMemo(() => suppliers || [], [suppliers])
+  const rows = useMemo(() => {
+    const allRows = suppliers || []
+    return allRows.filter((supplier) => {
+      const score = supplier.matchPercentage || supplier.finalScore || 0
+      if (filterHighMatches) {
+        return score >= 70
+      }
+      return score > 0
+    })
+  }, [suppliers, filterHighMatches])
 
   const handleView = (supplier) => {
     if (onView) {
@@ -126,6 +137,62 @@ const SupplierMatchesTable = ({
 
   return (
     <div style={{ width: "100%" }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "flex-end",
+          alignItems: "center",
+          marginBottom: "12px",
+          gap: "10px",
+          fontFamily: "'Outfit', 'Inter', sans-serif",
+        }}
+      >
+        <span style={{ fontSize: "12px", fontWeight: "600", color: "#8D6E63", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+          Filter Matches:
+        </span>
+        <div
+          style={{
+            display: "inline-flex",
+            background: "#efebe9",
+            padding: "3px",
+            borderRadius: "20px",
+            border: "1px solid #d7ccc8",
+          }}
+        >
+          <button
+            onClick={() => setFilterHighMatches(false)}
+            style={{
+              padding: "4px 12px",
+              borderRadius: "15px",
+              border: "none",
+              fontSize: "11px",
+              fontWeight: "700",
+              cursor: "pointer",
+              background: !filterHighMatches ? "#5d4037" : "transparent",
+              color: !filterHighMatches ? "#fff" : "#8d6e63",
+              transition: "all 0.2s ease",
+            }}
+          >
+            All Matches
+          </button>
+          <button
+            onClick={() => setFilterHighMatches(true)}
+            style={{
+              padding: "4px 12px",
+              borderRadius: "15px",
+              border: "none",
+              fontSize: "11px",
+              fontWeight: "700",
+              cursor: "pointer",
+              background: filterHighMatches ? "#5d4037" : "transparent",
+              color: filterHighMatches ? "#fff" : "#8d6e63",
+              transition: "all 0.2s ease",
+            }}
+          >
+            Best Matches
+          </button>
+        </div>
+      </div>
       <div
         style={{
           width: "100%",

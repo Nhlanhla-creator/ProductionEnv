@@ -13,6 +13,8 @@ import { renderSocialImpact } from "./SocialImpact"
 import { renderDocumentUpload } from "./DocumentUpload"
 import { renderDeclarationCommitment } from "./DeclarationCommitment"
 import ApplicationSummary from "./application-summary"
+import AnalysisProgressOverlay from "./AnalysisProgressOverlay"
+import { useFundingApplications } from "./hooks/useFundingApplications"
 import { doc, setDoc, getDoc } from "firebase/firestore"
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage"
 import { auth, db, storage } from "../../firebaseConfig"
@@ -23,6 +25,16 @@ import { evaluateProfile } from "../../utils/profileEvaluator"
 import API_KEYS from "../../API"
 
 // Updated sections array with Guarantees
+const maxScores = {
+  leadership: 15,
+  operationalStrength: 15,
+  governance: 15,
+  guarantees: 10,
+  impact: 10,
+  financialReadiness: 5,
+  financialStrength: 5,
+}
+
 const sectionsWithGuarantees = [
   { id: "applicationOverview", label: "Application\nOverview" },
   { id: "useOfFunds", label: "Use of\nFunds" },
@@ -123,27 +135,46 @@ const documentsList = [
   },
 ]
 
-const FundingApplication = () => {
+const FundingApplication = ({
+  applicationId = null,
+  isNew = false,
+  onBack,
+  onNavigateToMatches,
+  onAnalysisComplete,
+}) => {
   const [activeSection, setActiveSection] = useState("applicationOverview")
-  const [applicationSubmitted, setApplicationSubmitted] = useState(false)
   const [showSummary, setShowSummary] = useState(false)
-  const [isLoading, setIsLoading] = useState(true)
   const navigate = useNavigate()
   const [authChecked, setAuthChecked] = useState(false)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
-  const [evaluationData, setEvaluationData] = useState(null)
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState(null)
   const [validationModal, setValidationModal] = useState({ open: false, title: "", messages: [] })
-  const [popupSeen, setPopupSeen] = useState(false)
   const apiKey = API_KEYS.OPENAI;
-  
-  // New state for popups
+
   const [showWelcomePopup, setShowWelcomePopup] = useState(false)
   const [showCongratulationsPopup, setShowCongratulationsPopup] = useState(false)
   const [currentOnboardingStep, setCurrentOnboardingStep] = useState(0)
   const [isApiKeyLoading, setIsApiKeyLoading] = useState(true)
-  
+
+  // Use custom hook for form state & actions
+  const {
+    formData,
+    completedSections,
+    isLoading,
+    isSubmitted: applicationSubmitted,
+    setIsSubmitted: setApplicationSubmitted,
+    updateFormData,
+    saveSectionToFirebase,
+    submitApplication,
+    currentDocId,
+    analysisProgress,
+    analysisComplete,
+    setCompletedSections,
+  } = useFundingApplications({
+    applicationId,
+    isNew,
+    onNavigateToMatches,
+  })
+
   // State for existing documents from universal profile (like Advisory)
   const [existingUniversalDocs, setExistingUniversalDocs] = useState({
     businessPlan: null,
@@ -151,23 +182,23 @@ const FundingApplication = () => {
     financialStatements: [],
     loading: true
   })
-  
+
   useEffect(() => {
     if (apiKey != null) {
       setIsApiKeyLoading(false)
     }
   }, [apiKey])
 
-const getContainerStyles = () => ({
-  width: "100%",
-  minHeight: "100vh",
-  maxWidth: "100vw",
-  overflowX: "hidden",
-  boxSizing: "border-box",
-  position: "relative",
-})
+  const getContainerStyles = () => ({
+    width: "100%",
+    minHeight: "100vh",
+    maxWidth: "100vw",
+    overflowX: "hidden",
+    boxSizing: "border-box",
+    position: "relative",
+  })
 
-  // Fetch existing documents from universal profile (like Advisory)
+  // Fetch existing documents from universal profile
   useEffect(() => {
     const fetchExistingDocuments = async () => {
       const user = auth.currentUser
@@ -213,27 +244,37 @@ const getContainerStyles = () => ({
   }, [])
 
   useEffect(() => {
-    const fetchPopupStatus = async () => {
-      const userId = auth.currentUser?.uid
-      if (!userId) return
-
-      const userDoc = await getDoc(doc(db, "universalProfiles", userId))
-      if (userDoc.exists()) {
-        const data = userDoc.data()
-        if (data?.popupSeen) {
-          setPopupSeen(true)
-        }
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      if (user) {
+        setIsAuthenticated(true)
+      } else {
+        navigate("/login")
       }
-    }
+      setAuthChecked(true)
+    })
 
-    fetchPopupStatus()
+    return () => unsubscribe()
   }, [])
+
+  // Helper function to get user-specific localStorage key
+  const getUserSpecificKey = (baseKey) => {
+    const userId = auth.currentUser?.uid
+    return userId ? `${baseKey}_${userId}` : baseKey
+  }
+
+  // Show onboarding popup if user hasn't seen it yet
+  useEffect(() => {
+    if (isLoading) return
+    const storageKey = getUserSpecificKey("hasSeenFundingOnboarding")
+    const seen = localStorage.getItem(storageKey) === "true"
+    if (!seen) {
+      setShowWelcomePopup(true)
+    }
+  }, [isLoading])
 
   const sectionValidations = {
     applicationOverview: (data) => {
       const requiredFields = ["applicationType", "fundingStage", "urgency", "preferredStartDate"]
-
-      // Check if supportFormat is required based on applicationType
       const needsSupportFormat =
         data?.applicationType && ["acceleration", "incubation", "enterprise_development"].includes(data.applicationType)
 
@@ -241,7 +282,6 @@ const getContainerStyles = () => ({
         requiredFields.push("supportFormat")
       }
 
-      // Check all required fields are filled
       const allFieldsValid = requiredFields.every((field) => {
         const value = data?.[field]
         return value !== undefined && value !== null && value !== ""
@@ -288,12 +328,10 @@ const getContainerStyles = () => ({
         "hasPayingCustomers",
       ]
 
-      // All radio buttons must have a value ("yes" or "no")
       for (const field of requiredRadios) {
         if (!data[field]) return false
       }
 
-      // Conditional checks for "yes" responses
       if (data.hasBusinessPlan === "yes") {
         if (!Array.isArray(data.businessPlanFile) || data.businessPlanFile.length === 0) return false
       }
@@ -308,7 +346,6 @@ const getContainerStyles = () => ({
       }
 
       if (data.hasMvp === "yes" && !data.mvpDetails?.trim()) return false
-
       if (data.hasTraction === "yes" && !data.tractionDetails?.trim()) return false
 
       if (data.hasGuarantees === "yes") {
@@ -327,7 +364,6 @@ const getContainerStyles = () => ({
 
       if (data.previousSupport === "yes") {
         if (!data.previousSupportDetails?.trim() || !data.previousSupportSource?.trim()) return false
-        // previousSupportAmount is now optional
       }
 
       if (data.hasPayingCustomers === "yes" && !data.payingCustomersDetails?.trim()) return false
@@ -335,10 +371,7 @@ const getContainerStyles = () => ({
       return true
     },
     financialOverview: (data) => {
-      // Required fields that are always needed
       const requiredFields = ["generatesRevenue", "profitabilityStatus", "hasAccountingSoftware"]
-
-      // Check basic required fields
       const basicFieldsValid = requiredFields.every((field) => {
         const value = data[field]
         return value !== undefined && value !== null && value !== ""
@@ -346,24 +379,17 @@ const getContainerStyles = () => ({
 
       if (!basicFieldsValid) return false
 
-      // Conditional validations
       const conditionalValidations = []
-
-      // If generates revenue, annual revenue is required
       if (data.generatesRevenue === "yes") {
         conditionalValidations.push(
           data.annualRevenue !== undefined && data.annualRevenue !== null && data.annualRevenue !== "",
         )
       }
 
-      // Check if any conditional validation fails
       const allConditionalsValid = conditionalValidations.every((validation) => validation === true)
-
       return basicFieldsValid && allConditionalsValid
     },
     guarantees: (data) => {
-      // Guarantees section is optional - all fields are yes/no questions
-      // We can return true since having guarantees is beneficial but not required
       return true
     },
     growthPotential: (data) => {
@@ -379,38 +405,16 @@ const getContainerStyles = () => ({
       ]
 
       const radioFieldsValid = requiredRadioFields.every((field) => data[field] === "yes" || data[field] === "no")
-
       if (!radioFieldsValid) return false
 
       const conditionalValidations = []
-
-      if (data.marketShare === "yes") {
-        conditionalValidations.push(Boolean(data.marketShareDetails?.trim()))
-      }
-
-      if (data.qualityImprovement === "yes") {
-        conditionalValidations.push(Boolean(data.qualityImprovementDetails?.trim()))
-      }
-
-      if (data.greenTech === "yes") {
-        conditionalValidations.push(Boolean(data.greenTechDetails?.trim()))
-      }
-
-      if (data.localisation === "yes") {
-        conditionalValidations.push(Boolean(data.localisationDetails?.trim()))
-      }
-
-      if (data.regionalSpread === "yes") {
-        conditionalValidations.push(Boolean(data.regionalSpreadDetails?.trim()))
-      }
-
-      if (data.personalRisk === "yes") {
-        conditionalValidations.push(Boolean(data.personalRiskDetails?.trim()))
-      }
-
-      if (data.empowerment === "yes") {
-        conditionalValidations.push(Boolean(data.empowermentDetails?.trim()))
-      }
+      if (data.marketShare === "yes") conditionalValidations.push(Boolean(data.marketShareDetails?.trim()))
+      if (data.qualityImprovement === "yes") conditionalValidations.push(Boolean(data.qualityImprovementDetails?.trim()))
+      if (data.greenTech === "yes") conditionalValidations.push(Boolean(data.greenTechDetails?.trim()))
+      if (data.localisation === "yes") conditionalValidations.push(Boolean(data.localisationDetails?.trim()))
+      if (data.regionalSpread === "yes") conditionalValidations.push(Boolean(data.regionalSpreadDetails?.trim()))
+      if (data.personalRisk === "yes") conditionalValidations.push(Boolean(data.personalRiskDetails?.trim()))
+      if (data.empowerment === "yes") conditionalValidations.push(Boolean(data.empowermentDetails?.trim()))
 
       if (data.employment === "yes") {
         conditionalValidations.push(
@@ -426,11 +430,9 @@ const getContainerStyles = () => ({
       }
 
       const allConditionalsValid = conditionalValidations.every(Boolean)
-
       return radioFieldsValid && allConditionalsValid
     },
     socialImpact: (data) => {
-      // Required fields
       const requiredFields = [
         "jobsToCreate",
         "csiCsrSpend",
@@ -440,7 +442,6 @@ const getContainerStyles = () => ({
         "disabledOwnership",
       ]
 
-      // Check all required fields are filled
       const basicFieldsValid = requiredFields.every((field) => {
         const value = data[field]
         return value !== undefined && value !== null && value !== ""
@@ -448,24 +449,17 @@ const getContainerStyles = () => ({
 
       if (!basicFieldsValid) return false
 
-      // Validate percentage fields (0-100)
       const percentageFields = ["blackOwnership", "womenOwnership", "youthOwnership", "disabledOwnership"]
-
       const percentagesValid = percentageFields.every((field) => {
         const value = Number.parseFloat(data[field])
         return !isNaN(value) && value >= 0 && value <= 100
       })
 
-      // Validate CSI/CSR spend format (starts with R)
       const csiCsrValid = data.csiCsrSpend
-
       return basicFieldsValid && percentagesValid && csiCsrValid
     },
     documentUpload: (data) => {
-      // Get required documents from the documentsList
       const requiredDocuments = documentsList.filter((doc) => doc.required)
-
-      // Check if all required documents are uploaded
       const allRequiredUploaded = requiredDocuments.every((doc) => {
         const files = data[doc.id] || []
         return files.length > 0
@@ -475,278 +469,8 @@ const getContainerStyles = () => ({
     },
     declarationCommitment: (data) => {
       if (!data) return false
-
       return data.confirmIntent === true && data.commitReporting === true && data.consentShare === true
     },
-  }
-
-  const [completedSections, setCompletedSections] = useState({
-    applicationOverview: false,
-    useOfFunds: false,
-    enterpriseReadiness: false,
-    financialOverview: false,
-    guarantees: false,
-    growthPotential: false,
-    socialImpact: false,
-    documentUpload: false,
-    declarationCommitment: false,
-  })
-
-  const [formData, setFormData] = useState({
-    applicationOverview: {
-      submissionChannel: "Online Portal",
-      applicationDate: new Date().toISOString().split("T")[0],
-    },
-    useOfFunds: {
-      fundingItems: [
-        {
-          category: "",
-          subArea: "",
-          description: "",
-          amount: "",
-        },
-      ],
-    },
-    enterpriseReadiness: {
-      barriers: [],
-    },
-    financialOverview: {},
-    guarantees: {},
-    growthPotential: {},
-    socialImpact: {},
-    documentUpload: {},
-    declarationCommitment: {
-      confirmIntent: false,
-      commitReporting: false,
-      consentShare: false,
-    },
-  })
-
-  useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        setIsAuthenticated(true)
-        loadDataFromFirebase() // load Firebase data only if authenticated
-      } else {
-        navigate("/login") // or wherever your login page is
-      }
-      setAuthChecked(true)
-    })
-
-    return () => unsubscribe()
-  }, [])
-
-  // Helper function to get user-specific localStorage key
-  const getUserSpecificKey = (baseKey) => {
-    const userId = auth.currentUser?.uid
-    return userId ? `${baseKey}_${userId}` : baseKey
-  }
-
-  // Function to check if declaration commitment is complete
-  const checkDeclarationCommitment = (data) => {
-    const declarationCommitment = data?.declarationCommitment
-    if (!declarationCommitment) return false
-
-    return (
-      declarationCommitment.confirmIntent === true &&
-      declarationCommitment.commitReporting === true &&
-      declarationCommitment.consentShare === true
-    )
-  }
-
-  // Function to save onboarding status to Firebase
-  const saveOnboardingStatusToFirebase = async (status) => {
-    try {
-      const userId = auth.currentUser?.uid
-      if (!userId) return
-
-      const docRef = doc(db, "universalProfiles", userId)
-      await setDoc(
-        docRef,
-        {
-          fundingApplicationOnboardingSeen: status,
-        },
-        { merge: true },
-      )
-    } catch (error) {
-      console.error("Error saving onboarding status to Firebase:", error)
-    }
-  }
-
-  const maxScores = {
-    leadership: 15,
-    operationalStrength: 15,
-    governance: 15,
-    guarantees: 10,
-    impact: 10,
-    financialReadiness: 5,
-    financialStrength: 5,
-  }
-
-  // Function to load data from Firebase
-  const loadDataFromFirebase = async () => {
-    try {
-      const userId = auth.currentUser?.uid
-      if (!userId) {
-        // console.log("User not logged in, skipping Firebase data retrieval")
-        setIsLoading(false)
-        return
-      }
-
-      const docRef = doc(db, "universalProfiles", userId)
-      const docSnap = await getDoc(docRef)
-
-      if (docSnap.exists()) {
-        const firebaseData = docSnap.data()
-        // console.log("Retrieved data from Firebase:", firebaseData)
-
-        // Check onboarding status from Firebase
-        const hasSeenOnboarding = firebaseData.fundingApplicationOnboardingSeen === true
-
-        // Show welcome popup only if user hasn't seen it (based on Firebase data)
-        if (!hasSeenOnboarding) {
-          setShowWelcomePopup(true)
-        }
-
-        // Check if declaration commitment is complete in Firebase
-        const declarationCommitmentComplete = checkDeclarationCommitment(firebaseData)
-
-        // Application is considered submitted if declaration commitment is complete OR applicationSubmitted is true
-        const firebaseSubmissionStatus = declarationCommitmentComplete || firebaseData.applicationSubmitted === true
-
-        // Merge Firebase data with current formData, preserving structure
-        setFormData((prevData) => {
-          const mergedData = { ...prevData }
-
-          // Handle each section
-          Object.keys(prevData).forEach((sectionKey) => {
-            if (firebaseData[sectionKey]) {
-              mergedData[sectionKey] = {
-                ...prevData[sectionKey],
-                ...firebaseData[sectionKey],
-              }
-            }
-          })
-
-          // Special handling for applicationOverview to ensure required fields
-          if (firebaseData.applicationOverview) {
-            mergedData.applicationOverview = {
-              submissionChannel: "Online Portal", // Always default this
-              applicationDate: new Date().toISOString().split("T")[0], // Always use current date for new applications
-              ...firebaseData.applicationOverview,
-              // Override with current date and submission channel for new application
-              applicationDate: new Date().toISOString().split("T")[0],
-              submissionChannel: "Online Portal",
-            }
-          }
-
-          return mergedData
-        })
-
-        // Update completed sections based on what data exists
-        setCompletedSections((prevCompleted) => {
-          const updatedCompleted = { ...prevCompleted }
-
-          Object.keys(prevCompleted).forEach((sectionKey) => {
-            if (firebaseData[sectionKey]) {
-              // Check if section has meaningful data
-              const sectionData = firebaseData[sectionKey]
-              const hasData = Object.keys(sectionData).some((key) => {
-                const value = sectionData[key]
-                return (
-                  value !== "" &&
-                  value !== null &&
-                  value !== undefined &&
-                  (Array.isArray(value) ? value.length > 0 : true)
-                )
-              })
-
-              if (hasData) {
-                updatedCompleted[sectionKey] = true
-              }
-            }
-          })
-
-          return updatedCompleted
-        })
-
-        // If application is marked as submitted in Firebase, show summary
-        if (firebaseSubmissionStatus) {
-          setApplicationSubmitted(true)
-          setShowSummary(true)
-        }
-      } else {
-        // console.log("No previous data found in Firebase")
-        // If no Firebase data exists, show onboarding for new users
-        setShowWelcomePopup(true)
-      }
-    } catch (error) {
-      console.error("Error loading data from Firebase:", error)
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  useEffect(() => {
-    const userId = auth.currentUser?.uid
-    if (!userId) {
-      setIsLoading(false)
-      return
-    }
-
-    // First load from localStorage for immediate UI update (keeping existing localStorage functionality)
-    const savedData = localStorage.getItem(getUserSpecificKey("fundingApplicationData"))
-    const savedCompletedSections = localStorage.getItem(getUserSpecificKey("fundingApplicationCompletedSections"))
-    const savedSubmissionStatus = localStorage.getItem(getUserSpecificKey("applicationSubmitted"))
-
-    if (savedData) {
-      setFormData(JSON.parse(savedData))
-    }
-
-    if (savedCompletedSections) {
-      setCompletedSections(JSON.parse(savedCompletedSections))
-    }
-
-    if (savedSubmissionStatus === "true") {
-      setApplicationSubmitted(true)
-      setShowSummary(true)
-    }
-
-    // Load from Firebase (this will override localStorage data and handle onboarding)
-    loadDataFromFirebase()
-  }, [])
-
-  useEffect(() => {
-    const userId = auth.currentUser?.uid
-    if (!userId) return
-
-    // Only save to localStorage after initial loading is complete
-    if (!isLoading) {
-      localStorage.setItem(getUserSpecificKey("fundingApplicationData"), JSON.stringify(formData))
-      localStorage.setItem(getUserSpecificKey("fundingApplicationCompletedSections"), JSON.stringify(completedSections))
-      localStorage.setItem(getUserSpecificKey("applicationSubmitted"), applicationSubmitted.toString())
-    }
-  }, [formData, completedSections, applicationSubmitted, isLoading])
-
-  const updateFormData = (section, data) => {
-    setFormData((prev) => ({
-      ...prev,
-      [section]: {
-        ...prev[section],
-        ...data,
-      },
-    }))
-  }
-
-  const markSectionAsCompleted = async (section) => {
-    const updated = { ...completedSections, [section]: true }
-    setCompletedSections(updated)
-
-    const userId = auth.currentUser?.uid
-    if (userId) {
-      const docRef = doc(db, "universalProfiles", userId)
-      await setDoc(docRef, { completedSections: updated }, { merge: true })
-    }
   }
 
   const navigateToNextSection = () => {
@@ -767,7 +491,7 @@ const getContainerStyles = () => ({
 
   const handleEditApplication = () => {
     setShowSummary(false)
-    setApplicationSubmitted(false) // Allow editing by setting to false
+    setApplicationSubmitted(false)
     setActiveSection("applicationOverview")
     window.scrollTo(0, 0)
   }
@@ -777,20 +501,18 @@ const getContainerStyles = () => ({
       setCurrentOnboardingStep(currentOnboardingStep + 1)
     } else {
       setShowWelcomePopup(false)
-      // Save to Firebase that user has seen onboarding
-      saveOnboardingStatusToFirebase(true)
+      localStorage.setItem(getUserSpecificKey("hasSeenFundingOnboarding"), "true")
     }
   }
 
   const handleCloseWelcomePopup = () => {
     setShowWelcomePopup(false)
-    // Save to Firebase that user has seen onboarding
-    saveOnboardingStatusToFirebase(true)
+    localStorage.setItem(getUserSpecificKey("hasSeenFundingOnboarding"), "true")
   }
 
   const handleCloseCongratulationsPopup = () => {
     setShowCongratulationsPopup(false)
-    setShowSummary(true) // Show the summary after closing the congratulations popup
+    setShowSummary(true)
   }
 
   const handleNavigateToProductApplication = () => {
@@ -805,7 +527,6 @@ const getContainerStyles = () => ({
   }
 
   const handleSubmitApplication = async () => {
-    await markSectionAsCompleted("declarationCommitment")
     const allSectionsValid = Object.entries(sectionValidations).every(
       ([key, validate]) => validate(formData[key] || {}) && completedSections[key],
     )
@@ -824,15 +545,8 @@ const getContainerStyles = () => ({
     }
 
     try {
-      await markSectionAsCompleted("declarationCommitment")
-      setApplicationSubmitted(true)
-      await saveDataToFirebase(null, true)
-      await evaluateProfile(auth.currentUser.uid)
-
-      const user = auth.currentUser
-      if (user) {
-        await sendBIGEvaluationMessage(user.uid, user.displayName || "Entrepreneur")
-      }
+      await submitApplication()
+      onAnalysisComplete?.(applicationId || currentDocId)
 
       const hasSeenFundingCongratulationsPopup =
         localStorage.getItem(getUserSpecificKey("hasSeenFundingCongratulationsPopup")) === "true"
@@ -852,7 +566,6 @@ const getContainerStyles = () => ({
   }
 
   const renderActiveSection = () => {
-    // Prevent Enterprise Readiness from loading without API key
     if (activeSection === "enterpriseReadiness") {
       if (isApiKeyLoading) {
         return (
@@ -874,7 +587,6 @@ const getContainerStyles = () => ({
           </div>
         )
       }
-      console.log(apiKey)
       if (!apiKey) {
         return (
           <div
@@ -920,7 +632,6 @@ const getContainerStyles = () => ({
       case "useOfFunds":
         return renderUseOfFunds(formData.useOfFunds, updateFormData)
       case "enterpriseReadiness":
-        // Pass existingUniversalDocs like Advisory does
         return renderEnterpriseReadiness(
           formData.enterpriseReadiness, 
           updateFormData, 
@@ -947,78 +658,40 @@ const getContainerStyles = () => ({
     }
   }
 
-  const uploadFilesAndReplaceWithURLs = async (data, section) => {
-    const uploadRecursive = async (item, pathPrefix) => {
-      if (item instanceof File) {
-        const fileRef = ref(storage, `universalProfile/${auth.currentUser?.uid}/${pathPrefix}`)
-        await uploadBytes(fileRef, item)
-        return await getDownloadURL(fileRef)
-      } else if (Array.isArray(item)) {
-        return await Promise.all(item.map((entry, idx) => uploadRecursive(entry, `${pathPrefix}/${idx}`)))
-      } else if (typeof item === "object" && item !== null) {
-        const updated = {}
-        for (const key in item) {
-          updated[key] = await uploadRecursive(item[key], `${pathPrefix}/${key}`)
-        }
-        return updated
-      } else {
-        return item
-      }
-    }
-
-    return await uploadRecursive(data, section)
-  }
-
-  const saveDataToFirebase = async (section = null, includingSubmissionStatus = false) => {
-    setLoading(true)
-    try {
-      const userId = auth.currentUser?.uid
-      if (!userId) throw new Error("User not logged in.")
-
-      const docRef = doc(db, "universalProfiles", userId)
-      const sectionData = section ? formData[section] : formData
-
-      const uploaded = section
-        ? { [section]: await uploadFilesAndReplaceWithURLs(sectionData, section) }
-        : await uploadFilesAndReplaceWithURLs(formData, "full")
-
-      const dataToSave = { ...uploaded }
-      
-      const triggerRelevantSections = [
-        "enterpriseReadiness",
-        "financialOverview",
-        "guarantees",
-        "documentUpload",
-        "growthPotential",
-      ]
-      if (section && triggerRelevantSections.includes(section)) {
-        await setDoc(docRef, { triggerFundabilityEvaluation: true }, { merge: true })
-        await setDoc(docRef, { triggerLegitimacyEvaluation: true }, { merge: true })
-      }
-
-      if (includingSubmissionStatus) {
-        dataToSave.applicationSubmitted = applicationSubmitted
-      }
-
-      await setDoc(docRef, dataToSave, { merge: true })
-      setLoading(false)
-    } catch (err) {
-      console.error("Error saving to Firebase:", err)
-      throw err
-    }
-  }
-
   const handleSaveSection = async () => {
     try {
-      await saveDataToFirebase(activeSection)
-      alert("Section saved to Firebase!")
+      const ok = await saveSectionToFirebase(activeSection, false)
+      if (ok) {
+        alert("Section saved successfully!")
+      } else {
+        alert("Failed to save to Firebase.")
+      }
     } catch (err) {
       alert("Failed to save to Firebase.")
     }
   }
 
+  const handleSaveAndContinue = async () => {
+    const currentIndex = sectionsWithGuarantees.findIndex((s) => s.id === activeSection)
+    const nextSection = sectionsWithGuarantees[currentIndex + 1]?.id
+
+    if (!sectionValidations[activeSection](formData[activeSection] || {})) {
+      setValidationModal({
+        open: true,
+        title: "Please review the following:",
+        messages: [`${sectionsWithGuarantees.find((s) => s.id === activeSection)?.label.replace(/\n/g, " ")} is incomplete.`],
+      })
+      return
+    }
+
+    const ok = await saveSectionToFirebase(activeSection, true)
+    if (ok && nextSection) {
+      setActiveSection(nextSection)
+      window.scrollTo(0, 0)
+    }
+  }
+
   const sendBIGEvaluationMessage = async (userId, userName) => {
-    // Fetch all evaluation data
     const fetchLatest = async (collectionName) => {
       const q = query(collection(db, collectionName), where("userId", "==", userId))
       const snap = await getDocs(q)
@@ -1275,77 +948,9 @@ The BIG Fundability Team
     }
   }
 
-  const handleSaveAndContinue = async () => {
-    try {
-      const isValid = sectionValidations[activeSection](formData[activeSection])
 
-      if (!isValid) {
-        const errors = []
-        errors.push(
-          `${sectionsWithGuarantees.find((s) => s.id === activeSection)?.label.replace(/\n/g, " ")} is incomplete or has invalid fields.`,
-        )
-        setValidationModal({
-          open: true,
-          title: "Please review the following:",
-          messages: errors,
-        })
-        return
-      }
 
-      await markSectionAsCompleted(activeSection)
-      await saveDataToFirebase(activeSection)
-
-      // Check if next section is enterprise readiness and API key isn't ready
-      const currentIndex = sectionsWithGuarantees.findIndex((section) => section.id === activeSection)
-      const nextSection = sectionsWithGuarantees[currentIndex + 1]
-
-      if (nextSection?.id === "enterpriseReadiness" && (!apiKey || isApiKeyLoading)) {
-        alert("Please wait for API resources to load before proceeding to Enterprise Readiness section.")
-        return
-      }
-
-      navigateToNextSection()
-    } catch (err) {
-      console.error("Save error:", err)
-      alert("Failed to save. Please try again.")
-    }
-  }
-
-  // Show loading state while fetching data
-  if (isLoading) {
-    return (
-      <div
-        style={{
-          width: "100%",
-          minHeight: "100vh",
-          maxWidth: "100vw",
-          overflowX: "hidden",
-          padding: "0",
-          margin: "0",
-          boxSizing: "border-box",
-        }}
-        className="funding-application-container"
-      >
-        <div
-          className="loading-container"
-          style={{
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            minHeight: "200px",
-            fontSize: "16px",
-            color: "#666",
-            width: "100%",
-            maxWidth: "100%",
-          }}
-        >
-          Loading your previous application data...
-        </div>
-      </div>
-    )
-  }
-
-  if (loading) {
+  if (isLoading && !analysisProgress) {
     return (
       <div
         style={{
@@ -1367,8 +972,9 @@ The BIG Fundability Team
 
   // If application is submitted and we're showing the summary
   if (showSummary) {
-    return <ApplicationSummary formData={formData} onEdit={handleEditApplication} />
+    return <ApplicationSummary formData={formData} onEdit={handleEditApplication} onBack={onBack} />
   }
+
   if (isApiKeyLoading) {
     return (
       <div
@@ -1847,6 +1453,12 @@ The BIG Fundability Team
           )}
         </div>
       </div>
+
+      {/* Progress Animation Overlay for AI Matching */}
+      <AnalysisProgressOverlay 
+        progress={analysisProgress} 
+        isComplete={analysisComplete} 
+      />
     </div>
   )
 }
