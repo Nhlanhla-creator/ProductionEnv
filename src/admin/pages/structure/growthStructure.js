@@ -226,7 +226,26 @@ export const GROWTH_STRUCTURE = {
     type: "folder",
     icon: "briefcase",
     items: {
-      
+      "Target List": {
+        type: "folder",
+        icon: "folder",
+        items: {
+          "Corporate": {
+            type: "table",
+            icon: "building",
+            accept: ".pdf,.docx,.doc,.xlsx,.xls",
+            maxSize: 10485760,
+            description: "Manage corporate partnerships database / spreadsheet"
+          },
+          "Government": {
+            type: "table",
+            icon: "landmark",
+            accept: ".pdf,.docx,.doc,.xlsx,.xls",
+            maxSize: 10485760,
+            description: "Manage government partnerships database / spreadsheet"
+          }
+        }
+      }
     }
   }
 };

@@ -44,21 +44,7 @@ export const PARTNERS_STRUCTURE = {
     }
   },
 
-  "Corporates ESD": {
-    type: "table",
-    icon: "building",
-    accept: ".pdf,.docx,.doc,.xlsx,.xls",
-    maxSize: 10485760,
-    description: "Manage corporate ESD partnerships database / spreadsheet"
-  },
 
-  "Government": {
-    type: "table",
-    icon: "landmark",
-    accept: ".pdf,.docx,.doc,.xlsx,.xls",
-    maxSize: 10485760,
-    description: "Manage government partnerships database / spreadsheet"
-  },
 
   "MOUs Agreements": {
     type: "file",

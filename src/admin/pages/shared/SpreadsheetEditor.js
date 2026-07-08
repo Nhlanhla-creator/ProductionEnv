@@ -374,6 +374,14 @@ export const SpreadsheetEditor = ({ path, itemConfig, content, onSave, onClose }
     e.target.value = '';
   };
 
+  const handleClearTable = () => {
+    if (window.confirm("Are you sure you want to clear the entire table? This will delete all rows and columns.")) {
+      setColumns([]);
+      setRows([]);
+      setHasChanges(true);
+    }
+  };
+
   // Filter rows based on search query
   const filteredRows = useMemo(() => {
     if (!searchQuery) return rows;
@@ -482,6 +490,25 @@ export const SpreadsheetEditor = ({ path, itemConfig, content, onSave, onClose }
             accept=".xlsx,.xls,.csv"
             style={{ display: 'none' }}
           />
+
+          <button
+            onClick={handleClearTable}
+            title="Clear Table"
+            style={{
+              padding: '8px 12px',
+              background: '#fef2f2',
+              color: '#dc2626',
+              border: '1px solid #fee2e2',
+              borderRadius: 6,
+              cursor: 'pointer',
+              fontSize: 13,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6
+            }}
+          >
+            <Trash2 size={14} /> Clear
+          </button>
 
           <button
             onClick={onClose}
