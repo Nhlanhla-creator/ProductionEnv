@@ -18,11 +18,11 @@ const BreakdownCard = ({ itemKey, item, devMode }) => {
     location: "Location",
     engagementStyle: "Engagement Style"
   };
-  
+
   const label = labels[itemKey] || itemKey;
   const score = item.score || 0;
   const color = score >= 75 ? "#388E3C" : score >= 50 ? "#F57C00" : "#D32F2F";
-  
+
   return (
     <div
       style={{
@@ -89,6 +89,7 @@ const AdvisorMatchesTable = ({
   const [mounted, setMounted] = useState(false)
   const [devMode, setDevMode] = useState(false)
   const [contactingId, setContactingId] = useState(null)
+  const [filterHighMatches, setFilterHighMatches] = useState(true)
 
   useEffect(() => { setMounted(true) }, [])
 
@@ -143,9 +144,15 @@ const AdvisorMatchesTable = ({
   const denseMode = dense || embedded
 
   const rows = useMemo(() => {
-    const allRows = advisors || [];
-    return allRows.filter(advisor => (advisor.finalScore || 0) > 0);
-  }, [advisors]);
+    const allRows = advisors || []
+    return allRows.filter((advisor) => {
+      const score = advisor.finalScore || 0
+      if (filterHighMatches) {
+        return score >= 70
+      }
+      return score > 0
+    })
+  }, [advisors, filterHighMatches])
 
   const handleView = (advisor) => {
     if (onView) {
@@ -198,6 +205,62 @@ const AdvisorMatchesTable = ({
 
   return (
     <div style={{ width: "100%" }}>
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "flex-end",
+          alignItems: "center",
+          marginBottom: "12px",
+          gap: "10px",
+          fontFamily: "'Outfit', 'Inter', sans-serif",
+        }}
+      >
+        <span style={{ fontSize: "12px", fontWeight: "600", color: "#8D6E63", textTransform: "uppercase", letterSpacing: "0.5px" }}>
+          Filter Matches:
+        </span>
+        <div
+          style={{
+            display: "inline-flex",
+            background: "#efebe9",
+            padding: "3px",
+            borderRadius: "20px",
+            border: "1px solid #d7ccc8",
+          }}
+        >
+          <button
+            onClick={() => setFilterHighMatches(false)}
+            style={{
+              padding: "4px 12px",
+              borderRadius: "15px",
+              border: "none",
+              fontSize: "11px",
+              fontWeight: "700",
+              cursor: "pointer",
+              background: !filterHighMatches ? "#5d4037" : "transparent",
+              color: !filterHighMatches ? "#fff" : "#8d6e63",
+              transition: "all 0.2s ease",
+            }}
+          >
+            All Matches
+          </button>
+          <button
+            onClick={() => setFilterHighMatches(true)}
+            style={{
+              padding: "4px 12px",
+              borderRadius: "15px",
+              border: "none",
+              fontSize: "11px",
+              fontWeight: "700",
+              cursor: "pointer",
+              background: filterHighMatches ? "#5d4037" : "transparent",
+              color: filterHighMatches ? "#fff" : "#8d6e63",
+              transition: "all 0.2s ease",
+            }}
+          >
+            Best Matches
+          </button>
+        </div>
+      </div>
       <style>{`
         @keyframes spin {
           from { transform: rotate(0deg); }
@@ -286,8 +349,8 @@ const AdvisorMatchesTable = ({
                     fontSize: fontSz,
                   }}
                 >
-                  {advisors?.length > 0 
-                    ? `Found ${advisors.length} potential advisor(s) but none met the 50% match threshold. Try adjusting your preferences.` 
+                  {advisors?.length > 0
+                    ? `Found ${advisors.length} potential advisor(s) but none met the 50% match threshold. Try adjusting your preferences.`
                     : emptyMessage}
                 </td>
               </tr>
@@ -591,8 +654,8 @@ const AdvisorMatchesTable = ({
                 </div>
                 <p style={{ fontSize: "1rem", color: "#8D6E63", margin: 0 }}>Overall Match Score</p>
                 <p style={{ fontSize: "0.8rem", color: "#bbb", margin: "4px 0 0" }}>
-                  {breakdownAdvisor.hasPrimaryAnalysis 
-                    ? "60% AI Primary + 40% Preferences" 
+                  {breakdownAdvisor.hasPrimaryAnalysis
+                    ? "60% AI Primary + 40% Preferences"
                     : "Preferences only — run AI for full analysis"}
                 </p>
               </div>
@@ -623,7 +686,7 @@ const AdvisorMatchesTable = ({
                         <strong>Reasoning:</strong> {breakdownAdvisor.primaryReasoning}
                       </div>
                     )}
-                    
+
                     {/* Display matched capabilities */}
                     {breakdownAdvisor.matchedCapabilities?.length > 0 && (
                       <div style={{ fontSize: "0.8rem", color: "#5D4037", marginTop: "0.5rem" }}>

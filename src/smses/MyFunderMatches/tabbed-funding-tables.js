@@ -2,7 +2,7 @@
 import { useState, useRef, useEffect } from "react"
 import { Eye, ChevronDown, Search, X, Trophy, TrendingUp, Calendar, DollarSign, FileText } from "lucide-react"
 // REMOVED: import FundingApplication from "../../smses/FundingApplication/FundingApplication"
-import { FundingTable } from "./funding-table"
+import GroupedFundingMatches from "../FundingApplication/GroupedFundingMatches"
 import styles from "./funding.module.css"
 import { db } from "../../firebaseConfig"
 import { collection, query, where, onSnapshot, doc, getDoc } from "firebase/firestore"
@@ -816,12 +816,7 @@ const TabbedFundingTables = ({
         {/* My Matches Content - FIRST */}
         {activeTab === "matches" && (
           <div>
-            <FundingTable
-              filters={filters}
-              onInsightsData={onInsightsData}
-              onPrimaryMatchCount={onPrimaryMatchCount}
-              onDealComplete={onDealComplete}
-            />
+            <GroupedFundingMatches />
           </div>
         )}
 

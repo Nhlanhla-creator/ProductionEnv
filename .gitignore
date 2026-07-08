@@ -46,7 +46,9 @@ PRODUCTION_PUSH_PLAN.md
 IMPLEMENTATION_SUMMARY.md
 *.md
 
-advisorMatching.js
-supplierMatching.js
-internMatching.js
+analyzeAdvisorMatches.js
+analyzeSupplierMatches.js
+analyzeInternMatches.js
+analyzeFundingMatches.js
+fundingMatches.js
 simple-bulk-update.js

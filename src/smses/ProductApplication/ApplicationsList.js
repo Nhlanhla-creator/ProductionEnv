@@ -221,7 +221,8 @@ const ApplicationsList = ({ onViewSummary, onEditApplication, onCreateNew, embed
                 {applications.map((app) => {
                   const { label, color, bg, Icon } = getStatusBadge(app)
                   const isExpanded = expandedAppId === app.id
-                  const matches = matchesByAppId[app.appId] || []
+                  const allMatches = matchesByAppId[app.appId] || []
+                  const qualifiedCount = allMatches.filter(m => (m.matchPercentage || m.finalScore || 0) >= 70).length
                   return (
                     <Fragment key={app.id}>
                       <tr>
@@ -280,7 +281,7 @@ const ApplicationsList = ({ onViewSummary, onEditApplication, onCreateNew, embed
                               aria-expanded={isExpanded}
                               title={isExpanded ? "Hide matches" : "Show matches for this application"}
                             >
-                              <Building size={12} />{matches.length > 0 ? ` (${matches.length})` : ""}
+                              <Building size={12} />{qualifiedCount > 0 ? ` (${qualifiedCount})` : ""}
                               {isExpanded ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
                             </button>
                             <button className="al-btn ab-view" onClick={() => onViewSummary(app.id, app)}>
@@ -302,11 +303,11 @@ const ApplicationsList = ({ onViewSummary, onEditApplication, onCreateNew, embed
                                 <span>Supplier Matches for</span>
                                 <span className="al-appid"><Hash size={10} /> {app.appId}</span>
                                 <span style={{ fontWeight:500, color:"#7d5a50", textTransform:"none", letterSpacing:0 }}>
-                                  &mdash; {matches.length} {matches.length === 1 ? "supplier" : "suppliers"} relevant to this request
+                                  &mdash; {qualifiedCount} {qualifiedCount === 1 ? "supplier" : "suppliers"} relevant to this request
                                 </span>
                               </div>
                               <SupplierMatchesTable
-                                suppliers={matches}
+                                suppliers={allMatches}
                                 loading={matchesLoading}
                                 dense
                                 emptyMessage={

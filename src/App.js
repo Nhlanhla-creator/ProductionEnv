@@ -289,6 +289,7 @@ import CatalystInvestments from "./catalyst/MyInvestment/MyInvestments"
 
 // Application Components
 import FundingApplication from "./smses/FundingApplication/FundingApplication"
+import FundingApplicationManager from "./smses/FundingApplication/FundingApplicationManager"
 import ProductApplication from "./smses/ProductApplication/ProductApplication"
 import ProductApplicationManager from "./smses/ProductApplication/ProductApplicationManager"
 import AdvisoryApplication from "./smses/AdvisorApplication/AdvisorApplication"
@@ -1058,8 +1059,8 @@ function App() {
         <Route path="/program-sponsor-profile/declaration-consent" element={renderProgramSponsorProfileSection(ProgramSponsorDeclarationConsent, "declarationConsent")} />
 
         {/* Application Routes */}
-        <Route path="/applications/funding" element={withProtection(FundingApplication, {}, renderSMERoute)} />
-        <Route path="/applications/funding/:section" element={withProtection(FundingApplication, {}, renderSMERoute)} />
+        <Route path="/applications/funding" element={withProtection(FundingApplicationManager, {}, renderSMERoute)} />
+        <Route path="/applications/funding/:section" element={withProtection(FundingApplicationManager, {}, renderSMERoute)} />
         <Route path="/applications/product" element={withProtection(ProductApplicationManager, {}, renderSMERoute)} />
         <Route path="/applications/products-services" element={withProtection(ProductApplicationManager, {}, renderSMERoute)} />
         <Route path="/applications/product/:section" element={withProtection(ProductApplicationManager, {}, renderSMERoute)} />
