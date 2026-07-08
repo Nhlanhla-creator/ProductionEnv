@@ -56,6 +56,7 @@ import SolutionsCorporates from "./main_pages/Solutions/SolutionsCorporates"
 import SolutionsCatalysts from "./main_pages/Solutions/SolutionsCatalysts"
 import SolutionsGraduates from "./main_pages/Solutions/SolutionsGraduates"
 import SolutionsAdvisors from "./main_pages/Solutions/SolutionsAdvisors"
+import SolutionsAssociations from "./main_pages/Solutions/SolutionsAssociations" 
 
 // Billing and Payment Components
 import MySubscriptions from "./smses/BillingInformation/subscriptions"
@@ -183,6 +184,7 @@ import HowItWorksAdvisors from "./main_pages/HowItWorksAdvisor"
 import HowItWorksInterns from "main_pages/HowItWorksInterns"
 import HomeContactFormPage from "./main_pages/SMEs/HomeContact"
 import FAQPage from "./main_pages/FAQs"
+import HowItWorksAssociations from "./main_pages/HowItWorksAssociations"
 
 import HomePage from "./main_pages/SMEs/HomePage"
 import ContactPage from "./main_pages/Contact"
@@ -883,6 +885,7 @@ function App() {
         <Route path="/HeaderProgram" element={<HeaderProgram />} />
         <Route path="/BookSession" element={<BookSession />} />
         <Route path="/HomePageAdvisor" element={<HomePageAdvisor />} />
+        <Route path="/HowItWorksAssociations" element={<HowItWorksAssociations />} />
         <Route path="/CharmSchool" element={<CharmSchool />} />
         <Route path="/verify-email" element={<EmailVerification />} />
         <Route path="/card/:cardId" element={<CardLandingPage />} />
@@ -895,6 +898,7 @@ function App() {
         <Route path="/solutions/catalysts" element={<SolutionsCatalysts />} />
         <Route path="/solutions/graduates" element={<SolutionsGraduates />} />
         <Route path="/solutions/advisors" element={<SolutionsAdvisors />} />
+        <Route path="/solutions/associations" element={<SolutionsAssociations />} />
 
         {/* Admin Notion Routes */}
         <Route path="/admin/articles" element={withAdminProtection(ArticleManagement)} />

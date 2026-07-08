@@ -46,24 +46,28 @@ const SolutionsCatalysts = () => {
   const keySolutions = [
     {
       icon: <FaChartLine size={24} />,
+      image: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=400&h=250&q=80',
       title: 'Programme Intelligence',
       description: 'Gain deep insights into program performance and participant outcomes.',
       color: colors.brown,
     },
     {
       icon: <FaUsers size={24} />,
+      image: 'https://images.unsplash.com/photo-1557804506-669a67965ba0?auto=format&fit=crop&w=400&h=250&q=80',
       title: 'Cohort Management',
       description: 'Streamline application, vetting, and cohort tracking from one platform.',
       color: colors.primary,
     },
     {
       icon: <FaChartBar size={24} />,
+      image: 'https://images.unsplash.com/photo-1504868584819-f8e8b4b6d7e3?auto=format&fit=crop&w=400&h=250&q=80',
       title: 'Growth Suite',
       description: 'Equip participants with tools to track and improve their performance.',
       color: colors.secondary,
     },
     {
       icon: <FaNetworkWired size={24} />,
+      image: 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?auto=format&fit=crop&w=400&h=250&q=80',
       title: 'Portfolio Intelligence',
       description: 'Track alumni visibility and longitudinal impact measurement.',
       color: colors.brownDark,
@@ -104,7 +108,7 @@ const SolutionsCatalysts = () => {
         flex: '1',
         width: '100%',
       }}>
-        {/* Hero Section */}
+        {/* Hero Section with Image */}
         <section style={{
           position: 'relative',
           borderRadius: '20px',
@@ -122,7 +126,7 @@ const SolutionsCatalysts = () => {
             left: 0,
             right: 0,
             bottom: 0,
-            backgroundImage: 'url(https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=1400&h=500&fit=crop&crop=center)',
+            backgroundImage: 'url(https://images.unsplash.com/photo-1557804506-669a67965ba0?w=1400&h=500&fit=crop&crop=center)',
             backgroundSize: 'cover',
             backgroundPosition: 'center',
             opacity: 0.12,
@@ -154,163 +158,161 @@ const SolutionsCatalysts = () => {
           <div style={{
             position: 'relative',
             zIndex: 1,
-            maxWidth: '700px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            width: '100%',
+            gap: '40px',
           }}>
             <div style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '10px',
-              background: `${colors.amber}30`,
-              border: `1px solid ${colors.amber}50`,
-              borderRadius: '30px',
-              padding: '8px 20px 8px 14px',
-              marginBottom: '24px',
+              maxWidth: '600px',
             }}>
-              <span style={{
-                width: 10,
-                height: 10,
-                borderRadius: '50%',
-                background: colors.amber,
-                display: 'inline-block',
-                animation: 'pulse 2s infinite',
-              }} />
-              <span style={{
-                color: colors.amber,
-                fontSize: '0.75rem',
-                fontWeight: 700,
-                letterSpacing: '0.1em',
-                textTransform: 'uppercase',
+              <div style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '10px',
+                background: `${colors.amber}30`,
+                border: `1px solid ${colors.amber}50`,
+                borderRadius: '30px',
+                padding: '8px 20px 8px 14px',
+                marginBottom: '24px',
               }}>
-                For Catalysts & Business Associations
-              </span>
-            </div>
-            
-            <h1 style={{
-              fontSize: 'clamp(2.2rem, 4.5vw, 3.2rem)',
-              fontWeight: 900,
-              color: colors.white,
-              margin: '0 0 20px',
-              lineHeight: 1.1,
-              letterSpacing: '-0.02em',
-            }}>
-              From Programme Management <br />
-              to <span style={{ color: colors.amber }}>Ecosystem</span> <br />
-              Intelligence.
-            </h1>
-            
-            <p style={{
-              fontSize: '1.1rem',
-              color: 'rgba(255,255,255,0.8)',
-              lineHeight: 1.8,
-              margin: '0 0 30px',
-              maxWidth: '550px',
-            }}>
-              BIG enables accelerators, incubators, ecosystem builders, and business associations to scale their 
-              impact with data-driven intelligence and powerful program management tools.
-            </p>
-
-            <div style={{
-              display: 'flex',
-              gap: '16px',
-              flexWrap: 'wrap',
-              alignItems: 'center',
-            }}>
-              <button
-                onClick={() => navigate('/LoginRegister')}
-                style={{
-                  background: `linear-gradient(135deg, ${colors.brown}, ${colors.brownLight})`,
-                  color: colors.white,
-                  border: 'none',
-                  borderRadius: '50px',
-                  padding: '16px 40px',
-                  fontSize: '1rem',
+                <span style={{
+                  width: 10,
+                  height: 10,
+                  borderRadius: '50%',
+                  background: colors.amber,
+                  display: 'inline-block',
+                  animation: 'pulse 2s infinite',
+                }} />
+                <span style={{
+                  color: colors.amber,
+                  fontSize: '0.75rem',
                   fontWeight: 700,
-                  cursor: 'pointer',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: '12px',
-                  transition: 'all 0.3s ease',
-                  boxShadow: `0 4px 25px ${colors.brown}50`,
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.transform = 'translateY(-3px)';
-                  e.currentTarget.style.boxShadow = `0 8px 35px ${colors.brown}60`;
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.transform = 'translateY(0)';
-                  e.currentTarget.style.boxShadow = `0 4px 25px ${colors.brown}50`;
-                }}
-              >
-                Get Started Today
-                <FaArrowRight size={14} />
-              </button>
+                  letterSpacing: '0.1em',
+                  textTransform: 'uppercase',
+                }}>
+                  For Catalysts & Business Associations
+                </span>
+              </div>
               
+              <h1 style={{
+                fontSize: 'clamp(2rem, 4vw, 3.2rem)',
+                fontWeight: 900,
+                color: colors.white,
+                margin: '0 0 20px',
+                lineHeight: 1.1,
+                letterSpacing: '-0.02em',
+              }}>
+                From Programme Management <br />
+                to <span style={{ color: colors.amber }}>Ecosystem</span> <br />
+                Intelligence.
+              </h1>
+              
+              <p style={{
+                fontSize: '1.1rem',
+                color: 'rgba(255,255,255,0.8)',
+                lineHeight: 1.8,
+                margin: '0 0 30px',
+                maxWidth: '550px',
+              }}>
+                BIG enables accelerators, incubators and
+                 ecosystem builders to scale their 
+                impact with data-driven intelligence and powerful program management tools.
+              </p>
+
               <div style={{
                 display: 'flex',
+                gap: '16px',
+                flexWrap: 'wrap',
                 alignItems: 'center',
-                gap: '6px',
-                color: 'rgba(255,255,255,0.4)',
-                fontSize: '0.85rem',
               }}>
-                <FaRegClock size={14} /> Quick setup • Free to join
+                <button
+                  onClick={() => navigate('/LoginRegister')}
+                  style={{
+                    background: `linear-gradient(135deg, ${colors.brown}, ${colors.brownLight})`,
+                    color: colors.white,
+                    border: 'none',
+                    borderRadius: '50px',
+                    padding: '16px 40px',
+                    fontSize: '1rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '12px',
+                    transition: 'all 0.3s ease',
+                    boxShadow: `0 4px 25px ${colors.brown}50`,
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.transform = 'translateY(-3px)';
+                    e.currentTarget.style.boxShadow = `0 8px 35px ${colors.brown}60`;
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.transform = 'translateY(0)';
+                    e.currentTarget.style.boxShadow = `0 4px 25px ${colors.brown}50`;
+                  }}
+                >
+                  Get Started Today
+                  <FaArrowRight size={14} />
+                </button>
+                
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  color: 'rgba(255,255,255,0.4)',
+                  fontSize: '0.85rem',
+                }}>
+                  <FaRegClock size={14} /> Quick setup • Free to join
+                </div>
+              </div>
+
+              <div style={{
+                display: 'flex',
+                gap: '30px',
+                marginTop: '28px',
+                flexWrap: 'wrap',
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <FaCheckCircle size={14} color={colors.amber} />
+                  <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem' }}>
+                    Trusted by leading accelerators
+                  </span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <FaShieldAlt size={14} color={colors.amber} />
+                  <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem' }}>
+                    Data-driven insights
+                  </span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <FaGlobeAfrica size={14} color={colors.amber} />
+                  <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem' }}>
+                    Ecosystem-wide impact
+                  </span>
+                </div>
               </div>
             </div>
 
+            {/* Hero Image */}
             <div style={{
-              display: 'flex',
-              gap: '30px',
-              marginTop: '28px',
-              flexWrap: 'wrap',
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <FaCheckCircle size={14} color={colors.amber} />
-                <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem' }}>
-                  Trusted by leading accelerators
-                </span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <FaShieldAlt size={14} color={colors.amber} />
-                <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem' }}>
-                  Data-driven insights
-                </span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <FaGlobeAfrica size={14} color={colors.amber} />
-                <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.8rem' }}>
-                  Ecosystem-wide impact
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <div style={{
-            position: 'relative',
-            zIndex: 1,
-            marginLeft: 'auto',
-            display: 'none',
-            '@media (min-width: 1024px)': {
-              display: 'block',
-            },
-          }}>
-            <div style={{
-              width: '200px',
-              height: '200px',
-              borderRadius: '50%',
-              background: `linear-gradient(135deg, ${colors.amber}30, ${colors.gold}20)`,
+              flex: '0 0 320px',
+              height: '260px',
+              borderRadius: '16px',
+              overflow: 'hidden',
               border: `2px solid ${colors.amber}30`,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexDirection: 'column',
-              padding: '20px',
             }}>
-              <div style={{ fontSize: '3rem', color: colors.amber, marginBottom: '8px' }}>🚀</div>
-              <div style={{ color: colors.white, fontSize: '0.9rem', fontWeight: 700, textAlign: 'center' }}>
-                Scale Your <br />Impact
-              </div>
-              <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.7rem', marginTop: '4px' }}>
-                Powered by BIG
-              </div>
+              <img 
+                src="https://images.unsplash.com/photo-1557804506-669a67965ba0?auto=format&fit=crop&w=600&h=400&q=80"
+                alt="Ecosystem Collaboration"
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'cover',
+                }}
+                loading="lazy"
+              />
             </div>
           </div>
         </section>
@@ -318,139 +320,195 @@ const SolutionsCatalysts = () => {
         {/* Audiences Section */}
         <section style={{ marginBottom: '50px' }}>
           <div style={{
-            textAlign: 'center',
-            marginBottom: '32px',
-          }}>
-            <p style={{
-              color: colors.secondary,
-              fontWeight: 700,
-              fontSize: '0.75rem',
-              letterSpacing: '0.14em',
-              textTransform: 'uppercase',
-              marginBottom: '8px',
-            }}>
-              Who We Serve
-            </p>
-            <h2 style={{
-              fontSize: 'clamp(1.5rem, 2.5vw, 2rem)',
-              fontWeight: 800,
-              color: colors.dark,
-              margin: 0,
-            }}>
-              Empowering <span style={{ color: colors.brown }}>Ecosystem</span> Builders
-            </h2>
-          </div>
-
-          <div style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(5, 1fr)',
-            gap: '12px',
+            gridTemplateColumns: '1fr 1fr',
+            gap: '40px',
+            alignItems: 'center',
           }}>
-            {audiences.map((item, index) => (
-              <div
-                key={index}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '8px',
-                  padding: '14px 12px',
-                  background: colors.white,
-                  borderRadius: '10px',
-                  border: `1px solid ${colors.border}`,
-                  transition: 'all 0.2s ease',
-                  textAlign: 'center',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = colors.brown;
-                  e.currentTarget.style.transform = 'translateY(-2px)';
-                  e.currentTarget.style.boxShadow = `0 4px 15px ${colors.brown}20`;
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = colors.border;
-                  e.currentTarget.style.transform = 'translateY(0)';
-                  e.currentTarget.style.boxShadow = 'none';
-                }}
-              >
-                <span style={{
-                  fontSize: '0.8rem',
-                  color: colors.dark,
-                  fontWeight: 600,
+            <div>
+              <div style={{
+                marginBottom: '16px',
+              }}>
+                <p style={{
+                  color: colors.secondary,
+                  fontWeight: 700,
+                  fontSize: '0.75rem',
+                  letterSpacing: '0.14em',
+                  textTransform: 'uppercase',
+                  marginBottom: '4px',
                 }}>
-                  {item}
-                </span>
+                  Who We Serve
+                </p>
+                <h2 style={{
+                  fontSize: 'clamp(1.3rem, 2vw, 1.8rem)',
+                  fontWeight: 800,
+                  color: colors.dark,
+                  margin: 0,
+                }}>
+                  Empowering <span style={{ color: colors.brown }}>Ecosystem</span> Builders
+                </h2>
               </div>
-            ))}
+
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr',
+                gap: '10px',
+              }}>
+                {audiences.map((item, index) => (
+                  <div
+                    key={index}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      padding: '12px 16px',
+                      background: colors.white,
+                      borderRadius: '10px',
+                      border: `1px solid ${colors.border}`,
+                      transition: 'all 0.2s ease',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.borderColor = colors.brown;
+                      e.currentTarget.style.transform = 'translateX(4px)';
+                      e.currentTarget.style.boxShadow = `0 4px 15px ${colors.brown}20`;
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.borderColor = colors.border;
+                      e.currentTarget.style.transform = 'translateX(0)';
+                      e.currentTarget.style.boxShadow = 'none';
+                    }}
+                  >
+                    <FaCheckCircle size={14} color={colors.brown} />
+                    <span style={{
+                      fontSize: '0.82rem',
+                      color: colors.dark,
+                      fontWeight: 500,
+                    }}>
+                      {item}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Side Image */}
+            <div style={{
+              borderRadius: '16px',
+              overflow: 'hidden',
+              height: '280px',
+              boxShadow: '0 8px 40px rgba(28,20,16,0.1)',
+            }}>
+              <img 
+                src="https://images.unsplash.com/photo-1504384308090-c894fdcc538d?auto=format&fit=crop&w=800&h=500&q=80"
+                alt="Ecosystem Building Workspace"
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'cover',
+                }}
+                loading="lazy"
+              />
+            </div>
           </div>
         </section>
 
         {/* Capabilities Section */}
         <section style={{ marginBottom: '50px' }}>
           <div style={{
-            textAlign: 'center',
-            marginBottom: '32px',
-          }}>
-            <p style={{
-              color: colors.secondary,
-              fontWeight: 700,
-              fontSize: '0.75rem',
-              letterSpacing: '0.14em',
-              textTransform: 'uppercase',
-              marginBottom: '8px',
-            }}>
-              What We Enable
-            </p>
-            <h2 style={{
-              fontSize: 'clamp(1.5rem, 2.5vw, 2rem)',
-              fontWeight: 800,
-              color: colors.dark,
-              margin: 0,
-            }}>
-              End-to-End <span style={{ color: colors.brown }}>Programme</span> Management
-            </h2>
-          </div>
-
-          <div style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(3, 1fr)',
-            gap: '12px',
+            gridTemplateColumns: '1fr 1fr',
+            gap: '40px',
+            alignItems: 'center',
           }}>
-            {capabilities.map((item, index) => (
-              <div
-                key={index}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '10px',
-                  padding: '12px 16px',
-                  background: colors.white,
-                  borderRadius: '10px',
-                  border: `1px solid ${colors.border}`,
-                  transition: 'all 0.2s ease',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.borderColor = colors.brown;
-                  e.currentTarget.style.transform = 'translateX(4px)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.borderColor = colors.border;
-                  e.currentTarget.style.transform = 'translateX(0)';
-                }}
-              >
-                <FaCheckCircle size={16} color={colors.brown} />
-                <span style={{
-                  fontSize: '0.85rem',
-                  color: colors.dark,
-                  fontWeight: 500,
+            <div style={{
+              order: '2',
+            }}>
+              <div style={{
+                marginBottom: '16px',
+              }}>
+                <p style={{
+                  color: colors.secondary,
+                  fontWeight: 700,
+                  fontSize: '0.75rem',
+                  letterSpacing: '0.14em',
+                  textTransform: 'uppercase',
+                  marginBottom: '4px',
                 }}>
-                  {item}
-                </span>
+                  What We Enable
+                </p>
+                <h2 style={{
+                  fontSize: 'clamp(1.3rem, 2vw, 1.8rem)',
+                  fontWeight: 800,
+                  color: colors.dark,
+                  margin: 0,
+                }}>
+                  End-to-End <span style={{ color: colors.brown }}>Programme</span> Management
+                </h2>
               </div>
-            ))}
+
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 1fr',
+                gap: '10px',
+              }}>
+                {capabilities.map((item, index) => (
+                  <div
+                    key={index}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      padding: '10px 14px',
+                      background: colors.white,
+                      borderRadius: '10px',
+                      border: `1px solid ${colors.border}`,
+                      transition: 'all 0.2s ease',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.borderColor = colors.brown;
+                      e.currentTarget.style.transform = 'translateX(4px)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.borderColor = colors.border;
+                      e.currentTarget.style.transform = 'translateX(0)';
+                    }}
+                  >
+                    <FaCheckCircle size={14} color={colors.brown} />
+                    <span style={{
+                      fontSize: '0.78rem',
+                      color: colors.dark,
+                      fontWeight: 500,
+                    }}>
+                      {item}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Side Image - Left */}
+            <div style={{
+              order: '1',
+              borderRadius: '16px',
+              overflow: 'hidden',
+              height: '280px',
+              boxShadow: '0 8px 40px rgba(28,20,16,0.1)',
+            }}>
+              <img 
+                src="https://images.unsplash.com/photo-1551288049-bebda4e38f71?auto=format&fit=crop&w=800&h=500&q=80"
+                alt="Programme Management Dashboard"
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'cover',
+                }}
+                loading="lazy"
+              />
+            </div>
           </div>
         </section>
 
-        {/* Key Solutions Section */}
+        {/* Key Solutions Section with Images */}
         <section style={{ marginBottom: '50px' }}>
           <div style={{
             textAlign: 'center',
@@ -487,13 +545,13 @@ const SolutionsCatalysts = () => {
                 style={{
                   background: colors.white,
                   borderRadius: '14px',
-                  padding: '24px 20px',
+                  overflow: 'hidden',
                   border: `1px solid ${colors.border}`,
                   transition: 'all 0.3s ease',
                 }}
                 onMouseEnter={(e) => {
-                  e.currentTarget.style.transform = 'translateY(-4px)';
-                  e.currentTarget.style.boxShadow = '0 8px 30px rgba(28,20,16,0.08)';
+                  e.currentTarget.style.transform = 'translateY(-6px)';
+                  e.currentTarget.style.boxShadow = '0 12px 40px rgba(28,20,16,0.1)';
                   e.currentTarget.style.borderColor = solution.color;
                 }}
                 onMouseLeave={(e) => {
@@ -503,92 +561,144 @@ const SolutionsCatalysts = () => {
                 }}
               >
                 <div style={{
-                  width: '48px',
-                  height: '48px',
-                  borderRadius: '12px',
-                  background: `${solution.color}15`,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: solution.color,
-                  marginBottom: '12px',
+                  height: '140px',
+                  overflow: 'hidden',
+                  position: 'relative',
                 }}>
-                  {solution.icon}
+                  <img 
+                    src={solution.image}
+                    alt={solution.title}
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'cover',
+                      transition: 'transform 0.5s ease',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.transform = 'scale(1.05)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.transform = 'scale(1)';
+                    }}
+                    loading="lazy"
+                    onError={(e) => {
+                      e.target.style.display = 'none';
+                    }}
+                  />
                 </div>
-                <h4 style={{
-                  fontSize: '1rem',
-                  fontWeight: 700,
-                  color: colors.dark,
-                  margin: '0 0 6px',
+
+                <div style={{
+                  padding: '16px 20px 20px',
                 }}>
-                  {solution.title}
-                </h4>
-                <p style={{
-                  fontSize: '0.85rem',
-                  color: colors.muted,
-                  lineHeight: 1.6,
-                  margin: 0,
-                }}>
-                  {solution.description}
-                </p>
+                  <div style={{
+                    width: '44px',
+                    height: '44px',
+                    borderRadius: '10px',
+                    background: `${solution.color}15`,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: solution.color,
+                    marginBottom: '10px',
+                  }}>
+                    {solution.icon}
+                  </div>
+                  <h4 style={{
+                    fontSize: '0.95rem',
+                    fontWeight: 700,
+                    color: colors.dark,
+                    margin: '0 0 4px',
+                  }}>
+                    {solution.title}
+                  </h4>
+                  <p style={{
+                    fontSize: '0.82rem',
+                    color: colors.muted,
+                    lineHeight: 1.6,
+                    margin: 0,
+                  }}>
+                    {solution.description}
+                  </p>
+                </div>
               </div>
             ))}
           </div>
         </section>
 
+       
+
         {/* CTA Section */}
         <section style={{
-          padding: '40px',
+          position: 'relative',
+          padding: '50px',
           background: `linear-gradient(135deg, ${colors.brown}, ${colors.brownLight})`,
           borderRadius: '20px',
           textAlign: 'center',
+          overflow: 'hidden',
         }}>
-          <h2 style={{
-            fontSize: 'clamp(1.3rem, 2vw, 1.8rem)',
-            fontWeight: 800,
-            color: colors.white,
-            margin: '0 0 12px',
+          <div style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundImage: 'url(https://images.unsplash.com/photo-1557804506-669a67965ba0?auto=format&fit=crop&w=1400&h=400&q=80)',
+            backgroundSize: 'cover',
+            backgroundPosition: 'center',
+            opacity: 0.08,
+          }} />
+          
+          <div style={{
+            position: 'relative',
+            zIndex: 1,
           }}>
-            Ready to Scale Your Impact?
-          </h2>
-          <p style={{
-            fontSize: '1rem',
-            color: 'rgba(255,255,255,0.85)',
-            margin: '0 0 24px',
-            maxWidth: '450px',
-            marginLeft: 'auto',
-            marginRight: 'auto',
-          }}>
-            Join leading accelerators, incubators, and business associations using BIG to drive ecosystem growth.
-          </p>
-          <button
-            onClick={() => navigate('/LoginRegister')}
-            style={{
-              background: colors.white,
-              color: colors.brown,
-              border: 'none',
-              borderRadius: '50px',
-              padding: '16px 48px',
+            <h2 style={{
+              fontSize: 'clamp(1.3rem, 2vw, 1.8rem)',
+              fontWeight: 800,
+              color: colors.white,
+              margin: '0 0 12px',
+            }}>
+              Ready to Scale Your Impact?
+            </h2>
+            <p style={{
               fontSize: '1rem',
-              fontWeight: 700,
-              cursor: 'pointer',
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '12px',
-              transition: 'all 0.3s ease',
-              boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.transform = 'translateY(-3px)';
-              e.currentTarget.style.boxShadow = '0 8px 30px rgba(0,0,0,0.25)';
-            }}
-            onMouseLeave={(e) => {
-              e.currentTarget.style.transform = 'translateY(0)';
-              e.currentTarget.style.boxShadow = '0 4px 20px rgba(0,0,0,0.15)';
-            }}
-          >
-            Get Started <FaArrowRight size={14} />
-          </button>
+              color: 'rgba(255,255,255,0.85)',
+              margin: '0 0 24px',
+              maxWidth: '450px',
+              marginLeft: 'auto',
+              marginRight: 'auto',
+            }}>
+              Join leading accelerators and incubatorsusing BIG to drive ecosystem growth.
+            </p>
+            <button
+              onClick={() => navigate('/LoginRegister')}
+              style={{
+                background: colors.white,
+                color: colors.brown,
+                border: 'none',
+                borderRadius: '50px',
+                padding: '16px 48px',
+                fontSize: '1rem',
+                fontWeight: 700,
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '12px',
+                transition: 'all 0.3s ease',
+                boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.transform = 'translateY(-3px)';
+                e.currentTarget.style.boxShadow = '0 8px 30px rgba(0,0,0,0.25)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = '0 4px 20px rgba(0,0,0,0.15)';
+              }}
+            >
+              Get Started <FaArrowRight size={14} />
+            </button>
+          </div>
         </section>
       </div>
 

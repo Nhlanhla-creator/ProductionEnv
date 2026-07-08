@@ -70,7 +70,9 @@ const RegModal = ({ onClose, isMobile }) => (
 )
 
 const ScoreRing = ({ pct=80, size=110 }) => {
-  const r=(size/2)-10, circ=2*Math.PI*r, dash=(pct/100)*circ
+  const r = (size/2) - 10;
+  const circ = 2 * Math.PI * r;
+  const dash = (pct/100) * circ;
   return (
     <div style={{position:"relative",width:size,height:size,flexShrink:0}}>
       <svg width={size} height={size} style={{transform:"rotate(-90deg)"}}>
@@ -530,15 +532,70 @@ const LandingPage = () => {
   useEffect(()=>{ const s=()=>setShowScroll(window.scrollY>400); window.addEventListener("scroll",s); return ()=>window.removeEventListener("scroll",s) },[])
 
   const mobile=winW<=768
-  const go=()=>regOpen?navigate("/loginRegister"):setShowModal(true)
+  const go=() => navigate('/solutions')
 
+  // Benefits data with random online images
   const benefits=[
-    {title:"Businesses & NPOs", icon:<FaUsers size={18}/>, color:C.primary, tagline:"Be Seen. Be Matched. Grow.", desc:"Commercial businesses seeking growth, markets, suppliers, funding, partnerships, etc. and NGOs/NPOs that are not primarily operating as catalysts.", link:"/HowItWorksSMSE", tip:"SMEs, startups, growing enterprises, and non-profits."},
-    {title:"Investors", icon:<FaUserTie size={18}/>, color:C.secondary, tagline:"Discover. Verify. Invest.", desc:"Access verified, investment-ready businesses with transparent scoring and predictive insights.", link:"/HowItWorksInvestors", tip:"VCs, angel investors, and impact investors."},
-    {title:"Corporates",icon:<MdCorporateFare size={18}/>, color:"#4A3728", tagline:"Source. Partner. Amplify Impact.", desc:"Large companies looking for suppliers, innovation, partnerships, or ESD opportunities.", link:"/HowItWorksCorporates", tip:"Large companies sourcing via CSI or ESD."},
-    {title:"Catalyst & Business Association Organisations", icon:<FaHandHoldingHeart size={18}/>, color:"#8B6914", tagline:"Accelerate. Mentor. Fund. Track.", desc:"Organisations that enable business growth (ESD programmes, incubators, accelerators, development agencies, industry associations, universities, consultants, etc.)", link:"/HowItWorksCatalysts", tip:"Incubators, accelerators, and development agencies."},
-    {title:"Advisors", icon:<FaUserTie size={18}/>, color:"#5A5A5A", tagline:"Guide. Mentor. Get Recognised.", desc:"Connect with businesses that need your expertise and grow your advisory practice.", link:"/HowItWorksAdvisors", tip:"Strategic advisors matched to businesses."},
-    {title:"Interns & Sponsors", icon:<FaUsers size={18}/>, color:"#8A8A8A", tagline:"Learn. Grow. Get Experience.", desc:"Students, graduates, and internship sponsors connecting for practical experience and talent development.", link:"/HowItWorksInterns", tip:"Students, graduates, and internship sponsors."},
+    {
+      title:"Businesses & NPOs",
+      image:"https://images.unsplash.com/photo-1521791136064-7986c2920216?auto=format&fit=crop&w=400&h=300&q=80",
+      fallbackEmoji:"🏢",
+      color:C.primary,
+      tagline:"Be Seen. Be Matched. Grow.",
+      desc:"Commercial businesses seeking growth, markets, suppliers, funding, partnerships, etc. and NGOs/NPOs that are not primarily operating as catalysts.",
+      link:"/HowItWorksSMSE",
+      tip:"SMEs, startups, growing enterprises, and non-profits."
+    },
+    {
+      title:"Investors",
+      image:"https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?auto=format&fit=crop&w=400&h=300&q=80",
+      fallbackEmoji:"💰",
+      color:C.secondary,
+      tagline:"Discover. Verify. Invest.",
+      desc:"Access verified, investment-ready businesses with transparent scoring and predictive insights.",
+      link:"/HowItWorksInvestors",
+      tip:"VCs, angel investors, and impact investors."
+    },
+    {
+      title:"Corporates",
+      image:"https://images.unsplash.com/photo-1560179707-f14e90ef3623?auto=format&fit=crop&w=400&h=300&q=80",
+      fallbackEmoji:"🏛️",
+      color:"#4A3728",
+      tagline:"Source. Partner. Amplify Impact.",
+      desc:"Large companies looking for suppliers, innovation, partnerships, or ESD opportunities.",
+      link:"/HowItWorksCorporates",
+      tip:"Large companies sourcing via CSI or ESD."
+    },
+    {
+      title:"Catalyst , Associations & Member Organisations",
+      image:"https://images.unsplash.com/photo-1557804506-669a67965ba0?auto=format&fit=crop&w=400&h=300&q=80",
+      fallbackEmoji:"🚀",
+      color:"#8B6914",
+      tagline:"Accelerate. Mentor. Fund. Track.",
+      desc:"Organisations that enable business growth (ESD programmes, incubators, accelerators, development agencies, industry associations, universities, consultants, etc.)",
+      link:"/HowItWorksCatalysts",
+      tip:"Incubators, accelerators, and development agencies."
+    },
+    {
+      title:"Advisors",
+      image:"https://images.unsplash.com/photo-1524178232363-1fb2b075b655?auto=format&fit=crop&w=400&h=300&q=80",
+      fallbackEmoji:"🧠",
+      color:"#5A5A5A",
+      tagline:"Guide. Mentor. Get Recognised.",
+      desc:"Connect with businesses that need your expertise and grow your advisory practice.",
+      link:"/HowItWorksAdvisors",
+      tip:"Strategic advisors matched to businesses."
+    },
+    {
+      title:"Interns & Sponsors",
+      image:"https://images.unsplash.com/photo-1523240795612-9a054b0db644?auto=format&fit=crop&w=400&h=300&q=80",
+      fallbackEmoji:"🎓",
+      color:"#8A8A8A",
+      tagline:"Learn. Grow. Get Experience.",
+      desc:"Students, graduates, and internship sponsors connecting for practical experience and talent development.",
+      link:"/HowItWorksInterns",
+      tip:"Students, graduates, and internship sponsors."
+    },
   ]
   const steps=[
     {n:"01",icon:<FaUser size={18}/>, title:"Create Your Profile", desc:"Sign up, upload your business details, and get verified across all key areas."},
@@ -566,6 +623,7 @@ const LandingPage = () => {
     .ben-card:hover{transform:translateY(-6px);box-shadow:0 20px 48px rgba(28,20,16,0.14);border-color:${C.neutral}}
     .ben-card .tip{visibility:hidden;opacity:0;position:absolute;bottom:calc(100%+8px);left:50%;transform:translateX(-50%);background:${C.dark};color:#fff;font-size:0.72rem;padding:7px 12px;border-radius:10px;transition:opacity 0.18s;z-index:30;pointer-events:none;max-width:200px;white-space:normal;text-align:center;line-height:1.4}
     .ben-card:hover .tip{visibility:visible;opacity:1}
+    .ben-image{width:100%;height:140px;object-fit:cover;border-radius:10px;margin-bottom:12px;background:#f0ebe2}
     .step-card{background:${C.card};border-radius:20px;padding:28px 22px;border:1px solid ${C.border};position:relative;transition:box-shadow 0.2s,transform 0.2s}
     .step-card:hover{box-shadow:0 12px 32px rgba(28,20,16,0.1);transform:translateY(-3px)}
     .tc{background:${C.card};border-radius:16px;padding:24px;border:1px solid ${C.border};transition:transform 0.22s,box-shadow 0.22s}
@@ -577,7 +635,7 @@ const LandingPage = () => {
     .vm-card{background:${C.white};border-radius:8px;padding:25px;text-align:center;box-shadow:0 5px 20px rgba(0,0,0,0.1);transition:transform 0.3s ease,box-shadow 0.3s ease}
     .vm-card:hover{transform:translateY(-3px);box-shadow:0 8px 30px rgba(0,0,0,0.15)}
     .vm-icon-wrap{width:60px;height:60px;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 15px;border:2px solid}
-    @media(max-width:768px){.hero-r{flex-direction:column!important}.g2,.g3,.g4,.g6{grid-template-columns:1fr!important}}
+    @media(max-width:768px){.hero-r{flex-direction:column!important}.g2,.g3,.g4,.g6{grid-template-columns:1fr!important}.ben-image{height:120px}}
     @media(prefers-reduced-motion:reduce){*{transition-duration:0.01ms!important}}
   `
 
@@ -611,7 +669,7 @@ const LandingPage = () => {
                 BIG Marketplace connects African businesses to funders, partners, and opportunities through one AI-powered credibility score.
               </p>
               <div style={{display:"flex",gap:14,flexWrap:"wrap",marginBottom:40}}>
-                <button className="lp-a" onClick={go}>{regOpen?"Join Now — It's Free":"Get Your BIG Score"}</button>
+                <button className="lp-a" onClick={go}>See Solutions</button>
                 <Link to="/HowItWorks" className="lp-w">See How It Works</Link>
               </div>
               <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
@@ -662,17 +720,12 @@ const LandingPage = () => {
               <p style={{fontSize:"0.9rem",lineHeight:"1.6",color:C.dark}}><strong>To make growth accessible — not accidental — for Africa's most promising enterprises.</strong></p>
             </div>
           </div>
-          <div style={{textAlign:"center"}}>
-            <p style={{fontSize:mobile?"1rem":"1.1rem",fontWeight:600,marginBottom:"25px",color:C.primary,textTransform:"uppercase"}}>
-              We're building a continent-wide trust economy. Join us.
-            </p>
-            <button className="lp-b" onClick={go}>{regOpen?"Register Now":"Be BIG. Join the Movement"}</button>
-          </div>
+         
         </div>
         <div style={{position:"absolute",bottom:0,left:0,right:0,height:"20px",background:`linear-gradient(to right, ${C.primary}, ${C.secondary})`,clipPath:"polygon(0 30%, 100% 0, 100% 100%, 0 100%)"}}/>
       </section>
 
-      {/* WHO BENEFITS FROM BIG SECTION */}
+      {/* WHO BENEFITS FROM BIG SECTION - With Images */}
       <section style={{padding:mobile?"48px 20px":"72px 40px",background:C.dark}}>
         <div style={{maxWidth:1100,margin:"0 auto"}}>
           <div style={{textAlign:"center",marginBottom:48}}>
@@ -683,13 +736,39 @@ const LandingPage = () => {
             {benefits.map((c,i)=>(
               <div key={i} className="ben-card" style={{borderLeft:`3px solid ${c.color}`}}>
                 <div className="tip">{c.tip}</div>
-                <div style={{width:40,height:40,borderRadius:12,background:`${c.color}1A`,display:"flex",alignItems:"center",justifyContent:"center",marginBottom:12,color:c.color}}>{c.icon}</div>
+                {/* Image from online source */}
+                <img 
+                  src={c.image} 
+                  alt={c.title}
+                  className="ben-image"
+                  loading="lazy"
+                  onError={(e) => {
+                    e.target.style.display = 'none';
+                    // Show fallback emoji
+                    const fallback = e.target.parentElement.querySelector('.fallback-emoji');
+                    if (fallback) fallback.style.display = 'flex';
+                  }}
+                />
+                <div className="fallback-emoji" style={{
+                  display: 'none',
+                  width: '100%',
+                  height: '140px',
+                  borderRadius: '10px',
+                  marginBottom: '12px',
+                  background: `${c.color}20`,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '3rem',
+                  border: `2px dashed ${c.color}40`
+                }}>
+                  {c.fallbackEmoji}
+                </div>
                 <h3 style={{fontSize:"0.92rem",fontWeight:800,color:C.dark,margin:"0 0 4px"}}>{c.title}</h3>
                 <p style={{fontSize:"0.7rem",fontWeight:700,color:c.color,textTransform:"uppercase",margin:"0 0 10px",letterSpacing:"0.04em"}}>{c.tagline}</p>
                 <p style={{fontSize:"0.78rem",color:C.muted,margin:"0 0 16px",lineHeight:1.55,flexGrow:1}}>{c.desc}</p>
                 <div style={{marginTop:"auto",display:"flex",gap:8}}>
                   <Link to={c.link} style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",background:`${c.color}12`,color:c.color,fontWeight:700,textDecoration:"none",fontSize:"0.72rem",padding:"8px 10px",borderRadius:8,gap:4,border:`1px solid ${c.color}28`}}>How It Works <FaChevronRight size={9}/></Link>
-                  <button onClick={go} style={{flex:1,background:c.color,color:"#fff",border:"none",borderRadius:8,padding:"8px 10px",fontSize:"0.72rem",fontWeight:700,cursor:"pointer",fontFamily:"inherit",transition:"opacity 0.2s"}} onMouseOver={e=>{e.currentTarget.style.opacity="0.85"}} onMouseOut={e=>{e.currentTarget.style.opacity="1"}}>{regOpen?"Join Now":"Get Started"}</button>
+                  <button onClick={go} style={{flex:1,background:c.color,color:"#fff",border:"none",borderRadius:8,padding:"8px 10px",fontSize:"0.72rem",fontWeight:700,cursor:"pointer",fontFamily:"inherit",transition:"opacity 0.2s"}} onMouseOver={e=>{e.currentTarget.style.opacity="0.85"}} onMouseOut={e=>{e.currentTarget.style.opacity="1"}}>See Solutions</button>
                 </div>
               </div>
             ))}
@@ -771,7 +850,7 @@ const LandingPage = () => {
           <h2 style={{fontSize:mobile?"1.7rem":"2.4rem",fontWeight:900,color:"#fff",margin:"0 0 14px",letterSpacing:"-0.02em",lineHeight:1.15}}>Ready to build your<br/>business credibility?</h2>
           <p style={{fontSize:"0.95rem",color:"rgba(255,255,255,0.6)",lineHeight:1.7,marginBottom:32}}>Join a trusted ecosystem designed to help African businesses grow, connect, and succeed.</p>
           <div style={{display:"flex",gap:14,justifyContent:"center",flexWrap:"wrap"}}>
-            <button className="lp-a" onClick={go}>{regOpen?"Get Started — It's Free":"Join the Movement"}</button>
+            <button className="lp-a" onClick={go}>See Solutions</button>
             <Link to="/HowItWorks" className="lp-w">See the Platform</Link>
           </div>
         </div>

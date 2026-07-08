@@ -86,26 +86,28 @@ const Header = ({ onLoginClick }) => {
     setIsSolutionsOpen(false);
   };
 
-  // How It Works dropdown items - UPDATED LABELS ONLY, PATHS UNCHANGED
-  const howItWorksItems = [
-    { label: 'For Businesses', path: '/HowItWorksSMSE' },
-    { label: 'For Investors', path: '/HowItWorksInvestors' },
-    { label: 'For Corporates', path: '/HowItWorksCorporates' },
-    { label: 'For Catalysts', path: '/HowItWorksCatalysts' },
-    { label: 'For Advisors', path: '/HowItWorksAdvisors' },
-    { label: 'For Interns', path: '/HowItWorksInterns' },
-  ];
+// How It Works dropdown items - Alphabetical order
+const howItWorksItems = [
+  { label: 'For Advisors', path: '/HowItWorksAdvisors' },
+  { label: 'For Associations & Member Organisations', path: '/HowItWorksAssociations' },
+  { label: 'For Businesses', path: '/HowItWorksSMSE' },
+  { label: 'For Catalysts', path: '/HowItWorksCatalysts' },
+  { label: 'For Corporates', path: '/HowItWorksCorporates' },
+  { label: 'For Interns', path: '/HowItWorksInterns' },
+  { label: 'For Investors', path: '/HowItWorksInvestors' },
+];
 
-  // Solutions dropdown items - UPDATED LABELS ONLY, PATHS UNCHANGED
-  const solutionsItems = [
-    { label: 'Overview', path: '/solutions' },
-    { label: 'For Businesses', path: '/solutions/smes' },
-    { label: 'For Business Associations', path: '/solutions/catalysts' },
-    { label: 'For Investors', path: '/solutions/investors' },
-    { label: 'For Corporates', path: '/solutions/corporates' },
-    { label: 'For Catalysts', path: '/solutions/catalysts' },
-    { label: 'For Interns', path: '/solutions/graduates' },
-  ];
+ // Solutions dropdown items - Alphabetical order
+const solutionsItems = [
+  { label: 'Overview', path: '/solutions' },
+  { label: 'For Advisors', path: '/solutions/advisors' },
+  { label: 'For Associations & Member Organisations', path: '/solutions/associations' },
+  { label: 'For Businesses', path: '/solutions/smes' },
+  { label: 'For Catalysts', path: '/solutions/catalysts' },
+  { label: 'For Corporates', path: '/solutions/corporates' },
+  { label: 'For Interns', path: '/solutions/graduates' },
+  { label: 'For Investors', path: '/solutions/investors' },
+];
 
   const styles = {
     header: {
