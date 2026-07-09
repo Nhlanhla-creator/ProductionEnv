@@ -304,11 +304,11 @@ const InsightsPage = () => {
                         height: isMobile ? '200px' : '100%',
                       }}>
                         <img 
-                          src={post.imageUrl || 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?ixlib=rb-1.2.1&auto=format&fit=crop&w=1352&q=80'} 
+                          src={post.imageUrl || '/BIGLogoBrown.jpg'} 
                           alt={post.title} 
                           style={styles.postImage}
                           onError={(e) => {
-                            e.target.src = 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?ixlib=rb-1.2.1&auto=format&fit=crop&w=1352&q=80';
+                            e.target.src = '/BIGLogoBrown.jpg';
                           }}
                         />
                         {post.category && post.category !== "All Posts" && (
@@ -337,11 +337,11 @@ const InsightsPage = () => {
                               height: isMobile ? '36px' : '44px',
                             }}>
                               <img 
-                                src={post.authorImageUrl || "https://randomuser.me/api/portraits/women/44.jpg"} 
-                                alt="Author" 
+                                src="/BIGLogoBrown.jpg" 
+                                alt="BIG Marketplace" 
                                 style={styles.authorImage}
                                 onError={(e) => {
-                                  e.target.src = "https://randomuser.me/api/portraits/women/44.jpg";
+                                  e.target.src = '/BIGLogoBrown.jpg';
                                 }}
                               />
                             </div>
@@ -484,7 +484,7 @@ const InsightsPage = () => {
               height: isMobile ? '200px' : '400px',
             }}>
               <img 
-                src={selectedArticle.imageUrl || 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?ixlib=rb-1.2.1&auto=format&fit=crop&w=1352&q=80'} 
+                src={selectedArticle.imageUrl || '/BIGLogoBrown.jpg'} 
                 alt={selectedArticle.title} 
                 style={styles.modalImage}
               />
