@@ -46,11 +46,18 @@ export const advisorMenuItems = [
     icon: <User size={18} />,
     route: "/advisor-profile",
   },
+ 
   {
     id: "matches",
     label: "My Matches",
     icon: <HeartHandshake size={18} />,
     route: "/advisor-dashboard",
+  },
+   {
+    id: "cohorts",
+    label: "My Cohorts",
+    icon: <Users size={18} />,
+    route: "/advisor-cohorts",
   },
   {
     id: "insights",

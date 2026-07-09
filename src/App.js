@@ -86,6 +86,7 @@ import SupportProgramHeader from "./catalyst/CatalystProgramHeader/CatalystHeade
 import AdvisorHeader from "./advisors/AdvisorHeader/advisorHeader"
 import Documents from "./Investor/Documents"
 import BetaSignupForm from "./BetaForm"
+import AdvisorCohorts from "./advisors/AdvisorCohorts/AdvisorCohorts"
 
 // Intern Components
 import InternSidebar from "./Interns/sidebar/sidebar"
@@ -1047,6 +1048,8 @@ function App() {
         <Route path="/advisor-messages" element={withProtection(AdvisorMessages, {}, renderAdvisorRoute)} />
         <Route path="/advisor-calendar" element={withProtection(Calendar, {}, renderAdvisorRoute)} />
         <Route path="/advisor-settings" element={withProtection(AdvisorSettings, {}, renderAdvisorRoute)} />
+<Route path="/advisor-cohorts" element={withProtection(AdvisorCohorts, {}, renderAdvisorRoute)} />
+
 
         {/* Advisor Billing Routes */}
         <Route path="/advisor/billing/info" element={withProtection(BillingInformationSMSE, {}, renderAdvisorRoute)} />
