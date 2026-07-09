@@ -1309,7 +1309,7 @@ const BIGScorePage = () => {
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <FaUsers size={16} color={colors.amber} />
                 <span style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.85rem' }}>
-                  Trusted by 500+ Businesses
+                  Trusted by many Businesses
                 </span>
               </div>
             </div>
