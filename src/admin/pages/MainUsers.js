@@ -11,14 +11,14 @@ import {
   Trash2,
   Ban,
   MoreHorizontal,
-  X,           // Add this
+  X,
   User,
   FileText,
   DollarSign,
   Building2,
   ChevronLeft,
   ChevronRight,
-  Calendar,    // Add this
+  Calendar,
   Mail,
   Phone,
   MapPin,
@@ -30,11 +30,14 @@ import {
   File,
   Shield,
   LockKeyhole,
+  LockOpen,
+  RefreshCw,
 } from "lucide-react"
 import styles from "./all-profiles.module.css"
-import { collection, getDocs, doc, deleteDoc } from "firebase/firestore"
+import { collection, getDocs, doc, deleteDoc, updateDoc } from "firebase/firestore"
 import * as XLSX from 'xlsx';
 import databaseService from "../../services/databaseService"
+import { auth } from "../../firebaseConfig"
 
 function MainUsers() {
   const navigate = useNavigate()
@@ -44,6 +47,7 @@ function MainUsers() {
   )
   
   const [loading, setLoading] = useState(true)
+  const [loadingMessage, setLoadingMessage] = useState("")
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
   const [selectedUser, setSelectedUser] = useState(null)
@@ -122,6 +126,7 @@ function MainUsers() {
       setUsersData([]);
     } finally {
       setLoading(false);
+      setLoadingMessage("");
     }
   };
 
@@ -199,10 +204,108 @@ function MainUsers() {
         await deleteUser(user.id, user);
         break;
       case "block":
-        if (window.confirm(`Are you sure you want to block ${user.companyName}?`)) {
-          setUsersData(usersData.map(u => 
-            u.firestoreId === user.firestoreId ? { ...u, status: "blocked" } : u
-          ));
+        if (window.confirm(`Are you sure you want to suspend ${user.companyName}? They will not be able to log in.`)) {
+          try {
+            setLoading(true);
+            setLoadingMessage("Suspending user account...");
+            
+            const reason = prompt("Reason for suspension (optional):") || "No reason provided";
+            
+            const currentUser = auth.currentUser;
+            if (!currentUser) {
+              throw new Error("No authenticated user found");
+            }
+            
+            const idToken = await currentUser.getIdToken();
+            
+            setLoadingMessage("Calling suspension API...");
+            const response = await fetch('https://us-central1-tuts-7ea8c.cloudfunctions.net/suspendUserAccount', {
+              method: 'POST',
+              headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${idToken}`
+              },
+              body: JSON.stringify({
+                data: {
+                  userId: user.firestoreId,
+                  reason: reason
+                }
+              })
+            });
+            
+            const result = await response.json();
+            
+            if (result.success === true || result.data?.success === true) {
+              setLoadingMessage("Updating local data...");
+              // Update Firestore status locally
+              const db = getCurrentDb();
+              const userRef = doc(db, 'users', user.firestoreId);
+              await updateDoc(userRef, { status: 'suspended' });
+              
+              // Refresh the data
+              await fetchMainUsers();
+              alert(`${user.companyName} has been suspended successfully.`);
+            } else {
+              throw new Error(result.message || "Suspension failed");
+            }
+          } catch (error) {
+            console.error("Suspension failed:", error);
+            alert(`Failed to suspend user: ${error.message}`);
+          } finally {
+            setLoading(false);
+            setLoadingMessage("");
+          }
+        }
+        break;
+      case "unblock":
+        if (window.confirm(`Are you sure you want to unblock ${user.companyName}?`)) {
+          try {
+            setLoading(true);
+            setLoadingMessage("Reactivating user account...");
+            
+            const currentUser = auth.currentUser;
+            if (!currentUser) {
+              throw new Error("No authenticated user found");
+            }
+            
+            const idToken = await currentUser.getIdToken();
+            
+            setLoadingMessage("Calling reactivation API...");
+            const response = await fetch('https://us-central1-tuts-7ea8c.cloudfunctions.net/reactivateUserAccount', {
+              method: 'POST',
+              headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${idToken}`
+              },
+              body: JSON.stringify({
+                data: {
+                  userId: user.firestoreId
+                }
+              })
+            });
+            
+            const result = await response.json();
+            
+            if (result.success === true || result.data?.success === true) {
+              setLoadingMessage("Updating local data...");
+              // Update Firestore status locally
+              const db = getCurrentDb();
+              const userRef = doc(db, 'users', user.firestoreId);
+              await updateDoc(userRef, { status: 'active' });
+              
+              // Refresh the data
+              await fetchMainUsers();
+              alert(`${user.companyName} has been unblocked successfully.`);
+            } else {
+              throw new Error(result.message || "Unblock failed");
+            }
+          } catch (error) {
+            console.error("Unblock failed:", error);
+            alert(`Failed to unblock user: ${error.message}`);
+          } finally {
+            setLoading(false);
+            setLoadingMessage("");
+          }
         }
         break;
       default:
@@ -210,38 +313,64 @@ function MainUsers() {
     }
   };
 
-  const handleEditSave = () => {
-    setUsersData(usersData.map(user => 
-      user.firestoreId === selectedUser.firestoreId 
-        ? { 
-            ...user, 
-            ...editFormData,
-            lastEdited: new Date().toISOString().split('T')[0]
-          } 
-        : user
-    ));
-    setShowEditModal(false);
-    setSelectedUser(null);
-    setEditFormData({});
+  const handleEditSave = async () => {
+    try {
+      setLoading(true);
+      const db = getCurrentDb();
+      const userRef = doc(db, 'users', selectedUser.firestoreId);
+      await updateDoc(userRef, {
+        username: editFormData.username,
+        email: editFormData.email,
+        companyName: editFormData.companyName,
+        status: editFormData.status,
+        updatedAt: new Date()
+      });
+      
+      await fetchMainUsers();
+      setShowEditModal(false);
+      setSelectedUser(null);
+      setEditFormData({});
+      alert("User updated successfully!");
+    } catch (error) {
+      console.error("Error updating user:", error);
+      alert(`Error updating user: ${error.message}`);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleAddUser = () => {
-    const newUser = {
-      id: Date.now(),
-      ...addFormData,
-      created: new Date().toISOString().split('T')[0],
-      lastEdited: new Date().toISOString().split('T')[0],
-      status: addFormData.status,
-    };
-    
-    setUsersData([...usersData, newUser]);
-    setShowAddModal(false);
-    setAddFormData({
-      username: "",
-      email: "",
-      companyName: "",
-      status: "pending",
-    });
+  const handleAddUser = async () => {
+    try {
+      setLoading(true);
+      // Note: This just adds to Firestore, not to Firebase Auth
+      const db = getCurrentDb();
+      const usersRef = collection(db, 'users');
+      const newUserRef = doc(usersRef);
+      
+      await updateDoc(newUserRef, {
+        username: addFormData.username,
+        email: addFormData.email,
+        companyName: addFormData.companyName,
+        status: addFormData.status,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      });
+      
+      await fetchMainUsers();
+      setShowAddModal(false);
+      setAddFormData({
+        username: "",
+        email: "",
+        companyName: "",
+        status: "pending",
+      });
+      alert("User created successfully!");
+    } catch (error) {
+      console.error("Error creating user:", error);
+      alert(`Error creating user: ${error.message}`);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const exportToExcel = () => {
@@ -332,16 +461,39 @@ function MainUsers() {
     });
   };
 
-  const filteredUsers = usersData.filter((user) => {
-    const matchesSearch = 
-      user.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user.companyName.toLowerCase().includes(searchTerm.toLowerCase());
+  // Create sorter function to push "N/A" usernames to the end
+  const createNALastSorter = (getValue) => (a, b) => {
+    const aValue = getValue(a);
+    const bValue = getValue(b);
     
-    const matchesStatus = statusFilter === "all" || user.status === statusFilter;
+    const aIsNA = aValue === "N/A" || aValue?.toLowerCase() === "n/a";
+    const bIsNA = bValue === "N/A" || bValue?.toLowerCase() === "n/a";
     
-    return matchesSearch && matchesStatus;
-  });
+    if (aIsNA === bIsNA) {
+      // For non-N/A items, sort alphabetically
+      if (!aIsNA && !bIsNA) {
+        return String(aValue).localeCompare(String(bValue));
+      }
+      return 0;
+    }
+    
+    // Push N/A items to the end
+    return aIsNA ? 1 : -1;
+  };
+
+  // Filter and sort users - push "N/A" usernames to the end
+  const filteredUsers = usersData
+    .filter((user) => {
+      const matchesSearch = 
+        user.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        user.companyName.toLowerCase().includes(searchTerm.toLowerCase());
+      
+      const matchesStatus = statusFilter === "all" || user.status === statusFilter;
+      
+      return matchesSearch && matchesStatus;
+    })
+    .sort(createNALastSorter(user => user.username));
 
   const totalPages = Math.ceil(filteredUsers.length / itemsPerPage);
   const startIndex = (currentPage - 1) * itemsPerPage;
@@ -352,7 +504,14 @@ function MainUsers() {
     return (
       <div className={styles.loading}>
         <div className={styles.loadingSpinner}></div>
-        <p>Loading users...</p>
+        {loadingMessage ? (
+          <>
+            <p>{loadingMessage}</p>
+            <p style={{ fontSize: '12px', color: '#666', marginTop: '8px' }}>Please wait...</p>
+          </>
+        ) : (
+          <p>Loading users...</p>
+        )}
       </div>
     );
   }
@@ -365,6 +524,10 @@ function MainUsers() {
           <p className={styles.subtitle}>Manage and monitor authentication users</p>
         </div>
         <div className={styles.headerActions}>
+          <button className={styles.actionButton} onClick={fetchMainUsers}>
+            <RefreshCw size={16} />
+            Refresh
+          </button>
           <button className={styles.actionButton} onClick={exportToExcel}>
             <Download size={16} />
             Export to Excel
@@ -469,13 +632,25 @@ function MainUsers() {
                     >
                       <Edit size={16} />
                     </button>
-                    <button
-                      className={styles.actionBtn}
-                      onClick={() => handleAction("block", user)}
-                      title="Block"
-                    >
-                      <LockKeyhole size={16} />
-                    </button>
+                    {user.status === "suspended" ? (
+                      <button
+                        className={styles.actionBtn}
+                        onClick={() => handleAction("unblock", user)}
+                        title="Unblock User"
+                        style={{ color: "#4CAF50" }}
+                      >
+                        <LockOpen size={16} />
+                      </button>
+                    ) : (
+                      <button
+                        className={styles.actionBtn}
+                        onClick={() => handleAction("block", user)}
+                        title="Block User"
+                        style={{ color: "#f44336" }}
+                      >
+                        <LockKeyhole size={16} />
+                      </button>
+                    )}
                     <button
                       className={styles.actionBtn}
                       onClick={() => handleAction("delete", user)}
