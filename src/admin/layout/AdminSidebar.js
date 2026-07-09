@@ -33,6 +33,7 @@ import {
   Bug,
   FlaskConical,
   BarChart3,
+  BookOpen, // Added for Article Management
 } from "lucide-react";
 import styles from "./admin-sidebar.module.css";
 import { auth } from "../../firebaseConfig";
@@ -163,6 +164,8 @@ function AdminSidebar() {
       icon: <LayoutDashboard size={18} />,
       route: "/admin/dashboard",
     },
+    // NEW: Article Management - Top level menu item
+   
     {
       id: "notion",
       label: "Shared Drive",
@@ -275,12 +278,17 @@ function AdminSidebar() {
         },
       ],
     },
-
     {
       id: "qr-codes",
       label: "QR Codes",
       icon: <QrCode size={18} />,
       route: "/admin/qr-codes",
+    },
+     {
+      id: "articles",
+      label: "Article Management",
+      icon: <BookOpen size={18} />,
+      route: "/admin/articles",
     },
     {
       id: "subscriptions",
