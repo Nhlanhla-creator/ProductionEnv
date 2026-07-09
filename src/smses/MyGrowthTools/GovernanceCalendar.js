@@ -2120,13 +2120,12 @@ const SpinKeyframes = () => (
             {new Date(showDetailsModal.createdAt).toLocaleDateString()}
           </div>
         </div>
-        
-        {/* Actions Section in Meeting Details Modal */}
+      {/* Actions Section in Meeting Details Modal */}
 <div style={detailsSectionStyles}>
   <div style={detailsLabelStyles}>Actions</div>
   {showDetailsModal.actions && showDetailsModal.actions.length > 0 ? (
     <div>
-      {showDetailsModal.actions.map((action) => (
+      {showDetailsModal.actions.slice(0, 3).map((action) => (
         <div
           key={action.id}
           style={{
@@ -2168,18 +2167,26 @@ const SpinKeyframes = () => (
           )}
         </div>
       ))}
+      {showDetailsModal.actions.length > 3 && (
+        <div style={{ fontSize: "12px", color: "#8d6e63", marginTop: "4px" }}>
+          +{showDetailsModal.actions.length - 3} more actions
+        </div>
+      )}
     </div>
   ) : (
     <div style={{ fontSize: "13px", color: "#8d6e63", fontStyle: "italic" }}>
       No actions created yet.
     </div>
   )}
-  <div style={{ marginTop: "12px" }}>
+  
+  {/* ✅ Navigation Buttons */}
+  <div style={{ display: "flex", gap: "8px", marginTop: "12px" }}>
     <button
       onClick={() => {
-        window.location.href = `/raps-actions?meeting=${showDetailsModal.id}`;
+        window.location.href = `/raps-overview?meeting=${showDetailsModal.id}`;
       }}
       style={{
+        flex: 1,
         padding: "8px 16px",
         backgroundColor: "#7d5a50",
         color: "white",
@@ -2188,14 +2195,30 @@ const SpinKeyframes = () => (
         cursor: "pointer",
         fontSize: "13px",
         fontWeight: "500",
-        width: "100%",
       }}
     >
-      📋 View All Actions for this Meeting
+      📊 View Overview
+    </button>
+    <button
+      onClick={() => {
+        window.location.href = `/raps-actions?meeting=${showDetailsModal.id}`;
+      }}
+      style={{
+        flex: 1,
+        padding: "8px 16px",
+        backgroundColor: "#e6d7c3",
+        color: "#4a352f",
+        border: "none",
+        borderRadius: "6px",
+        cursor: "pointer",
+        fontSize: "13px",
+        fontWeight: "500",
+      }}
+    >
+      📋 View Actions
     </button>
   </div>
 </div>
-
         {/* Action Buttons - Only show Delete for future meetings */}
         {(() => {
           const isPastMeeting = new Date(showDetailsModal.instances?.[0]?.date) < new Date();

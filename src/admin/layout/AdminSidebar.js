@@ -33,7 +33,6 @@ import {
   Bug,
   FlaskConical,
   BarChart3,
-  Newspaper,  // ADDED THIS ICON FOR ARTICLES
 } from "lucide-react";
 import styles from "./admin-sidebar.module.css";
 import { auth } from "../../firebaseConfig";
@@ -43,7 +42,7 @@ import { onAuthStateChanged } from "firebase/auth";
 import { doc } from "firebase/firestore";
 
 function AdminSidebar() {
-  // --- Sidebar manual expand/collapse logic ---
+  // --- Sidebar hover/manual expand/collapse logic ---
   const [isCollapsed, setIsCollapsed] = useState(() => {
     try {
       const saved = localStorage.getItem("adminSidebarCollapsed");
@@ -52,7 +51,10 @@ function AdminSidebar() {
       return false;
     }
   });
-  
+  // Track if user manually toggled (chevron)
+  const [manualOverride, setManualOverride] = useState(false);
+  // Track if sidebar is hovered (except chevron)
+  const [isHovered, setIsHovered] = useState(false);
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
   const location = useLocation();
@@ -63,11 +65,15 @@ function AdminSidebar() {
   const handleLogout = async () => {
     try {
       await auth.signOut();
+      // Clear any session storage
       sessionStorage.clear();
+      // Clear any local storage related to auth
       localStorage.removeItem("sidebarCollapsed");
+      // Navigate to login
       navigate("/LoginRegister");
     } catch (error) {
       console.error("Error signing out: ", error);
+      // You might want to show a toast notification here
       alert("Error signing out. Please try again.");
     }
   };
@@ -220,6 +226,12 @@ function AdminSidebar() {
       ],
     },
     {
+      id: "main-users",
+      label: "Main Users",
+      icon: <Users size={18} />,
+      route: "/admin/main-users",
+    },
+    {
       id: "ecosystem",
       label: "Ecosystem",
       icon: <Globe size={18} />,
@@ -263,14 +275,7 @@ function AdminSidebar() {
         },
       ],
     },
-    // ==================== ADDED ARTICLE MANAGEMENT MENU ITEM ====================
-    {
-      id: "articles",
-      label: "Article Management",
-      icon: <Newspaper size={18} />,
-      route: "/admin/articles",
-    },
-    // ============================================================================
+
     {
       id: "qr-codes",
       label: "QR Codes",
@@ -360,11 +365,37 @@ function AdminSidebar() {
     }
   };
 
-  // Manual chevron click only - no hover auto-expand
+  // Manual chevron click: override hover
   const toggleSidebar = (e) => {
     if (e) e.stopPropagation();
-    setIsCollapsed((prev) => !prev);
+    setIsCollapsed((prev) => {
+      setManualOverride(true);
+      return !prev;
+    });
   };
+
+  // Hover handlers for sidebar (not chevron)
+  const handleSidebarMouseEnter = () => {
+    if (!manualOverride) {
+      setIsCollapsed(false);
+    }
+    setIsHovered(true);
+  };
+  const handleSidebarMouseLeave = () => {
+    setIsHovered(false);
+    if (!manualOverride) {
+      setIsCollapsed(true);
+    }
+  };
+
+  // If user clicks anywhere else, reset manual override
+  useEffect(() => {
+    if (!isHovered && manualOverride) {
+      // If sidebar is not hovered and was manually expanded, keep state
+      // But if sidebar is collapsed and not hovered, reset override
+      if (isCollapsed) setManualOverride(false);
+    }
+  }, [isHovered, isCollapsed, manualOverride]);
 
   // Get company initials for logo
   const getCompanyInitials = (name) => {
@@ -390,11 +421,15 @@ function AdminSidebar() {
 
       <div
         className={`${styles.sidebar} ${isCollapsed ? styles.collapsed : ""}`}
+        onMouseEnter={handleSidebarMouseEnter}
+        onMouseLeave={handleSidebarMouseLeave}
       >
         {/* Toggle Button (chevron) */}
         <button
           className={styles.sidebarToggle}
           onClick={toggleSidebar}
+          onMouseEnter={(e) => e.stopPropagation()} // Prevent hover expand on chevron
+          onMouseLeave={(e) => e.stopPropagation()}
         >
           {isCollapsed ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}
         </button>
