@@ -26,6 +26,14 @@ import QRCodes from "./admin/pages/QRCodes"
 import CardLandingPage from "./admin/pages/CardLandingPage"
 // Admin Settings Subcategory Components
 import ArticleManagement from "./admin/pages/ArticleManagement";
+// Add these after the Solutions imports (around line 40-50)
+import MatchingInfrastructure from "./main_pages/BIGInfrastructure/MatchingInfrastructure";
+import GrowthSuite from "./main_pages/BIGInfrastructure/GrowthSuite";
+import MarketIntelligence from "./main_pages/BIGInfrastructure/MarketIntelligence";
+import SupplyEngine from "./main_pages/BIGInfrastructure/SupplyEngine"
+import SolutionsCapitalMarket from "./main_pages/Solutions/SolutionsCapitalMarket";
+import HowItWorksCapitalMarket from "./main_pages/HowItWorksCapitalMarket";
+import InfrastructurePage from "./main_pages/BIGInfrastructure/InfrastructurePage";
 
 import AdminUsers from "./admin/pages/AdminUserManagement"
 import ApprovalWorkflows from "./admin/pages/ApprovalWorkflows"
@@ -889,7 +897,15 @@ function App() {
         <Route path="/CharmSchool" element={<CharmSchool />} />
         <Route path="/verify-email" element={<EmailVerification />} />
         <Route path="/card/:cardId" element={<CardLandingPage />} />
-
+{/* Add these after the existing Solutions routes */}
+<Route path="/matching-infrastructure" element={<MatchingInfrastructure />} />
+<Route path="/growth-suite" element={<GrowthSuite />} />
+<Route path="/market-intelligence" element={<MarketIntelligence />} />
+<Route path="/supply-engine" element={<SupplyEngine />} />
+<Route path="/solutions/capital-market" element={<SolutionsCapitalMarket />} />
+<Route path="/HowItWorksCapitalMarket" element={<HowItWorksCapitalMarket />} />
+{/* Add this near the other routes, around line 700 */}
+<Route path="/infrastructure" element={<InfrastructurePage />} />
         {/* Solutions Routes - Public */}
         <Route path="/solutions" element={<SolutionsOverview />} />
         <Route path="/solutions/smes" element={<SolutionsSMSEs />} />

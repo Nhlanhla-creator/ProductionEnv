@@ -29,6 +29,49 @@ const HowItWorksSMSE = () => {
     blue: '#1D5FAA'
   };
 
+  const steps = [
+    {
+      number: '01',
+      title: 'Step 1',
+      description: 'Complete your universal profile in under 5 minutes. Upload documents and get verified.',
+      image: 'https://images.unsplash.com/photo-1551434678-e076c223a692?w=400&h=250&fit=crop',
+      icon: <FaUserEdit size={22} />,
+      color: colors.primary,
+      details: ['Complete profile in 5 min', 'Upload key documents', 'Automated review', 'Verified in hours'],
+      subtext: '🔒 Secure. Simple. Fast.'
+    },
+    {
+      number: '02',
+      title: 'Step 2',
+      description: 'Our AI evaluates your business across compliance, growth potential, and pitch quality.',
+      image: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=400&h=250&fit=crop',
+      icon: <FaChartLine size={22} />,
+      color: colors.secondary,
+      details: ['Compliance & docs check', 'Growth potential', 'Pitch quality', 'Score 0-100 + feedback'],
+      subtext: '🎯 Actionable insights to strengthen your business'
+    },
+    {
+      number: '03',
+      title: 'Step 3',
+      description: 'Get matched with funders, advisors, accelerators, and programs that fit your stage.',
+      image: 'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=400&h=250&fit=crop',
+      icon: <FaHandshake size={22} />,
+      color: colors.amber,
+      details: ['Matched funders', 'Advisors & mentors', 'Accelerators', 'Apply once, match many'],
+      subtext: '🔗 Apply once. Match many.'
+    },
+    {
+      number: '04',
+      title: 'Step 4',
+      description: 'Improve your score, access tools, and build visibility with top partners.',
+      image: 'https://images.unsplash.com/photo-1504868584819-f8e8b4b6d7e3?w=400&h=250&fit=crop',
+      icon: <FaChartBar size={22} />,
+      color: colors.green,
+      details: ['Improve your BIG Score', 'Exclusive tools', 'Boost visibility', 'Monitor progress'],
+      subtext: '📈 Built for businesses serious about scale.'
+    }
+  ];
+
   return (
     <div style={{
       display: 'flex',
@@ -258,7 +301,7 @@ const HowItWorksSMSE = () => {
           </div>
         </section>
 
-        {/* Steps Section - 4 steps */}
+        {/* Steps Section - 4 steps with images */}
         <div style={{ marginBottom: '50px' }}>
           <div style={{ textAlign: 'center', marginBottom: '40px' }}>
             <p style={{
@@ -292,55 +335,17 @@ const HowItWorksSMSE = () => {
           <div style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(4, 1fr)',
-            gap: '20px',
+            gap: '16px',
           }}>
-            {[
-              {
-                icon: <FaUserEdit size={26} />,
-                number: '01',
-                title: 'Create & Verify',
-                description: 'Complete your universal profile in under 5 minutes. Upload documents and get verified.',
-                details: ['Complete profile in 5 min', 'Upload key documents', 'Automated review', 'Verified in hours'],
-                subtext: '🔒 Secure. Simple. Fast.',
-                color: colors.primary,
-              },
-              {
-                icon: <FaChartLine size={26} />,
-                number: '02',
-                title: 'Get Your BIG Score',
-                description: 'Our AI evaluates your business across compliance, growth potential, and pitch quality.',
-                details: ['Compliance & docs check', 'Growth potential', 'Pitch quality', 'Score 0-100 + feedback'],
-                subtext: '🎯 Actionable insights to strengthen your business',
-                color: colors.secondary,
-              },
-              {
-                icon: <FaHandshake size={26} />,
-                number: '03',
-                title: 'Unlock Opportunities',
-                description: 'Get matched with funders, advisors, accelerators, and programs that fit your stage.',
-                details: ['Matched funders', 'Advisors & mentors', 'Accelerators', 'Apply once, match many'],
-                subtext: '🔗 Apply once. Match many.',
-                color: colors.amber,
-              },
-              {
-                icon: <FaChartBar size={26} />,
-                number: '04',
-                title: 'Track & Grow',
-                description: 'Improve your score, access tools, and build visibility with top partners.',
-                details: ['Improve your BIG Score', 'Exclusive tools', 'Boost visibility', 'Monitor progress'],
-                subtext: '📈 Built for businesses serious about scale.',
-                color: colors.green,
-              },
-            ].map((step, index) => (
+            {steps.map((step, index) => (
               <div
                 key={index}
                 style={{
                   background: colors.white,
-                  borderRadius: '16px',
-                  padding: '24px 20px',
+                  borderRadius: '14px',
+                  overflow: 'hidden',
                   border: `1px solid ${colors.border}`,
                   transition: 'all 0.3s ease',
-                  position: 'relative',
                   cursor: 'default',
                 }}
                 onMouseEnter={(e) => {
@@ -354,87 +359,133 @@ const HowItWorksSMSE = () => {
                   e.currentTarget.style.borderColor = colors.border;
                 }}
               >
+                {/* Step Image */}
                 <div style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'flex-start',
-                  marginBottom: '14px',
+                  height: '140px',
+                  overflow: 'hidden',
+                  position: 'relative',
                 }}>
+                  <img 
+                    src={step.image}
+                    alt={step.title}
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'cover',
+                      transition: 'transform 0.5s ease',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.transform = 'scale(1.08)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.transform = 'scale(1)';
+                    }}
+                    loading="lazy"
+                    onError={(e) => {
+                      e.target.style.display = 'none';
+                    }}
+                  />
                   <div style={{
-                    width: '50px',
-                    height: '50px',
-                    borderRadius: '12px',
-                    background: `${step.color}60`,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: step.color,
-                  }}>
-                    {step.icon}
-                  </div>
-                  <span style={{
-                    fontSize: '1.8rem',
-                    fontWeight: 900,
-                    color: `${step.color}60`,
-                    lineHeight: 1,
+                    position: 'absolute',
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    height: '40%',
+                    background: 'linear-gradient(transparent, rgba(0,0,0,0.3))',
+                  }} />
+                  <div style={{
+                    position: 'absolute',
+                    top: '10px',
+                    right: '10px',
+                    background: step.color,
+                    color: colors.white,
+                    padding: '2px 12px',
+                    borderRadius: '20px',
+                    fontSize: '0.7rem',
+                    fontWeight: 700,
                   }}>
                     {step.number}
-                  </span>
+                  </div>
                 </div>
-                
-                <h3 style={{
-                  fontSize: '1.05rem',
-                  fontWeight: 800,
-                  color: colors.dark,
-                  margin: '0 0 6px',
-                  letterSpacing: '-0.01em',
-                }}>
-                  {step.title}
-                </h3>
-                
-                <p style={{
-                  fontSize: '0.82rem',
-                  color: colors.muted,
-                  lineHeight: 1.5,
-                  margin: '0 0 14px',
-                }}>
-                  {step.description}
-                </p>
 
-                <ul style={{
-                  listStyle: 'none',
-                  padding: 0,
-                  margin: '0 0 14px',
-                  textAlign: 'left',
+                <div style={{
+                  padding: '14px 16px 18px',
                 }}>
-                  {step.details.map((detail, i) => (
-                    <li key={i} style={{
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    marginBottom: '8px',
+                  }}>
+                    <div style={{
+                      width: '32px',
+                      height: '32px',
+                      borderRadius: '50%',
+                      background: `${step.color}15`,
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '8px',
-                      fontSize: '0.8rem',
-                      color: colors.muted,
-                      padding: '3px 0',
+                      justifyContent: 'center',
+                      color: step.color,
+                      fontSize: '14px',
                     }}>
-                      <span style={{
-                        color: step.color,
-                        fontWeight: 700,
-                      }}>✓</span>
-                      {detail}
-                    </li>
-                  ))}
-                </ul>
+                      {step.icon}
+                    </div>
+                    <h4 style={{
+                      fontSize: '0.8rem',
+                      fontWeight: 700,
+                      color: step.color,
+                      margin: 0,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.05em',
+                    }}>
+                      {step.title}
+                    </h4>
+                  </div>
+                  
+                  <p style={{
+                    fontSize: '0.78rem',
+                    color: colors.muted,
+                    lineHeight: 1.5,
+                    margin: '0 0 10px',
+                  }}>
+                    {step.description}
+                  </p>
 
-                <p style={{
-                  fontSize: '0.78rem',
-                  color: colors.muted,
-                  fontStyle: 'italic',
-                  margin: 0,
-                  paddingTop: '10px',
-                  borderTop: `1px solid ${colors.border}`,
-                }}>
-                  {step.subtext}
-                </p>
+                  <ul style={{
+                    listStyle: 'none',
+                    padding: 0,
+                    margin: '0 0 10px',
+                    textAlign: 'left',
+                  }}>
+                    {step.details.map((detail, i) => (
+                      <li key={i} style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        fontSize: '0.7rem',
+                        color: colors.muted,
+                        padding: '2px 0',
+                      }}>
+                        <span style={{
+                          color: step.color,
+                          fontWeight: 700,
+                        }}>✓</span>
+                        {detail}
+                      </li>
+                    ))}
+                  </ul>
+
+                  <p style={{
+                    fontSize: '0.7rem',
+                    color: colors.muted,
+                    fontStyle: 'italic',
+                    margin: 0,
+                    paddingTop: '8px',
+                    borderTop: `1px solid ${colors.border}`,
+                  }}>
+                    {step.subtext}
+                  </p>
+                </div>
               </div>
             ))}
           </div>
