@@ -19,8 +19,8 @@ import {
 //
 // Internally this is organised into three sub-sections that mirror how the
 // business actually thinks about this pillar:
-//   A. Ownership & Structure   — directors, shareholders, succession
-//      (sourced from the deterministic Board Structure scorer)
+//   A. Ownership & Structure   — directors, shareholders, succession, PIS
+//      (sourced from the deterministic Board Structure scorer + local PIS calc)
 //   B. Leadership Quality      — founder experience, qualifications,
 //      industry expertise, execution capability, ambition, learning mindset
 //      (sourced from the AI leadership evaluation)
@@ -37,6 +37,30 @@ const SECTION_WEIGHTS = {
   maturity: 35,
 }
 
+// ─────────────────────────────────────────────────────────────────────────
+// Critical role coverage — the operational roles a funder expects to see
+// staffed for a business of this type, regardless of whether the person
+// holding them sits on the board (director.roles) or in management
+// (executive.position). Matching is against the exact option strings used
+// in directorRoleOptions / executivePositions in OwnershipManagement.jsx.
+// Used for two checks:
+//   1. Coverage gaps — is anyone at all covering Finance / Tech / Sales /
+//      Operations / top executive leadership?
+//   2. Concentration risk — is one person covering 2+ of these buckets, or
+//      holding an unusually high number of board roles? That's a signal
+//      the business is spread thin on a single individual and may carry
+//      succession and conflict-of-interest risk.
+// ─────────────────────────────────────────────────────────────────────────
+const CRITICAL_ROLE_BUCKETS = [
+  { key: "executive", label: "CEO / Managing Director", keywords: ["Chief Executive Officer", "Managing Director"] },
+  { key: "finance", label: "Finance / CFO", keywords: ["Chief Financial Officer", "Financial Manager"] },
+  { key: "tech", label: "Technology / Tech Lead", keywords: ["Chief Technology Officer", "Chief Information Officer", "IT Manager"] },
+  { key: "sales", label: "Sales & Marketing", keywords: ["Chief Marketing Officer", "Sales Manager", "Marketing Manager"] },
+  { key: "operations", label: "Operations", keywords: ["Chief Operating Officer", "Operations Manager", "General Manager"] },
+]
+
+const DIRECTOR_ROLE_OVERLOAD_THRESHOLD = 3 // 3+ distinct board roles held by one person is itself a flag
+
 export function GovernanceLeadershipScoreCard({ styles, profileData, onScoreUpdate, apiKey }) {
   const [showModal, setShowModal] = useState(false)
 
@@ -46,6 +70,28 @@ export function GovernanceLeadershipScoreCard({ styles, profileData, onScoreUpda
   // ── A. Ownership & Structure ──
   const [ownershipScore, setOwnershipScore] = useState(0)
   const [ownershipDetail, setOwnershipDetail] = useState(null)
+  const [pisCalculation, setPisCalculation] = useState({
+    employees: 0, turnover: 0, liabilities: 0, shareholders: 1,
+    turnoverComponent: 0, liabilitiesComponent: 0, totalPIS: 1,
+  })
+  const [ownershipStructureDetail, setOwnershipStructureDetail] = useState({
+    shareholderCount: 0,
+    directorCount: 0,
+    execDirectors: 0,
+    nonExecDirectors: 0,
+    unspecifiedDirectors: 0,
+    executiveCount: 0,
+    hasAdvisors: false,
+    advisorsMeetRegularly: false,
+    advisorsMeetingFrequency: "",
+    activeConflictsCount: 0,
+    conflictSummary: "None declared",
+    roleCoverage: {
+      bucketCoverage: {}, // { finance: [{name, source}], tech: [...], ... }
+      missingCriticalRoles: [], // [{key, label}]
+      overloadedPeople: [], // [{name, buckets: [label,...], directorRoleCount}]
+    },
+  })
 
   // ── B. Leadership Quality ──
   const [leadershipScore, setLeadershipScore] = useState(0)
@@ -58,18 +104,119 @@ export function GovernanceLeadershipScoreCard({ styles, profileData, onScoreUpda
   const [maturityScore, setMaturityScore] = useState(0)
   const [maturityBreakdown, setMaturityBreakdown] = useState([])
   const [governanceStage, setGovernanceStage] = useState("")
+  const [governanceRecommendation, setGovernanceRecommendation] = useState("")
   const [governanceAiResult, setGovernanceAiResult] = useState("")
 
   const [isEvaluating, setIsEvaluating] = useState(false)
   const [evaluationError, setEvaluationError] = useState("")
   const [showAboutScore, setShowAboutScore] = useState(false)
-  const [openSection, setOpenSection] = useState("leadership") // which sub-section is expanded
+  const [openSection, setOpenSection] = useState("ownership") // which sub-section is expanded
   const [triggeredByAuto, setTriggeredByAuto] = useState(false)
 
   useEffect(() => {
     document.body.style.overflow = showModal ? "hidden" : ""
     return () => (document.body.style.overflow = "")
   }, [showModal])
+
+  // ─────────────────────────────────────────────────────────────────────
+  // PIS calculation — same formula as the standalone PIS card:
+  //   PIS = Employees + (Turnover / R1m) + (Liabilities / R1m) + Shareholders
+  // This is the number that decides which governance "stage" (Advisors /
+  // Emerging Board / Full Board) a business sits in, and it's the number
+  // that used to only live on the old PIS card. It belongs here now because
+  // it's fundamentally an Ownership & Structure input (shareholder count
+  // is one of its four terms, and the stage it produces IS the ownership
+  // section's headline read).
+  // ─────────────────────────────────────────────────────────────────────
+  const calculatePIS = () => {
+    const employees = parseInt(profileData?.entityOverview?.employeeCount) || 0
+
+    const turnoverRaw = profileData?.financialOverview?.annualRevenue || "0"
+    const turnover = parseFloat(turnoverRaw.toString().replace(/[R,\s]/g, "")) || 0
+
+    const liabilitiesRaw = profileData?.financialOverview?.existingDebt || "0"
+    const liabilities = parseFloat(liabilitiesRaw.toString().replace(/[R,\s]/g, "")) || 0
+
+    const shareholders = profileData?.ownershipManagement?.shareholders?.length || 1
+
+    const turnoverComponent = turnover / 1000000
+    const liabilitiesComponent = liabilities / 1000000
+    const totalPIS = employees + turnoverComponent + liabilitiesComponent + shareholders
+
+    return {
+      employees,
+      turnover,
+      liabilities,
+      shareholders,
+      turnoverComponent: parseFloat(turnoverComponent.toFixed(2)),
+      liabilitiesComponent: parseFloat(liabilitiesComponent.toFixed(2)),
+      totalPIS: parseFloat(totalPIS.toFixed(2)),
+    }
+  }
+
+  useEffect(() => {
+    if (!profileData) return
+    setPisCalculation(calculatePIS())
+  }, [
+    profileData?.entityOverview?.employeeCount,
+    profileData?.financialOverview?.annualRevenue,
+    profileData?.financialOverview?.existingDebt,
+    profileData?.ownershipManagement?.shareholders?.length,
+  ])
+
+  // ─────────────────────────────────────────────────────────────────────
+  // Role coverage / concentration risk — takes the already-filtered valid
+  // directors and executives (name-bearing rows only) and works out which
+  // critical operational roles are covered, and by whom. A person covering
+  // 2+ critical buckets, or holding 3+ distinct board roles, comes back in
+  // overloadedPeople as a "spread thin / potential conflict" risk signal.
+  // ─────────────────────────────────────────────────────────────────────
+  const computeRoleCoverage = (validDirectors, validExecutives) => {
+    const bucketCoverage = {}
+    CRITICAL_ROLE_BUCKETS.forEach((b) => (bucketCoverage[b.key] = []))
+
+    const bucketsByPerson = {} // name -> Set(bucket label)
+
+    const registerRole = (name, roleLabel, source) => {
+      if (!name || !roleLabel) return
+      CRITICAL_ROLE_BUCKETS.forEach((b) => {
+        if (b.keywords.includes(roleLabel)) {
+          bucketCoverage[b.key].push({ name, source })
+          if (!bucketsByPerson[name]) bucketsByPerson[name] = new Set()
+          bucketsByPerson[name].add(b.label)
+        }
+      })
+    }
+
+    const directorRoleCounts = {}
+    ;(validDirectors || []).forEach((d) => {
+      const roles = (d.roles || []).map((r) => (r === "Other" ? d.customRole : r)).filter(Boolean)
+      directorRoleCounts[d.name] = (directorRoleCounts[d.name] || 0) + roles.length
+      roles.forEach((r) => registerRole(d.name, r, "Director"))
+    })
+    ;(validExecutives || []).forEach((e) => {
+      const position = e.position === "Other" ? e.customPosition : e.position
+      registerRole(e.name, position, "Executive")
+    })
+
+    const missingCriticalRoles = CRITICAL_ROLE_BUCKETS.filter((b) => bucketCoverage[b.key].length === 0)
+
+    const overloadedPeople = Object.entries(bucketsByPerson)
+      .filter(([, buckets]) => buckets.size >= 2)
+      .map(([name, buckets]) => ({
+        name,
+        buckets: Array.from(buckets),
+        directorRoleCount: directorRoleCounts[name] || 0,
+      }))
+
+    Object.entries(directorRoleCounts).forEach(([name, count]) => {
+      if (count >= DIRECTOR_ROLE_OVERLOAD_THRESHOLD && !overloadedPeople.find((p) => p.name === name)) {
+        overloadedPeople.push({ name, buckets: [], directorRoleCount: count })
+      }
+    })
+
+    return { bucketCoverage, missingCriticalRoles, overloadedPeople }
+  }
 
   // ─────────────────────────────────────────────────────────────────────
   // Deterministic scoring — runs on every profileData change, no AI needed
@@ -104,6 +251,60 @@ export function GovernanceLeadershipScoreCard({ styles, profileData, onScoreUpda
     setMaturityScore(maturityOverall)
     setMaturityBreakdown(nonBoardCats)
     setGovernanceStage(gov.stage)
+
+    const recommendation =
+      gov.stage === "Full Board Stage"
+        ? "Formal board strongly recommended"
+        : gov.stage === "Emerging Board Stage"
+        ? "Informal board recommended"
+        : "Advisors sufficient"
+    setGovernanceRecommendation(recommendation)
+
+    // ── Ownership & Structure display detail (mirrors prepareLeadershipData,
+    // but computed unconditionally so the section always has content even
+    // before any AI call has run) ──
+    const om = profileData?.ownershipManagement || {}
+    const validShareholders = (om.shareholders || []).filter((s) => s?.name && s.name.trim() !== "")
+    const validDirectors = (om.directors || []).filter((d) => d?.name && d.name.trim() !== "")
+    const validExecutives = (om.executives || []).filter((e) => e?.name && e.name.trim() !== "")
+
+    const execSplit = validDirectors.reduce(
+      (acc, d) => {
+        if (d.execType === "Executive") acc.exec++
+        else if (d.execType === "Non-Executive") acc.nonExec++
+        else acc.unspecified++
+        return acc
+      },
+      { exec: 0, nonExec: 0, unspecified: 0 }
+    )
+
+    const activeInterests = om.activeInterests || []
+    const activeConflicts = activeInterests.filter(
+      (i) => i?.assignedTo && i.businessStatus && i.businessStatus !== "Closed"
+    )
+    const conflictSummary =
+      activeConflicts.length > 0
+        ? activeConflicts
+            .map((i) => `${i.assignedTo} — active interest in ${i.companyName || "unnamed company"} (${i.businessStatus})`)
+            .join("; ")
+        : "None declared"
+
+    const roleCoverage = computeRoleCoverage(validDirectors, validExecutives)
+
+    setOwnershipStructureDetail({
+      shareholderCount: validShareholders.length,
+      directorCount: validDirectors.length,
+      execDirectors: execSplit.exec,
+      nonExecDirectors: execSplit.nonExec,
+      unspecifiedDirectors: execSplit.unspecified,
+      executiveCount: validExecutives.length,
+      hasAdvisors: profileData?.enterpriseReadiness?.hasAdvisors === "yes",
+      advisorsMeetRegularly: !!profileData?.enterpriseReadiness?.advisorsMeetRegularly,
+      advisorsMeetingFrequency: profileData?.enterpriseReadiness?.advisorsMeetingFrequency || "Not specified",
+      activeConflictsCount: activeConflicts.length,
+      conflictSummary,
+      roleCoverage,
+    })
   }, [
     profileData?.entityOverview?.operationStage,
     profileData?.entityOverview?.employeeCount,
@@ -117,6 +318,8 @@ export function GovernanceLeadershipScoreCard({ styles, profileData, onScoreUpda
     profileData?.financialOverview?.annualRevenue,
     profileData?.financialOverview?.existingDebt,
     profileData?.ownershipManagement?.shareholders?.length,
+    profileData?.ownershipManagement?.executives?.length,
+    profileData?.ownershipManagement?.activeInterests,
   ])
 
   // ─────────────────────────────────────────────────────────────────────
@@ -303,6 +506,22 @@ export function GovernanceLeadershipScoreCard({ styles, profileData, onScoreUpda
 
     const employeeSummary = `Permanent: ${om.permanentEmployees || 0}, Contract: ${om.contractEmployees || 0}, Internship: ${om.internshipEmployees || 0}, Temporary: ${om.temporaryEmployees || 0}`
 
+    // ── Critical role coverage & role-concentration risk — feeds Leadership
+    // Structure (coverage gaps) and Leadership Behaviour (one person spread
+    // across multiple critical roles = succession/conflict-of-interest risk) ──
+    const roleCoverage = computeRoleCoverage(validDirectors, validExecutives)
+    const coverageLines = CRITICAL_ROLE_BUCKETS.map((b) => {
+      const holders = roleCoverage.bucketCoverage[b.key] || []
+      return holders.length > 0
+        ? `${b.label}: covered by ${holders.map((h) => `${h.name} (${h.source})`).join(", ")}`
+        : `${b.label}: NOT COVERED`
+    }).join("\n")
+    const overloadSummary = roleCoverage.overloadedPeople.length > 0
+      ? roleCoverage.overloadedPeople
+          .map((p) => `${p.name} — ${p.buckets.length > 0 ? `covers ${p.buckets.join(" + ")}` : ""}${p.buckets.length > 0 && p.directorRoleCount >= DIRECTOR_ROLE_OVERLOAD_THRESHOLD ? "; " : ""}${p.directorRoleCount >= DIRECTOR_ROLE_OVERLOAD_THRESHOLD ? `holds ${p.directorRoleCount} distinct board roles` : ""}`)
+          .join("; ")
+      : "None — no individual holds multiple critical roles or an unusually high number of board roles."
+
     return `
 STARTUP LEADERSHIP EVALUATION
 
@@ -328,6 +547,14 @@ Active outside business interests held by shareholders/directors/executives: ${c
 Previous (closed) interests declared: ${previousInterests.length}
 ${activeConflicts.length > 0 ? "NOTE: Named individuals with active interests in other operating businesses represent a potential conflict of interest for this business. Factor this into Leadership Behaviour — note whether it appears to be transparently disclosed here (it is, since it's declared) versus whether the scale or nature of the interest raises concern (e.g. an active director also running a business in a similar sector)." : ""}
 
+Critical Role Coverage (are the operational functions a business of this type needs actually staffed?):
+${coverageLines}
+${roleCoverage.missingCriticalRoles.length > 0 ? `NOTE: ${roleCoverage.missingCriticalRoles.map((b) => b.label).join(", ")} ${roleCoverage.missingCriticalRoles.length > 1 ? "are" : "is"} not covered by any named director or executive. Treat any uncovered role as a Leadership Structure gap — flag it explicitly rather than assuming it's handled informally.` : "All critical roles (CEO/MD, Finance, Technology, Sales & Marketing, Operations) have a named person against them."}
+
+Role Concentration / "Spread Thin" Risk (one person covering multiple critical functions, or holding an unusually high number of board roles):
+${overloadSummary}
+${roleCoverage.overloadedPeople.length > 0 ? "NOTE: A single person covering multiple critical roles (e.g. also acting as CFO and Tech Lead) is a succession and conflict-of-interest risk — that person's attention is divided across functions that would normally be separated, and the business has a single point of failure if they leave or are unavailable. Factor this into Leadership Behaviour as a risk factor, not as evidence of a lean, capable team." : ""}
+
 RESPONSE FORMAT (follow exactly):
 
 ### 1. Leadership Credentials
@@ -338,12 +565,12 @@ Evidence: (cite specific data)
 ### 2. Leadership Structure
 Score: X/5
 Confidence: High | Medium | Low
-Evidence: (cite specific data — including shareholder count/concentration, director exec/non-exec balance, and management team depth)
+Evidence: (cite specific data — including shareholder count/concentration, director exec/non-exec balance, management team depth, and any critical role coverage gaps)
 
 ### 3. Leadership Behaviour
 Score: X/5
 Confidence: High | Medium | Low
-Evidence: (cite specific data — including openness to advice and any conflict-of-interest signal from declared active business interests)
+Evidence: (cite specific data — including openness to advice, any conflict-of-interest signal from declared active business interests, and any role-concentration / "spread thin" risk from one person holding multiple critical roles)
 `
   }
 
@@ -548,13 +775,15 @@ Evidence: (cite specific data — including openness to advice and any conflict-
     )
   }
 
+  const o = ownershipStructureDetail
+
   return (
     <>
       {/* ── Score Card ── */}
       <div style={{ background: "linear-gradient(135deg, #ffffff 0%, #faf8f6 100%)", borderRadius: "20px", boxShadow: "0 8px 32px rgba(141, 110, 99, 0.15)", border: "1px solid #e8ddd6", overflow: "hidden", position: "relative", width: "100%", minWidth: "210px" }}>
         <div style={{ background: "linear-gradient(135deg, #8d6e63 0%, #6d4c41 100%)", padding: "24px 30px 20px 30px", color: "white", position: "relative" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
-            <h2 style={{ margin: 0, fontSize: "16px", fontWeight: "700", letterSpacing: "0.5px", whiteSpace: "nowrap" }}>Leadership & Governance</h2>
+            <h2 style={{ margin: 0, fontSize: "15px", fontWeight: "700", letterSpacing: "0.5px", whiteSpace: "nowrap" }}>Leadership&Governance</h2>
             <Users size={24} style={{ opacity: 0.8 }} />
           </div>
           <p style={{ margin: 0, fontSize: "13px", opacity: 0.9 }}>Who's in charge, and can we trust them</p>
@@ -608,7 +837,7 @@ Evidence: (cite specific data — including openness to advice and any conflict-
                 {governanceStage && (
                   <div style={{ marginTop: "6px" }}>
                     <span style={{ display: "inline-block", padding: "6px 16px", background: "#fdecea", border: "1px solid #e6b8ac", borderRadius: "20px", color: "#8d6e63", fontWeight: "600", fontSize: "12px" }}>
-                      Governance stage: {governanceStage}
+                      Business stage: {governanceStage}{governanceRecommendation ? ` — ${governanceRecommendation}` : ""}
                     </span>
                   </div>
                 )}
@@ -623,6 +852,42 @@ Evidence: (cite specific data — including openness to advice and any conflict-
                 </div>
               )}
 
+              {/* ── About Score — moved to the top, right after the headline
+                  score/stage, same position as it sits on the standalone
+                  PIS card (above the section breakdowns, not below them) ── */}
+              <div style={{ border: "1px solid #d7ccc8", borderRadius: "8px", overflow: "hidden", marginBottom: "8px" }}>
+                <div style={{ backgroundColor: "#8d6e63", color: "white", padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", fontWeight: "bold" }}
+                  onClick={() => setShowAboutScore(!showAboutScore)}>
+                  <span>About this score</span>
+                  <ChevronDown size={20} style={{ transform: showAboutScore ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s ease" }} />
+                </div>
+                {showAboutScore && (
+                  <div style={{ backgroundColor: "#f5f2f0", padding: "20px", color: "#5d4037", fontSize: "13px", lineHeight: 1.6 }}>
+                    <p style={{ marginBottom: "14px" }}>
+                      Leadership & Governance answers one question for a funder: <strong>can we trust the people and decision-making structures behind this business?</strong> It replaces the old separate Leadership and Governance/PIS cards with a single view across three weighted areas:
+                    </p>
+                    <ul style={{ margin: "0 0 14px 0", paddingLeft: "18px" }}>
+                      <li><strong>Ownership & Structure ({SECTION_WEIGHTS.ownership}%)</strong> — directors, shareholders, succession, and the Public Interest Score (PIS) that decides your governance stage</li>
+                      <li><strong>Leadership Quality ({SECTION_WEIGHTS.leadership}%)</strong> — founder experience, qualifications, industry expertise, execution capability, ambition, learning mindset</li>
+                      <li><strong>Governance Maturity ({SECTION_WEIGHTS.maturity}%)</strong> — board, advisors, policies, reporting, risk management, integrity & risk, sanctions, conflicts, legal, reputation</li>
+                    </ul>
+
+                    <div style={{ backgroundColor: "#efebe9", padding: "16px", borderRadius: "8px", borderLeft: "4px solid #8d6e63" }}>
+                      <p style={{ fontWeight: "bold", marginBottom: "10px", color: "#6d4c41" }}>Public Interest Score (PIS) — the number behind Ownership & Structure</p>
+                      <p style={{ marginBottom: "8px" }}>PIS decides which governance stage a business sits in:</p>
+                      <ul style={{ margin: "0 0 10px 0", paddingLeft: "18px", color: "#6d4c41" }}>
+                        <li style={{ marginBottom: "4px" }}>PIS &lt; 100: <strong>Advisors Stage</strong> — light governance structures suitable for smaller operations</li>
+                        <li style={{ marginBottom: "4px" }}>PIS 100–349: <strong>Emerging Board Stage</strong> — informal board recommended for growing businesses</li>
+                        <li>PIS ≥ 350: <strong>Full Board Stage</strong> — formal board strongly recommended for complex operations</li>
+                      </ul>
+                      <p style={{ margin: 0, fontFamily: "monospace", fontSize: "12.5px", backgroundColor: "white", padding: "8px 10px", borderRadius: "6px", border: "1px solid #e0d5c8" }}>
+                        PIS = Employees + (Turnover ÷ R1m) + (Liabilities ÷ R1m) + Shareholders
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               <div style={{ fontSize: "11px", color: "#8d6e63", marginBottom: "6px", display: "flex", justifyContent: "space-around" }}>
                 <span>Ownership & Structure {SECTION_WEIGHTS.ownership}%</span>
                 <span>Leadership Quality {SECTION_WEIGHTS.leadership}%</span>
@@ -636,11 +901,93 @@ Evidence: (cite specific data — including openness to advice and any conflict-
                 breakdown={null}
                 aiText={null}
                 extra={
-                  <div style={{ fontSize: "13px", color: "#5d4037", marginBottom: "10px", lineHeight: 1.6 }}>
-                    Directors, shareholders and succession readiness — derived from your board composition, exec / non-exec mix, decision governance and advisory structure.
+                  <div style={{ fontSize: "13px", color: "#5d4037", marginBottom: "12px", lineHeight: 1.6 }}>
+                    <p style={{ margin: "0 0 12px 0" }}>
+                      Directors, shareholders and succession readiness — derived from your board composition, exec / non-exec mix, decision governance and advisory structure.
+                    </p>
+
+                    {/* PIS breakdown + formula */}
+                    <div style={{ padding: "12px 14px", background: "white", borderRadius: "8px", border: "1px solid #f0e8e0", marginBottom: "10px" }}>
+                      <div style={{ fontWeight: "700", color: "#5d4037", marginBottom: "8px", fontSize: "12.5px" }}>Public Interest Score (PIS)</div>
+                      <div style={{ fontSize: "12.5px", color: "#6d4c41", lineHeight: 1.7 }}>
+                        <div>Employees: <strong>{pisCalculation.employees}</strong></div>
+                        <div>Annual Turnover: <strong>R {pisCalculation.turnover.toLocaleString()}</strong> → {pisCalculation.turnoverComponent}</div>
+                        <div>Liabilities: <strong>R {pisCalculation.liabilities.toLocaleString()}</strong> → {pisCalculation.liabilitiesComponent}</div>
+                        <div>Shareholders: <strong>{pisCalculation.shareholders}</strong></div>
+                        <div style={{ marginTop: "8px", fontFamily: "monospace", fontSize: "12px", backgroundColor: "#f9f5f0", padding: "6px 8px", borderRadius: "6px" }}>
+                          PIS = {pisCalculation.employees} + {pisCalculation.turnoverComponent} + {pisCalculation.liabilitiesComponent} + {pisCalculation.shareholders} = <strong>{pisCalculation.totalPIS}</strong>
+                        </div>
+                        <div style={{ marginTop: "6px" }}>
+                          Stage: <strong>{governanceStage || "—"}</strong>{governanceRecommendation ? ` — ${governanceRecommendation}` : ""}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Board Structure deterministic score */}
                     {ownershipDetail && (
-                      <div style={{ marginTop: "8px", padding: "10px 14px", background: "white", borderRadius: "8px", border: "1px solid #f0e8e0", fontSize: "12px" }}>
+                      <div style={{ padding: "10px 14px", background: "white", borderRadius: "8px", border: "1px solid #f0e8e0", fontSize: "12.5px", marginBottom: "10px" }}>
                         Board Structure score: <strong>{ownershipDetail.score}%</strong>
+                        {ownershipDetail.weight != null && <span style={{ color: "#8d6e63" }}> (weight {ownershipDetail.weight}% within Governance Maturity's deterministic model)</span>}
+                      </div>
+                    )}
+
+                    {/* Directors / shareholders / advisors breakdown */}
+                    <div style={{ padding: "12px 14px", background: "white", borderRadius: "8px", border: "1px solid #f0e8e0" }}>
+                      <div style={{ fontWeight: "700", color: "#5d4037", marginBottom: "8px", fontSize: "12.5px" }}>Structure detail</div>
+                      <div style={{ fontSize: "12.5px", color: "#6d4c41", lineHeight: 1.8 }}>
+                        <div>Shareholders: <strong>{o.shareholderCount}</strong>{o.shareholderCount > 8 ? " — high count for an SME; can signal fragmented decision-making and dilution risk" : ""}</div>
+                        <div>Directors: <strong>{o.directorCount}</strong> (Executive: {o.execDirectors}, Non-Executive: {o.nonExecDirectors}, Unspecified: {o.unspecifiedDirectors})</div>
+                        <div>Executives (management beyond the board): <strong>{o.executiveCount}</strong></div>
+                        <div>Advisors in place: <strong>{o.hasAdvisors ? "Yes" : "No"}</strong>{o.hasAdvisors ? ` — meets ${o.advisorsMeetRegularly ? "regularly" : "irregularly"} (${o.advisorsMeetingFrequency})` : ""}</div>
+                        <div>Conflict of interest signal: <strong>{o.activeConflictsCount > 0 ? `${o.activeConflictsCount} active` : "None declared"}</strong></div>
+                        {o.activeConflictsCount > 0 && (
+                          <div style={{ marginTop: "4px", fontStyle: "italic", color: "#8d6e63" }}>{o.conflictSummary}</div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Critical role coverage */}
+                    <div style={{ padding: "12px 14px", background: "white", borderRadius: "8px", border: "1px solid #f0e8e0", marginTop: "10px" }}>
+                      <div style={{ fontWeight: "700", color: "#5d4037", marginBottom: "8px", fontSize: "12.5px" }}>Critical role coverage</div>
+                      <div style={{ fontSize: "12.5px", color: "#6d4c41", lineHeight: 1.9 }}>
+                        {CRITICAL_ROLE_BUCKETS.map((b) => {
+                          const holders = o.roleCoverage?.bucketCoverage?.[b.key] || []
+                          const covered = holders.length > 0
+                          return (
+                            <div key={b.key} style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "2px" }}>
+                              <span style={{
+                                display: "inline-block", width: "8px", height: "8px", borderRadius: "50%", flexShrink: 0,
+                                backgroundColor: covered ? "#4CAF50" : "#F44336",
+                              }} />
+                              <span>
+                                <strong>{b.label}:</strong>{" "}
+                                {covered
+                                  ? holders.map((h) => `${h.name} (${h.source})`).join(", ")
+                                  : <span style={{ color: "#B71C1C", fontWeight: 600 }}>Not covered — risk</span>}
+                              </span>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Role concentration / spread-thin risk */}
+                    {o.roleCoverage?.overloadedPeople?.length > 0 && (
+                      <div style={{ padding: "12px 14px", background: "#fdecea", borderRadius: "8px", border: "1px solid #e6b8ac", marginTop: "10px" }}>
+                        <div style={{ fontWeight: "700", color: "#B71C1C", marginBottom: "6px", fontSize: "12.5px", display: "flex", alignItems: "center", gap: "6px" }}>
+                          <AlertCircle size={14} /> Role concentration risk
+                        </div>
+                        <div style={{ fontSize: "12.5px", color: "#8d3a2e", lineHeight: 1.8 }}>
+                          {o.roleCoverage.overloadedPeople.map((p, i) => (
+                            <div key={i} style={{ marginBottom: "4px" }}>
+                              <strong>{p.name}</strong>
+                              {p.buckets.length > 0 && ` covers ${p.buckets.join(" + ")}`}
+                              {p.buckets.length > 0 && p.directorRoleCount >= DIRECTOR_ROLE_OVERLOAD_THRESHOLD && "; "}
+                              {p.directorRoleCount >= DIRECTOR_ROLE_OVERLOAD_THRESHOLD && `holds ${p.directorRoleCount} distinct board roles`}
+                              {" "}— spread too thin across functions that would normally be separated; a succession and conflict-of-interest risk if this person leaves or is unavailable.
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     )}
                   </div>
@@ -662,27 +1009,6 @@ Evidence: (cite specific data — including openness to advice and any conflict-
                 breakdown={maturityBreakdown}
                 aiText={governanceAiResult}
               />
-
-              {/* ── About Score ── */}
-              <div style={{ marginTop: "20px", border: "1px solid #d7ccc8", borderRadius: "8px", overflow: "hidden" }}>
-                <div style={{ backgroundColor: "#8d6e63", color: "white", padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", fontWeight: "bold" }}
-                  onClick={() => setShowAboutScore(!showAboutScore)}>
-                  <span>About this score</span>
-                  <ChevronDown size={20} style={{ transform: showAboutScore ? "rotate(180deg)" : "rotate(0deg)", transition: "transform 0.2s ease" }} />
-                </div>
-                {showAboutScore && (
-                  <div style={{ backgroundColor: "#f5f2f0", padding: "20px", color: "#5d4037", fontSize: "13px", lineHeight: 1.6 }}>
-                    <p style={{ marginBottom: "10px" }}>
-                      Leadership & Governance answers one question for a funder: <strong>can we trust the people and decision-making structures behind this business?</strong> It replaces the old separate Leadership and Governance/PIS cards with a single view across three areas:
-                    </p>
-                    <ul style={{ margin: 0, paddingLeft: "18px" }}>
-                      <li><strong>Ownership & Structure</strong> — directors, shareholders, succession</li>
-                      <li><strong>Leadership Quality</strong> — founder experience, qualifications, industry expertise, execution capability, ambition, learning mindset</li>
-                      <li><strong>Governance Maturity</strong> — board, advisors, policies, reporting, risk management, integrity & risk, sanctions, conflicts, legal, reputation</li>
-                    </ul>
-                  </div>
-                )}
-              </div>
 
               {evaluationError && (
                 <div style={{ marginTop: "15px", padding: "12px", backgroundColor: "#f8d7da", color: "#721c24", border: "1px solid #f5c6cb", borderRadius: "6px", fontSize: "14px", display: "flex", alignItems: "center", gap: "8px" }}>
