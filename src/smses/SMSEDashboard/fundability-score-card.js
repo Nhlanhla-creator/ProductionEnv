@@ -250,6 +250,11 @@ export function FundabilityScoreCard({
   const isReevaluatingRef = useRef(false);
   const fundingCheckCompleteRef = useRef(false);
   const isFundingDataLoadedRef = useRef(false);
+  // Tracks the in-flight fetchFundingApplicationData() promise so concurrent
+  // callers (auto-trigger listener, manual refresh, effects) await the SAME
+  // fetch and all get the same freshly-loaded data instead of racing
+  // separate reads against each other.
+  const dataLoadPromiseRef = useRef(null);
 
   const {
     loadLatestSolvencyScore,
@@ -317,10 +322,44 @@ export function FundabilityScoreCard({
   }, [auth?.currentUser?.uid, checkFundingApplicationStatus]);
   const [dataLoadedAt, setDataLoadedAt] = useState(null);
 
+  // Loads every piece of funding-application evidence and RETURNS it
+  // directly as a plain object, in addition to updating component state.
+  //
+  // Why this matters (this is the actual bug, not a timing issue): the old
+  // code correctly WAITED for a ref (isFundingDataLoadedRef) to flip true —
+  // refs are always current, so that part worked fine. But once the wait
+  // was over, it went on to call runAiEvaluation() / prepareDataForEvaluation(),
+  // which read businessPlanAnalysis / pitchDeckAnalysis / etc. from
+  // component STATE — and that read happens inside a closure (the
+  // onSnapshot callback, or whatever effect called it) that was created
+  // BEFORE those setState calls landed. A closure's captured variables
+  // don't refresh just because you waited longer or because a ref changed
+  // elsewhere; only a brand-new render does that. So the "wait" correctly
+  // detected the data was ready, and then the code went on to read stale
+  // (null/zero) values anyway.
+  //
+  // The fix: return the freshly-fetched data straight from this function
+  // and pass it explicitly into runAiEvaluation / prepareDataForEvaluation
+  // as a parameter, so those functions never depend on a state variable
+  // "catching up" inside an old closure.
   const fetchFundingApplicationData = useCallback(async () => {
-    try {
+    // If a fetch is already in flight, piggyback on it.
+    if (dataLoadPromiseRef.current) {
+      return dataLoadPromiseRef.current;
+    }
+
+    const loadPromise = (async () => {
       const userId = auth.currentUser.uid;
       let loadedCount = 0;
+
+      const fresh = {
+        businessPlanAnalysis: null,
+        pitchDeckAnalysis: null,
+        creditReportAnalysis: null,
+        guaranteesAnalysis: null,
+        financialResilienceAnalysis: null,
+        solvencyAnalysis: null,
+      };
 
       try {
         const snap = await getDocs(query(collection(db, "aiEvaluations"), where("userId", "==", userId)));
@@ -330,7 +369,8 @@ export function FundabilityScoreCard({
           const rawScore = d?.evaluation?.score || 0;
           const score = Math.round(rawScore);
           const isValid = score > 0 && content.trim().length > 0;
-          setBusinessPlanAnalysis({ score, rawScore, content, isValid });
+          fresh.businessPlanAnalysis = { score, rawScore, content, isValid };
+          setBusinessPlanAnalysis(fresh.businessPlanAnalysis);
           if (isValid) loadedCount++;
         }
       } catch (e) { console.error("BP load error:", e); }
@@ -343,7 +383,8 @@ export function FundabilityScoreCard({
           const score = d?.evaluation?.score || 0;
           const operationalScore = d?.evaluation?.operationalScore || 0;
           const isValid = score > 0 && content.trim().length > 0;
-          setPitchDeckAnalysis({ score, operationalScore, content, isValid });
+          fresh.pitchDeckAnalysis = { score, operationalScore, content, isValid };
+          setPitchDeckAnalysis(fresh.pitchDeckAnalysis);
           if (isValid) loadedCount++;
         }
       } catch (e) { console.error("PD load error:", e); }
@@ -365,9 +406,9 @@ export function FundabilityScoreCard({
             ?? d?.isCreditReport
             ?? false;
 
-
           const isValid = isCreditReport === true && score > 0 && content.trim().length > 0;
-          setCreditReportAnalysis({ score, content, label, isCreditReport, isValid });
+          fresh.creditReportAnalysis = { score, content, label, isCreditReport, isValid };
+          setCreditReportAnalysis(fresh.creditReportAnalysis);
           if (isValid) loadedCount++;
         }
       } catch (e) { console.error("CR load error:", e); }
@@ -379,11 +420,12 @@ export function FundabilityScoreCard({
           const activeGuarantees = Object.entries(g)
             .filter(([k, v]) => !k.endsWith("Files") && v === "yes")
             .map(([k]) => k);
-          setGuaranteesAnalysis({
+          fresh.guaranteesAnalysis = {
             activeCount: activeGuarantees.length,
             items: activeGuarantees,
             score: Math.min(activeGuarantees.length, 5),
-          });
+          };
+          setGuaranteesAnalysis(fresh.guaranteesAnalysis);
           if (activeGuarantees.length > 0) loadedCount++;
         }
       } catch (e) { console.error("Guarantees load error:", e); }
@@ -393,7 +435,8 @@ export function FundabilityScoreCard({
         if (snap.exists()) {
           const d = snap.data();
           const resScore = d?.evaluation?.resilienceScore || d?.evaluation?.score || 0;
-          setFinancialResilienceAnalysis({ score: resScore, content: d?.evaluation?.summary || d?.evaluation?.content || "" });
+          fresh.financialResilienceAnalysis = { score: resScore, content: d?.evaluation?.summary || d?.evaluation?.content || "" };
+          setFinancialResilienceAnalysis(fresh.financialResilienceAnalysis);
           if (resScore > 0) loadedCount++;
         }
       } catch (e) { console.error("FR load error:", e); }
@@ -407,8 +450,6 @@ export function FundabilityScoreCard({
           const debtToEquity = parseFloat(rawMetrics.debtToEquity) || 0;
           const debtToAssets = parseFloat(rawMetrics.debtToAssets) || 0;
           const interestCoverage = parseFloat(rawMetrics.interestCoverage) || 0;
-
-          let calculatedSolvencyScore = 0;
 
           let navScore = 0;
           if (nav > 100) navScore = 100;
@@ -434,38 +475,51 @@ export function FundabilityScoreCard({
           else if (deviation <= 1.5) dteScore = 35;
           else dteScore = Math.max(0, 100 - deviation * 10);
 
-          calculatedSolvencyScore = Math.round(
+          const calculatedSolvencyScore = Math.round(
             (navScore * 0.4) + (equityScore * 0.35) + (dteScore * 0.25)
           );
 
           const normalizedScore = normalizeSolvencyScore(calculatedSolvencyScore);
 
-          setSolvencyAnalysis({
+          fresh.solvencyAnalysis = {
             score: calculatedSolvencyScore,
-            normalizedScore: normalizedScore,
+            normalizedScore,
             nav, equityRatio, debtToEquity, debtToAssets, interestCoverage,
             timestamp: solvencyData.timestamp,
             rawMetrics,
-            isValid: calculatedSolvencyScore > 0
-          });
-
+            isValid: calculatedSolvencyScore > 0,
+          };
+          setSolvencyAnalysis(fresh.solvencyAnalysis);
           if (calculatedSolvencyScore > 0) loadedCount++;
         } else {
-          setSolvencyAnalysis({ score: 0, normalizedScore: 0, nav: 0, equityRatio: 0, debtToEquity: 0, debtToAssets: 0, interestCoverage: 0, isValid: false });
+          fresh.solvencyAnalysis = { score: 0, normalizedScore: 0, nav: 0, equityRatio: 0, debtToEquity: 0, debtToAssets: 0, interestCoverage: 0, isValid: false };
+          setSolvencyAnalysis(fresh.solvencyAnalysis);
         }
       } catch (e) {
         console.error("Solvency load error:", e);
-        setSolvencyAnalysis({ score: 0, normalizedScore: 0, nav: 0, equityRatio: 0, debtToEquity: 0, debtToAssets: 0, interestCoverage: 0, isValid: false });
+        fresh.solvencyAnalysis = { score: 0, normalizedScore: 0, nav: 0, equityRatio: 0, debtToEquity: 0, debtToAssets: 0, interestCoverage: 0, isValid: false };
+        setSolvencyAnalysis(fresh.solvencyAnalysis);
       }
 
       const isLoaded = loadedCount > 0;
       setIsFundingDataLoaded(isLoaded);
       isFundingDataLoadedRef.current = isLoaded;
       setDataLoadedAt(Date.now());
+
+      return { isLoaded, ...fresh };
+    })();
+
+    dataLoadPromiseRef.current = loadPromise;
+
+    try {
+      return await loadPromise;
     } catch (error) {
       console.error("Error fetching funding application data:", error);
       setIsFundingDataLoaded(false);
       isFundingDataLoadedRef.current = false;
+      throw error;
+    } finally {
+      dataLoadPromiseRef.current = null;
     }
   }, [auth?.currentUser?.uid]);
 
@@ -701,7 +755,18 @@ export function FundabilityScoreCard({
     };
   };
 
-  const prepareDataForEvaluation = async (data) => {
+  const prepareDataForEvaluation = async (data, freshData = null) => {
+    // Prefer explicitly-passed fresh data (just returned by
+    // fetchFundingApplicationData); fall back to component state only when
+    // nothing fresh was fetched for this call — which is fine, since in
+    // that case state was already reliable before the call started.
+    const bpAnalysis = freshData?.businessPlanAnalysis ?? businessPlanAnalysis;
+    const pdAnalysis = freshData?.pitchDeckAnalysis ?? pitchDeckAnalysis;
+    const crAnalysis = freshData?.creditReportAnalysis ?? creditReportAnalysis;
+    const grAnalysis = freshData && "guaranteesAnalysis" in freshData ? freshData.guaranteesAnalysis : guaranteesAnalysis;
+    const frAnalysis = freshData?.financialResilienceAnalysis ?? financialResilienceAnalysis;
+    const svAnalysis = freshData?.solvencyAnalysis ?? solvencyAnalysis;
+
     let out = "";
 
     out += `\n=== FINANCIAL STRENGTH ===\n`;
@@ -788,39 +853,39 @@ export function FundabilityScoreCard({
       out += `Amount requested: ${data?.useOfFunds?.amountRequested || "Not specified"}\n`;
       out += `Support focus: ${data?.useOfFunds?.additionalSupportFocus || "None"}\n`;
 
-      if (businessPlanAnalysis?.isValid) {
-        const bpScore5 = Math.round((businessPlanAnalysis.score / 100) * 5 * 10) / 10;
+      if (bpAnalysis?.isValid) {
+        const bpScore5 = Math.round((bpAnalysis.score / 100) * 5 * 10) / 10;
         out += `\n--- BUSINESS PLAN ---\n`;
-        out += `Original AI Score: ${businessPlanAnalysis.rawScore}/100 → Converted: ${bpScore5}/5\n`;
-        out += `Full Analysis:\n${businessPlanAnalysis.content}\n`;
+        out += `Original AI Score: ${bpAnalysis.rawScore}/100 → Converted: ${bpScore5}/5\n`;
+        out += `Full Analysis:\n${bpAnalysis.content}\n`;
         out += `INSTRUCTION: Use the converted score (${bpScore5}/5) as your base for section 4. You may adjust ±0.5 only if the analysis content clearly justifies it.\n`;
       } else {
         out += `\n--- BUSINESS PLAN ---\nStatus: NOT SUBMITTED or NOT YET ANALYSED. You MUST output Score: 0.\n`;
       }
 
-      if (pitchDeckAnalysis?.isValid) {
-        const pitchScore5 = Math.round((pitchDeckAnalysis.score / 100) * 5 * 10) / 10;
+      if (pdAnalysis?.isValid) {
+        const pitchScore5 = Math.round((pdAnalysis.score / 100) * 5 * 10) / 10;
         out += `\n--- PITCH DECK ---\n`;
-        out += `Original AI Score: ${pitchDeckAnalysis.score}/100 → Converted: ${pitchScore5}/5\n`;
-        out += `Operational Score (already 0-5): ${pitchDeckAnalysis.operationalScore}/5\n`;
-        out += `Full Analysis:\n${pitchDeckAnalysis.content}\n`;
+        out += `Original AI Score: ${pdAnalysis.score}/100 → Converted: ${pitchScore5}/5\n`;
+        out += `Operational Score (already 0-5): ${pdAnalysis.operationalScore}/5\n`;
+        out += `Full Analysis:\n${pdAnalysis.content}\n`;
         out += `INSTRUCTION: Use the converted score (${pitchScore5}/5) as your base.\n`;
       } else {
         out += `\n--- PITCH DECK ---\nStatus: NOT SUBMITTED or NOT YET ANALYSED. You MUST output Score: 0.\n`;
       }
 
-      if (creditReportAnalysis?.isValid) {
-        out += `\n--- CREDIT REPORT ---\nCredit score: ${creditReportAnalysis.score}/850\nAnalysis:\n${creditReportAnalysis.content}\nCONVERT TO 0-5: 750-850=5, 650-749=4, 550-649=3, 450-549=2, below 450=1.\n`;
+      if (crAnalysis?.isValid) {
+        out += `\n--- CREDIT REPORT ---\nCredit score: ${crAnalysis.score}/850\nAnalysis:\n${crAnalysis.content}\nCONVERT TO 0-5: 750-850=5, 650-749=4, 550-649=3, 450-549=2, below 450=1.\n`;
       } else {
-        const reason = creditReportAnalysis && !creditReportAnalysis.isCreditReport
+        const reason = crAnalysis && !crAnalysis.isCreditReport
           ? "Document uploaded was NOT a credit report."
           : "NOT SUBMITTED or NOT YET ANALYSED.";
         out += `\n--- CREDIT REPORT ---\nStatus: ${reason} You MUST output Score: 0.\n`;
       }
 
       if (subW?.guarantees > 0) {
-        if (guaranteesAnalysis) {
-          out += `\n--- GUARANTEES / COLLATERAL ---\nActive types (${guaranteesAnalysis.activeCount}): ${guaranteesAnalysis.items.join(", ") || "None"}\nScore: ${guaranteesAnalysis.score}/5\n`;
+        if (grAnalysis) {
+          out += `\n--- GUARANTEES / COLLATERAL ---\nActive types (${grAnalysis.activeCount}): ${grAnalysis.items.join(", ") || "None"}\nScore: ${grAnalysis.score}/5\n`;
         } else {
           out += `\n--- GUARANTEES / COLLATERAL ---\nStatus: Not provided\nScore: 0/5\n`;
         }
@@ -830,21 +895,21 @@ export function FundabilityScoreCard({
 
       if (subW?.financialResilience > 0) {
         out += `\n--- FINANCIAL RESILIENCE & EFFICIENCY ---\n`;
-        if (solvencyAnalysis?.isValid) {
+        if (svAnalysis?.isValid) {
           out += `SOLVENCY METRICS (from capital structure):\n`;
-          out += `- Net Asset Value (NAV): R${solvencyAnalysis.nav}M\n`;
-          out += `- Equity Ratio: ${solvencyAnalysis.equityRatio}%\n`;
-          out += `- Debt to Equity: ${solvencyAnalysis.debtToEquity}\n`;
-          out += `- Debt to Assets: ${solvencyAnalysis.debtToAssets}\n`;
-          out += `- Interest Coverage: ${solvencyAnalysis.interestCoverage}\n`;
-          out += `- Solvency Score: ${solvencyAnalysis.score}/100 (${solvencyAnalysis.normalizedScore}/5 normalized)\n`;
+          out += `- Net Asset Value (NAV): R${svAnalysis.nav}M\n`;
+          out += `- Equity Ratio: ${svAnalysis.equityRatio}%\n`;
+          out += `- Debt to Equity: ${svAnalysis.debtToEquity}\n`;
+          out += `- Debt to Assets: ${svAnalysis.debtToAssets}\n`;
+          out += `- Interest Coverage: ${svAnalysis.interestCoverage}\n`;
+          out += `- Solvency Score: ${svAnalysis.score}/100 (${svAnalysis.normalizedScore}/5 normalized)\n`;
         }
-        if (financialResilienceAnalysis?.content) {
-          out += `Resilience Score: ${financialResilienceAnalysis.score}/5\nAnalysis:\n${financialResilienceAnalysis.content}\n`;
+        if (frAnalysis?.content) {
+          out += `Resilience Score: ${frAnalysis.score}/5\nAnalysis:\n${frAnalysis.content}\n`;
         } else {
           out += `Status: Using solvency metrics from capital structure.\n`;
         }
-        out += `Score: ${solvencyAnalysis?.normalizedScore || 0}/5\n`;
+        out += `Score: ${svAnalysis?.normalizedScore || 0}/5\n`;
       }
     }
 
@@ -861,19 +926,24 @@ export function FundabilityScoreCard({
     }
   };
 
-  const runAiEvaluation = async (userId) => {
-    if (!apiKey?.trim()) { setEvaluationError("API key not configured."); return; }
-    if (!profileData) { setEvaluationError("No profile data."); return; }
+  // Runs the AI evaluation. If the business has applied for funding and no
+  // freshly-fetched data was handed in, this now AWAITS THE REAL FETCH
+  // itself (fetchFundingApplicationData) and uses exactly what it returns —
+  // instead of polling a ref and then reading component state that might
+  // still be stale inside whatever closure called this function. This is
+  // what actually fixes the "shows 0 / uses old data" bug.
+  const runAiEvaluation = async (userId, freshData = null) => {
+    if (!apiKey?.trim()) { setEvaluationError("API key not configured."); return null; }
+    if (!profileData) { setEvaluationError("No profile data."); return null; }
 
-    if (hasAppliedForFunding && !isFundingDataLoaded) {
+    if (hasAppliedForFunding && !freshData) {
       setEvaluationError("Loading funding application data...");
-      const start = Date.now();
-      while (!isFundingDataLoadedRef.current && Date.now() - start < 10000) {
-        await new Promise((r) => setTimeout(r, 500));
-      }
-      if (!isFundingDataLoadedRef.current) {
-        setEvaluationError("Funding data timeout. Please try again.");
-        return;
+      try {
+        freshData = await fetchFundingApplicationData();
+      } catch (error) {
+        console.error("Error loading funding data before evaluation:", error);
+        setEvaluationError("Failed to load funding data. Please try again.");
+        return null;
       }
     }
 
@@ -881,7 +951,7 @@ export function FundabilityScoreCard({
     setEvaluationError("");
 
     try {
-      const evalData = await prepareDataForEvaluation(profileData);
+      const evalData = await prepareDataForEvaluation(profileData, freshData);
       const tier = fundingTier;
       const subW = getFundabilitySubWeights(tier);
 
@@ -1014,6 +1084,7 @@ ${evalData}`;
     } catch (error) {
       console.error("AI Evaluation error:", error);
       setEvaluationError(`Failed: ${error.message}`);
+      return null;
     } finally {
       setIsEvaluating(false);
     }
@@ -1028,7 +1099,19 @@ ${evalData}`;
         setAiEvaluationResult(aiSnap.data().result);
         return;
       }
-      await runAiEvaluation(userId);
+      const result = await runAiEvaluation(userId);
+      if (result) {
+        const aiEvalRef = doc(db, "aiFundabilityEvaluations", userId);
+        await setDoc(aiEvalRef, {
+          result,
+          timestamp: new Date(),
+          profileSnapshot: profileData,
+          includedFundingData: hasAppliedForFunding,
+          fundingTier,
+        }, { merge: true });
+        setAiEvaluationResult(result);
+        setShowDetailedAnalysis(true);
+      }
     } catch (error) {
       setEvaluationError(`Failed to refresh: ${error.message}`);
     }
@@ -1058,30 +1141,35 @@ ${evalData}`;
             try { await waitForFundingCheck(); }
             catch { await updateDoc(docRef, { triggerFundabilityEvaluation: false }); return; }
           }
-          if (hasAppliedForFunding && !isFundingDataLoaded) {
-            const start = Date.now();
-            while (!isFundingDataLoadedRef.current && Date.now() - start < 15000) {
-              await new Promise((r) => setTimeout(r, 500));
-            }
-          }
 
+          // No more manually polling isFundingDataLoadedRef and then reading
+          // stale state — runAiEvaluation() now awaits the real fetch itself
+          // (fetchFundingApplicationData) and uses exactly what it returns,
+          // so this listener doesn't need to (and shouldn't) do that wait
+          // itself anymore.
           setTriggeredByAuto(true);
           isSavingEvaluation.current = true;
 
-          const result = await runAiEvaluation(auth.currentUser.uid);
+          try {
+            const result = await runAiEvaluation(auth.currentUser.uid);
 
-          if (result) {
-            await setDoc(aiEvalRef, {
-              result, timestamp: new Date(), profileSnapshot: profileData,
-              includedFundingData: hasAppliedForFunding, fundingTier,
-            }, { merge: true });
+            if (result) {
+              await setDoc(aiEvalRef, {
+                result, timestamp: new Date(), profileSnapshot: profileData,
+                includedFundingData: hasAppliedForFunding, fundingTier,
+              }, { merge: true });
 
-            setAiEvaluationResult(result);
-            setShowDetailedAnalysis(true);
+              setAiEvaluationResult(result);
+              setShowDetailedAnalysis(true);
+            }
+          } catch (error) {
+            console.error("Auto evaluation error:", error);
+            setEvaluationError(`Auto evaluation failed: ${error.message}`);
+          } finally {
+            await updateDoc(docRef, { triggerFundabilityEvaluation: false });
+            isSavingEvaluation.current = false;
           }
-
-          await updateDoc(docRef, { triggerFundabilityEvaluation: false });
-          isSavingEvaluation.current = false;
+          return;
         }
       }
 
@@ -1464,6 +1552,11 @@ ${evalData}`;
                         ? (<><div style={{ width: "16px", height: "16px", border: "2px solid #fff", borderTop: "2px solid transparent", borderRadius: "50%", animation: "spin 1s linear infinite" }} />Loading...</>)
                         : (<><RefreshCw size={16} />Load AI analysis</>)}
                     </button>
+                    {evaluationError && !isEvaluating && (
+                      <div style={{ marginTop: "10px", padding: "10px 12px", backgroundColor: "#f8d7da", color: "#721c24", border: "1px solid #f5c6cb", borderRadius: "6px", fontSize: "13px", display: "flex", alignItems: "center", gap: "8px", textAlign: "left" }}>
+                        <AlertCircle size={16} style={{ flexShrink: 0 }} /> {evaluationError}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -1546,26 +1639,6 @@ ${evalData}`;
                         </ul>
                       </div>
                     </div>
-
-                    {/* ── Fundability — internal weighting + its own interpretation ── */}
-                    {/* <div style={{ backgroundColor: "#efebe9", padding: "14px", borderRadius: "8px", marginBottom: "16px", borderLeft: "4px solid #8d6e63" }}>
-                      <p style={{ fontWeight: "bold", marginBottom: "4px", color: "#6d4c41" }}>
-                        Fundability (Internal Weighting)
-                        {fundingTier && <span style={{ fontSize: "11px", fontWeight: "400", color: "#8d6e63", marginLeft: "8px" }}>— your active tier column is highlighted</span>}
-                      </p>
-                      <p style={{ fontSize: "11px", color: "#8d6e63", marginBottom: "10px", fontStyle: "italic" }}>
-                        Tier A &amp; C → Grants/Catalyst column · Tier B → PO (&lt;10M) column · Tier D → All other + Pos&gt;10M column
-                      </p>
-                      {renderFundabilityInternalTable()}
-                      <div style={{ marginTop: "12px" }}>
-                        <p style={{ fontWeight: "bold", marginBottom: "8px", color: "#6d4c41", fontSize: "13px" }}>Fundability interpretation:</p>
-                        <ul style={{ margin: "0", paddingLeft: "20px", fontSize: "13px" }}>
-                          {[["91–100%", "Highly fundable"], ["81–90%", "Strong investment case"], ["61–80%", "Moderate potential"], ["41–60%", "Basic potential"], ["0–40%", "Needs development"]].map(([r, l]) => (
-                            <li key={r} style={{ marginBottom: "4px" }}><strong>{r}:</strong> {l}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    </div> */}
                   </div>
                 )}
               </div>
