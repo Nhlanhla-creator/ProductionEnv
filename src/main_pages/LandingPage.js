@@ -647,7 +647,12 @@ const LandingPage = () => {
       {mobile && showMobileNotice && <MobileNotice onClose={() => setShowMobileNotice(false)} />}
       
       {showModal&&<RegModal onClose={()=>setShowModal(false)} isMobile={mobile}/>}
-      <Header onLoginClick={go}/>
+      {/* FIX: removed onLoginClick={go} — that was wiring the Login button
+          to the "See Solutions" handler, causing Login to open Solutions
+          Overview on the first click. Header's own default behavior
+          (navigate to /LoginRegister) is what we want here, so no
+          onLoginClick prop should be passed. */}
+      <Header/>
 
       {/* HERO SECTION */}
       <section style={{background:`linear-gradient(105deg, rgba(28,20,16,0.94) 0%, rgba(61,42,26,0.88) 50%, rgba(28,20,16,0.75) 100%), url("https://images.unsplash.com/photo-1556761175-4b46a572b786?auto=format&fit=crop&w=1600&q=80")`,backgroundSize:"cover",backgroundPosition:"center top",padding:mobile?"44px 20px 52px":"68px 40px 76px",color:"#fff",position:"relative",overflow:"hidden",minHeight:mobile?"auto":520,display:"flex",alignItems:"center"}}>
