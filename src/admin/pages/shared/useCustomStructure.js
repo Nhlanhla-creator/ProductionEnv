@@ -25,6 +25,7 @@ export const useCustomStructure = ({
   loadUserStructure,
   saveUserStructure,
   deleteContent,
+  enableTables = false,
 }) => {
   const [customStructure, setCustomStructure] = useState({});
   const [createDialog, setCreateDialog] = useState({ open: false, parentPath: [] });
@@ -72,13 +73,23 @@ export const useCustomStructure = ({
         newItem = { type: 'folder', icon: 'folder', items: {} };
       } else {
         const preset = FILE_TYPE_PRESETS[fileType] || FILE_TYPE_PRESETS.any;
-        newItem = {
-          type: 'file',
-          icon: 'file',
-          accept: preset.accept,
-          maxSize: DEFAULT_FILE_MAX_SIZE,
-          description: `Upload ${preset.label} (max 10MB)`,
-        };
+        if (enableTables && fileType === 'spreadsheet') {
+          newItem = {
+            type: 'table',
+            icon: 'file-spreadsheet',
+            accept: preset.accept,
+            maxSize: DEFAULT_FILE_MAX_SIZE,
+            description: `Manage ${name} database / spreadsheet`,
+          };
+        } else {
+          newItem = {
+            type: 'file',
+            icon: 'file',
+            accept: preset.accept,
+            maxSize: DEFAULT_FILE_MAX_SIZE,
+            description: `Upload ${preset.label} (max 10MB)`,
+          };
+        }
       }
 
       const previous = customStructure;
@@ -96,7 +107,7 @@ export const useCustomStructure = ({
       }
       return { parentPath, name, type };
     },
-    [createDialog, customStructure, saveUserStructure, closeCreateDialog]
+    [createDialog, customStructure, saveUserStructure, closeCreateDialog, enableTables]
   );
 
   // Delete a user-created folder/file. Folders also remove every uploaded
