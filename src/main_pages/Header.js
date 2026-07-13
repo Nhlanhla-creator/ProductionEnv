@@ -111,10 +111,9 @@ const Header = ({ onLoginClick }) => {
     { label: 'For Investors', path: '/HowItWorksInvestors' },
     { label: 'For Catalysts', path: '/HowItWorksCatalysts' },
     { label: 'For Capital and Market Facilitators', path: '/HowItWorksCapitalMarket' },
-        { label: 'For Associations & Member Organisations', path: '/HowItWorksAssociations' },
+    { label: 'For Associations & Member Organisations', path: '/HowItWorksAssociations' },
     { label: 'For Advisors', path: '/HowItWorksAdvisors' },
     { label: 'For Interns', path: '/HowItWorksInterns' },
-
   ];
 
   // Solutions dropdown items
@@ -128,7 +127,6 @@ const Header = ({ onLoginClick }) => {
     { label: 'For Associations & Member Organisations', path: '/solutions/associations' },
     { label: 'For Advisors', path: '/solutions/advisors' },
     { label: 'For Interns', path: '/solutions/graduates' },
-
   ];
 
   const styles = {
@@ -224,13 +222,15 @@ const Header = ({ onLoginClick }) => {
       padding: '6px 0',
       minWidth: '260px',
       zIndex: 200,
+      display: 'none',  // FIXED: Hide completely when closed to prevent click interception
       opacity: 0,
       visibility: 'hidden',
-      transition: 'all 0.25s ease',
+      transition: 'opacity 0.25s ease, visibility 0.25s ease',
       border: '1px solid #EAE2D8',
       pointerEvents: 'none',
     },
     dropdownMenuOpen: {
+      display: 'block',  // FIXED: Show when open
       opacity: 1,
       visibility: 'visible',
       pointerEvents: 'auto',
@@ -566,9 +566,13 @@ const Header = ({ onLoginClick }) => {
                 }}>▼</span>
               </button>
 
+              {/* FIXED: Solutions dropdown aligned to the right to prevent overlapping login button */}
               <div style={{
                 ...styles.dropdownMenu,
                 ...(openDropdown === 'solutions' ? styles.dropdownMenuOpen : {}),
+                left: 'auto',
+                right: '0',
+                transform: 'none',
               }}>
                 {solutionsItems.map((item) => (
                   <button
@@ -623,9 +627,13 @@ const Header = ({ onLoginClick }) => {
                 }}>▼</span>
               </button>
 
+              {/* FIXED: How It Works dropdown aligned to the right to prevent overlapping login button */}
               <div style={{
                 ...styles.dropdownMenu,
                 ...(openDropdown === 'howItWorks' ? styles.dropdownMenuOpen : {}),
+                left: 'auto',
+                right: '0',
+                transform: 'none',
               }}>
                 {howItWorksItems.map((item) => (
                   <button
