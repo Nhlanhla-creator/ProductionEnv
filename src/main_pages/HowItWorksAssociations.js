@@ -51,6 +51,59 @@ const HowItWorksAssociations = () => {
     gold: '#C9A96E',
   };
 
+  const steps = [
+    {
+      number: '01',
+      title: 'Step 1',
+      description: 'Configure membership categories, fees, approval workflows, committees, events, branding, and communications.',
+      image: 'https://images.unsplash.com/photo-1557804506-669a67965ba0?w=400&h=250&fit=crop',
+      icon: <FaBuilding size={22} />,
+      color: colors.primary,
+      details: ['Membership categories', 'Fees & billing', 'Approval workflows', 'Committees & Events', 'Branding & Communications'],
+      subtext: '🔧 Fully digital administration'
+    },
+    {
+      number: '02',
+      title: 'Step 2',
+      description: 'Members create rich profiles while BIG verifies key information. Upload compliance docs, certifications, and capabilities.',
+      image: 'https://images.unsplash.com/photo-1522071820081-009f0129c71c?w=400&h=250&fit=crop',
+      icon: <FaUsers size={22} />,
+      color: colors.brown,
+      details: ['Compliance documents', 'Certifications', 'Products & services', 'Industry capabilities', 'Funding & procurement interests'],
+      subtext: '🔒 Verified & secure network'
+    },
+    {
+      number: '03',
+      title: 'Step 3',
+      description: 'BIG intelligently connects members with customers, investors, procurement, advisors, interns, and strategic partners.',
+      image: 'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=400&h=250&fit=crop',
+      icon: <FaHandshake size={22} />,
+      color: colors.amber,
+      details: ['Customers & Investors', 'Procurement opportunities', 'Advisors & Service providers', 'Interns & Graduates', 'Strategic partnerships'],
+      subtext: '🤝 Data-driven connections'
+    },
+    {
+      number: '04',
+      title: 'Step 4',
+      description: 'Support members with funding readiness, supplier readiness, AI-powered insights, growth support, and business tools.',
+      image: 'https://images.unsplash.com/photo-1542744173-8e7e53415bb0?w=400&h=250&fit=crop',
+      icon: <FaRocket size={22} />,
+      color: colors.green,
+      details: ['Funding readiness', 'Supplier readiness', 'AI-powered insights', 'Growth support', 'Business tools & knowledge'],
+      subtext: '📈 Beyond event engagement'
+    },
+    {
+      number: '05',
+      title: 'Step 5',
+      description: 'Monitor membership growth, renewal rates, engagement, programme participation, opportunity outcomes, and ecosystem health.',
+      image: 'https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=400&h=250&fit=crop',
+      icon: <FaChartBar size={22} />,
+      color: colors.blue,
+      details: ['Membership growth', 'Renewal rates', 'Engagement tracking', 'Programme outcomes', 'Ecosystem health insights'],
+      subtext: '📊 Real-time analytics'
+    }
+  ];
+
   return (
     <div style={{
       display: 'flex',
@@ -280,7 +333,7 @@ const HowItWorksAssociations = () => {
           </div>
         </section>
 
-        {/* Steps Section - 5 steps in one row */}
+        {/* Steps Section - 5 steps with images */}
         <div style={{ marginBottom: '50px' }}>
           <div style={{ textAlign: 'center', marginBottom: '40px' }}>
             <p style={{
@@ -316,65 +369,16 @@ const HowItWorksAssociations = () => {
             gridTemplateColumns: 'repeat(5, 1fr)',
             gap: '16px',
           }}>
-            {[
-              {
-                icon: <FaBuilding size={22} />,
-                number: '01',
-                title: 'Build Your Digital Association',
-                description: 'Configure membership categories, fees, approval workflows, committees, events, branding, and communications.',
-                details: ['Membership categories', 'Fees & billing', 'Approval workflows', 'Committees & Events', 'Branding & Communications'],
-                subtext: '🔧 Fully digital administration',
-                color: colors.primary,
-              },
-              {
-                icon: <FaUsers size={22} />,
-                number: '02',
-                title: 'Build a Trusted Member Network',
-                description: 'Members create rich profiles while BIG verifies key information. Upload compliance docs, certifications, and capabilities.',
-                details: ['Compliance documents', 'Certifications', 'Products & services', 'Industry capabilities', 'Funding & procurement interests'],
-                subtext: '🔒 Verified & secure network',
-                color: colors.brown,
-              },
-              {
-                icon: <FaHandshake size={22} />,
-                number: '03',
-                title: 'Activate Opportunities',
-                description: 'BIG intelligently connects members with customers, investors, procurement, advisors, interns, and strategic partners.',
-                details: ['Customers & Investors', 'Procurement opportunities', 'Advisors & Service providers', 'Interns & Graduates', 'Strategic partnerships'],
-                subtext: '🤝 Data-driven connections',
-                color: colors.amber,
-              },
-              {
-                icon: <FaRocket size={22} />,
-                number: '04',
-                title: 'Deliver Member Value',
-                description: 'Support members with funding readiness, supplier readiness, AI-powered insights, growth support, and business tools.',
-                details: ['Funding readiness', 'Supplier readiness', 'AI-powered insights', 'Growth support', 'Business tools & knowledge'],
-                subtext: '📈 Beyond event engagement',
-                color: colors.green,
-              },
-              {
-                icon: <FaChartBar size={22} />,
-                number: '05',
-                title: 'Measure Ecosystem Impact',
-                description: 'Monitor membership growth, renewal rates, engagement, programme participation, opportunity outcomes, and ecosystem health.',
-                details: ['Membership growth', 'Renewal rates', 'Engagement tracking', 'Programme outcomes', 'Ecosystem health insights'],
-                subtext: '📊 Real-time analytics',
-                color: colors.blue,
-              },
-            ].map((step, index) => (
+            {steps.map((step, index) => (
               <div
                 key={index}
                 style={{
                   background: colors.white,
-                  borderRadius: '16px',
-                  padding: '20px 16px',
+                  borderRadius: '14px',
+                  overflow: 'hidden',
                   border: `1px solid ${colors.border}`,
                   transition: 'all 0.3s ease',
-                  position: 'relative',
                   cursor: 'default',
-                  display: 'flex',
-                  flexDirection: 'column',
                 }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.transform = 'translateY(-6px)';
@@ -387,88 +391,133 @@ const HowItWorksAssociations = () => {
                   e.currentTarget.style.borderColor = colors.border;
                 }}
               >
+                {/* Step Image */}
                 <div style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'flex-start',
-                  marginBottom: '12px',
+                  height: '130px',
+                  overflow: 'hidden',
+                  position: 'relative',
                 }}>
+                  <img 
+                    src={step.image}
+                    alt={step.title}
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'cover',
+                      transition: 'transform 0.5s ease',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.transform = 'scale(1.08)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.transform = 'scale(1)';
+                    }}
+                    loading="lazy"
+                    onError={(e) => {
+                      e.target.style.display = 'none';
+                    }}
+                  />
                   <div style={{
-                    width: '42px',
-                    height: '42px',
-                    borderRadius: '10px',
-                    background: `${step.color}60`,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: step.color,
-                  }}>
-                    {step.icon}
-                  </div>
-                  <span style={{
-                    fontSize: '1.4rem',
-                    fontWeight: 900,
-                    color: `${step.color}60`,
-                    lineHeight: 1,
+                    position: 'absolute',
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    height: '40%',
+                    background: 'linear-gradient(transparent, rgba(0,0,0,0.3))',
+                  }} />
+                  <div style={{
+                    position: 'absolute',
+                    top: '8px',
+                    right: '8px',
+                    background: step.color,
+                    color: colors.white,
+                    padding: '2px 10px',
+                    borderRadius: '20px',
+                    fontSize: '0.65rem',
+                    fontWeight: 700,
                   }}>
                     {step.number}
-                  </span>
+                  </div>
                 </div>
-                
-                <h3 style={{
-                  fontSize: '0.85rem',
-                  fontWeight: 800,
-                  color: colors.dark,
-                  margin: '0 0 4px',
-                  letterSpacing: '-0.01em',
-                  minHeight: '42px',
-                }}>
-                  {step.title}
-                </h3>
-                
-                <p style={{
-                  fontSize: '0.72rem',
-                  color: colors.muted,
-                  lineHeight: 1.5,
-                  margin: '0 0 10px',
-                  flex: '1',
-                }}>
-                  {step.description}
-                </p>
 
                 <div style={{
-                  display: 'flex',
-                  flexWrap: 'wrap',
-                  gap: '3px',
-                  marginBottom: '10px',
+                  padding: '12px 14px 16px',
                 }}>
-                  {step.details.map((detail, i) => (
-                    <span
-                      key={i}
-                      style={{
-                        background: `${step.color}10`,
-                        color: step.color,
-                        padding: '1px 6px',
-                        borderRadius: '50px',
-                        fontSize: '0.55rem',
-                        fontWeight: 600,
-                      }}
-                    >
-                      {detail}
-                    </span>
-                  ))}
-                </div>
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    marginBottom: '6px',
+                  }}>
+                    <div style={{
+                      width: '28px',
+                      height: '28px',
+                      borderRadius: '50%',
+                      background: `${step.color}15`,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: step.color,
+                      fontSize: '12px',
+                    }}>
+                      {step.icon}
+                    </div>
+                    <h4 style={{
+                      fontSize: '0.7rem',
+                      fontWeight: 700,
+                      color: step.color,
+                      margin: 0,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.05em',
+                    }}>
+                      {step.title}
+                    </h4>
+                  </div>
+                  
+                  <p style={{
+                    fontSize: '0.7rem',
+                    color: colors.muted,
+                    lineHeight: 1.4,
+                    margin: '0 0 8px',
+                    minHeight: '40px',
+                  }}>
+                    {step.description}
+                  </p>
 
-                <p style={{
-                  fontSize: '0.68rem',
-                  color: colors.muted,
-                  fontStyle: 'italic',
-                  margin: 0,
-                  paddingTop: '8px',
-                  borderTop: `1px solid ${colors.border}`,
-                }}>
-                  {step.subtext}
-                </p>
+                  <div style={{
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    gap: '3px',
+                    marginBottom: '8px',
+                  }}>
+                    {step.details.map((detail, i) => (
+                      <span
+                        key={i}
+                        style={{
+                          background: `${step.color}10`,
+                          color: step.color,
+                          padding: '1px 6px',
+                          borderRadius: '50px',
+                          fontSize: '0.5rem',
+                          fontWeight: 600,
+                        }}
+                      >
+                        {detail}
+                      </span>
+                    ))}
+                  </div>
+
+                  <p style={{
+                    fontSize: '0.62rem',
+                    color: colors.muted,
+                    fontStyle: 'italic',
+                    margin: 0,
+                    paddingTop: '6px',
+                    borderTop: `1px solid ${colors.border}`,
+                  }}>
+                    {step.subtext}
+                  </p>
+                </div>
               </div>
             ))}
           </div>

@@ -5,51 +5,170 @@ import FormField from "./FormField"
 import { Plus, Trash2, ChevronDown, ChevronUp, AlertTriangle } from "lucide-react"
 import "./FundingApplication.css"
 
-// Funding Instrument options
-const fundingInstrumentOptions = [
+// ============================================
+// LEVEL 1 — Funding Category
+// ============================================
+const FUNDING_CATEGORY_OPTIONS = [
   { value: "Any", label: "Any" },
-  { 
-    value: "Equity", 
-    label: "Equity (Buying shares in the business)",
-    tooltip: "Investor purchases ownership stake in your company in exchange for capital"
-  },
-  { 
-    value: "Debt", 
-    label: "Debt (Loan-based funding)",
-    tooltip: "Borrowed money that must be repaid with interest over time"
-  },
-  { 
-    value: "Grants", 
-    label: "Grants (Non-repayable funding)",
-    tooltip: "Funds provided by government or organizations that do not need to be repaid"
-  },
-  { 
-    value: "Convertible Notes", 
-    label: "Convertible Notes (Loan that can turn into shares)",
-    tooltip: "Short-term debt that converts to equity during future financing round"
-  },
-  { 
-    value: "Revenue-based Financing", 
-    label: "Revenue-based Financing",
-    tooltip: "Repayment tied to company's monthly revenue rather than fixed installments"
-  },
-  { 
-    value: "Hybrid/Structured Instruments", 
-    label: "Hybrid/Structured Instruments",
-    tooltip: "Combination of debt and equity features tailored to specific needs"
-  },
-  { 
-    value: "Secondary Market Strategies", 
-    label: "Secondary Market Strategies",
-    tooltip: "Investments in existing shares rather than new company equity"
-  },
-  { 
-    value: "Special Strategies", 
-    label: "Special Strategies",
-    tooltip: "Customized or non-traditional funding approaches"
-  },
+  { value: "Equity", label: "Equity" },
+  { value: "Debt", label: "Debt" },
+  { value: "Grants", label: "Grants" },
+  { value: "Hybrid / Structured Finance", label: "Hybrid / Structured Finance" },
+  { value: "Secondary Market Strategies", label: "Secondary Market Strategies" },
+  { value: "Special Strategies", label: "Special Strategies" },
   { value: "Other", label: "Other (please specify)" },
 ]
+
+// ============================================
+// LEVEL 2 — Funding Instrument (depends on Category)
+// ============================================
+const INSTRUMENTS_BY_CATEGORY = {
+  Equity: [
+    "Any Equity Instrument",
+    "Ordinary Equity",
+    "Preference Shares",
+    "Growth Equity",
+    "Strategic Equity",
+  ],
+  Debt: [
+    "Any Debt Instrument",
+    "Term Loan",
+    "Working Capital Facility",
+    "Revolving Credit Facility",
+    "Asset Finance",
+    "Trade Finance",
+    "Invoice Discounting / Factoring",
+    "Purchase Order Finance",
+    "Bridging Finance",
+    "Contract Finance",
+    "Import Finance",
+    "Export Finance",
+  ],
+  Grants: [
+    "Any Grant",
+    "Government Grant",
+    "Innovation Grant",
+    "Research Grant",
+    "Export Grant",
+    "Green / Energy Grant",
+    "Impact Grant",
+    "Challenge Fund",
+    "Incentive / Rebate",
+    "Matching Grant",
+  ],
+  "Hybrid / Structured Finance": [
+    "Any Hybrid Instrument",
+    "Convertible Note",
+    "SAFE",
+    "Revenue Based Financing",
+    "Mezzanine Finance",
+    "Royalty Financing",
+    "Blended Finance",
+  ],
+  "Secondary Market Strategies": [
+    "Any Secondary Strategy",
+    "Secondary Share Sale",
+    "Recapitalisation",
+    "Management Buyout",
+    "Management Buy-In",
+  ],
+  "Special Strategies": [
+    "Any Special Strategy",
+    "Acquisition Finance",
+    "Project Finance",
+    "Vendor Finance",
+    "Infrastructure Finance",
+    "Islamic Finance",
+  ],
+}
+
+// ============================================
+// LEVEL 3 — Preferred Funder Type (depends on Instrument)
+// ============================================
+const DEFAULT_FUNDER_TYPES = [
+  "Any",
+  "Bank",
+  "Development Finance Institution",
+  "Alternative Lender",
+  "Venture Capital",
+  "Private Equity",
+  "Angel Investor",
+  "Family Office",
+  "Corporate Investor",
+  "Strategic Investor",
+  "Government Fund",
+  "Foundation",
+  "NGO",
+  "Corporate CSI",
+  "Development Partner",
+  "Purchase Order Finance Specialist",
+  "Corporate Supply Chain Finance Provider",
+  "Revenue Finance Fund",
+  "Other (please specify)",
+]
+
+const GRANT_FUNDER_TYPES = [
+  "Any",
+  "Government Fund",
+  "Foundation",
+  "NGO",
+  "Corporate CSI",
+  "Development Partner",
+  "Development Finance Institution",
+  "Other (please specify)",
+]
+
+const FUNDER_TYPES_BY_INSTRUMENT = {
+  "Ordinary Equity": [
+    "Any",
+    "Angel Investor",
+    "Venture Capital",
+    "Private Equity",
+    "Family Office",
+    "Corporate Investor",
+    "Strategic Investor",
+    "Other (please specify)",
+  ],
+  "Term Loan": [
+    "Any",
+    "Bank",
+    "Development Finance Institution",
+    "Alternative Lender",
+    "Government Fund",
+    "Other (please specify)",
+  ],
+  "Purchase Order Finance": [
+    "Any",
+    "Bank",
+    "Development Finance Institution",
+    "Purchase Order Finance Specialist",
+    "Alternative Lender",
+    "Corporate Supply Chain Finance Provider",
+    "Other (please specify)",
+  ],
+  "Revenue Based Financing": [
+    "Any",
+    "Revenue Finance Fund",
+    "Alternative Lender",
+    "Family Office",
+    "Other (please specify)",
+  ],
+}
+
+// Grant instruments all share the same funder pool
+;(INSTRUMENTS_BY_CATEGORY.Grants || []).forEach((instrument) => {
+  FUNDER_TYPES_BY_INSTRUMENT[instrument] = GRANT_FUNDER_TYPES
+})
+
+const getInstrumentOptions = (category) => {
+  if (!category || category === "Any" || category === "Other") return []
+  return INSTRUMENTS_BY_CATEGORY[category] || []
+}
+
+const getFunderTypeOptions = (instrument) => {
+  if (!instrument) return []
+  return FUNDER_TYPES_BY_INSTRUMENT[instrument] || DEFAULT_FUNDER_TYPES
+}
 
 const equityType = [
   { value: "0-20%", label: "0-20%" },
@@ -59,50 +178,22 @@ const equityType = [
   { value: "Any", label: "Any" },
 ]
 
-// Type of Funder options
-const funderTypeOptions = [
-  { value: "Any", label: "Any" },
-  { 
-    value: "Venture Capital", 
-    label: "Venture Capital",
-    tooltip: "Professional investors in high-growth startups, typically taking equity"
-  },
-  { 
-    value: "Angel Investment", 
-    label: "Angel Investment",
-    tooltip: "Individual investors using personal funds for early-stage companies"
-  },
-    { 
-    value: "Banks & Financial Institutions", 
-    label: "Banks & Financial Institutions",
-    tooltip: "Individual investors using personal funds for early-stage companies"
-  },
-  { 
-    value: "Private Equity", 
-    label: "Private Equity",
-    tooltip: "Investment in established companies for expansion or restructuring"
-  },
-  { 
-    value: "Government Fund", 
-    label: "Government Fund",
-    tooltip: "Public sector funding through agencies or development programs"
-  },
-  { 
-    value: "Grant / Non-Profit", 
-    label: "Grant / Non-Profit",
-    tooltip: "Non-repayable funding from foundations or charitable organizations"
-  },
-  { 
-    value: "Development Finance", 
-    label: "Development Finance",
-    tooltip: "Funding from development banks focused on economic growth"
-  },
-  { 
-    value: "Corporate Investment", 
-    label: "Corporate Investment",
-    tooltip: "Investment from established companies for strategic partnerships"
-  },
-  { value: "Other (specify)", label: "Other (specify)" },
+// ============================================
+// Optional Preferences — Time Horizon / Geographic Scope
+// ============================================
+const timeHorizonOptions = [
+  { value: "Immediate (0-3 months)", label: "Immediate (0-3 months)" },
+  { value: "Short-term (3-6 months)", label: "Short-term (3-6 months)" },
+  { value: "Medium-term (6-12 months)", label: "Medium-term (6-12 months)" },
+  { value: "Long-term (12+ months)", label: "Long-term (12+ months)" },
+]
+
+const geographicScopeOptions = [
+  { value: "Local / Community", label: "Local / Community" },
+  { value: "Provincial", label: "Provincial" },
+  { value: "National (South Africa)", label: "National (South Africa)" },
+  { value: "Regional (Africa)", label: "Regional (Africa)" },
+  { value: "International / Global", label: "International / Global" },
 ]
 
 // Support Focus categories and subtypes
@@ -511,7 +602,7 @@ const subAreaOptions = {
   ],
 }
 
-// MultiSelect component for dropdown selections
+// MultiSelect component for dropdown selections (used for Geographic Scope)
 function MultiSelect({ options, selected, onChange, label }) {
   const [isOpen, setIsOpen] = useState(false)
 
@@ -628,6 +719,39 @@ const UseOfFunds = ({ data, updateData }) => {
     }
   }
 
+  // ============================================
+  // Level 1 / 2 / 3 cascading handlers
+  // ============================================
+  const handleFundingCategoryChange = (e) => {
+    const value = e.target.value
+    updateData({
+      fundingCategory: value,
+      fundingCategoryOther: value === "Other" ? data.fundingCategoryOther || "" : "",
+      fundingInstrument: "",
+      fundingInstrumentOther: "",
+      preferredFunderType: "",
+      preferredFunderTypeOther: "",
+    })
+  }
+
+  const handleFundingInstrumentChange = (e) => {
+    const value = e.target.value
+    updateData({
+      fundingInstrument: value,
+      fundingInstrumentOther: value.startsWith("Other") ? data.fundingInstrumentOther || "" : "",
+      preferredFunderType: "",
+      preferredFunderTypeOther: "",
+    })
+  }
+
+  const handlePreferredFunderChange = (e) => {
+    const value = e.target.value
+    updateData({
+      preferredFunderType: value,
+      preferredFunderTypeOther: value.startsWith("Other") ? data.preferredFunderTypeOther || "" : "",
+    })
+  }
+
   const handleSupportFocusChange = (e) => {
     const { value } = e.target
     updateData({
@@ -716,8 +840,8 @@ const UseOfFunds = ({ data, updateData }) => {
     updateData({ [field]: value })
   }
 
-  const showFundingInstrumentOther = data.fundingInstruments?.includes("other")
-  const showFunderTypeOther = data.funderTypes?.includes("other")
+  const instrumentOptions = getInstrumentOptions(data.fundingCategory)
+  const funderTypeOptions = getFunderTypeOptions(data.fundingInstrument)
 
   return (
     <div style={{ width: "100%", maxWidth: "100%" }}>
@@ -770,17 +894,61 @@ const UseOfFunds = ({ data, updateData }) => {
         </div>
 
         <div>
-          <FormField label="Funding Instrument Preferred">
-            <MultiSelect
-              options={fundingInstrumentOptions}
-              selected={data.fundingInstruments || []}
-              onChange={(value) => handleMultiSelectChange("fundingInstruments", value)}
-              label="Funding Instruments"
-            />
+          {/* LEVEL 1 — Funding Category */}
+          <FormField label="Funding Category" tooltip="Select the broad type of funding you are looking for">
+            <select
+              name="fundingCategory"
+              value={data.fundingCategory || ""}
+              onChange={handleFundingCategoryChange}
+              className="form-select"
+              required
+            >
+              <option value="">Select Funding Category</option>
+              {FUNDING_CATEGORY_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
           </FormField>
 
-          {showFundingInstrumentOther && (
-            <FormField label="Please specify other funding instrument">
+          {data.fundingCategory === "Other" && (
+            <FormField label="Please specify the funding category">
+              <input
+                type="text"
+                name="fundingCategoryOther"
+                value={data.fundingCategoryOther || ""}
+                onChange={handleChange}
+                className="form-input"
+                placeholder="Please specify the funding category"
+                required
+              />
+            </FormField>
+          )}
+
+          {/* LEVEL 2 — Funding Instrument (depends on Category) */}
+          {data.fundingCategory && data.fundingCategory !== "Other" && data.fundingCategory !== "Any" && (
+            <FormField label="Funding Instrument Preferred">
+              <select
+                name="fundingInstrument"
+                value={data.fundingInstrument || ""}
+                onChange={handleFundingInstrumentChange}
+                className="form-select"
+                disabled={!instrumentOptions.length}
+              >
+                <option value="">Select Funding Instrument</option>
+                {instrumentOptions.map((instrument) => (
+                  <option key={instrument} value={instrument}>
+                    {instrument}
+                  </option>
+                ))}
+                <option value="Other (please specify)">Other (please specify)</option>
+              </select>
+            </FormField>
+          )}
+
+          {data.fundingInstrument === "Other (please specify)" && (
+            <FormField label="Please specify the funding instrument">
               <input
                 type="text"
                 name="fundingInstrumentOther"
@@ -793,21 +961,36 @@ const UseOfFunds = ({ data, updateData }) => {
             </FormField>
           )}
 
-          <FormField label="Type of Funder Preferred">
-            <MultiSelect
-              options={funderTypeOptions}
-              selected={data.funderTypes || []}
-              onChange={(value) => handleMultiSelectChange("funderTypes", value)}
-              label="Funder Types"
-            />
-          </FormField>
+          {/* LEVEL 3 — Preferred Funder Type (depends on Instrument) */}
+          {data.fundingCategory && data.fundingCategory !== "Other" && (
+            <FormField label="Type of Funder Preferred">
+              <select
+                name="preferredFunderType"
+                value={data.preferredFunderType || ""}
+                onChange={handlePreferredFunderChange}
+                className="form-select"
+                disabled={data.fundingCategory !== "Any" && !data.fundingInstrument}
+              >
+                <option value="">
+                  {data.fundingCategory === "Any" || data.fundingInstrument
+                    ? "Select Type of Funder"
+                    : "Select a funding instrument first"}
+                </option>
+                {(data.fundingCategory === "Any" ? DEFAULT_FUNDER_TYPES : funderTypeOptions).map((funder) => (
+                  <option key={funder} value={funder}>
+                    {funder}
+                  </option>
+                ))}
+              </select>
+            </FormField>
+          )}
 
-          {showFunderTypeOther && (
-            <FormField label="Please specify other funder type">
+          {data.preferredFunderType === "Other (please specify)" && (
+            <FormField label="Please specify the preferred funder type">
               <input
                 type="text"
-                name="funderTypeOther"
-                value={data.funderTypeOther || ""}
+                name="preferredFunderTypeOther"
+                value={data.preferredFunderTypeOther || ""}
                 onChange={handleChange}
                 className="form-input"
                 placeholder="Please specify the type of funder"
@@ -1076,6 +1259,61 @@ const UseOfFunds = ({ data, updateData }) => {
             total (R {calculateTotal().toLocaleString()})
           </div>
         )}
+      </div>
+
+      {/* Additional Preferences Section (Optional) */}
+      <div style={{ width: "100%", marginTop: "2rem" }}>
+        <h3 style={{ marginBottom: "1rem" }}>Additional Preferences (Optional)</h3>
+        <div className="grid-container">
+          <div>
+            <FormField label="Time Horizon" tooltip="How quickly do you need the funding to be in place?">
+              <select
+                name="timeHorizon"
+                value={data.timeHorizon || ""}
+                onChange={handleChange}
+                className="form-select"
+              >
+                <option value="">Select Time Horizon</option>
+                {timeHorizonOptions.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </FormField>
+
+            <FormField label="Sector Restrictions" tooltip="Any sector restrictions or exclusions that matter for your ideal funder">
+              <textarea
+                name="sectorRestrictions"
+                value={data.sectorRestrictions || ""}
+                onChange={handleChange}
+                className="form-textarea"
+                placeholder="e.g. would prefer not to be matched with funders that exclude agriculture"
+                rows={3}
+                style={{
+                  width: "100%",
+                  padding: "8px",
+                  border: "1px solid #D1D5DB",
+                  borderRadius: "4px",
+                  fontSize: "14px",
+                  resize: "vertical",
+                  fontFamily: "inherit",
+                }}
+              />
+            </FormField>
+          </div>
+
+          <div>
+            <FormField label="Geographic Scope" tooltip="Where should your ideal funder be able to operate or invest?">
+              <MultiSelect
+                options={geographicScopeOptions}
+                selected={data.geographicScope || []}
+                onChange={(value) => handleMultiSelectChange("geographicScope", value)}
+                label="Geographic Scope"
+              />
+            </FormField>
+          </div>
+        </div>
       </div>
 
       {/* Additional Support Required Section */}

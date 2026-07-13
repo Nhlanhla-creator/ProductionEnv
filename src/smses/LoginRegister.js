@@ -1,5 +1,6 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useLayoutEffect } from "react";
+import { createPortal } from "react-dom";
 import "./LoginRegister.css";
 import RetrieveAccount from "./RetrieveAccount.js";
 import {
@@ -24,6 +25,8 @@ import {
   Handshake,
   Building,
   Globe,
+  Landmark,
+  ChevronDown,
 } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
@@ -56,7 +59,11 @@ const PASSWORD_REQUIREMENTS = {
   requireSpecialChars: true,
 };
 
-// Role cards configuration - UPDATED with new roles
+// Role cards configuration - UPDATED order + new "Capital and Market Facilitators" role
+// NOTE: `id` values are kept the same as before for every pre-existing role so that
+// none of the backend logic (Firestore fields, routing maps, normalizeRoleName, etc.)
+// breaks. Only display `title`s were changed where requested, plus the order and the
+// new entry.
 const ROLE_CARDS = [
   {
     id: "Business",
@@ -66,15 +73,9 @@ const ROLE_CARDS = [
   },
   {
     id: "NonProfit",
-    title: "Non-Profit",
+    title: "NPOs",
     icon: <HeartHandshake size={20} />,
     hoverInfo: "NGOs/NPOs that are not primarily operating as catalysts.",
-  },
-  {
-    id: "Investor",
-    title: "Investor/Funder",
-    icon: <TrendingUp size={20} />,
-    hoverInfo: "Banks, VCs, angel investors, DFIs, grant makers.",
   },
   {
     id: "Corporate",
@@ -83,10 +84,28 @@ const ROLE_CARDS = [
     hoverInfo: "Large companies looking for suppliers, innovation, partnerships, or ESD opportunities.",
   },
   {
+    id: "Investor",
+    title: "Investor/Funder",
+    icon: <TrendingUp size={20} />,
+    hoverInfo: "Banks, VCs, angel investors, DFIs, grant makers.",
+  },
+  {
     id: "Catalyst",
     title: "Catalyst",
     icon: <Rocket size={20} />,
     hoverInfo: "Organisations that enable business growth (ESD programmes, incubators, accelerators, development agencies, industry associations, universities, consultants, etc.).",
+  },
+  {
+    id: "CapitalMarketFacilitators",
+    title: "Capital and Market Facilitators",
+    icon: <Landmark size={20} />,
+    hoverInfo: "Organisations that help connect businesses to capital and market opportunities.",
+  },
+  {
+    id: "BusinessAssociation",
+    title: "Association and Member Organisations",
+    icon: <Globe size={20} />,
+    hoverInfo: "Network, collaborate, and build meaningful partnerships across the business ecosystem.",
   },
   {
     id: "Advisors",
@@ -105,12 +124,6 @@ const ROLE_CARDS = [
     title: "Intern Sponsor",
     icon: <Award size={20} />,
     hoverInfo: "Sponsor internship programs and build talent pipelines.",
-  },
-  {
-    id: "BusinessAssociation",
-    title: "Business Association",
-    icon: <Globe size={20} />,
-    hoverInfo: "Network, collaborate, and build meaningful partnerships across the business ecosystem.",
   },
 ];
 
@@ -195,6 +208,17 @@ export default function LoginRegister() {
   const [show2FAVerification, setShow2FAVerification] = useState(false);
   const [tempUser, setTempUser] = useState(null);
   const [twoFactorSecret, setTwoFactorSecret] = useState('');
+  // NEW: dropdown open/close state for the role multi-selector
+  const [roleDropdownOpen, setRoleDropdownOpen] = useState(false);
+  const roleDropdownRef = useRef(null); // wraps the trigger button
+  const roleDropdownMenuRef = useRef(null); // the portaled menu itself
+  const [roleDropdownPos, setRoleDropdownPos] = useState({
+    top: 0,
+    bottom: undefined,
+    left: 0,
+    width: 0,
+    maxHeight: 320,
+  });
 
   // ============== PASSWORD VALIDATION FUNCTIONS ==============
   
@@ -274,13 +298,20 @@ export default function LoginRegister() {
     const iconMap = {
       "Business": <Briefcase size={16} />,
       "Non-Profit": <HeartHandshake size={16} />,
+      "NPOs": <HeartHandshake size={16} />,
+      "NonProfit": <HeartHandshake size={16} />,
       "Investor/Funder": <Rocket size={16} />,
       "Corporate": <Building size={16} />,
       "Catalyst": <Building2 size={16} />,
+      "CapitalMarketFacilitators": <Landmark size={16} />,
+      "Capital and Market Facilitators": <Landmark size={16} />,
       "Advisor": <Users size={16} />,
       "Intern": <GraduationCap size={16} />,
       "Intern Sponsor": <Award size={16} />,
+      "InternSponsor": <Award size={16} />,
       "Business Association": <Globe size={16} />,
+      "BusinessAssociation": <Globe size={16} />,
+      "Association and Member Organisations": <Globe size={16} />,
       // Backward compatibility
       "Small and Medium Social Enterprises": <Briefcase size={16} />,
       SMSEs: <Briefcase size={16} />,
@@ -303,13 +334,17 @@ export default function LoginRegister() {
     const routeMap = {
       "Business": "/profile",
       "Non-Profit": "/profile",
+      "NonProfit": "/profile",
       "Investor/Funder": "/investor-profile",
       "Corporate": "/corporate-profile",
       "Catalyst": "/support-profile",
+      "CapitalMarketFacilitators": "/capital-market-facilitator-profile",
       "Advisor": "/advisor-profile",
       "Intern": "/intern-profile",
       "Intern Sponsor": "/intern-sponsor-profile",
+      "InternSponsor": "/intern-sponsor-profile",
       "Business Association": "/associator-profile",
+      "BusinessAssociation": "/associator-profile",
       // Backward compatibility
       Investor: "/investor-profile",
       INVESTOR: "/investor-profile",
@@ -337,7 +372,7 @@ export default function LoginRegister() {
 
   // Event handlers
   const handleRoleSelect = (roleId) => {
-    if (roleId === "Advisor") {
+    if (roleId === "Advisors") {
       setShowAdvisorCriteria(true);
       return;
     }
@@ -352,9 +387,9 @@ export default function LoginRegister() {
   const handleAdvisorCriteriaAccept = () => {
     setShowAdvisorCriteria(false);
     setRoles((prev) =>
-      prev.includes("Advisor")
-        ? prev.filter((r) => r !== "Advisor")
-        : [...prev, "Advisor"]
+      prev.includes("Advisors")
+        ? prev.filter((r) => r !== "Advisors")
+        : [...prev, "Advisors"]
     );
     setErrors((prev) => ({ ...prev, role: "" }));
   };
@@ -830,28 +865,32 @@ By using this platform, you confirm that you:
   const getRoleDashboardName = (role) => {
     const dashboardMap = {
       "Business": "Business Dashboard",
-      "Non-Profit": "Non-Profit Dashboard",
+      "Non-Profit": "NPOs Dashboard",
+      "NonProfit": "NPOs Dashboard",
       "Investor/Funder": "Investor Dashboard",
       "Corporate": "Corporate Dashboard",
       "Catalyst": "Catalyst Dashboard",
+      "CapitalMarketFacilitators": "Capital and Market Facilitators Dashboard",
       "Advisor": "Advisor Dashboard",
       "Intern": "Intern Dashboard",
       "Intern Sponsor": "Intern Sponsor Dashboard",
-      "Business Association": "Business Association Dashboard",
+      "InternSponsor": "Intern Sponsor Dashboard",
+      "Business Association": "Association and Member Organisations Dashboard",
+      "BusinessAssociation": "Association and Member Organisations Dashboard",
       // Backward compatibility
-      "Small and Medium Social Enterprises": "SMSEs Dashboard",
-      SMSEs: "SMSEs Dashboard",
-      SMSE: "SMSEs Dashboard",
-      SME: "SMSEs Dashboard",
-      "SME/BUSINESS": "SMSEs Dashboard",
+      "Small and Medium Social Enterprises": "Business Dashboard",
+      SMSEs: "Business Dashboard",
+      SMSE: "Business Dashboard",
+      SME: "Business Dashboard",
+      "SME/BUSINESS": "Business Dashboard",
       Investor: "Investor Dashboard",
       Advisors: "Advisor Dashboard",
       Accelerators: "Catalyst Dashboard",
       Catalyst: "Catalyst Dashboard",
       Interns: "Intern Dashboard",
       ProgramSponsor: "Intern Sponsor Dashboard",
-      Association: "Business Association Dashboard",
-      Associator: "Business Association Dashboard",
+      Association: "Association and Member Organisations Dashboard",
+      Associator: "Association and Member Organisations Dashboard",
       Admin: "Admin Dashboard",
       admin: "Admin Dashboard",
       ADMIN: "Admin Dashboard",
@@ -863,13 +902,17 @@ By using this platform, you confirm that you:
     const descriptionMap = {
       "Business": "Access funding, growth tools, and partnerships",
       "Non-Profit": "Access resources and partnerships for social impact",
+      "NonProfit": "Access resources and partnerships for social impact",
       "Investor/Funder": "Discover investment opportunities and manage portfolio",
       "Corporate": "Source suppliers, innovation, and ESD opportunities",
       "Catalyst": "Support business growth and drive innovation",
+      "CapitalMarketFacilitators": "Connect businesses to capital and market opportunities",
       "Advisor": "Connect with businesses and offer expertise",
       "Intern": "Access internship opportunities and career development",
       "Intern Sponsor": "Sponsor internship programs and build talent pipelines",
+      "InternSponsor": "Sponsor internship programs and build talent pipelines",
       "Business Association": "Network, collaborate, and build meaningful partnerships",
+      "BusinessAssociation": "Network, collaborate, and build meaningful partnerships",
       // Backward compatibility
       "Small and Medium Social Enterprises": "Access funding, growth tools, and partnerships",
       SMSEs: "Access funding, growth tools, and partnerships",
@@ -1066,12 +1109,70 @@ By using this platform, you confirm that you:
         if (showAdvisorCriteria) setShowAdvisorCriteria(false);
         if (roleSelectionModal.show)
           setRoleSelectionModal({ show: false, roles: [] });
+        if (roleDropdownOpen) setRoleDropdownOpen(false);
       }
     };
 
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [isRegistering, codeSent, isLoading]);
+  }, [isRegistering, codeSent, isLoading, roleDropdownOpen]);
+
+  // Close the role dropdown when clicking outside of the trigger AND outside
+  // the portaled menu (the menu lives in document.body, not inside the
+  // wrapper, so both refs need to be checked).
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      const clickedTrigger =
+        roleDropdownRef.current && roleDropdownRef.current.contains(e.target);
+      const clickedMenu =
+        roleDropdownMenuRef.current &&
+        roleDropdownMenuRef.current.contains(e.target);
+
+      if (!clickedTrigger && !clickedMenu) {
+        setRoleDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // Recompute the portaled menu's position whenever it opens, and keep it
+  // pinned to the trigger button while the page scrolls or resizes.
+  useLayoutEffect(() => {
+    if (!roleDropdownOpen) return;
+
+    const updatePosition = () => {
+      if (!roleDropdownRef.current) return;
+      const rect = roleDropdownRef.current.getBoundingClientRect();
+      const estimatedMenuHeight = 320;
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const spaceAbove = rect.top;
+      const shouldFlipUp =
+        spaceBelow < estimatedMenuHeight && spaceAbove > spaceBelow;
+
+      const gap = 6;
+      setRoleDropdownPos({
+        top: shouldFlipUp ? undefined : rect.bottom + gap,
+        bottom: shouldFlipUp
+          ? window.innerHeight - rect.top + gap
+          : undefined,
+        left: rect.left,
+        width: rect.width,
+        maxHeight: shouldFlipUp
+          ? Math.max(spaceAbove - gap - 12, 120)
+          : Math.max(spaceBelow - gap - 12, 120),
+      });
+    };
+
+    updatePosition();
+    window.addEventListener("scroll", updatePosition, true);
+    window.addEventListener("resize", updatePosition);
+    return () => {
+      window.removeEventListener("scroll", updatePosition, true);
+      window.removeEventListener("resize", updatePosition);
+    };
+  }, [roleDropdownOpen]);
 
   // Render functions
   const renderRoleSelectionModal = () => {
@@ -1265,6 +1366,184 @@ By using this platform, you confirm that you:
     </div>
   );
 
+  // NEW: multi-select dropdown for role selection (replaces the card grid)
+  const renderRoleDropdown = () => {
+    const selectedCards = ROLE_CARDS.filter((c) => roles.includes(c.id));
+
+    // The menu is portaled straight to document.body and positioned with
+    // `position: fixed` using coordinates measured from the trigger button.
+    // This means it can never be clipped by a parent's overflow/height (the
+    // bug in the screenshot), and it gets its own independent scrollbar that
+    // always reaches the last item.
+    const menu =
+      roleDropdownOpen &&
+      createPortal(
+        <ul
+          className="role-dropdown-menu"
+          role="listbox"
+          ref={roleDropdownMenuRef}
+          style={{
+            top: roleDropdownPos.top,
+            bottom: roleDropdownPos.bottom,
+            left: roleDropdownPos.left,
+            width: roleDropdownPos.width,
+            maxHeight: roleDropdownPos.maxHeight,
+          }}
+        >
+          {ROLE_CARDS.map((card) => {
+            const isSelected = roles.includes(card.id);
+            return (
+              <li
+                key={card.id}
+                className={`role-dropdown-option ${isSelected ? "selected" : ""}`}
+                role="option"
+                aria-selected={isSelected}
+                title={card.hoverInfo}
+                onClick={() => handleRoleSelect(card.id)}
+              >
+                <span className="role-dropdown-option-checkbox">
+                  <input
+                    type="checkbox"
+                    checked={isSelected}
+                    readOnly
+                    tabIndex={-1}
+                  />
+                </span>
+                <span className="role-dropdown-option-icon">{card.icon}</span>
+                <span className="role-dropdown-option-text">{card.title}</span>
+              </li>
+            );
+          })}
+        </ul>,
+        document.body
+      );
+
+    return (
+      <div className="role-dropdown-wrapper" ref={roleDropdownRef}>
+        <button
+          type="button"
+          className={`role-dropdown-trigger ${errors.role ? "has-error" : ""}`}
+          onClick={() => setRoleDropdownOpen((prev) => !prev)}
+          aria-haspopup="listbox"
+          aria-expanded={roleDropdownOpen}
+        >
+          <span className="role-dropdown-trigger-content">
+            {selectedCards.length === 0 ? (
+              <span className="role-dropdown-placeholder">Select role(s)</span>
+            ) : (
+              selectedCards.map((card) => (
+                <span key={card.id} className="role-dropdown-chip">
+                  {card.icon}
+                  {card.title}
+                </span>
+              ))
+            )}
+          </span>
+          <ChevronDown
+            size={18}
+            className={`role-dropdown-chevron ${roleDropdownOpen ? "open" : ""}`}
+          />
+        </button>
+
+        {menu}
+
+        <style>{`
+          .role-dropdown-wrapper {
+            position: relative;
+            width: 100%;
+          }
+          .role-dropdown-trigger {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            padding: 10px 14px;
+            border: 1px solid #d1d5db;
+            border-radius: 10px;
+            background: #fff;
+            cursor: pointer;
+            min-height: 46px;
+            font-size: 14px;
+            text-align: left;
+          }
+          .role-dropdown-trigger.has-error {
+            border-color: #e11d48;
+          }
+          .role-dropdown-trigger-content {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            flex: 1;
+          }
+          .role-dropdown-placeholder {
+            color: #9ca3af;
+          }
+          .role-dropdown-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            background: #f1f5f9;
+            border-radius: 999px;
+            padding: 3px 10px;
+            font-size: 12px;
+            color: #1f2937;
+            white-space: nowrap;
+          }
+          .role-dropdown-chevron {
+            flex-shrink: 0;
+            transition: transform 0.15s ease;
+            color: #6b7280;
+          }
+          .role-dropdown-chevron.open {
+            transform: rotate(180deg);
+          }
+          .role-dropdown-menu {
+            position: fixed;
+            z-index: 9999;
+            overflow-y: auto;
+            background: #fff;
+            border: 1px solid #d1d5db;
+            border-radius: 10px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+            list-style: none;
+            margin: 0;
+            padding: 6px;
+            -webkit-overflow-scrolling: touch;
+          }
+          .role-dropdown-option {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 9px 10px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+          }
+          .role-dropdown-option:hover {
+            background: #f3f4f6;
+          }
+          .role-dropdown-option.selected {
+            background: #eef2ff;
+          }
+          .role-dropdown-option-checkbox input {
+            pointer-events: none;
+            width: 16px;
+            height: 16px;
+          }
+          .role-dropdown-option-icon {
+            display: flex;
+            align-items: center;
+            color: #4b5563;
+          }
+          .role-dropdown-option-text {
+            flex: 1;
+          }
+        `}</style>
+      </div>
+    );
+  };
+
   const renderRegisterForm = () => (
     <form
       className="form-step"
@@ -1315,16 +1594,7 @@ By using this platform, you confirm that you:
 
       <div className="role-selection">
         <label>I am a:</label>
-        <div className="role-cards-grid">
-          {ROLE_CARDS.map((card) => (
-            <RoleCard
-              key={card.id}
-              {...card}
-              isSelected={roles.includes(card.id)}
-              onClick={handleRoleSelect}
-            />
-          ))}
-        </div>
+        {renderRoleDropdown()}
         {errors.role && <p className="error-text">{errors.role}</p>}
       </div>
 

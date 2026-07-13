@@ -30,6 +30,49 @@ const HowItWorksInterns = () => {
     warmGray: '#9E8D7B'
   };
 
+  const steps = [
+    {
+      number: '01',
+      title: 'Step 1',
+      description: 'Complete your profile and get your initial BIG Score.',
+      image: 'https://images.unsplash.com/photo-1551434678-e076c223a692?w=400&h=250&fit=crop',
+      icon: <FaUserEdit size={22} />,
+      color: colors.primary,
+      details: ['Register online', 'Upload CV & qualifications', 'Indicate preferences', 'Get verified & scored'],
+      subtext: '✅ We verify to ensure safety and readiness'
+    },
+    {
+      number: '02',
+      title: 'Step 2',
+      description: 'Improve your employability score with training.',
+      image: 'https://images.unsplash.com/photo-1523240795612-9a054b0db644?w=400&h=250&fit=crop',
+      icon: <FaChartLine size={22} />,
+      color: colors.secondary,
+      details: ['Score evaluates employability', 'Complete certifications', 'Receive feedback', 'Higher score = more visibility'],
+      subtext: '📈 Watch your employability grow'
+    },
+    {
+      number: '03',
+      title: 'Step 3',
+      description: 'Connect with sponsors and businesses.',
+      image: 'https://images.unsplash.com/photo-1521791136064-7986c2920216?w=400&h=250&fit=crop',
+      icon: <FaHandshake size={22} />,
+      color: colors.amber,
+      details: ['Matched with sponsors', 'Stipend & training covered', 'BIG Score helps match', 'Notify when confirmed'],
+      subtext: '💡 BIG handles the admin for you'
+    },
+    {
+      number: '04',
+      title: 'Step 4',
+      description: 'Monitor progress and improve your BIG Score.',
+      image: 'https://images.unsplash.com/photo-1504868584819-f8e8b4b6d7e3?w=400&h=250&fit=crop',
+      icon: <FaChartBar size={22} />,
+      color: colors.green,
+      details: ['Track stipends & sessions', 'Attend Charm School', 'Receive employer feedback', 'Unlock better opportunities'],
+      subtext: '🚀 Your BIG Score rises with experience'
+    }
+  ];
+
   return (
     <div style={{
       display: 'flex',
@@ -176,7 +219,7 @@ const HowItWorksInterns = () => {
           </div>
         </section>
 
-        {/* Steps Section - 4 steps */}
+        {/* Steps Section - 4 steps with images */}
         <div style={{ marginBottom: '50px' }}>
           <div style={{ textAlign: 'center', marginBottom: '40px' }}>
             <p style={{
@@ -203,55 +246,17 @@ const HowItWorksInterns = () => {
           <div style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(4, 1fr)',
-            gap: '20px',
+            gap: '16px',
           }}>
-            {[
-              {
-                icon: <FaUserEdit size={26} />,
-                number: '01',
-                title: 'Create & Get Verified',
-                description: 'Complete your profile and get your initial BIG Score.',
-                details: ['Register online', 'Upload CV & qualifications', 'Indicate preferences', 'Get verified & scored'],
-                subtext: '✅ We verify to ensure safety and readiness',
-                color: colors.primary,
-              },
-              {
-                icon: <FaChartLine size={26} />,
-                number: '02',
-                title: 'Boost Your BIG Score',
-                description: 'Improve your employability score with training.',
-                details: ['Score evaluates employability', 'Complete certifications', 'Receive feedback', 'Higher score = more visibility'],
-                subtext: '📈 Watch your employability grow',
-                color: colors.secondary,
-              },
-              {
-                icon: <FaHandshake size={26} />,
-                number: '03',
-                title: 'Get Matched',
-                description: 'Connect with sponsors and businesses.',
-                details: ['Matched with sponsors', 'Stipend & training covered', 'BIG Score helps match', 'Notify when confirmed'],
-                subtext: '💡 BIG handles the admin for you',
-                color: colors.amber,
-              },
-              {
-                icon: <FaChartBar size={26} />,
-                number: '04',
-                title: 'Track & Grow',
-                description: 'Monitor progress and improve your BIG Score.',
-                details: ['Track stipends & sessions', 'Attend Charm School', 'Receive employer feedback', 'Unlock better opportunities'],
-                subtext: '🚀 Your BIG Score rises with experience',
-                color: colors.green,
-              },
-            ].map((step, index) => (
+            {steps.map((step, index) => (
               <div
                 key={index}
                 style={{
                   background: colors.white,
-                  borderRadius: '16px',
-                  padding: '24px 20px',
+                  borderRadius: '14px',
+                  overflow: 'hidden',
                   border: `1px solid ${colors.border}`,
                   transition: 'all 0.3s ease',
-                  position: 'relative',
                   cursor: 'default',
                 }}
                 onMouseEnter={(e) => {
@@ -265,87 +270,133 @@ const HowItWorksInterns = () => {
                   e.currentTarget.style.borderColor = colors.border;
                 }}
               >
+                {/* Step Image */}
                 <div style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'flex-start',
-                  marginBottom: '14px',
+                  height: '140px',
+                  overflow: 'hidden',
+                  position: 'relative',
                 }}>
+                  <img 
+                    src={step.image}
+                    alt={step.title}
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'cover',
+                      transition: 'transform 0.5s ease',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.transform = 'scale(1.08)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.transform = 'scale(1)';
+                    }}
+                    loading="lazy"
+                    onError={(e) => {
+                      e.target.style.display = 'none';
+                    }}
+                  />
                   <div style={{
-                    width: '50px',
-                    height: '50px',
-                    borderRadius: '12px',
-                    background: `${step.color}60`,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: step.color,
-                  }}>
-                    {step.icon}
-                  </div>
-                  <span style={{
-                    fontSize: '1.8rem',
-                    fontWeight: 900,
-                    color: `${step.color}60`,
-                    lineHeight: 1,
+                    position: 'absolute',
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    height: '40%',
+                    background: 'linear-gradient(transparent, rgba(0,0,0,0.3))',
+                  }} />
+                  <div style={{
+                    position: 'absolute',
+                    top: '10px',
+                    right: '10px',
+                    background: step.color,
+                    color: colors.white,
+                    padding: '2px 12px',
+                    borderRadius: '20px',
+                    fontSize: '0.7rem',
+                    fontWeight: 700,
                   }}>
                     {step.number}
-                  </span>
+                  </div>
                 </div>
-                
-                <h3 style={{
-                  fontSize: '1.05rem',
-                  fontWeight: 800,
-                  color: colors.dark,
-                  margin: '0 0 6px',
-                  letterSpacing: '-0.01em',
-                }}>
-                  {step.title}
-                </h3>
-                
-                <p style={{
-                  fontSize: '0.82rem',
-                  color: colors.muted,
-                  lineHeight: 1.5,
-                  margin: '0 0 14px',
-                }}>
-                  {step.description}
-                </p>
 
-                <ul style={{
-                  listStyle: 'none',
-                  padding: 0,
-                  margin: '0 0 14px',
-                  textAlign: 'left',
+                <div style={{
+                  padding: '14px 16px 18px',
                 }}>
-                  {step.details.map((detail, i) => (
-                    <li key={i} style={{
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    marginBottom: '8px',
+                  }}>
+                    <div style={{
+                      width: '32px',
+                      height: '32px',
+                      borderRadius: '50%',
+                      background: `${step.color}15`,
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '8px',
-                      fontSize: '0.8rem',
-                      color: colors.muted,
-                      padding: '3px 0',
+                      justifyContent: 'center',
+                      color: step.color,
+                      fontSize: '14px',
                     }}>
-                      <span style={{
-                        color: step.color,
-                        fontWeight: 700,
-                      }}>✓</span>
-                      {detail}
-                    </li>
-                  ))}
-                </ul>
+                      {step.icon}
+                    </div>
+                    <h4 style={{
+                      fontSize: '0.8rem',
+                      fontWeight: 700,
+                      color: step.color,
+                      margin: 0,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.05em',
+                    }}>
+                      {step.title}
+                    </h4>
+                  </div>
+                  
+                  <p style={{
+                    fontSize: '0.78rem',
+                    color: colors.muted,
+                    lineHeight: 1.5,
+                    margin: '0 0 10px',
+                  }}>
+                    {step.description}
+                  </p>
 
-                <p style={{
-                  fontSize: '0.78rem',
-                  color: colors.muted,
-                  fontStyle: 'italic',
-                  margin: 0,
-                  paddingTop: '10px',
-                  borderTop: `1px solid ${colors.border}`,
-                }}>
-                  {step.subtext}
-                </p>
+                  <ul style={{
+                    listStyle: 'none',
+                    padding: 0,
+                    margin: '0 0 10px',
+                    textAlign: 'left',
+                  }}>
+                    {step.details.map((detail, i) => (
+                      <li key={i} style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        fontSize: '0.7rem',
+                        color: colors.muted,
+                        padding: '2px 0',
+                      }}>
+                        <span style={{
+                          color: step.color,
+                          fontWeight: 700,
+                        }}>✓</span>
+                        {detail}
+                      </li>
+                    ))}
+                  </ul>
+
+                  <p style={{
+                    fontSize: '0.7rem',
+                    color: colors.muted,
+                    fontStyle: 'italic',
+                    margin: 0,
+                    paddingTop: '8px',
+                    borderTop: `1px solid ${colors.border}`,
+                  }}>
+                    {step.subtext}
+                  </p>
+                </div>
               </div>
             ))}
           </div>
