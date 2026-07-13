@@ -14,12 +14,13 @@ import {
   FiCalendar,
   FiUser,
   FiBookOpen,
-  FiTrendingUp,
-  FiZap,
+  FiUsers,
+  FiShield,
   FiBriefcase,
-  FiGlobe,
-  FiCpu,
-  FiBarChart2
+  FiTrendingUp,
+  FiAward,
+  FiStar,
+  FiTarget
 } from 'react-icons/fi';
 import { FaHeart, FaRegHeart } from 'react-icons/fa';
 import { fetchArticles } from '../services/articleService';
@@ -60,12 +61,13 @@ const AnimatedHeroSubtitle = styled.p`
   line-height: 1.7;
 `;
 
+// Updated Category Icon Map for 5C's
 const CategoryIconMap = {
-  "Business Strategy & Growth": <FiTrendingUp size={16} />,
-  "Funding & Capital Access": <FiZap size={16} />,
-  "Market Access": <FiGlobe size={16} />,
-  "Technology & Innovation": <FiCpu size={16} />,
-  "Industry Trends": <FiBarChart2 size={16} />,
+  "Customer": <FiUsers size={16} />,
+  "Credibility": <FiShield size={16} />,
+  "Capacity": <FiBriefcase size={16} />,
+  "Capital": <FiTrendingUp size={16} />,
+  "Capability": <FiAward size={16} />,
 };
 
 const InsightsPage = () => {
@@ -88,13 +90,14 @@ const InsightsPage = () => {
     return () => window.removeEventListener('resize', checkMobile);
   }, []);
 
+  // Updated categories to 5C's
   const categories = [
     "All Posts",
-    "Business Strategy & Growth",
-    "Funding & Capital Access",
-    "Market Access",
-    "Technology & Innovation",
-    "Industry Trends"
+    "Customer",
+    "Credibility",
+    "Capacity",
+    "Capital",
+    "Capability"
   ];
 
   useEffect(() => {
@@ -171,7 +174,22 @@ const InsightsPage = () => {
   const formatDate = (dateValue) => {
     if (!dateValue) return 'Recent';
     
-    if (typeof dateValue === 'string') {
+    // If it's a Firestore timestamp
+    if (dateValue && typeof dateValue.toDate === 'function') {
+      try {
+        const date = dateValue.toDate();
+        return date.toLocaleDateString('en-US', { 
+          month: 'short', 
+          day: 'numeric', 
+          year: 'numeric' 
+        });
+      } catch (e) {
+        return 'Recent';
+      }
+    }
+    
+    // If it's a string or number
+    try {
       const date = new Date(dateValue);
       if (!isNaN(date.getTime())) {
         return date.toLocaleDateString('en-US', { 
@@ -180,15 +198,8 @@ const InsightsPage = () => {
           year: 'numeric' 
         });
       }
-    }
-    
-    if (dateValue && typeof dateValue.toDate === 'function') {
-      const date = dateValue.toDate();
-      return date.toLocaleDateString('en-US', { 
-        month: 'short', 
-        day: 'numeric', 
-        year: 'numeric' 
-      });
+    } catch (e) {
+      return 'Recent';
     }
     
     if (dateValue && dateValue.displayDate) {
@@ -304,11 +315,11 @@ const InsightsPage = () => {
                         height: isMobile ? '200px' : '100%',
                       }}>
                         <img 
-                          src={post.imageUrl || 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?ixlib=rb-1.2.1&auto=format&fit=crop&w=1352&q=80'} 
+                          src={post.imageUrl || '/BIGLogoBrown.jpg'} 
                           alt={post.title} 
                           style={styles.postImage}
                           onError={(e) => {
-                            e.target.src = 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?ixlib=rb-1.2.1&auto=format&fit=crop&w=1352&q=80';
+                            e.target.src = '/BIGLogoBrown.jpg';
                           }}
                         />
                         {post.category && post.category !== "All Posts" && (
@@ -337,11 +348,11 @@ const InsightsPage = () => {
                               height: isMobile ? '36px' : '44px',
                             }}>
                               <img 
-                                src={post.authorImageUrl || "https://randomuser.me/api/portraits/women/44.jpg"} 
-                                alt="Author" 
+                                src={post.authorImageUrl || '/BIGLogoBrown.jpg'} 
+                                alt="BIG Marketplace" 
                                 style={styles.authorImage}
                                 onError={(e) => {
-                                  e.target.src = "https://randomuser.me/api/portraits/women/44.jpg";
+                                  e.target.src = '/BIGLogoBrown.jpg';
                                 }}
                               />
                             </div>
@@ -484,9 +495,12 @@ const InsightsPage = () => {
               height: isMobile ? '200px' : '400px',
             }}>
               <img 
-                src={selectedArticle.imageUrl || 'https://images.unsplash.com/photo-1451187580459-43490279c0fa?ixlib=rb-1.2.1&auto=format&fit=crop&w=1352&q=80'} 
+                src={selectedArticle.imageUrl || '/BIGLogoBrown.jpg'} 
                 alt={selectedArticle.title} 
                 style={styles.modalImage}
+                onError={(e) => {
+                  e.target.src = '/BIGLogoBrown.jpg';
+                }}
               />
               <div style={{
                 ...styles.modalImageOverlay,

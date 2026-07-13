@@ -30,6 +30,49 @@ const HowItWorksInvestors = () => {
     warmGray: '#9E8D7B'
   };
 
+  const steps = [
+    {
+      number: '01',
+      title: 'Step 1',
+      description: 'Build your investor profile in minutes and get verified.',
+      image: 'https://images.unsplash.com/photo-1551434678-e076c223a692?w=400&h=250&fit=crop',
+      icon: <FaUserEdit size={22} />,
+      color: colors.primary,
+      details: ['Build investor profile', 'Submit documentation', 'Confirm deal type', 'Complete KYC'],
+      subtext: '🛡 Investor-side trust, secured.'
+    },
+    {
+      number: '02',
+      title: 'Step 2',
+      description: 'Define your investment preferences and risk appetite.',
+      image: 'https://images.unsplash.com/photo-1460925895917-afdab827c52f?w=400&h=250&fit=crop',
+      icon: <FaFilter size={22} />,
+      color: colors.secondary,
+      details: ['Choose industry & region', 'Define funding instrument', 'Set risk & deal size', 'Auto-matching opt-in'],
+      subtext: '🎯 Let BIG do the filtering.'
+    },
+    {
+      number: '03',
+      title: 'Step 3',
+      description: 'Access detailed profiles of verified businesses.',
+      image: 'https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=400&h=250&fit=crop',
+      icon: <FaFileAlt size={22} />,
+      color: colors.amber,
+      details: ['Filter by BIG Score', 'Check compliance readiness', 'View pitch decks', 'Score breakdowns'],
+      subtext: '📊 Every business is pre-screened.'
+    },
+    {
+      number: '04',
+      title: 'Step 4',
+      description: 'Message businesses, track portfolio, and deploy capital.',
+      image: 'https://images.unsplash.com/photo-1504868584819-f8e8b4b6d7e3?w=400&h=250&fit=crop',
+      icon: <FaMoneyBillWave size={22} />,
+      color: colors.green,
+      details: ['Direct messaging', 'Request introductions', 'Track portfolio', 'View analytics'],
+      subtext: '🚀 Fund faster. Fund smarter.'
+    }
+  ];
+
   return (
     <div style={{
       display: 'flex',
@@ -259,7 +302,7 @@ const HowItWorksInvestors = () => {
           </div>
         </section>
 
-        {/* Steps Section - 4 steps */}
+        {/* Steps Section - 4 steps with images */}
         <div style={{ marginBottom: '50px' }}>
           <div style={{ textAlign: 'center', marginBottom: '40px' }}>
             <p style={{
@@ -293,55 +336,17 @@ const HowItWorksInvestors = () => {
           <div style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(4, 1fr)',
-            gap: '20px',
+            gap: '16px',
           }}>
-            {[
-              {
-                icon: <FaUserEdit size={26} />,
-                number: '01',
-                title: 'Create & Verify',
-                description: 'Build your investor profile in minutes and get verified.',
-                details: ['Build investor profile', 'Submit documentation', 'Confirm deal type', 'Complete KYC'],
-                subtext: '🛡 Investor-side trust, secured.',
-                color: colors.primary,
-              },
-              {
-                icon: <FaFilter size={26} />,
-                number: '02',
-                title: 'Set Investment Criteria',
-                description: 'Define your investment preferences and risk appetite.',
-                details: ['Choose industry & region', 'Define funding instrument', 'Set risk & deal size', 'Auto-matching opt-in'],
-                subtext: '🎯 Let BIG do the filtering.',
-                color: colors.secondary,
-              },
-              {
-                icon: <FaFileAlt size={26} />,
-                number: '03',
-                title: 'Review Pre-Vetted Businesses',
-                description: 'Access detailed profiles of verified businesses.',
-                details: ['Filter by BIG Score', 'Check compliance readiness', 'View pitch decks', 'Score breakdowns'],
-                subtext: '📊 Every business is pre-screened.',
-                color: colors.amber,
-              },
-              {
-                icon: <FaMoneyBillWave size={26} />,
-                number: '04',
-                title: 'Connect & Deploy',
-                description: 'Message businesses, track portfolio, and deploy capital.',
-                details: ['Direct messaging', 'Request introductions', 'Track portfolio', 'View analytics'],
-                subtext: '🚀 Fund faster. Fund smarter.',
-                color: colors.green,
-              },
-            ].map((step, index) => (
+            {steps.map((step, index) => (
               <div
                 key={index}
                 style={{
                   background: colors.white,
-                  borderRadius: '16px',
-                  padding: '24px 20px',
+                  borderRadius: '14px',
+                  overflow: 'hidden',
                   border: `1px solid ${colors.border}`,
                   transition: 'all 0.3s ease',
-                  position: 'relative',
                   cursor: 'default',
                 }}
                 onMouseEnter={(e) => {
@@ -355,87 +360,133 @@ const HowItWorksInvestors = () => {
                   e.currentTarget.style.borderColor = colors.border;
                 }}
               >
+                {/* Step Image */}
                 <div style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'flex-start',
-                  marginBottom: '14px',
+                  height: '140px',
+                  overflow: 'hidden',
+                  position: 'relative',
                 }}>
+                  <img 
+                    src={step.image}
+                    alt={step.title}
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'cover',
+                      transition: 'transform 0.5s ease',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.transform = 'scale(1.08)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.transform = 'scale(1)';
+                    }}
+                    loading="lazy"
+                    onError={(e) => {
+                      e.target.style.display = 'none';
+                    }}
+                  />
                   <div style={{
-                    width: '50px',
-                    height: '50px',
-                    borderRadius: '12px',
-                    background: `${step.color}60`,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: step.color,
-                  }}>
-                    {step.icon}
-                  </div>
-                  <span style={{
-                    fontSize: '1.8rem',
-                    fontWeight: 900,
-                    color: `${step.color}60`,
-                    lineHeight: 1,
+                    position: 'absolute',
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    height: '40%',
+                    background: 'linear-gradient(transparent, rgba(0,0,0,0.3))',
+                  }} />
+                  <div style={{
+                    position: 'absolute',
+                    top: '10px',
+                    right: '10px',
+                    background: step.color,
+                    color: colors.white,
+                    padding: '2px 12px',
+                    borderRadius: '20px',
+                    fontSize: '0.7rem',
+                    fontWeight: 700,
                   }}>
                     {step.number}
-                  </span>
+                  </div>
                 </div>
-                
-                <h3 style={{
-                  fontSize: '1.05rem',
-                  fontWeight: 800,
-                  color: colors.dark,
-                  margin: '0 0 6px',
-                  letterSpacing: '-0.01em',
-                }}>
-                  {step.title}
-                </h3>
-                
-                <p style={{
-                  fontSize: '0.82rem',
-                  color: colors.muted,
-                  lineHeight: 1.5,
-                  margin: '0 0 14px',
-                }}>
-                  {step.description}
-                </p>
 
-                <ul style={{
-                  listStyle: 'none',
-                  padding: 0,
-                  margin: '0 0 14px',
-                  textAlign: 'left',
+                <div style={{
+                  padding: '14px 16px 18px',
                 }}>
-                  {step.details.map((detail, i) => (
-                    <li key={i} style={{
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    marginBottom: '8px',
+                  }}>
+                    <div style={{
+                      width: '32px',
+                      height: '32px',
+                      borderRadius: '50%',
+                      background: `${step.color}15`,
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '8px',
-                      fontSize: '0.8rem',
-                      color: colors.muted,
-                      padding: '3px 0',
+                      justifyContent: 'center',
+                      color: step.color,
+                      fontSize: '14px',
                     }}>
-                      <span style={{
-                        color: step.color,
-                        fontWeight: 700,
-                      }}>✓</span>
-                      {detail}
-                    </li>
-                  ))}
-                </ul>
+                      {step.icon}
+                    </div>
+                    <h4 style={{
+                      fontSize: '0.8rem',
+                      fontWeight: 700,
+                      color: step.color,
+                      margin: 0,
+                      textTransform: 'uppercase',
+                      letterSpacing: '0.05em',
+                    }}>
+                      {step.title}
+                    </h4>
+                  </div>
+                  
+                  <p style={{
+                    fontSize: '0.78rem',
+                    color: colors.muted,
+                    lineHeight: 1.5,
+                    margin: '0 0 10px',
+                  }}>
+                    {step.description}
+                  </p>
 
-                <p style={{
-                  fontSize: '0.78rem',
-                  color: colors.muted,
-                  fontStyle: 'italic',
-                  margin: 0,
-                  paddingTop: '10px',
-                  borderTop: `1px solid ${colors.border}`,
-                }}>
-                  {step.subtext}
-                </p>
+                  <ul style={{
+                    listStyle: 'none',
+                    padding: 0,
+                    margin: '0 0 10px',
+                    textAlign: 'left',
+                  }}>
+                    {step.details.map((detail, i) => (
+                      <li key={i} style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '6px',
+                        fontSize: '0.7rem',
+                        color: colors.muted,
+                        padding: '2px 0',
+                      }}>
+                        <span style={{
+                          color: step.color,
+                          fontWeight: 700,
+                        }}>✓</span>
+                        {detail}
+                      </li>
+                    ))}
+                  </ul>
+
+                  <p style={{
+                    fontSize: '0.7rem',
+                    color: colors.muted,
+                    fontStyle: 'italic',
+                    margin: 0,
+                    paddingTop: '8px',
+                    borderTop: `1px solid ${colors.border}`,
+                  }}>
+                    {step.subtext}
+                  </p>
+                </div>
               </div>
             ))}
           </div>

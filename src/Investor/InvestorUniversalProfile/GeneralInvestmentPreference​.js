@@ -202,6 +202,23 @@ const portfolioReinvestmentOptions = [
 ]
 
 // ============================================
+// Funder Type (self-identification)
+// ============================================
+const funderTypeSelfOptions = [
+  { value: "Venture Capital", label: "Venture Capital" },
+  { value: "Angel Investor", label: "Angel Investor" },
+  { value: "Bank", label: "Bank" },
+  { value: "Development Finance Institution", label: "Development Finance Institution (DFI)" },
+  { value: "Private Equity", label: "Private Equity" },
+  { value: "Family Office", label: "Family Office" },
+  { value: "Corporate Investor", label: "Corporate Investor" },
+  { value: "Government Fund", label: "Government Fund" },
+  { value: "Foundation", label: "Foundation" },
+  { value: "Alternative Lender", label: "Alternative Lender" },
+  { value: "Other", label: "Other (please specify)" },
+]
+
+// ============================================
 // MULTI-SELECT COMPONENT
 // ============================================
 
@@ -284,6 +301,14 @@ export default function GeneralInvestmentPreference({ data = {}, updateData }) {
     updateData({ [field]: value })
   }
 
+  const handleFunderTypeChange = (e) => {
+    const value = e.target.value
+    updateData({
+      funderType: value,
+      funderTypeOther: value === "Other" ? data.funderTypeOther || "" : "",
+    })
+  }
+
   const getAvailableInvestmentFocusSubtypes = () => {
     const selectedFocusAreas = data.investmentFocus || []
     if (!Array.isArray(selectedFocusAreas) || selectedFocusAreas.length === 0) return []
@@ -320,6 +345,29 @@ export default function GeneralInvestmentPreference({ data = {}, updateData }) {
         Define your investment preferences including fund structure, sector focus, geographic preferences, and exit strategies.
       </p>
 
+      {/* Funder Identity Section */}
+      <div style={sectionStyle}>
+        <h3 style={sectionTitleStyle}>Funder Identity</h3>
+        <p style={{ fontSize: "14px", color: "#8d6e63", marginBottom: "20px" }}>
+          Tell us who you are as a funder. This helps SMEs and the matching engine understand what type of capital you provide.
+        </p>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px" }}>
+          <div>
+            <label style={labelStyle}>Funder Type</label>
+            <select name="funderType" value={data.funderType || ""} onChange={handleFunderTypeChange} style={inputStyle}>
+              <option value="">Select Funder Type</option>
+              {funderTypeSelfOptions.map((option) => (<option key={option.value} value={option.value}>{option.label}</option>))}
+            </select>
+          </div>
+          {data.funderType === "Other" && (
+            <div>
+              <label style={labelStyle}>Please specify your funder type</label>
+              <input type="text" name="funderTypeOther" value={data.funderTypeOther || ""} onChange={handleChange} placeholder="Please specify" style={inputStyle} />
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* Investment Preferences Section */}
       <div style={sectionStyle}>
         <h3 style={sectionTitleStyle}>Investment Preferences</h3>
@@ -346,12 +394,12 @@ export default function GeneralInvestmentPreference({ data = {}, updateData }) {
             <MultiSelect options={investmentStageOptions} selected={data.investmentStage || []} onChange={(value) => handleMultiSelectChange("investmentStage", value)} label="Investment Stages" />
           </div>
           <div>
-            <label style={labelStyle}>Funding Instrument Preferred</label>
+            <label style={labelStyle}>Funding Category Supported</label>
             <MultiSelect options={investmentFocusCategories} selected={data.investmentFocus || []} onChange={handleInvestmentFocusChange} label="Investment Focus Areas" />
           </div>
           <div>
-            <label style={labelStyle}>Funding Instrument Preferred Subtype</label>
-            <MultiSelect options={getAvailableInvestmentFocusSubtypes()} selected={data.investmentFocusSubtype || []} onChange={(value) => handleMultiSelectChange("investmentFocusSubtype", value)} label="Focus Subtypes" />
+            <label style={labelStyle}>Funding Instruments Actively Funded</label>
+            <MultiSelect options={getAvailableInvestmentFocusSubtypes()} selected={data.investmentFocusSubtype || []} onChange={(value) => handleMultiSelectChange("investmentFocusSubtype", value)} label="Instruments" />
           </div>
         </div>
 
@@ -386,6 +434,62 @@ export default function GeneralInvestmentPreference({ data = {}, updateData }) {
               <option value="">Select Risk Appetite</option>
               {riskAppetiteOptions.map((option) => (<option key={option.value} value={option.value}>{option.label}</option>))}
             </select>
+          </div>
+        </div>
+      </div>
+
+      {/* Minimum Requirements Section */}
+      <div style={sectionStyle}>
+        <h3 style={sectionTitleStyle}>Minimum Requirements (Optional)</h3>
+        <p style={{ fontSize: "14px", color: "#8d6e63", marginBottom: "20px" }}>
+          Set the minimum thresholds an SME must meet before being matched to you. Leave any field blank if it doesn't apply.
+        </p>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px", marginBottom: "24px" }}>
+          <div>
+            <label style={labelStyle}>Minimum BIG Score</label>
+            <input type="number" name="minimumBigScore" value={data.minimumBigScore || ""} onChange={handleChange} placeholder="e.g. 65" min="0" max="100" style={inputStyle} />
+            <small style={{ color: "#a0826d", fontSize: "11px", display: "block", marginTop: "4px" }}>Out of 100</small>
+          </div>
+          <div>
+            <label style={labelStyle}>Minimum Compliance Score</label>
+            <input type="number" name="minimumComplianceScore" value={data.minimumComplianceScore || ""} onChange={handleChange} placeholder="e.g. 80" min="0" max="100" style={inputStyle} />
+            <small style={{ color: "#a0826d", fontSize: "11px", display: "block", marginTop: "4px" }}>Out of 100</small>
+          </div>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px", marginBottom: "24px" }}>
+          <div>
+            <label style={labelStyle}>Minimum Financial Strength</label>
+            <input type="number" name="minimumFinancialStrength" value={data.minimumFinancialStrength || ""} onChange={handleChange} placeholder="e.g. 70" min="0" max="100" style={inputStyle} />
+            <small style={{ color: "#a0826d", fontSize: "11px", display: "block", marginTop: "4px" }}>Out of 100</small>
+          </div>
+          <div>
+            <label style={labelStyle}>Minimum Operational Strength</label>
+            <input type="number" name="minimumOperationalStrength" value={data.minimumOperationalStrength || ""} onChange={handleChange} placeholder="e.g. 65" min="0" max="100" style={inputStyle} />
+            <small style={{ color: "#a0826d", fontSize: "11px", display: "block", marginTop: "4px" }}>Out of 100</small>
+          </div>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px", marginBottom: "24px" }}>
+          <div>
+            <label style={labelStyle}>Minimum Annual Revenue (R)</label>
+            <input type="number" name="minimumRevenue" value={data.minimumRevenue || ""} onChange={handleChange} placeholder="e.g. 1000000" min="0" style={inputStyle} />
+          </div>
+          <div>
+            <label style={labelStyle}>Minimum Years Trading</label>
+            <input type="number" name="minimumYearsTrading" value={data.minimumYearsTrading || ""} onChange={handleChange} placeholder="e.g. 2" min="0" style={inputStyle} />
+          </div>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px" }}>
+          <div>
+            <label style={labelStyle}>Minimum Ticket Size (R)</label>
+            <input type="number" name="minimumTicketSize" value={data.minimumTicketSize || ""} onChange={handleChange} placeholder="e.g. 500000" min="0" style={inputStyle} />
+          </div>
+          <div>
+            <label style={labelStyle}>Maximum Ticket Size (R)</label>
+            <input type="number" name="maximumTicketSize" value={data.maximumTicketSize || ""} onChange={handleChange} placeholder="e.g. 10000000" min="0" style={inputStyle} />
           </div>
         </div>
       </div>

@@ -21,17 +21,18 @@ const ArticleManagement = () => {
     writer: 'BIG Marketplace',
     readTime: '3 min read',
     imageUrl: '',
-    authorImageUrl: 'https://randomuser.me/api/portraits/women/44.jpg'
+    authorImageUrl: '/BIGLogoBrown.jpg'
   });
   const [imageFile, setImageFile] = useState(null);
   const [previewImage, setPreviewImage] = useState('');
 
+  // Updated categories to 5C's
   const categories = [
-    'Business Strategy & Growth',
-    'Funding & Capital Access',
-    'Market Access',
-    'Technology & Innovation',
-    'Industry Trends'
+    'Customer',
+    'Credibility',
+    'Capacity',
+    'Capital',
+    'Capability'
   ];
 
   useEffect(() => {
@@ -88,16 +89,16 @@ const ArticleManagement = () => {
   const handleEdit = (article) => {
     setEditingArticle(article);
     setFormData({
-      title: article.title,
-      excerpt: article.excerpt,
-      content: article.content,
-      category: article.category,
-      writer: article.writer,
-      readTime: article.readTime,
-      imageUrl: article.imageUrl,
-      authorImageUrl: article.authorImageUrl
+      title: article.title || '',
+      excerpt: article.excerpt || '',
+      content: article.content || '',
+      category: article.category || '',
+      writer: article.writer || 'BIG Marketplace',
+      readTime: article.readTime || '3 min read',
+      imageUrl: article.imageUrl || '',
+      authorImageUrl: article.authorImageUrl || '/BIGLogoBrown.jpg'
     });
-    setPreviewImage(article.imageUrl);
+    setPreviewImage(article.imageUrl || '');
     setShowForm(true);
   };
 
@@ -123,10 +124,45 @@ const ArticleManagement = () => {
       writer: 'BIG Marketplace',
       readTime: '3 min read',
       imageUrl: '',
-      authorImageUrl: 'https://randomuser.me/api/portraits/women/44.jpg'
+      authorImageUrl: '/BIGLogoBrown.jpg'
     });
     setImageFile(null);
     setPreviewImage('');
+  };
+
+  // Helper function to safely format date
+  const formatDate = (dateValue) => {
+    if (!dateValue) return 'N/A';
+    
+    // If it's a Firestore timestamp with toDate method
+    if (dateValue && typeof dateValue.toDate === 'function') {
+      try {
+        const date = dateValue.toDate();
+        return date.toLocaleDateString('en-US', { 
+          month: 'short', 
+          day: 'numeric', 
+          year: 'numeric' 
+        });
+      } catch (e) {
+        return 'Invalid Date';
+      }
+    }
+    
+    // If it's a string or number that can be parsed
+    try {
+      const date = new Date(dateValue);
+      if (!isNaN(date.getTime())) {
+        return date.toLocaleDateString('en-US', { 
+          month: 'short', 
+          day: 'numeric', 
+          year: 'numeric' 
+        });
+      }
+    } catch (e) {
+      return 'Invalid Date';
+    }
+    
+    return 'N/A';
   };
 
   return (
@@ -268,11 +304,18 @@ const ArticleManagement = () => {
               {articles.map(article => (
                 <tr key={article.id}>
                   <td>
-                    <img src={article.imageUrl} alt={article.title} className="table-image" />
+                    <img 
+                      src={article.imageUrl || '/BIGLogoBrown.jpg'} 
+                      alt={article.title} 
+                      className="table-image"
+                      onError={(e) => {
+                        e.target.src = '/BIGLogoBrown.jpg';
+                      }}
+                    />
                   </td>
                   <td className="title-cell">{article.title}</td>
                   <td>{article.category}</td>
-                  <td>{new Date(article.date).toLocaleDateString()}</td>
+                  <td>{formatDate(article.createdAt || article.date || article.timestamp)}</td>
                   <td>
                     <button 
                       className="btn-edit"

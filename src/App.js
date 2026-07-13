@@ -26,6 +26,14 @@ import QRCodes from "./admin/pages/QRCodes"
 import CardLandingPage from "./admin/pages/CardLandingPage"
 // Admin Settings Subcategory Components
 import ArticleManagement from "./admin/pages/ArticleManagement";
+// Add these after the Solutions imports (around line 40-50)
+import MatchingInfrastructure from "./main_pages/BIGInfrastructure/MatchingInfrastructure";
+import GrowthSuite from "./main_pages/BIGInfrastructure/GrowthSuite";
+import MarketIntelligence from "./main_pages/BIGInfrastructure/MarketIntelligence";
+import SupplyEngine from "./main_pages/BIGInfrastructure/SupplyEngine"
+import SolutionsCapitalMarket from "./main_pages/Solutions/SolutionsCapitalMarket";
+import HowItWorksCapitalMarket from "./main_pages/HowItWorksCapitalMarket";
+import InfrastructurePage from "./main_pages/BIGInfrastructure/InfrastructurePage";
 
 import AdminUsers from "./admin/pages/AdminUserManagement"
 import ApprovalWorkflows from "./admin/pages/ApprovalWorkflows"
@@ -78,6 +86,7 @@ import SupportProgramHeader from "./catalyst/CatalystProgramHeader/CatalystHeade
 import AdvisorHeader from "./advisors/AdvisorHeader/advisorHeader"
 import Documents from "./Investor/Documents"
 import BetaSignupForm from "./BetaForm"
+import AdvisorCohorts from "./advisors/AdvisorCohorts/AdvisorCohorts"
 
 // Intern Components
 import InternSidebar from "./Interns/sidebar/sidebar"
@@ -889,7 +898,15 @@ function App() {
         <Route path="/CharmSchool" element={<CharmSchool />} />
         <Route path="/verify-email" element={<EmailVerification />} />
         <Route path="/card/:cardId" element={<CardLandingPage />} />
-
+{/* Add these after the existing Solutions routes */}
+<Route path="/matching-infrastructure" element={<MatchingInfrastructure />} />
+<Route path="/growth-suite" element={<GrowthSuite />} />
+<Route path="/market-intelligence" element={<MarketIntelligence />} />
+<Route path="/supply-engine" element={<SupplyEngine />} />
+<Route path="/solutions/capital-market" element={<SolutionsCapitalMarket />} />
+<Route path="/HowItWorksCapitalMarket" element={<HowItWorksCapitalMarket />} />
+{/* Add this near the other routes, around line 700 */}
+<Route path="/infrastructure" element={<InfrastructurePage />} />
         {/* Solutions Routes - Public */}
         <Route path="/solutions" element={<SolutionsOverview />} />
         <Route path="/solutions/smes" element={<SolutionsSMSEs />} />
@@ -1031,6 +1048,8 @@ function App() {
         <Route path="/advisor-messages" element={withProtection(AdvisorMessages, {}, renderAdvisorRoute)} />
         <Route path="/advisor-calendar" element={withProtection(Calendar, {}, renderAdvisorRoute)} />
         <Route path="/advisor-settings" element={withProtection(AdvisorSettings, {}, renderAdvisorRoute)} />
+<Route path="/advisor-cohorts" element={withProtection(AdvisorCohorts, {}, renderAdvisorRoute)} />
+
 
         {/* Advisor Billing Routes */}
         <Route path="/advisor/billing/info" element={withProtection(BillingInformationSMSE, {}, renderAdvisorRoute)} />
