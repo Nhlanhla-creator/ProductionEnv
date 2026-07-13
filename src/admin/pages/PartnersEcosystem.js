@@ -45,6 +45,7 @@ const PartnersEcosystem = () => {
     loadUserStructure,
     saveUserStructure,
     deleteContent,
+    enableTables: true,
   });
 
   // Keep selectedItem in sync with the merged structure

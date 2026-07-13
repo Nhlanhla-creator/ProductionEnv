@@ -9,18 +9,80 @@ import { FileText, ExternalLink, Upload, Filter, ChevronDown, ChevronUp, Trash2,
 import { onAuthStateChanged } from "firebase/auth";
 import { getFunctions, httpsCallable } from "firebase/functions";
 
-// ── Only these 3 documents remain ────────────────────────────────────────────
+// ── Document configurations ────────────────────────────────────────────
+// Multi-upload documents (can have multiple files)
+const MULTI_UPLOAD_DOCUMENTS = [
+  "Termsheets & Agreements"
+];
+
 const DOCUMENT_PATHS = {
   "Standard NDA": "formData.documentUpload.standardNda",
-  "Standard Contract / Term Sheet": "formData.documentUpload.standardContract",
+  "Termsheets & Agreements": "formData.documentUpload.standardContract",
   "Program Brochures": "formData.documentUpload.programBrochures",
 };
 
 const DOCUMENTS = Object.keys(DOCUMENT_PATHS);
 
-const getDocumentURL = (label, data) => {
-  const files = data?.formData?.documentUpload?.[label === "Standard NDA" ? "standardNda" : label === "Standard Contract / Term Sheet" ? "standardContract" : "programBrochures"];
-  return files && files.length > 0 ? files[0].url : null;
+const getDocumentURL = (label, data, index = 0) => {
+  const fieldMap = {
+    "Standard NDA": "standardNda",
+    "Termsheets & Agreements": "standardContract",
+    "Program Brochures": "programBrochures"
+  };
+  
+  const field = fieldMap[label];
+  const files = data?.formData?.documentUpload?.[field];
+  
+  if (!files || files.length === 0) return null;
+  
+  if (MULTI_UPLOAD_DOCUMENTS.includes(label)) {
+    if (index === -1) return files.map(f => f.url);
+    return files[index]?.url || null;
+  }
+  
+  return files[0]?.url || null;
+};
+
+const getAllDocuments = (label, data) => {
+  const fieldMap = {
+    "Standard NDA": "standardNda",
+    "Termsheets & Agreements": "standardContract",
+    "Program Brochures": "programBrochures"
+  };
+  
+  const field = fieldMap[label];
+  const files = data?.formData?.documentUpload?.[field] || [];
+  return files;
+};
+const getUpdatedAt = (label, data) => {
+  const fieldMap = {
+    "Standard NDA": "standardNda",
+    "Termsheets & Agreements": "standardContract",
+    "Program Brochures": "programBrochures"
+  };
+  
+  const field = fieldMap[label];
+  
+  // Check for UpdatedAt timestamp first
+  const updatedAt = data?.formData?.documentUpload?.[`${field}UpdatedAt`];
+  if (updatedAt?.seconds) {
+    return new Date(updatedAt.seconds * 1000);
+  }
+  
+  // Check individual document uploadedAt
+  const files = data?.formData?.documentUpload?.[field];
+  if (files && files.length > 0) {
+    // Check if any file has uploadedAt
+    for (const file of files) {
+      if (file?.uploadedAt) {
+        return new Date(file.uploadedAt);
+      }
+    }
+    // If no uploadedAt, use the current date as fallback
+    return new Date();
+  }
+  
+  return null;
 };
 
 const CatalystDocuments = () => {
@@ -39,7 +101,11 @@ const CatalystDocuments = () => {
   const [viewingSMEName, setViewingSMEName] = useState("");
   const [showFullGuidelines, setShowFullGuidelines] = useState(false);
   const [registeredName, setRegisteredName] = useState("");
-
+  const [typeFilter, setTypeFilter] = useState("all");
+  const [expandedTermsheets, setExpandedTermsheets] = useState(false);
+  const [editingDoc, setEditingDoc] = useState({ docLabel: null, docIndex: null });
+  const [editNameValue, setEditNameValue] = useState("");
+  
   const functions = getFunctions();
 
   useEffect(() => {
@@ -74,15 +140,16 @@ const CatalystDocuments = () => {
               const data = docSnap.data();
               setProfileData(data);
               
-              // Get registered name
               const name = data?.formData?.business?.registeredName || 
                           data?.formData?.applicant?.fullName ||
                           data?.formData?.companyName ||
                           "Unknown";
               setRegisteredName(name);
               
-              // Check submitted documents
-              const submitted = DOCUMENTS.filter(label => getDocumentURL(label, data));
+              const submitted = DOCUMENTS.filter(label => {
+                const url = getDocumentURL(label, data);
+                return !!(url && url !== null && url !== '');
+              });
               setSubmittedDocuments(submitted);
             } else {
               console.log("No profile found for ID:", profileId);
@@ -158,12 +225,269 @@ const CatalystDocuments = () => {
     }
   };
 
+  const handleIndividualDocumentUpload = async (docLabel, file, docIndex) => {
+    const auth = getAuth();
+    const user = auth.currentUser;
+    if (!user || !file) return;
+
+    const allowedTypes = ['.pdf', '.jpg', '.jpeg', '.png', '.doc', '.docx'];
+    const fileExtension = file.name.toLowerCase().split('.').pop();
+    if (!allowedTypes.includes(`.${fileExtension}`)) {
+      setValidationResults(prev => ({
+        ...prev,
+        [docLabel]: {
+          isValid: false,
+          status: "rejected",
+          message: `Invalid file type. Please upload PDF, Word, or Image files`,
+          warnings: []
+        }
+      }));
+      setTimeout(() => {
+        setValidationResults(prev => {
+          const newResults = { ...prev };
+          delete newResults[docLabel];
+          return newResults;
+        });
+      }, 5000);
+      return;
+    }
+
+    const maxSize = 10 * 1024 * 1024;
+    if (file.size > maxSize) {
+      setValidationResults(prev => ({
+        ...prev,
+        [docLabel]: {
+          isValid: false,
+          status: "rejected",
+          message: `File size exceeds 10MB limit. Please upload a smaller file.`,
+          warnings: []
+        }
+      }));
+      setTimeout(() => {
+        setValidationResults(prev => {
+          const newResults = { ...prev };
+          delete newResults[docLabel];
+          return newResults;
+        });
+      }, 5000);
+      return;
+    }
+
+    setIsUploading(true);
+    setIsOverlayVisible(true);
+
+    try {
+      const registeredNameValue = await getRegisteredName();
+      const validationResult = await validateDocumentWithAI(docLabel, file, registeredNameValue);
+
+      setValidationResults(prev => ({
+        ...prev,
+        [docLabel]: validationResult
+      }));
+
+      if (!validationResult.isValid) {
+        setIsUploading(false);
+        setTimeout(() => {
+          setIsOverlayVisible(false);
+        }, 300);
+        return;
+      }
+
+      const storage = getStorage();
+      const path = DOCUMENT_PATHS[docLabel];
+      const docId = path.split(".").pop();
+      const timestamp = Date.now();
+      const safeFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
+      const filePath = `catalystProfiles/${user.uid}/documents/${docId}/${timestamp}_${safeFileName}`;
+      const fileRef = ref(storage, filePath);
+
+      await uploadBytes(fileRef, file);
+      const downloadURL = await getDownloadURL(fileRef);
+      const fileObj = {
+        name: file.name,
+        url: downloadURL,
+        path: filePath,
+        validatedAt: new Date().toISOString(),
+        validationStatus: validationResult.status,
+        fileSize: file.size,
+        fileType: file.type,
+        customName: null,
+        uploadedAt: new Date().toISOString()
+      };
+
+      const profileRef = doc(db, "catalystProfiles", user.uid);
+      const existingDocs = getAllDocuments(docLabel, profileData);
+      let updatedDocs;
+      
+      if (docIndex < existingDocs.length) {
+        updatedDocs = existingDocs.map((doc, index) =>
+          index === docIndex ? fileObj : doc
+        );
+      } else {
+        updatedDocs = [...existingDocs, fileObj];
+      }
+
+      const fieldMap = {
+        "Standard NDA": "standardNda",
+        "Termsheets & Agreements": "standardContract",
+        "Program Brochures": "programBrochures"
+      };
+      const field = fieldMap[docLabel];
+
+      await updateDoc(profileRef, {
+        [`formData.documentUpload.${field}`]: updatedDocs,
+        [`formData.documentUpload.${field}UpdatedAt`]: serverTimestamp(),
+      });
+
+      setSubmittedDocuments((prev) => Array.from(new Set([...prev, docLabel])));
+
+      const updatedSnap = await getDoc(profileRef);
+      if (updatedSnap.exists()) {
+        setProfileData(updatedSnap.data());
+      }
+
+      setIsUploading(false);
+      setTimeout(() => {
+        setIsOverlayVisible(false);
+      }, 300);
+
+    } catch (error) {
+      console.error("Upload failed:", error);
+      setIsUploading(false);
+      setTimeout(() => {
+        setIsOverlayVisible(false);
+        alert(error.message || "Network error - please try again");
+      }, 300);
+    }
+  };
+
+  const handleDeleteIndividualDocument = async (docLabel, displayIndex) => {
+    const auth = getAuth();
+    const user = auth.currentUser;
+    if (!user) return;
+
+    const confirmDelete = window.confirm(`Are you sure you want to delete this ${docLabel}?`);
+    if (!confirmDelete) return;
+
+    try {
+      const profileRef = doc(db, "catalystProfiles", user.uid);
+      const existingDocs = getAllDocuments(docLabel, profileData);
+      const updatedDocs = existingDocs.filter((_, i) => i !== displayIndex);
+
+      const fieldMap = {
+        "Standard NDA": "standardNda",
+        "Termsheets & Agreements": "standardContract",
+        "Program Brochures": "programBrochures"
+      };
+      const field = fieldMap[docLabel];
+
+      await updateDoc(profileRef, {
+        [`formData.documentUpload.${field}`]: updatedDocs,
+        [`formData.documentUpload.${field}UpdatedAt`]: serverTimestamp(),
+      });
+
+      const updatedSnap = await getDoc(profileRef);
+      if (updatedSnap.exists()) {
+        setProfileData(updatedSnap.data());
+        const submitted = DOCUMENTS.filter(label => {
+          const url = getDocumentURL(label, updatedSnap.data());
+          return !!(url && url !== null && url !== '');
+        });
+        setSubmittedDocuments(submitted);
+      }
+
+    } catch (error) {
+      console.error("Error deleting document:", error);
+      alert('Failed to delete document. Please try again.');
+    }
+  };
+
+  const handleAddNewDocument = async (docLabel) => {
+    const auth = getAuth();
+    const user = auth.currentUser;
+    if (!user) return;
+
+    try {
+      const profileRef = doc(db, "catalystProfiles", user.uid);
+      const existingDocs = getAllDocuments(docLabel, profileData);
+      
+      const newDocData = {
+        url: "",
+        status: "pending",
+        message: "No document uploaded",
+        uploadedAt: new Date().toISOString(),
+        customName: null,
+        name: `New ${docLabel}`
+      };
+
+      const updatedDocs = [...existingDocs, newDocData];
+
+      const fieldMap = {
+        "Standard NDA": "standardNda",
+        "Termsheets & Agreements": "standardContract",
+        "Program Brochures": "programBrochures"
+      };
+      const field = fieldMap[docLabel];
+
+      await updateDoc(profileRef, {
+        [`formData.documentUpload.${field}`]: updatedDocs,
+        [`formData.documentUpload.${field}UpdatedAt`]: serverTimestamp(),
+      });
+
+      const updatedSnap = await getDoc(profileRef);
+      if (updatedSnap.exists()) {
+        setProfileData(updatedSnap.data());
+      }
+
+    } catch (error) {
+      console.error("Error adding new document slot:", error);
+      alert('Failed to add new document slot. Please try again.');
+    }
+  };
+
+  const handleUpdateDocName = async (docLabel, docIndex, newName) => {
+    const auth = getAuth();
+    const user = auth.currentUser;
+    if (!user) return;
+
+    try {
+      const profileRef = doc(db, "catalystProfiles", user.uid);
+      const existingDocs = getAllDocuments(docLabel, profileData);
+      const updatedDocs = existingDocs.map((doc, index) =>
+        index === docIndex ? { ...doc, customName: newName } : doc
+      );
+
+      const fieldMap = {
+        "Standard NDA": "standardNda",
+        "Termsheets & Agreements": "standardContract",
+        "Program Brochures": "programBrochures"
+      };
+      const field = fieldMap[docLabel];
+
+      await updateDoc(profileRef, {
+        [`formData.documentUpload.${field}`]: updatedDocs,
+        [`formData.documentUpload.${field}UpdatedAt`]: serverTimestamp(),
+      });
+
+      const updatedSnap = await getDoc(profileRef);
+      if (updatedSnap.exists()) {
+        setProfileData(updatedSnap.data());
+      }
+
+      setEditingDoc({ docLabel: null, docIndex: null });
+      setEditNameValue("");
+
+    } catch (error) {
+      console.error("Error updating document name:", error);
+      alert("Failed to update document name");
+    }
+  };
+
   const handleFileUpload = async (docLabel, file) => {
     const auth = getAuth();
     const user = auth.currentUser;
     if (!user || !file) return;
 
-    // Validate file type
     const allowedTypes = ['.pdf', '.jpg', '.jpeg', '.png'];
     const fileExtension = file.name.toLowerCase().split('.').pop();
     if (!allowedTypes.includes(`.${fileExtension}`)) {
@@ -186,7 +510,6 @@ const CatalystDocuments = () => {
       return;
     }
 
-    // Validate file size
     const maxSize = 10 * 1024 * 1024;
     if (file.size > maxSize) {
       setValidationResults(prev => ({
@@ -298,7 +621,6 @@ const CatalystDocuments = () => {
       }
     }
     
-    // Check if document has been uploaded but not validated
     if (url && !validationResult) {
       return "uploaded";
     }
@@ -344,7 +666,168 @@ const CatalystDocuments = () => {
     );
   };
 
+  const renderDocumentLinkForIndividual = (doc) => {
+    if (!doc.url || doc.url === "") {
+      return (
+        <span style={{
+          color: "#8d6e63",
+          fontSize: "12px",
+          fontStyle: "italic"
+        }}>
+          No document uploaded
+        </span>
+      );
+    }
+
+    return (
+      <a
+        href={doc.url}
+        target="_blank"
+        rel="noopener noreferrer"
+        style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: "6px",
+          color: "#5d4037",
+          textDecoration: "none",
+          fontSize: "12px",
+          fontWeight: "500",
+          padding: "4px 0",
+          borderBottom: "1px solid #5d4037",
+          transition: "all 0.2s ease"
+        }}
+        onMouseEnter={(e) => {
+          e.target.style.color = "#8d6e63";
+          e.target.style.borderBottomColor = "#8d6e63";
+        }}
+        onMouseLeave={(e) => {
+          e.target.style.color = "#5d4037";
+          e.target.style.borderBottomColor = "#5d4037";
+        }}
+      >
+        <FileText size={14} />
+        <span>View Document</span>
+        <ExternalLink size={12} />
+      </a>
+    );
+  };
+
+  const renderIndividualDocumentActions = (docLabel, docIndex, doc) => {
+    return (
+      <div style={{ display: "flex", gap: "8px", justifyContent: "center" }}>
+        <label style={{
+          display: "inline-flex",
+          alignItems: "center",
+          gap: "6px",
+          padding: "6px 12px",
+          backgroundColor: "#a67c52",
+          color: "white",
+          borderRadius: "6px",
+          fontSize: "11px",
+          fontWeight: "600",
+          cursor: "pointer",
+          transition: "all 0.2s ease"
+        }}
+        onMouseEnter={(e) => {
+          e.target.style.backgroundColor = "#8d6e63";
+        }}
+        onMouseLeave={(e) => {
+          e.target.style.backgroundColor = "#a67c52";
+        }}
+        >
+          <Upload size={12} />
+          {doc.url ? "Update" : "Upload"}
+          <input
+            type="file"
+            style={{ display: 'none' }}
+            onChange={(e) => {
+              const file = e.target.files[0];
+              if (file) {
+                handleIndividualDocumentUpload(docLabel, file, docIndex);
+              }
+            }}
+            accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+          />
+        </label>
+        <button
+          onClick={() => handleDeleteIndividualDocument(docLabel, docIndex)}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "4px",
+            padding: "6px 12px",
+            backgroundColor: "#d32f2f",
+            color: "white",
+            border: "none",
+            borderRadius: "6px",
+            fontSize: "11px",
+            cursor: "pointer",
+            fontWeight: "600",
+            transition: "all 0.2s ease"
+          }}
+          onMouseEnter={(e) => {
+            e.target.style.backgroundColor = "#b71c1c";
+          }}
+          onMouseLeave={(e) => {
+            e.target.style.backgroundColor = "#d32f2f";
+          }}
+        >
+          <Trash2 size={12} />
+          Delete
+        </button>
+      </div>
+    );
+  };
+
   const renderDocumentLink = (label) => {
+    // For multi-upload documents (Termsheets & Agreements)
+    if (MULTI_UPLOAD_DOCUMENTS.includes(label)) {
+      const allDocs = getAllDocuments(label, profileData);
+      const documentName = "Termsheet";
+
+      return (
+        <div style={{ textAlign: "center" }}>
+          <span style={{
+            color: "#5d4037",
+            fontSize: "12px",
+            fontWeight: "500"
+          }}>
+            {allDocs.filter(doc => doc.url && doc.url !== "").length} {documentName}{allDocs.filter(doc => doc.url && doc.url !== "").length !== 1 ? 's' : ''} uploaded
+          </span>
+          <div style={{ marginTop: "4px" }}>
+            <button
+              onClick={() => setExpandedTermsheets(!expandedTermsheets)}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "4px",
+                padding: "2px 8px",
+                backgroundColor: "transparent",
+                color: "#8d6e63",
+                border: "1px solid #8d6e63",
+                borderRadius: "4px",
+                fontSize: "10px",
+                cursor: "pointer",
+                transition: "all 0.2s ease"
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.backgroundColor = "#8d6e63";
+                e.target.style.color = "white";
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.backgroundColor = "transparent";
+                e.target.style.color = "#8d6e63";
+              }}
+            >
+              {expandedTermsheets ? <Minus size={10} /> : <Plus size={10} />}
+              {expandedTermsheets ? "Hide" : "Show"} {documentName}s
+            </button>
+          </div>
+        </div>
+      );
+    }
+
+    // For single documents (Standard NDA, Program Brochures)
     const url = getDocumentURL(label, profileData);
     if (!url) {
       return (
@@ -390,6 +873,261 @@ const CatalystDocuments = () => {
     );
   };
 
+  const renderExpandedRows = (docLabel) => {
+    if (!expandedTermsheets) return null;
+    
+    let allDocs = getAllDocuments(docLabel, profileData);
+    let filteredDocs = allDocs;
+
+    // Ensure there's always at least one document slot (placeholder)
+    if (filteredDocs.length === 0) {
+      filteredDocs = [{
+        url: "",
+        status: "pending",
+        message: "No document uploaded",
+        uploadedAt: new Date().toISOString(),
+        customName: null
+      }];
+    }
+
+    return (
+      <React.Fragment>
+        <tr style={{ backgroundColor: "#f5f2f0", borderBottom: "1px solid #e8d8cf" }}>
+          <td colSpan="6" style={{ padding: "12px 20px", textAlign: "center", color: "#8d6e63", fontSize: "12px", fontWeight: "500" }}>
+            Documents
+          </td>
+        </tr>
+        {filteredDocs.map((doc, docIndex) => {
+          let displayName = doc.customName || `Termsheet ${docIndex + 1}`;
+          
+          let statusDisplay = "Pending";
+          let statusStyle = "pending";
+          
+          if (!doc.url || doc.url === "") {
+            statusDisplay = "Pending";
+            statusStyle = "pending";
+          } else if (doc.status === "verified" || doc.status === "verified:not_audited") {
+            statusDisplay = "Verified";
+            statusStyle = "verified";
+          } else if (doc.status === "expired") {
+            statusDisplay = "Expired";
+            statusStyle = "expired";
+          } else if (
+            doc.status === "wrong_type" || 
+            doc.status === "name_mismatch" || 
+            doc.status === "incomplete" || 
+            doc.status === "rejected"
+          ) {
+            statusDisplay = "Rejected";
+            statusStyle = "rejected";
+          }
+          
+          return (
+            <tr 
+              key={`${docLabel}-${docIndex}`}
+              style={{
+                backgroundColor: docIndex % 2 === 0 ? "#f9f5f3" : "#f5f2f0",
+                borderBottom: "1px solid #e8d8cf",
+                transition: "background-color 0.2s ease"
+              }}
+            >
+              <td style={{
+                padding: "12px 20px 12px 40px",
+                fontSize: "13px",
+                color: "#6d4c41",
+                fontWeight: "500",
+                verticalAlign: "middle",
+                borderLeft: "3px solid #8d6e63"
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <span style={{ 
+                    display: "inline-flex", 
+                    alignItems: "center", 
+                    justifyContent: "center",
+                    width: "20px",
+                    height: "20px",
+                    backgroundColor: "#8d6e63",
+                    color: "white",
+                    borderRadius: "50%",
+                    fontSize: "10px",
+                    fontWeight: "600"
+                  }}>
+                    {docIndex + 1}
+                  </span>
+                  
+                  {editingDoc.docLabel === docLabel && editingDoc.docIndex === docIndex ? (
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <input
+                        type="text"
+                        value={editNameValue}
+                        onChange={(e) => setEditNameValue(e.target.value)}
+                        style={{
+                          padding: "4px 8px",
+                          border: "1px solid #8d6e63",
+                          borderRadius: "4px",
+                          fontSize: "13px",
+                          width: "200px",
+                          outline: "none"
+                        }}
+                        autoFocus
+                        onKeyPress={(e) => {
+                          if (e.key === "Enter") {
+                            handleUpdateDocName(docLabel, docIndex, editNameValue);
+                          }
+                        }}
+                      />
+                      <button
+                        onClick={() => handleUpdateDocName(docLabel, docIndex, editNameValue)}
+                        style={{
+                          padding: "4px 8px",
+                          backgroundColor: "#8d6e63",
+                          color: "white",
+                          border: "none",
+                          borderRadius: "4px",
+                          fontSize: "11px",
+                          cursor: "pointer"
+                        }}
+                      >
+                        Save
+                      </button>
+                      <button
+                        onClick={() => {
+                          setEditingDoc({ docLabel: null, docIndex: null });
+                          setEditNameValue("");
+                        }}
+                        style={{
+                          padding: "4px 8px",
+                          backgroundColor: "#ccc",
+                          color: "#666",
+                          border: "none",
+                          borderRadius: "4px",
+                          fontSize: "11px",
+                          cursor: "pointer"
+                        }}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <span>{displayName}</span>
+                      <button
+                        onClick={() => {
+                          setEditingDoc({ docLabel, docIndex });
+                          setEditNameValue(displayName);
+                        }}
+                        style={{
+                          background: "none",
+                          border: "none",
+                          cursor: "pointer",
+                          color: "#8d6e63",
+                          fontSize: "10px",
+                          padding: "2px 4px",
+                          borderRadius: "3px"
+                        }}
+                        onMouseEnter={(e) => e.target.style.backgroundColor = "#efebe9"}
+                        onMouseLeave={(e) => e.target.style.backgroundColor = "transparent"}
+                      >
+                        ✎
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </td>
+              <td style={{
+                padding: "12px 20px",
+                textAlign: "center",
+                verticalAlign: "middle"
+              }}>
+                {renderDocumentLinkForIndividual(doc)}
+              </td>
+              <td style={{
+                padding: "12px 20px",
+                fontSize: "12px",
+                color: "#6d4c41",
+                textAlign: "center",
+                verticalAlign: "middle"
+              }}>
+                {doc.uploadedAt ? new Date(doc.uploadedAt).toLocaleDateString() : "-"}
+              </td>
+              <td style={{
+                padding: "12px 20px",
+                fontSize: "12px",
+                color: "#6d4c41",
+                textAlign: "center",
+                verticalAlign: "middle"
+              }}>
+                {doc.message || (doc.url ? "Document uploaded" : "No document uploaded")}
+              </td>
+              <td style={{
+                padding: "12px 20px",
+                textAlign: "center",
+                verticalAlign: "middle"
+              }}>
+                <span style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  padding: "4px 8px",
+                  borderRadius: "12px",
+                  fontSize: "10px",
+                  fontWeight: "600",
+                  backgroundColor: statusStyle === "verified" ? "#e8f5e8" : 
+                                statusStyle === "pending" ? "#fff3e0" : 
+                                statusStyle === "expired" ? "#fff3e0" : "#ffebee",
+                  color: statusStyle === "verified" ? "#2e7d32" : 
+                        statusStyle === "pending" ? "#ef6c00" :
+                        statusStyle === "expired" ? "#c62828" : "#c62828"
+                }}>
+                  {statusDisplay}
+                </span>
+              </td>
+              <td style={{
+                padding: "12px 20px",
+                textAlign: "center",
+                verticalAlign: "middle"
+              }}>
+                {renderIndividualDocumentActions(docLabel, docIndex, doc)}
+              </td>
+            </tr>
+          );
+        })}
+        <tr style={{ backgroundColor: "#f5f2f0", borderBottom: "1px solid #e8d8cf" }}>
+          <td colSpan="6" style={{ padding: "12px 20px", textAlign: "center" }}>
+            <button
+              onClick={() => handleAddNewDocument(docLabel)}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "6px",
+                padding: "6px 16px",
+                color: "#5d4037",
+                backgroundColor: "transparent",
+                border: "1px solid #5d4037",
+                borderRadius: "4px",
+                fontSize: "12px",
+                cursor: "pointer",
+                fontWeight: "500",
+                transition: "all 0.2s ease"
+              }}
+              onMouseEnter={(e) => {
+                e.target.style.backgroundColor = "#5d4037";
+                e.target.style.color = "white";
+              }}
+              onMouseLeave={(e) => {
+                e.target.style.backgroundColor = "transparent";
+                e.target.style.color = "#5d4037";
+              }}
+            >
+              <Plus size={14} />
+              Add New Termsheet
+            </button>
+          </td>
+        </tr>
+      </React.Fragment>
+    );
+  };
+
   const hasDocumentMatchingStatusFilter = (docLabel) => {
     const status = getDocumentStatus(docLabel);
     if (statusFilter === "all") return true;
@@ -400,10 +1138,27 @@ const CatalystDocuments = () => {
     return true;
   };
 
+  const hasDocumentMatchingTypeFilter = (docLabel) => {
+    const internalDocuments = [
+      "Program Brochures"
+    ];
+
+    const externalDocuments = [
+      "Standard NDA",
+      "Termsheets & Agreements"
+    ];
+
+    if (typeFilter === "all") return true;
+    if (typeFilter === "internal") return internalDocuments.includes(docLabel);
+    if (typeFilter === "external") return externalDocuments.includes(docLabel);
+    return true;
+  };
+
   const filteredDocuments = DOCUMENTS.filter((docLabel) => {
     const matchSearch = docLabel.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchType = hasDocumentMatchingTypeFilter(docLabel);
     const matchStatus = hasDocumentMatchingStatusFilter(docLabel);
-    return matchSearch && matchStatus;
+    return matchSearch && matchType && matchStatus;
   });
 
   const getContainerStyles = () => ({
@@ -628,7 +1383,7 @@ const CatalystDocuments = () => {
                     <h4 style={{ fontSize: "14px", fontWeight: "600", color: "#1565c0", marginBottom: "12px" }}>📄 Document Requirements</h4>
                     <ul style={{ margin: "0", paddingLeft: "20px", color: "#5d4037", fontSize: "14px", lineHeight: "1.5" }}>
                       <li>NDA must have parties and confidentiality clause</li>
-                      <li>Contracts must have clear terms and parties</li>
+                      <li>Termsheets must have clear terms and parties</li>
                       <li>Brochures must describe program offering</li>
                     </ul>
                   </div>
@@ -651,21 +1406,21 @@ const CatalystDocuments = () => {
             boxSizing: "border-box"
           }}>
             <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-              {["all", "pending", "uploaded",].map((type) => {
+              {["all", "internal", "external"].map((type) => {
                 const labels = {
                   all: "All",
-                  pending: "Pending",
-                  uploaded: "Uploaded",
+                  internal: "Internal",
+                  external: "External",
                 };
                 return (
                   <button
                     key={type}
-                    onClick={() => setStatusFilter(type)}
+                    onClick={() => setTypeFilter(type)}
                     style={{
                       padding: "10px 20px",
-                      border: statusFilter === type ? "2px solid #8d6e63" : "2px solid #d7ccc8",
-                      backgroundColor: statusFilter === type ? "#8d6e63" : "#faf8f6",
-                      color: statusFilter === type ? "white" : "#6d4c41",
+                      border: typeFilter === type ? "2px solid #8d6e63" : "2px solid #d7ccc8",
+                      backgroundColor: typeFilter === type ? "#8d6e63" : "#faf8f6",
+                      color: typeFilter === type ? "white" : "#6d4c41",
                       borderRadius: "8px",
                       fontWeight: "500",
                       fontSize: "0.875rem",
@@ -681,7 +1436,6 @@ const CatalystDocuments = () => {
                 );
               })}
             </div>
-
             <input
               className="search-box"
               type="text"
@@ -910,19 +1664,21 @@ const CatalystDocuments = () => {
                   {filteredDocuments.map((docLabel, index) => {
                     const path = DOCUMENT_PATHS[docLabel];
                     const parts = path.split(".");
-                    const timestampPath = parts.length === 1 ? `${parts[0]}UpdatedAt` : `${parts.slice(0, -1).join(".")}.UpdatedAt`;
-                    const updatedAt = profileData?.formData?.documentUpload?.[
-                      docLabel === "Standard NDA" ? "standardNda" : 
-                      docLabel === "Standard Contract / Term Sheet" ? "standardContract" : 
-                      "programBrochures"
-                    ]?.[0]?.uploadedAt || profileData?.[timestampPath];
                     
-                    const formattedDate = updatedAt ?
-                      (updatedAt.seconds ? new Date(updatedAt.seconds * 1000).toLocaleDateString() : new Date(updatedAt).toLocaleDateString()) :
-                      "Never";
+                    const fieldMap = {
+                      "Standard NDA": "standardNda",
+                      "Termsheets & Agreements": "standardContract",
+                      "Program Brochures": "programBrochures"
+                    };
+                    const field = fieldMap[docLabel];
+                    const docData = profileData?.formData?.documentUpload?.[field];
+                    
+                    const updatedDate = getUpdatedAt(docLabel, profileData);
+                    const formattedDate = updatedDate ? updatedDate.toLocaleDateString() : "Never";
 
                     const validationResult = validationResults[docLabel];
                     const url = getDocumentURL(docLabel, profileData);
+                    const isMultiUpload = MULTI_UPLOAD_DOCUMENTS.includes(docLabel);
 
                     return (
                       <React.Fragment key={docLabel}>
@@ -1020,48 +1776,108 @@ const CatalystDocuments = () => {
                                 <Eye size={12} />
                                 Read only
                               </span>
-                            ) : (
-                              <label style={{
-                                display: "inline-flex",
-                                alignItems: "center",
-                                gap: "6px",
-                                padding: "8px 16px",
-                                backgroundColor: "#a67c52",
-                                color: "white",
-                                borderRadius: "6px",
-                                fontSize: "11px",
-                                fontWeight: "600",
-                                cursor: "pointer",
-                                transition: "all 0.2s ease",
-                                textTransform: "uppercase",
-                                letterSpacing: "0.5px"
-                              }}
-                              onMouseEnter={(e) => {
-                                e.target.style.backgroundColor = "#8d6e63";
-                                e.target.style.transform = "translateY(-1px)";
-                              }}
-                              onMouseLeave={(e) => {
-                                e.target.style.backgroundColor = "#a67c52";
-                                e.target.style.transform = "translateY(0)";
-                              }}
-                              >
-                                <Upload size={12} />
-                                {url ? "Update" : "Upload"}
-                                <input
-                                  type="file"
-                                  style={{ display: "none" }}
-                                  onChange={(e) => {
-                                    if (e.target.files && e.target.files[0]) {
-                                      handleFileUpload(docLabel, e.target.files[0]);
-                                    }
-                                    e.target.value = '';
-                                  }}
-                                  accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
-                                />
-                              </label>
+                            ) : isMultiUpload ? (
+                              <div style={{ display: "flex", gap: "8px", justifyContent: "center", alignItems: "center" }}>
+                                <label style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "6px",
+                                  padding: "8px 16px",
+                                  backgroundColor: "#a67c52",
+                                  color: "white",
+                                  borderRadius: "6px",
+                                  fontSize: "11px",
+                                  fontWeight: "600",
+                                  cursor: "pointer",
+                                  transition: "all 0.2s ease",
+                                  textTransform: "uppercase",
+                                  letterSpacing: "0.5px"
+                                }}
+                                onMouseEnter={(e) => {
+                                  e.target.style.backgroundColor = "#8d6e63";
+                                  e.target.style.transform = "translateY(-1px)";
+                                }}
+                                onMouseLeave={(e) => {
+                                  e.target.style.backgroundColor = "#a67c52";
+                                  e.target.style.transform = "translateY(0)";
+                                }}
+                                >
+                                  <Upload size={12} />
+                                  Upload
+                                  <input
+                                    type="file"
+                                    style={{ display: "none" }}
+                                    onChange={(e) => {
+                                      const files = e.target.files;
+                                      if (files && files.length > 0) {
+                                        const allDocs = getAllDocuments(docLabel, profileData);
+                                        handleIndividualDocumentUpload(docLabel, files[0], allDocs.length);
+                                      }
+                                    }}
+                                    accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                                  />
+                                </label>
+                              </div>
+                      ) : docLabel === "Standard NDA" ? (
+                      // Standard NDA - Read only (no upload button)
+                      <span style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "4px",
+                        padding: "4px 8px",
+                        backgroundColor: "#f5f2f0",
+                        color: "#8d6e63",
+                        borderRadius: "4px",
+                        fontSize: "10px",
+                        fontWeight: "500"
+                      }}>
+                        <Eye size={12} />
+                        Read only
+                      </span>
+                    ) : (
+                      // Program Brochures - Allow upload/update
+                      <label style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        padding: "8px 16px",
+                        backgroundColor: "#a67c52",
+                        color: "white",
+                        borderRadius: "6px",
+                        fontSize: "11px",
+                        fontWeight: "600",
+                        cursor: "pointer",
+                        transition: "all 0.2s ease",
+                        textTransform: "uppercase",
+                        letterSpacing: "0.5px"
+                      }}
+                      onMouseEnter={(e) => {
+                        e.target.style.backgroundColor = "#8d6e63";
+                        e.target.style.transform = "translateY(-1px)";
+                      }}
+                      onMouseLeave={(e) => {
+                        e.target.style.backgroundColor = "#a67c52";
+                        e.target.style.transform = "translateY(0)";
+                      }}
+                      >
+                        <Upload size={12} />
+                        {url ? "Update" : "Upload"}
+                        <input
+                          type="file"
+                          style={{ display: "none" }}
+                          onChange={(e) => {
+                            if (e.target.files && e.target.files[0]) {
+                              handleFileUpload(docLabel, e.target.files[0]);
+                            }
+                            e.target.value = '';
+                          }}
+                          accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                        />
+                      </label>
                             )}
                           </td>
                         </tr>
+                        {isMultiUpload && renderExpandedRows(docLabel)}
                       </React.Fragment>
                     );
                   })}
