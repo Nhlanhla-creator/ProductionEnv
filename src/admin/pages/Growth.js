@@ -47,6 +47,7 @@ const Growth = () => {
     loadUserStructure,
     saveUserStructure,
     deleteContent,
+    enableTables: true,
   });
 
   // Load all content on mount

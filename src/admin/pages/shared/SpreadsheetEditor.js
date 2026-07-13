@@ -31,7 +31,13 @@ const DEFAULT_COLUMNS = [
 ];
 
 // Helper to get initial mock data based on the section path
-const getInitialMockData = (path) => {
+const getInitialMockData = (path, itemConfig) => {
+  if (itemConfig?._custom) {
+    return {
+      columns: [],
+      rows: []
+    };
+  }
   const lastSegment = path[path.length - 1] || '';
   if (lastSegment.toLowerCase().includes('corporate')) {
     return {
@@ -196,12 +202,12 @@ export const SpreadsheetEditor = ({ path, itemConfig, content, onSave, onClose }
       setColumns(content.tableData.columns);
       setRows(content.tableData.rows);
     } else {
-      const mock = getInitialMockData(path);
+      const mock = getInitialMockData(path, itemConfig);
       setColumns(mock.columns);
       setRows(mock.rows);
     }
     setHasChanges(false);
-  }, [content, path]);
+  }, [content, path, itemConfig]);
 
   // Debounced auto-save triggers whenever hasChanges is true
   useEffect(() => {
