@@ -5,7 +5,7 @@ import { onAuthStateChanged } from "firebase/auth";
 import { auth } from "../../firebaseConfig";
 import { getAuth } from "firebase/auth";
 import { db } from "../../firebaseConfig";
-import { collection, query, where, getDocs } from "firebase/firestore";
+import { collection, query, where, getDocs, doc, getDoc, addDoc, serverTimestamp } from "firebase/firestore";
 import { SupplierFlowPipeline } from "./supplier-flow-pipeline";
 import SupplierTabbedTables from "./supplier-tabbed-tables";
 import styles from "./supplier.module.css";
@@ -76,15 +76,15 @@ export default function SupplierMatchesPage() {
 
       const q = query(
         collection(db, "supplierApplications"),
-        where("supplierId", "==", currentUser.uid)
+        where("customerId", "==", currentUser.uid)
       );
       const snapshot = await getDocs(q);
-      const contacted = snapshot.docs.map(doc => doc.data().customerId);
+      const contacted = snapshot.docs.map(doc => doc.data().supplierId);
       setContactedSuppliers(contacted);
     };
 
     fetchContactedSuppliers();
-  }, []);
+  }, [user]);
 
   // Check for popup display
   useEffect(() => {
@@ -112,9 +112,92 @@ export default function SupplierMatchesPage() {
     }
   };
 
-  const handleSupplierContacted = (supplierId) => {
+  const handleSupplierContacted = async (supplier) => {
+    const supplierId = supplier?.id;
+    if (!supplierId) return;
+
     if (!contactedSuppliers.includes(supplierId)) {
       setContactedSuppliers(prev => [...prev, supplierId]);
+    }
+
+    try {
+      const auth = getAuth();
+      const currentUser = auth.currentUser;
+      if (!currentUser) return;
+
+      // 1. Fetch SMSE (Customer) Profile to populate payload fields
+      let customerName = "Unknown Customer";
+      let customerLocation = "Not specified";
+      let customerType = "Not specified";
+      let customerSector = "Not specified";
+
+      try {
+        const cSnap = await getDoc(doc(db, "universalProfiles", currentUser.uid));
+        if (cSnap.exists()) {
+          const cData = cSnap.data() || {};
+          const entityOverview = cData.entityOverview || {};
+          customerName = entityOverview.tradingName || entityOverview.registeredName || customerName;
+          customerLocation = entityOverview.location || customerLocation;
+          customerType = entityOverview.entityType || customerType;
+          customerSector = entityOverview.economicSectors?.[0] || customerSector;
+        }
+      } catch (err) {
+        console.error("Failed to fetch customer profile:", err);
+      }
+
+      // 2. Prepare outreach document
+      const supplierName = supplier.entityOverview?.tradingName || supplier.entityOverview?.registeredName || supplier.name || "Unnamed Supplier";
+      
+      const payload = {
+        applicationSource: "supplier-directory",
+        status: "Pending",
+        matchPercentage: supplier.matchPercentage || supplier.finalScore || 0,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        
+        customerId: currentUser.uid,
+        customerName: customerName,
+        customerLocation: customerLocation,
+        customerType: customerType,
+        customerSector: customerSector,
+
+        supplierId: supplierId,
+        supplierName: supplierName,
+        supplierLocation: supplier.entityOverview?.location || supplier.location || "Not specified",
+        supplierType: supplier.entityOverview?.entityType || "Not specified",
+        supplierSector: supplier.entityOverview?.economicSectors?.[0] || "Not specified",
+
+        currentStage: "Contact Initiated",
+        nextStage: "Proposal Sent",
+        lastActivity: new Date().toISOString(),
+      };
+
+      // 3. Add document to supplierApplications
+      await addDoc(collection(db, "supplierApplications"), payload);
+
+      // 4. Dispatch simulated notification
+      // TO-DO: Implement full email sending and in-app notification to the supplier here.
+      // This is a placeholder for the messaging developer to integrate email / notification logic.
+      console.log(`[TO-DO / Notification Sim] Send email & notification to supplier ${supplierName} (${supplierId})`);
+
+      const notificationMessage = `Contact request to ${supplierName} sent successfully`;
+      const event = new CustomEvent("newNotification", {
+        detail: {
+          message: notificationMessage,
+          type: "success",
+          timestamp: new Date().toISOString(),
+        },
+        bubbles: true,
+        cancelable: true,
+        composed: true,
+      });
+      window.dispatchEvent(event);
+
+    } catch (err) {
+      console.error("Failed to contact supplier:", err);
+      // Revert state if firestore fails
+      setContactedSuppliers(prev => prev.filter(id => id !== supplierId));
+      throw err;
     }
   };
 
@@ -448,6 +531,7 @@ export default function SupplierMatchesPage() {
             onSupplierContacted={handleSupplierContacted}
             onSuppliersUpdate={handleSuppliersUpdate}
             defaultActiveTab="my-matches" // Pass the default tab
+            contactedSuppliers={contactedSuppliers}
           />
         </div>
       </div>

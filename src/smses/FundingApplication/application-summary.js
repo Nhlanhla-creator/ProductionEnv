@@ -1,8 +1,8 @@
 import { useState } from "react"
-import { ChevronDown, ChevronUp, Edit, ExternalLink, FileText, FileBarChart, TrendingUp, DollarSign, Building, Users, Heart, CheckSquare, Shield } from "lucide-react"
+import { ChevronDown, ChevronUp, ChevronLeft, Edit, ExternalLink, FileText, FileBarChart, TrendingUp, DollarSign, Building, Users, Heart, CheckSquare, Shield } from "lucide-react"
 import FundabilityScoreCard from './FundabilityScoreCard'
 
-const ApplicationSummary = ({ formData, onEdit }) => {
+const ApplicationSummary = ({ formData, onEdit, onBack }) => {
   const [expandedSections, setExpandedSections] = useState({
     applicationOverview: false,
     useOfFunds: false,
@@ -113,6 +113,17 @@ const ApplicationSummary = ({ formData, onEdit }) => {
           maxWidth: 'none'
         }}>
 
+          {/* Back */}
+          {onBack && (
+            <button onClick={onBack}
+              style={{ display:"flex", alignItems:"center", gap:7, padding:"10px 0", marginBottom:14, background:"none", border:"none", color:"#a67c52", cursor:"pointer", fontSize:14, fontWeight:500 }}
+              onMouseEnter={(e) => { e.currentTarget.style.color="#7d5a50" }}
+              onMouseLeave={(e) => { e.currentTarget.style.color="#a67c52" }}
+            >
+              <ChevronLeft size={19} /> Back to Applications
+            </button>
+          )}
+
           {/* Header */}
           <div style={{
             background: 'linear-gradient(135deg, rgba(250, 247, 242, 0.9), rgba(245, 240, 225, 0.9))',
@@ -190,12 +201,12 @@ const ApplicationSummary = ({ formData, onEdit }) => {
                   justifyContent: 'center'
                 }}
                 onMouseEnter={(e) => {
-                  e.target.style.transform = 'translateY(-2px)'
-                  e.target.style.boxShadow = '0 8px 24px rgba(166, 124, 82, 0.4)'
+                  e.currentTarget.style.transform = 'translateY(-2px)'
+                  e.currentTarget.style.boxShadow = '0 8px 24px rgba(166, 124, 82, 0.4)'
                 }}
                 onMouseLeave={(e) => {
-                  e.target.style.transform = 'translateY(0)'
-                  e.target.style.boxShadow = '0 4px 16px rgba(166, 124, 82, 0.3)'
+                  e.currentTarget.style.transform = 'translateY(0)'
+                  e.currentTarget.style.boxShadow = '0 4px 16px rgba(166, 124, 82, 0.3)'
                 }}
               >
                 <Edit size={16} /> Edit Application

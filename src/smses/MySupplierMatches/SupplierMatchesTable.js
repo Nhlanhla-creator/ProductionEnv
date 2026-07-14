@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useEffect } from "react"
 import { createPortal } from "react-dom"
-import { Eye, MessageSquare, Users, Award, MapPin, Percent, Info, Brain, Settings2 } from "lucide-react"
+import { Eye, MessageSquare, Users, Award, MapPin, Percent, Info, Brain, Settings2, CheckCircle, Loader2 } from "lucide-react"
 import SupplierDetailsModal from "./SupplierDetailsModal"
 
 /**
@@ -61,12 +61,14 @@ const SupplierMatchesTable = ({
   onContact,
   onView,
   dense = false,
+  contactedSuppliers = [],
 }) => {
   const [modalSupplier, setModalSupplier] = useState(null)
   const [breakdownSupplier, setBreakdownSupplier] = useState(null)
   const [mounted, setMounted] = useState(false)
   const [devMode, setDevMode] = useState(false)
   const [filterHighMatches, setFilterHighMatches] = useState(true)
+  const [contactingId, setContactingId] = useState(null)
 
   useEffect(() => { setMounted(true) }, [])
 
@@ -102,8 +104,16 @@ const SupplierMatchesTable = ({
     setModalSupplier(supplier)
   }
 
-  const handleContact = (supplier) => {
-    if (onContact) onContact(supplier)
+  const handleContact = async (supplier) => {
+    if (!onContact || contactedSuppliers.includes(supplier.id)) return
+    setContactingId(supplier.id)
+    try {
+      await onContact(supplier)
+    } catch (err) {
+      // Contact failed; user can retry
+    } finally {
+      setContactingId(null)
+    }
   }
 
   const supplierName = (s) =>
@@ -193,6 +203,12 @@ const SupplierMatchesTable = ({
           </button>
         </div>
       </div>
+      <style>{`
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+      `}</style>
       <div
         style={{
           width: "100%",
@@ -410,32 +426,92 @@ const SupplierMatchesTable = ({
                         >
                           <Eye size={12} />
                         </button>
-                        {onContact && (
-                          <button
-                            onClick={() => handleContact(s)}
-                            style={{
-                              display: "inline-flex",
-                              alignItems: "center",
-                              gap: 4,
-                              padding: dense ? "6px 9px" : "7px 11px",
-                              background: "linear-gradient(135deg,#a67c52,#7d5a50)",
-                              color: "#FAF7F2",
-                              border: "none",
-                              borderRadius: 6,
-                              fontSize: "12px",
-                              fontWeight: 600,
-                              cursor: "pointer",
-                              whiteSpace: "nowrap",
-                              boxShadow: "0 2px 6px rgba(166,124,82,0.3)",
-                              transition: "transform 0.15s, box-shadow 0.15s",
-                            }}
-                            onMouseEnter={(e) => (e.currentTarget.style.transform = "translateY(-1px)")}
-                            onMouseLeave={(e) => (e.currentTarget.style.transform = "")}
-                            title={`Contact ${supplierName(s)}`}
-                          >
-                            <MessageSquare size={12} />
-                          </button>
-                        )}
+                        {onContact && (() => {
+                          const isContacted = contactedSuppliers.includes(s.id) || s.status === "contacted"
+                          const isThisContacting = contactingId === s.id
+
+                          // Already contacted — show permanent green state
+                          if (isContacted) {
+                            return (
+                              <button
+                                disabled
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: 4,
+                                  padding: dense ? "6px 9px" : "7px 11px",
+                                  background: "linear-gradient(135deg,#388E3C,#2E7D32)",
+                                  color: "#fff",
+                                  border: "none",
+                                  borderRadius: 6,
+                                  fontSize: "12px",
+                                  fontWeight: 600,
+                                  cursor: "default",
+                                  whiteSpace: "nowrap",
+                                  boxShadow: "0 2px 6px rgba(56,142,60,0.3)",
+                                }}
+                                title={`Contacted ${supplierName(s)}`}
+                              >
+                                <CheckCircle size={12} />
+                                Contacted
+                              </button>
+                            )
+                          }
+
+                          // Loading
+                          if (isThisContacting) {
+                            return (
+                              <button
+                                disabled
+                                style={{
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: 4,
+                                  padding: dense ? "6px 9px" : "7px 11px",
+                                  background: "linear-gradient(135deg,#a67c52,#7d5a50)",
+                                  color: "#FAF7F2",
+                                  border: "none",
+                                  borderRadius: 6,
+                                  fontSize: "12px",
+                                  fontWeight: 600,
+                                  cursor: "not-allowed",
+                                  whiteSpace: "nowrap",
+                                  boxShadow: "0 2px 6px rgba(166,124,82,0.3)",
+                                }}
+                              >
+                                <Loader2 size={12} style={{ animation: "spin 1s linear infinite" }} />
+                              </button>
+                            )
+                          }
+
+                          // Idle — contact button
+                          return (
+                            <button
+                              onClick={() => handleContact(s)}
+                              style={{
+                                display: "inline-flex",
+                                alignItems: "center",
+                                gap: 4,
+                                padding: dense ? "6px 9px" : "7px 11px",
+                                background: "linear-gradient(135deg,#a67c52,#7d5a50)",
+                                color: "#FAF7F2",
+                                border: "none",
+                                borderRadius: 6,
+                                fontSize: "12px",
+                                fontWeight: 600,
+                                cursor: "pointer",
+                                whiteSpace: "nowrap",
+                                boxShadow: "0 2px 6px rgba(166,124,82,0.3)",
+                                transition: "transform 0.15s, box-shadow 0.15s",
+                              }}
+                              onMouseEnter={(e) => (e.currentTarget.style.transform = "translateY(-1px)")}
+                              onMouseLeave={(e) => (e.currentTarget.style.transform = "")}
+                              title={`Contact ${supplierName(s)}`}
+                            >
+                              <MessageSquare size={12} />
+                            </button>
+                          )
+                        })()}
                       </div>
                     </td>
                   </tr>

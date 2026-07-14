@@ -9,6 +9,7 @@ import { db, auth } from "../../../firebaseConfig"
 
 const IS_PROD = process.env.NODE_ENV === "production"
 const LOCAL_MATCHING_URL = "http://localhost:8000/api/funders/analyze"
+const USE_CLOUD_FUNCTION = true // Set to false to switch back to local backend for matching in dev environment
 
 const storage = getStorage()
 
@@ -530,7 +531,7 @@ export const useFundingApplications = ({
 
         const controller = new AbortController()
 
-        const fetchPromise = IS_PROD
+        const fetchPromise = (USE_CLOUD_FUNCTION || IS_PROD)
           ? (async () => {
               const fn = httpsCallable(getFunctions(), "analyzeFundingMatches")
               const { data } = await fn({ applicationId: docId })
