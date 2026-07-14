@@ -7,7 +7,6 @@ import HomeHeader from "./main_pages/SMEs/HomeHeader"
 import { useAuth } from "./context/useAuth"
 import ProtectedRoute from "./context/ProtectedRoute"
 import EmailVerification from "./EmailVerification"
-import { auth, db, doc, setDoc, getDoc } from "./firebaseConfig"
 
 // Admin Components
 import AdminSidebar from "./admin/layout/AdminSidebar"
@@ -179,15 +178,6 @@ import AssociationAdminGovernance from "./associator/MyDashboard/AdminGovernance
 import AssociationUsersMarketplace from "./associator/MyDashboard/UsersMarketplace"
 import AssociationPilotsCaseStudies from "./associator/MyDashboard/PilotsCaseStudies"
 import AssociationSurveys from "./associator/MyDashboard/Surveys"
-// ─────────────────────────────────────────────────────────────────────────────
-
-// ─── Capital and Market Facilitator (CMF) Components ────────────────────────
-import CMFSidebar from "./cmf/CMFSidebar/CMFSidebar"
-import CMFHeader from "./cmf/CMFHeader/CMFHeader"
-import CMFUniversalProfile from "./cmf/CMFUniversalProfile/CMFUniversalProfile"
-import CMFMatches from "./cmf/CMFMatches/CMFMatches"
-import CMFCohorts from "./cmf/CMFCohorts/CMFCohorts"
-import CMFDocuments from "./cmf/CMFDocuments/CMFDocuments"
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Public Pages
@@ -452,7 +442,6 @@ function App() {
   const companyName = "Acme Inc"
   const { user, loading } = useAuth()
 
-
   const updateFormData = (section, data) => {
     setFormData((prev) => ({ ...prev, [section]: { ...prev[section], ...data } }))
   }
@@ -687,27 +676,6 @@ function App() {
     )
   }
 
-  // ─── CMF Layout ───────────────────────────────────────────────────────────────
-  const CMFLayout = ({ children }) => {
-    const [collapsed, setCollapsed] = useState(true)
-    useEffect(() => {
-      const check = () => setCollapsed(document.body.classList.contains("sidebar-collapsed"))
-      check()
-      const obs = new MutationObserver(check)
-      obs.observe(document.body, { attributes: true, attributeFilter: ["class"] })
-      return () => obs.disconnect()
-    }, [])
-    return (
-      <div className="app-layout">
-        <CMFSidebar />
-        <div className={`${styles.mainContent} ${collapsed ? styles.sidebarCollapsed : styles.sidebarExpanded}`}>
-          <CMFHeader />
-          <div>{children}</div>
-        </div>
-      </div>
-    )
-  }
-
   // ─── Render helpers ───────────────────────────────────────────────────────────
   const renderAdminRoute = (Component, props = {}) => (<AdminLayout><Component {...props} /></AdminLayout>)
   const renderSMERoute = (Component, props = {}) => (<SMELayout><Component {...props} /></SMELayout>)
@@ -717,7 +685,6 @@ function App() {
   const renderInternRoute = (Component, props = {}) => (<InternLayout><Component {...props} /></InternLayout>)
   const renderProgramSponsorRoute = (Component, props = {}) => (<ProgramSponsorLayout><Component {...props} /></ProgramSponsorLayout>)
   const renderAssociatorRoute = (Component, props = {}) => (<AssociatorLayout><Component {...props} /></AssociatorLayout>)
-  const renderCMFRoute = (Component, props = {}) => (<CMFLayout><Component {...props} /></CMFLayout>)
 
   // ─── Profile section renderers ────────────────────────────────────────────────
   const renderSMEProfileSection = (Component, section) => (
@@ -1228,24 +1195,6 @@ function App() {
         <Route path="/associator-dashboard/marketplace" element={withProtection(AssociationUsersMarketplace, {}, renderAssociatorRoute)} />
         <Route path="/associator-dashboard/pilot" element={withProtection(AssociationPilotsCaseStudies, {}, renderAssociatorRoute)} />
         <Route path="/associator-dashboard/surveys" element={withProtection(AssociationSurveys, {}, renderAssociatorRoute)} />
-        {/* ──────────────────────────────────────────────────────────────────────── */}
-
-        {/* ─── Capital and Market Facilitator (CMF) Routes ──────────────────────── */}
-        <Route path="/cmf-profile" element={withProtection(CMFUniversalProfile, {}, renderCMFRoute)} />
-        <Route path="/cmf-matches" element={withProtection(CMFMatches, {}, renderCMFRoute)} />
-        <Route path="/cmf-cohorts" element={withProtection(CMFCohorts, {}, renderCMFRoute)} />
-        <Route path="/cmf-documents" element={withProtection(CMFDocuments, {}, renderCMFRoute)} />
-        <Route path="/cmf-messages" element={withProtection(Messages, {}, renderCMFRoute)} />
-        <Route path="/cmf-calendar" element={withProtection(Calendar, {}, renderCMFRoute)} />
-        <Route path="/cmf-settings" element={withProtection(Settings, {}, renderCMFRoute)} />
-        <Route path="/cmf-insights" element={withProtection(BigInsights, {}, renderCMFRoute)} />
-        <Route path="/cmf-home" element={<Navigate to="/cmf-profile" replace />} />
-        {/* CMF Billing Routes */}
-        <Route path="/cmf/billing/info" element={withProtection(BillingInfoInvestors, {}, renderCMFRoute)} />
-        <Route path="/cmf/billing/subscriptions" element={withProtection(InvestorsSubscriptions, {}, renderCMFRoute)} />
-        <Route path="/cmf/billing/history" element={withProtection(BillingHistoryInvestor, {}, renderCMFRoute)} />
-        {/* CMF Redirect */}
-        <Route path="/cmf" element={<Navigate to="/cmf-profile" replace />} />
         {/* ──────────────────────────────────────────────────────────────────────── */}
 
         {/* Redirects */}
