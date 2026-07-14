@@ -337,6 +337,9 @@ import People from "./smses/MyGrowthTools/People"
 import SocialImpact from "./smses/MyGrowthTools/SocialImpact"
 import MarketingSales from "./smses/MyGrowthTools/MarketingSale"
 import RiskManagement from "./smses/MyGrowthTools/RiskManagement"
+import GovernanceCalendar from "smses/MyGrowthTools/GovernanceCalendar"
+import RapsActions from "smses/MyGrowthTools/RapsActions"
+import RapsOverview from "smses/MyGrowthTools/RapsOverview"
 
 // Advisor Components
 import AdvisorSettings from "./advisors/AdvisorSettings/advisor-settings"
@@ -364,9 +367,6 @@ import BillingInfoCatalyst from "catalyst/CatalystBillingAndPayments/billing-inf
 import CatalystSubscriptions from "catalyst/CatalystBillingAndPayments/catalyst-subscription"
 import BillingHistoryCatalyst from "catalyst/CatalystBillingAndPayments/billing-history-catalyst"
 import AdvisorApplicationManager from "smses/AdvisorApplication/AdvisorApplicationManager"
-import GovernanceCalendar from "smses/MyGrowthTools/GovernanceCalendar"
-import * as RapsActions from 'smses/MyGrowthTools/RapsActions';
-import RapsOverview from "smses/MyGrowthTools/RapsOverview"
 
 // Initial Data States
 const initialFormData = {
@@ -1014,6 +1014,10 @@ function App() {
         <Route path="/People" element={withProtection(People, {}, renderSMERoute)} />
         <Route path="/SocialImpact" element={withProtection(SocialImpact, {}, renderSMERoute)} />
         <Route path="/MarketingSales" element={withProtection(MarketingSales, {}, renderSMERoute)} />
+        <Route path="/governance-calendar" element={withProtection(GovernanceCalendar, {}, renderSMERoute)} />
+        <Route path="/raps-actions" element={withProtection(RapsActions, {}, renderSMERoute)} />
+        <Route path="/raps-overview" element={withProtection(RapsOverview, {}, renderSMERoute)} />
+
 
         {/* Investor Billing and Payments Routes */}
         <Route path="/investor/billing/subscriptions" element={withProtection(InvestorsSubscriptions, {}, renderInvestorRoute)} />
@@ -1261,9 +1265,7 @@ function App() {
         <Route path="/applications/intern-application" element={<Navigate to="/applications/intern" replace />} />
         <Route path="/associator" element={<Navigate to="/associator-dashboard" replace />} />
         <Route path="/associator-universal-profile" element={<Navigate to="/associator-profile/instructions" replace />} />
-        <Route path="/governance-calendar" element={withProtection(GovernanceCalendar, {}, renderSMERoute)} />
-        <Route path="/raps-overview" element={withProtection(RapsOverview, {}, renderSMERoute)} />
-        <Route path="/raps-actions" element={withProtection(RapsActions, {}, renderSMERoute)} />
+     
 
       </Routes>
     </Router>

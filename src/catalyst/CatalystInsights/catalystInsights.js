@@ -32,14 +32,14 @@ const StatCardSkeleton = () => (
 );
 
 const CanvasCardSkeleton = () => (
-  <div className="bg-white rounded-2xl border border-lightTan p-5 shadow-sm flex flex-col gap-4" style={{ height: 280 }}>
+  <div className="bg-white rounded-2xl border border-lightTan p-5 shadow-sm flex flex-col gap-4" style={{ height: 320 }}>
     <div className="h-4 w-48 rounded bg-shimmer-light bg-shimmer animate-shimmer" />
     <div className="flex-1 rounded-xl bg-shimmer-light bg-shimmer animate-shimmer-d1" />
   </div>
 );
 
 const LeaderboardSkeleton = () => (
-  <div className="bg-white rounded-2xl border border-lightTan p-5 flex flex-col gap-4 min-h-[280px]">
+  <div className="bg-white rounded-2xl border border-lightTan p-5 flex flex-col gap-4 min-h-[320px]">
     <div className="h-4 w-48 rounded bg-shimmer-light bg-shimmer animate-shimmer" />
     {[1, 2, 3].map((i) => (
       <div key={i} className="flex items-center gap-3 py-2 border-b border-lightTan last:border-0">
@@ -58,8 +58,10 @@ const BP = {
 };
 const BCOLORS = ["#3b2409","#5e3f26","#7d5a36","#9c7c54","#b8a082","#c2a882","#d4c4b0","#a08060"];
 const PORTFOLIO_LINE_COLOR = "#c17d3c";
-const CS_CARD_H  = "460px";
-const CS_CHART_H = "260px";
+// FIX: shrunk from "460px" — this was the source of the oversized cards.
+// Now matches the ~320px compact card size used across Investor/Advisor/Intern insights.
+const CS_CARD_H  = "320px";
+const CS_CHART_H = "200px";
 
 const csHistogramOpts = (yCb, xTitle) => ({
   responsive: true, maintainAspectRatio: false, animation: false,
@@ -122,17 +124,17 @@ const csMonthlyComboOpts = (max) => ({
 // ── Shared primitives ─────────────────────────────────────────────────────────
 const CsCard = ({ title, footer, children }) => (
   <div style={{
-    background: "#fff", borderRadius: "10px", padding: "20px",
+    background: "#fff", borderRadius: "10px", padding: "16px",
     height: CS_CARD_H,
     boxShadow: "0 2px 10px rgba(59,36,9,0.07)", border: `1px solid ${BP.pale}`,
     display: "flex", flexDirection: "column",
   }}>
-    <div style={{ paddingBottom: "10px", borderBottom: `1px solid ${BP.offwhite}`, marginBottom: "8px" }}>
-      <h3 style={{ fontSize: "14px", fontWeight: "700", color: BP.dark, margin: 0 }}>{title}</h3>
+    <div style={{ paddingBottom: "8px", borderBottom: `1px solid ${BP.offwhite}`, marginBottom: "8px" }}>
+      <h3 style={{ fontSize: "13px", fontWeight: "700", color: BP.dark, margin: 0 }}>{title}</h3>
     </div>
     <div style={{ flex: 1, overflow: "hidden", display: "flex", flexDirection: "column" }}>{children}</div>
     {footer && (
-      <div style={{ marginTop: "8px", padding: "7px 10px", background: BP.offwhite, borderRadius: "6px", flexShrink: 0 }}>
+      <div style={{ marginTop: "8px", padding: "6px 10px", background: BP.offwhite, borderRadius: "6px", flexShrink: 0 }}>
         {footer}
       </div>
     )}
@@ -141,7 +143,7 @@ const CsCard = ({ title, footer, children }) => (
 
 const CsPill = ({ label, active, onClick }) => (
   <button onClick={onClick} style={{
-    padding: "5px 14px", borderRadius: "20px", cursor: "pointer", fontSize: "11px",
+    padding: "4px 12px", borderRadius: "20px", cursor: "pointer", fontSize: "10px",
     border: `1.5px solid ${active ? BP.medium : BP.pale}`,
     fontWeight: active ? 700 : 500,
     background: active ? BP.medium : "#fff",
@@ -163,37 +165,37 @@ const CsScoreRangeView = ({ min, pipelineAvg, max, target, ecoSystemAvg, suffix 
   const clamp = v => Math.min(Math.max(v || 0, 0), 100);
   const mn = clamp(min), pa = clamp(pipelineAvg), mx = clamp(max);
   return (
-    <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "12px" }}>
-      <div style={{ fontSize: "64px", fontWeight: "800", color: BP.darkest, lineHeight: 1, marginTop: "-4px" }}>
-        {ecoSystemAvg}<span style={{ fontSize: "32px" }}>{suffix}</span>
+    <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "8px" }}>
+      <div style={{ fontSize: "42px", fontWeight: "800", color: BP.darkest, lineHeight: 1, marginTop: "-4px" }}>
+        {ecoSystemAvg}<span style={{ fontSize: "22px" }}>{suffix}</span>
       </div>
-      <div style={{ fontSize: "14px", color: BP.medium, fontWeight: 600 }}>Target: {target}{suffix}</div>
-      <div style={{ width: "100%", marginTop: "4px" }}>
-        <div style={{ position: "relative", width: "100%", height: "12px", background: BP.pale, borderRadius: "6px", overflow: "visible" }}>
+      <div style={{ fontSize: "12px", color: BP.medium, fontWeight: 600 }}>Target: {target}{suffix}</div>
+      <div style={{ width: "100%", marginTop: "2px" }}>
+        <div style={{ position: "relative", width: "100%", height: "10px", background: BP.pale, borderRadius: "6px", overflow: "visible" }}>
           <div style={{ position: "absolute", left: 0, top: 0, width: `${mx}%`, height: "100%", background: BP.light, borderRadius: "6px", overflow: "hidden" }} />
           <div style={{ position: "absolute", left: 0, top: 0, width: `${pa}%`, height: "100%", background: BP.medium, borderRadius: "6px", overflow: "hidden" }} />
           <div style={{ position: "absolute", left: 0, top: 0, width: `${mn}%`, height: "100%", background: BP.dark, borderRadius: "6px", overflow: "hidden" }} />
         </div>
-        <div style={{ position: "relative", width: "95%", height: "38px", marginTop: "6px" }}>
+        <div style={{ position: "relative", width: "95%", height: "30px", marginTop: "4px" }}>
           {[
             { val: mn, label: "Min",           color: BP.dark   },
             { val: pa, label: "Ecosystem Avg", color: BP.medium },
             { val: mx, label: "Max",           color: BP.light  },
           ].map(({ val, label, color }) => (
             <div key={label} style={{ position: "absolute", left: `${val}%`, transform: "translateX(-50%)", textAlign: "center", whiteSpace: "nowrap" }}>
-              <div style={{ fontSize: "14px", fontWeight: 700, color }}>{val}{suffix}</div>
+              <div style={{ fontSize: "12px", fontWeight: 700, color }}>{val}{suffix}</div>
             </div>
           ))}
         </div>
-        <div style={{ position: "relative", width: "95%", height: "20px", marginTop: "6px" }}>
+        <div style={{ position: "relative", width: "95%", height: "16px", marginTop: "2px" }}>
           {[
             { label: "Min", color: BP.darkest },
             { label: "Ecosystem Avg",  color: BP.medium  },
             { label: "Max",        color: BP.light   },
           ].map(({ label, color }) => (
             <div key={label} style={{ display: "flex", alignItems: "center", gap: "4px", marginRight: "16px" }}>
-              <div style={{ width: "12px", height: "12px", borderRadius: "6px", background: color }} />
-              <div style={{ fontSize: "11px", color }}>{label}</div>
+              <div style={{ width: "10px", height: "10px", borderRadius: "5px", background: color }} />
+              <div style={{ fontSize: "10px", color }}>{label}</div>
             </div>
           ))}
         </div>
@@ -203,7 +205,6 @@ const CsScoreRangeView = ({ min, pipelineAvg, max, target, ecoSystemAvg, suffix 
 };
 
 // ── Histogram dataset builder ─────────────────────────────────────────────────
-// Bar = universal ecosystem distribution; Line = user's portfolio cohort overlay
 const buildHistogramData = (ecosystemDist, portfolioDist) => ({
   labels: Object.keys(ecosystemDist),
   datasets: [
@@ -238,7 +239,7 @@ const CsAverageMatchStrength = ({ metrics, portfolioMetrics }) => {
   const hasData = m.min > 0 || m.avg > 0;
   return (
     <CsCard title="Average Match Strength (%)">
-      <div style={{ display: "flex", gap: "6px", marginBottom: "10px", flexShrink: 0 }}>
+      <div style={{ display: "flex", gap: "6px", marginBottom: "8px", flexShrink: 0 }}>
         <CsPill label="Range"     active={view === "range"}     onClick={() => setView("range")} />
         <CsPill label="Histogram" active={view === "histogram"} onClick={() => setView("histogram")} />
       </div>
@@ -263,7 +264,7 @@ const CsAverageBIGScore = ({ metrics, portfolioMetrics }) => {
   const hasData = b.min > 0 || b.avg > 0;
   return (
     <CsCard title="Average BIG Score (%)">
-      <div style={{ display: "flex", gap: "6px", marginBottom: "10px", flexShrink: 0 }}>
+      <div style={{ display: "flex", gap: "6px", marginBottom: "8px", flexShrink: 0 }}>
         <CsPill label="Range"     active={view === "range"}     onClick={() => setView("range")} />
         <CsPill label="Histogram" active={view === "histogram"} onClick={() => setView("histogram")} />
       </div>
@@ -286,18 +287,18 @@ const CsFundingReadinessRate = ({ metrics }) => {
   const ready = Math.round((rate / 100) * total);
   return (
     <CsCard title="Funding Readiness Rate (%)">
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "12px", marginTop: "-8px" }}>
-        <div style={{ fontSize: "64px", fontWeight: "800", color: BP.darkest, lineHeight: 1 }}>
-          {rate}<span style={{ fontSize: "32px" }}>%</span>
+      <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "8px", marginTop: "-4px" }}>
+        <div style={{ fontSize: "42px", fontWeight: "800", color: BP.darkest, lineHeight: 1 }}>
+          {rate}<span style={{ fontSize: "22px" }}>%</span>
         </div>
-        <div style={{ fontSize: "14px", color: BP.medium, fontWeight: 600 }}>{ready} of {total} SMEs funding-ready</div>
-        <div style={{ width: "100%", marginTop: "4px" }}>
-          <div style={{ width: "100%", background: BP.pale, borderRadius: "6px", height: "12px", overflow: "hidden" }}>
+        <div style={{ fontSize: "12px", color: BP.medium, fontWeight: 600 }}>{ready} of {total} SMEs funding-ready</div>
+        <div style={{ width: "100%", marginTop: "2px" }}>
+          <div style={{ width: "100%", background: BP.pale, borderRadius: "6px", height: "10px", overflow: "hidden" }}>
             <div style={{ width: `${rate}%`, background: BP.medium, height: "100%", borderRadius: "6px" }} />
           </div>
           <div style={{ display: "flex", justifyContent: "space-between", width: "100%", padding: "4px" }}>
-            <span style={{ fontSize: "14px", color: BP.warm }}>Current: {rate}%</span>
-            <span style={{ fontSize: "14px", color: BP.warm }}>Target: 70%</span>
+            <span style={{ fontSize: "12px", color: BP.warm }}>Current: {rate}%</span>
+            <span style={{ fontSize: "12px", color: BP.warm }}>Target: 70%</span>
           </div>
         </div>
       </div>
@@ -309,29 +310,29 @@ const CsAverageVettingTime = ({ metrics }) => {
   const ACTUAL   = metrics?.vetting?.avg || 0;
   const TARGET   = metrics?.vetting?.target || 10;
   const VARIANCE = ACTUAL - TARGET;
-  const R = 54, CIRC = 2 * Math.PI * R;
+  const R = 40, CIRC = 2 * Math.PI * R;
   const offset = CIRC - (CIRC * Math.min(ACTUAL, 60)) / 60;
   return (
     <CsCard title="Average Vetting Time (Days)">
       <div style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center" }}>
         {ACTUAL > 0 ? (
           <>
-            <svg width="260" height="260" viewBox="0 0 160 160">
+            <svg width="180" height="180" viewBox="0 0 160 160">
               <circle cx="80" cy="80" r={R} stroke={BP.pale} strokeWidth="11" fill="none" />
               <circle cx="80" cy="80" r={R} stroke={ACTUAL <= TARGET ? BP.medium : BP.dark} strokeWidth="11" fill="none" strokeLinecap="round"
                 strokeDasharray={CIRC} strokeDashoffset={offset} transform="rotate(-90 80 80)" />
-              <text x="80" y="74" textAnchor="middle" fill={BP.darkest} fontSize="30" fontWeight="800">{Math.round(ACTUAL)}</text>
-              <text x="80" y="93" textAnchor="middle" fill={BP.warm} fontSize="13">days</text>
+              <text x="80" y="76" textAnchor="middle" fill={BP.darkest} fontSize="26" fontWeight="800">{Math.round(ACTUAL)}</text>
+              <text x="80" y="94" textAnchor="middle" fill={BP.warm} fontSize="12">days</text>
             </svg>
-            <div style={{ display: "flex", gap: "24px" }}>
+            <div style={{ display: "flex", gap: "18px" }}>
               {[
                 ["Actual",   Math.round(ACTUAL) + "d",                                    BP.dark],
                 ["Target",   TARGET + "d",                                                  BP.medium],
                 ["Variance", (VARIANCE > 0 ? "+" : "") + Math.round(VARIANCE) + "d",       VARIANCE > 0 ? "#8b3a1a" : BP.medium],
               ].map(([l, v, col]) => (
                 <div key={l} style={{ textAlign: "center" }}>
-                  <div style={{ fontSize: "14px", color: BP.warm, marginBottom: "3px" }}>{l}</div>
-                  <div style={{ fontSize: "16px", fontWeight: "700", color: col }}>{v}</div>
+                  <div style={{ fontSize: "11px", color: BP.warm, marginBottom: "2px" }}>{l}</div>
+                  <div style={{ fontSize: "14px", fontWeight: "700", color: col }}>{v}</div>
                 </div>
               ))}
             </div>
@@ -354,10 +355,10 @@ const CsSMEPipelineProgress = ({ metrics }) => {
   const doughnutLabels = nonZeroEntries.map(([k]) => k);
   const doughnutValues = nonZeroEntries.map(([, v]) => v);
   const hasData = nonZeroEntries.length > 0;
-  const innerH  = Math.max(parseInt(CS_CHART_H), hbarLabels.length * 36);
+  const innerH  = Math.max(parseInt(CS_CHART_H), hbarLabels.length * 28);
   return (
     <CsCard title="SME Pipeline Progress">
-      <div style={{ display: "flex", gap: "6px", marginBottom: "10px", flexShrink: 0 }}>
+      <div style={{ display: "flex", gap: "6px", marginBottom: "8px", flexShrink: 0 }}>
         <CsPill label="Stage Dist." active={view === "stage"}  onClick={() => setView("stage")} />
         <CsPill label="Funnel"      active={view === "funnel"} onClick={() => setView("funnel")} />
       </div>
@@ -365,7 +366,7 @@ const CsSMEPipelineProgress = ({ metrics }) => {
         <>
           <div style={{ flex: 1, overflow: "hidden" }}>
             {view === "stage" ? (
-              <div style={{ height: `${innerH}px`, overflowY: hbarLabels.length > 7 ? "auto" : "visible" }}>
+              <div style={{ height: `${innerH}px`, overflowY: hbarLabels.length > 6 ? "auto" : "visible" }}>
                 <Bar options={csHBarOpts(true)} data={{ labels: hbarLabels, datasets: [{ label: "# SMEs", data: hbarValues, backgroundColor: BCOLORS.slice(0, hbarLabels.length) }] }} />
               </div>
             ) : (
@@ -374,9 +375,9 @@ const CsSMEPipelineProgress = ({ metrics }) => {
               </div>
             )}
           </div>
-          <div style={{ display: "flex", justifyContent: "center", gap: "5px", marginTop: "0px", flexWrap: "wrap", flexShrink: 0 }}>
+          <div style={{ display: "flex", justifyContent: "center", gap: "4px", marginTop: "0px", flexWrap: "wrap", flexShrink: 0 }}>
             {doughnutLabels.map((s, i) => (
-              <span key={s} style={{ fontSize: "10px", color: BP.dark, background: BP.offwhite, padding: "3px 7px", borderRadius: "10px" }}>
+              <span key={s} style={{ fontSize: "9px", color: BP.dark, background: BP.offwhite, padding: "2px 6px", borderRadius: "10px" }}>
                 {s}: <strong>{doughnutValues[i]}</strong>
               </span>
             ))}
@@ -390,8 +391,8 @@ const CsSMEPipelineProgress = ({ metrics }) => {
 // ── Cohort Selection tab skeleton ─────────────────────────────────────────────
 const CsCohortSkeleton = () => {
   const cardShell = (children) => (
-    <div className="bg-white rounded-xl p-5 border border-paleBrown flex flex-col" style={{ height: CS_CARD_H, boxShadow: "0 2px 10px rgba(59,36,9,0.07)" }}>
-      <div className="pb-2.5 border-b border-offWhite mb-4">
+    <div className="bg-white rounded-xl p-4 border border-paleBrown flex flex-col" style={{ height: CS_CARD_H, boxShadow: "0 2px 10px rgba(59,36,9,0.07)" }}>
+      <div className="pb-2 border-b border-offWhite mb-3">
         <div className="w-3/4 h-4 bg-shimmer-dark bg-shimmer animate-shimmer rounded" />
       </div>
       {children}
@@ -400,13 +401,13 @@ const CsCohortSkeleton = () => {
   const ScoreRangeBody = () => (
     <div className="flex-1 flex flex-col gap-3 px-1 pt-1">
       <div className="flex gap-2">
-        <div className="h-7 w-20 rounded-full bg-shimmer-mid bg-shimmer animate-shimmer" />
-        <div className="h-7 w-24 rounded-full bg-shimmer-light bg-shimmer animate-shimmer-d1" />
+        <div className="h-6 w-16 rounded-full bg-shimmer-mid bg-shimmer animate-shimmer" />
+        <div className="h-6 w-20 rounded-full bg-shimmer-light bg-shimmer animate-shimmer-d1" />
       </div>
-      <div className="flex flex-col items-center justify-center flex-1 gap-3">
-        <div className="h-16 w-28 rounded-lg bg-shimmer-dark bg-shimmer animate-shimmer-d1" />
-        <div className="h-4 w-24 rounded bg-shimmer-light bg-shimmer animate-shimmer-d2" />
-        <div className="w-full h-3 rounded-full bg-shimmer-light bg-shimmer animate-shimmer-d3 mt-2" />
+      <div className="flex flex-col items-center justify-center flex-1 gap-2">
+        <div className="h-12 w-24 rounded-lg bg-shimmer-dark bg-shimmer animate-shimmer-d1" />
+        <div className="h-3 w-20 rounded bg-shimmer-light bg-shimmer animate-shimmer-d2" />
+        <div className="w-full h-2.5 rounded-full bg-shimmer-light bg-shimmer animate-shimmer-d3 mt-2" />
         <div className="flex justify-between w-full">
           <div className="h-3 w-10 rounded bg-shimmer-mid bg-shimmer animate-shimmer-d2" />
           <div className="h-3 w-20 rounded bg-shimmer-mid bg-shimmer animate-shimmer-d3" />
@@ -416,55 +417,55 @@ const CsCohortSkeleton = () => {
     </div>
   );
   const KpiBarBody = () => (
-    <div className="flex-1 flex flex-col items-center justify-center gap-4 px-1">
-      <div className="h-20 w-32 rounded-lg bg-shimmer-dark bg-shimmer animate-shimmer" />
-      <div className="h-4 w-48 rounded bg-shimmer-light bg-shimmer animate-shimmer-d1" />
-      <div className="w-full h-3 rounded-full bg-shimmer-light bg-shimmer animate-shimmer-d2" />
+    <div className="flex-1 flex flex-col items-center justify-center gap-3 px-1">
+      <div className="h-16 w-28 rounded-lg bg-shimmer-dark bg-shimmer animate-shimmer" />
+      <div className="h-3 w-40 rounded bg-shimmer-light bg-shimmer animate-shimmer-d1" />
+      <div className="w-full h-2.5 rounded-full bg-shimmer-light bg-shimmer animate-shimmer-d2" />
       <div className="flex justify-between w-full">
-        <div className="h-3 w-20 rounded bg-shimmer-mid bg-shimmer animate-shimmer-d3" />
-        <div className="h-3 w-20 rounded bg-shimmer-mid bg-shimmer animate-shimmer-d4" />
+        <div className="h-3 w-16 rounded bg-shimmer-mid bg-shimmer animate-shimmer-d3" />
+        <div className="h-3 w-16 rounded bg-shimmer-mid bg-shimmer animate-shimmer-d4" />
       </div>
     </div>
   );
   const GaugeBody = () => (
-    <div className="flex-1 flex flex-col items-center justify-center gap-4">
-      <div className="relative w-36 h-36">
-        <div className="absolute inset-0 rounded-full border-[10px] border-shimmer-mid bg-shimmer animate-shimmer" />
+    <div className="flex-1 flex flex-col items-center justify-center gap-3">
+      <div className="relative w-28 h-28">
+        <div className="absolute inset-0 rounded-full border-[9px] border-shimmer-mid bg-shimmer animate-shimmer" />
         <div className="absolute inset-0 flex items-center justify-center">
-          <div className="w-14 h-10 bg-shimmer-dark bg-shimmer animate-shimmer-d1 rounded" />
+          <div className="w-12 h-8 bg-shimmer-dark bg-shimmer animate-shimmer-d1 rounded" />
         </div>
       </div>
-      <div className="flex gap-6">
+      <div className="flex gap-5">
         {[1, 2, 3].map((i) => (
           <div key={i} className="text-center">
-            <div className="w-12 h-3 bg-shimmer-light bg-shimmer animate-shimmer rounded mx-auto mb-1" />
-            <div className="w-16 h-5 bg-shimmer-mid bg-shimmer animate-shimmer-d1 rounded" />
+            <div className="w-10 h-3 bg-shimmer-light bg-shimmer animate-shimmer rounded mx-auto mb-1" />
+            <div className="w-14 h-4 bg-shimmer-mid bg-shimmer animate-shimmer-d1 rounded" />
           </div>
         ))}
       </div>
     </div>
   );
   const HBarBody = () => (
-    <div className="flex-1 flex flex-col gap-3 px-1 pt-1">
+    <div className="flex-1 flex flex-col gap-2 px-1 pt-1">
       <div className="flex gap-2">
-        <div className="h-7 w-24 rounded-full bg-shimmer-mid bg-shimmer animate-shimmer" />
-        <div className="h-7 w-16 rounded-full bg-shimmer-light bg-shimmer animate-shimmer-d1" />
+        <div className="h-6 w-20 rounded-full bg-shimmer-mid bg-shimmer animate-shimmer" />
+        <div className="h-6 w-14 rounded-full bg-shimmer-light bg-shimmer animate-shimmer-d1" />
       </div>
       {[80, 55, 40, 30, 20].map((w, i) => (
         <div key={i} className="flex items-center gap-2">
-          <div className={`h-3 w-24 rounded bg-shimmer-light bg-shimmer animate-shimmer-d${(i % 5) + 1} flex-shrink-0`} />
-          <div className={`h-6 rounded bg-shimmer-mid bg-shimmer animate-shimmer-d${(i % 5) + 1}`} style={{ width: `${w}%` }} />
+          <div className={`h-3 w-20 rounded bg-shimmer-light bg-shimmer animate-shimmer-d${(i % 5) + 1} flex-shrink-0`} />
+          <div className={`h-5 rounded bg-shimmer-mid bg-shimmer animate-shimmer-d${(i % 5) + 1}`} style={{ width: `${w}%` }} />
         </div>
       ))}
       <div className="flex gap-2 flex-wrap mt-auto">
         {[60, 80, 50, 65].map((w, i) => (
-          <div key={i} className={`h-5 rounded-full bg-shimmer-light bg-shimmer animate-shimmer-d${i + 1}`} style={{ width: `${w}px` }} />
+          <div key={i} className={`h-4 rounded-full bg-shimmer-light bg-shimmer animate-shimmer-d${i + 1}`} style={{ width: `${w}px` }} />
         ))}
       </div>
     </div>
   );
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(380px, 1fr))", gap: "20px" }}>
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: "20px" }}>
       {cardShell(<ScoreRangeBody />)}
       {cardShell(<ScoreRangeBody />)}
       {cardShell(<KpiBarBody />)}
@@ -475,13 +476,11 @@ const CsCohortSkeleton = () => {
 };
 
 // ── Cohort Selection tab ──────────────────────────────────────────────────────
-// universalMetrics → ecosystem bars (all applications across every catalyst)
-// portfolioMetrics → amber line overlay (current user's Active Support + Approved)
 const CohortSelectionTabContent = () => {
   const { universalMetrics, portfolioMetrics, loading } = usePortfolio();
   if (loading) return <CsCohortSkeleton />;
   return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(380px, 1fr))", gap: "20px" }}>
+    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: "20px" }}>
       <CsAverageMatchStrength metrics={universalMetrics} portfolioMetrics={portfolioMetrics} />
       <CsAverageBIGScore      metrics={universalMetrics} portfolioMetrics={portfolioMetrics} />
       <CsFundingReadinessRate metrics={universalMetrics} />
@@ -495,11 +494,9 @@ const CohortSelectionTabContent = () => {
 export function AcceleratorInsights({ isCatalystProfile }) {
   const [activeTab, setActiveTab] = useState("cohort-selection");
 
-  // All data sourced from the universal batch — same view for every logged-in user
   const { universalEnriched, universalMetrics, loading } = usePortfolio();
   const apps = universalEnriched || [];
 
-  // ── Sector category helpers ───────────────────────────────────────────────
   const sectorCategoryMap = {
     "Healthcare / Nursing / Medical": "Health & Social Services",
     "NGO / Non-Profit / Community Services": "Health & Social Services",
@@ -545,7 +542,6 @@ export function AcceleratorInsights({ isCatalystProfile }) {
     "Technology & Engineering": 0, "Science, Research & Education": 0, "Other": 0,
   });
 
-  // ── viewType → program type key ───────────────────────────────────────────
   const viewTypeKey = (vt) => {
     const n = (vt || "").toLowerCase();
     if (n.includes("accelerat"))    return "accelerator";
@@ -556,13 +552,10 @@ export function AcceleratorInsights({ isCatalystProfile }) {
     return "hybrid";
   };
 
-  // ── isApproved helper ─────────────────────────────────────────────────────
   const isApproved = (a) => {
     const s = (a.pipelineStage || a.status || "").toLowerCase();
     return s.includes("support approved") || s.includes("active support") || s.includes("deal closed");
   };
-
-  // ── Data processors — all sourced from universalEnriched / universalMetrics ─
 
   const processSupportTypeBreakdown = () => {
     const types = { grant_based: 0, mentorship: 0, training_education: 0, incubator: 0, accelerator: 0, hybrid: 0 };
@@ -570,10 +563,8 @@ export function AcceleratorInsights({ isCatalystProfile }) {
     return types;
   };
 
-  // Uses universalMetrics.lifecycle which is already keyed by operationStage
   const processActiveProgramsByStage = () => universalMetrics?.lifecycle || {};
 
-  // Top 3 SMEs by oldest applicationDate — represents longest-running engagements
   const processLongestActiveSMEs = () =>
     [...apps]
       .filter(a => a.applicationDate)
@@ -585,7 +576,6 @@ export function AcceleratorInsights({ isCatalystProfile }) {
         daysSinceSubmission: Math.floor((Date.now() - new Date(a.applicationDate)) / 86400000),
       }));
 
-  // Groups by supportRequired field — maps to the same snake_case keys fmtLabel expects
   const processProgramsBySector = () => {
     const types = { funding_support: 0, market_access: 0, technology: 0, capacity_building: 0, social_impact: 0 };
     apps.forEach(a => {
@@ -620,8 +610,6 @@ export function AcceleratorInsights({ isCatalystProfile }) {
     return cats;
   };
 
-  // "With Catalyst Support" = Support Approved / Active Support
-  // "In Pipeline" = all other stages
   const processBigScoreComparison = () => {
     let withT = 0, withC = 0, pipeT = 0, pipeC = 0;
     apps.forEach(a => {
@@ -711,7 +699,6 @@ export function AcceleratorInsights({ isCatalystProfile }) {
     return days.length ? Math.round(days.reduce((a, b) => a + b, 0) / days.length) : 0;
   };
 
-  // ── Stat card values ──────────────────────────────────────────────────────
   const insightsData = {
     matchRate:                    universalMetrics?.match?.avg           ?? 0,
     averageFundingAmount:         universalMetrics?.funding?.avg         ?? 0,
@@ -734,7 +721,6 @@ export function AcceleratorInsights({ isCatalystProfile }) {
 
   const memoizedInsights = useDeepCompareMemo(insightsData);
 
-  // ── Chart refs ────────────────────────────────────────────────────────────
   const ceilMax = (vals) => Math.ceil(Math.max(0, ...(vals || []).map(v => Number(v) || 0)));
   const fmtLabel = (l) => l.split("_").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
   const csHBarOptsWithMax = (xTitle, max, stacked = false, tickCb) => ({
@@ -751,9 +737,6 @@ export function AcceleratorInsights({ isCatalystProfile }) {
     },
   });
 
-  
-
-  // ── Tab config ────────────────────────────────────────────────────────────
   const tabs = [
     { id: "cohort-selection",       label: "Ecosystem Selection",      icon: Users    },
     { id: "program-types",          label: "Catalyst Types & Reach",   icon: Rocket   },
@@ -836,7 +819,7 @@ export function AcceleratorInsights({ isCatalystProfile }) {
             <CsCard title="Top 3 Longest Active SMEs">
               <div className="flex flex-col gap-0 flex-1">
                 {memoizedInsights.longestRunningPrograms.map((prog, i) => (
-                  <div key={i} className="flex items-center gap-3 py-3 border-b border-lightTan last:border-0">
+                  <div key={i} className="flex items-center gap-3 py-2.5 border-b border-lightTan last:border-0">
                     <span className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0 ${i === 0 ? "bg-accentGold" : i === 1 ? "bg-lightBrown" : "bg-lightTan text-textBrown"}`}>#{i + 1}</span>
                     <span className="flex-1 text-sm text-textBrown font-medium truncate">{prog.name}</span>
                     <span className="text-xs text-lightBrown whitespace-nowrap">{prog.daysSinceSubmission}d ago</span>
