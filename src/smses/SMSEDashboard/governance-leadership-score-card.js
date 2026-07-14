@@ -781,10 +781,10 @@ Evidence: (cite specific data — including openness to advice, any conflict-of-
     <>
       {/* ── Score Card ── */}
       <div style={{ background: "linear-gradient(135deg, #ffffff 0%, #faf8f6 100%)", borderRadius: "20px", boxShadow: "0 8px 32px rgba(141, 110, 99, 0.15)", border: "1px solid #e8ddd6", overflow: "hidden", position: "relative", width: "100%", minWidth: "210px" }}>
-        <div style={{ background: "linear-gradient(135deg, #8d6e63 0%, #6d4c41 100%)", padding: "24px 30px 20px 30px", color: "white", position: "relative" }}>
+        <div style={{ background: "linear-gradient(135deg, #8d6e63 0%, #6d4c41 100%)", padding: "24px 20px 20px 20px", color: "white", position: "relative" }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
-            <h2 style={{ margin: 0, fontSize: "15px", fontWeight: "700", letterSpacing: "0.5px", whiteSpace: "nowrap" }}>Leadership&Governance</h2>
-            <Users size={24} style={{ opacity: 0.8 }} />
+            <h2 style={{ margin: 0, fontSize: "15px", fontWeight: "700", letterSpacing: "0.5px", whiteSpace: "nowrap" }}>Leadership &amp; Governance</h2>
+           
           </div>
           <p style={{ margin: 0, fontSize: "13px", opacity: 0.9 }}>Who's in charge, and can we trust them</p>
           <div style={{ position: "absolute", top: "-20px", right: "-20px", width: "80px", height: "80px", background: "rgba(255,255,255,0.1)", borderRadius: "50%", opacity: 0.6 }} />
@@ -824,7 +824,7 @@ Evidence: (cite specific data — including openness to advice, any conflict-of-
             </button>
             <div style={{ padding: "30px 20px 20px 20px" }}>
               <h3 style={{ margin: "0 0 20px 0", fontSize: "24px", fontWeight: "600", color: "#5d4037", textAlign: "center" }}>
-                Leadership & Governance Score breakdown
+                Leadership &amp; Governance Score breakdown
               </h3>
 
               <div style={{ textAlign: "center", marginBottom: "30px", padding: "20px", background: "linear-gradient(135deg, #fdf8f6 0%, #f3e8dc 100%)", borderRadius: "12px", border: "1px solid #d6b88a" }}>
@@ -864,16 +864,16 @@ Evidence: (cite specific data — including openness to advice, any conflict-of-
                 {showAboutScore && (
                   <div style={{ backgroundColor: "#f5f2f0", padding: "20px", color: "#5d4037", fontSize: "13px", lineHeight: 1.6 }}>
                     <p style={{ marginBottom: "14px" }}>
-                      Leadership & Governance answers one question for a funder: <strong>can we trust the people and decision-making structures behind this business?</strong> It replaces the old separate Leadership and Governance/PIS cards with a single view across three weighted areas:
+                      Leadership &amp; Governance answers one question for a funder: <strong>can we trust the people and decision-making structures behind this business?</strong> It replaces the old separate Leadership and Governance/PIS cards with a single view across three weighted areas:
                     </p>
                     <ul style={{ margin: "0 0 14px 0", paddingLeft: "18px" }}>
-                      <li><strong>Ownership & Structure ({SECTION_WEIGHTS.ownership}%)</strong> — directors, shareholders, succession, and the Public Interest Score (PIS) that decides your governance stage</li>
+                      <li><strong>Ownership &amp; Structure ({SECTION_WEIGHTS.ownership}%)</strong> — directors, shareholders, succession, and the Public Interest Score (PIS) that decides your governance stage</li>
                       <li><strong>Leadership Quality ({SECTION_WEIGHTS.leadership}%)</strong> — founder experience, qualifications, industry expertise, execution capability, ambition, learning mindset</li>
-                      <li><strong>Governance Maturity ({SECTION_WEIGHTS.maturity}%)</strong> — board, advisors, policies, reporting, risk management, integrity & risk, sanctions, conflicts, legal, reputation</li>
+                      <li><strong>Governance Maturity ({SECTION_WEIGHTS.maturity}%)</strong> — board, advisors, policies, reporting, risk management, integrity &amp; risk, sanctions, conflicts, legal, reputation</li>
                     </ul>
 
                     <div style={{ backgroundColor: "#efebe9", padding: "16px", borderRadius: "8px", borderLeft: "4px solid #8d6e63" }}>
-                      <p style={{ fontWeight: "bold", marginBottom: "10px", color: "#6d4c41" }}>Public Interest Score (PIS) — the number behind Ownership & Structure</p>
+                      <p style={{ fontWeight: "bold", marginBottom: "10px", color: "#6d4c41" }}>Public Interest Score (PIS) — the number behind Ownership &amp; Structure</p>
                       <p style={{ marginBottom: "8px" }}>PIS decides which governance stage a business sits in:</p>
                       <ul style={{ margin: "0 0 10px 0", paddingLeft: "18px", color: "#6d4c41" }}>
                         <li style={{ marginBottom: "4px" }}>PIS &lt; 100: <strong>Advisors Stage</strong> — light governance structures suitable for smaller operations</li>
@@ -889,7 +889,7 @@ Evidence: (cite specific data — including openness to advice, any conflict-of-
               </div>
 
               <div style={{ fontSize: "11px", color: "#8d6e63", marginBottom: "6px", display: "flex", justifyContent: "space-around" }}>
-                <span>Ownership & Structure {SECTION_WEIGHTS.ownership}%</span>
+                <span>Ownership &amp; Structure {SECTION_WEIGHTS.ownership}%</span>
                 <span>Leadership Quality {SECTION_WEIGHTS.leadership}%</span>
                 <span>Governance Maturity {SECTION_WEIGHTS.maturity}%</span>
               </div>

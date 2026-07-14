@@ -526,7 +526,7 @@ const Governance = ({ data, updateData }) => {
         </div>
       </div>
 
-      {/* Conflict of Interest Section */}
+      {/* Conflict of Interest Section - FIXED */}
       <div className="mb-8">
         <h3 className="text-xl font-semibold text-brown-700 mt-6 mb-6 border-b border-brown-200 pb-2">
           Conflict of Interest
@@ -539,12 +539,20 @@ const Governance = ({ data, updateData }) => {
                 name="membersHaveMultipleBusinesses"
                 value={formData.membersHaveMultipleBusinesses || ""}
                 onChange={(e) => {
-                  handleChange(e)
-                  if (e.target.value === "No") {
-                    const updated = { ...formData, conflictOfInterest: [] }
-                    setFormData(updated)
-                    updateData("governance", updated)
+                  const newValue = e.target.value;
+                  // Create updated object with the new value
+                  const updatedFormData = { 
+                    ...formData, 
+                    membersHaveMultipleBusinesses: newValue 
+                  };
+                  
+                  // If "No" is selected, clear conflict of interest entries
+                  if (newValue === "No") {
+                    updatedFormData.conflictOfInterest = [];
                   }
+                  
+                  setFormData(updatedFormData);
+                  updateData("governance", updatedFormData);
                 }}
                 className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
                 required
@@ -561,14 +569,14 @@ const Governance = ({ data, updateData }) => {
           <div className="mt-4">
             <div className="flex items-center justify-between mb-4">
               <h4 className="text-md font-medium text-brown-700">Members' Other Business Interests</h4>
-             <button
-  type="button"
-  onClick={handleAddConflictOfInterest}
-  className="flex items-center gap-2 px-4 py-2 bg-stone-700 text-white rounded-md hover:bg-stone-800 transition-colors font-medium"
->
-  <Plus className="w-4 h-4" />
-  Add Member
-</button>
+              <button
+                type="button"
+                onClick={handleAddConflictOfInterest}
+                className="flex items-center gap-2 px-4 py-2 bg-stone-700 text-white rounded-md hover:bg-stone-800 transition-colors font-medium"
+              >
+                <Plus className="w-4 h-4" />
+                Add Member
+              </button>
             </div>
 
             {(formData.conflictOfInterest || []).length === 0 && (
@@ -703,7 +711,7 @@ const Governance = ({ data, updateData }) => {
         handleTransparencyChange
       )}
 
-      {/* Risk & Legal Section */}
+      {/* Risk & Legal Section - FIXED */}
       <div className="mb-8">
         <h3 className="text-xl font-semibold text-brown-700 mt-6 mb-6 border-b border-brown-200 pb-2">
           Risk & Legal
@@ -716,12 +724,15 @@ const Governance = ({ data, updateData }) => {
                 name="adverseListings"
                 value={formData.adverseListings || ""}
                 onChange={(e) => {
-                  handleChange(e)
-                  if (e.target.value === "No") {
-                    const updated = { ...formData, adverseListingsDetails: "" }
-                    setFormData(updated)
-                    updateData("governance", updated)
+                  const newValue = e.target.value;
+                  const updatedFormData = { ...formData, adverseListings: newValue };
+                  
+                  if (newValue === "No") {
+                    updatedFormData.adverseListingsDetails = "";
                   }
+                  
+                  setFormData(updatedFormData);
+                  updateData("governance", updatedFormData);
                 }}
                 className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
               >
@@ -750,12 +761,15 @@ const Governance = ({ data, updateData }) => {
                 name="courtNotices"
                 value={formData.courtNotices || ""}
                 onChange={(e) => {
-                  handleChange(e)
-                  if (e.target.value === "No") {
-                    const updated = { ...formData, courtNoticesDetails: "" }
-                    setFormData(updated)
-                    updateData("governance", updated)
+                  const newValue = e.target.value;
+                  const updatedFormData = { ...formData, courtNotices: newValue };
+                  
+                  if (newValue === "No") {
+                    updatedFormData.courtNoticesDetails = "";
                   }
+                  
+                  setFormData(updatedFormData);
+                  updateData("governance", updatedFormData);
                 }}
                 className="w-full px-3 py-2 border border-brown-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brown-500"
               >
