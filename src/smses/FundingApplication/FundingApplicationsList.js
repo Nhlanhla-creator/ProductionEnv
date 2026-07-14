@@ -1,7 +1,7 @@
 "use client"
 
 import { Fragment, useState, useEffect } from "react"
-import { collection, query, where, getDocs, orderBy, deleteDoc, doc } from "firebase/firestore"
+import { collection, query, where, getDocs, orderBy, deleteDoc, doc, getDoc, addDoc, setDoc, serverTimestamp } from "firebase/firestore"
 import { db, auth } from "../../firebaseConfig"
 import { Eye, FileText, Brain, Calendar, Plus, RefreshCw, Trash2, CheckCircle, Clock, AlertCircle, Hash, ChevronDown, ChevronUp, DollarSign, UserCheck } from "lucide-react"
 import FundingMatchesTable from "./FundingMatchesTable"
@@ -50,16 +50,54 @@ const FundingApplicationsList = ({ onViewSummary, onEditApplication, onCreateNew
     try {
       setLoading(true); setError(null)
       let apps = []
-      try {
-        const q = query(collection(db, "fundingApplicationsV2"), where("userId", "==", userId), orderBy("lastUpdated", "desc"))
-        const snapshot = await getDocs(q)
-        snapshot.forEach((d) => apps.push(formatAppData(d.id, d.data())))
-      } catch {
-        const q = query(collection(db, "fundingApplicationsV2"), where("userId", "==", userId))
-        const snapshot = await getDocs(q)
+      
+      // Check if any apps exist in fundingApplicationsV2
+      const qNew = query(collection(db, "fundingApplicationsV2"), where("userId", "==", userId))
+      const snapshot = await getDocs(qNew)
+      
+      if (snapshot.empty) {
+        // If no apps exist in fundingApplicationsV2, check universalProfiles for legacy app
+        const upDocRef = doc(db, "universalProfiles", userId)
+        const upSnap = await getDoc(upDocRef)
+        if (upSnap.exists()) {
+          const upData = upSnap.data()
+          if (upData.applicationOverview || upData.useOfFunds || upData.completedSections) {
+            // Seed the legacy application
+            const newAppPayload = {
+              userId: userId,
+              userEmail: auth.currentUser?.email || "",
+              status: upData.status || (upData.applicationSubmitted ? "submitted" : "in_progress"),
+              createdAt: serverTimestamp(),
+              lastUpdated: serverTimestamp(),
+              completedSections: upData.completedSections || {},
+            }
+            
+            const possibleFields = [
+              "applicationOverview", "useOfFunds", "enterpriseReadiness",
+              "financialOverview", "guarantees", "growthPotential",
+              "socialImpact", "documentUpload", "declarationCommitment"
+            ]
+            possibleFields.forEach(field => {
+              if (upData[field]) {
+                newAppPayload[field] = upData[field]
+              }
+            })
+            
+            await addDoc(collection(db, "fundingApplicationsV2"), newAppPayload)
+            
+            // Mark universalProfile as seeded so we don't try again
+            await setDoc(upDocRef, { legacyFundingSeeded: true }, { merge: true })
+            
+            // Re-fetch now that it's seeded
+            const snapshotRefreshed = await getDocs(qNew)
+            snapshotRefreshed.forEach((d) => apps.push(formatAppData(d.id, d.data())))
+          }
+        }
+      } else {
         snapshot.forEach((d) => apps.push(formatAppData(d.id, d.data())))
         apps.sort((a, b) => (b.lastUpdatedTimestamp || 0) - (a.lastUpdatedTimestamp || 0))
       }
+      
       setApplications(apps)
       await fetchMatchCounts(userId)
     } catch (err) { setError(err.message) }

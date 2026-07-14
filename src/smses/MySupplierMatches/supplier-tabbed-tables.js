@@ -762,7 +762,8 @@ const SupplierTabbedTables = ({
   onSupplierContacted,
   onSuppliersUpdate,
   defaultActiveTab = "my-matches",
-  onNewRequest = null
+  onNewRequest = null,
+  contactedSuppliers = []
 }) => {
   const [activeTab, setActiveTab] = useState(defaultActiveTab)
   const [allSuppliers, setAllSuppliers] = useState([])
@@ -974,6 +975,7 @@ const SupplierTabbedTables = ({
             <GroupedSupplierMatches
               onSuppliersUpdate={handleSuppliersUpdate}
               onSupplierContacted={onSupplierContacted}
+              contactedSuppliers={contactedSuppliers}
             />
           </div>
         )}

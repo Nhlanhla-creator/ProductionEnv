@@ -15,7 +15,7 @@ import SupplierMatchesTable from "./SupplierMatchesTable"
  * filtered to only the suppliers relevant to that application (via the
  * category-match logic in useMatches).
  */
-const GroupedSupplierMatches = ({ onSuppliersUpdate, onSupplierContacted }) => {
+const GroupedSupplierMatches = ({ onSuppliersUpdate, onSupplierContacted, contactedSuppliers = [] }) => {
   const navigate = useNavigate()
   const { applications, suppliers, matchesByAppId, allMatches, refreshAiCache, loading, error } = useMatches()
 
@@ -363,10 +363,11 @@ const GroupedSupplierMatches = ({ onSuppliersUpdate, onSupplierContacted }) => {
 
             <SupplierMatchesTable
               suppliers={matches}
+              contactedSuppliers={contactedSuppliers}
               showIneligibleSuppliers={showIneligibleSuppliers}
               onContact={
                 onSupplierContacted
-                  ? (supplier) => onSupplierContacted(supplier.id)
+                  ? (supplier) => onSupplierContacted(supplier)
                   : undefined
               }
               emptyMessage="No supplier matches for this application yet."
