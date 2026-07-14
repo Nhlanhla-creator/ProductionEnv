@@ -25,6 +25,7 @@ import {
   Layers,
   Truck,
   Briefcase,
+  TrendingUp,
 } from "lucide-react"
 
 const ProfileSummary = ({ data, onEdit }) => {
@@ -95,6 +96,11 @@ const ProfileSummary = ({ data, onEdit }) => {
   }
 
   const formatBoolean = (value) => (value ? "✅ Yes" : "❌ No")
+
+  const formatArray = (arr) => {
+    if (!arr || !arr.length) return "None specified"
+    return arr.map(formatLabel).join(" • ")
+  }
 
   const handleEdit = () => { if (onEdit) onEdit() }
 

@@ -30,6 +30,7 @@ import {
   TrendingUp,
   LayoutDashboard,
   ListChecks,
+  Handshake,
 
 } from "lucide-react";
 
@@ -791,3 +792,89 @@ export const smeMenuItems = [
     route: "/settings",
   },
 ];
+
+// ─── Capital and Market Facilitator Menu Items ────────────────────────────────
+export const capitalMarketFacilitatorMenuItems = [
+  {
+    id: "home",
+    label: "Home",
+    icon: <Home size={18} />,
+    route: "/cmf-home",
+  },
+  {
+    id: "profile",
+    label: "My Profile",
+    icon: <User size={18} />,
+    route: "/cmf-profile",
+  },
+  {
+    id: "matches",
+    label: "My Matches",
+    icon: <Handshake size={18} />,
+    route: "/cmf-matches",
+  },
+  {
+    id: "cohorts",
+    label: "My Cohorts",
+    icon: <Users size={18} />,
+    route: "/cmf-cohorts",
+  },
+  {
+    id: "insights",
+    label: "BIG Insights",
+    icon: <Lightbulb size={18} />,
+    route: "/cmf-insights",
+  },
+  {
+    id: "documents",
+    label: "My Documents",
+    icon: <FileText size={18} />,
+    route: "/cmf-documents",
+  },
+  {
+    id: "messages",
+    label: "My Messages",
+    icon: <MessageSquare size={18} />,
+    route: "/cmf-messages",
+  },
+  {
+    id: "calendar",
+    label: "My Calendar",
+    icon: <Calendar size={18} />,
+    route: "/cmf-calendar",
+  },
+  {
+    id: "billing",
+    label: "Billing & Payments",
+    icon: <CreditCard size={18} />,
+    route: "/cmf/billing",
+    hasSubmenu: true,
+    subItems: [
+      {
+        id: "billing-info",
+        label: "Billing Information",
+        icon: <DollarSign size={16} />,
+        route: "/cmf/billing/info",
+      },
+      {
+        id: "subscriptions",
+        label: "Subscriptions",
+        icon: <Repeat size={16} />,
+        route: "/cmf/billing/subscriptions",
+      },
+      {
+        id: "transactions",
+        label: "Billing History",
+        icon: <Package size={16} />,
+        route: "/cmf/billing/history",
+      },
+    ],
+  },
+  {
+    id: "settings",
+    label: "Settings",
+    icon: <Settings size={18} />,
+    route: "/cmf-settings",
+  },
+];
+// ─────────────────────────────────────────────────────────────────────────────

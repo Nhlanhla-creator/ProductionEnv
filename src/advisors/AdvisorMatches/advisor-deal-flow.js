@@ -23,6 +23,7 @@ const fetchStageCounts = async () => {
   const counts = {
     "New Match": 0,
     "Evaluation": 0,
+    "Contacted": 0,
     "Due Diligence": 0,
     "Decision": 0,
     "Term Issue": 0,

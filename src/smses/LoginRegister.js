@@ -125,6 +125,7 @@ const ROLE_CARDS = [
     icon: <Award size={20} />,
     hoverInfo: "Sponsor internship programs and build talent pipelines.",
   },
+
 ];
 
 // Comprehensive error message mapping with safe fallbacks
@@ -312,6 +313,7 @@ export default function LoginRegister() {
       "Business Association": <Globe size={16} />,
       "BusinessAssociation": <Globe size={16} />,
       "Association and Member Organisations": <Globe size={16} />,
+      "Capital and Market Facilitator": <Handshake size={16} />,
       // Backward compatibility
       "Small and Medium Social Enterprises": <Briefcase size={16} />,
       SMSEs: <Briefcase size={16} />,
@@ -345,6 +347,9 @@ export default function LoginRegister() {
       "InternSponsor": "/intern-sponsor-profile",
       "Business Association": "/associator-profile",
       "BusinessAssociation": "/associator-profile",
+      "CapitalMarketFacilitators": "/cmf-profile",
+      "Capital and Market Facilitator": "/cmf-profile",
+      "Capital and Market Facilitators": "/cmf-profile",
       // Backward compatibility
       Investor: "/investor-profile",
       INVESTOR: "/investor-profile",
@@ -877,6 +882,9 @@ By using this platform, you confirm that you:
       "InternSponsor": "Intern Sponsor Dashboard",
       "Business Association": "Association and Member Organisations Dashboard",
       "BusinessAssociation": "Association and Member Organisations Dashboard",
+      "CapitalMarketFacilitators": "CMF Dashboard",
+      "Capital and Market Facilitator": "CMF Dashboard",
+      "Capital and Market Facilitators": "CMF Dashboard",
       // Backward compatibility
       "Small and Medium Social Enterprises": "Business Dashboard",
       SMSEs: "Business Dashboard",
@@ -913,6 +921,9 @@ By using this platform, you confirm that you:
       "InternSponsor": "Sponsor internship programs and build talent pipelines",
       "Business Association": "Network, collaborate, and build meaningful partnerships",
       "BusinessAssociation": "Network, collaborate, and build meaningful partnerships",
+      "CapitalMarketFacilitators": "Connect capital, markets, and businesses",
+      "Capital and Market Facilitator": "Connect capital, markets, and businesses",
+      "Capital and Market Facilitators": "Connect capital, markets, and businesses",
       // Backward compatibility
       "Small and Medium Social Enterprises": "Access funding, growth tools, and partnerships",
       SMSEs: "Access funding, growth tools, and partnerships",
@@ -1620,6 +1631,50 @@ By using this platform, you confirm that you:
     </form>
   );
 
+
+
+  const handleSeedCMFRole = async () => {
+    try {
+      const querySnap = await db.collection("users").where("email", "==", "lindelanixaba22@gmail.com").get();
+      if (querySnap.empty) {
+        alert("User document for lindelanixaba22@gmail.com was not found in Firestore. Please register this account first.");
+        return;
+      }
+      
+      let updatedCount = 0;
+      for (const doc of querySnap.docs) {
+        const data = doc.data();
+        let roleArray = data.roleArray || [];
+        let role = data.role || "";
+        const newRole = "Capital and Market Facilitator";
+        
+        let changed = false;
+        if (!roleArray.includes(newRole)) {
+          roleArray.push(newRole);
+          changed = true;
+        }
+        if (!role.includes(newRole)) {
+          role = role ? `${role}, ${newRole}` : newRole;
+          changed = true;
+        }
+        
+        if (changed) {
+          await doc.ref.update({ roleArray, role });
+          updatedCount++;
+        }
+      }
+      
+      if (updatedCount > 0) {
+        alert("Success! CMF Role seeded for lindelanixaba22@gmail.com in Firestore. You can now login or reload to see the CMF Dashboard option!");
+      } else {
+        alert("The user lindelanixaba22@gmail.com already has the CMF role assigned in Firestore.");
+      }
+    } catch (err) {
+      console.error("Error seeding role:", err);
+      alert("Failed to seed CMF role: " + err.message);
+    }
+  };
+
   const renderLoginForm = () => (
     <form
       className="form-step"
@@ -1660,6 +1715,29 @@ By using this platform, you confirm that you:
           </>
         )}
       </button>
+
+      {/* <div style={{ marginTop: "16px", paddingTop: "16px", borderTop: "1px dashed rgba(200, 182, 166, 0.4)", textAlign: "center" }}>
+        <button
+          type="button"
+          onClick={handleSeedCMFRole}
+          style={{
+            padding: "8px 16px",
+            backgroundColor: "#4f46e5",
+            color: "#ffffff",
+            border: "none",
+            borderRadius: "6px",
+            fontSize: "12px",
+            fontWeight: "600",
+            cursor: "pointer",
+            boxShadow: "0 2px 4px rgba(79, 70, 229, 0.2)",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "6px"
+          }}
+        >
+          🔑 Seed CMF Role for lindelanixaba22@gmail.com
+        </button>
+      </div> */}
     </form>
   );
 
