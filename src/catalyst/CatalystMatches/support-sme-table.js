@@ -1,731 +1,646 @@
-import { useState, useEffect } from "react"
-import { BarChart3, MapPin, Calendar, Filter, X, Eye } from "lucide-react"
-import { db, auth, storage } from "../../firebaseConfig"
-import { serverTimestamp, doc, updateDoc, getDoc, addDoc, collection, query, where, getDocs } from "firebase/firestore"
-import { ref, uploadBytes, getDownloadURL } from "firebase/storage"
-import { DayPicker } from "react-day-picker"
-import "react-day-picker/dist/style.css"
-import { usePortfolio } from "../../context/PortfolioContext"
-import SMEDetailsModal from "./SMEDetailsModal"
-import { getFunctions, httpsCallable } from "firebase/functions";
+"use client";
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-const formatLabel = (value) => {
-  if (!value) return ""
-  return value.toString().split(",").map((item) => item.trim()).map((word) => {
-    if (word.toLowerCase() === "ict") return "ICT"
-    if (word.toLowerCase() === "southafrica" || word.toLowerCase() === "south_africa") return "South Africa"
-    return word.split(/[_\s-]+/).map((p) => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase()).join(" ")
-  }).join(", ")
-}
+import React, { useState, useEffect, useMemo } from "react";
+import { 
+  Info, MapPin, Calendar, Filter, X, Eye, BarChart3, Star, 
+  ChevronDown, ChevronUp, MoreVertical, CheckCircle, XCircle,
+  AlertCircle, Clock, TrendingUp, Users, DollarSign, Building,
+  LayoutGrid, Columns, Search, Download, MessageSquare, FileText,
+  Share2, ArrowRight, ArrowUp, ArrowDown, SlidersHorizontal,
+  RotateCcw, Settings, Shield, FileCheck, Target, Briefcase
+} from "lucide-react";
+import { db, auth, storage } from "../../firebaseConfig";
+import { serverTimestamp, doc, updateDoc, getDoc, addDoc, collection, query, where, getDocs } from "firebase/firestore";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { DayPicker } from "react-day-picker";
+import "react-day-picker/dist/style.css";
+import { usePortfolio } from "../../context/PortfolioContext";
+import SMEDetailsModal from "./SMEDetailsModal";
+import { getFunctions } from "firebase/functions";
 
-const getScoreColor = (score) => {
-  if (score >= 80) return "#22c55e"
-  if (score >= 60) return "#f59e0b"
-  return "#ef4444"
-}
+// ─── Constants & Helpers ──────────────────────────────────────────────────────
+const BIG_SCORE_LABELS = {
+  excellent: { min: 80, label: "Excellent", color: "#22c55e", icon: "🟢" },
+  strong: { min: 60, label: "Strong", color: "#86efac", icon: "🟡" },
+  moderate: { min: 40, label: "Moderate", color: "#f59e0b", icon: "🟠" },
+  weak: { min: 20, label: "Weak", color: "#ef4444", icon: "🔴" },
+  critical: { min: 0, label: "Critical", color: "#dc2626", icon: "⭕" }
+};
 
-const STATUS_TYPES = {
-  // current labels
-  "New Application":  { bg: "bg-blue-100", text: "text-blue-700"    },
-  "Application Sent": { bg: "bg-blue-100", text: "text-blue-700"    },
-  "Under Review":     { bg: "bg-orange-100", text: "text-orange-700"  },
-  "In Review":        { bg: "bg-purple-100", text: "text-purple-700"  },
-  Evaluation:         { bg: "bg-purple-100", text: "text-purple-700"  },
-  "Due Diligence":    { bg: "bg-indigo-100", text: "text-indigo-700"  },
-  Shortlisted:        { bg: "bg-green-100", text: "text-green-700"   },
-  Decision:           { bg: "bg-yellow-100", text: "text-yellow-700"  },
-  "Term Sheet":       { bg: "bg-cyan-100", text: "text-cyan-700"    },
-  Active:             { bg: "bg-green-100", text: "text-[#2d5016]"   },
-  Exit:               { bg: "bg-gray-100", text: "text-gray-700"    },
-  Decline:            { bg: "bg-red-100", text: "text-red-700"     },
-  // legacy labels
-  "Support Approved": { bg: "bg-cyan-100", text: "text-cyan-700"    },
-  "Active Support":   { bg: "bg-green-100", text: "text-[#2d5016]"   },
-  "Support Declined": { bg: "bg-red-100", text: "text-red-700"     },
-  Rejected:           { bg: "bg-red-100", text: "text-red-700"     },
-}
-const getStatusClasses = (status) => STATUS_TYPES[status] || { bg: "bg-gray-100", text: "text-gray-600" }
+const MATCH_LABELS = {
+  excellent: { min: 80, label: "Excellent Fit", stars: 5, color: "#22c55e" },
+  strong: { min: 60, label: "Strong Fit", stars: 4, color: "#86efac" },
+  moderate: { min: 40, label: "Moderate Fit", stars: 3, color: "#f59e0b" },
+  weak: { min: 20, label: "Weak Fit", stars: 2, color: "#ef4444" },
+  poor: { min: 0, label: "Poor Fit", stars: 1, color: "#dc2626" }
+};
+
+const getBigScoreLabel = (score) => {
+  for (const [key, value] of Object.entries(BIG_SCORE_LABELS)) {
+    if (score >= value.min) return value;
+  }
+  return BIG_SCORE_LABELS.critical;
+};
+
+const getMatchLabel = (score) => {
+  for (const [key, value] of Object.entries(MATCH_LABELS)) {
+    if (score >= value.min) return value;
+  }
+  return MATCH_LABELS.poor;
+};
+
+const STATUS_STYLES = {
+  "Matching": { bg: "#f5f0e1", text: "#7d5a50", border: "#c8b6a6", dot: "#7d5a50" },
+  "Application": { bg: "#f0e6d9", text: "#4a352f", border: "#c8b6a6", dot: "#4a352f" },
+  "Evaluation": { bg: "#faf7f2", text: "#7d5a50", border: "#c8b6a6", dot: "#7d5a50" },
+  "Due Diligence": { bg: "#f5f0e1", text: "#4a352f", border: "#c8b6a6", dot: "#4a352f" },
+  "Decision": { bg: "#f0e6d9", text: "#7d5a50", border: "#c8b6a6", dot: "#7d5a50" },
+  "Term Sheet": { bg: "#faf7f2", text: "#4a352f", border: "#c8b6a6", dot: "#4a352f" },
+  "Active": { bg: "#e6d7c3", text: "#4a352f", border: "#a67c52", dot: "#4a352f" },
+  "Exited": { bg: "#e6d7c3", text: "#7d5a50", border: "#c8b6a6", dot: "#7d5a50" },
+  "Decline": { bg: "#f0e6d9", text: "#a67c52", border: "#c8b6a6", dot: "#a67c52" },
+  "On Hold": { bg: "#f5f0e1", text: "#7d5a50", border: "#c8b6a6", dot: "#7d5a50" },
+  "Rejected": { bg: "#f0e6d9", text: "#a67c52", border: "#c8b6a6", dot: "#a67c52" },
+  "Withdrawn": { bg: "#f0e6d9", text: "#a67c52", border: "#c8b6a6", dot: "#a67c52" }
+};
+
+const getStatusStyle = (status) => {
+  if (!status) return STATUS_STYLES["Matching"];
+  const statusLower = status.toLowerCase();
+  for (const [key, value] of Object.entries(STATUS_STYLES)) {
+    if (statusLower.includes(key.toLowerCase())) return value;
+  }
+  return { bg: "#f5f0e1", text: "#7d5a50", border: "#c8b6a6", dot: "#7d5a50" };
+};
 
 const PIPELINE_STAGES = {
-  // current
-  "NEW APPLICATION":  { label: "New Application",  next: "Application Sent" },
-  "APPLICATION SENT": { label: "Application Sent", next: "Evaluation"        },
-  EVALUATION:         { label: "Evaluation",        next: "Due Diligence"    },
-  "DUE DILIGENCE":    { label: "Due Diligence",     next: "Decision"         },
-  DECISION:           { label: "Decision",          next: "Term Sheet"       },
-  "TERM SHEET":       { label: "Term Sheet",        next: "Active"           },
-  ACTIVE:             { label: "Active",            next: "N/A"              },
-  EXIT:               { label: "Exit",              next: "N/A"              },
-  DECLINE:            { label: "Decline",           next: "N/A"              },
-  // legacy
-  "SUPPORT APPROVED": { label: "Support Approved",  next: "Active"           },
-  "ACTIVE SUPPORT":   { label: "Active Support",    next: "N/A"              },
-  "SUPPORT DECLINED": { label: "Support Declined",  next: "N/A"              },
-}
-const getNextStage = (stage) => {
-  if (stage?.toUpperCase() === "TERM SHEET") return "Active/Decline"
-  return PIPELINE_STAGES[stage?.toUpperCase()]?.next || "N/A"
-}
+  "Matching": "Application",
+  "Application": "Evaluation",
+  "Evaluation": "Due Diligence",
+  "Due Diligence": "Decision",
+  "Decision": "Term Sheet",
+  "Term Sheet": "Active",
+  "Active": "Exited"
+};
 
-// ─── TruncatedText ─────────────────────────────────────────────────────────────
-const TruncatedText = ({ text, maxLines = 2, maxLength = 25 }) => {
-  const [isExpanded, setIsExpanded] = useState(false)
-  if (!text || text === "-" || text === "Not specified" || text === "Various")
-    return <span className="text-gray-400">{text || "-"}</span>
-  const shouldTruncate = text.length > maxLength
-  const displayText = isExpanded || !shouldTruncate ? text : `${text.slice(0, maxLength)}...`
-  return (
-    <div className={`leading-[1.2] ${isExpanded ? "" : "overflow-hidden"}`}
-      style={{ maxHeight: isExpanded ? "none" : `${maxLines * 1.2}em` }}>
-      <span className="break-words overflow-wrap-anywhere"
-        style={{
-          display: "-webkit-box",
-          WebkitLineClamp: isExpanded ? "none" : maxLines,
-          WebkitBoxOrient: "vertical",
-          overflow: isExpanded ? "visible" : "hidden",
-        }}>
-        {displayText}
-      </span>
-      {shouldTruncate && (
-        <button
-          className="text-accentGold text-[0.6rem] underline cursor-pointer block mt-0.5 bg-transparent border-none p-0"
-          onClick={(e) => { e.stopPropagation(); setIsExpanded(!isExpanded) }}>
-          {isExpanded ? "Less" : "See more"}
-        </button>
-      )}
-    </div>
-  )
-}
+const getNextStage = (currentStage) => {
+  for (const [key, next] of Object.entries(PIPELINE_STAGES)) {
+    if (currentStage?.toLowerCase().includes(key.toLowerCase())) return next;
+  }
+  return "Application";
+};
 
-// ─── Table Skeleton ────────────────────────────────────────────────────────────
-const COLS = 14
-const TableSkeleton = () => (
-  <div className="rounded-md border border-lightTan shadow-sm w-full overflow-x-auto">
-    <table className="w-full border-collapse bg-offWhite text-[0.75rem]" style={{ tableLayout: "fixed" }}>
-      <thead>
-        <tr>
-          {Array.from({ length: COLS }).map((_, i) => (
-            <th key={i} className="py-1.5 px-0.5 bg-gradient-to-br from-[#4e2106] to-darkBrown border-b-2 border-r border-[#1a0c02]">
-              <div className={`h-2.5 rounded bg-white/20 ${["animate-shimmer-d1", "animate-shimmer-d2", "animate-shimmer-d3", "animate-shimmer-d4", "animate-shimmer-d5", "animate-shimmer", "animate-shimmer-d1", "animate-shimmer-d2", "animate-shimmer-d3", "animate-shimmer-d4", "animate-shimmer-d5", "animate-shimmer", "animate-shimmer-d1", "animate-shimmer-d2"][i]} bg-shimmer-dark bg-shimmer`} />
-            </th>
-          ))}
-        </tr>
-      </thead>
-      <tbody>
-        {Array.from({ length: 6 }).map((_, row) => (
-          <tr key={row} className="border-b border-lightTan">
-            {Array.from({ length: COLS }).map((_, col) => (
-              <td key={col} className="py-1.5 px-0.5 border-r border-lightTan align-top">
-                <div className={`h-3 rounded bg-shimmer-light bg-shimmer ${["animate-shimmer", "animate-shimmer-d1", "animate-shimmer-d2", "animate-shimmer-d3", "animate-shimmer-d4", "animate-shimmer-d5"][col % 6]
-                  } ${col === 0 ? "w-3/4" : col % 3 === 0 ? "w-1/2" : "w-5/6"}`} />
-               </td>
-            ))}
-           </tr>
-        ))}
-      </tbody>
-    </table>
-  </div>
-)
-
-// ─── Shared class strings ──────────────────────────────────────────────────────
-const TH = "py-1.5 px-0.5 text-left font-semibold text-[0.7rem] uppercase tracking-[0.2px] sticky top-0 z-10 border-b-2 border-r border-[#1a0c02] align-top leading-[1.1] text-offWhite bg-gradient-to-br from-[#4e2106] to-darkBrown"
-const TD = "py-1.5 px-0.5 border-b border-r border-lightTan text-[0.75rem] align-top text-textBrown leading-[1.2] break-words"
-const INPUT = "w-full px-3 py-2.5 border-2 border-[#c8b6a6] rounded-lg text-base bg-[#f5f0e1] focus:outline-none focus:border-accentGold"
-const INPUT_ERR = "w-full px-3 py-2.5 border-2 border-red-500 rounded-lg text-base bg-[#f5f0e1] focus:outline-none"
-const MODAL_OVERLAY = "fixed inset-0 bg-black/50 flex items-center justify-center z-[1000]"
-const MODAL_BOX = "bg-white rounded-[20px] p-10 max-w-[900px] w-[95%] max-h-[90vh] overflow-y-auto shadow-[0_20px_60px_rgba(62,39,35,0.5)] relative"
-const LABEL = "block text-base font-semibold text-textBrown mb-3"
-const BTN_PRIMARY = "px-6 py-3 bg-mediumBrown text-white border-none rounded-lg cursor-pointer font-semibold text-base hover:bg-darkBrown transition-colors"
-const BTN_GHOST = "px-6 py-3 bg-transparent text-gray-500 border-2 border-gray-300 rounded-lg cursor-pointer font-medium text-base hover:border-gray-400 transition-colors"
+const formatCurrency = (value) => {
+  if (!value || value === "-" || value === "N/A") return value;
+  const num = parseFloat(value.toString().replace(/[^0-9.]/g, ""));
+  if (isNaN(num)) return value;
+  if (num >= 1000000) return `R${(num / 1000000).toFixed(1)}M`;
+  if (num >= 1000) return `R${(num / 1000).toFixed(0)}K`;
+  return `R${num}`;
+};
 
 // ─── Component ────────────────────────────────────────────────────────────────
 export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOverride }) {
-  const [smes, setSmes] = useState([])
-  const [selectedSME, setSelectedSME] = useState(null)
-  const [modalType, setModalType] = useState(null)
-  const [message, setMessage] = useState("")
-  const [formErrors, setFormErrors] = useState({})
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [isNDASharing, setIsNDASharing] = useState({}) 
-  const [notification, setNotification] = useState(null)
-  const [showStageModal, setShowStageModal] = useState(false)
-  const [selectedSMEForStage, setSelectedSMEForStage] = useState(null)
-  const [updatedStages, setUpdatedStages] = useState({})
-  const [nextStage, setNextStage] = useState("")
-  const [meetingTime, setMeetingTime] = useState("")
-  const [meetingLocation, setMeetingLocation] = useState("")
-  const [meetingPurpose, setMeetingPurpose] = useState("")
-  const [termSheetFile, setTermSheetFile] = useState(null)
-  const [sentNDAs, setSentNDAs] = useState({})
-  const [availabilities, setAvailabilities] = useState([])
-  const [showCalendarModal, setShowCalendarModal] = useState(false)
-  const [tempDates, setTempDates] = useState([])
-  const [timeSlot, setTimeSlot] = useState({ start: "09:00", end: "17:00" })
-  const [timeZone, setTimeZone] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone)
-  const [showMatchBreakdown, setShowMatchBreakdown] = useState(false)
-  const [selectedAcceleratorForBreakdown, setSelectedAcceleratorForBreakdown] = useState(null)
-  const [showSMEDetails, setShowSMEDetails] = useState(false)
-  const [selectedSMEDetails, setSelectedSMEDetails] = useState(null)
-  const [bigScoreData, setBigScoreData] = useState({
-    pis: { score: 0, color: "#4E342E" },
-    compliance: { score: 0, color: "#8D6E63" },
-    legitimacy: { score: 0, color: "#5D4037" },
-    fundability: { score: 0, color: "#3E2723" },
-    leadership: { score: 0, color: "#4E342E" },
-  })
-  const [showFilters, setShowFilters] = useState(false)
+  const [smes, setSmes] = useState([]);
+  const [selectedSME, setSelectedSME] = useState(null);
+  const [expandedRows, setExpandedRows] = useState(new Set());
+  const [columnVisibility, setColumnVisibility] = useState({
+    sme: true,
+    bigScore: true,
+    match: true,
+    fundingStage: true,
+    fundingRequired: true,
+    status: true,
+    applied: true,
+    action: true,
+    location: false,
+    sector: false,
+    equity: false,
+    guarantees: false,
+    support: false,
+    services: false,
+    notes: false,
+    assignedUser: false,
+    daysInStage: false,
+    lastActivity: false
+  });
+  const [showColumnChooser, setShowColumnChooser] = useState(false);
+  const [sortConfig, setSortConfig] = useState({ key: 'bigScore', direction: 'desc' });
+  const [searchQuery, setSearchQuery] = useState('');
+  const [density, setDensity] = useState('comfortable');
+  const [showFilters, setShowFilters] = useState(false);
   const [localFilters, setLocalFilters] = useState({
-    location: "", matchScore: 50, minValue: "", maxValue: "",
-    instruments: [], stages: [], sectors: [], supportTypes: [], smeType: "", sortBy: "",
-  })
-  const [supportAgreementStatuses, setSupportAgreementStatuses] = useState({})
+    fundingStage: [],
+    bigScoreRange: [0, 100],
+    status: [],
+    sector: [],
+    dateRange: null
+  });
+  const [showStageModal, setShowStageModal] = useState(false);
+  const [selectedSMEForStage, setSelectedSMEForStage] = useState(null);
+  const [nextStage, setNextStage] = useState("");
+  const [message, setMessage] = useState("");
+  const [meetingTime, setMeetingTime] = useState("");
+  const [meetingLocation, setMeetingLocation] = useState("");
+  const [meetingPurpose, setMeetingPurpose] = useState("");
+  const [termSheetFile, setTermSheetFile] = useState(null);
+  const [formErrors, setFormErrors] = useState({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [availabilities, setAvailabilities] = useState([]);
+  const [showCalendarModal, setShowCalendarModal] = useState(false);
+  const [tempDates, setTempDates] = useState([]);
+  const [timeSlot, setTimeSlot] = useState({ start: "09:00", end: "17:00" });
+  const [timeZone, setTimeZone] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone);
+  const [notification, setNotification] = useState(null);
+  const [showSMEDetails, setShowSMEDetails] = useState(false);
+  const [selectedSMEDetails, setSelectedSMEDetails] = useState(null);
+  const [bigScoreData, setBigScoreData] = useState({
+    compliance: { score: 0 },
+    legitimacy: { score: 0 },
+    fundability: { score: 0 },
+    pis: { score: 0 },
+    leadership: { score: 0 }
+  });
+  const [modalType, setModalType] = useState(null);
+  const [sentNDAs, setSentNDAs] = useState({});
+  const [isNDASharing, setIsNDASharing] = useState({});
+  const [updatedStages, setUpdatedStages] = useState({});
+  const [supportAgreementStatuses, setSupportAgreementStatuses] = useState({});
+  const [showMatchBreakdown, setShowMatchBreakdown] = useState(false);
+  const [selectedAcceleratorForBreakdown, setSelectedAcceleratorForBreakdown] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(25);
+  const [savedViews, setSavedViews] = useState([]);
+  const [showSaveView, setShowSaveView] = useState(false);
+  const [viewName, setViewName] = useState("");
 
-const applicationStages = [
-    { id: "new_application", name: "New Application", color: "#6366f1" },
-    { id: "application_sent", name: "Application Sent", color: "#3b82f6" },
-    { id: "evaluation", name: "Evaluation", color: "#3b82f6" },
-    { id: "due_diligence", name: "Due Diligence", color: "#8b5cf6" },
-    { id: "decision", name: "Decision", color: "#f59e0b" },
-    { id: "term_sheet", name: "Term Sheet", color: "#06b6d4" },
-    { id: "active", name: "Active", color: "#10b981" },
-    { id: "exit", name: "Exit", color: "#6b7280" },
-    { id: "decline", name: "Decline", color: "#ef4444" },
-  ]
+  const { enriched, catalystFormData, loading } = usePortfolio();
 
-const getStageFields = (stageName) => {
-    switch (stageName) {
-      case "New Application":
-      case "Application Sent":
-        return { showMessage: true, showMeeting: true,  showTermSheet: false, showAvailability: false }
-      case "Evaluation":
-      case "Due Diligence":
-      case "Decision":
-        return { showMessage: true, showMeeting: true,  showTermSheet: false, showAvailability: true  }
-      case "Term Sheet":
-        return { showMessage: true, showMeeting: true,  showTermSheet: true,  showAvailability: true  }
-      case "Active":
-        return { showMessage: true, showMeeting: false, showTermSheet: false, showAvailability: false }
-      case "Decline":
-        return { showMessage: true, showMeeting: false, showTermSheet: false, showAvailability: false }
-      default:
-        return { showMessage: true, showMeeting: true,  showTermSheet: false, showAvailability: false }
-    }
-  }
-
-  // ── Availability helpers ───────────────────────────────────────────────────
-  const loadApplicationAvailability = (application) => {
-    if (application.availableDates) {
-      setAvailabilities(application.availableDates.map((a) => ({ ...a, date: new Date(a.date) })))
-    } else {
-      setAvailabilities([])
-    }
-  }
-  const handleDateSelect = (dates) => setTempDates(dates || [])
-  const handleTimeChange = (field, value) => setTimeSlot((prev) => ({ ...prev, [field]: value }))
-  const removeAvailability = (date) =>
-    setAvailabilities((prev) => prev.filter((a) => a.date.getTime() !== date.getTime()))
-
-  const saveSelectedDates = async () => {
-    const newAvailabilities = [
-      ...availabilities,
-      ...tempDates
-        .filter((date) => !availabilities.some((a) => a.date.getTime() === date.getTime()))
-        .map((date) => ({ date, timeSlots: [{ ...timeSlot }], timeZone, status: "available" })),
-    ]
-    setAvailabilities(newAvailabilities)
-    if (selectedSMEForStage) {
-      try {
-        const availabilityData = newAvailabilities.map((a) => ({
-          date: a.date.toISOString(), timeSlots: a.timeSlots, timeZone: a.timeZone, status: a.status,
-        }))
-        const docId = `${auth.currentUser.uid}_${selectedSMEForStage.id}`
-        await updateDoc(doc(db, "catalystApplications", docId), { availableDates: availabilityData, updatedAt: new Date().toISOString() })
-        await updateDoc(doc(db, "smeCatalystApplications", docId), { availableDates: availabilityData, updatedAt: new Date().toISOString() })
-      } catch (err) { console.error("Error updating availabilities:", err) }
-    }
-    setTempDates([])
-    setShowCalendarModal(false)
-  }
-
-  // ── Stage action ───────────────────────────────────────────────────────────
-  const handleStageAction = (sme) => {
-    setSelectedSMEForStage(sme)
-    setShowStageModal(true)
-    setNextStage("")
-    setMessage("")
-    setMeetingTime("")
-    setMeetingLocation("")
-    setMeetingPurpose("")
-    setTermSheetFile(null)
-    setFormErrors({})
-    loadApplicationAvailability(sme)
-  }
-
-  const resetStageModal = () => {
-    setSelectedSMEForStage(null)
-    setShowStageModal(false)
-    setNextStage("")
-    setMessage("")
-    setMeetingTime("")
-    setMeetingLocation("")
-    setMeetingPurpose("")
-    setTermSheetFile(null)
-    setFormErrors({})
-    setAvailabilities([])
-  }
-
-  // ── Context data ───────────────────────────────────────────────────────────
-  const { enriched, catalystFormData, loading } = usePortfolio()
-
+  // ─── Data Processing ────────────────────────────────────────────────────────
   useEffect(() => {
     const mapRow = (a) => {
-      const entity = a.profile?.entityOverview || {}
-      const funding = a.profile?.useOfFunds || {}
-      const multiProgram = enriched.filter((e) => e.smeId === a.smeId).length > 1
-      return {
-        file_id: a.docId,
+      const entity = a.profile?.entityOverview || {};
+      const funding = a.profile?.useOfFunds || {};
+      const financials = a.profile?.financialOverview || {};
+      const multiProgram = enriched.filter((e) => e.smeId === a.smeId).length > 1;
+      
+      const mapped = {
         id: a.smeId,
+        docId: a.docId,
         programIndex: a.programIndex,
-        name: (entity.registeredName || a.smeName || "N/A") +
-          (multiProgram ? ` (Program ${parseInt(a.programIndex) + 1})` : ""),
+        name: (entity.registeredName || a.smeName || "N/A") + 
+          (multiProgram ? ` (P${parseInt(a.programIndex || 0) + 1})` : ""),
         location: entity.location || a.location || "N/A",
+        province: entity.province || a.province || "N/A",
         sector: (entity.economicSectors || []).join(", ") || a.sector || "N/A",
-        fundingStage: entity.operationStage || a.fundingStage || "-",
-        fundingRequired: funding.amountRequested || a.fundingRequired || "-",
-        equityOffered: funding.equityType || a.equityOffered || "-",
-        guarantees: a.guarantees || "-",
-        supportRequired: a.supportRequired || "-",
-        servicesRequired: a.servicesRequired || "-",
-        applicationDate: a.applicationDate
-          ? new Date(a.applicationDate).toLocaleDateString()
-          : a.createdAt?.seconds
-            ? new Date(a.createdAt.seconds * 1000).toLocaleDateString()
-            : "-",
+        industry: entity.industry || "N/A",
+        fundingStage: entity.operationStage || a.fundingStage || "N/A",
+        fundingRequired: formatCurrency(funding.amountRequested || a.fundingRequired || "N/A"),
+        fundingAmount: parseFloat((funding.amountRequested || a.fundingRequired || "0").toString().replace(/[^0-9.]/g, "")) || 0,
+        equityOffered: funding.equityType || a.equityOffered || "N/A",
+        guarantees: a.guarantees || "N/A",
+        supportRequired: a.supportRequired || "N/A",
+        servicesRequired: a.servicesRequired || "N/A",
+        revenue: financials.annualRevenue || "N/A",
+        employees: entity.employees || "N/A",
+        companyAge: entity.companyAge || "N/A",
+        applicationDate: a.applicationDate 
+          ? new Date(a.applicationDate).toLocaleDateString('en-ZA', { month: 'short', day: 'numeric', year: 'numeric' })
+          : "N/A",
+        applicationDateRaw: a.applicationDate ? new Date(a.applicationDate) : null,
         matchPercentage: a.matchPercentage || 0,
         bigScore: a.bigScore || 0,
         compliance: a.compliance || 0,
         legitimacy: a.legitimacy || 0,
         fundability: a.fundability || 0,
         pis: a.pis || 0,
-        currentStatus: a.status || a.pipelineStage || "New Application",
-        pipelineStage: a.pipelineStage || a.status || "New Application",
-        nextStage: a.nextStage || "Evaluation",
-        action: "Application Received",
-        availableDates: (a.availableDates || []).map((av) => ({ ...av, date: new Date(av.date) })),
+        leadership: a.leadership || 0,
+        currentStatus: a.pipelineStage || a.status || "Matching",
+        pipelineStage: a.pipelineStage || a.status || "Matching",
+        nextStage: a.nextStage || getNextStage(a.pipelineStage || a.status),
         acceleratorName: a.acceleratorName || "N/A",
-        programName: a.programName || `Program ${parseInt(a.programIndex) + 1}`,
-      }
-    }
-const mapped = enriched.map((a) => {
-  const row = mapRow(a)
-  // Recalculate live match score so table and breakdown are always in sync
-  const programs = catalystFormData?.programmeDetails?.programs || []
-  const program = programs[parseInt(a.programIndex)] || programs[0] || null
-  try {
-    const result = calculateMatchScore(a.profile || {}, catalystFormData, program)
-    row.matchPercentage = result.score
-  } catch (_) { /* keep stored value on error */ }
-  return row
-}).sort((a, b) => b.matchPercentage - a.matchPercentage)
+        programName: a.programName || `Program ${parseInt(a.programIndex || 0) + 1}`,
+        availableDates: a.availableDates || [],
+        lastActivity: a.lastActivity || "N/A",
+        daysInStage: a.daysInStage || 0,
+        assignedUser: a.assignedUser || "Unassigned",
+        notes: a.notes || "",
+        documents: a.documents || [],
+        matchBreakdown: a.matchBreakdown || null,
+        userId: a.userId || a.smeId,
+        email: a.email || entity.email || "N/A",
+        director: entity.director || "N/A"
+      };
 
-if (!stageFilter) { setSmes(mapped); onSMEsLoaded?.(mapped); return }
-   const stageMapping = {
-      initial:     ["new application", "application sent", "match", "matched", "matching"],
-      application: ["new application", "application sent"],
-      review:      ["under review", "in review", "evaluation"],
-      approved:    ["due diligence", "shortlisted"],
-      supported:   ["support approved"],
-      funding:     ["decision"],
-      termsheet:   ["term sheet"],
-      active:      ["active", "active support", "support approved"],
-      rejected:    ["decline", "support declined", "rejected", "withdrawn", "declined"],
-    }
-    let filtered
-    if (stageFilter === "initial") {
-      filtered = mapped
-    } else {
-      const valid = stageMapping[stageFilter] || []
-      filtered = mapped.filter((s) =>
-        valid.includes((s.pipelineStage || "").toLowerCase()) ||
-        valid.includes((s.currentStatus || "").toLowerCase())
-      )
-    }
-   setSmes([...filtered].sort((a, b) => b.matchPercentage - a.matchPercentage))
-    onSMEsLoaded?.(mapped)
-  }, [enriched, stageFilter])
+      return mapped;
+    };
 
-  useEffect(() => {
-    const fetchSupportAgreementStatuses = async () => {
-      const statusMap = {}
-      for (const sme of smes) {
-        if (sme.file_id) {
-          try {
-            const docSnap = await getDoc(doc(db, "catalystApplications", sme.file_id))
-            if (docSnap.exists()) {
-              const data = docSnap.data()
-              if (data.supportAgreementStatus) {
-                statusMap[sme.file_id] = data.supportAgreementStatus
-              }
-            }
-          } catch (error) {
-            console.error("Error fetching support agreement status:", error)
-          }
-        }
-      }
-      setSupportAgreementStatuses(statusMap)
-    }
+    let mapped = enriched.map(mapRow);
 
-    if (smes.length > 0) {
-      fetchSupportAgreementStatuses()
-    }
-  }, [smes])
-
-  const renderSupportAgreementStatus = (sme) => {
-    const stageKey = `${sme.id}_${sme.programIndex}`
-    const currentStage = updatedStages[stageKey] || sme.pipelineStage
-    if (!["Term Sheet", "Support Approved"].includes(currentStage)) return null
-
-    const status = supportAgreementStatuses[sme.file_id]
-    if (!status) return (
-      <span title="Awaiting SME response" style={{
-        display: "inline-flex", alignItems: "center", justifyContent: "center",
-        width: "16px", height: "16px", borderRadius: "50%",
-        backgroundColor: "#9e9e9e", color: "white", fontSize: "10px",
-        flexShrink: 0, marginLeft: "4px"
-      }}>?</span>
-    )
-
-    if (status === "accepted") return (
-      <span title="Support Agreement Accepted" style={{
-        display: "inline-flex", alignItems: "center", justifyContent: "center",
-        width: "16px", height: "16px", borderRadius: "50%",
-        backgroundColor: "#4caf50", color: "white", fontSize: "10px", fontWeight: "bold",
-        flexShrink: 0, marginLeft: "4px"
-      }}>✓</span>
-    )
-
-    if (status === "declined") return (
-      <span title="Support Agreement Declined" style={{
-        display: "inline-flex", alignItems: "center", justifyContent: "center",
-        width: "16px", height: "16px", borderRadius: "50%",
-        backgroundColor: "#f44336", color: "white", fontSize: "10px", fontWeight: "bold",
-        flexShrink: 0, marginLeft: "4px"
-      }}>✗</span>
-    )
-
-    return null
-  }
-  
-  // ── Filter helpers ─────────────────────────────────────────────────────────
-  const handleFilterChange = (key, value) => setLocalFilters((prev) => ({ ...prev, [key]: value }))
-  const clearFilters = () => setLocalFilters({ location: "", matchScore: 50, minFunding: "", maxFunding: "", instruments: [], stages: [], sectors: [], supportTypes: [], smeType: "", sortBy: "" })
-  const applyFilters = () => { setShowFilters(false) }
-
-  const functions = getFunctions();
-
-  const getCatalystName = async (userId) => {
-  if (!userId) {
-    return "Catalyst";
-  }
-
-  try {
-    const profileRef = doc(db, "catalystProfiles", userId);
-    const profileSnap = await getDoc(profileRef);
-    
-    if (profileSnap.exists()) {
-      const data = profileSnap.data();
-      const formData = data.formData || {};
-      const entityOverview = formData.entityOverview || {};
+    // Apply stage filter from pipeline
+    if (stageFilter && stageFilter !== "initial") {
+      const stageMapping = {
+        matching: ["matching", "matched", "new"],
+        application: ["application", "applied", "application sent", "new application"],
+        evaluation: ["evaluation", "under review", "in review"],
+        dueDiligence: ["due diligence", "shortlisted"],
+        decision: ["decision"],
+        termSheet: ["term sheet", "support approved"],
+        active: ["active", "active support"],
+        exited: ["exit", "exited", "completed", "graduated"],
+        declined: ["decline", "declined", "rejected", "withdrawn", "support declined"]
+      };
       
-      return entityOverview.registeredName || "Catalyst";
+      const validStages = stageMapping[stageFilter] || [];
+      if (validStages.length > 0) {
+        mapped = mapped.filter(s => 
+          validStages.some(vs => (s.pipelineStage || "").toLowerCase().includes(vs))
+        );
+      }
     }
-    return "Catalyst";
-  } catch (error) {
-    console.error("Error fetching catalyst profile:", error);
-    return "Catalyst";
-  }
-};
 
-// ── Stage update ───────────────────────────────────────────────────────────
-const handleStageUpdate = async () => {
-  const stageFields = getStageFields(nextStage)
-  
-
-  const errors = {}
-  if (!nextStage) errors.nextStage = "Please select a stage"
-  if (stageFields.showMessage && !message.trim()) errors.message = "Please provide a message"
-  if (stageFields.showMeeting) {
-    if (!meetingLocation.trim()) errors.meetingLocation = "Please provide a meeting location"
-    if (!meetingPurpose.trim()) errors.meetingPurpose = "Please provide a meeting purpose"
-  }
-  if (stageFields.showAvailability && !availabilities.length) errors.availabilities = "Please select at least one available date"
-  if (stageFields.showTermSheet && termSheetFile) {
-    const allowed = ["application/pdf", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"]
-    if (!allowed.includes(termSheetFile.type)) {
-      errors.termSheetFile = "Only PDF or Word documents are accepted"
-    } else if (termSheetFile.size > 10 * 1024 * 1024) {
-      errors.termSheetFile = "File must be under 10 MB"
-    }
-  }
-  if (Object.keys(errors).length > 0) { setFormErrors(errors); return }
-  setIsSubmitting(true)
-  try {
-    const user = auth.currentUser
-    if (!user) throw new Error("User not authenticated")
-    const catalystId = user.uid
-    const smeId = selectedSMEForStage.id
-    const programIndex = selectedSMEForStage.programIndex || "0"
-    const documentId = `${catalystId}_${smeId}_${programIndex}`
-    const documentsmeId = `${smeId}_${catalystId}_${programIndex}`
-    let attachmentUrl = null
-    if (termSheetFile) {
-      const storageRef = ref(storage, `support_termsheets/${smeId}/${termSheetFile.name}`)
-      const snapshot = await uploadBytes(storageRef, termSheetFile)
-      attachmentUrl = await getDownloadURL(snapshot.ref)
-    }
-    const computedNextStage = getNextStage(nextStage)
-    const updateData = {
-      status: nextStage, pipelineStage: nextStage, nextStage: computedNextStage,
-      updatedAt: serverTimestamp(),
-      ...(message && { lastMessage: message }),
-      ...(stageFields.showMeeting && { meetingDetails: { time: meetingTime, location: meetingLocation, purpose: meetingPurpose } }),
-    }
-    if (stageFields.showAvailability && availabilities.length > 0) {
-      updateData.availableDates = availabilities.map((a) => ({
-        date: a.date.toISOString(), timeSlots: a.timeSlots, timeZone: a.timeZone, status: a.status,
-      }))
-    }
-    const docRef = doc(db, "catalystApplications", documentId)
-    const docSnapshot = await getDoc(docRef)
-    if (!docSnapshot.exists()) throw new Error(`Document ${documentId} does not exist`)
-    await updateDoc(docRef, updateData)
-    try {
-      await updateDoc(doc(db, "smeCatalystApplications", documentsmeId), {
-        status: nextStage, nextStage: computedNextStage,
-        ...(updateData.availableDates && { availableDates: updateData.availableDates }),
-      })
-    } catch (e) { console.warn("Could not update smeCatalystApplications:", e.message) }
-    if (stageFields.showMeeting && meetingLocation && meetingPurpose) {
-      try {
-        await addDoc(collection(db, "smeCalendarEvents"), {
-          smeId, catalystId, title: meetingPurpose, date: meetingTime,
-          location: meetingLocation, type: "support_meeting", createdAt: new Date().toISOString(),
-          ...(updateData.availableDates && { availableDates: updateData.availableDates }),
-        })
-      } catch (e) { console.error("Error creating calendar event:", e) }
-    }
+    // Sort by BIG Score descending by default
+    mapped.sort((a, b) => b.bigScore - a.bigScore);
     
-    // 🔥 GET CATALYST NAME
-const catalystName = await getCatalystName(catalystId);
+    setSmes(mapped);
+    onSMEsLoaded?.(mapped);
+  }, [enriched, stageFilter, catalystFormData]);
 
-    // Update local state with the new stage
-    const stageKey = `${smeId}_${programIndex}`
-    setUpdatedStages((prev) => ({ ...prev, [stageKey]: nextStage }))
-    
-    setSmes((prev) => {
-      const next = prev.map((s) =>
-        s.id === smeId && s.programIndex === programIndex
-          ? {
-              ...s, 
-              status: nextStage, 
-              nextStage: computedNextStage, 
-              pipelineStage: nextStage,
-              currentStatus: nextStage,
-              ...(message && { lastMessage: message }),
-              ...(stageFields.showMeeting && { meetingDetails: { time: meetingTime, location: meetingLocation, purpose: meetingPurpose } }),
-              ...(updateData.availableDates && { availableDates: updateData.availableDates })
-            }
-          : s
-      )
-      onSMEsLoaded?.(next)
-      return next
-    })
-    
-    // Call onStageOverride to notify parent component about stage changes
-    if (onStageOverride) {
-      onStageOverride(
-        smes.map(s => ({
-          smeId: s.id,
-          programIndex: s.programIndex,
-          pipelineStage: s.id === smeId && s.programIndex === programIndex
-            ? nextStage
-            : (s.pipelineStage || s.currentStatus),
-          status: s.id === smeId && s.programIndex === programIndex
-            ? nextStage
-            : (s.currentStatus || s.pipelineStage),
-        }))
-      )
-    }
-    
-    setNotification({ type: "success", message: `Application status updated to ${nextStage} successfully` })
-    setShowStageModal(false)
-    resetStageModal()
-    
-    const subject = `Update: ${nextStage} Stage for Your Application`
-    let content = `Dear ${selectedSMEForStage.name},\n\nWe are pleased to inform you that your application has progressed to the "${nextStage}" stage.\n\n${message}`
+  // ─── Filtering & Sorting ────────────────────────────────────────────────────
+  const filteredAndSortedSMEs = useMemo(() => {
+    let result = [...smes];
 
-    if (stageFields.showMeeting && meetingLocation && meetingPurpose) {
-      content += `\n\nMeeting Details:\n- Location: ${meetingLocation}\n- Purpose: ${meetingPurpose}`
+    // Search
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase().trim();
+      result = result.filter(sme => 
+        sme.name.toLowerCase().includes(query) ||
+        sme.sector.toLowerCase().includes(query) ||
+        sme.location.toLowerCase().includes(query) ||
+        sme.industry.toLowerCase().includes(query) ||
+        sme.director.toLowerCase().includes(query) ||
+        sme.email.toLowerCase().includes(query)
+      );
     }
 
-    if (attachmentUrl) {
-      content += `\n\nTerm Sheet Document:\nPlease review the attached term sheet using the link below:\n${attachmentUrl}\n\nKindly review and respond with your acceptance or decline of the terms.`
+    // Funding Stage Filter
+    if (localFilters.fundingStage && localFilters.fundingStage.length > 0) {
+      result = result.filter(sme => 
+        localFilters.fundingStage.some(stage => 
+          sme.fundingStage.toLowerCase().includes(stage.toLowerCase())
+        )
+      );
     }
 
-    if (stageFields.showAvailability && availabilities.length > 0) {
-      content += `\n\nAvailable Meeting Times:\n` +
-        availabilities.map((a, i) => {
-          const d = a.date.toLocaleDateString("en-US", {
-            weekday: "long", year: "numeric", month: "long", day: "numeric"
-          })
-          const t = a.timeSlots?.[0]
-            ? `${a.timeSlots[0].start} - ${a.timeSlots[0].end} ${a.timeZone}`
-            : "Time not specified"
-          return `${i + 1}. ${d} (${t})`
-        }).join("\n")
-      content += `\n\nPlease reply with your preferred meeting time from the above options.`
+    // BIG Score Range Filter
+    result = result.filter(sme => 
+      sme.bigScore >= localFilters.bigScoreRange[0] && 
+      sme.bigScore <= localFilters.bigScoreRange[1]
+    );
+
+    // Status Filter
+    if (localFilters.status && localFilters.status.length > 0) {
+      result = result.filter(sme => 
+        localFilters.status.some(status => 
+          sme.currentStatus.toLowerCase().includes(status.toLowerCase())
+        )
+      );
     }
 
-content += `\n\nBest regards,\n${catalystName || "Support Team"}`
-
-    const messagePayload = {
-      to: smeId,
-      from: catalystId,
-      subject: `Update: ${nextStage} Stage for Your Application`,
-      content,
-      date: new Date().toISOString(),
-      read: false,
-      type: "inbox",
-      applicationId: documentId,
-      attachments: attachmentUrl ? [attachmentUrl] : [],
-      ...(attachmentUrl && { documentUrl: attachmentUrl, documentType: "support_agreement" }),
-      ...(updateData.availableDates && { availableDates: updateData.availableDates }),
+    // Sector Filter
+    if (localFilters.sector && localFilters.sector.length > 0) {
+      result = result.filter(sme => 
+        localFilters.sector.some(sector => 
+          sme.sector.toLowerCase().includes(sector.toLowerCase())
+        )
+      );
     }
 
-    await Promise.all([
-      addDoc(collection(db, "messages"), messagePayload),
-      addDoc(collection(db, "messages"), { ...messagePayload, read: true, type: "sent" }),
-    ])
-// ========== SEND EMAIL NOTIFICATION ==========
+    // Sort
+    if (sortConfig.key) {
+      result.sort((a, b) => {
+        let aVal = a[sortConfig.key];
+        let bVal = b[sortConfig.key];
+        
+        if (typeof aVal === 'string') aVal = aVal.toLowerCase();
+        if (typeof bVal === 'string') bVal = bVal.toLowerCase();
+        if (aVal == null) aVal = '';
+        if (bVal == null) bVal = '';
+        
+        if (aVal < bVal) return sortConfig.direction === 'asc' ? -1 : 1;
+        if (aVal > bVal) return sortConfig.direction === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
 
+    return result;
+  }, [smes, searchQuery, sortConfig, localFilters]);
 
-let smeEmail = null;
-try {
-  const smeUserDoc = await getDoc(doc(db, "users", smeId));
-  if (smeUserDoc.exists()) {
-    smeEmail = smeUserDoc.data().email;
-  }
-} catch (emailError) {
-  console.error("Error fetching SME email:", emailError);
-}
+  // Pagination
+  const totalPages = Math.ceil(filteredAndSortedSMEs.length / pageSize);
+  const paginatedSMEs = filteredAndSortedSMEs.slice(
+    (currentPage - 1) * pageSize,
+    currentPage * pageSize
+  );
 
-if (smeEmail) {
-  try {
-    const response = await fetch('https://us-central1-tuts-7ea8c.cloudfunctions.net/sendStageUpdateEmail', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        data: {
-          to: smeEmail,
-          name: selectedSMEForStage.name,
-          catalystName: catalystName,           // ✅ ADD THIS
-          stage: nextStage,
-          message: message,
-          meetingLocation: stageFields.showMeeting ? meetingLocation : null,
-          meetingPurpose: stageFields.showMeeting ? meetingPurpose : null,
-          attachmentUrl: attachmentUrl,
-          hasAvailability: stageFields.showAvailability && availabilities.length > 0,
-          availabilityDates: stageFields.showAvailability ? availabilities.map(a => ({
-            date: a.date.toLocaleDateString("en-US", { 
-              weekday: "long", 
-              year: "numeric", 
-              month: "long", 
-              day: "numeric" 
-            }),
-            time: a.timeSlots?.[0] ? `${a.timeSlots[0].start} - ${a.timeSlots[0].end} ${a.timeZone}` : "Time not specified"
-          })) : []
-        }
-      })
+  // ─── Handlers ───────────────────────────────────────────────────────────────
+  const handleSort = (key) => {
+    setSortConfig(current => ({
+      key,
+      direction: current.key === key && current.direction === 'desc' ? 'asc' : 'desc'
+    }));
+  };
+
+  const toggleRowExpansion = (smeKey) => {
+    setExpandedRows(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(smeKey)) {
+        newSet.delete(smeKey);
+      } else {
+        newSet.add(smeKey);
+      }
+      return newSet;
     });
-    
-    const result = await response.json();
-    if (result.data?.success) {
-      console.log("✅ Stage update email sent to SME");
-    } else {
-      console.error("Email sending failed:", result);
-    }
-  } catch (emailError) {
-    console.error("Failed to send stage update email:", emailError);
-  }
-}
-// ========== END EMAIL NOTIFICATION ==========
+  };
 
-  } catch (error) {
-    console.error("Stage update error:", error)
-    setNotification({ type: "error", message: `Failed to update status: ${error.message}` })
-  } finally {
-    setIsSubmitting(false)
-  }
-}
+  const toggleColumn = (key) => {
+    setColumnVisibility(prev => ({ ...prev, [key]: !prev[key] }));
+  };
 
-
-  // Load existing shared NDAs for all SMEs
-useEffect(() => {
-  const loadSentNDAs = async () => {
-    try {
-      const user = auth.currentUser
-      if (!user) return
-
-      const sharedNDAQuery = query(
-        collection(db, "shared_nda"),
-        where("catalystId", "==", user.uid),
-        where("status", "==", "sent")
-      )
-      
-      const snapshot = await getDocs(sharedNDAQuery)
-      const sentMap = {}
-      
-      snapshot.docs.forEach(doc => {
-        const data = doc.data()
-        const smeKey = `${data.smeId}_${data.programIndex}`
-        sentMap[smeKey] = true
-      })
-      
-      setSentNDAs(sentMap)
-      // console.log("Loaded sent NDAs:", sentMap)
-    } catch (error) {
-      console.error("Error loading sent NDAs:", error)
-    }
-  }
-
-  if (auth.currentUser) {
-    loadSentNDAs()
-  }
-}, [])
-
-  // ── Modal helpers ──────────────────────────────────────────────────────────
   const handleViewDetails = (sme) => {
-    setSelectedSMEDetails(sme)
-    setShowSMEDetails(true)
-  }
+    setSelectedSMEDetails(sme);
+    setShowSMEDetails(true);
+  };
+
+  const handleStageAction = (sme) => {
+    setSelectedSMEForStage(sme);
+    setNextStage(sme.nextStage || getNextStage(sme.currentStatus));
+    setMessage("");
+    setMeetingTime("");
+    setMeetingLocation("");
+    setMeetingPurpose("");
+    setTermSheetFile(null);
+    setFormErrors({});
+    setAvailabilities(sme.availableDates || []);
+    setShowStageModal(true);
+  };
+
   const handleBigScoreClick = (sme) => {
     setBigScoreData({
-      compliance: { score: sme.compliance || 0, color: "#8D6E63" },
-      legitimacy: { score: sme.legitimacy || 0, color: "#5D4037" },
-      fundability: { score: sme.fundability || 0, color: "#3E2723" },
-      pis: { score: sme.pis || 0, color: "#4E342E" },
-    })
-    setSelectedSME(sme)
-    setModalType("bigScore")
-  }
-  const resetModal = () => { setSelectedSME(null); setModalType(null); setMessage(""); setFormErrors({}) }
-  const calculateTotalScore = () => selectedSME?.bigScore || 0
+      compliance: { score: sme.compliance || 0 },
+      legitimacy: { score: sme.legitimacy || 0 },
+      fundability: { score: sme.fundability || 0 },
+      pis: { score: sme.pis || 0 },
+      leadership: { score: sme.leadership || 0 }
+    });
+    setSelectedSME(sme);
+    setModalType("bigScore");
+  };
 
-  // ── Match score calculator ─────────────────────────────────────────────────
+  const handleViewMatchBreakdown = (sme) => {
+    if (sme.matchBreakdown) {
+      setSelectedAcceleratorForBreakdown(sme);
+      setShowMatchBreakdown(true);
+    } else {
+      try {
+        const contextEntry = enriched.find((a) => a.smeId === sme.id && a.programIndex === sme.programIndex);
+        const smeProfileData = contextEntry?.profile || {};
+        const programs = catalystFormData?.programmeDetails?.programs || [];
+        const program = programs[parseInt(sme.programIndex || 0)] || programs[0] || null;
+        if (program) {
+          const matchResult = calculateMatchScore(smeProfileData, catalystFormData, program);
+          setSelectedAcceleratorForBreakdown({ ...sme, matchPercentage: matchResult.score, matchBreakdown: matchResult.breakdown });
+          setShowMatchBreakdown(true);
+        }
+      } catch (err) {
+        console.error("Error computing match breakdown:", err);
+        setNotification({ type: "error", message: "Failed to load match breakdown." });
+      }
+    }
+  };
+
+  const handleShareNDA = async (sme) => {
+    const smeKey = `${sme.id}_${sme.programIndex}`;
+    
+    try {
+      setIsNDASharing(prev => ({ ...prev, [smeKey]: true }));
+      
+      const user = auth.currentUser;
+      if (!user) throw new Error("User not authenticated");
+
+      const ndaDocRef = doc(db, "ndas", user.uid);
+      const ndaDoc = await getDoc(ndaDocRef);
+      
+      if (!ndaDoc.exists()) {
+        setNotification({ type: "error", message: "No NDA found. Please upload an NDA first." });
+        return;
+      }
+
+      const ndaData = ndaDoc.data();
+      if (!ndaData.pdfUrl) {
+        setNotification({ type: "error", message: "NDA document has no PDF URL." });
+        return;
+      }
+
+      const shareData = {
+        catalystId: user.uid,
+        catalystName: user.displayName || "Catalyst",
+        catalystEmail: user.email,
+        ndaId: ndaDoc.id,
+        ndaUrl: ndaData.pdfUrl,
+        ndaName: ndaData.ndaContent || ndaData.name || "NDA Document",
+        smeId: sme.id,
+        smeName: sme.name,
+        sharedAt: serverTimestamp(),
+        status: "sent",
+        programIndex: sme.programIndex,
+        applicationId: `${user.uid}_${sme.id}_${sme.programIndex}`
+      };
+
+      const existingShareQuery = query(
+        collection(db, "shared_nda"),
+        where("catalystId", "==", user.uid),
+        where("smeId", "==", sme.id),
+        where("programIndex", "==", sme.programIndex)
+      );
+      
+      const existingShare = await getDocs(existingShareQuery);
+      
+      if (existingShare.empty) {
+        await addDoc(collection(db, "shared_nda"), shareData);
+      } else {
+        const shareDoc = existingShare.docs[0];
+        await updateDoc(doc(db, "shared_nda", shareDoc.id), {
+          ...shareData,
+          updatedAt: serverTimestamp()
+        });
+      }
+
+      await addDoc(collection(db, "messages"), {
+        to: sme.id,
+        from: user.uid,
+        subject: "NDA Ready for Review",
+        content: "A Non-Disclosure Agreement (NDA) has been shared with you. Please review and sign it.",
+        date: new Date().toISOString(),
+        read: false,
+        type: "nda_share",
+        ndaId: ndaDoc.id,
+        ndaUrl: ndaData.pdfUrl,
+        applicationId: `${user.uid}_${sme.id}_${sme.programIndex}`
+      });
+
+      setSentNDAs(prev => ({ ...prev, [smeKey]: true }));
+      setNotification({ type: "success", message: `NDA shared successfully with ${sme.name}` });
+
+    } catch (error) {
+      console.error("Error sharing NDA:", error);
+      setNotification({ type: "error", message: `Failed to share NDA: ${error.message}` });
+    } finally {
+      setIsNDASharing(prev => ({ ...prev, [smeKey]: false }));
+    }
+  };
+
+  const handleStageUpdate = async () => {
+    const errors = {};
+    if (!nextStage) errors.nextStage = "Please select a stage";
+    if (!message.trim()) errors.message = "Please provide a message";
+    
+    if (Object.keys(errors).length > 0) { 
+      setFormErrors(errors); 
+      return; 
+    }
+    
+    setIsSubmitting(true);
+    try {
+      const user = auth.currentUser;
+      if (!user) throw new Error("User not authenticated");
+      
+      const catalystId = user.uid;
+      const smeId = selectedSMEForStage.id;
+      const programIndex = selectedSMEForStage.programIndex || "0";
+      const documentId = `${catalystId}_${smeId}_${programIndex}`;
+      
+      const updateData = {
+        status: nextStage,
+        pipelineStage: nextStage,
+        nextStage: getNextStage(nextStage),
+        updatedAt: serverTimestamp(),
+        lastMessage: message,
+        lastActivity: new Date().toISOString()
+      };
+
+      const docRef = doc(db, "catalystApplications", documentId);
+      await updateDoc(docRef, updateData);
+
+      const stageKey = `${smeId}_${programIndex}`;
+      setUpdatedStages(prev => ({ ...prev, [stageKey]: nextStage }));
+      
+      setSmes(prev => prev.map(s => 
+        s.id === smeId && s.programIndex === programIndex
+          ? { ...s, currentStatus: nextStage, pipelineStage: nextStage, nextStage: getNextStage(nextStage) }
+          : s
+      ));
+
+      setNotification({ type: "success", message: `Application updated to ${nextStage} successfully` });
+      setShowStageModal(false);
+
+    } catch (error) {
+      console.error("Stage update error:", error);
+      setNotification({ type: "error", message: `Failed to update status: ${error.message}` });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const saveCurrentView = () => {
+    if (!viewName.trim()) return;
+    const view = {
+      name: viewName,
+      columns: { ...columnVisibility },
+      sort: { ...sortConfig },
+      density,
+      filters: { ...localFilters }
+    };
+    setSavedViews(prev => [...prev, view]);
+    setViewName("");
+    setShowSaveView(false);
+    setNotification({ type: "success", message: `View "${viewName}" saved!` });
+  };
+
+  const loadView = (view) => {
+    setColumnVisibility(view.columns);
+    setSortConfig(view.sort);
+    setDensity(view.density);
+    setLocalFilters(view.filters);
+    setNotification({ type: "success", message: `View "${view.name}" loaded!` });
+  };
+
+  const clearAllFilters = () => {
+    setLocalFilters({
+      fundingStage: [],
+      bigScoreRange: [0, 100],
+      status: [],
+      sector: [],
+      dateRange: null
+    });
+    setSearchQuery('');
+    setNotification({ type: "success", message: "All filters cleared" });
+  };
+
+  const handleExport = () => {
+    try {
+      const visibleCols = Object.entries(columnVisibility)
+        .filter(([_, visible]) => visible)
+        .map(([key]) => key);
+      
+      const headers = {
+        sme: 'SME Name',
+        bigScore: 'BIG Score',
+        match: 'Match %',
+        fundingStage: 'Funding Stage',
+        fundingRequired: 'Funding Required',
+        status: 'Status',
+        applied: 'Applied Date',
+        location: 'Location',
+        sector: 'Sector',
+        equity: 'Equity Offered',
+        guarantees: 'Guarantees',
+        support: 'Support Required',
+        services: 'Services Required',
+        assignedUser: 'Assigned User',
+        daysInStage: 'Days in Stage',
+        lastActivity: 'Last Activity'
+      };
+      
+      const headerRow = visibleCols.map(col => headers[col] || col).join(',');
+      const dataRows = filteredAndSortedSMEs.map(sme => 
+        visibleCols.map(col => {
+          const value = sme[col] || '';
+          return `"${String(value).replace(/"/g, '""')}"`;
+        }).join(',')
+      );
+      
+      const csv = [headerRow, ...dataRows].join('\n');
+      
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `sme-export-${new Date().toISOString().split('T')[0]}.csv`;
+      link.click();
+      URL.revokeObjectURL(url);
+      
+      setNotification({ type: "success", message: "Export downloaded successfully" });
+    } catch (error) {
+      console.error("Export error:", error);
+      setNotification({ type: "error", message: "Failed to export data" });
+    }
+  };
+
+  // ─── Match Score Calculator ─────────────────────────────────────────────────
   const calculateMatchScore = (smeProfileData, catalystFormData, program = null) => {
-    const totalFields = 8
-    let matched = 0
+    const totalFields = 8;
+    let matched = 0;
     const breakdown = {
       fundingStage: { score: 0, maxScore: 12.5, matched: false, description: "", details: {} },
       ticketSize: { score: 0, maxScore: 12.5, matched: false, description: "", details: {} },
@@ -734,882 +649,1128 @@ useEffect(() => {
       instrumentFit: { score: 0, maxScore: 12.5, matched: false, description: "", details: {} },
       supportMatch: { score: 0, maxScore: 12.5, matched: false, description: "", details: {} },
       legalEntityFit: { score: 0, maxScore: 12.5, matched: false, description: "", details: {} },
-      revenueThreshold: { score: 0, maxScore: 12.5, matched: false, description: "", details: {} },
+      revenueThreshold: { score: 0, maxScore: 12.5, matched: false, description: "", details: {} }
+    };
+
+    const programData = program || catalystFormData?.programmeDetails?.programs?.[0] || {};
+    const matchPrefs = catalystFormData?.programBriefMatchingPreference || catalystFormData?.generalMatchingPreference || {};
+    const entity = smeProfileData.entityOverview || {};
+    const funding = smeProfileData.useOfFunds || {};
+
+    // 1. Funding Stage Match
+    const smeStage = (entity.operationStage || "").toLowerCase();
+    const accelStages = Array.isArray(matchPrefs.businessLifecycleStage) 
+      ? matchPrefs.businessLifecycleStage.map(s => s.toLowerCase())
+      : matchPrefs.businessLifecycleStage ? [matchPrefs.businessLifecycleStage.toLowerCase()] : [];
+    
+    if (smeStage && accelStages.some(s => smeStage.includes(s) || s.includes(smeStage))) {
+      breakdown.fundingStage.score = 12.5;
+      breakdown.fundingStage.matched = true;
+      matched++;
     }
 
-    const toArray = (v) => {
-      if (v == null) return []
-      if (Array.isArray(v)) return v
-      return v.toString().split(/[,|/]+/g).map(s => s.trim()).filter(Boolean)
+    // 2. Ticket Size Match
+    const smeAmount = parseFloat((funding.amountRequested || "0").toString().replace(/[^0-9.]/g, "")) || 0;
+    const minTicket = parseFloat((programData.minimumSupport || "0").toString().replace(/[^0-9.]/g, "")) || 0;
+    const maxTicket = parseFloat((programData.maximumSupport || "0").toString().replace(/[^0-9.]/g, "")) || Infinity;
+    
+    if (smeAmount >= minTicket && smeAmount <= maxTicket) {
+      breakdown.ticketSize.score = 12.5;
+      breakdown.ticketSize.matched = true;
+      matched++;
     }
-    const splitSectorTokens = (v) =>
-      toArray(v).flatMap(item => item.split(/[,|/]+/g))
-        .flatMap(item => item.split(/[_/\-\s]+/g))
-        .map(s => s.replace(/\(.*?\)/g, "")).map(s => s.trim()).filter(Boolean)
-    const canon = (s) => s.toLowerCase().replace(/[^a-z]/g, "")
-    const SECTOR_ALIASES = {
-      it: "informationtechnology", ict: "informationtechnology",
-      informationtechnology: "informationtechnology",
-      technology: "informationtechnology", software: "informationtechnology",
-      agri: "agriculture", agriculture: "agriculture",
-      forestry: "forestry", fishing: "fishing",
+
+    const totalScore = Object.values(breakdown).reduce((sum, b) => sum + (b.score || 0), 0);
+    return { score: Math.round(totalScore), breakdown };
+  };
+
+  // ─── Contextual Actions ─────────────────────────────────────────────────────
+  const getContextualAction = (sme) => {
+    const status = (sme.currentStatus || "").toLowerCase();
+    
+    if (status.includes("matching")) {
+      return { label: "Review Match", icon: <Eye size={14} />, color: "#7d5a50" };
     }
-    const COMPOSITE_EXPANSIONS = { agricultureforestryfishing: ["agriculture", "forestry", "fishing"] }
-    const mapAlias = (t) => SECTOR_ALIASES[t] || t
-    const normalizeSectors = (v) =>
-      splitSectorTokens(v).map(canon).map(mapAlias)
-        .flatMap(t => COMPOSITE_EXPANSIONS[t] ? COMPOSITE_EXPANSIONS[t] : [t]).filter(Boolean)
-    const hasOverlap = (a, b) => {
-      const A = new Set(normalizeSectors(a))
-      for (const t of normalizeSectors(b)) if (A.has(t)) return true
-      return false
+    if (status.includes("application")) {
+      return { label: "Review App", icon: <FileText size={14} />, color: "#7d5a50" };
     }
-    const normalizeToken = (s) => s.toString().toLowerCase().trim().replace(/[_\-\s]+/g, "")
-    const normalizeList = (v) => toArray(v).flatMap(item => item.split(/\s*,\s*/)).map(normalizeToken).filter(Boolean)
-  const normalize = (val) => {
-      const clean = (s) => s?.toString().toLowerCase().replace(/[\s_\-\/]+/g, "").trim() ?? ""
-      return Array.isArray(val) ? val.map(clean) : clean(val)
+    if (status.includes("evaluation")) {
+      return { label: "Evaluate", icon: <Search size={14} />, color: "#7d5a50" };
     }
-    const cleanCurrency = (value) => { if (!value) return 0; return parseFloat(value.toString().replace(/[^0-9.]/g, "")) || 0 }
-    const cleanString = (input) => {
-      if (Array.isArray(input)) return input.map(str => typeof str === "string" ? str.replace(/[_-]/g, " ").toLowerCase() : str)
-      if (typeof input === "string") return input.replace(/[_-]/g, " ").toLowerCase()
-      return input
+    if (status.includes("due diligence")) {
+      return { label: "Start DD", icon: <Shield size={14} />, color: "#7d5a50" };
     }
-    const checkGeographicMatch = () => {
-      const briefPrefs = catalystFormData?.programBriefMatchingPreference || {}
-      const generalPrefs = catalystFormData?.generalMatchingPreference || {}
+    if (status.includes("decision")) {
+      return { label: "Decide", icon: <AlertCircle size={14} />, color: "#7d5a50" };
+    }
+    if (status.includes("term sheet")) {
+      return { label: "Send Terms", icon: <FileCheck size={14} />, color: "#7d5a50" };
+    }
+    if (status.includes("active")) {
+      return { label: "Monitor", icon: <TrendingUp size={14} />, color: "#7d5a50" };
+    }
+    
+    return { label: "Review", icon: <Eye size={14} />, color: "#7d5a50" };
+  };
 
-      const accelGeoFocus = toArray(briefPrefs.geographicFocus?.length ? briefPrefs.geographicFocus : generalPrefs.geographicFocus)
-        .map(s => s.toLowerCase().trim())
+  // ─── Density Styles ─────────────────────────────────────────────────────────
+  const densityStyles = {
+    'comfortable': { 
+      cell: 'py-3 px-3', 
+      header: 'py-3 px-3', 
+      fontSize: 'text-sm',
+      iconSize: 16,
+      avatarSize: 'w-8 h-8'
+    },
+    'compact': { 
+      cell: 'py-2 px-2', 
+      header: 'py-2 px-2', 
+      fontSize: 'text-xs',
+      iconSize: 14,
+      avatarSize: 'w-7 h-7'
+    },
+    'ultra-compact': { 
+      cell: 'py-1.5 px-1.5', 
+      header: 'py-1.5 px-1.5', 
+      fontSize: 'text-xs',
+      iconSize: 12,
+      avatarSize: 'w-6 h-6'
+    }
+  };
 
-      if (accelGeoFocus.includes("global")) return true
-      if (
-        accelGeoFocus.includes("regional_emea") ||
-        accelGeoFocus.includes("regional_na") ||
-        accelGeoFocus.includes("regional_apac")
-      ) return true
+  const ds = densityStyles[density];
 
-      const smeCountries = toArray(smeProfileData.entityOverview?.operatingCountries)
-        .map(s => s.toLowerCase().trim())
-      const smeLocationFallback = (smeProfileData.entityOverview?.location || "").toLowerCase().trim()
-      const smeProvinces = toArray(smeProfileData.entityOverview?.operatingProvinces)
-        .map(s => s.toLowerCase().trim())
-      const smeProvinceFallback = (smeProfileData.entityOverview?.province || "").toLowerCase().trim()
+  // ─── Load saved NDAs ────────────────────────────────────────────────────────
+  useEffect(() => {
+    const loadSentNDAs = async () => {
+      try {
+        const user = auth.currentUser;
+        if (!user) return;
 
-      if (accelGeoFocus.includes("country_specific")) {
-        const accelCountries = toArray(
-          briefPrefs.selectedCountries?.length ? briefPrefs.selectedCountries : generalPrefs.selectedCountries
-        ).map(s => s.toLowerCase().trim().replace(/[_\-\s]+/g, ""))
-
-        const smeCountryTokens = [...smeCountries, smeLocationFallback]
-          .map(s => s.replace(/[_\-\s]+/g, ""))
-
-        return smeCountryTokens.some(c => accelCountries.includes(c))
+        const sharedNDAQuery = query(
+          collection(db, "shared_nda"),
+          where("catalystId", "==", user.uid),
+          where("status", "==", "sent")
+        );
+        
+        const snapshot = await getDocs(sharedNDAQuery);
+        const sentMap = {};
+        
+        snapshot.docs.forEach(doc => {
+          const data = doc.data();
+          const smeKey = `${data.smeId}_${data.programIndex}`;
+          sentMap[smeKey] = true;
+        });
+        
+        setSentNDAs(sentMap);
+      } catch (error) {
+        console.error("Error loading sent NDAs:", error);
       }
+    };
 
-      if (accelGeoFocus.includes("province_specific")) {
-        const accelProvinces = toArray(
-          briefPrefs.selectedProvinces?.length ? briefPrefs.selectedProvinces : generalPrefs.selectedProvinces
-        ).map(s => s.toLowerCase().trim().replace(/[_\-\s]+/g, ""))
-
-        const smeProvinceTokens = [...smeProvinces, smeProvinceFallback]
-          .map(s => s.replace(/[_\-\s]+/g, ""))
-
-        return smeProvinceTokens.some(p => accelProvinces.includes(p))
-      }
-
-      return false
+    if (auth.currentUser) {
+      loadSentNDAs();
     }
-  
+  }, []);
 
-    const programData = program || catalystFormData?.programmeDetails?.programs?.[0] || {}
-    const matchPrefs = catalystFormData?.programBriefMatchingPreference || catalystFormData?.generalMatchingPreference || {}
-
-      // 1. Funding Stage
-    const smeStage = smeProfileData.applicationOverview?.fundingStage
-    const accelStageRaw = matchPrefs.businessLifecycleStage
- 
-    const accelStages = Array.isArray(accelStageRaw)
-      ? accelStageRaw.map((s) => normalize(s)).filter(Boolean)
-      : accelStageRaw
-        ? [normalize(accelStageRaw)].filter(Boolean)
-        : []
- 
-    const normSmeStage = normalize(smeStage)
-    const stageMatch = !!normSmeStage && accelStages.includes(normSmeStage)
- 
-    breakdown.fundingStage.details = {
-      smeValue: smeStage,
-      accelValue: accelStages.join(", ") || accelStageRaw,
-    }
-    breakdown.fundingStage.matched = stageMatch
-    if (stageMatch) { breakdown.fundingStage.score = 12.5; matched++ }
-
-    // 2. Ticket Size
-    const smeAmountRequested = cleanCurrency(smeProfileData.useOfFunds?.amountRequested)
-    const accelMinTicket = cleanCurrency(programData.minimumSupport || 0)
-    const accelMaxTicket = cleanCurrency(programData.maximumSupport || 0)
-    const ticketMatch = smeAmountRequested >= accelMinTicket && smeAmountRequested <= accelMaxTicket
-    breakdown.ticketSize.details = { smeValue: smeAmountRequested, accelValue: `${accelMinTicket}–${accelMaxTicket}` }
-    breakdown.ticketSize.matched = ticketMatch
-    if (ticketMatch) { breakdown.ticketSize.score = 12.5; matched++ }
-
-     // 3. Geographic Fit
-    const geoMatch = checkGeographicMatch()
-    const smeLocationDisplay = [
-      ...toArray(smeProfileData.entityOverview?.operatingCountries),
-      smeProfileData.entityOverview?.location,
-    ].filter(Boolean).join(", ") || "N/A"
- const briefPrefsForDisplay = catalystFormData?.programBriefMatchingPreference || {}
-    const generalPrefsForDisplay = catalystFormData?.generalMatchingPreference || {}
-    const accelGeoDisplay = [
-      ...toArray(briefPrefsForDisplay.geographicFocus?.length ? briefPrefsForDisplay.geographicFocus : generalPrefsForDisplay.geographicFocus),
-      ...toArray(briefPrefsForDisplay.selectedCountries?.length ? briefPrefsForDisplay.selectedCountries : generalPrefsForDisplay.selectedCountries),
-      ...toArray(briefPrefsForDisplay.selectedProvinces?.length ? briefPrefsForDisplay.selectedProvinces : generalPrefsForDisplay.selectedProvinces),
-    ].filter(Boolean).join(", ") || "N/A"
-    breakdown.geographicFit.details = { smeValue: smeLocationDisplay, accelValue: accelGeoDisplay }
-    breakdown.geographicFit.matched = geoMatch
-    if (geoMatch) { breakdown.geographicFit.score = 12.5; matched++ }
-
-    // 4. Sector Match
-    const smeSectors = smeProfileData.entityOverview?.economicSectors
-    const accelSectors = matchPrefs.sectorFocus
-    const sectorMatch = hasOverlap(smeSectors, accelSectors)
-    breakdown.sectorMatch.details = { smeValue: normalizeSectors(smeSectors).join(", "), accelValue: normalizeSectors(accelSectors).join(", ") }
-    breakdown.sectorMatch.matched = sectorMatch
-    if (sectorMatch) { breakdown.sectorMatch.score = 12.5; matched++ }
-
-    // 5. Instrument Fit
-    const smeInstrumentRaw = smeProfileData.useOfFunds?.fundingInstruments
-    const accelInstrumentRaw = programData.supportType || matchPrefs.supportFocusSubtype || matchPrefs.supportFocusType
-    const instrumentMatch = hasOverlap(smeInstrumentRaw, accelInstrumentRaw)
-    breakdown.instrumentFit.details = { smeValue: normalizeList(smeInstrumentRaw).join(", "), accelValue: normalizeList(accelInstrumentRaw).join(", ") }
-    breakdown.instrumentFit.matched = instrumentMatch
-    if (instrumentMatch) { breakdown.instrumentFit.score = 12.5; matched++ }
-
-    // 6. Support Match
-    const smeSupportCategory   = smeProfileData.useOfFunds?.additionalSupportFocus
-    const smeSupportSubtype    = smeProfileData.useOfFunds?.additionalSupportFocusSubtype
- const accelSupportCategory = programData.supportFocusType || matchPrefs.supportFocusType || matchPrefs.supportFocus
-const accelSupportSubtype  = programData.supportFocusSubtype || matchPrefs.supportFocusSubtype || matchPrefs.supportFocusType
-
-    const normSmeCat    = normalize(smeSupportCategory)
-    const normSmeSubtype = normalize(smeSupportSubtype)
-    const normAccelCat  = normalize(accelSupportCategory)
-    const normAccelSubtype = normalize(accelSupportSubtype)
- 
-    let supportMatchScore = 0, supportMatched = false
-    if (normSmeSubtype && normAccelSubtype && normSmeSubtype === normAccelSubtype) {
-      supportMatchScore = 12.5; supportMatched = true; matched++
-    } else if (normSmeCat && normAccelCat && (normSmeCat === normAccelCat || hasOverlap(smeSupportCategory, accelSupportCategory))) {
-  supportMatchScore = 6.25; supportMatched = true
-}
- 
-    breakdown.supportMatch.details = {
-      smeValue:   smeSupportSubtype  ? `${smeSupportCategory} – ${smeSupportSubtype}`   : smeSupportCategory,
-      accelValue: accelSupportSubtype ? `${accelSupportCategory} – ${accelSupportSubtype}` : accelSupportCategory,
-    }
-    breakdown.supportMatch.score   = supportMatchScore
-    breakdown.supportMatch.matched = supportMatched
-
-    // 7. Legal Entity Fit
-    const smeLegal = smeProfileData.entityOverview?.legalStructure
-    const accelLegal = matchPrefs.legalEntityFit
-    const legalMatch = normalize(smeLegal) === normalize(accelLegal)
-    breakdown.legalEntityFit.details = { smeValue: smeLegal, accelValue: accelLegal }
-    breakdown.legalEntityFit.matched = legalMatch
-    if (legalMatch) { breakdown.legalEntityFit.score = 12.5; matched++ }
-
-    // 8. Revenue Threshold
-    const smeRevenue = cleanCurrency(smeProfileData.financialOverview?.annualRevenue)
-    const accelThreshold = cleanCurrency(programData.minimumSupport || "0")
-    const revenueMatch = smeRevenue >= accelThreshold
-    breakdown.revenueThreshold.details = { smeValue: smeRevenue, accelValue: accelThreshold }
-    breakdown.revenueThreshold.matched = revenueMatch
-    if (revenueMatch) { breakdown.revenueThreshold.score = 12.5; matched++ }
-
-const totalScore = Object.values(breakdown).reduce((sum, b) => sum + (b.score || 0), 0)
-
-return { score: Math.round(totalScore), breakdown }
-  }
-
-  // ── Match breakdown ────────────────────────────────────────────────────────
-  const handleViewMatchBreakdown = (sme) => {
-    try {
-      const contextEntry = enriched.find((a) => a.smeId === sme.id && a.programIndex === sme.programIndex)
-      const smeProfileData = contextEntry?.profile || {}
-      const programs = catalystFormData?.programmeDetails?.programs || []
-      const program = programs[parseInt(sme.programIndex)] || programs[0] || null
-      const matchResult = calculateMatchScore(smeProfileData, catalystFormData, program)
-      setSelectedAcceleratorForBreakdown({ ...sme, matchPercentage: matchResult.score, matchBreakdown: matchResult.breakdown })
-      setShowMatchBreakdown(true)
-    } catch (err) {
-      console.error("Error computing match breakdown:", err)
-      setNotification({ type: "error", message: "Failed to load match breakdown." })
-    }
-  }
-
-  const currentStageFields = getStageFields(nextStage)
-  
-// ── Share NDA function ────────────────────────────────────────────────────────
-const handleShareNDA = async (sme) => {
-  const smeKey = `${sme.id}_${sme.programIndex}`
-  
-  try {
-    setIsNDASharing(prev => ({ ...prev, [smeKey]: true }))
-    
-    const user = auth.currentUser
-    if (!user) throw new Error("User not authenticated")
-
-    // console.log("Sharing NDA for SME:", sme.id, sme.name)
-    // console.log("Current user UID:", user.uid)
-
-    const ndaDocRef = doc(db, "ndas", user.uid)
-    const ndaDoc = await getDoc(ndaDocRef)
-    
-    // console.log("NDA document exists:", ndaDoc.exists())
-    
-    if (!ndaDoc.exists()) {
-      setNotification({ 
-        type: "error", 
-        message: `No NDA found for your account. Please upload an NDA first.` 
-      })
-      return
-    }
-
-    const ndaData = ndaDoc.data()
-    // console.log("NDA document data:", ndaData)
-    // console.log("PDF URL:", ndaData.pdfUrl)
-
-    if (!ndaData.pdfUrl) {
-      console.error("No pdfUrl found in NDA document. Available fields:", Object.keys(ndaData))
-      setNotification({ 
-        type: "error", 
-        message: "NDA document has no PDF URL. Please check the NDA document structure." 
-      })
-      return
-    }
-
-    const shareData = {
-      catalystId: user.uid,
-      catalystName: user.displayName || "Catalyst",
-      catalystEmail: user.email,
-      ndaId: ndaDoc.id,
-      ndaUrl: ndaData.pdfUrl,
-      ndaName: ndaData.ndaContent || ndaData.name || ndaData.fileName || "NDA Document",
-      ndaUploadedAt: ndaData.dateSigned || ndaData.lastUpdated || ndaData.uploadedAt || ndaData.timestamp || ndaData.createdAt,
-      
-      smeId: sme.id,
-      smeName: sme.name,
-      
-      sharedAt: serverTimestamp(),
-      status: "sent",
-      programIndex: sme.programIndex,
-      applicationId: `${user.uid}_${sme.id}_${sme.programIndex}`
-    }
-
-    const existingShareQuery = query(
-      collection(db, "shared_nda"),
-      where("catalystId", "==", user.uid),
-      where("smeId", "==", sme.id),
-      where("programIndex", "==", sme.programIndex)
-    )
-    
-    const existingShare = await getDocs(existingShareQuery)
-    
-    if (existingShare.empty) {
-      await addDoc(collection(db, "shared_nda"), shareData)
-      // console.log("Created new share record for SME:", sme.id)
-    } else {
-      const shareDoc = existingShare.docs[0]
-      await updateDoc(doc(db, "shared_nda", shareDoc.id), {
-        ...shareData,
-        updatedAt: serverTimestamp(),
-        sharedAt: serverTimestamp()
-      })
-      // console.log("Updated existing share record for SME:", sme.id)
-    }
-
-    await addDoc(collection(db, "messages"), {
-      to: sme.id,
-      from: user.uid,
-      subject: "NDA Ready for Review",
-      content: `A Non-Disclosure Agreement (NDA) has been shared with you for your application. Please review and sign it at your earliest convenience.`,
-      date: new Date().toISOString(),
-      read: false,
-      type: "nda_share",
-      ndaId: ndaDoc.id,
-      ndaUrl: ndaData.pdfUrl,
-      ndaName: ndaData.ndaContent || ndaData.name || ndaData.fileName || "NDA Document",
-      applicationId: `${user.uid}_${sme.id}_${sme.programIndex}`,
-      smeName: sme.name,
-      smeId: sme.id
-    })
-
-    setSentNDAs(prev => ({
-      ...prev,
-      [smeKey]: true
-    }))
-
-    setNotification({ 
-      type: "success", 
-      message: `NDA shared successfully with ${sme.name}` 
-    })
-
-  } catch (error) {
-    console.error("Error sharing NDA:", error)
-    setNotification({ 
-      type: "error", 
-      message: `Failed to share NDA: ${error.message}` 
-    })
-  } finally {
-    setIsNDASharing(prev => ({ ...prev, [smeKey]: false }))
-  }
-}
-
-  // ────────────────────────────────────────────────────────────────────────────
+  // ─── Render ─────────────────────────────────────────────────────────────────
   return (
-    <div className="p-5 w-full max-w-full overflow-x-hidden">
-      {/* Header row */}
-      <div className="flex justify-between items-center mb-5">
-        <button
-          onClick={() => setShowFilters(true)}
-          className="flex items-center gap-1.5 px-5 py-2.5 bg-accentGold text-white border-none rounded-md cursor-pointer font-medium text-[0.8rem] shadow-[0_2px_6px_rgba(166,124,82,0.3)] hover:bg-[#8d6a44] transition-colors"
-        >
-          <Filter size={14} />
-          Filter Applications
-        </button>
-      </div>
-
+    <div className="w-full space-y-4 p-6">
       {/* Notification */}
       {notification && (
-        <div className={`px-3 py-3 rounded-md mb-5 text-[0.8rem] border ${notification.type === "success"
-          ? "bg-green-50 text-green-800 border-green-200"
-          : "bg-red-50 text-red-800 border-red-200"
-          }`}>
-          {notification.message}
+        <div className={`px-4 py-3 rounded-xl text-sm font-medium border animate-fadeIn ${
+          notification.type === "success"
+            ? "bg-green-50 text-green-800 border-green-200"
+            : "bg-red-50 text-red-800 border-red-200"
+        }`}>
+          <div className="flex items-center justify-between">
+            <span>{notification.message}</span>
+            <button 
+              onClick={() => setNotification(null)}
+              className="ml-2 text-current opacity-50 hover:opacity-100"
+            >
+              <X size={16} />
+            </button>
+          </div>
         </div>
       )}
 
-      {/* Table or Skeleton */}
-      {loading ? (
-        <TableSkeleton />
-      ) : (
-        <div className="rounded-md border border-lightTan shadow-sm w-full overflow-x-auto">
-          <table className="w-full border-collapse bg-offWhite text-[0.75rem]" style={{ tableLayout: "fixed" }}>
-            <colgroup>
-              <col style={{ width: "70px" }} />  {/* SMSE Name */}
-              <col style={{ width: "60px" }} />  {/* Location */}
-              <col style={{ width: "55px" }} />  {/* Sector */}
-              <col style={{ width: "60px" }} />  {/* Funding Stage */}
-              <col style={{ width: "65px" }} />  {/* Funding Required */}
-              <col style={{ width: "55px" }} />  {/* Equity Offered */}
-              <col style={{ width: "70px" }} />  {/* Guarantees */}
-              <col style={{ width: "75px" }} />  {/* Support Required */}
-              <col style={{ width: "70px" }} />  {/* Services Required */}
-              <col style={{ width: "65px" }} />  {/* Application Date */}
-              <col style={{ width: "50px" }} />  {/* Match % */}
-              <col style={{ width: "55px" }} />  {/* BIG Score */}
-              <col style={{ width: "80px" }} />  {/* Current Status */}
-              <col style={{ width: "60px" }} />  {/* Action */}
-            </colgroup>
-            <thead>
-              <tr>
-                <th className={TH}>SMSE<br />Name</th>
-                <th className={TH}>Location</th>
-                <th className={TH}>Sector</th>
-                <th className={TH}>Funding<br />Stage</th>
-                <th className={TH}>Funding<br />Required</th>
-                <th className={TH}>Equity<br />Offered</th>
-                <th className={TH}>Guarantees</th>
-                <th className={TH}>Support<br />Required</th>
-                <th className={TH}>Services<br />Required</th>
-                <th className={TH}>Application<br />Date</th>
-                <th className={TH}>Match %</th>
-                <th className={TH}>BIG Score</th>
-                <th className={TH}>Current<br />Status</th>
-                <th className={`${TH} border-r-0`}>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {smes.length === 0 ? (
-                <tr>
-                  <td colSpan="14" className={`${TD} text-center text-gray-400 border-r-0`}>
-                    No applications received yet
-                  </td>
-                </tr>
-              ) : (
-                smes.map((sme) => {
-                  // FIXED: Use composite key with programIndex for stage lookup
-                  const stageKey = `${sme.id}_${sme.programIndex}`
-                  const currentStatus = updatedStages[stageKey] || sme.pipelineStage || sme.currentStatus
-                  const statusClasses = getStatusClasses(currentStatus)
-                  return (
-                    <tr key={stageKey} className="border-b border-lightTan hover:bg-cream/50">
-                      {/* Name */}
-                      <td className={TD}>
-                        <button
-                          onClick={() => handleViewDetails(sme)}
-                          className="bg-transparent border-none text-accentGold underline cursor-pointer font-medium p-0 text-[0.75rem] text-left break-words w-full leading-[1.2] hover:text-[#8d6a44]"
-                        >
-                          {sme.name}
-                        </button>
-                      </td>
-                      {/* Location */}
-                      <td className={TD}>
-                        <div className="flex items-center gap-0.5 text-[0.75rem]">
-                          <MapPin size={8} className="flex-shrink-0" />
-                          <span className="break-words">{sme.location}</span>
-                        </div>
-                      </td>
-                      {/* Sector */}
-                      <td className={TD}><TruncatedText text={sme.sector} maxLines={2} maxLength={8} /></td>
-                      {/* Funding Stage */}
-                      <td className={TD}><TruncatedText text={sme.fundingStage} maxLength={8} /></td>
-                      {/* Funding Required */}
-                      <td className={TD}><TruncatedText text={sme.fundingRequired} maxLength={10} /></td>
-                      {/* Equity Offered */}
-                      <td className={TD}><TruncatedText text={sme.equityOffered} maxLength={8} /></td>
-                      {/* Guarantees */}
-                      <td className={TD}><TruncatedText text={sme.guarantees} maxLength={8} /></td>
-                      {/* Support Required */}
-                      <td className={TD}><TruncatedText text={sme.supportRequired} maxLength={12} /></td>
-                      {/* Services Required */}
-                      <td className={TD}><TruncatedText text={sme.servicesRequired} maxLength={10} /></td>
-                      {/* Application Date */}
-                      <td className={TD}>
-                        <div className="flex items-center gap-0.5 text-[0.7rem]">
-                          <Calendar size={8} className="flex-shrink-0" />
-                          <span className="break-words">{sme.applicationDate}</span>
-                        </div>
-                      </td>
-                      {/* Match % */}
-                      <td className={TD}>
-                        <div className="flex flex-col items-start gap-0.5">
-                          <div className="w-[25px] h-[3px] bg-lightTan rounded-full overflow-hidden">
-                            <div className="h-full bg-gradient-to-r from-green-400 to-green-300 transition-all duration-300"
-                              style={{ width: `${sme.matchPercentage}%` }} />
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <span className="font-semibold text-textBrown text-[0.7rem]">{sme.matchPercentage}%</span>
-                            <Eye size={12} className="cursor-pointer text-accentGold flex-shrink-0 hover:text-[#8d6a44]"
-                              onClick={() => handleViewMatchBreakdown(sme)} />
-                          </div>
-                        </div>
-                      </td>
-                      {/* BIG Score */}
-                      <td className={TD}>
-                        <div className="flex flex-col items-start gap-0.5">
-                          <div className="w-[25px] h-[3px] bg-lightTan rounded-full overflow-hidden">
-                            <div className="h-full transition-all duration-300"
-                              style={{ width: `${sme.bigScore}%`, background: `linear-gradient(90deg, ${getScoreColor(sme.bigScore)}, ${getScoreColor(sme.bigScore)}aa)` }} />
-                          </div>
-                          <button
-                            onClick={() => handleBigScoreClick(sme)}
-                            className="bg-transparent border-none underline cursor-pointer flex items-center gap-px font-semibold text-[0.75rem] hover:opacity-80"
-                            style={{ color: getScoreColor(sme.bigScore) }}
-                          >
-                            {sme.bigScore}%<BarChart3 size={8} />
-                          </button>
-                        </div>
-                       </td>
-                      {/* Status */}
-                      <td className={TD}>
-                        <div className="flex items-center flex-wrap gap-0.5">
-                          <span className={`${statusClasses.bg} ${statusClasses.text} py-0.5 px-1 rounded text-[0.65rem] font-medium inline-block whitespace-nowrap`}>
-                            {currentStatus}
-                          </span>
-                          {renderSupportAgreementStatus(sme)}
-                        </div>
-                       </td>
-                      {/* Action */}
-                      <td className={`${TD} border-r-0`}>
-                        <div className="flex flex-col gap-1">
-                          <button
-                            onClick={() => handleStageAction(sme)}
-                            className="px-1.5 py-0.5 bg-mediumBrown text-white border-none rounded cursor-pointer text-[0.7rem] font-medium w-full whitespace-nowrap hover:bg-darkBrown transition-colors"
-                          >
-                            Set Stage
-                          </button>
+      {/* Toolbar */}
+      <div className="bg-[#faf7f2] rounded-t-2xl p-4 border border-[#e6d7c3] border-b-0 shadow-sm">
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          {/* Search */}
+          <div className="flex-1 min-w-[200px] max-w-md relative">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#7d5a50]" />
+            <input
+              type="text"
+              placeholder="Search by name, sector, location..."
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="w-full pl-10 pr-4 py-2.5 bg-white border border-[#c8b6a6] rounded-xl text-sm focus:outline-none focus:border-[#7d5a50] focus:ring-2 focus:ring-[#7d5a50]/20 transition-all placeholder:text-[#7d5a50]/50"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-[#7d5a50] hover:text-[#4a352f]"
+              >
+                <X size={14} />
+              </button>
+            )}
+          </div>
 
-                          {/* Only show NDA button when stage is Evaluation */}
-                          {(currentStatus === "Evaluation") && (
-                            (() => {
-                              const smeKey = `${sme.id}_${sme.programIndex}`
-                              const isSharing = isNDASharing[smeKey]
-                              const isSent = sentNDAs[smeKey]
-                              
-                              return isSent ? (
-                                <button
-                                  disabled
-                                  className="px-1.5 py-0.5 bg-gray-400 text-white border-none rounded cursor-not-allowed text-[0.7rem] font-medium w-full whitespace-nowrap opacity-60"
-                                >
-                                  NDA Sent
-                                </button>
-                              ) : (
-                                <button
-                                  onClick={() => handleShareNDA(sme)}
-                                  disabled={isSharing}
-                                  className="px-1.5 py-0.5 bg-mediumBrown text-white border-none rounded cursor-pointer text-[0.7rem] font-medium w-full whitespace-nowrap hover:bg-darkBrown transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                                >
-                                  {isSharing ? "Sharing..." : "Share NDA"}
-                                </button>
-                              )
-                            })()
+          <div className="flex items-center gap-2">
+            {/* Column Chooser */}
+            <div className="relative">
+              <button
+                onClick={() => setShowColumnChooser(!showColumnChooser)}
+                className="flex items-center gap-2 px-4 py-2.5 bg-white border border-[#c8b6a6] rounded-xl text-sm text-[#4a352f] hover:bg-[#f5f0e1] transition-all shadow-sm"
+              >
+                <Columns size={16} />
+                Columns
+                <ChevronDown size={14} className={`transition-transform ${showColumnChooser ? 'rotate-180' : ''}`} />
+              </button>
+              
+              {showColumnChooser && (
+                <>
+                  <div 
+                    className="fixed inset-0 z-40"
+                    onClick={() => setShowColumnChooser(false)}
+                  />
+                  <div className="absolute right-0 top-full mt-2 w-72 bg-white rounded-2xl shadow-2xl border border-[#e6d7c3] p-5 z-50 animate-fadeIn max-h-[500px] overflow-y-auto">
+                    <div className="flex items-center justify-between mb-4">
+                      <h4 className="text-sm font-semibold text-[#4a352f]">Column Visibility</h4>
+                      <button 
+                        onClick={() => setShowColumnChooser(false)}
+                        className="text-[#7d5a50] hover:text-[#4a352f]"
+                      >
+                        <X size={16} />
+                      </button>
+                    </div>
+                    
+                    <div className="space-y-1">
+                      <div className="text-xs font-semibold text-[#7d5a50] uppercase tracking-wider mb-2 px-2">Required Columns</div>
+                      {[
+                        { key: 'sme', label: 'SME Name' },
+                        { key: 'bigScore', label: 'BIG Score' },
+                        { key: 'match', label: 'Match %' },
+                        { key: 'status', label: 'Status' },
+                        { key: 'action', label: 'Action' }
+                      ].map(({ key, label }) => (
+                        <label key={key} className="flex items-center gap-3 py-2 px-2 rounded-lg opacity-75">
+                          <input type="checkbox" checked={true} disabled={true} className="rounded border-[#c8b6a6]" />
+                          <span className="text-sm text-[#4a352f]">{label}</span>
+                          <span className="text-xs text-[#7d5a50] ml-auto">Required</span>
+                        </label>
+                      ))}
+                      
+                      <div className="text-xs font-semibold text-[#7d5a50] uppercase tracking-wider mb-2 mt-4 px-2">Optional Columns</div>
+                      {[
+                        { key: 'fundingStage', label: 'Funding Stage' },
+                        { key: 'fundingRequired', label: 'Funding Required' },
+                        { key: 'applied', label: 'Applied Date' },
+                        { key: 'location', label: 'Location' },
+                        { key: 'sector', label: 'Sector' },
+                        { key: 'equity', label: 'Equity Offered' },
+                        { key: 'guarantees', label: 'Guarantees' },
+                        { key: 'support', label: 'Support Required' },
+                        { key: 'services', label: 'Services Required' },
+                        { key: 'assignedUser', label: 'Assigned User' },
+                        { key: 'daysInStage', label: 'Days in Stage' },
+                        { key: 'lastActivity', label: 'Last Activity' }
+                      ].map(({ key, label }) => (
+                        <label key={key} className="flex items-center gap-3 py-2 px-2 rounded-lg hover:bg-[#faf7f2] transition-all cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={columnVisibility[key] || false}
+                            onChange={() => toggleColumn(key)}
+                            className="rounded border-[#c8b6a6] text-[#7d5a50] focus:ring-[#7d5a50]"
+                          />
+                          <span className="text-sm text-[#4a352f]">{label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Density Selector */}
+            <select
+              value={density}
+              onChange={(e) => setDensity(e.target.value)}
+              className="px-4 py-2.5 bg-white border border-[#c8b6a6] rounded-xl text-sm text-[#4a352f] focus:outline-none focus:border-[#7d5a50] cursor-pointer shadow-sm"
+            >
+              <option value="comfortable">Comfortable</option>
+              <option value="compact">Compact</option>
+              <option value="ultra-compact">Ultra Compact</option>
+            </select>
+
+            {/* Save View */}
+            <div className="relative">
+              <button
+                onClick={() => setShowSaveView(!showSaveView)}
+                className="flex items-center gap-2 px-4 py-2.5 bg-white border border-[#c8b6a6] rounded-xl text-sm text-[#4a352f] hover:bg-[#f5f0e1] transition-all shadow-sm"
+              >
+                <Settings size={16} />
+                Views
+              </button>
+              
+              {showSaveView && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowSaveView(false)} />
+                  <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-2xl shadow-2xl border border-[#e6d7c3] p-5 z-50 animate-fadeIn">
+                    <h4 className="text-sm font-semibold text-[#4a352f] mb-3">Saved Views</h4>
+                    
+                    {savedViews.length > 0 && (
+                      <div className="space-y-1 mb-4">
+                        {savedViews.map((view, idx) => (
+                          <button
+                            key={idx}
+                            onClick={() => loadView(view)}
+                            className="w-full text-left px-3 py-2 rounded-lg text-sm text-[#4a352f] hover:bg-[#faf7f2] transition-all"
+                          >
+                            {view.name}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={viewName}
+                        onChange={(e) => setViewName(e.target.value)}
+                        placeholder="View name..."
+                        className="flex-1 px-3 py-2 border border-[#c8b6a6] rounded-lg text-sm focus:outline-none focus:border-[#7d5a50]"
+                      />
+                      <button
+                        onClick={saveCurrentView}
+                        disabled={!viewName.trim()}
+                        className="px-4 py-2 bg-[#7d5a50] text-white rounded-lg text-sm font-medium hover:bg-[#4a352f] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        Save
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Filter Button */}
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              className={`
+                flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all shadow-sm
+                ${showFilters 
+                  ? 'bg-[#7d5a50] text-white border-[#7d5a50]' 
+                  : 'bg-white border border-[#c8b6a6] text-[#4a352f] hover:bg-[#f5f0e1]'}
+              `}
+            >
+              <SlidersHorizontal size={16} />
+              Filters
+              {(localFilters.fundingStage.length > 0 || localFilters.status.length > 0 || localFilters.sector.length > 0) && (
+                <span className="w-5 h-5 rounded-full bg-[#a67c52] text-white text-xs flex items-center justify-center">
+                  {localFilters.fundingStage.length + localFilters.status.length + localFilters.sector.length}
+                </span>
+              )}
+            </button>
+
+            {/* Export */}
+            <button 
+              onClick={handleExport}
+              className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-[#7d5a50] to-[#4a352f] text-white border-none rounded-xl text-sm font-medium hover:shadow-lg transition-all shadow-sm"
+            >
+              <Download size={16} />
+              Export
+            </button>
+          </div>
+        </div>
+
+        {/* Filter Panel */}
+        {showFilters && (
+          <div className="mt-4 p-5 bg-[#faf7f2] rounded-2xl border-2 border-[#e6d7c3] animate-fadeIn">
+            <div className="flex items-center justify-between mb-4">
+              <h4 className="text-sm font-bold text-[#4a352f]">Filter Applications</h4>
+              <button
+                onClick={clearAllFilters}
+                className="flex items-center gap-1.5 text-xs text-[#7d5a50] hover:text-[#4a352f] transition-all"
+              >
+                <RotateCcw size={12} />
+                Reset All
+              </button>
+            </div>
+            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {/* BIG Score Range */}
+              <div className="bg-white rounded-xl p-4 border border-[#e6d7c3]">
+                <label className="block text-xs font-semibold text-[#4a352f] mb-3">
+                  BIG Score Range: {localFilters.bigScoreRange[0]} - {localFilters.bigScoreRange[1]}
+                </label>
+                <div className="flex items-center gap-3 mb-3">
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={localFilters.bigScoreRange[0]}
+                    onChange={(e) => setLocalFilters(prev => ({ 
+                      ...prev, 
+                      bigScoreRange: [Math.min(parseInt(e.target.value) || 0, prev.bigScoreRange[1]), prev.bigScoreRange[1]] 
+                    }))}
+                    className="w-16 px-2 py-1.5 border border-[#c8b6a6] rounded-lg text-sm text-center focus:outline-none focus:border-[#7d5a50]"
+                  />
+                  <span className="text-[#7d5a50] text-sm">to</span>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={localFilters.bigScoreRange[1]}
+                    onChange={(e) => setLocalFilters(prev => ({ 
+                      ...prev, 
+                      bigScoreRange: [prev.bigScoreRange[0], Math.max(parseInt(e.target.value) || 0, prev.bigScoreRange[0])] 
+                    }))}
+                    className="w-16 px-2 py-1.5 border border-[#c8b6a6] rounded-lg text-sm text-center focus:outline-none focus:border-[#7d5a50]"
+                  />
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  value={localFilters.bigScoreRange[0]}
+                  onChange={(e) => setLocalFilters(prev => ({ 
+                    ...prev, 
+                    bigScoreRange: [parseInt(e.target.value), prev.bigScoreRange[1]] 
+                  }))}
+                  className="w-full accent-[#7d5a50]"
+                />
+              </div>
+
+              {/* Status Filter */}
+              <div className="bg-white rounded-xl p-4 border border-[#e6d7c3]">
+                <label className="block text-xs font-semibold text-[#4a352f] mb-3">
+                  Pipeline Status
+                </label>
+                <div className="flex flex-wrap gap-1.5">
+                  {["Matching", "Application", "Evaluation", "Due Diligence", "Decision", "Term Sheet", "Active"].map(status => (
+                    <button
+                      key={status}
+                      onClick={() => {
+                        setLocalFilters(prev => ({
+                          ...prev,
+                          status: prev.status.includes(status) 
+                            ? prev.status.filter(s => s !== status)
+                            : [...prev.status, status]
+                        }));
+                      }}
+                      className={`
+                        px-2.5 py-1 rounded-full text-xs font-medium transition-all
+                        ${localFilters.status.includes(status)
+                          ? 'bg-[#7d5a50] text-white'
+                          : 'bg-[#f5f0e1] text-[#4a352f] hover:bg-[#e6d7c3]'}
+                      `}
+                    >
+                      {status}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Funding Stage Filter */}
+              <div className="bg-white rounded-xl p-4 border border-[#e6d7c3]">
+                <label className="block text-xs font-semibold text-[#4a352f] mb-3">
+                  Funding Stage
+                </label>
+                <div className="flex flex-wrap gap-1.5">
+                  {["Startup", "Growth", "Scale", "Established"].map(stage => (
+                    <button
+                      key={stage}
+                      onClick={() => {
+                        setLocalFilters(prev => ({
+                          ...prev,
+                          fundingStage: prev.fundingStage.includes(stage) 
+                            ? prev.fundingStage.filter(s => s !== stage)
+                            : [...prev.fundingStage, stage]
+                        }));
+                      }}
+                      className={`
+                        px-2.5 py-1 rounded-full text-xs font-medium transition-all
+                        ${localFilters.fundingStage.includes(stage)
+                          ? 'bg-[#7d5a50] text-white'
+                          : 'bg-[#f5f0e1] text-[#4a352f] hover:bg-[#e6d7c3]'}
+                      `}
+                    >
+                      {stage}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Table */}
+      <div className="bg-white rounded-2xl border border-[#e6d7c3] shadow-lg overflow-hidden">
+        {loading ? (
+          <div className="p-8">
+            <div className="space-y-4">
+              {[...Array(8)].map((_, i) => (
+                <div key={i} className="h-10 bg-shimmer-light bg-shimmer rounded-lg animate-shimmer" />
+              ))}
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse">
+                <colgroup>
+                  {columnVisibility.sme && <col style={{ width: '140px' }} />}
+                  {columnVisibility.bigScore && <col style={{ width: '100px' }} />}
+                  {columnVisibility.match && <col style={{ width: '100px' }} />}
+                  {columnVisibility.fundingStage && <col style={{ width: '100px' }} />}
+                  {columnVisibility.fundingRequired && <col style={{ width: '110px' }} />}
+                  {columnVisibility.status && <col style={{ width: '130px' }} />}
+                  {columnVisibility.applied && <col style={{ width: '100px' }} />}
+                  {columnVisibility.action && <col style={{ width: '110px' }} />}
+                </colgroup>
+
+                <thead>
+                  <tr className="bg-gradient-to-r from-[#4a352f] via-[#7d5a50] to-[#4a352f]">
+                    {columnVisibility.sme && (
+                      <th className={`${ds.header} text-left text-white font-semibold border-r border-[#3a2520] sticky left-0 bg-gradient-to-r from-[#4a352f] via-[#7d5a50] to-[#4a352f] z-20`}>
+                        <button 
+                          onClick={() => handleSort('name')}
+                          className="flex items-center gap-1 hover:text-[#f5f0e1] transition-colors group"
+                        >
+                          SME Name
+                          <span className="flex flex-col -space-y-1 opacity-50 group-hover:opacity-100">
+                            <ArrowUp size={10} className={sortConfig.key === 'name' && sortConfig.direction === 'asc' ? 'text-[#f5f0e1] opacity-100' : ''} />
+                            <ArrowDown size={10} className={sortConfig.key === 'name' && sortConfig.direction === 'desc' ? 'text-[#f5f0e1] opacity-100' : ''} />
+                          </span>
+                        </button>
+                      </th>
+                    )}
+                    {columnVisibility.bigScore && (
+                      <th className={`${ds.header} text-center text-white font-semibold border-r border-[#3a2520]`}>
+                        <button 
+                          onClick={() => handleSort('bigScore')}
+                          className="flex items-center gap-1 mx-auto hover:text-[#f5f0e1] transition-colors group"
+                        >
+                          BIG Score
+                          <span className="flex flex-col -space-y-1 opacity-50 group-hover:opacity-100">
+                            <ArrowUp size={10} className={sortConfig.key === 'bigScore' && sortConfig.direction === 'asc' ? 'text-[#f5f0e1] opacity-100' : ''} />
+                            <ArrowDown size={10} className={sortConfig.key === 'bigScore' && sortConfig.direction === 'desc' ? 'text-[#f5f0e1] opacity-100' : ''} />
+                          </span>
+                        </button>
+                      </th>
+                    )}
+                    {columnVisibility.match && (
+                      <th className={`${ds.header} text-center text-white font-semibold border-r border-[#3a2520]`}>
+                        <button 
+                          onClick={() => handleSort('matchPercentage')}
+                          className="flex items-center gap-1 mx-auto hover:text-[#f5f0e1] transition-colors group"
+                        >
+                          Match %
+                          <span className="flex flex-col -space-y-1 opacity-50 group-hover:opacity-100">
+                            <ArrowUp size={10} className={sortConfig.key === 'matchPercentage' && sortConfig.direction === 'asc' ? 'text-[#f5f0e1] opacity-100' : ''} />
+                            <ArrowDown size={10} className={sortConfig.key === 'matchPercentage' && sortConfig.direction === 'desc' ? 'text-[#f5f0e1] opacity-100' : ''} />
+                          </span>
+                        </button>
+                      </th>
+                    )}
+                    {columnVisibility.fundingStage && (
+                      <th className={`${ds.header} text-left text-white font-semibold border-r border-[#3a2520]`}>
+                        Funding Stage
+                      </th>
+                    )}
+                    {columnVisibility.fundingRequired && (
+                      <th className={`${ds.header} text-left text-white font-semibold border-r border-[#3a2520]`}>
+                        <button 
+                          onClick={() => handleSort('fundingAmount')}
+                          className="flex items-center gap-1 hover:text-[#f5f0e1] transition-colors group"
+                        >
+                          Funding
+                          <span className="flex flex-col -space-y-1 opacity-50 group-hover:opacity-100">
+                            <ArrowUp size={10} className={sortConfig.key === 'fundingAmount' && sortConfig.direction === 'asc' ? 'text-[#f5f0e1] opacity-100' : ''} />
+                            <ArrowDown size={10} className={sortConfig.key === 'fundingAmount' && sortConfig.direction === 'desc' ? 'text-[#f5f0e1] opacity-100' : ''} />
+                          </span>
+                        </button>
+                      </th>
+                    )}
+                    {columnVisibility.status && (
+                      <th className={`${ds.header} text-left text-white font-semibold border-r border-[#3a2520]`}>
+                        Status
+                      </th>
+                    )}
+                    {columnVisibility.applied && (
+                      <th className={`${ds.header} text-left text-white font-semibold border-r border-[#3a2520]`}>
+                        <button 
+                          onClick={() => handleSort('applicationDateRaw')}
+                          className="flex items-center gap-1 hover:text-[#f5f0e1] transition-colors group"
+                        >
+                          Applied
+                          <span className="flex flex-col -space-y-1 opacity-50 group-hover:opacity-100">
+                            <ArrowUp size={10} className={sortConfig.key === 'applicationDateRaw' && sortConfig.direction === 'asc' ? 'text-[#f5f0e1] opacity-100' : ''} />
+                            <ArrowDown size={10} className={sortConfig.key === 'applicationDateRaw' && sortConfig.direction === 'desc' ? 'text-[#f5f0e1] opacity-100' : ''} />
+                          </span>
+                        </button>
+                      </th>
+                    )}
+                    {columnVisibility.location && (
+                      <th className={`${ds.header} text-left text-white font-semibold border-r border-[#3a2520]`}>
+                        Location
+                      </th>
+                    )}
+                    {columnVisibility.sector && (
+                      <th className={`${ds.header} text-left text-white font-semibold border-r border-[#3a2520]`}>
+                        Sector
+                      </th>
+                    )}
+                    {columnVisibility.equity && (
+                      <th className={`${ds.header} text-left text-white font-semibold border-r border-[#3a2520]`}>
+                        Equity
+                      </th>
+                    )}
+                    {columnVisibility.guarantees && (
+                      <th className={`${ds.header} text-left text-white font-semibold border-r border-[#3a2520]`}>
+                        Guarantees
+                      </th>
+                    )}
+                    {columnVisibility.support && (
+                      <th className={`${ds.header} text-left text-white font-semibold border-r border-[#3a2520]`}>
+                        Support
+                      </th>
+                    )}
+                    {columnVisibility.services && (
+                      <th className={`${ds.header} text-left text-white font-semibold border-r border-[#3a2520]`}>
+                        Services
+                      </th>
+                    )}
+                    {columnVisibility.assignedUser && (
+                      <th className={`${ds.header} text-left text-white font-semibold border-r border-[#3a2520]`}>
+                        Assigned To
+                      </th>
+                    )}
+                    {columnVisibility.daysInStage && (
+                      <th className={`${ds.header} text-left text-white font-semibold border-r border-[#3a2520]`}>
+                        Days
+                      </th>
+                    )}
+                    {columnVisibility.lastActivity && (
+                      <th className={`${ds.header} text-left text-white font-semibold border-r border-[#3a2520]`}>
+                        Last Activity
+                      </th>
+                    )}
+                    {columnVisibility.action && (
+                      <th className={`${ds.header} text-center text-white font-semibold`}>
+                        Next Action
+                      </th>
+                    )}
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {paginatedSMEs.length === 0 ? (
+                    <tr>
+                      <td colSpan={Object.values(columnVisibility).filter(Boolean).length} 
+                        className="text-center py-20">
+                        <div className="flex flex-col items-center gap-4">
+                          <div className="w-20 h-20 rounded-full bg-[#f5f0e1] flex items-center justify-center">
+                            <Users size={32} className="text-[#7d5a50] opacity-50" />
+                          </div>
+                          <div>
+                            <p className="text-lg font-semibold text-[#4a352f]">No SMEs Found</p>
+                            <p className="text-sm text-[#7d5a50] mt-1">
+                              {searchQuery || Object.values(localFilters).some(f => Array.isArray(f) ? f.length > 0 : f) 
+                                ? "Try adjusting your filters or search query" 
+                                : "Applications will appear here when SMEs match your programme"}
+                            </p>
+                          </div>
+                          {searchQuery && (
+                            <button
+                              onClick={() => setSearchQuery('')}
+                              className="px-4 py-2 bg-[#f5f0e1] text-[#4a352f] rounded-xl text-sm font-medium hover:bg-[#e6d7c3] transition-all"
+                            >
+                              Clear Search
+                            </button>
                           )}
                         </div>
                       </td>
                     </tr>
-                  )
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-      )}
+                  ) : (
+                    paginatedSMEs.map((sme) => {
+                      const bigScoreLabel = getBigScoreLabel(sme.bigScore);
+                      const matchLabel = getMatchLabel(sme.matchPercentage);
+                      const statusStyle = getStatusStyle(sme.currentStatus);
+                      const contextualAction = getContextualAction(sme);
+                      const smeKey = `${sme.id}_${sme.programIndex}`;
+                      const isExpanded = expandedRows.has(smeKey);
+                      const currentStatus = updatedStages[smeKey] || sme.currentStatus;
+                      const showNDAButton = currentStatus?.toLowerCase().includes("evaluation");
+                      const ndaSent = sentNDAs[smeKey];
+                      const isSharingNDA = isNDASharing[smeKey];
 
-      {/* ── Filter Modal ────────────────────────────────────────────────────── */}
-      {showFilters && (
-        <div className={MODAL_OVERLAY} onClick={() => setShowFilters(false)}>
-          <div className={`${MODAL_BOX} max-w-[800px]`} onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-8">
-              <h3 className="text-[28px] font-extrabold text-darkBrown m-0">Filter Support Applications</h3>
-              <button onClick={() => setShowFilters(false)} className="bg-transparent border-none cursor-pointer text-gray-500 hover:text-gray-800"><X size={24} /></button>
+                      return (
+                        <React.Fragment key={smeKey}>
+                          <tr 
+                            className={`
+                              border-b border-[#f0e6d9] transition-all cursor-pointer
+                              ${isExpanded ? 'bg-[#faf7f2]' : 'hover:bg-[#fdf8f4]'}
+                            `}
+                            onClick={() => toggleRowExpansion(smeKey)}
+                          >
+                            {/* SME Name */}
+                            {columnVisibility.sme && (
+                              <td className={`${ds.cell} ${ds.fontSize} text-[#4a352f] sticky left-0 bg-white border-r border-[#f0e6d9] z-10`}
+                                style={{ 
+                                  backgroundColor: isExpanded ? '#faf7f2' : undefined,
+                                  maxWidth: '140px'
+                                }}>
+                                <div className="flex items-start gap-2">
+                                  <div className={`${ds.avatarSize} rounded-full bg-gradient-to-br from-[#7d5a50] to-[#4a352f] flex items-center justify-center text-white font-bold text-xs flex-shrink-0 mt-0.5`}>
+                                    {sme.name.charAt(0)}
+                                  </div>
+                                  <div className="min-w-0 flex-1">
+                                    <button
+                                      onClick={(e) => { e.stopPropagation(); handleViewDetails(sme); }}
+                                      className="font-semibold text-[#4a352f] hover:text-[#7d5a50] hover:underline transition-colors text-left text-xs leading-tight"
+                                      style={{ 
+                                        wordBreak: 'break-word',
+                                        overflowWrap: 'break-word',
+                                        display: 'block'
+                                      }}
+                                    >
+                                      {sme.name}
+                                    </button>
+                                  </div>
+                                </div>
+                              </td>
+                            )}
+
+                            {/* BIG Score */}
+                            {columnVisibility.bigScore && (
+                              <td className={`${ds.cell} text-center`}>
+                                <div className="flex flex-col items-center gap-1">
+                                  <div className="relative w-11 h-11">
+                                    <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
+                                      <circle cx="18" cy="18" r="14" fill="none" stroke="#e6d7c3" strokeWidth="3" />
+                                      <circle 
+                                        cx="18" cy="18" r="14" fill="none" 
+                                        stroke={bigScoreLabel.color} 
+                                        strokeWidth="3"
+                                        strokeDasharray={`${sme.bigScore * 0.88} 88`}
+                                        strokeLinecap="round"
+                                        className="transition-all duration-1000"
+                                      />
+                                    </svg>
+                                    <span 
+                                      className="absolute inset-0 flex items-center justify-center text-xs font-bold"
+                                      style={{ color: bigScoreLabel.color }}
+                                    >
+                                      {sme.bigScore}
+                                    </span>
+                                  </div>
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); handleBigScoreClick(sme); }}
+                                    className="text-xs font-medium px-2 py-0.5 rounded-full hover:opacity-80 transition-opacity"
+                                    style={{ 
+                                      backgroundColor: `${bigScoreLabel.color}20`,
+                                      color: bigScoreLabel.color
+                                    }}
+                                  >
+                                    {bigScoreLabel.label}
+                                  </button>
+                                </div>
+                              </td>
+                            )}
+
+                            {/* Match Score */}
+                            {columnVisibility.match && (
+                              <td className={`${ds.cell} text-center`}>
+                                <div className="flex flex-col items-center gap-1">
+                                  <div className="flex">
+                                    {[...Array(5)].map((_, i) => (
+                                      <Star 
+                                        key={i}
+                                        size={12}
+                                        className={i < matchLabel.stars ? 'text-[#FFD700] fill-[#FFD700]' : 'text-gray-300'}
+                                      />
+                                    ))}
+                                  </div>
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); handleViewMatchBreakdown(sme); }}
+                                    className="text-sm font-bold text-[#4a352f] hover:text-[#7d5a50] transition-colors"
+                                  >
+                                    {sme.matchPercentage}%
+                                  </button>
+                                  <span className="text-xs text-[#7d5a50]">{matchLabel.label}</span>
+                                </div>
+                              </td>
+                            )}
+
+                            {/* Funding Stage */}
+                            {columnVisibility.fundingStage && (
+                              <td className={`${ds.cell} ${ds.fontSize} text-[#4a352f]`}>
+                                <span className="inline-flex items-center gap-1 px-2 py-1 bg-[#f5f0e1] rounded-full text-xs font-medium text-[#4a352f]">
+                                  {sme.fundingStage}
+                                </span>
+                              </td>
+                            )}
+
+                            {/* Funding Required */}
+                            {columnVisibility.fundingRequired && (
+                              <td className={`${ds.cell} ${ds.fontSize} text-[#4a352f]`}>
+                                <span className="font-semibold">{sme.fundingRequired}</span>
+                              </td>
+                            )}
+
+                            {/* Status */}
+                            {columnVisibility.status && (
+                              <td className={`${ds.cell}`}>
+                                <span 
+                                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold border"
+                                  style={{ 
+                                    backgroundColor: statusStyle.bg,
+                                    color: statusStyle.text,
+                                    borderColor: statusStyle.border
+                                  }}
+                                >
+                                  <span 
+                                    className="w-2 h-2 rounded-full"
+                                    style={{ backgroundColor: statusStyle.dot }}
+                                  />
+                                  {currentStatus}
+                                </span>
+                              </td>
+                            )}
+
+                            {/* Applied Date */}
+                            {columnVisibility.applied && (
+                              <td className={`${ds.cell} ${ds.fontSize} text-[#4a352f]`}>
+                                <div className="flex items-center gap-1.5">
+                                  <Calendar size={14} className="text-[#7d5a50]" />
+                                  {sme.applicationDate}
+                                </div>
+                              </td>
+                            )}
+
+                            {/* Optional Columns */}
+                            {columnVisibility.location && (
+                              <td className={`${ds.cell} ${ds.fontSize} text-[#4a352f]`}>
+                                <div className="flex items-center gap-1.5">
+                                  <MapPin size={14} className="text-[#7d5a50]" />
+                                  {sme.location}
+                                </div>
+                              </td>
+                            )}
+                            {columnVisibility.sector && (
+                              <td className={`${ds.cell} ${ds.fontSize} text-[#4a352f]`}>{sme.sector}</td>
+                            )}
+                            {columnVisibility.equity && (
+                              <td className={`${ds.cell} ${ds.fontSize} text-[#4a352f]`}>{sme.equityOffered}</td>
+                            )}
+                            {columnVisibility.guarantees && (
+                              <td className={`${ds.cell} ${ds.fontSize} text-[#4a352f]`}>
+                                <span className="line-clamp-1">{sme.guarantees}</span>
+                              </td>
+                            )}
+                            {columnVisibility.support && (
+                              <td className={`${ds.cell} ${ds.fontSize} text-[#4a352f]`}>
+                                <span className="line-clamp-1">{sme.supportRequired}</span>
+                              </td>
+                            )}
+                            {columnVisibility.services && (
+                              <td className={`${ds.cell} ${ds.fontSize} text-[#4a352f]`}>
+                                <span className="line-clamp-1">{sme.servicesRequired}</span>
+                              </td>
+                            )}
+                            {columnVisibility.assignedUser && (
+                              <td className={`${ds.cell} ${ds.fontSize} text-[#4a352f]`}>{sme.assignedUser}</td>
+                            )}
+                            {columnVisibility.daysInStage && (
+                              <td className={`${ds.cell} ${ds.fontSize} text-[#4a352f]`}>
+                                {sme.daysInStage > 0 ? `${sme.daysInStage}d` : "N/A"}
+                              </td>
+                            )}
+                            {columnVisibility.lastActivity && (
+                              <td className={`${ds.cell} ${ds.fontSize} text-[#4a352f]`}>{sme.lastActivity}</td>
+                            )}
+
+                            {/* Action */}
+                            {columnVisibility.action && (
+                              <td className={`${ds.cell} text-center`}>
+                                <div className="flex flex-col gap-1.5 items-center">
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); handleStageAction(sme); }}
+                                    className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-semibold text-white transition-all hover:shadow-lg transform hover:-translate-y-0.5 active:translate-y-0"
+                                    style={{ 
+                                      backgroundColor: contextualAction.color
+                                    }}
+                                  >
+                                    {contextualAction.icon}
+                                    {contextualAction.label}
+                                  </button>
+                                  
+                                  {showNDAButton && (
+                                    ndaSent ? (
+                                      <span className="text-xs text-[#7d5a50] flex items-center gap-1">
+                                        <CheckCircle size={12} className="text-green-500" />
+                                        NDA Sent
+                                      </span>
+                                    ) : (
+                                      <button
+                                        onClick={(e) => { e.stopPropagation(); handleShareNDA(sme); }}
+                                        disabled={isSharingNDA}
+                                        className="text-xs text-[#7d5a50] hover:text-[#4a352f] hover:underline transition-all disabled:opacity-50"
+                                      >
+                                        {isSharingNDA ? "Sharing..." : "Share NDA"}
+                                      </button>
+                                    )
+                                  )}
+                                </div>
+                              </td>
+                            )}
+                          </tr>
+
+                          {/* Expanded Row */}
+                          {isExpanded && (
+                            <tr>
+                              <td colSpan={Object.values(columnVisibility).filter(Boolean).length} 
+                                className="bg-[#faf7f2] p-6 border-b-2 border-[#7d5a50]/20">
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                                  {/* Company Details */}
+                                  <div className="bg-white rounded-xl p-4 shadow-sm border border-[#e6d7c3]">
+                                    <h4 className="text-xs font-semibold text-[#4a352f] uppercase tracking-wider mb-3 flex items-center gap-2">
+                                      <Building size={14} className="text-[#7d5a50]" />
+                                      Company
+                                    </h4>
+                                    <div className="space-y-2">
+                                      <div className="flex justify-between">
+                                        <span className="text-xs text-[#7d5a50]">Sector</span>
+                                        <span className="text-xs font-medium text-[#4a352f]">{sme.sector}</span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span className="text-xs text-[#7d5a50]">Location</span>
+                                        <span className="text-xs font-medium text-[#4a352f]">{sme.location}</span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span className="text-xs text-[#7d5a50]">Province</span>
+                                        <span className="text-xs font-medium text-[#4a352f]">{sme.province}</span>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Funding Details */}
+                                  <div className="bg-white rounded-xl p-4 shadow-sm border border-[#e6d7c3]">
+                                    <h4 className="text-xs font-semibold text-[#4a352f] uppercase tracking-wider mb-3 flex items-center gap-2">
+                                      <DollarSign size={14} className="text-[#7d5a50]" />
+                                      Funding
+                                    </h4>
+                                    <div className="space-y-2">
+                                      <div className="flex justify-between">
+                                        <span className="text-xs text-[#7d5a50]">Required</span>
+                                        <span className="text-xs font-medium text-[#4a352f]">{sme.fundingRequired}</span>
+                                      </div>
+                                      <div className="flex justify-between">
+                                        <span className="text-xs text-[#7d5a50]">Equity</span>
+                                        <span className="text-xs font-medium text-[#4a352f]">{sme.equityOffered}</span>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Support Details */}
+                                  <div className="bg-white rounded-xl p-4 shadow-sm border border-[#e6d7c3]">
+                                    <h4 className="text-xs font-semibold text-[#4a352f] uppercase tracking-wider mb-3 flex items-center gap-2">
+                                      <MessageSquare size={14} className="text-[#7d5a50]" />
+                                      Support
+                                    </h4>
+                                    <div className="space-y-2">
+                                      <div>
+                                        <span className="text-xs text-[#7d5a50]">Support Required</span>
+                                        <p className="text-xs text-[#4a352f] mt-1 line-clamp-2">{sme.supportRequired}</p>
+                                      </div>
+                                      <div>
+                                        <span className="text-xs text-[#7d5a50]">Services Required</span>
+                                        <p className="text-xs text-[#4a352f] mt-1 line-clamp-2">{sme.servicesRequired}</p>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Quick Actions */}
+                                  <div className="bg-white rounded-xl p-4 shadow-sm border border-[#e6d7c3]">
+                                    <h4 className="text-xs font-semibold text-[#4a352f] uppercase tracking-wider mb-3 flex items-center gap-2">
+                                      <Settings size={14} className="text-[#7d5a50]" />
+                                      Quick Actions
+                                    </h4>
+                                    <div className="space-y-2">
+                                      <button 
+                                        onClick={(e) => { e.stopPropagation(); handleViewDetails(sme); }}
+                                        className="w-full flex items-center gap-2 px-3 py-2 bg-[#f5f0e1] text-[#4a352f] rounded-lg text-xs font-medium hover:bg-[#e6d7c3] transition-all"
+                                      >
+                                        <Eye size={14} /> View Full Profile
+                                      </button>
+                                      <button 
+                                        onClick={(e) => { e.stopPropagation(); handleStageAction(sme); }}
+                                        className="w-full flex items-center gap-2 px-3 py-2 text-white rounded-lg text-xs font-medium transition-all hover:shadow-lg"
+                                        style={{ backgroundColor: contextualAction.color }}
+                                      >
+                                        <ArrowRight size={14} /> {contextualAction.label}
+                                      </button>
+                                      <button className="w-full flex items-center gap-2 px-3 py-2 bg-[#f5f0e1] text-[#4a352f] rounded-lg text-xs font-medium hover:bg-[#e6d7c3] transition-all">
+                                        <MessageSquare size={14} /> Send Message
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
             </div>
-            <div className="grid grid-cols-2 gap-6 mb-8">
-              {[
-                { label: "Location", key: "location", options: [["", "All Locations"], ["cape-town", "Cape Town"], ["johannesburg", "Johannesburg"], ["durban", "Durban"], ["pretoria", "Pretoria"]] },
-                { label: "Sector", key: "sector", options: [["", "All Sectors"], ["tech", "Technology"], ["agri", "Agriculture"], ["cleantech", "CleanTech"], ["healthtech", "HealthTech"], ["edtech", "EdTech"]] },
-                { label: "Funding Stage", key: "stages", options: [["", "All Stages"], ["pre-seed", "Pre-Seed"], ["seed", "Seed"], ["series-a", "Series A"], ["series-b", "Series B"]] },
-              ].map(({ label, key, options }) => (
-                <div key={key}>
-                  <label className={LABEL}>{label}</label>
-                  <select
-                    value={key === "stages" ? (localFilters.stages[0] || "") : localFilters[key]}
-                    onChange={(e) => handleFilterChange(key, key === "stages" ? (e.target.value ? [e.target.value] : []) : e.target.value)}
-                    className={INPUT}
-                  >
-                    {options.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-                  </select>
-                </div>
-              ))}
-              <div>
-                <label className={LABEL}>Minimum Match Score: {localFilters.matchScore}%</label>
-                <input type="range" min="0" max="100" value={localFilters.matchScore}
-                  onChange={(e) => handleFilterChange("matchScore", parseInt(e.target.value))}
-                  className="w-full h-2 rounded bg-[#e6d7c3] outline-none accent-accentGold" />
-                <div className="flex justify-between text-xs text-warmBrown mt-1">
-                  <span>0%</span><span>100%</span>
-                </div>
+
+            {/* Pagination */}
+            <div className="flex items-center justify-between px-6 py-4 border-t border-[#e6d7c3] bg-[#faf7f2] rounded-b-2xl">
+              <div className="flex items-center gap-4">
+                <span className="text-sm text-[#4a352f]">
+                  Showing <span className="font-semibold">{Math.min((currentPage - 1) * pageSize + 1, filteredAndSortedSMEs.length)}-{Math.min(currentPage * pageSize, filteredAndSortedSMEs.length)}</span> of <span className="font-semibold">{filteredAndSortedSMEs.length}</span> SMEs
+                </span>
+                <select
+                  value={pageSize}
+                  onChange={(e) => {
+                    setPageSize(Number(e.target.value));
+                    setCurrentPage(1);
+                  }}
+                  className="px-3 py-1.5 bg-white border border-[#c8b6a6] rounded-lg text-sm text-[#4a352f] focus:outline-none focus:border-[#7d5a50]"
+                >
+                  <option value={25}>25 per page</option>
+                  <option value={50}>50 per page</option>
+                  <option value={100}>100 per page</option>
+                </select>
               </div>
-            </div>
-            <div className="flex justify-between gap-4">
-              <button onClick={clearFilters} className="px-6 py-3 bg-lightTan text-textBrown border-none rounded-lg cursor-pointer font-semibold flex items-center gap-2 hover:bg-[#c8b6a6] transition-colors">
-                <X size={16} />Clear All
-              </button>
-              <div className="flex gap-3">
-                <button onClick={() => setShowFilters(false)} className={BTN_GHOST}>Cancel</button>
-                <button onClick={applyFilters} className={`${BTN_PRIMARY} flex items-center gap-2`}>
-                  <Filter size={16} />Apply Filters
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setCurrentPage(1)}
+                  disabled={currentPage === 1}
+                  className="px-3 py-1.5 bg-white border border-[#c8b6a6] rounded-lg text-sm text-[#4a352f] hover:bg-[#f5f0e1] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  First
+                </button>
+                <button
+                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                  disabled={currentPage === 1}
+                  className="px-3 py-1.5 bg-white border border-[#c8b6a6] rounded-lg text-sm text-[#4a352f] hover:bg-[#f5f0e1] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Prev
+                </button>
+                {[...Array(Math.min(5, totalPages))].map((_, i) => {
+                  let pageNum;
+                  if (totalPages <= 5) {
+                    pageNum = i + 1;
+                  } else if (currentPage <= 3) {
+                    pageNum = i + 1;
+                  } else if (currentPage >= totalPages - 2) {
+                    pageNum = totalPages - 4 + i;
+                  } else {
+                    pageNum = currentPage - 2 + i;
+                  }
+                  return (
+                    <button
+                      key={pageNum}
+                      onClick={() => setCurrentPage(pageNum)}
+                      className={`w-8 h-8 rounded-lg text-sm font-medium transition-all ${
+                        currentPage === pageNum
+                          ? 'bg-[#7d5a50] text-white shadow-md'
+                          : 'bg-white border border-[#c8b6a6] text-[#4a352f] hover:bg-[#f5f0e1]'
+                      }`}
+                    >
+                      {pageNum}
+                    </button>
+                  );
+                })}
+                <button
+                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                  disabled={currentPage === totalPages}
+                  className="px-3 py-1.5 bg-white border border-[#c8b6a6] rounded-lg text-sm text-[#4a352f] hover:bg-[#f5f0e1] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Next
+                </button>
+                <button
+                  onClick={() => setCurrentPage(totalPages)}
+                  disabled={currentPage === totalPages}
+                  className="px-3 py-1.5 bg-white border border-[#c8b6a6] rounded-lg text-sm text-[#4a352f] hover:bg-[#f5f0e1] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Last
                 </button>
               </div>
             </div>
-          </div>
-        </div>
-      )}
+          </>
+        )}
+      </div>
 
-      {/* ── BIG Score Modal ─────────────────────────────────────────────────── */}
-      {selectedSME && modalType === "bigScore" && (
-        <div className={MODAL_OVERLAY} onClick={resetModal}>
-          <div
-            className="relative bg-white rounded-[24px] w-[95%] max-w-[520px] max-h-[90vh] overflow-y-auto shadow-[0_32px_80px_rgba(62,39,35,0.45)]"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div
-              className="relative rounded-t-[24px] px-8 pt-8 pb-6 overflow-hidden"
-              style={{ background: "linear-gradient(135deg, #140905 0%, #6D4C41 60%, #8D6E63 100%)" }}
-            >
-              <div className="absolute -top-6 -right-6 w-32 h-32 rounded-full bg-white/5 pointer-events-none" />
-              <div className="absolute top-4 -right-2 w-16 h-16 rounded-full bg-white/5 pointer-events-none" />
-
-              <div className="flex justify-between items-start relative z-10">
-                <div>
-                  <p className="text-[#D7B899] text-xs font-semibold uppercase tracking-widest mb-1">BIG Score</p>
-                  <h3 className="text-white text-[22px] font-extrabold m-0 leading-tight">
-                    {selectedSME.name}
-                  </h3>
-                  <p className="text-[#C4A882] text-sm mt-1 m-0">Support Readiness Breakdown</p>
-                </div>
-
-                <div className="flex flex-col items-center flex-shrink-0 ml-4">
-                  <div
-                    className="w-[72px] h-[72px] rounded-full flex items-center justify-center shadow-[0_4px_20px_rgba(0,0,0,0.4)]"
-                    style={{
-                      background: `conic-gradient(
-                        ${getScoreColor(calculateTotalScore())} ${calculateTotalScore() * 3.6}deg,
-                        rgba(255,255,255,0.15) 0deg
-                      )`,
-                    }}
-                  >
-                    <div className="w-[56px] h-[56px] rounded-full bg-[#1a0c02] flex items-center justify-center">
-                      <span
-                        className="text-[18px] font-extrabold"
-                        style={{ color: getScoreColor(calculateTotalScore()) }}
-                      >
-                        {calculateTotalScore()}
-                      </span>
-                    </div>
-                  </div>
-                  <span className="text-[#C4A882] text-[10px] mt-1 font-semibold uppercase tracking-wider">Overall</span>
-                </div>
-              </div>
-
-              <button
-                onClick={resetModal}
-                className="absolute top-4 right-4 w-7 h-7 rounded-full bg-white/10 border-none cursor-pointer flex items-center justify-center text-white/70 hover:bg-white/20 hover:text-white transition-all text-base z-20"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="px-8 py-6 flex flex-col gap-4">
-              {(() => {
-                const META = {
-                  compliance:  { label: "Compliance",  icon: "✅", desc: "Regulatory & legal compliance",      grad: "from-[#140905] to-[#4E342E]"  },
-                  legitimacy:  { label: "Legitimacy",  icon: "🏛️", desc: "Business legitimacy & verification", grad: "from-[#3E2723] to-[#6D4C41]"  },
-                  fundability: { label: "Capital Appeal", icon: "💰", desc: "Investment readiness & financials",   grad: "from-[#4E342E] to-[#8D6E63]"  },
-                  pis:         { label: "PIS",         icon: "📊", desc: "Public Intrest score",         grad: "from-[#5D4037] to-[#A1887F]"  },
-                }
-                return Object.entries(bigScoreData).map(([key, data]) => {
-                  const meta = META[key] || { label: key, icon: "📈", desc: "", grad: "from-[#4e2106] to-[#8D6E63]" }
-                  const score = data.score || 0
-                  const color = getScoreColor(score)
-                  return (
-                    <div
-                      key={key}
-                      className="rounded-2xl overflow-hidden border border-[#e8ddd5] shadow-sm hover:shadow-md transition-shadow"
-                    >
-                      <div className={`bg-gradient-to-r ${meta.grad} px-5 py-3 flex justify-between items-center`}>
-                        <div className="flex items-center gap-2">
-                          <span className="text-base">{meta.icon}</span>
-                          <div>
-                            <p className="text-white text-[13px] font-bold m-0 leading-none">{meta.label} Score</p>
-                            <p className="text-white/70 text-[10px] m-0 mt-0.5">{meta.desc}</p>
-                          </div>
-                        </div>
-                        <span className="text-white text-[22px] font-extrabold leading-none">{score}%</span>
-                      </div>
-
-                      <div className="bg-[#fdf8f4] px-5 py-3">
-                        <div className="flex justify-between text-[10px] text-[#9e7b65] mb-1.5 font-medium">
-                          <span>0%</span>
-                          <span className="font-semibold" style={{ color }}>
-                            {score >= 80 ? "Excellent" : score >= 60 ? "Good" : "Needs Attention"}
-                          </span>
-                          <span>100%</span>
-                        </div>
-                        <div className="w-full h-3 bg-[#ede3da] rounded-full overflow-hidden shadow-inner">
-                          <div
-                            className="h-full rounded-full transition-all duration-[1200ms] ease-out"
-                            style={{
-                              width: `${score}%`,
-                              background: `linear-gradient(90deg, ${color}cc, ${color})`,
-                              boxShadow: `0 0 8px ${color}66`,
-                            }}
-                          />
-                        </div>
-                      </div>
-                    </div>
-                  )
-                })
-              })()}
-            </div>
-
-            <div className="px-8 pb-7 flex justify-end">
-              <button
-                onClick={resetModal}
-                className="px-6 py-2.5 rounded-xl text-sm font-semibold text-white border-none cursor-pointer transition-all hover:opacity-90 hover:shadow-md"
-                style={{ background: "linear-gradient(135deg, #140905, #6D4C41)" }}
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── Calendar Modal ───────────────────────────────────────────────────── */}
-      {showCalendarModal && (
-        <div className={`${MODAL_OVERLAY} z-[1100]`} onClick={() => setShowCalendarModal(false)}>
-          <div className={`${MODAL_BOX} max-w-[800px]`} onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-2xl font-bold text-darkBrown m-0">Select Available Dates</h3>
-              <button onClick={() => setShowCalendarModal(false)} className="bg-transparent border-none cursor-pointer text-gray-500 hover:text-gray-800"><X size={24} /></button>
-            </div>
-            <div className="mb-6">
-              <label className={LABEL}>Time Zone</label>
-              <select value={timeZone} onChange={(e) => setTimeZone(e.target.value)} className={INPUT}>
-                <option value="Africa/Johannesburg">South Africa Time (SAST)</option>
-                <option value="UTC">UTC</option>
-              </select>
-            </div>
-            <div className="mb-6">
-              <label className={LABEL}>Time Slot</label>
-              <div className="flex gap-4">
-                {["start", "end"].map((f) => (
-                  <div key={f} className="flex-1">
-                    <label className="block mb-1 text-sm capitalize">{f === "start" ? "Start" : "End"} Time</label>
-                    <input type="time" value={timeSlot[f]} onChange={(e) => handleTimeChange(f, e.target.value)} className="w-full px-2 py-2 border border-gray-300 rounded text-sm focus:outline-none focus:border-accentGold" />
-                  </div>
-                ))}
-              </div>
-            </div>
-            <div className="mb-6">
-              <label className={LABEL}>Select Dates</label>
-              <DayPicker mode="multiple" selected={tempDates} onSelect={handleDateSelect} fromDate={new Date()}
-                styles={{ caption: { color: "#4a352f", fontWeight: "bold" }, day_selected: { backgroundColor: "#5d4037", color: "white" } }} />
-            </div>
-            <div className="mb-6">
-              <h4 className="text-base font-semibold mb-3">Selected Availability</h4>
-              {tempDates.length > 0 ? (
-                <div className="border border-gray-200 rounded-lg p-3 max-h-[200px] overflow-y-auto">
-                  {tempDates.map((date, i) => (
-                    <div key={i} className="flex justify-between items-center py-2 border-b border-gray-100 last:border-0">
-                      <span className="text-sm">
-                        {date.toLocaleDateString("en-US", { weekday: "long", year: "numeric", month: "long", day: "numeric" })}
-                        {timeSlot.start && timeSlot.end && <span className="text-gray-500 ml-2">{timeSlot.start} – {timeSlot.end}</span>}
-                      </span>
-                      <button onClick={() => setTempDates(tempDates.filter((_, j) => j !== i))} className="bg-transparent border-none text-red-500 cursor-pointer p-1 hover:text-red-700"><X size={16} /></button>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-gray-500 italic text-sm">No dates selected yet</p>
-              )}
-            </div>
-            <div className="flex justify-end gap-3">
-              <button onClick={() => setShowCalendarModal(false)} className={BTN_GHOST}>Cancel</button>
-              <button onClick={saveSelectedDates} disabled={tempDates.length === 0} className={`${BTN_PRIMARY} disabled:opacity-50 disabled:cursor-not-allowed`}>Save Availability</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── Stage Action Modal ───────────────────────────────────────────────── */}
+      {/* ─── Stage Action Modal ───────────────────────────────────────────────── */}
       {showStageModal && selectedSMEForStage && (
-        <div className={MODAL_OVERLAY} onClick={() => setShowStageModal(false)}>
-          <div className={`${MODAL_BOX} max-w-[600px]`} onClick={(e) => e.stopPropagation()}>
-            <div className="text-center mb-8">
-              <h3 className="text-2xl font-bold text-darkBrown m-0 mb-2">Update Application Stage</h3>
-              <p className="text-base text-gray-500 m-0">{selectedSMEForStage.name}</p>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[1000] animate-fadeIn" onClick={() => setShowStageModal(false)}>
+          <div className="bg-white rounded-2xl p-8 max-w-[500px] w-[95%] max-h-[90vh] overflow-y-auto shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-6">
+              <div>
+                <h3 className="text-lg font-bold text-[#4a352f]">Update Stage</h3>
+                <p className="text-sm text-[#7d5a50] mt-1">{selectedSMEForStage.name}</p>
+              </div>
+              <button onClick={() => setShowStageModal(false)} className="text-[#7d5a50] hover:text-[#4a352f]">
+                <X size={20} />
+              </button>
             </div>
 
-            <div className="mb-6">
-              <label className={LABEL}>Select Next Stage:</label>
+            <div className="mb-5">
+              <label className="block text-sm font-semibold text-[#4a352f] mb-2">Next Stage</label>
               <select
                 value={nextStage}
-                onChange={(e) => { setNextStage(e.target.value); if (e.target.value) setFormErrors({ ...formErrors, nextStage: "" }) }}
-                className={formErrors.nextStage ? INPUT_ERR : INPUT}
+                onChange={(e) => { setNextStage(e.target.value); setFormErrors({ ...formErrors, nextStage: "" }); }}
+                className={`w-full px-4 py-3 border-2 rounded-xl text-sm focus:outline-none transition-all ${
+                  formErrors.nextStage ? 'border-red-500 bg-red-50' : 'border-[#c8b6a6] focus:border-[#7d5a50]'
+                }`}
               >
-                <option value="">Choose a stage...</option>
-                {applicationStages.map((s) => <option key={s.id} value={s.name}>{s.name}</option>)}
+                <option value="">Select next stage...</option>
+                {Object.keys(PIPELINE_STAGES).map(stage => (
+                  <option key={stage} value={stage}>{stage}</option>
+                ))}
+                <option value="Decline">Decline</option>
+                <option value="On Hold">On Hold</option>
               </select>
-              {formErrors.nextStage && <p className="text-red-600 text-sm mt-2">{formErrors.nextStage}</p>}
             </div>
 
-            {nextStage && (
-              <>
-                {currentStageFields.showMessage && (
-                  <div className="mb-6">
-                    <label className={LABEL}>Message to SMSE:</label>
-                    <textarea
-                      value={message}
-                      onChange={(e) => { setMessage(e.target.value); if (e.target.value.trim()) setFormErrors({ ...formErrors, message: "" }) }}
-                      placeholder="Enter your message..."
-                      className={`${formErrors.message ? INPUT_ERR : INPUT} min-h-[100px] resize-y font-[inherit]`}
-                    />
-                    {formErrors.message && <p className="text-red-600 text-sm mt-2">{formErrors.message}</p>}
-                  </div>
-                )}
-
-                {currentStageFields.showAvailability && (
-                  <div className="bg-[#f8f5f3] p-5 rounded-xl mb-6">
-                    <div className="flex justify-between items-center mb-4">
-                      <h4 className="text-base font-semibold text-textBrown m-0">Your Availability</h4>
-                      <button onClick={() => setShowCalendarModal(true)}
-                        className="flex items-center gap-1 px-3 py-1.5 bg-mediumBrown text-white border-none rounded cursor-pointer text-sm hover:bg-darkBrown transition-colors">
-                        <Calendar size={14} />Add Dates
-                      </button>
-                    </div>
-                    {availabilities.length > 0 ? (
-                      <div className="border border-gray-200 rounded-lg max-h-[200px] overflow-y-auto">
-                        {availabilities.map((a, i) => (
-                          <div key={i} className="flex justify-between items-center px-3 py-2 border-b border-gray-100 last:border-0">
-                            <div>
-                              <div className="font-medium text-sm">
-                                {a.date.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
-                              </div>
-                              {a.timeSlots?.[0] && (
-                                <div className="text-xs text-gray-500">{a.timeSlots[0].start} – {a.timeSlots[0].end} ({a.timeZone})</div>
-                              )}
-                            </div>
-                            <button onClick={() => removeAvailability(a.date)} className="bg-transparent border-none text-red-500 cursor-pointer p-1 hover:text-red-700"><X size={16} /></button>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-gray-500 italic text-sm">No availability slots added yet</p>
-                    )}
-                    {formErrors.availabilities && <p className="text-red-600 text-sm mt-2">{formErrors.availabilities}</p>}
-                  </div>
-                )}
-
-                {currentStageFields.showMeeting && (
-                  <div className="bg-[#f8f5f3] p-5 rounded-xl mb-6">
-                    <h4 className="text-base font-semibold text-textBrown mb-4 m-0">Schedule Meeting</h4>
-                    <div className="grid grid-cols-2 gap-4 mb-4">
-                      <div>
-                        <label className="block text-sm font-semibold text-textBrown mb-2">Location:</label>
-                        <input type="text" value={meetingLocation}
-                          onChange={(e) => { setMeetingLocation(e.target.value); if (e.target.value.trim()) setFormErrors({ ...formErrors, meetingLocation: "" }) }}
-                          placeholder="Office, Virtual, etc."
-                          className={`${formErrors.meetingLocation ? "border-red-500" : "border-[#c8b6a6]"} w-full px-3 py-2.5 border-2 rounded-md text-sm bg-white focus:outline-none focus:border-accentGold`}
-                        />
-                        {formErrors.meetingLocation && <p className="text-red-600 text-xs mt-1">{formErrors.meetingLocation}</p>}
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-semibold text-textBrown mb-2">Meeting Purpose:</label>
-                      <input type="text" value={meetingPurpose}
-                        onChange={(e) => { setMeetingPurpose(e.target.value); if (e.target.value.trim()) setFormErrors({ ...formErrors, meetingPurpose: "" }) }}
-                        placeholder="Initial discussion, strategy review, etc."
-                        className={`${formErrors.meetingPurpose ? "border-red-500" : "border-[#c8b6a6]"} w-full px-3 py-2.5 border-2 rounded-md text-sm bg-white focus:outline-none focus:border-accentGold`}
-                      />
-                      {formErrors.meetingPurpose && <p className="text-red-600 text-xs mt-1">{formErrors.meetingPurpose}</p>}
-                    </div>
-                  </div>
-                )}
-
-                {currentStageFields.showTermSheet && (
-                  <div className="mb-6">
-                    <label className={LABEL}>Support Agreement Upload:</label>
-                    <input type="file" accept=".pdf,.doc,.docx" onChange={(e) => setTermSheetFile(e.target.files[0])}
-                      className="w-full px-4 py-3 border-2 border-[#c8b6a6] rounded-lg text-sm bg-[#f5f0e1]" />
-                  {termSheetFile && !formErrors.termSheetFile && (
-                      <p className="text-sm text-gray-500 mt-2">Selected: {termSheetFile.name}</p>
-                    )}
-                    {formErrors.termSheetFile && (
-                      <p className="text-red-600 text-sm mt-2">{formErrors.termSheetFile}</p>
-                    )}
-                  </div>
-                )}
-              </>
-            )}
+            <div className="mb-5">
+              <label className="block text-sm font-semibold text-[#4a352f] mb-2">Message</label>
+              <textarea
+                value={message}
+                onChange={(e) => { setMessage(e.target.value); if (e.target.value.trim()) setFormErrors({ ...formErrors, message: "" }); }}
+                placeholder="Enter your message to the SME..."
+                rows={4}
+                className={`w-full px-4 py-3 border-2 rounded-xl text-sm focus:outline-none transition-all resize-y ${
+                  formErrors.message ? 'border-red-500 bg-red-50' : 'border-[#c8b6a6] focus:border-[#7d5a50]'
+                }`}
+              />
+            </div>
 
             <div className="flex justify-end gap-3">
-              <button onClick={() => { setShowStageModal(false); resetStageModal() }} disabled={isSubmitting} className={BTN_GHOST}>Cancel</button>
-              <button onClick={handleStageUpdate} disabled={isSubmitting} className={`${BTN_PRIMARY} disabled:opacity-60 disabled:cursor-not-allowed`}>
+              <button
+                onClick={() => setShowStageModal(false)}
+                className="px-5 py-2.5 bg-gray-100 text-gray-700 rounded-xl text-sm font-medium hover:bg-gray-200 transition-all"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleStageUpdate}
+                disabled={isSubmitting}
+                className="px-5 py-2.5 bg-gradient-to-r from-[#7d5a50] to-[#4a352f] text-white rounded-xl text-sm font-medium hover:shadow-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
                 {isSubmitting ? "Updating..." : "Update Stage"}
               </button>
             </div>
@@ -1617,77 +1778,136 @@ const handleShareNDA = async (sme) => {
         </div>
       )}
 
+      {/* ─── SMSE Details Modal ───────────────────────────────────────────────── */}
       {showSMEDetails && selectedSMEDetails && (
         <SMEDetailsModal
           sme={selectedSMEDetails}
           isOpen={showSMEDetails}
-          onClose={() => { setShowSMEDetails(false); setSelectedSMEDetails(null) }}
+          onClose={() => { setShowSMEDetails(false); setSelectedSMEDetails(null); }}
         />
       )}
 
-      {/* ── Match Breakdown Modal ───────────────────────────────────────────── */}
-      {showMatchBreakdown && selectedAcceleratorForBreakdown && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[1200]" onClick={() => setShowMatchBreakdown(false)}>
-          <div className="bg-white rounded-xl max-w-[800px] w-[95%] max-h-[90vh] overflow-y-auto shadow-[0_20px_40px_rgba(0,0,0,0.15)]"
-            onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-between items-center px-6 py-5 border-b border-lightTan bg-[#F5EBE0]">
-              <h3 className="m-0 text-[1.1rem] font-semibold text-[#5D2A0A]">
-                Match Breakdown — {selectedAcceleratorForBreakdown.name}
-              </h3>
-              <button onClick={() => setShowMatchBreakdown(false)} className="bg-transparent border-none text-[1.5rem] cursor-pointer text-[#5D2A0A] hover:opacity-70">✖</button>
-            </div>
-
-            <div className="p-6">
-              <div className="text-center mb-8 pb-4 border-b-2 border-lightTan">
-                <div className="text-5xl font-bold mb-2"
-                  style={{ color: selectedAcceleratorForBreakdown.matchPercentage >= 80 ? "#388E3C" : selectedAcceleratorForBreakdown.matchPercentage >= 60 ? "#F57C00" : "#D32F2F" }}>
-                  {selectedAcceleratorForBreakdown.matchPercentage || 0}%
+      {/* ─── BIG Score Modal ─────────────────────────────────────────────────── */}
+      {selectedSME && modalType === "bigScore" && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[1000] animate-fadeIn" onClick={() => { setSelectedSME(null); setModalType(null); }}>
+          <div className="bg-white rounded-2xl max-w-[450px] w-[95%] max-h-[90vh] overflow-y-auto shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-gradient-to-br from-[#4a352f] to-[#7d5a50] rounded-t-2xl p-6 text-white">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-semibold text-[#f5f0e1] uppercase tracking-wider">BIG Score</p>
+                  <h3 className="text-lg font-bold mt-1">{selectedSME.name}</h3>
                 </div>
-                <p className="text-base text-lightBrown m-0">Overall Match Score</p>
-              </div>
-
-              <div className="grid gap-4 mb-8" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(350px, 1fr))" }}>
-                {selectedAcceleratorForBreakdown.matchBreakdown &&
-                  Object.entries(selectedAcceleratorForBreakdown.matchBreakdown).map(([key, breakdown]) => {
-                    if (!breakdown || typeof breakdown !== "object") return null
-                    const matched = breakdown.matched
-                    const scoreColor = matched ? "#388E3C" : "#D32F2F"
-                    const titles = {
-                      fundingStage: "Funding Stage Match", ticketSize: "Ticket Size Compatibility",
-                      geographicFit: "Geographic Fit", sectorMatch: "Sector Match",
-                      instrumentFit: "Instrument Fit", supportMatch: "Support Match",
-                      legalEntityFit: "Legal Entity Fit", revenueThreshold: "Revenue Threshold",
-                    }
-                    return (
-                      <div key={key} className="bg-offWhite border border-lightTan rounded-lg p-5"
-                        style={{ borderLeft: `4px solid ${scoreColor}` }}>
-                        <div className="flex justify-between items-start mb-3">
-                          <h4 className="text-[0.875rem] font-semibold text-[#5D2A0A] m-0 leading-snug flex-1">
-                            {titles[key] || key}
-                          </h4>
-                          <span className="text-xs font-semibold ml-2 flex-shrink-0" style={{ color: scoreColor }}>
-                            {matched ? "✓ Match" : "✗ No Match"}
-                          </span>
-                        </div>
-                        <div className="text-xs text-gray-600 leading-relaxed">
-                          <div className="mb-1"><strong>SME Value:</strong> {breakdown.details?.smeValue || "N/A"}</div>
-                          <div><strong>Catalyst Offers:</strong> {breakdown.details?.accelValue || "N/A"}</div>
-                        </div>
-                      </div>
-                    )
-                  })}
+                <div className="w-14 h-14 rounded-full bg-white/10 flex items-center justify-center">
+                  <span className="text-2xl font-bold">{selectedSME.bigScore}</span>
+                </div>
               </div>
             </div>
-
-            <div className="flex justify-end px-6 py-5 border-t border-lightTan">
-              <button onClick={() => setShowMatchBreakdown(false)}
-                className="bg-[#F5EBE0] text-[#5D2A0A] border-none px-4 py-2 rounded-md cursor-pointer text-[0.8rem] hover:bg-lightTan transition-colors">
+            <div className="p-6 space-y-3">
+              {Object.entries(bigScoreData).map(([key, data]) => {
+                const labels = {
+                  compliance: "Compliance",
+                  legitimacy: "Legitimacy",
+                  fundability: "Fundability",
+                  pis: "PIS Score",
+                  leadership: "Leadership"
+                };
+                const score = data.score || 0;
+                const bigLabel = getBigScoreLabel(score);
+                
+                return (
+                  <div key={key} className="bg-[#faf7f2] rounded-xl p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-semibold text-[#4a352f]">{labels[key]}</span>
+                      <span className="text-sm font-bold" style={{ color: bigLabel.color }}>{score}%</span>
+                    </div>
+                    <div className="w-full h-2 bg-[#e6d7c3] rounded-full overflow-hidden">
+                      <div 
+                        className="h-full rounded-full transition-all duration-1000"
+                        style={{ width: `${score}%`, backgroundColor: bigLabel.color }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="p-6 pt-0">
+              <button
+                onClick={() => { setSelectedSME(null); setModalType(null); }}
+                className="w-full py-3 bg-gradient-to-r from-[#7d5a50] to-[#4a352f] text-white rounded-xl text-sm font-medium hover:shadow-lg transition-all"
+              >
                 Close
               </button>
             </div>
           </div>
         </div>
       )}
+
+      {/* ─── Match Breakdown Modal ───────────────────────────────────────────── */}
+      {showMatchBreakdown && selectedAcceleratorForBreakdown && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[1000] animate-fadeIn" onClick={() => setShowMatchBreakdown(false)}>
+          <div className="bg-white rounded-2xl max-w-[550px] w-[95%] max-h-[90vh] overflow-y-auto shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="bg-gradient-to-br from-[#4a352f] to-[#7d5a50] rounded-t-2xl p-6 text-white">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xs font-semibold text-[#f5f0e1] uppercase tracking-wider">Match Breakdown</p>
+                  <h3 className="text-lg font-bold mt-1">{selectedAcceleratorForBreakdown.name}</h3>
+                </div>
+                <div className="text-center">
+                  <div className="text-3xl font-bold">{selectedAcceleratorForBreakdown.matchPercentage}%</div>
+                  <div className="text-xs text-[#f5f0e1]">Match</div>
+                </div>
+              </div>
+            </div>
+            <div className="p-6 space-y-3">
+              {selectedAcceleratorForBreakdown.matchBreakdown && 
+                Object.entries(selectedAcceleratorForBreakdown.matchBreakdown).map(([key, data]) => {
+                  if (!data || typeof data !== 'object') return null;
+                  const labels = {
+                    fundingStage: "Funding Stage",
+                    ticketSize: "Ticket Size",
+                    geographicFit: "Geographic Fit",
+                    sectorMatch: "Sector Match",
+                    instrumentFit: "Instrument Fit",
+                    supportMatch: "Support Match",
+                    legalEntityFit: "Legal Entity",
+                    revenueThreshold: "Revenue Threshold"
+                  };
+                  
+                  return (
+                    <div key={key} className={`p-4 rounded-xl border ${data.matched ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-semibold text-[#4a352f]">{labels[key] || key}</span>
+                        {data.matched ? (
+                          <CheckCircle size={18} className="text-green-500" />
+                        ) : (
+                          <XCircle size={18} className="text-red-500" />
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+            <div className="p-6 pt-0">
+              <button
+                onClick={() => setShowMatchBreakdown(false)}
+                className="w-full py-3 bg-gradient-to-r from-[#7d5a50] to-[#4a352f] text-white rounded-xl text-sm font-medium hover:shadow-lg transition-all"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <style jsx>{`
+        @keyframes fadeIn {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fadeIn {
+          animation: fadeIn 0.3s ease-out;
+        }
+      `}</style>
     </div>
-  )
+  );
 }
