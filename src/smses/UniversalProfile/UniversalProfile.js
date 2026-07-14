@@ -485,19 +485,19 @@ export default function UniversalProfile() {
     }
     
     try {
-      const user = auth.currentUser;
-      if (user) {
-        const smeName = formData.entityOverview?.registeredName || "there";
-        const userEmail = formData.contactDetails?.email;
-        if (userEmail) {
-          const sendConsentConfirmation = getFunctions().httpsCallable('sendConsentConfirmation');
-          await sendConsentConfirmation({
-            userId: user.uid,
-            email: userEmail,
-            name: smeName
-          }).catch(err => console.error("Consent email failed:", err));
-        }
-      }
+      // const user = auth.currentUser;
+      // if (user) {
+      //   const smeName = formData.entityOverview?.registeredName || "there";
+      //   const userEmail = formData.contactDetails?.email;
+      //   if (userEmail) {
+      //     const sendConsentConfirmation = getFunctions().httpsCallable('sendConsentConfirmation');
+      //     await sendConsentConfirmation({
+      //       userId: user.uid,
+      //       email: userEmail,
+      //       name: smeName
+      //     }).catch(err => console.error("Consent email failed:", err));
+      //   }
+      // }
       
       await saveDataToFirebase(null, true)
       const userEmail = formData.contactDetails?.email;
@@ -531,9 +531,8 @@ export default function UniversalProfile() {
   const handleNavigateToFunding = () => navigate("/applications/funding")
 
   const isDocumentsSectionComplete = () => {
-    const requiredDocs = ["registrationCertificate", "certifiedIds", "shareRegister", "proofOfAddress", "taxClearanceCert"]
-    const documents = formData.documents || {}
-    return requiredDocs.every((docId) => (documents[docId] || []).length > 0)
+ 
+    return true
   }
 
   const renderActiveSection = () => {
@@ -602,8 +601,7 @@ export default function UniversalProfile() {
   }, [isEditing, effectiveUserId])
 
   useEffect(() => {
-    if (isDocumentsSectionComplete() && !completedSections.documents) setCompletedSections((prev) => ({ ...prev, documents: true }))
-    else if (!isDocumentsSectionComplete() && completedSections.documents) setCompletedSections((prev) => ({ ...prev, documents: false }))
+   if (!completedSections.documents) setCompletedSections((prev) => ({ ...prev, documents: true }))
   }, [formData.documents])
 
   if (loading) {

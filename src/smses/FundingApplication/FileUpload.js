@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef, useId } from "react"
 import { Upload, X, FileText, Loader2, Eye } from "lucide-react"
 
 export default function FileUpload({
@@ -15,6 +15,8 @@ export default function FileUpload({
 }) {
   const [files, setFiles] = useState([])
   const [isDragging, setIsDragging] = useState(false) // Fixed: changed 'seIsDragging' to 'setIsDragging'
+  const inputRef = useRef(null)
+  const uniqueId = useId()
 
   // Sync with parent value prop with proper array checking
   useEffect(() => {
@@ -234,7 +236,7 @@ export default function FileUpload({
 
   const clickHandler = () => {
     if (!isUploading) {
-      document.getElementById(`file-upload-${label || 'default'}`).click()
+      inputRef.current?.click()
     }
   }
 
@@ -298,7 +300,7 @@ export default function FileUpload({
   return (
     <div style={styles.container}>
       {label && (
-        <label style={styles.label}>
+        <label style={styles.label} htmlFor={`file-upload-${uniqueId}`}>
           {label} {required && <span style={styles.required}>*</span>}
         </label>
       )}
@@ -325,7 +327,8 @@ export default function FileUpload({
         }}
       >
         <input
-          id={`file-upload-${label || 'default'}`}
+          id={`file-upload-${uniqueId}`}
+          ref={inputRef}
           type="file"
           style={styles.hiddenInput}
           accept={accept}

@@ -5,112 +5,115 @@ import { db } from "../../firebaseConfig";
 import { getAuth } from "firebase/auth";
 import styles from "./DealFlowPipeline.module.css";
 
+// These MUST mirror the labels your FundingTable.js actually writes to
+// `pipelineStage` in Firestore (see PIPELINE_STAGES in FundingTable.js).
+// Keeping this list in sync with that file is what keeps the counts correct.
+const STAGE_DEFINITIONS = [
+  {
+    id: "initial",
+    name: "Matched",
+    colorClass: "stageInitial",
+    iconColor: "#8d6e63",
+    // Not a Firestore value — this is the base pool of matched funders
+    // before any application has been sent, fed in via primaryMatchCount.
+    matchValues: [],
+  },
+  {
+    id: "applicationSent",
+    // Display label only — the underlying Firestore value written by
+    // FundingTable.js is still literally "Application Sent", so the
+    // matchValues entry below must stay as-is even though the label reads
+    // "Contacted".
+    name: "Contacted",
+    colorClass: "stageApplication",
+    iconColor: "#795548",
+    matchValues: ["application sent"],
+  },
+  {
+    id: "applicationReceived",
+    name: "Application Received",
+    colorClass: "stageApplication",
+    iconColor: "#6d8c61",
+    matchValues: ["application received"],
+  },
+  {
+    id: "review",
+    name: "Evaluation",
+    colorClass: "stageReview",
+    iconColor: "#6d4c41",
+    matchValues: ["under review"],
+  },
+  {
+    id: "approved",
+    name: "Funding Approved",
+    colorClass: "stageApproved",
+    iconColor: "#5d4037",
+    matchValues: ["funding approved"],
+  },
+  {
+    id: "termsheet",
+    name: "Termsheet",
+    colorClass: "stageFeedback",
+    iconColor: "#4e342e",
+    matchValues: ["termsheet"],
+  },
+  {
+    id: "dealComplete",
+    name: "Deal Complete",
+    colorClass: "stageDeals",
+    iconColor: "#3e2723",
+    matchValues: ["deal complete"],
+  },
+  {
+    id: "closed",
+    name: "Deals Closed",
+    colorClass: "stageDeals",
+    iconColor: "#2e1b13",
+    matchValues: ["closed"],
+  },
+  {
+    id: "declined",
+    name: "Declined",
+    colorClass: "stageWithdrawn",
+    iconColor: "#1e0e09",
+    // Table writes both "Deal Declined" and "Declined" depending on the
+    // path taken — both mean the same terminal state, so merge them here.
+    matchValues: ["deal declined", "declined"],
+  },
+];
+
 export default function DealFlowPipeline({ primaryMatchCount = 0 }) {
-  const [stages, setStages] = useState([
-    {
-      id: "initial",
-      name: "Matching",
-      count: 0,
-
-      colorClass: styles.stageInitial,
-      iconColor: "#8d6e63"
-    },
-    {
-      id: "application",
-      name: "Application",
-      count: 0,
-    
-      colorClass: styles.stageApplication,
-      iconColor: "#795548"
-    },
-    {
-      id: "review",
-      name: "Evaluation",
-      count: 0,
-     
-      colorClass: styles.stageReview,
-      iconColor: "#6d4c41"
-    },
-    {
-      id: "diligence",
-      name: "Due Diligence",
-      count: 0,
- 
-      colorClass: styles.stageApproved,
-      iconColor: "#5d4037"
-    },
-    {
-      id: "approved",
-      name: "Decision",
-      count: 0,
-    
-      colorClass: styles.stageFeedback,
-      iconColor: "#4e342e"
-    },
-    {
-      id: "feedback",
-      name: "Terms Issue",
-      count: 0,
-
-      colorClass: styles.stageDeals,
-      iconColor: "#3e2723"
-    },
-    {
-      id: "deals",
-      name: "Deals Closed",
-      count: 0,
-     
-      colorClass: styles.stageDeals,
-      iconColor: "#2e1b13"
-    },
-    {
-      id: "withdrawn",
-      name: "Withdrawn/Declined",
-      count: 0,
-
-      colorClass: styles.stageWithdrawn,
-      iconColor: "#1e0e09"
-    },
-  ]);
-
+  const [stages, setStages] = useState(
+    STAGE_DEFINITIONS.map((s) => ({ ...s, count: 0 }))
+  );
   const [totalApplications, setTotalApplications] = useState(0);
 
   const calculateStageCounts = (applications, primaryMatchCount) => {
-    const stageCounts = {
-      initial: primaryMatchCount,
-      application: 0,
-      review: 0,
-      diligence: 0,
-      approved: 0,
-      feedback: 0,
-      deals: 0,
-      withdrawn: 0,
-    };
+    const counts = {};
+    STAGE_DEFINITIONS.forEach((s) => {
+      counts[s.id] = 0;
+    });
+    counts.initial = primaryMatchCount;
 
-    let totalApplicationsEver = 0;
-
-    applications.forEach(data => {
-      totalApplicationsEver += 1;
-
-      const stage = (data.pipelineStage || "").toLowerCase();
-
-      if (stage === "under review") {
-        stageCounts.review += 1;
-      } else if (stage === "due diligence") {
-        stageCounts.diligence += 1;
-      } else if (stage === "funding approved") {
-        stageCounts.approved += 1;
-      } else if (stage === "termsheet") {
-        stageCounts.feedback += 1;
-      } else if (stage === "deal closed" || stage === "deal successful") {
-        stageCounts.deals += 1;
-      } else if (stage === "declined" || stage === "withdrawn") {
-        stageCounts.withdrawn += 1;
+    applications.forEach((data) => {
+      const stage = (data.pipelineStage || "").toLowerCase().trim();
+      const matchedDef = STAGE_DEFINITIONS.find((s) =>
+        s.matchValues.includes(stage)
+      );
+      if (matchedDef) {
+        counts[matchedDef.id] += 1;
+      }
+      // If it doesn't match any known value, it's logged below so you can
+      // catch new/typo'd pipelineStage strings instead of them silently
+      // disappearing from the pipeline.
+      else if (stage) {
+        console.warn(
+          `[DealFlowPipeline] Unrecognized pipelineStage value: "${data.pipelineStage}" — not counted in any bucket.`
+        );
       }
     });
 
-    stageCounts.application = totalApplicationsEver;
-    return { stageCounts, totalApplicationsEver };
+    return { counts, totalApplicationsEver: applications.length };
   };
 
   useEffect(() => {
@@ -122,20 +125,23 @@ export default function DealFlowPipeline({ primaryMatchCount = 0 }) {
       const snapshot = await getDocs(collection(db, "smeApplications"));
       const userApplications = [];
 
-      snapshot.forEach(doc => {
+      snapshot.forEach((doc) => {
         const data = doc.data();
         if (data.smeId === user.uid) {
           userApplications.push(data);
         }
       });
 
-      const { stageCounts, totalApplicationsEver } = calculateStageCounts(userApplications, primaryMatchCount);
+      const { counts, totalApplicationsEver } = calculateStageCounts(
+        userApplications,
+        primaryMatchCount
+      );
       setTotalApplications(totalApplicationsEver);
 
-      setStages(current =>
-        current.map(stage => ({
+      setStages((current) =>
+        current.map((stage) => ({
           ...stage,
-          count: stage.id === "initial" ? primaryMatchCount : stageCounts[stage.id] || 0
+          count: stage.id === "initial" ? primaryMatchCount : counts[stage.id] || 0,
         }))
       );
     };
@@ -156,7 +162,7 @@ export default function DealFlowPipeline({ primaryMatchCount = 0 }) {
           {stages.map((stage) => (
             <div
               key={stage.id}
-              className={`${styles.pipelineStage} ${stage.colorClass}`}
+              className={`${styles.pipelineStage} ${styles[stage.colorClass]}`}
             >
               <div className={styles.stageCard}>
                 <div className={styles.stageContent}>
@@ -166,19 +172,18 @@ export default function DealFlowPipeline({ primaryMatchCount = 0 }) {
                       <Info size={14} />
                     </div>
                   </div>
-                  <p className={styles.stageCount}>
-                    {stage.id === "application" ? totalApplications : stage.count}
-                  </p>
+                  <p className={styles.stageCount}>{stage.count}</p>
                 </div>
               </div>
-              
-              {/* Tooltip for stage description */}
-              <div className={styles.stageTooltip}>
-                {stage.description}
-              </div>
+
+              <div className={styles.stageTooltip}>{stage.description}</div>
             </div>
           ))}
         </div>
+      </div>
+
+      <div style={{ marginTop: "0.5rem", fontSize: "0.75rem", color: "#8d6e63" }}>
+        Total applications submitted: {totalApplications}
       </div>
     </div>
   );

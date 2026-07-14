@@ -16,17 +16,21 @@ export const roleRoutes = {
   Associator: "/associator-profile",
   ASSOCIATOR: "/associator-profile",
   associator: "/associator-profile",
+  "Capital and Market Facilitator": "/cmf-profile",
+  CapitalMarketFacilitator: "/cmf-profile",
+  CMF: "/cmf-profile",
 }
 
 // Available role options for each profile type
 export const profileRoleOptions = {
-  investor: ["Investor", "SMSEs", "Advisors", "Catalysts", "Intern", "Associator"],
-  intern: ["Investor", "SMSEs", "Advisors", "Catalysts", "Intern", "Associator"],
-  advisor: ["Investor", "SMSEs", "Advisors", "Catalysts", "Intern", "Associator"],
-  catalyst: ["Investor", "SMSEs", "Advisors", "Catalysts", "Intern", "Associator"],
-  sme: ["Investor", "SMSEs", "Advisors", "Catalysts", "Intern", "Associator"],
-  programSponsor: ["Investor", "SMSEs", "Advisors", "Catalysts", "Intern", "ProgramSponsor", "Associator"],
-  associator: ["Investor", "SMSEs", "Advisors", "Catalysts", "Intern", "ProgramSponsor", "Associator"],
+  investor: ["Investor", "SMSEs", "Advisors", "Catalysts", "Intern", "Associator", "Capital and Market Facilitator"],
+  intern: ["Investor", "SMSEs", "Advisors", "Catalysts", "Intern", "Associator", "Capital and Market Facilitator"],
+  advisor: ["Investor", "SMSEs", "Advisors", "Catalysts", "Intern", "Associator", "Capital and Market Facilitator"],
+  catalyst: ["Investor", "SMSEs", "Advisors", "Catalysts", "Intern", "Associator", "Capital and Market Facilitator"],
+  sme: ["Investor", "SMSEs", "Advisors", "Catalysts", "Intern", "Associator", "Capital and Market Facilitator"],
+  programSponsor: ["Investor", "SMSEs", "Advisors", "Catalysts", "Intern", "ProgramSponsor", "Associator", "Capital and Market Facilitator"],
+  associator: ["Investor", "SMSEs", "Advisors", "Catalysts", "Intern", "ProgramSponsor", "Associator", "Capital and Market Facilitator"],
+  capitalMarketFacilitator: ["Investor", "SMSEs", "Advisors", "Catalysts", "Intern", "Associator", "Capital and Market Facilitator"],
 }
 
 // Profile-specific configurations
@@ -79,5 +83,12 @@ export const headerProfiles = {
     logoField: "formData.entityOverview.companyLogo",
     portalName: "Associator Portal",
     fallbackName: "Associator",
+  },
+  capitalMarketFacilitator: {
+    collection: "capitalMarketProfiles",
+    nameField: "formData.entityOverview.registeredName",
+    logoField: "formData.entityOverview.companyLogo",
+    portalName: "CMF Dashboard",
+    fallbackName: "Facilitator",
   },
 }
