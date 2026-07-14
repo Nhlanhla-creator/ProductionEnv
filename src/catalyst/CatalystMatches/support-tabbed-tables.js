@@ -35,7 +35,7 @@ const SuccessfulSupportDealsTable = ({ successfulDeals }) => {
         <table className="w-full border-collapse bg-white text-sm">
           <thead>
             <tr className="bg-gradient-to-r from-[#3E2723] to-[#5D4037]">
-              {["SMSE Name", "Funding", "Equity", "Start Date", "Sector", "Location", "Status", "Actions"].map((header, idx) => (
+              {["Business Name", "Funding", "Equity", "Start Date", "Sector", "Location", "Status", "Actions"].map((header, idx) => (
                 <th key={header} className={`py-3 px-3 text-left text-white font-semibold text-xs uppercase tracking-wider ${idx < 7 ? 'border-r border-[#2A1A15]' : ''}`}>
                   {header}
                 </th>
