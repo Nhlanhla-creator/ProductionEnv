@@ -2,14 +2,14 @@
 
 import React, { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
-import { 
-  Info, MapPin, Calendar, Filter, X, Eye, BarChart3, Star, 
+import {
+  Info, MapPin, Calendar, Filter, X, Eye, BarChart3,
   ChevronDown, ChevronUp, MoreVertical, CheckCircle, XCircle,
   AlertCircle, Clock, TrendingUp, Users, DollarSign, Building,
   LayoutGrid, Columns, Search, Download, MessageSquare, FileText,
   Share2, ArrowRight, ArrowUp, ArrowDown, SlidersHorizontal,
   RotateCcw, Settings, Shield, FileCheck, Target, Briefcase,
-  Video, Link
+  Video, Link, Flag, LogOut, Bookmark, Trash2
 } from "lucide-react";
 import { db, auth, storage } from "../../firebaseConfig";
 import { serverTimestamp, doc, updateDoc, getDoc, addDoc, collection, query, where, getDocs } from "firebase/firestore";
@@ -18,6 +18,7 @@ import { DayPicker } from "react-day-picker";
 import "react-day-picker/dist/style.css";
 import { usePortfolio } from "../../context/PortfolioContext";
 import SMEDetailsModal from "./SMEDetailsModal";
+import { DEFAULT_STAGES, mapStatusToStageId, getStageColors, getNextStageId, getStageActionConfig, loadPipelineSettings } from "./stageConfig";
 
 // ─── Constants & Helpers ──────────────────────────────────────────────────────
 const BIG_SCORE_LABELS = {
@@ -28,65 +29,57 @@ const BIG_SCORE_LABELS = {
   critical: { min: 0, label: "Critical", color: "#dc2626" }
 };
 
+// Match % now maps to a plain label + fit bar instead of a 5-star rating
+// (feedback #5: stars read as a customer-satisfaction score, not a fit
+// score, and duplicated what the percentage already communicates).
 const MATCH_LABELS = {
-  excellent: { min: 80, label: "Excellent Fit", stars: 5 },
-  strong: { min: 60, label: "Strong Fit", stars: 4 },
-  moderate: { min: 40, label: "Moderate Fit", stars: 3 },
-  weak: { min: 20, label: "Weak Fit", stars: 2 },
-  poor: { min: 0, label: "Poor Fit", stars: 1 }
+  excellent: { min: 80, label: "Excellent Fit", color: "#22c55e" },
+  strong: { min: 60, label: "Strong Fit", color: "#86efac" },
+  moderate: { min: 40, label: "Moderate Fit", color: "#f59e0b" },
+  weak: { min: 20, label: "Weak Fit", color: "#ef4444" },
+  poor: { min: 0, label: "Poor Fit", color: "#dc2626" }
 };
 
 const getBigScoreLabel = (score) => {
-  for (const [key, value] of Object.entries(BIG_SCORE_LABELS)) {
+  for (const value of Object.values(BIG_SCORE_LABELS)) {
     if (score >= value.min) return value;
   }
   return BIG_SCORE_LABELS.critical;
 };
 
 const getMatchLabel = (score) => {
-  for (const [key, value] of Object.entries(MATCH_LABELS)) {
+  for (const value of Object.values(MATCH_LABELS)) {
     if (score >= value.min) return value;
   }
   return MATCH_LABELS.poor;
 };
 
-const STATUS_STYLES = {
-  "Matching": { bg: "#f5f0e1", text: "#7d5a50", border: "#c8b6a6", dot: "#7d5a50" },
-  "Application": { bg: "#f0e6d9", text: "#4a352f", border: "#c8b6a6", dot: "#4a352f" },
-  "Evaluation": { bg: "#faf7f2", text: "#7d5a50", border: "#c8b6a6", dot: "#7d5a50" },
-  "Due Diligence": { bg: "#f5f0e1", text: "#4a352f", border: "#c8b6a6", dot: "#4a352f" },
-  "Decision": { bg: "#f0e6d9", text: "#7d5a50", border: "#c8b6a6", dot: "#7d5a50" },
-  "Term Sheet": { bg: "#faf7f2", text: "#4a352f", border: "#c8b6a6", dot: "#4a352f" },
-  "Active": { bg: "#e6d7c3", text: "#4a352f", border: "#a67c52", dot: "#4a352f" },
-  "Exited": { bg: "#e6d7c3", text: "#7d5a50", border: "#c8b6a6", dot: "#7d5a50" },
-  "Decline": { bg: "#f0e6d9", text: "#a67c52", border: "#c8b6a6", dot: "#a67c52" },
-  "On Hold": { bg: "#f5f0e1", text: "#7d5a50", border: "#c8b6a6", dot: "#7d5a50" }
-};
+// Stage lookup built from the shared config (feedback #3: one place stages
+// are named/defined, shared with the pipeline view so the two can't drift).
+const STAGE_BY_ID = Object.fromEntries(DEFAULT_STAGES.map((s) => [s.id, s]));
+const getStageById = (id) => STAGE_BY_ID[id] || STAGE_BY_ID.matched;
 
 const getStatusStyle = (status) => {
-  if (!status) return STATUS_STYLES["Matching"];
-  const statusLower = status.toLowerCase();
-  for (const [key, value] of Object.entries(STATUS_STYLES)) {
-    if (statusLower.includes(key.toLowerCase())) return value;
-  }
-  return { bg: "#f5f0e1", text: "#7d5a50", border: "#c8b6a6", dot: "#7d5a50" };
+  const stage = getStageById(mapStatusToStageId(status));
+  const colors = getStageColors(stage.group);
+  return { bg: colors.bgColor, text: colors.color, border: colors.borderColor, dot: colors.color, stage };
 };
 
-const PIPELINE_STAGES = {
-  "Matching": "Application",
-  "Application": "Evaluation",
-  "Evaluation": "Due Diligence",
-  "Due Diligence": "Decision",
-  "Decision": "Term Sheet",
-  "Term Sheet": "Active",
-  "Active": "Exited"
+// Reads whatever the catalyst admin configured in the pipeline's "Stage
+// Actions" settings panel (persisted via stageConfig.js's shared helpers),
+// falling back to the sensible defaults there if nothing's been customized.
+// This used to be a hardcoded switch statement with no way for an admin to
+// change it — now it's just reading data.
+const getStageFields = (stageName) => {
+  const id = mapStatusToStageId(stageName);
+  const overrides = loadPipelineSettings().customization?.stageActions || {};
+  return getStageActionConfig(id, overrides);
 };
 
 const getNextStage = (currentStage) => {
-  for (const [key, next] of Object.entries(PIPELINE_STAGES)) {
-    if (currentStage?.toLowerCase().includes(key.toLowerCase())) return next;
-  }
-  return "Application";
+  const currentId = mapStatusToStageId(currentStage);
+  const nextId = getNextStageId(DEFAULT_STAGES, currentId);
+  return getStageById(nextId).name;
 };
 
 const formatCurrency = (value) => {
@@ -98,50 +91,100 @@ const formatCurrency = (value) => {
   return `R${num}`;
 };
 
-const getStageFields = (stageName) => {
-  switch (stageName) {
-    case "Application":
-    case "Matching":
-      return { showMessage: true, showMeeting: true, showTermSheet: false, showAvailability: false };
-    case "Evaluation":
-    case "Due Diligence":
-    case "Decision":
-      return { showMessage: true, showMeeting: true, showTermSheet: false, showAvailability: true };
-    case "Term Sheet":
-      return { showMessage: true, showMeeting: true, showTermSheet: true, showAvailability: true };
-    case "Active":
-      return { showMessage: true, showMeeting: false, showTermSheet: false, showAvailability: false };
-    case "Decline":
-      return { showMessage: true, showMeeting: false, showTermSheet: false, showAvailability: false };
-    default:
-      return { showMessage: true, showMeeting: true, showTermSheet: false, showAvailability: false };
-  }
+// ─── Attention indicator (feedback #11) ────────────────────────────────────
+// Flags records that need catalyst action. Reasons are computed from
+// whatever's already on the record; reasons that need fields the schema
+// doesn't yet have (e.g. "documents outstanding") are left out rather than
+// invented, consistent with this codebase's existing honesty-over-mocking
+// convention for data that isn't backed by a real field yet.
+const getAttentionReasons = (sme) => {
+  const reasons = [];
+  if ((sme.daysInStage || 0) >= 14) reasons.push("Stalled for 14+ days");
+  if ((sme.bigScore || 0) < 40 && sme.bigScore > 0) reasons.push("BIG Score below threshold");
+  const stageId = mapStatusToStageId(sme.pipelineStage);
+  if (stageId === "decision") reasons.push("Decision pending");
+  if (stageId === "evaluation" && (sme.daysInStage || 0) >= 7) reasons.push("Evaluation overdue");
+  return reasons;
 };
 
 // Small helper component so all popups can be portaled straight to <body>.
-// This guarantees `position: fixed` popups are positioned against the real
-// viewport instead of against some transformed ancestor further up the tree
-// (which is what was causing popups to render in the wrong place / get cut off).
 const PopupPortal = ({ children }) => {
   if (typeof document === "undefined") return null;
   return createPortal(children, document.body);
 };
 
+// ─── Column header info tooltip ────────────────────────────────────────────
+// Replaces a bare `title="..."` attribute (native browser tooltips are slow
+// to appear, easy to miss, and inconsistent across browsers — which is why
+// it looked like "it does nothing"). This renders an actual, immediately
+// visible tooltip on hover, portaled to <body> so it never clips inside the
+// scrolling table container.
+const HeaderInfoTooltip = ({ text }) => {
+  const [rect, setRect] = useState(null);
+  return (
+    <span
+      onMouseEnter={(e) => setRect(e.currentTarget.getBoundingClientRect())}
+      onMouseLeave={() => setRect(null)}
+      className="inline-flex"
+    >
+      <Info size={12} style={{ color: "#a89482" }} />
+      {rect && (
+        <PopupPortal>
+          <div
+            className="fixed z-[1200] bg-[#4a352f] text-[#faf7f2] text-xs rounded-lg px-3 py-2 shadow-2xl pointer-events-none normal-case font-normal"
+            style={{
+              top: rect.bottom + 8,
+              left: Math.min(Math.max(rect.left - 90, 12), window.innerWidth - 232),
+              width: "220px",
+            }}
+          >
+            {text}
+          </div>
+        </PopupPortal>
+      )}
+    </span>
+  );
+};
+
 // ─── Component ────────────────────────────────────────────────────────────────
 export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOverride }) {
-  const [smes, setSmes] = useState([]);
-  const [expandedRows, setExpandedRows] = useState(new Set());
-  const [columnVisibility, setColumnVisibility] = useState({
+  // Table layout preferences (visible columns, density, sort) previously
+  // lived only in component state, which resets to these hardcoded defaults
+  // every time the component unmounts — i.e. the moment you navigate away.
+  // Persisting to localStorage means "leave and come back" actually keeps
+  // what was customized. `savedViews`/`saveCurrentView`/`loadView` further
+  // down already existed in this file but were never wired to a visible
+  // button or to any storage, so nothing they set could ever actually stick
+  // — that's fixed below too, with a real "Save View" control in the toolbar.
+  const VIEW_STORAGE_KEY = "sme-table-current-view-v1";
+  const SAVED_VIEWS_STORAGE_KEY = "sme-table-saved-views-v1";
+
+  const DEFAULT_COLUMN_VISIBILITY = {
     sme: true, bigScore: true, match: true, fundingStage: true,
     fundingRequired: true, status: true, applied: true, action: true,
     location: false, sector: false, equity: false, guarantees: false,
     support: false, services: false, notes: false, assignedUser: false,
-    daysInStage: false, lastActivity: false
-  });
+    daysInStage: true, lastActivity: true
+  };
+  const DEFAULT_SORT_CONFIG = { key: 'attentionThenScore', direction: 'desc' };
+
+  const loadStoredView = () => {
+    if (typeof window === "undefined") return null;
+    try {
+      return JSON.parse(window.localStorage.getItem(VIEW_STORAGE_KEY) || "null");
+    } catch {
+      return null;
+    }
+  };
+
+  const [smes, setSmes] = useState([]);
+  const [expandedRows, setExpandedRows] = useState(new Set());
+  const [columnVisibility, setColumnVisibility] = useState(() => loadStoredView()?.columnVisibility || DEFAULT_COLUMN_VISIBILITY);
   const [showColumnChooser, setShowColumnChooser] = useState(false);
-  const [sortConfig, setSortConfig] = useState({ key: 'bigScore', direction: 'desc' });
+  // Default sort now prioritises records that need attention (feedback #11)
+  const [sortConfig, setSortConfig] = useState(() => loadStoredView()?.sortConfig || DEFAULT_SORT_CONFIG);
   const [searchQuery, setSearchQuery] = useState('');
-  const [density, setDensity] = useState('comfortable');
+  const [density, setDensity] = useState(() => loadStoredView()?.density || 'comfortable');
   const [showFilters, setShowFilters] = useState(false);
   const [localFilters, setLocalFilters] = useState({
     fundingStage: [], bigScoreRange: [0, 100], status: [], sector: []
@@ -149,7 +192,14 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
   const [notification, setNotification] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
-  const [savedViews, setSavedViews] = useState([]);
+  const [savedViews, setSavedViews] = useState(() => {
+    if (typeof window === "undefined") return [];
+    try {
+      return JSON.parse(window.localStorage.getItem(SAVED_VIEWS_STORAGE_KEY) || "[]");
+    } catch {
+      return [];
+    }
+  });
   const [showSaveView, setShowSaveView] = useState(false);
   const [viewName, setViewName] = useState("");
   const [sentNDAs, setSentNDAs] = useState({});
@@ -179,6 +229,19 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
 
   const { enriched, catalystFormData, loading } = usePortfolio();
 
+  // Auto-persist the current layout on every change — this is what actually
+  // fixes "resets when I leave and come back", as opposed to only saving
+  // when the person explicitly clicks something.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      window.localStorage.setItem(VIEW_STORAGE_KEY, JSON.stringify({ columnVisibility, density, sortConfig }));
+    } catch {
+      // Storage can fail (private browsing, quota) — the table still works
+      // for the current session, it just won't persist.
+    }
+  }, [columnVisibility, density, sortConfig]);
+
   // ─── Data Processing ────────────────────────────────────────────────────────
   useEffect(() => {
     const mapRow = (a) => {
@@ -186,7 +249,7 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
       const funding = a.profile?.useOfFunds || {};
       const financials = a.profile?.financialOverview || {};
       const multiProgram = enriched.filter((e) => e.smeId === a.smeId).length > 1;
-      
+
       return {
         id: a.smeId, docId: a.docId, programIndex: a.programIndex,
         name: (entity.registeredName || a.smeName || "N/A") + (multiProgram ? ` (P${parseInt(a.programIndex || 0) + 1})` : ""),
@@ -206,8 +269,8 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
         bigScore: a.bigScore || 0,
         compliance: a.compliance || 0, legitimacy: a.legitimacy || 0,
         fundability: a.fundability || 0, pis: a.pis || 0, leadership: a.leadership || 0,
-        currentStatus: a.pipelineStage || a.status || "Matching",
-        pipelineStage: a.pipelineStage || a.status || "Matching",
+        currentStatus: a.pipelineStage || a.status || "Matched",
+        pipelineStage: a.pipelineStage || a.status || "Matched",
         nextStage: a.nextStage || getNextStage(a.pipelineStage || a.status),
         availableDates: a.availableDates || [],
         lastActivity: a.lastActivity || "N/A", daysInStage: a.daysInStage || 0,
@@ -222,22 +285,17 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
 
     let mapped = enriched.map(mapRow);
 
+    // Feedback #1: once an SME is Admitted (formerly "Active") it should
+    // ordinarily live in My Cohorts, not stay mixed into this matching
+    // table — unless the caller explicitly asked to see admitted records
+    // via stageFilter.
+    if (stageFilter !== "admitted" && stageFilter !== "active") {
+      mapped = mapped.filter((s) => mapStatusToStageId(s.pipelineStage) !== "admitted");
+    }
+
     if (stageFilter && stageFilter !== "initial") {
-      const stageMapping = {
-        matching: ["matching", "matched", "new"],
-        application: ["application", "applied", "application sent", "new application"],
-        evaluation: ["evaluation", "under review", "in review"],
-        dueDiligence: ["due diligence", "shortlisted"],
-        decision: ["decision"],
-        termSheet: ["term sheet", "support approved"],
-        active: ["active", "active support"],
-        exited: ["exit", "exited", "completed", "graduated"],
-        declined: ["decline", "declined", "rejected", "withdrawn", "support declined"]
-      };
-      const validStages = stageMapping[stageFilter] || [];
-      if (validStages.length > 0) {
-        mapped = mapped.filter(s => validStages.some(vs => (s.pipelineStage || "").toLowerCase().includes(vs)));
-      }
+      const validIds = new Set([stageFilter]);
+      mapped = mapped.filter((s) => validIds.has(mapStatusToStageId(s.pipelineStage)));
     }
 
     mapped.sort((a, b) => b.bigScore - a.bigScore);
@@ -251,7 +309,7 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
 
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase().trim();
-      result = result.filter(sme => 
+      result = result.filter(sme =>
         sme.name.toLowerCase().includes(query) || sme.sector.toLowerCase().includes(query) ||
         sme.location.toLowerCase().includes(query) || (sme.industry || "").toLowerCase().includes(query) ||
         (sme.director || "").toLowerCase().includes(query) || (sme.email || "").toLowerCase().includes(query)
@@ -272,7 +330,14 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
       result = result.filter(sme => localFilters.sector.some(sector => sme.sector.toLowerCase().includes(sector.toLowerCase())));
     }
 
-    if (sortConfig.key) {
+    if (sortConfig.key === 'attentionThenScore') {
+      result.sort((a, b) => {
+        const aFlag = getAttentionReasons(a).length > 0 ? 1 : 0;
+        const bFlag = getAttentionReasons(b).length > 0 ? 1 : 0;
+        if (aFlag !== bFlag) return bFlag - aFlag;
+        return b.bigScore - a.bigScore;
+      });
+    } else if (sortConfig.key) {
       result.sort((a, b) => {
         let aVal = a[sortConfig.key], bVal = b[sortConfig.key];
         if (typeof aVal === 'string') aVal = aVal.toLowerCase();
@@ -303,36 +368,28 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
     setActivePopup(null);
   };
 
-  // openPopup now takes a DOMRect directly (instead of an event), so it can be
-  // called both from real click events AND reused later (e.g. from the Quick
-  // Actions popup) without having to fabricate a fake event/rect.
   const openPopup = (type, sme, rect) => {
     let popupWidth, popupHeight;
     switch (type) {
       case 'bigScore': popupWidth = 380; popupHeight = 450; break;
-      case 'match': popupWidth = 350; popupHeight = 350; break;
+      case 'match': popupWidth = 380; popupHeight = 420; break;
       case 'stage': popupWidth = 450; popupHeight = 500; break;
       case 'quickActions': popupWidth = 200; popupHeight = 250; break;
       default: popupWidth = 300; popupHeight = 300;
     }
 
-    // Calculate position - center horizontally, below the element
     let x = rect.left + (rect.width / 2) - (popupWidth / 2);
     let y = rect.bottom + 8;
 
-    // Adjust if goes off screen
     if (x + popupWidth > window.innerWidth - 20) x = window.innerWidth - popupWidth - 20;
     if (x < 20) x = 20;
 
-    // If popup goes below viewport, show above the element
     if (y + popupHeight > window.innerHeight - 20) {
       y = rect.top - popupHeight - 8;
     }
     if (y < 20) y = 20;
 
     setSelectedSMEForPopup(sme);
-    // Keep the original rect around so nested popups (opened from Quick
-    // Actions) can be positioned against the same anchor.
     setActivePopup({ type, smeKey: `${sme.id}_${sme.programIndex}`, position: { x, y }, rect });
 
     if (type === 'bigScore') {
@@ -369,7 +426,6 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
     }
   };
 
-  // Convenience wrapper for real DOM click events.
   const openPopupFromEvent = (type, sme, event) => {
     event.stopPropagation();
     openPopup(type, sme, event.currentTarget.getBoundingClientRect());
@@ -387,19 +443,17 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
     const errors = {};
     if (!stageUpdateData.nextStage) errors.nextStage = "Please select a stage";
     if (stageFields.showMessage && !stageUpdateData.message.trim()) errors.message = "Please provide a message";
-    // Meeting details are optional — scheduling a meeting is no longer a
-    // requirement to advance a business to the next stage.
     if (Object.keys(errors).length > 0) { setStageFormErrors(errors); return; }
-    
+
     setIsStageSubmitting(true);
     try {
       const user = auth.currentUser;
       if (!user) throw new Error("User not authenticated");
-      
+
       const smeId = selectedSMEForPopup.id;
       const programIndex = selectedSMEForPopup.programIndex || "0";
       const documentId = `${user.uid}_${smeId}_${programIndex}`;
-      
+
       const updateData = {
         status: stageUpdateData.nextStage, pipelineStage: stageUpdateData.nextStage,
         nextStage: getNextStage(stageUpdateData.nextStage),
@@ -418,7 +472,7 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
 
       const stageKey = `${smeId}_${programIndex}`;
       setUpdatedStages(prev => ({ ...prev, [stageKey]: stageUpdateData.nextStage }));
-      setSmes(prev => prev.map(s => 
+      setSmes(prev => prev.map(s =>
         s.id === smeId && s.programIndex === programIndex
           ? { ...s, currentStatus: stageUpdateData.nextStage, pipelineStage: stageUpdateData.nextStage, nextStage: getNextStage(stageUpdateData.nextStage) }
           : s
@@ -450,7 +504,7 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
 
       const existingShareQuery = query(collection(db, "shared_nda"), where("catalystId", "==", user.uid), where("smeId", "==", sme.id), where("programIndex", "==", sme.programIndex));
       const existingShare = await getDocs(existingShareQuery);
-      
+
       if (existingShare.empty) {
         await addDoc(collection(db, "shared_nda"), {
           catalystId: user.uid, smeId: sme.id, smeName: sme.name,
@@ -472,7 +526,7 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
   const handleExport = () => {
     try {
       const visibleCols = Object.entries(columnVisibility).filter(([_, v]) => v).map(([k]) => k);
-      const headers = { sme: 'Business Name', bigScore: 'BIG Score', match: 'Match %', fundingStage: 'Funding Stage', fundingRequired: 'Funding Required', status: 'Status', applied: 'Applied Date', location: 'Location', sector: 'Sector', equity: 'Equity Offered', guarantees: 'Guarantees', support: 'Support Required', services: 'Services Required' };
+      const headers = { sme: 'Business Name', bigScore: 'BIG Score', match: 'Match %', fundingStage: 'Funding Stage', fundingRequired: 'Funding Required', status: 'Status', applied: 'Applied Date', location: 'Location', sector: 'Sector', equity: 'Equity Offered', guarantees: 'Guarantees', support: 'Support Required', services: 'Services Required', daysInStage: 'Days in Stage', lastActivity: 'Last Activity' };
       const headerRow = visibleCols.map(col => headers[col] || col).join(',');
       const dataRows = filteredAndSortedSMEs.map(sme => visibleCols.map(col => `"${String(sme[col] || '').replace(/"/g, '""')}"`).join(','));
       const csv = [headerRow, ...dataRows].join('\n');
@@ -486,6 +540,9 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
     }
   };
 
+  // Match breakdown now carries a percentage per component (feedback #7:
+  // "why this match?" should be answerable without opening the full
+  // profile), not just a matched/unmatched flag.
   const calculateMatchScore = (smeProfileData, catalystFormData, program = null) => {
     const breakdown = {
       fundingStage: { score: 0, maxScore: 12.5, matched: false, details: {} },
@@ -515,16 +572,20 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
     return { score: Math.round(totalScore), breakdown };
   };
 
+  // "Monitor" → "View Progress" (feedback #8: more specific about what the
+  // action does than a generic, slightly passive verb).
   const getContextualAction = (sme) => {
-    const status = (sme.currentStatus || "").toLowerCase();
-    if (status.includes("matching")) return { label: "Review Match", icon: <Eye size={14} />, color: "#7d5a50" };
-    if (status.includes("application")) return { label: "Review App", icon: <FileText size={14} />, color: "#7d5a50" };
-    if (status.includes("evaluation")) return { label: "Evaluate", icon: <Search size={14} />, color: "#7d5a50" };
-    if (status.includes("due diligence")) return { label: "Start DD", icon: <Shield size={14} />, color: "#7d5a50" };
-    if (status.includes("decision")) return { label: "Decide", icon: <AlertCircle size={14} />, color: "#7d5a50" };
-    if (status.includes("term sheet")) return { label: "Send Terms", icon: <FileCheck size={14} />, color: "#7d5a50" };
-    if (status.includes("active")) return { label: "Monitor", icon: <TrendingUp size={14} />, color: "#7d5a50" };
-    return { label: "Review", icon: <Eye size={14} />, color: "#7d5a50" };
+    const stageId = mapStatusToStageId(sme.currentStatus);
+    switch (stageId) {
+      case "matched": return { label: "Review Match", icon: <Eye size={14} />, color: "#7d5a50" };
+      case "applied": return { label: "Review App", icon: <FileText size={14} />, color: "#7d5a50" };
+      case "evaluation": return { label: "Evaluate", icon: <Search size={14} />, color: "#7d5a50" };
+      case "dueDiligence": return { label: "Start DD", icon: <Shield size={14} />, color: "#7d5a50" };
+      case "decision": return { label: "Decide", icon: <AlertCircle size={14} />, color: "#7d5a50" };
+      case "offer": return { label: "Send Offer", icon: <FileCheck size={14} />, color: "#7d5a50" };
+      case "admitted": return { label: "View Progress", icon: <TrendingUp size={14} />, color: "#7d5a50" };
+      default: return { label: "Review", icon: <Eye size={14} />, color: "#7d5a50" };
+    }
   };
 
   const densityStyles = {
@@ -550,14 +611,34 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
 
   const saveCurrentView = () => {
     if (!viewName.trim()) return;
-    setSavedViews(prev => [...prev, { name: viewName, columns: {...columnVisibility}, sort: {...sortConfig}, density }]);
+    setSavedViews(prev => {
+      const next = [...prev.filter(v => v.name !== viewName.trim()), { name: viewName.trim(), columns: { ...columnVisibility }, sort: { ...sortConfig }, density }];
+      try {
+        if (typeof window !== "undefined") window.localStorage.setItem(SAVED_VIEWS_STORAGE_KEY, JSON.stringify(next));
+      } catch {
+        // Non-fatal — the view still applies for this session.
+      }
+      return next;
+    });
+    setNotification({ type: "success", message: `View "${viewName.trim()}" saved!` });
     setViewName(""); setShowSaveView(false);
-    setNotification({ type: "success", message: `View "${viewName}" saved!` });
   };
 
   const loadView = (view) => {
     setColumnVisibility(view.columns); setSortConfig(view.sort); setDensity(view.density);
     setNotification({ type: "success", message: `View "${view.name}" loaded!` });
+  };
+
+  const deleteView = (name) => {
+    setSavedViews(prev => {
+      const next = prev.filter(v => v.name !== name);
+      try {
+        if (typeof window !== "undefined") window.localStorage.setItem(SAVED_VIEWS_STORAGE_KEY, JSON.stringify(next));
+      } catch {
+        // Non-fatal.
+      }
+      return next;
+    });
   };
 
   const clearAllFilters = () => {
@@ -619,7 +700,7 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
                       </label>
                     ))}
                     <div className="border-t border-[#e6d7c3] my-2" />
-                    {[{ key: 'fundingStage', label: 'Funding Stage' },{ key: 'fundingRequired', label: 'Funding Required' },{ key: 'applied', label: 'Applied Date' },{ key: 'location', label: 'Location' },{ key: 'sector', label: 'Sector' },{ key: 'equity', label: 'Equity Offered' },{ key: 'guarantees', label: 'Guarantees' },{ key: 'support', label: 'Support Required' },{ key: 'services', label: 'Services Required' }].map(({ key, label }) => (
+                    {[{ key: 'fundingStage', label: 'Funding Stage' },{ key: 'fundingRequired', label: 'Funding Required' },{ key: 'applied', label: 'Applied Date' },{ key: 'daysInStage', label: 'Days in Stage' },{ key: 'lastActivity', label: 'Last Activity' },{ key: 'location', label: 'Location' },{ key: 'sector', label: 'Sector' },{ key: 'equity', label: 'Equity Offered' },{ key: 'guarantees', label: 'Guarantees' },{ key: 'support', label: 'Support Required' },{ key: 'services', label: 'Services Required' }].map(({ key, label }) => (
                       <label key={key} className="flex items-center gap-3 py-2 px-2 rounded-lg hover:bg-[#faf7f2] cursor-pointer">
                         <input type="checkbox" checked={columnVisibility[key] || false} onChange={() => toggleColumn(key)} className="rounded border-[#c8b6a6] text-[#7d5a50]" />
                         <span className="text-sm text-[#4a352f]">{label}</span>
@@ -639,6 +720,47 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
             <button onClick={() => setShowFilters(!showFilters)} className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all shadow-sm ${showFilters ? 'bg-[#7d5a50] text-white' : 'bg-white border border-[#c8b6a6] text-[#4a352f] hover:bg-[#f5f0e1]'}`}>
               <SlidersHorizontal size={16} /> Filters
             </button>
+
+            {/* Save View: current column/density/sort layout auto-saves as
+                you go (see the persistence effect above), but this lets you
+                also save named snapshots and switch between them. */}
+            <div className="relative">
+              <button onClick={() => setShowSaveView(!showSaveView)} className="flex items-center gap-2 px-4 py-2.5 bg-white border border-[#c8b6a6] rounded-xl text-sm text-[#4a352f] hover:bg-[#f5f0e1] transition-all shadow-sm">
+                <Bookmark size={16} /> Views {savedViews.length > 0 && <span className="text-xs text-[#a89482]">({savedViews.length})</span>}
+              </button>
+              {showSaveView && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setShowSaveView(false)} />
+                  <div className="absolute right-0 top-full mt-2 w-72 bg-white rounded-2xl shadow-2xl border border-[#e6d7c3] p-4 z-50">
+                    <h4 className="text-sm font-semibold text-[#4a352f] mb-2">Save current layout</h4>
+                    <div className="flex items-center gap-2 mb-3">
+                      <input
+                        value={viewName}
+                        onChange={(e) => setViewName(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && saveCurrentView()}
+                        placeholder="View name..."
+                        className="flex-1 px-2.5 py-1.5 border border-[#c8b6a6] rounded-lg text-sm"
+                      />
+                      <button onClick={saveCurrentView} disabled={!viewName.trim()} className="px-3 py-1.5 bg-[#7d5a50] text-white rounded-lg text-xs font-semibold disabled:opacity-40">Save</button>
+                    </div>
+                    {savedViews.length > 0 && (
+                      <>
+                        <div className="border-t border-[#e6d7c3] my-2" />
+                        <h4 className="text-xs font-semibold text-[#a89482] uppercase tracking-wide mb-2">Saved views</h4>
+                        <div className="space-y-1 max-h-[180px] overflow-y-auto">
+                          {savedViews.map((view) => (
+                            <div key={view.name} className="flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg hover:bg-[#faf7f2]">
+                              <button onClick={() => { loadView(view); setShowSaveView(false); }} className="flex-1 text-left text-sm text-[#4a352f]">{view.name}</button>
+                              <button onClick={() => deleteView(view.name)} className="text-[#a89482] hover:text-red-500 p-1"><Trash2 size={13} /></button>
+                            </div>
+                          ))}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
 
             <button onClick={handleExport} className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-[#7d5a50] to-[#4a352f] text-white rounded-xl text-sm font-medium hover:shadow-lg transition-all shadow-sm">
               <Download size={16} /> Export
@@ -660,8 +782,8 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
             <div className="bg-white rounded-xl p-4 border border-[#e6d7c3]">
               <label className="block text-xs font-semibold text-[#4a352f] mb-3">Status</label>
               <div className="flex flex-wrap gap-1.5">
-                {["Matching","Application","Evaluation","Due Diligence","Decision","Term Sheet","Active"].map(s => (
-                  <button key={s} onClick={() => setLocalFilters(prev => ({ ...prev, status: prev.status.includes(s) ? prev.status.filter(x => x !== s) : [...prev.status, s] }))} className={`px-2.5 py-1 rounded-full text-xs font-medium ${localFilters.status.includes(s) ? 'bg-[#7d5a50] text-white' : 'bg-[#f5f0e1] text-[#4a352f] hover:bg-[#e6d7c3]'}`}>{s}</button>
+                {DEFAULT_STAGES.map(s => (
+                  <button key={s.id} onClick={() => setLocalFilters(prev => ({ ...prev, status: prev.status.includes(s.name) ? prev.status.filter(x => x !== s.name) : [...prev.status, s.name] }))} className={`px-2.5 py-1 rounded-full text-xs font-medium ${localFilters.status.includes(s.name) ? 'bg-[#7d5a50] text-white' : 'bg-[#f5f0e1] text-[#4a352f] hover:bg-[#e6d7c3]'}`}>{s.name}</button>
                 ))}
               </div>
             </div>
@@ -683,46 +805,64 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
           <div className="p-8"><div className="space-y-4">{[...Array(8)].map((_, i) => (<div key={i} className="h-10 bg-shimmer-light rounded-lg animate-shimmer" />))}</div></div>
         ) : (
           <>
-            {/*
-              FIX: sticky <th> only sticks relative to its nearest *scrolling*
-              ancestor. The old wrapper only had `overflow-x-auto` (horizontal
-              scroll only, unbounded height), so the page scrolled instead of
-              this div — meaning there was never a vertical scroll happening
-              inside the div for the header to stick against, and it scrolled
-              away with the rest of the page.
-
-              Giving the wrapper a fixed max-height + overflow-y-auto (via
-              `overflow-auto`, which covers both axes) creates an actual
-              internal scroll container, so `sticky top-0` on the header row
-              now works as expected.
-            */}
             <div className="overflow-auto" style={{ maxHeight: '70vh' }}>
-              <table className="w-full border-collapse" style={{ minWidth: '800px' }}>
+              {/*
+                Header weight reduced (feedback #12): the page already carries
+                several dark brown elements (active tab, export button, action
+                buttons). The table header moves to a lighter tan background
+                with dark text so the brand brown reads as one dominant accent
+                (the CTA/active states) instead of competing across layers.
+
+                Header text color is enforced via the .smt-th / .smt-th-btn
+                classes below with `!important`, rather than plain inline
+                styles — some columns were rendering white by default despite
+                an inline color, which points to something elsewhere in the
+                app's stylesheet winning the cascade for those cells. A local
+                !important class beats that regardless of where it comes from.
+              */}
+              <style>{`
+                .smt-th { color: #4a352f !important; line-height: 1.1; font-size: 0.75rem !important; font-weight: 600 !important; text-transform: uppercase !important; letter-spacing: 0.05em !important; font-family: inherit !important; }
+                .smt-th-btn { color: #4a352f !important; background: transparent; border: none; padding: 0; margin: 0; cursor: pointer; transition: color .15s ease; white-space: nowrap; font-size: inherit !important; font-weight: inherit !important; text-transform: inherit !important; letter-spacing: inherit !important; font-family: inherit !important; }
+                .smt-th-btn:hover { color: #7d5a50 !important; }
+              `}</style>
+              <table className="w-full border-collapse" style={{ minWidth: '960px' }}>
                 <thead>
-                  <tr className="bg-gradient-to-r from-[#4a352f] via-[#7d5a50] to-[#4a352f]">
-                    {/* Top-left corner cell is BOTH sticky-top (header) and
-                        sticky-left (first column), so it needs a higher
-                        z-index than plain sticky-top header cells or the
-                        sticky-left body cells would otherwise cover it. */}
-                    {columnVisibility.sme && <th className={`${ds.header} text-left text-white font-semibold border-r border-[#3a2520] sticky top-0 left-0 z-30`} style={{ backgroundColor: '#4a352f', minWidth: '150px', maxWidth: '200px' }}><button onClick={() => handleSort('name')} className="flex items-center gap-1 hover:text-[#f5f0e1] transition-colors">Business Name <span className="flex flex-col -space-y-1 opacity-50"><ArrowUp size={10} /><ArrowDown size={10} /></span></button></th>}
-                    {columnVisibility.bigScore && <th className={`${ds.header} text-center text-white font-semibold border-r border-[#3a2520] sticky top-0 z-20`} style={{ minWidth: '100px', backgroundColor: '#7d5a50' }}><button onClick={() => handleSort('bigScore')} className="flex items-center gap-1 mx-auto hover:text-[#f5f0e1] transition-colors">BIG Score <span className="flex flex-col -space-y-1 opacity-50"><ArrowUp size={10} /><ArrowDown size={10} /></span></button></th>}
-                    {columnVisibility.match && <th className={`${ds.header} text-center text-white font-semibold border-r border-[#3a2520] sticky top-0 z-20`} style={{ minWidth: '100px', backgroundColor: '#7d5a50' }}><button onClick={() => handleSort('matchPercentage')} className="flex items-center gap-1 mx-auto hover:text-[#f5f0e1] transition-colors">Match % <span className="flex flex-col -space-y-1 opacity-50"><ArrowUp size={10} /><ArrowDown size={10} /></span></button></th>}
-                    {columnVisibility.fundingStage && <th className={`${ds.header} text-left text-white font-semibold border-r border-[#3a2520] sticky top-0 z-20`} style={{ backgroundColor: '#7d5a50' }}>Funding Stage</th>}
-                    {columnVisibility.fundingRequired && <th className={`${ds.header} text-left text-white font-semibold border-r border-[#3a2520] sticky top-0 z-20`} style={{ backgroundColor: '#7d5a50' }}><button onClick={() => handleSort('fundingAmount')} className="flex items-center gap-1 hover:text-[#f5f0e1] transition-colors">Funding <span className="flex flex-col -space-y-1 opacity-50"><ArrowUp size={10} /><ArrowDown size={10} /></span></button></th>}
-                    {columnVisibility.status && <th className={`${ds.header} text-left text-white font-semibold border-r border-[#3a2520] sticky top-0 z-20`} style={{ backgroundColor: '#7d5a50' }}>Status</th>}
-                    {columnVisibility.applied && <th className={`${ds.header} text-left text-white font-semibold border-r border-[#3a2520] sticky top-0 z-20`} style={{ backgroundColor: '#7d5a50' }}><button onClick={() => handleSort('applicationDateRaw')} className="flex items-center gap-1 hover:text-[#f5f0e1] transition-colors">Applied <span className="flex flex-col -space-y-1 opacity-50"><ArrowUp size={10} /><ArrowDown size={10} /></span></button></th>}
-                    {columnVisibility.location && <th className={`${ds.header} text-left text-white font-semibold border-r border-[#3a2520] sticky top-0 z-20`} style={{ backgroundColor: '#7d5a50' }}>Location</th>}
-                    {columnVisibility.sector && <th className={`${ds.header} text-left text-white font-semibold border-r border-[#3a2520] sticky top-0 z-20`} style={{ backgroundColor: '#7d5a50' }}>Sector</th>}
-                    {columnVisibility.equity && <th className={`${ds.header} text-left text-white font-semibold border-r border-[#3a2520] sticky top-0 z-20`} style={{ backgroundColor: '#7d5a50' }}>Equity</th>}
-                    {columnVisibility.guarantees && <th className={`${ds.header} text-left text-white font-semibold border-r border-[#3a2520] sticky top-0 z-20`} style={{ backgroundColor: '#7d5a50' }}>Guarantees</th>}
-                    {columnVisibility.support && <th className={`${ds.header} text-left text-white font-semibold border-r border-[#3a2520] sticky top-0 z-20`} style={{ backgroundColor: '#7d5a50' }}>Support</th>}
-                    {columnVisibility.services && <th className={`${ds.header} text-left text-white font-semibold border-r border-[#3a2520] sticky top-0 z-20`} style={{ backgroundColor: '#7d5a50' }}>Services</th>}
-                    {columnVisibility.action && <th className={`${ds.header} text-center text-white font-semibold sticky top-0 z-20`} style={{ minWidth: '140px', backgroundColor: '#7d5a50' }}>Actions</th>}
+                  <tr className="bg-[#f0e6d9]">
+                    <th className={`smt-th py-3 px-3 text-left font-semibold uppercase tracking-wider text-xs whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 left-0 z-30`} style={{ backgroundColor: '#f0e6d9', minWidth: '220px', maxWidth: '260px' }}><button type="button" onClick={() => handleSort('name')} className="smt-th-btn flex items-center gap-1">Business Name <span className="flex flex-col -space-y-1 opacity-60"><ArrowUp size={10} /><ArrowDown size={10} /></span></button></th>
+                    {columnVisibility.bigScore && (
+                      <th className={`smt-th py-3 px-3 text-center font-semibold uppercase tracking-wider text-xs whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ minWidth: '100px', backgroundColor: '#f0e6d9' }}>
+                        <div className="flex items-center justify-center gap-1">
+                          <button type="button" onClick={() => handleSort('bigScore')} className="smt-th-btn flex items-center gap-1">BIG Score <span className="flex flex-col -space-y-1 opacity-60"><ArrowUp size={10} /><ArrowDown size={10} /></span></button>
+                          <HeaderInfoTooltip text="BIG Score measures SME credibility and readiness — compliance, legitimacy, fundability, PIS, and leadership." />
+                        </div>
+                      </th>
+                    )}
+                    {columnVisibility.match && (
+                      <th className={`smt-th py-3 px-3 text-center font-semibold uppercase tracking-wider text-xs whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ minWidth: '110px', backgroundColor: '#f0e6d9' }}>
+                        <div className="flex items-center justify-center gap-1">
+                          <button type="button" onClick={() => handleSort('matchPercentage')} className="smt-th-btn flex items-center gap-1">Match % <span className="flex flex-col -space-y-1 opacity-60"><ArrowUp size={10} /><ArrowDown size={10} /></span></button>
+                          <HeaderInfoTooltip text="Match Score measures programme fit — alignment with this programme's mandate and criteria." />
+                        </div>
+                      </th>
+                    )}
+                    {columnVisibility.fundingStage && <th className={`smt-th py-3 px-3 text-left font-semibold uppercase tracking-wider text-xs whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ backgroundColor: '#f0e6d9' }}>Funding Stage</th>}
+                    {columnVisibility.fundingRequired && <th className={`smt-th py-3 px-3 text-left font-semibold uppercase tracking-wider text-xs whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ backgroundColor: '#f0e6d9' }}><button type="button" onClick={() => handleSort('fundingAmount')} className="smt-th-btn flex items-center gap-1">Funding <span className="flex flex-col -space-y-1 opacity-60"><ArrowUp size={10} /><ArrowDown size={10} /></span></button></th>}
+                    {columnVisibility.status && <th className={`smt-th py-3 px-3 text-left font-semibold uppercase tracking-wider text-xs whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ backgroundColor: '#f0e6d9' }}>Status</th>}
+                    {columnVisibility.applied && <th className={`smt-th py-3 px-3 text-left font-semibold uppercase tracking-wider text-xs whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ backgroundColor: '#f0e6d9' }}><button type="button" onClick={() => handleSort('applicationDateRaw')} className="smt-th-btn flex items-center gap-1">Applied <span className="flex flex-col -space-y-1 opacity-60"><ArrowUp size={10} /><ArrowDown size={10} /></span></button></th>}
+                    {columnVisibility.daysInStage && <th className={`smt-th py-3 px-3 text-left font-semibold uppercase tracking-wider text-xs whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ backgroundColor: '#f0e6d9' }}><button type="button" onClick={() => handleSort('daysInStage')} className="smt-th-btn flex items-center gap-1">Days in Stage <span className="flex flex-col -space-y-1 opacity-60"><ArrowUp size={10} /><ArrowDown size={10} /></span></button></th>}
+                    {columnVisibility.lastActivity && <th className={`smt-th py-3 px-3 text-left font-semibold uppercase tracking-wider text-xs whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ backgroundColor: '#f0e6d9' }}>Last Activity</th>}
+                    {columnVisibility.location && <th className={`smt-th py-3 px-3 text-left font-semibold uppercase tracking-wider text-xs whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ backgroundColor: '#f0e6d9' }}>Location</th>}
+                    {columnVisibility.sector && <th className={`smt-th py-3 px-3 text-left font-semibold uppercase tracking-wider text-xs whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ backgroundColor: '#f0e6d9' }}>Sector</th>}
+                    {columnVisibility.equity && <th className={`smt-th py-3 px-3 text-left font-semibold uppercase tracking-wider text-xs whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ backgroundColor: '#f0e6d9' }}>Equity</th>}
+                    {columnVisibility.guarantees && <th className={`smt-th py-3 px-3 text-left font-semibold uppercase tracking-wider text-xs whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ backgroundColor: '#f0e6d9' }}>Guarantees</th>}
+                    {columnVisibility.support && <th className={`smt-th py-3 px-3 text-left font-semibold uppercase tracking-wider text-xs whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ backgroundColor: '#f0e6d9' }}>Support</th>}
+                    {columnVisibility.services && <th className={`smt-th py-3 px-3 text-left font-semibold uppercase tracking-wider text-xs whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ backgroundColor: '#f0e6d9' }}>Services</th>}
+                    {columnVisibility.action && <th className={`smt-th py-3 px-3 text-center font-semibold uppercase tracking-wider text-xs whitespace-nowrap sticky top-0 z-20`} style={{ minWidth: '190px', backgroundColor: '#f0e6d9' }}>Actions</th>}
                   </tr>
                 </thead>
                 <tbody>
                   {paginatedSMEs.length === 0 ? (
-                    <tr><td colSpan={Object.values(columnVisibility).filter(Boolean).length} className="text-center py-20">
+                    <tr><td colSpan={Object.values(columnVisibility).filter(Boolean).length + 1} className="text-center py-20">
                       <div className="flex flex-col items-center gap-4">
                         <div className="w-20 h-20 rounded-full bg-[#f5f0e1] flex items-center justify-center"><Users size={32} className="text-[#7d5a50] opacity-50" /></div>
                         <p className="text-lg font-semibold text-[#4a352f]">No Businesses Found</p>
@@ -736,22 +876,36 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
                       const contextualAction = getContextualAction(sme);
                       const smeKey = `${sme.id}_${sme.programIndex}`;
                       const currentStatus = updatedStages[smeKey] || sme.currentStatus;
-                      const showNDAButton = currentStatus?.toLowerCase().includes("evaluation");
+                      const showNDAButton = mapStatusToStageId(currentStatus) === "evaluation";
                       const ndaSent = sentNDAs[smeKey];
+                      const attentionReasons = getAttentionReasons(sme);
 
                       return (
                         <tr key={smeKey} className="border-b border-[#f0e6d9] hover:bg-[#fdf8f4] transition-all">
                           {columnVisibility.sme && (
-                            <td className={`${ds.cell} ${ds.fontSize} text-[#4a352f] sticky left-0 bg-white border-r border-[#f0e6d9] z-10`} style={{ minWidth: '150px', maxWidth: '200px' }}>
+                            <td className={`${ds.cell} ${ds.fontSize} text-[#4a352f] sticky left-0 bg-white border-r border-[#f0e6d9] z-10`} style={{ minWidth: '220px', maxWidth: '260px' }}>
                               <div className="flex items-start gap-2">
                                 <div className={`${ds.avatarSize} rounded-full bg-gradient-to-br from-[#7d5a50] to-[#4a352f] flex items-center justify-center text-white font-bold text-xs flex-shrink-0 mt-0.5`}>{sme.name.charAt(0)}</div>
-                                <button
-                                  onClick={() => handleViewDetails(sme)}
-                                  className="font-semibold text-xs leading-tight text-left hover:text-[#7d5a50] transition-colors"
-                                  style={{ wordBreak: 'break-word', textDecoration: 'underline', textUnderlineOffset: '2px' }}
-                                >
-                                  {sme.name}
-                                </button>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-start gap-1.5 flex-wrap">
+                                    <button
+                                      onClick={() => handleViewDetails(sme)}
+                                      className={`${ds.fontSize} font-normal leading-snug text-left hover:text-[#7d5a50] transition-colors`}
+                                      style={{ textDecoration: 'underline', textUnderlineOffset: '2px' }}
+                                    >
+                                      {sme.name}
+                                    </button>
+                                    {/* Attention indicator (feedback #11) */}
+                                    {attentionReasons.length > 0 && (
+                                      <span
+                                        className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-[#fff3e0] text-[#e65100] flex-shrink-0"
+                                        title={`Action required: ${attentionReasons.join(", ")}`}
+                                      >
+                                        <Flag size={9} /> Action
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
                               </div>
                             </td>
                           )}
@@ -763,31 +917,42 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
                                     <circle cx="18" cy="18" r="14" fill="none" stroke="#e6d7c3" strokeWidth="3" />
                                     <circle cx="18" cy="18" r="14" fill="none" stroke={bigScoreLabel.color} strokeWidth="3" strokeDasharray={`${sme.bigScore * 0.88} 88`} strokeLinecap="round" />
                                   </svg>
-                                  <span className="absolute inset-0 flex items-center justify-center text-xs font-bold" style={{ color: bigScoreLabel.color }}>{sme.bigScore}</span>
+                                  <span className={`absolute inset-0 flex items-center justify-center ${ds.fontSize} font-normal`} style={{ color: bigScoreLabel.color }}>{sme.bigScore}</span>
                                 </div>
                                 <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ backgroundColor: `${bigScoreLabel.color}20`, color: bigScoreLabel.color }}>{bigScoreLabel.label}</span>
                               </div>
                             </td>
                           )}
                           {columnVisibility.match && (
+                            // Feedback #5: percentage + label + a horizontal fit
+                            // bar, replacing the star rating (which read like a
+                            // customer-satisfaction score rather than a fit score).
                             <td className={`${ds.cell} text-center cursor-pointer`} onClick={(e) => openPopupFromEvent('match', sme, e)}>
-                              <div className="flex flex-col items-center gap-1">
-                                <div className="flex">{[...Array(5)].map((_, i) => (<Star key={i} size={12} className={i < matchLabel.stars ? 'text-[#FFD700] fill-[#FFD700]' : 'text-gray-300'} />))}</div>
-                                <span className="text-sm font-bold text-[#4a352f]">{sme.matchPercentage}%</span>
-                                <span className="text-xs text-[#7d5a50]">{matchLabel.label}</span>
+                              <div className="flex flex-col items-center gap-1 w-full max-w-[90px] mx-auto">
+                                <span className={`${ds.fontSize} font-normal text-[#4a352f]`}>{sme.matchPercentage}%</span>
+                                <span className="text-xs font-medium" style={{ color: matchLabel.color }}>{matchLabel.label}</span>
+                                <div className="w-full h-1.5 bg-[#e6d7c3] rounded-full overflow-hidden">
+                                  <div className="h-full rounded-full" style={{ width: `${sme.matchPercentage}%`, backgroundColor: matchLabel.color }} />
+                                </div>
                               </div>
                             </td>
                           )}
                           {columnVisibility.fundingStage && <td className={`${ds.cell} ${ds.fontSize} text-[#4a352f]`}><span className="inline-flex items-center gap-1 px-2 py-1 bg-[#f5f0e1] rounded-full text-xs font-medium">{sme.fundingStage}</span></td>}
-                          {columnVisibility.fundingRequired && <td className={`${ds.cell} ${ds.fontSize} text-[#4a352f]`}><span className="font-semibold">{sme.fundingRequired}</span></td>}
+                          {columnVisibility.fundingRequired && <td className={`${ds.cell} ${ds.fontSize} text-[#4a352f]`}><span className="font-normal">{sme.fundingRequired}</span></td>}
                           {columnVisibility.status && (
                             <td className={`${ds.cell}`}>
-                              <span className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold border" style={{ backgroundColor: statusStyle.bg, color: statusStyle.text, borderColor: statusStyle.border }}>
-                                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: statusStyle.dot }} />{currentStatus}
+                              <span
+                                className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold border"
+                                style={{ backgroundColor: statusStyle.bg, color: statusStyle.text, borderColor: statusStyle.border }}
+                                title={statusStyle.stage.tooltip}
+                              >
+                                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: statusStyle.dot }} />{statusStyle.stage.name}
                               </span>
                             </td>
                           )}
                           {columnVisibility.applied && <td className={`${ds.cell} ${ds.fontSize} text-[#4a352f]`}><div className="flex items-center gap-1.5"><Calendar size={14} className="text-[#7d5a50]" />{sme.applicationDate}</div></td>}
+                          {columnVisibility.daysInStage && <td className={`${ds.cell} ${ds.fontSize} text-[#4a352f]`}><div className="flex items-center gap-1.5"><Clock size={14} className="text-[#7d5a50]" />{sme.daysInStage} days</div></td>}
+                          {columnVisibility.lastActivity && <td className={`${ds.cell} ${ds.fontSize} text-[#4a352f]`}>{sme.lastActivity}</td>}
                           {columnVisibility.location && <td className={`${ds.cell} ${ds.fontSize} text-[#4a352f]`}>{sme.location}</td>}
                           {columnVisibility.sector && <td className={`${ds.cell} ${ds.fontSize} text-[#4a352f]`}>{sme.sector}</td>}
                           {columnVisibility.equity && <td className={`${ds.cell} ${ds.fontSize} text-[#4a352f]`}>{sme.equityOffered}</td>}
@@ -795,13 +960,30 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
                           {columnVisibility.support && <td className={`${ds.cell} ${ds.fontSize} text-[#4a352f]`}><span className="line-clamp-1">{sme.supportRequired}</span></td>}
                           {columnVisibility.services && <td className={`${ds.cell} ${ds.fontSize} text-[#4a352f]`}><span className="line-clamp-1">{sme.servicesRequired}</span></td>}
                           {columnVisibility.action && (
-                            <td className={`${ds.cell} text-center`} style={{ minWidth: '140px' }}>
-                              <div className="flex flex-col gap-1.5 items-center">
-                                <button onClick={(e) => openPopupFromEvent('stage', sme, e)} className="inline-flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-semibold text-white transition-all hover:shadow-lg w-full justify-center" style={{ backgroundColor: contextualAction.color }}>
+                            // Feedback #9: primary action + a separate ⋮ menu
+                            // button for secondary actions. Previously these
+                            // were visually fused with a hard divider line and
+                            // a column too narrow for the label, so "Review
+                            // Match" / "Send Offer" wrapped to two lines and
+                            // looked cramped — widened the column and gave
+                            // each button its own rounded shape and breathing
+                            // room instead.
+                            <td className={`${ds.cell} text-center`} style={{ minWidth: '190px' }}>
+                              <div className="flex items-center justify-center gap-1.5">
+                                <button
+                                  onClick={(e) => openPopupFromEvent('stage', sme, e)}
+                                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold text-white whitespace-nowrap transition-all hover:shadow-md hover:brightness-105"
+                                  style={{ backgroundColor: contextualAction.color }}
+                                >
                                   {contextualAction.icon} {contextualAction.label}
                                 </button>
-                                <button onClick={(e) => openPopupFromEvent('quickActions', sme, e)} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium transition-all w-full justify-center border" style={{ color: contextualAction.color, borderColor: contextualAction.color + '40', backgroundColor: contextualAction.color + '10' }}>
-                                  <MoreVertical size={12} /> Quick Actions
+                                <button
+                                  onClick={(e) => openPopupFromEvent('quickActions', sme, e)}
+                                  className="inline-flex items-center justify-center w-8 h-8 rounded-lg border transition-all hover:bg-[#f5f0e1]"
+                                  style={{ borderColor: contextualAction.color + '50', color: contextualAction.color }}
+                                  title="More actions"
+                                >
+                                  <MoreVertical size={14} />
                                 </button>
                               </div>
                             </td>
@@ -881,16 +1063,16 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
         </PopupPortal>
       )}
 
-      {/* ─── Match Breakdown Popup ───────────────────────────────────────────── */}
+      {/* ─── Match Breakdown Popup ("Why this match?" — feedback #7) ─────────── */}
       {activePopup?.type === 'match' && selectedSMEForPopup && (
         <PopupPortal>
           <div className="fixed inset-0 z-[1000]" onClick={closePopup} />
           <div className="fixed z-[1001] bg-white rounded-2xl shadow-2xl border border-[#e6d7c3] overflow-hidden animate-fadeIn"
-            style={{ top: activePopup.position.y, left: activePopup.position.x, width: '350px', maxHeight: '350px', overflowY: 'auto' }}>
+            style={{ top: activePopup.position.y, left: activePopup.position.x, width: '380px', maxHeight: '420px', overflowY: 'auto' }}>
             <div className="bg-gradient-to-br from-[#4a352f] to-[#7d5a50] p-4 text-white sticky top-0 z-10">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-xs font-semibold text-[#f5f0e1] uppercase tracking-wider">Match Breakdown</p>
+                  <p className="text-xs font-semibold text-[#f5f0e1] uppercase tracking-wider">Why this match?</p>
                   <h3 className="text-sm font-bold mt-0.5 truncate max-w-[200px]">{selectedSMEForPopup.name}</h3>
                 </div>
                 <div className="flex items-center gap-2">
@@ -905,11 +1087,15 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
               {matchBreakdownData ? Object.entries(matchBreakdownData).map(([key, data]) => {
                 if (!data || typeof data !== 'object') return null;
                 const labels = { fundingStage: "Funding Stage", ticketSize: "Ticket Size", geographicFit: "Geographic Fit", sectorMatch: "Sector Match", instrumentFit: "Instrument Fit", supportMatch: "Support Match", legalEntityFit: "Legal Entity", revenueThreshold: "Revenue Threshold" };
+                const pct = data.maxScore ? Math.round((data.score / data.maxScore) * 100) : 0;
                 return (
-                  <div key={key} className={`p-3 rounded-lg border text-xs ${data.matched ? 'bg-green-50 border-green-200' : 'bg-red-50 border-red-200'}`}>
-                    <div className="flex items-center justify-between">
+                  <div key={key} className="p-3 rounded-lg border border-[#e6d7c3] bg-[#faf7f2] text-xs">
+                    <div className="flex items-center justify-between mb-1.5">
                       <span className="font-semibold text-[#4a352f]">{labels[key] || key}</span>
-                      {data.matched ? <CheckCircle size={14} className="text-green-500" /> : <XCircle size={14} className="text-red-500" />}
+                      <span className="font-bold" style={{ color: data.matched ? "#22c55e" : "#ef4444" }}>{pct}%</span>
+                    </div>
+                    <div className="w-full h-1.5 bg-[#e6d7c3] rounded-full overflow-hidden">
+                      <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: data.matched ? "#22c55e" : "#ef4444" }} />
                     </div>
                   </div>
                 );
@@ -944,9 +1130,7 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
                   <select value={stageUpdateData.nextStage} onChange={(e) => setStageUpdateData(prev => ({ ...prev, nextStage: e.target.value }))}
                     className={`w-full px-3 py-2 border-2 rounded-lg text-xs ${stageFormErrors.nextStage ? 'border-red-500' : 'border-[#c8b6a6]'}`}>
                     <option value="">Choose a stage...</option>
-                    {Object.keys(PIPELINE_STAGES).map(s => (<option key={s} value={s}>{s}</option>))}
-                    <option value="Decline">Decline</option>
-                    <option value="On Hold">On Hold</option>
+                    {DEFAULT_STAGES.map(s => (<option key={s.id} value={s.name}>{s.name}</option>))}
                   </select>
                   {stageFormErrors.nextStage && <p className="text-red-500 text-xs mt-1">{stageFormErrors.nextStage}</p>}
                 </div>
@@ -1018,7 +1202,7 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
 
                     {stageFields.showTermSheet && (
                       <div>
-                        <label className="block text-xs font-semibold text-[#4a352f] mb-1">Support Agreement (PDF/DOC)</label>
+                        <label className="block text-xs font-semibold text-[#4a352f] mb-1">Programme Offer Document (PDF/DOC)</label>
                         <input type="file" accept=".pdf,.doc,.docx" onChange={(e) => setStageUpdateData(prev => ({ ...prev, termSheetFile: e.target.files[0] }))}
                           className="w-full px-3 py-2 border border-[#c8b6a6] rounded-lg text-xs" />
                       </div>
@@ -1079,9 +1263,9 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
             </div>
             <button onClick={() => { handleViewDetails(selectedSMEForPopup); closePopup(); }} className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"><Eye size={12} /> View Profile</button>
             <button onClick={() => openPopup('bigScore', selectedSMEForPopup, activePopup.rect)} className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"><BarChart3 size={12} /> BIG Score</button>
-            <button onClick={() => openPopup('match', selectedSMEForPopup, activePopup.rect)} className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"><Star size={12} /> Match Breakdown</button>
+            <button onClick={() => openPopup('match', selectedSMEForPopup, activePopup.rect)} className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"><Target size={12} /> Why This Match?</button>
             <button onClick={() => { setNotification({ type: "success", message: "Messaging coming soon" }); closePopup(); }} className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"><MessageSquare size={12} /> Send Message</button>
-            {selectedSMEForPopup.currentStatus?.toLowerCase().includes("evaluation") && !sentNDAs[`${selectedSMEForPopup.id}_${selectedSMEForPopup.programIndex}`] && (
+            {mapStatusToStageId(selectedSMEForPopup.currentStatus) === "evaluation" && !sentNDAs[`${selectedSMEForPopup.id}_${selectedSMEForPopup.programIndex}`] && (
               <button onClick={() => handleShareNDA(selectedSMEForPopup)} disabled={isNDASharing[`${selectedSMEForPopup.id}_${selectedSMEForPopup.programIndex}`]} className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left disabled:opacity-50">
                 <Share2 size={12} /> Share NDA
               </button>
