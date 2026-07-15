@@ -1,8 +1,14 @@
 "use client"
-import { useState, useEffect, useRef } from "react"
+import React, { useState, useEffect, useRef, useMemo } from "react"
 import { createPortal } from "react-dom"
-import { Trophy, Users, TrendingUp, Building, MapPin, DollarSign, Calendar, Eye, Wrench, Loader, RefreshCw, X, BarChart3, ChevronDown, FileText, Ticket, Copy, CheckCircle, MoreVertical, AlertCircle, Info } from "lucide-react"
-import { collection, query, where, getDocs, doc, getDoc, orderBy, addDoc, updateDoc } from "firebase/firestore"
+import {
+  Trophy, Users, TrendingUp, Building, MapPin, DollarSign, Calendar, Eye, Wrench,
+  Loader, RefreshCw, X, BarChart3, ChevronDown, ChevronUp, FileText, Ticket, Copy,
+  CheckCircle, MoreVertical, AlertCircle, Info, ArrowRight, GraduationCap, Layers,
+  Search, SlidersHorizontal, Columns, Bookmark, Trash2, StickyNote, Archive,
+  ArrowUpDown, Download, Square, CheckSquare, Plus
+} from "lucide-react"
+import { collection, query, where, getDocs, doc, getDoc, addDoc, updateDoc, arrayUnion, serverTimestamp } from "firebase/firestore"
 import { db, auth } from "../../firebaseConfig"
 
 const formatLabel = (value) => {
@@ -22,8 +28,10 @@ const formatLabel = (value) => {
     .join(", ")
 }
 
+// Spec §5.5 / §21: missing allocation should read "No allocation", not a
+// silent "Not specified" or a bare hyphen.
 const formatCurrency = (amount) => {
-  if (!amount || amount === "Not specified") return "Not specified"
+  if (!amount || amount === "Not specified") return "No allocation"
   if (typeof amount === "string") return amount
   return `R ${amount.toLocaleString()}`
 }
@@ -37,8 +45,6 @@ const formatDate = (dateValue, { fallback = "Not recorded" } = {}) => {
   if (!dateValue) return fallback
 
   let date
-  // Firestore Timestamps have a .toDate() method; plain strings/numbers go
-  // straight to the Date constructor.
   if (typeof dateValue === "object" && typeof dateValue.toDate === "function") {
     date = dateValue.toDate()
   } else {
@@ -56,26 +62,94 @@ const formatDate = (dateValue, { fallback = "Not recorded" } = {}) => {
 
 // ─── Status vocabulary ──────────────────────────────────────────────────────
 // TODO(backend): the current schema only distinguishes "Active Support",
-// "Active" and "Exit". The spec's fuller lifecycle (Onboarding, At Risk,
-// Graduation Pending, Graduated, Withdrawn, etc.) needs those states to
-// actually exist on the record before we can display them truthfully.
-// This mapping normalizes what exists today into cleaner labels without
-// inventing states the data can't support yet.
+// "Active" and "Exit". Spec §5.7 wants a much fuller lifecycle (Onboarding,
+// At Risk, Review Required, Graduation Pending, Graduated, Withdrawn,
+// Removed, etc.) — those states need to actually exist on the record before
+// we can display or transition between them truthfully. This mapping
+// normalizes what exists today into cleaner labels without inventing states
+// the data can't support yet.
 const STATUS_META = {
   "Active Support": { label: "Active", color: "#4caf50", group: "active" },
   "Active": { label: "Active", color: "#4caf50", group: "active" },
-  "Exit": { label: "Exited", color: "#9e9e9e", group: "exited" },
-  "Exit Support": { label: "Exited", color: "#9e9e9e", group: "exited" },
+  "Exit": { label: "Graduated / Exited", color: "#9e9e9e", group: "exited" },
+  "Exit Support": { label: "Graduated / Exited", color: "#9e9e9e", group: "exited" },
 }
 
 const getStatusMeta = (status) => STATUS_META[status] || { label: status || "Unknown", color: "#7d5a50", group: "active" }
 
+// Spec §17: exiting an SME must require a reason and log an audit entry.
+// This is real, storable data (written to Firestore below) even though the
+// richer status lifecycle it's attached to isn't fully modeled yet.
+const EXIT_REASONS = [
+  "Voluntary withdrawal",
+  "Programme requirements not met",
+  "Business closed",
+  "Unable to contact",
+  "Strategic mismatch",
+  "Funding no longer required",
+  "Moved to another programme",
+  "Other",
+]
+
+// ─── Post-admission pipeline (feedback #14) ─────────────────────────────────
+const POST_ADMISSION_STAGES = [
+  { id: "onboarding", name: "Onboarding", color: "#a67c52", bg: "#f5f0e1", icon: Layers, pending: true },
+  { id: "active", name: "Active", color: "#4caf50", bg: "#e8f5e9", icon: TrendingUp },
+  { id: "graduated", name: "Graduated / Exited", color: "#9e9e9e", bg: "#f3f4f6", icon: GraduationCap },
+]
+
+const PostAdmissionPipeline = ({ cohorts }) => {
+  const activeCount = cohorts.filter((c) => getStatusMeta(c.currentStatus).group === "active").length
+  const graduatedCount = cohorts.filter((c) => getStatusMeta(c.currentStatus).group === "exited").length
+  const countsByStage = { onboarding: 0, active: activeCount, graduated: graduatedCount }
+  const total = activeCount + graduatedCount || 1
+
+  return (
+    <div className="bg-white rounded-2xl border border-[#e6d7c3] shadow-sm p-4 mb-6">
+      <div className="flex items-center gap-2 mb-3">
+        <h3 className="text-sm font-semibold text-[#4a352f]">Post-Admission Journey</h3>
+        <span title="Businesses arrive here once admitted from Deal Flow. Declined/Withdrawn applications never reach this stage.">
+          <Info size={12} className="text-[#a89482]" />
+        </span>
+      </div>
+      <div className="flex items-center gap-1 flex-wrap">
+        {POST_ADMISSION_STAGES.map((stage, idx) => {
+          const count = countsByStage[stage.id] || 0
+          const pct = stage.pending ? 0 : Math.round((count / total) * 100)
+          const Icon = stage.icon
+          return (
+            <div key={stage.id} className="flex items-center">
+              <div
+                className={`flex items-center gap-2 px-3 py-2 rounded-xl border ${stage.pending ? "border-dashed opacity-60" : ""}`}
+                style={{ backgroundColor: stage.bg, borderColor: stage.pending ? "#c8b6a6" : stage.color + "60" }}
+                title={stage.pending ? "Awaiting a backend Onboarding status field" : undefined}
+              >
+                <Icon size={14} style={{ color: stage.color }} />
+                <div>
+                  <div className="text-xs font-semibold" style={{ color: stage.color }}>{stage.name}</div>
+                  <div className="text-[10px] text-[#7d5a50]">{stage.pending ? "Pending data" : `${count} · ${pct}%`}</div>
+                </div>
+              </div>
+              {idx < POST_ADMISSION_STAGES.length - 1 && (
+                <ArrowRight size={14} className="text-[#c8b6a6] mx-1.5 flex-shrink-0" />
+              )}
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 // ─── "Attention Required" heuristic ─────────────────────────────────────────
 // TODO(backend): a real implementation needs reporting-overdue flags,
-// last-activity timestamps, and milestone due dates on the record. Until
-// those fields exist, we flag records with missing/invalid core data as a
-// conservative, honest stand-in — this is a data-quality signal, not a
-// programme-health signal, and is labeled as such in the UI.
+// last-activity timestamps, and milestone due dates on the record (spec §13
+// lists the full set: reporting overdue, no activity in 30 days, BIG Score
+// declining, milestone overdue, unused support allocation, Growth Suite
+// incomplete, etc.). Until those fields exist, we flag records with
+// missing/invalid core data as a conservative, honest stand-in — this is a
+// data-quality signal, not a programme-health signal, and is labeled as such
+// in the UI.
 const needsAttention = (cohort) => {
   const hasValidStartDate = (() => {
     if (!cohort.completionDate) return false
@@ -88,16 +162,23 @@ const needsAttention = (cohort) => {
   return !hasValidStartDate || !hasFundingInfo
 }
 
-// Small helper so popups/tooltips render straight to <body>, avoiding
-// clipping or mispositioning from transformed ancestors.
+// Spec §20: attention-required first, then active, then graduated/exited
+// last — exited SMEs shouldn't dominate the default operational view.
+// No milestone-due-date field exists yet to sort within groups by, so ties
+// break alphabetically by name instead of fabricating urgency.
+const cohortSortRank = (cohort) => {
+  const meta = getStatusMeta(cohort.currentStatus)
+  if (meta.group === "active" && needsAttention(cohort)) return 0
+  if (meta.group === "active") return 1
+  return 2
+}
+
 const Portal = ({ children }) => {
   if (typeof document === "undefined") return null
   return createPortal(children, document.body)
 }
 
 // ─── Voucher info hover tooltip ──────────────────────────────────────────────
-// This replaces the always-visible banner. It only appears while hovering
-// the "Generate Voucher" action, anchored to that element.
 const VoucherInfoTooltip = ({ anchorRect }) => {
   if (!anchorRect) return null
   const width = 340
@@ -187,7 +268,7 @@ const LoadingSkeleton = () => (
         <div className="w-32 h-9 bg-shimmer-light bg-shimmer animate-shimmer-d2 rounded" />
       </div>
       <div className="grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-4 mb-6">
-        <StatCardSkeleton /><StatCardSkeleton /><StatCardSkeleton /><StatCardSkeleton />
+        <StatCardSkeleton /><StatCardSkeleton /><StatCardSkeleton /><StatCardSkeleton /><StatCardSkeleton />
       </div>
       <div className="bg-white rounded-2xl shadow-md overflow-hidden w-full border border-[#e6d7c3]">
         <div className="p-4 border-b-2 border-[#e6d7c3] bg-[#f5f0e1] flex justify-between items-center">
@@ -205,6 +286,48 @@ const LoadingSkeleton = () => (
   </div>
 )
 
+// ─── Customizable columns (spec §9) ────────────────────────────────────────
+// Scoped to fields that actually exist on the record. Programme, BIG Score,
+// Programme Progress, Support Utilised (vs. allocated), and Next Milestone
+// from the spec's recommended column set all need backend fields that don't
+// exist yet — adding them as columns here would mean showing fabricated
+// data, so they're left out rather than faked. "Days in Programme" is
+// included since it's honestly derivable from the existing start-date field.
+const OPTIONAL_COLUMNS = [
+  { key: "daysInProgramme", label: "Days in Programme" },
+  { key: "appliedDate", label: "Applied Date" },
+  { key: "teamSize", label: "Employees" },
+  { key: "guarantees", label: "Guarantees" },
+  { key: "servicesRequired", label: "Services" },
+]
+const DEFAULT_COLUMN_VISIBILITY = {
+  supportValue: true, startDate: true, status: true,
+  daysInProgramme: false, appliedDate: false, teamSize: false, guarantees: false, servicesRequired: false,
+}
+
+const VIEW_STORAGE_KEY = "my-cohorts-view-v1"
+const SAVED_VIEWS_STORAGE_KEY = "my-cohorts-saved-views-v1"
+
+const loadStoredView = () => {
+  if (typeof window === "undefined") return null
+  try {
+    return JSON.parse(window.localStorage.getItem(VIEW_STORAGE_KEY) || "null")
+  } catch {
+    return null
+  }
+}
+
+// Spec §10: a few standard presets. "Support Management", "Programme
+// Performance", "Graduation Pipeline" and "My SMEs" from the spec all need
+// fields that don't exist yet (support breakdown, BIG Score history,
+// milestones, assigned programme manager) — included here are only the
+// presets fully answerable with today's data.
+const PRESET_VIEWS = [
+  { key: "activeCohort", label: "Active Cohort", filter: "inProgramme" },
+  { key: "attentionRequired", label: "Attention Required", filter: "attention" },
+  { key: "completedExited", label: "Completed & Exited", filter: "exited" },
+]
+
 function MyCohorts() {
   const [cohorts, setCohorts] = useState([])
   const [loading, setLoading] = useState(true)
@@ -220,15 +343,49 @@ function MyCohorts() {
   const [copied, setCopied] = useState(false)
   const [savingVoucher, setSavingVoucher] = useState(false)
 
-  // New: quick-filter counters, density, row menu, voucher hover tooltip
-  const [activeFilter, setActiveFilter] = useState("all") // all | active | attention | exited
-  const [density, setDensity] = useState("comfortable")
+  // Default filter is "inProgramme" (active, whether flagged or not) rather
+  // than "all" — spec §20: exited/graduated SMEs shouldn't dominate the
+  // default operational view; they're reachable via the counter, a filter,
+  // or the "Completed & Exited" saved view.
+  const [activeFilter, setActiveFilter] = useState(() => loadStoredView()?.activeFilter || "inProgramme")
+  const [density, setDensity] = useState(() => loadStoredView()?.density || "comfortable")
+  const [columnVisibility, setColumnVisibility] = useState(() => loadStoredView()?.columnVisibility || DEFAULT_COLUMN_VISIBILITY)
   const [rowMenu, setRowMenu] = useState(null) // { cohort, position }
   const [voucherTooltip, setVoucherTooltip] = useState(null) // { rect }
+
+  // ─── New: search, filters, columns, saved views, bulk, expand, notes ────
+  const [searchQuery, setSearchQuery] = useState("")
+  const [showFilters, setShowFilters] = useState(false)
+  const [localFilters, setLocalFilters] = useState({ sector: [], location: [] })
+  const [showColumnChooser, setShowColumnChooser] = useState(false)
+  const [showSaveView, setShowSaveView] = useState(false)
+  const [viewName, setViewName] = useState("")
+  const [savedViews, setSavedViews] = useState(() => {
+    if (typeof window === "undefined") return []
+    try { return JSON.parse(window.localStorage.getItem(SAVED_VIEWS_STORAGE_KEY) || "[]") } catch { return [] }
+  })
+  const [showArchived, setShowArchived] = useState(false)
+  const [selectedRows, setSelectedRows] = useState(new Set())
+  const [expandedRows, setExpandedRows] = useState(new Set())
+  const [notesByCohort, setNotesByCohort] = useState({}) // cohortId -> [{note, createdAt}]
+  const [noteModal, setNoteModal] = useState(null) // { cohort, text }
+  const [statusModal, setStatusModal] = useState(null) // { cohorts: [], targetGroup, reason, note }
+  const [bulkConfirm, setBulkConfirm] = useState(null) // { message, onConfirm }
 
   useEffect(() => {
     fetchCohorts()
   }, [])
+
+  // Auto-persist layout (fixes "resets when I leave and come back" for this
+  // table too, same fix applied to the matching table).
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    try {
+      window.localStorage.setItem(VIEW_STORAGE_KEY, JSON.stringify({ activeFilter, density, columnVisibility }))
+    } catch {
+      // Storage can fail (private browsing, quota) — still works this session.
+    }
+  }, [activeFilter, density, columnVisibility])
 
   const fetchCohorts = async () => {
     try {
@@ -284,11 +441,12 @@ function MyCohorts() {
 
             return {
               id: docSnap.id,
+              docId: docSnap.id,
               smeId,
               smeName: `${smeName}${programSuffix}`,
               dealAmount: fundingRequired,
               dealType: equityOffered,
-              completionDate: data.updatedAt || data.createdAt || null, // no fabricated "now" fallback — let formatDate show "Not recorded"
+              completionDate: data.updatedAt || data.createdAt || null,
               sector,
               location,
               teamSize,
@@ -302,7 +460,11 @@ function MyCohorts() {
               guarantees,
               servicesRequired: data.servicesRequired || "Not specified",
               applicationDate: data.createdAt ? formatDate(data.createdAt) : "Not recorded",
+              applicationDateRaw: data.createdAt || null,
               programIndex,
+              archived: data.archived || false,
+              exitReason: data.exitReason || null,
+              statusHistory: data.statusHistory || [],
               // TODO(backend): populate once these fields exist on the record
               programme: data.programme || null,
             }
@@ -457,21 +619,211 @@ function MyCohorts() {
     return "#f44336"
   }
 
-  // ─── Derived: counters + filtering ─────────────────────────────────────────
-  const counts = {
-    total: cohorts.length,
-    active: cohorts.filter(c => getStatusMeta(c.currentStatus).group === "active" && !needsAttention(c)).length,
-    attention: cohorts.filter(c => getStatusMeta(c.currentStatus).group === "active" && needsAttention(c)).length,
-    exited: cohorts.filter(c => getStatusMeta(c.currentStatus).group === "exited").length,
+  // ─── Add Note (spec §7/§8 "Latest Activity", §6 secondary menu) ─────────
+  // Real Firestore write, not a placeholder — a dedicated `cohortNotes`
+  // collection keyed by cohortId, fetched on row expand.
+  const fetchNotesForCohort = async (cohort) => {
+    try {
+      const snapshot = await getDocs(query(collection(db, "cohortNotes"), where("cohortId", "==", cohort.id)))
+      const notes = snapshot.docs
+        .map((d) => d.data())
+        .sort((a, b) => (b.createdAtMs || 0) - (a.createdAtMs || 0))
+      setNotesByCohort((prev) => ({ ...prev, [cohort.id]: notes }))
+    } catch (error) {
+      console.error("Error fetching notes:", error)
+    }
   }
 
-  const filteredCohorts = cohorts.filter((c) => {
-    const meta = getStatusMeta(c.currentStatus)
-    if (activeFilter === "active") return meta.group === "active" && !needsAttention(c)
-    if (activeFilter === "attention") return meta.group === "active" && needsAttention(c)
-    if (activeFilter === "exited") return meta.group === "exited"
-    return true
-  })
+  const toggleExpandRow = (cohort) => {
+    setExpandedRows((prev) => {
+      const next = new Set(prev)
+      if (next.has(cohort.id)) {
+        next.delete(cohort.id)
+      } else {
+        next.add(cohort.id)
+        if (!notesByCohort[cohort.id]) fetchNotesForCohort(cohort)
+      }
+      return next
+    })
+  }
+
+  const handleSaveNote = async () => {
+    if (!noteModal?.text?.trim()) return
+    try {
+      const user = auth.currentUser
+      if (!user) { alert("Please log in to add a note"); return }
+      await addDoc(collection(db, "cohortNotes"), {
+        catalystId: user.uid,
+        smeId: noteModal.cohort.smeId,
+        cohortId: noteModal.cohort.id,
+        note: noteModal.text.trim(),
+        createdAt: serverTimestamp(),
+        createdAtMs: Date.now(),
+        authorName: user.displayName || user.email || "Catalyst",
+      })
+      await fetchNotesForCohort(noteModal.cohort)
+      setExpandedRows((prev) => new Set(prev).add(noteModal.cohort.id))
+      setNoteModal(null)
+    } catch (error) {
+      console.error("Error saving note:", error)
+      alert("Failed to save note. Please try again.")
+    }
+  }
+
+  // ─── Change Status (spec §17: require a reason, log an audit entry) ─────
+  const openStatusModal = (cohortOrCohorts) => {
+    const list = Array.isArray(cohortOrCohorts) ? cohortOrCohorts : [cohortOrCohorts]
+    setStatusModal({ cohorts: list, targetGroup: "", reason: "", note: "" })
+    setRowMenu(null)
+  }
+
+  const submitStatusChange = async () => {
+    if (!statusModal?.targetGroup) return
+    if (statusModal.targetGroup === "exited" && !statusModal.reason) return
+
+    const newStatus = statusModal.targetGroup === "exited" ? "Exit" : "Active"
+    const run = async () => {
+      try {
+        for (const cohort of statusModal.cohorts) {
+          const prevMeta = getStatusMeta(cohort.currentStatus)
+          const historyEntry = {
+            previousStatus: prevMeta.label,
+            newStatus: statusModal.targetGroup === "exited" ? "Graduated / Exited" : "Active",
+            changedAt: new Date().toISOString(),
+            reason: statusModal.reason || null,
+            note: statusModal.note || null,
+          }
+          await updateDoc(doc(db, "catalystApplications", cohort.docId), {
+            status: newStatus,
+            ...(statusModal.reason ? { exitReason: statusModal.reason } : {}),
+            statusHistory: arrayUnion(historyEntry),
+          })
+        }
+        await fetchCohorts()
+        setStatusModal(null)
+        setSelectedRows(new Set())
+      } catch (error) {
+        console.error("Error changing status:", error)
+        alert("Failed to update status. Please try again.")
+      }
+    }
+
+    if (statusModal.targetGroup === "exited") {
+      setBulkConfirm({
+        message: statusModal.cohorts.length > 1
+          ? `Mark ${statusModal.cohorts.length} businesses as Graduated / Exited? This cannot be easily undone.`
+          : `Mark ${statusModal.cohorts[0].smeName} as Graduated / Exited? This cannot be easily undone.`,
+        onConfirm: run,
+      })
+    } else {
+      run()
+    }
+  }
+
+  // ─── Archive (spec §6 secondary menu) ────────────────────────────────────
+  const handleArchive = async (cohort) => {
+    setBulkConfirm({
+      message: `Archive ${cohort.smeName}? It will be hidden from the default view but can still be found via "Show archived".`,
+      onConfirm: async () => {
+        try {
+          await updateDoc(doc(db, "catalystApplications", cohort.docId), { archived: true })
+          await fetchCohorts()
+        } catch (error) {
+          console.error("Error archiving record:", error)
+          alert("Failed to archive. Please try again.")
+        }
+      },
+    })
+    setRowMenu(null)
+  }
+
+  // ─── Bulk selection + export (spec §18) ──────────────────────────────────
+  const toggleRowSelected = (id) => {
+    setSelectedRows((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  }
+
+  const toggleSelectAll = (rows) => {
+    setSelectedRows((prev) => {
+      const allSelected = rows.every((r) => prev.has(r.id))
+      if (allSelected) return new Set()
+      return new Set(rows.map((r) => r.id))
+    })
+  }
+
+  const handleExportSelected = (rows) => {
+    try {
+      const selected = rows.filter((r) => selectedRows.has(r.id))
+      const headers = ["Business Name", "Support Value", "Start Date", "Status", "Sector", "Location"]
+      const dataRows = selected.map((c) => [
+        c.smeName, formatCurrency(c.dealAmount), formatDate(c.completionDate),
+        getStatusMeta(c.currentStatus).label, c.sector, c.location,
+      ].map((v) => `"${String(v || "").replace(/"/g, '""')}"`).join(","))
+      const csv = [headers.join(","), ...dataRows].join("\n")
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement("a")
+      link.href = url; link.download = `cohorts-export-${new Date().toISOString().split("T")[0]}.csv`; link.click()
+      URL.revokeObjectURL(url)
+    } catch (error) {
+      console.error("Export failed:", error)
+    }
+  }
+
+  // ─── Derived: counters (spec §3 wants 5 tiles) ───────────────────────────
+  // NOTE(backend): "Graduated" and "Exited" are shown as distinct tiles per
+  // spec, but the schema has no field distinguishing a successful graduation
+  // from an early exit — both collapse to the same "Exit" status today. Both
+  // tiles read the same underlying count until that distinction exists;
+  // labeling them separately (with a shared explanatory tooltip) is more
+  // honest than inventing a split that isn't backed by real data.
+  const visibleCohorts = useMemo(() => cohorts.filter((c) => showArchived || !c.archived), [cohorts, showArchived])
+
+  const counts = useMemo(() => ({
+    total: visibleCohorts.length,
+    active: visibleCohorts.filter((c) => getStatusMeta(c.currentStatus).group === "active" && !needsAttention(c)).length,
+    attention: visibleCohorts.filter((c) => getStatusMeta(c.currentStatus).group === "active" && needsAttention(c)).length,
+    exited: visibleCohorts.filter((c) => getStatusMeta(c.currentStatus).group === "exited").length,
+  }), [visibleCohorts])
+
+  // ─── Derived: filter options from real data ──────────────────────────────
+  const sectorOptions = useMemo(() => [...new Set(visibleCohorts.map((c) => c.sector).filter((s) => s && s !== "Not specified"))].sort(), [visibleCohorts])
+  const locationOptions = useMemo(() => [...new Set(visibleCohorts.map((c) => c.location).filter((l) => l && l !== "Not specified"))].sort(), [visibleCohorts])
+
+  const activeFilterCount = localFilters.sector.length + localFilters.location.length
+
+  // ─── Filtering, search, sort ──────────────────────────────────────────────
+  const filteredCohorts = useMemo(() => {
+    let result = visibleCohorts.filter((c) => {
+      const meta = getStatusMeta(c.currentStatus)
+      if (activeFilter === "inProgramme") return meta.group === "active"
+      if (activeFilter === "active") return meta.group === "active" && !needsAttention(c)
+      if (activeFilter === "attention") return meta.group === "active" && needsAttention(c)
+      if (activeFilter === "exited") return meta.group === "exited"
+      return true // "all"
+    })
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim()
+      result = result.filter((c) =>
+        c.smeName.toLowerCase().includes(q) ||
+        c.sector.toLowerCase().includes(q) ||
+        c.location.toLowerCase().includes(q)
+      )
+    }
+
+    if (localFilters.sector.length > 0) result = result.filter((c) => localFilters.sector.includes(c.sector))
+    if (localFilters.location.length > 0) result = result.filter((c) => localFilters.location.includes(c.location))
+
+    return [...result].sort((a, b) => {
+      const rankDiff = cohortSortRank(a) - cohortSortRank(b)
+      if (rankDiff !== 0) return rankDiff
+      return a.smeName.localeCompare(b.smeName)
+    })
+  }, [visibleCohorts, activeFilter, searchQuery, localFilters])
 
   const rowPad = density === "compact" ? "py-2.5 px-3" : "py-3.5 px-4"
 
@@ -482,8 +834,51 @@ function MyCohorts() {
     let x = rect.right - menuWidth
     let y = rect.bottom + 6
     if (x < 12) x = 12
-    if (y + 260 > window.innerHeight - 12) y = rect.top - 260 - 6
+    if (y + 340 > window.innerHeight - 12) y = rect.top - 340 - 6
     setRowMenu({ cohort, position: { x, y } })
+  }
+
+  const toggleColumn = (key) => setColumnVisibility((prev) => ({ ...prev, [key]: !prev[key] }))
+  const resetColumns = () => setColumnVisibility(DEFAULT_COLUMN_VISIBILITY)
+
+  const saveCurrentView = () => {
+    if (!viewName.trim()) return
+    setSavedViews((prev) => {
+      const next = [...prev.filter((v) => v.name !== viewName.trim()), { name: viewName.trim(), activeFilter, columnVisibility: { ...columnVisibility }, density }]
+      try { window.localStorage.setItem(SAVED_VIEWS_STORAGE_KEY, JSON.stringify(next)) } catch {}
+      return next
+    })
+    setViewName(""); setShowSaveView(false)
+  }
+
+  const loadSavedView = (view) => {
+    setActiveFilter(view.activeFilter); setColumnVisibility(view.columnVisibility); setDensity(view.density)
+    setShowSaveView(false)
+  }
+
+  const deleteSavedView = (name) => {
+    setSavedViews((prev) => {
+      const next = prev.filter((v) => v.name !== name)
+      try { window.localStorage.setItem(SAVED_VIEWS_STORAGE_KEY, JSON.stringify(next)) } catch {}
+      return next
+    })
+  }
+
+  const daysInProgramme = (cohort) => {
+    if (!cohort.completionDate) return null
+    const d = typeof cohort.completionDate === "object" && cohort.completionDate.toDate ? cohort.completionDate.toDate() : new Date(cohort.completionDate)
+    if (isNaN(d.getTime())) return null
+    return Math.max(0, Math.floor((Date.now() - d.getTime()) / (1000 * 60 * 60 * 24)))
+  }
+
+  // Spec §6: one contextual primary action instead of always "View
+  // Progress" — varies with what the record actually needs next, using only
+  // signals we can honestly derive today (attention flag, group).
+  const getPrimaryAction = (cohort) => {
+    const meta = getStatusMeta(cohort.currentStatus)
+    if (meta.group === "exited") return { label: "View Record", handler: handleViewGrowthSuite }
+    if (needsAttention(cohort)) return { label: "Review SME", handler: handleViewGrowthSuite }
+    return { label: "View Progress", handler: handleViewGrowthSuite }
   }
 
   const modalOverlayStyle = {
@@ -502,6 +897,8 @@ function MyCohorts() {
 
   if (loading) return <LoadingSkeleton />
 
+  const allVisibleSelected = filteredCohorts.length > 0 && filteredCohorts.every((c) => selectedRows.has(c.id))
+
   return (
     <div className="min-h-screen box-border transition-[margin-left] duration-300">
       <div className="mx-auto px-8 w-full">
@@ -510,11 +907,17 @@ function MyCohorts() {
           <div>
             <h1 className="text-[28px] font-bold text-[#4a352f] mb-1">My Cohorts</h1>
             <p className="text-[#7d5a50] text-base m-0">
-              Manage active, completed and exited businesses across your programmes.
+              Manage active, completed and exited SMEs across your programmes.
             </p>
           </div>
 
           <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowArchived((v) => !v)}
+              className={`flex items-center gap-1.5 border-2 rounded-lg px-3 py-2.5 text-xs font-semibold transition-all ${showArchived ? "bg-[#7d5a50] text-white border-[#7d5a50]" : "bg-white text-[#7d5a50] border-[#c8b6a6] hover:bg-[#f5f0e1]"}`}
+            >
+              <Archive size={14} /> {showArchived ? "Hiding archived: off" : "Show archived"}
+            </button>
             <select
               value={density}
               onChange={(e) => setDensity(e.target.value)}
@@ -534,38 +937,169 @@ function MyCohorts() {
           </div>
         </div>
 
-        {/* Summary counters — also act as quick filters */}
-        <div className="grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] gap-4 mb-6">
+        <PostAdmissionPipeline cohorts={visibleCohorts} />
+
+        {/* Summary counters — 5 tiles per spec §3, also act as quick filters */}
+        <div className="grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-3 mb-6">
           {[
-            { key: "all", label: "Total Businesses", value: counts.total, color: "#a67c52" },
+            { key: "all", label: "Total SMEs", value: counts.total, color: "#a67c52" },
             { key: "active", label: "Active", value: counts.active, color: "#4caf50" },
             { key: "attention", label: "Attention Required", value: counts.attention, color: "#e65100" },
-            { key: "exited", label: "Exited", value: counts.exited, color: "#9e9e9e" },
-          ].map(({ key, label, value, color }) => (
+            { key: "exited", label: "Graduated", value: counts.exited, color: "#2e7d32", note: true },
+            { key: "exited", label: "Exited", value: counts.exited, color: "#9e9e9e", note: true },
+          ].map(({ key, label, value, color, note }, i) => (
             <button
-              key={key}
-              onClick={() => setActiveFilter(activeFilter === key ? "all" : key)}
-              className={`text-left bg-white p-4 rounded-xl shadow-md border-2 transition-all ${activeFilter === key ? 'ring-2 ring-offset-1' : ''}`}
+              key={label + i}
+              onClick={() => setActiveFilter(activeFilter === key ? "inProgramme" : key)}
+              className={`text-left bg-white p-3.5 rounded-xl shadow-md border-2 transition-all ${activeFilter === key ? 'ring-2 ring-offset-1' : ''}`}
               style={{ borderColor: activeFilter === key ? color : "#e6d7c3" }}
+              title={note ? "Graduated vs. Exited aren't yet distinguished on the record — both show the same count until a backend outcome field exists." : undefined}
             >
-              <h3 className="text-xs font-semibold text-[#7d5a50] m-0 mb-1 uppercase tracking-wide">{label}</h3>
-              <p className="text-2xl font-bold m-0" style={{ color }}>{value}</p>
+              <h3 className="text-[11px] font-semibold text-[#7d5a50] m-0 mb-1 uppercase tracking-wide flex items-center gap-1">
+                {label}
+                {note && <Info size={10} className="text-[#a89482]" />}
+              </h3>
+              <p className="text-xl font-bold m-0" style={{ color }}>{value}</p>
             </button>
           ))}
         </div>
-        {/* TODO(backend): a "Graduated" counter/status needs a real graduation
-            milestone on the record; omitted rather than faked. */}
 
-        {activeFilter !== "all" && (
-          <div className="mb-4">
-            <button onClick={() => setActiveFilter("all")} className="text-xs text-[#7d5a50] underline hover:text-[#4a352f]">
-              Clear filter
+        {/* Saved / preset views */}
+        <div className="flex items-center gap-2 flex-wrap mb-4">
+          {PRESET_VIEWS.map((v) => (
+            <button
+              key={v.key}
+              onClick={() => setActiveFilter(v.filter)}
+              className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${activeFilter === v.filter ? 'bg-[#7d5a50] text-white border-[#7d5a50]' : 'bg-white text-[#4a352f] border-[#c8b6a6] hover:bg-[#f5f0e1]'}`}
+            >
+              {v.label}
             </button>
+          ))}
+          {savedViews.map((v) => (
+            <span key={v.name} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold border border-[#c8b6a6] bg-white text-[#4a352f]">
+              <button onClick={() => loadSavedView(v)} className="hover:text-[#7d5a50]">{v.name}</button>
+              <button onClick={() => deleteSavedView(v.name)} className="text-[#a89482] hover:text-red-500"><Trash2 size={11} /></button>
+            </span>
+          ))}
+        </div>
+
+        {/* Toolbar: search, filters, columns, save view */}
+        <div className="bg-[#faf7f2] rounded-t-2xl p-4 border border-[#e6d7c3] border-b-0 shadow-sm">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div className="flex-1 min-w-[200px] max-w-md relative">
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#7d5a50]" />
+              <input
+                type="text"
+                placeholder="Search cohort SMEs..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-10 pr-4 py-2.5 bg-white border border-[#c8b6a6] rounded-xl text-sm focus:outline-none focus:border-[#7d5a50] focus:ring-2 focus:ring-[#7d5a50]/20 transition-all"
+              />
+              {searchQuery && <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#7d5a50]"><X size={14} /></button>}
+            </div>
+
+            <div className="flex items-center gap-2">
+              <div className="relative">
+                <button onClick={() => setShowColumnChooser(!showColumnChooser)} className="flex items-center gap-2 px-4 py-2.5 bg-white border border-[#c8b6a6] rounded-xl text-sm text-[#4a352f] hover:bg-[#f5f0e1] transition-all shadow-sm">
+                  <Columns size={16} /> Columns <ChevronDown size={14} className={`transition-transform ${showColumnChooser ? 'rotate-180' : ''}`} />
+                </button>
+                {showColumnChooser && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setShowColumnChooser(false)} />
+                    <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-2xl shadow-2xl border border-[#e6d7c3] p-4 z-50">
+                      <h4 className="text-sm font-semibold text-[#4a352f] mb-2">Column Visibility</h4>
+                      {OPTIONAL_COLUMNS.map(({ key, label }) => (
+                        <label key={key} className="flex items-center gap-3 py-1.5 px-2 rounded-lg hover:bg-[#faf7f2] cursor-pointer">
+                          <input type="checkbox" checked={columnVisibility[key] || false} onChange={() => toggleColumn(key)} className="rounded border-[#c8b6a6] text-[#7d5a50]" />
+                          <span className="text-sm text-[#4a352f]">{label}</span>
+                        </label>
+                      ))}
+                      <div className="border-t border-[#e6d7c3] my-2" />
+                      <button onClick={resetColumns} className="text-xs text-[#7d5a50] underline hover:text-[#4a352f]">Reset to default</button>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              <div className="relative">
+                <button onClick={() => setShowFilters(!showFilters)} className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all shadow-sm ${showFilters ? 'bg-[#7d5a50] text-white' : activeFilterCount > 0 ? 'bg-[#fff3e0] border border-[#e65100] text-[#e65100]' : 'bg-white border border-[#c8b6a6] text-[#4a352f] hover:bg-[#f5f0e1]'}`}>
+                  <SlidersHorizontal size={16} /> Filters {activeFilterCount > 0 && `(${activeFilterCount})`}
+                </button>
+              </div>
+
+              <div className="relative">
+                <button onClick={() => setShowSaveView(!showSaveView)} className="flex items-center gap-2 px-4 py-2.5 bg-white border border-[#c8b6a6] rounded-xl text-sm text-[#4a352f] hover:bg-[#f5f0e1] transition-all shadow-sm">
+                  <Bookmark size={16} /> Save View
+                </button>
+                {showSaveView && (
+                  <>
+                    <div className="fixed inset-0 z-40" onClick={() => setShowSaveView(false)} />
+                    <div className="absolute right-0 top-full mt-2 w-72 bg-white rounded-2xl shadow-2xl border border-[#e6d7c3] p-4 z-50">
+                      <h4 className="text-sm font-semibold text-[#4a352f] mb-2">Save current layout</h4>
+                      <div className="flex items-center gap-2">
+                        <input
+                          value={viewName}
+                          onChange={(e) => setViewName(e.target.value)}
+                          onKeyDown={(e) => e.key === 'Enter' && saveCurrentView()}
+                          placeholder="View name..."
+                          className="flex-1 px-2.5 py-1.5 border border-[#c8b6a6] rounded-lg text-sm"
+                        />
+                        <button onClick={saveCurrentView} disabled={!viewName.trim()} className="px-3 py-1.5 bg-[#7d5a50] text-white rounded-lg text-xs font-semibold disabled:opacity-40">Save</button>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {showFilters && (
+            <div className="mt-4 p-5 bg-[#faf7f2] rounded-2xl border-2 border-[#e6d7c3] grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="bg-white rounded-xl p-4 border border-[#e6d7c3]">
+                <label className="block text-xs font-semibold text-[#4a352f] mb-3">Sector</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {sectorOptions.length === 0 && <span className="text-xs text-[#a89482]">No sector data available</span>}
+                  {sectorOptions.map((s) => (
+                    <button key={s} onClick={() => setLocalFilters((prev) => ({ ...prev, sector: prev.sector.includes(s) ? prev.sector.filter((x) => x !== s) : [...prev.sector, s] }))} className={`px-2.5 py-1 rounded-full text-xs font-medium ${localFilters.sector.includes(s) ? 'bg-[#7d5a50] text-white' : 'bg-[#f5f0e1] text-[#4a352f] hover:bg-[#e6d7c3]'}`}>{s}</button>
+                  ))}
+                </div>
+              </div>
+              <div className="bg-white rounded-xl p-4 border border-[#e6d7c3]">
+                <label className="block text-xs font-semibold text-[#4a352f] mb-3">Location</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {locationOptions.length === 0 && <span className="text-xs text-[#a89482]">No location data available</span>}
+                  {locationOptions.map((l) => (
+                    <button key={l} onClick={() => setLocalFilters((prev) => ({ ...prev, location: prev.location.includes(l) ? prev.location.filter((x) => x !== l) : [...prev.location, l] }))} className={`px-2.5 py-1 rounded-full text-xs font-medium ${localFilters.location.includes(l) ? 'bg-[#7d5a50] text-white' : 'bg-[#f5f0e1] text-[#4a352f] hover:bg-[#e6d7c3]'}`}>{l}</button>
+                  ))}
+                </div>
+              </div>
+              {activeFilterCount > 0 && (
+                <div className="md:col-span-2">
+                  <button onClick={() => setLocalFilters({ sector: [], location: [] })} className="text-xs text-[#7d5a50] underline hover:text-[#4a352f]">Clear all</button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Bulk action bar */}
+        {selectedRows.size > 0 && (
+          <div className="bg-[#4a352f] text-white px-4 py-3 flex items-center justify-between flex-wrap gap-2">
+            <span className="text-sm font-semibold">{selectedRows.size} selected</span>
+            <div className="flex items-center gap-2">
+              <button onClick={() => handleExportSelected(filteredCohorts)} className="flex items-center gap-1.5 px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-lg text-xs font-semibold transition-all">
+                <Download size={13} /> Export Selected
+              </button>
+              <button onClick={() => openStatusModal(filteredCohorts.filter((c) => selectedRows.has(c.id)))} className="flex items-center gap-1.5 px-3 py-1.5 bg-white/10 hover:bg-white/20 rounded-lg text-xs font-semibold transition-all">
+                Change Status
+              </button>
+              <button onClick={() => setSelectedRows(new Set())} className="px-3 py-1.5 text-xs font-semibold text-white/70 hover:text-white">Clear</button>
+            </div>
           </div>
         )}
 
         {filteredCohorts.length > 0 ? (
-          <div className="bg-white rounded-2xl shadow-md overflow-hidden w-full border border-[#e6d7c3]">
+          <div className="bg-white rounded-2xl shadow-md overflow-hidden w-full border border-[#e6d7c3]" style={selectedRows.size > 0 ? { borderTopLeftRadius: 0, borderTopRightRadius: 0 } : undefined}>
             <div className="p-4 border-b-2 border-[#e6d7c3] bg-[#f5f0e1] flex justify-between items-center">
               <h2 className="text-lg font-semibold text-[#4a352f] m-0">Cohort Businesses</h2>
               <span className="text-xs text-[#7d5a50] bg-[#a67c52]/15 px-3 py-1.5 rounded-md font-semibold">
@@ -573,25 +1107,28 @@ function MyCohorts() {
               </span>
             </div>
 
-            {/* Sticky header + sticky first column: wrapper needs its own
-                bounded, scrolling area for `sticky top-0` to work. */}
             <div className="overflow-auto" style={{ maxHeight: '70vh' }}>
+              <style>{`.mc-th { color: #4a352f !important; }`}</style>
               <table className="w-full border-collapse text-sm">
                 <thead>
-                  <tr className="bg-[#4a352f]">
-                    <th className={`${rowPad} text-left font-semibold text-white text-xs uppercase tracking-wide whitespace-nowrap sticky top-0 left-0 z-30`} style={{ backgroundColor: '#4a352f' }}>
+                  <tr className="bg-[#f0e6d9]">
+                    <th className={`mc-th ${rowPad} sticky top-0 left-0 z-30`} style={{ backgroundColor: '#f0e6d9', width: '40px' }}>
+                      <button onClick={() => toggleSelectAll(filteredCohorts)} className="flex items-center justify-center">
+                        {allVisibleSelected ? <CheckSquare size={16} /> : <Square size={16} />}
+                      </button>
+                    </th>
+                    <th className={`mc-th ${rowPad} text-left font-semibold text-xs uppercase tracking-wide whitespace-nowrap sticky top-0 left-0 z-30`} style={{ backgroundColor: '#f0e6d9' }}>
                       Business
                     </th>
-                    <th className={`${rowPad} text-left font-semibold text-white text-xs uppercase tracking-wide whitespace-nowrap sticky top-0 z-20`} style={{ backgroundColor: '#4a352f' }}>
-                      Support Value
-                    </th>
-                    <th className={`${rowPad} text-left font-semibold text-white text-xs uppercase tracking-wide whitespace-nowrap sticky top-0 z-20`} style={{ backgroundColor: '#4a352f' }}>
-                      Start Date
-                    </th>
-                    <th className={`${rowPad} text-left font-semibold text-white text-xs uppercase tracking-wide whitespace-nowrap sticky top-0 z-20`} style={{ backgroundColor: '#4a352f' }}>
-                      Status
-                    </th>
-                    <th className={`${rowPad} text-center font-semibold text-white text-xs uppercase tracking-wide whitespace-nowrap sticky top-0 z-20`} style={{ backgroundColor: '#4a352f' }}>
+                    {columnVisibility.supportValue && <th className={`mc-th ${rowPad} text-left font-semibold text-xs uppercase tracking-wide whitespace-nowrap sticky top-0 z-20`} style={{ backgroundColor: '#f0e6d9' }}>Support Value</th>}
+                    {columnVisibility.startDate && <th className={`mc-th ${rowPad} text-left font-semibold text-xs uppercase tracking-wide whitespace-nowrap sticky top-0 z-20`} style={{ backgroundColor: '#f0e6d9' }}>Start Date</th>}
+                    {columnVisibility.daysInProgramme && <th className={`mc-th ${rowPad} text-left font-semibold text-xs uppercase tracking-wide whitespace-nowrap sticky top-0 z-20`} style={{ backgroundColor: '#f0e6d9' }}>Days in Programme</th>}
+                    {columnVisibility.appliedDate && <th className={`mc-th ${rowPad} text-left font-semibold text-xs uppercase tracking-wide whitespace-nowrap sticky top-0 z-20`} style={{ backgroundColor: '#f0e6d9' }}>Applied Date</th>}
+                    {columnVisibility.teamSize && <th className={`mc-th ${rowPad} text-left font-semibold text-xs uppercase tracking-wide whitespace-nowrap sticky top-0 z-20`} style={{ backgroundColor: '#f0e6d9' }}>Employees</th>}
+                    {columnVisibility.guarantees && <th className={`mc-th ${rowPad} text-left font-semibold text-xs uppercase tracking-wide whitespace-nowrap sticky top-0 z-20`} style={{ backgroundColor: '#f0e6d9' }}>Guarantees</th>}
+                    {columnVisibility.servicesRequired && <th className={`mc-th ${rowPad} text-left font-semibold text-xs uppercase tracking-wide whitespace-nowrap sticky top-0 z-20`} style={{ backgroundColor: '#f0e6d9' }}>Services</th>}
+                    {columnVisibility.status && <th className={`mc-th ${rowPad} text-left font-semibold text-xs uppercase tracking-wide whitespace-nowrap sticky top-0 z-20`} style={{ backgroundColor: '#f0e6d9' }}>Status</th>}
+                    <th className={`mc-th ${rowPad} text-center font-semibold text-xs uppercase tracking-wide whitespace-nowrap sticky top-0 z-20`} style={{ backgroundColor: '#f0e6d9' }}>
                       Action
                     </th>
                   </tr>
@@ -600,69 +1137,156 @@ function MyCohorts() {
                   {filteredCohorts.map((cohort) => {
                     const meta = getStatusMeta(cohort.currentStatus)
                     const flagged = meta.group === "active" && needsAttention(cohort)
+                    const isExpanded = expandedRows.has(cohort.id)
+                    const primaryAction = getPrimaryAction(cohort)
+                    const days = daysInProgramme(cohort)
 
                     return (
-                      <tr key={cohort.id} className="border-b border-[#f0e6d9] last:border-b-0 hover:bg-[#faf7f2] transition-colors duration-200">
-                        <td className={`${rowPad} sticky left-0 bg-white z-10 border-r border-[#f0e6d9]`} style={{ minWidth: '220px' }}>
-                          <button
-                            onClick={() => handleViewDetails(cohort)}
-                            className="text-left font-semibold text-[#4a352f] hover:text-[#7d5a50] transition-colors block"
-                            style={{ textDecoration: 'underline', textUnderlineOffset: '2px' }}
-                          >
-                            {cohort.smeName}
-                          </button>
-                          <div className="text-xs text-[#7d5a50] mt-0.5">
-                            {cohort.sector} · {cohort.location}
-                          </div>
-                        </td>
+                      <React.Fragment key={cohort.id}>
+                        <tr className="border-b border-[#f0e6d9] last:border-b-0 hover:bg-[#faf7f2] transition-colors duration-200">
+                          <td className={`${rowPad}`}>
+                            <button onClick={() => toggleRowSelected(cohort.id)} className="flex items-center justify-center">
+                              {selectedRows.has(cohort.id) ? <CheckSquare size={16} className="text-[#7d5a50]" /> : <Square size={16} className="text-[#c8b6a6]" />}
+                            </button>
+                          </td>
+                          <td className={`${rowPad} sticky left-0 bg-white z-10 border-r border-[#f0e6d9]`} style={{ minWidth: '220px' }}>
+                            <div className="flex items-start gap-1.5">
+                              <button onClick={() => toggleExpandRow(cohort)} className="mt-0.5 text-[#a89482] hover:text-[#4a352f] flex-shrink-0">
+                                {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                              </button>
+                              <div>
+                                <button
+                                  onClick={() => handleViewDetails(cohort)}
+                                  className="text-left font-semibold text-[#4a352f] hover:text-[#7d5a50] transition-colors block"
+                                  style={{ textDecoration: 'underline', textUnderlineOffset: '2px' }}
+                                >
+                                  {cohort.smeName}
+                                </button>
+                                <div className="text-xs text-[#7d5a50] mt-0.5">
+                                  {cohort.sector} · {cohort.location}
+                                </div>
+                              </div>
+                            </div>
+                          </td>
 
-                        <td className={`${rowPad}`} style={{ minWidth: '130px' }}>
-                          <span className="font-semibold text-[#4a352f]">{formatCurrency(cohort.dealAmount)}</span>
-                        </td>
+                          {columnVisibility.supportValue && (
+                            <td className={`${rowPad}`} style={{ minWidth: '130px' }}>
+                              <span className="font-semibold text-[#4a352f]">{formatCurrency(cohort.dealAmount)}</span>
+                            </td>
+                          )}
 
-                        <td className={`${rowPad}`} style={{ minWidth: '120px' }}>
-                          <span className="text-[#5d4037]">{formatDate(cohort.completionDate)}</span>
-                        </td>
+                          {columnVisibility.startDate && (
+                            <td className={`${rowPad}`} style={{ minWidth: '120px' }}>
+                              <span className="text-[#5d4037]">{formatDate(cohort.completionDate)}</span>
+                            </td>
+                          )}
 
-                        <td className={`${rowPad}`} style={{ minWidth: '180px' }}>
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <span
-                              className="px-2.5 py-1 rounded-full text-xs font-semibold inline-block whitespace-nowrap"
-                              style={{ backgroundColor: meta.color + "20", color: meta.color }}
-                            >
-                              {meta.label}
-                            </span>
-                            {flagged && (
-                              <span
-                                className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold whitespace-nowrap"
-                                style={{ backgroundColor: "#fff3e0", color: "#e65100" }}
-                                title="Missing start date or funding information on record"
+                          {columnVisibility.daysInProgramme && (
+                            <td className={`${rowPad}`} style={{ minWidth: '120px' }}>
+                              <span className="text-[#5d4037]">{days === null ? "Not available" : `${days} days`}</span>
+                            </td>
+                          )}
+
+                          {columnVisibility.appliedDate && (
+                            <td className={`${rowPad}`} style={{ minWidth: '120px' }}>
+                              <span className="text-[#5d4037]">{cohort.applicationDate}</span>
+                            </td>
+                          )}
+
+                          {columnVisibility.teamSize && (
+                            <td className={`${rowPad}`}><span className="text-[#5d4037]">{cohort.teamSize}</span></td>
+                          )}
+
+                          {columnVisibility.guarantees && (
+                            <td className={`${rowPad}`}><span className="text-[#5d4037] line-clamp-1">{cohort.guarantees}</span></td>
+                          )}
+
+                          {columnVisibility.servicesRequired && (
+                            <td className={`${rowPad}`}><span className="text-[#5d4037] line-clamp-1">{cohort.servicesRequired}</span></td>
+                          )}
+
+                          {columnVisibility.status && (
+                            <td className={`${rowPad}`} style={{ minWidth: '180px' }}>
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                <span
+                                  className="px-2.5 py-1 rounded-full text-xs font-semibold inline-block whitespace-nowrap"
+                                  style={{ backgroundColor: meta.color + "20", color: meta.color }}
+                                >
+                                  {meta.label}
+                                </span>
+                                {flagged && (
+                                  <span
+                                    className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold whitespace-nowrap"
+                                    style={{ backgroundColor: "#fff3e0", color: "#e65100" }}
+                                    title="Missing start date or funding information on record"
+                                  >
+                                    <AlertCircle size={11} /> Attention
+                                  </span>
+                                )}
+                              </div>
+                            </td>
+                          )}
+
+                          <td className={`${rowPad} text-center`} style={{ minWidth: '170px' }}>
+                            <div className="flex items-center justify-center gap-1.5">
+                              <button
+                                onClick={() => primaryAction.handler(cohort)}
+                                className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white transition-all hover:shadow-md whitespace-nowrap"
+                                style={{ backgroundColor: "#a67c52" }}
                               >
-                                <AlertCircle size={11} /> Attention
-                              </span>
-                            )}
-                          </div>
-                        </td>
+                                {primaryAction.label}
+                              </button>
+                              <button
+                                onClick={(e) => openRowMenu(cohort, e)}
+                                className="p-2 rounded-lg border border-[#c8b6a6] text-[#7d5a50] hover:bg-[#f5f0e1] transition-all"
+                                aria-label="More actions"
+                              >
+                                <MoreVertical size={16} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
 
-                        <td className={`${rowPad} text-center`} style={{ minWidth: '160px' }}>
-                          <div className="flex items-center justify-center gap-1.5">
-                            <button
-                              onClick={() => handleViewGrowthSuite(cohort)}
-                              className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white transition-all hover:shadow-md whitespace-nowrap"
-                              style={{ backgroundColor: "#a67c52" }}
-                            >
-                              View Progress
-                            </button>
-                            <button
-                              onClick={(e) => openRowMenu(cohort, e)}
-                              className="p-2 rounded-lg border border-[#c8b6a6] text-[#7d5a50] hover:bg-[#f5f0e1] transition-all"
-                              aria-label="More actions"
-                            >
-                              <MoreVertical size={16} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
+                        {/* Expandable row (spec §8): only new info, nothing
+                            already visible in the collapsed row. */}
+                        {isExpanded && (
+                          <tr className="bg-[#faf7f2] border-b border-[#f0e6d9]">
+                            <td></td>
+                            <td colSpan={8} className="px-4 py-4">
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                  <p className="text-xs font-semibold text-[#4a352f] mb-1 uppercase tracking-wide">Description</p>
+                                  <p className="text-sm text-[#5d4037]">{cohort.description}</p>
+                                </div>
+                                <div>
+                                  <p className="text-xs font-semibold text-[#4a352f] mb-1 uppercase tracking-wide">Equity Offered</p>
+                                  <p className="text-sm text-[#5d4037]">{cohort.dealType}</p>
+                                </div>
+                                <div className="md:col-span-2">
+                                  <div className="flex items-center justify-between mb-1">
+                                    <p className="text-xs font-semibold text-[#4a352f] uppercase tracking-wide">Latest Activity</p>
+                                    <button onClick={() => setNoteModal({ cohort, text: "" })} className="flex items-center gap-1 text-xs text-[#7d5a50] hover:text-[#4a352f]">
+                                      <Plus size={12} /> Add Note
+                                    </button>
+                                  </div>
+                                  {(notesByCohort[cohort.id] || []).length === 0 ? (
+                                    <p className="text-sm text-[#a89482] italic">No notes recorded yet.</p>
+                                  ) : (
+                                    <div className="space-y-2 max-h-[140px] overflow-y-auto">
+                                      {(notesByCohort[cohort.id] || []).map((n, i) => (
+                                        <div key={i} className="bg-white rounded-lg border border-[#e6d7c3] p-2">
+                                          <p className="text-sm text-[#4a352f]">{n.note}</p>
+                                          <p className="text-[10px] text-[#a89482] mt-1">{n.authorName || "Catalyst"} · {n.createdAtMs ? formatDate(n.createdAtMs) : "Just now"}</p>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
                     )
                   })}
                 </tbody>
@@ -672,24 +1296,30 @@ function MyCohorts() {
         ) : (
           <div className="text-center p-[60px_20px] bg-white rounded-2xl shadow-md border border-[#e6d7c3] w-full">
             <h3 className="text-2xl font-semibold text-[#4a352f] mb-3">
-              {cohorts.length === 0 ? "No businesses in the cohort" : "No businesses match the selected filters"}
+              {visibleCohorts.length === 0
+                ? "No SMEs in the cohort"
+                : activeFilter === "inProgramme"
+                  ? "No active SMEs"
+                  : "No results after filtering"}
             </h3>
             <p className="text-[#7d5a50] text-base max-w-[500px] mx-auto">
-              {cohorts.length === 0
-                ? <>No businesses have entered a programme yet. Businesses will appear here once support is approved and they reach an active stage.</>
-                : <>Try clearing the current filter to see all cohort businesses.</>}
+              {visibleCohorts.length === 0
+                ? <>No SMEs have entered this cohort yet. Businesses will appear here once support is approved and they reach an active stage.</>
+                : activeFilter === "inProgramme"
+                  ? <>There are currently no active SMEs in this programme.</>
+                  : <>No SMEs match the selected filters. <button onClick={() => { setActiveFilter("inProgramme"); setLocalFilters({ sector: [], location: [] }); setSearchQuery(""); }} className="underline hover:text-[#4a352f]">Clear filters</button></>}
             </p>
           </div>
         )}
       </div>
 
-      {/* ─── Row secondary-action menu (⋮) ─────────────────────────────────── */}
+      {/* ─── Row secondary-action menu (⋮) — spec §6 expanded set ───────────── */}
       {rowMenu && (
         <Portal>
           <div className="fixed inset-0 z-[1090]" onClick={() => { setRowMenu(null); setVoucherTooltip(null) }} />
           <div
             className="fixed z-[1100] bg-white rounded-xl shadow-2xl border border-[#e6d7c3] py-1 overflow-visible"
-            style={{ top: rowMenu.position.y, left: rowMenu.position.x, width: '220px' }}
+            style={{ top: rowMenu.position.y, left: rowMenu.position.x, width: '230px' }}
           >
             <div className="flex items-center justify-between px-4 py-2 border-b border-[#e6d7c3]">
               <span className="text-xs font-semibold text-[#4a352f]">Quick Actions</span>
@@ -707,8 +1337,6 @@ function MyCohorts() {
             >
               <FileText size={12} /> View Documents
             </button>
-            {/* Generate Voucher — hover shows the info tooltip instead of an
-                always-visible banner elsewhere on the page. */}
             <button
               onMouseEnter={(e) => setVoucherTooltip({ rect: e.currentTarget.getBoundingClientRect() })}
               onMouseLeave={() => setVoucherTooltip(null)}
@@ -719,16 +1347,139 @@ function MyCohorts() {
               <Info size={11} className="ml-auto text-[#a67c52]" />
             </button>
             <button
+              onClick={() => { setNoteModal({ cohort: rowMenu.cohort, text: "" }); setRowMenu(null) }}
+              className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"
+            >
+              <StickyNote size={12} /> Add Note
+            </button>
+            <button
+              onClick={() => openStatusModal(rowMenu.cohort)}
+              className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"
+            >
+              <ArrowUpDown size={12} /> Change Status
+            </button>
+            <button
               onClick={() => handleViewDetails(rowMenu.cohort)}
               className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"
             >
               <Eye size={12} /> View Summary
+            </button>
+            <div className="border-t border-[#e6d7c3] my-1" />
+            <button
+              onClick={() => handleArchive(rowMenu.cohort)}
+              className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-red-600 hover:bg-red-50 text-left"
+            >
+              <Archive size={12} /> Archive Record
             </button>
           </div>
         </Portal>
       )}
 
       {voucherTooltip && <VoucherInfoTooltip anchorRect={voucherTooltip.rect} />}
+
+      {/* ─── Add Note Modal ──────────────────────────────────────────────── */}
+      {noteModal && (
+        <div style={modalOverlayStyle} onClick={() => setNoteModal(null)}>
+          <div style={{ ...modalContentStyle, maxWidth: '450px', padding: '28px' }} onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold text-[#3e2723] m-0">Add Note — {noteModal.cohort.smeName}</h3>
+              <button onClick={() => setNoteModal(null)}><X size={18} /></button>
+            </div>
+            <textarea
+              value={noteModal.text}
+              onChange={(e) => setNoteModal((prev) => ({ ...prev, text: e.target.value }))}
+              placeholder="What happened, or what needs follow-up?"
+              rows={4}
+              className="w-full px-3 py-2 border-2 border-[#c8b6a6] rounded-lg text-sm resize-y"
+            />
+            <div className="flex justify-end gap-2 mt-4">
+              <button onClick={() => setNoteModal(null)} className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm">Cancel</button>
+              <button onClick={handleSaveNote} disabled={!noteModal.text.trim()} className="px-4 py-2 bg-[#7d5a50] text-white rounded-lg text-sm font-semibold disabled:opacity-40">Save Note</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Change Status Modal (spec §17: required reason on exit) ─────── */}
+      {statusModal && (
+        <div style={modalOverlayStyle} onClick={() => setStatusModal(null)}>
+          <div style={{ ...modalContentStyle, maxWidth: '460px', padding: '28px' }} onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-bold text-[#3e2723] m-0">
+                Change Status {statusModal.cohorts.length > 1 ? `(${statusModal.cohorts.length} businesses)` : `— ${statusModal.cohorts[0].smeName}`}
+              </h3>
+              <button onClick={() => setStatusModal(null)}><X size={18} /></button>
+            </div>
+            <label className="block text-xs font-semibold text-[#5d4037] mb-2">New status</label>
+            <div className="grid grid-cols-2 gap-2 mb-4">
+              <button
+                onClick={() => setStatusModal((prev) => ({ ...prev, targetGroup: "active" }))}
+                className={`px-3 py-2 rounded-lg text-sm font-semibold border-2 ${statusModal.targetGroup === "active" ? "border-[#4caf50] bg-[#e8f5e9] text-[#2e7d32]" : "border-[#e6d7c3] text-[#4a352f]"}`}
+              >
+                Active
+              </button>
+              <button
+                onClick={() => setStatusModal((prev) => ({ ...prev, targetGroup: "exited" }))}
+                className={`px-3 py-2 rounded-lg text-sm font-semibold border-2 ${statusModal.targetGroup === "exited" ? "border-[#9e9e9e] bg-[#f3f4f6] text-[#4a352f]" : "border-[#e6d7c3] text-[#4a352f]"}`}
+              >
+                Graduated / Exited
+              </button>
+            </div>
+            {statusModal.targetGroup === "exited" && (
+              <>
+                <label className="block text-xs font-semibold text-[#5d4037] mb-2">Reason (required)</label>
+                <select
+                  value={statusModal.reason}
+                  onChange={(e) => setStatusModal((prev) => ({ ...prev, reason: e.target.value }))}
+                  className="w-full px-3 py-2 border-2 border-[#c8b6a6] rounded-lg text-sm mb-3"
+                >
+                  <option value="">Choose a reason...</option>
+                  {EXIT_REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
+                </select>
+                <label className="block text-xs font-semibold text-[#5d4037] mb-2">Note (optional)</label>
+                <textarea
+                  value={statusModal.note}
+                  onChange={(e) => setStatusModal((prev) => ({ ...prev, note: e.target.value }))}
+                  rows={3}
+                  className="w-full px-3 py-2 border-2 border-[#c8b6a6] rounded-lg text-sm resize-y mb-2"
+                />
+              </>
+            )}
+            <div className="flex justify-end gap-2 mt-3">
+              <button onClick={() => setStatusModal(null)} className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm">Cancel</button>
+              <button
+                onClick={submitStatusChange}
+                disabled={!statusModal.targetGroup || (statusModal.targetGroup === "exited" && !statusModal.reason)}
+                className="px-4 py-2 bg-[#7d5a50] text-white rounded-lg text-sm font-semibold disabled:opacity-40"
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Generic confirm modal for high-risk actions (spec §18) ──────── */}
+      {bulkConfirm && (
+        <div style={modalOverlayStyle} onClick={() => setBulkConfirm(null)}>
+          <div style={{ ...modalContentStyle, maxWidth: '420px', padding: '28px' }} onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center gap-2 mb-3">
+              <AlertCircle size={20} className="text-[#e65100]" />
+              <h3 className="text-base font-bold text-[#3e2723] m-0">Please confirm</h3>
+            </div>
+            <p className="text-sm text-[#5d4037] mb-5">{bulkConfirm.message}</p>
+            <div className="flex justify-end gap-2">
+              <button onClick={() => setBulkConfirm(null)} className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm">Cancel</button>
+              <button
+                onClick={async () => { await bulkConfirm.onConfirm(); setBulkConfirm(null) }}
+                className="px-4 py-2 bg-[#e65100] text-white rounded-lg text-sm font-semibold"
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Detailed View Modal */}
       {selectedCohort && !showVoucherModal && (
@@ -778,6 +1529,9 @@ function MyCohorts() {
                       {getStatusMeta(selectedCohort.currentStatus).label}
                     </span>
                   </div>
+                  {selectedCohort.exitReason && (
+                    <div><strong>Exit Reason:</strong> {selectedCohort.exitReason}</div>
+                  )}
                 </div>
               </div>
 
@@ -796,6 +1550,21 @@ function MyCohorts() {
               <h3 className="text-[#3e2723] mb-4">Support Services Provided</h3>
               <p className="text-base text-gray-800 leading-relaxed m-0">{selectedCohort.supportProvided}</p>
             </div>
+
+            {selectedCohort.statusHistory?.length > 0 && (
+              <div className="bg-[#f8f9fa] p-6 rounded-xl border border-gray-200 mb-6">
+                <h3 className="text-[#3e2723] mb-4">Status History</h3>
+                <div className="space-y-2">
+                  {selectedCohort.statusHistory.map((h, i) => (
+                    <div key={i} className="text-sm text-gray-700 border-b border-gray-200 pb-2 last:border-b-0">
+                      <strong>{h.previousStatus}</strong> → <strong>{h.newStatus}</strong>
+                      <span className="text-xs text-gray-500 ml-2">{formatDate(h.changedAt)}</span>
+                      {h.reason && <div className="text-xs text-gray-600 mt-1">Reason: {h.reason}</div>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div className="bg-green-50 p-6 rounded-xl border border-green-600 mb-6">
               <h3 className="text-green-800 mb-4">Support Program Summary</h3>

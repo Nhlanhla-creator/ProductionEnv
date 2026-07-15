@@ -1,20 +1,25 @@
 "use client";
 
 import { useState, useRef, useEffect, useCallback } from "react";
-import { Eye, X, Trophy, Users, Building, TrendingUp, Star } from "lucide-react";
+import { Eye, X, Trophy, Users, Building, TrendingUp } from "lucide-react";
 import { SupportSMETable } from "./support-sme-table";
 import { auth, db } from "../../firebaseConfig";
+import { mapStatusToStageId } from "./stageConfig";
 
 // ─── Successful Deals Table ───────────────────────────────────────────────────
+// NOTE: with feedback #1 applied in SupportSMETable (admitted SMEs no longer
+// appear in the matching table), the primary home for these records is now
+// the My Cohorts page. This tab is kept as a lightweight secondary view fed
+// from whatever SupportSMETable last loaded, using the same shared stage
+// vocabulary so "Admitted" here always matches "Admitted" everywhere else.
 const SuccessfulSupportDealsTable = ({ successfulDeals }) => {
   const [selectedDeal, setSelectedDeal] = useState(null);
 
   const getStatusColor = (status) => {
-    const statusLower = (status || "").toLowerCase();
-    if (statusLower.includes("active")) return "#1B5E20";
-    if (statusLower.includes("exit")) return "#263238";
-    if (statusLower.includes("completed")) return "#2196f3";
-    if (statusLower.includes("review")) return "#E65100";
+    const stageId = mapStatusToStageId(status);
+    if (stageId === "admitted") return "#1B5E20";
+    if (stageId === "withdrawn") return "#616161";
+    if (stageId === "declined") return "#B45309";
     return "#666";
   };
 
@@ -31,12 +36,13 @@ const SuccessfulSupportDealsTable = ({ successfulDeals }) => {
 
   return (
     <>
+      <style>{`.stt-th { color: #4a352f !important; }`}</style>
       <div className="overflow-x-auto rounded-xl border border-[#E8D5C4] shadow-sm">
         <table className="w-full border-collapse bg-white text-sm">
           <thead>
-            <tr className="bg-gradient-to-r from-[#3E2723] to-[#5D4037]">
+            <tr className="bg-[#F0E6D9]">
               {["Business Name", "Funding", "Equity", "Start Date", "Sector", "Location", "Status", "Actions"].map((header, idx) => (
-                <th key={header} className={`py-3 px-3 text-left text-white font-semibold text-xs uppercase tracking-wider ${idx < 7 ? 'border-r border-[#2A1A15]' : ''}`}>
+                <th key={header} className={`stt-th py-3 px-3 text-left font-semibold text-xs uppercase tracking-wider ${idx < 7 ? 'border-r border-[#E8D5C4]' : ''}`}>
                   {header}
                 </th>
               ))}
@@ -49,7 +55,7 @@ const SuccessfulSupportDealsTable = ({ successfulDeals }) => {
                   <div className="flex flex-col items-center gap-3">
                     <Trophy size={40} className="text-[#D7CCC8]" />
                     <p className="text-gray-400 font-medium">No successful deals yet</p>
-                    <p className="text-gray-400 text-sm">Deals reaching Active or Exited status will appear here</p>
+                    <p className="text-gray-400 text-sm">Deals reaching Admitted status will appear here — see My Cohorts for the full view</p>
                   </div>
                 </td>
               </tr>
@@ -67,20 +73,20 @@ const SuccessfulSupportDealsTable = ({ successfulDeals }) => {
                   <td className="py-3 px-3 text-[#5D4037]">{deal.sector}</td>
                   <td className="py-3 px-3 text-[#5D4037]">{deal.location}</td>
                   <td className="py-3 px-3">
-                    <span 
+                    <span
                       className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold border"
-                      style={{ 
+                      style={{
                         backgroundColor: `${getStatusColor(deal.currentStatus)}20`,
                         color: getStatusColor(deal.currentStatus),
                         borderColor: `${getStatusColor(deal.currentStatus)}40`
                       }}
                     >
                       <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: getStatusColor(deal.currentStatus) }} />
-                      {deal.currentStatus === "Active" ? "Active Support" : deal.currentStatus}
+                      {mapStatusToStageId(deal.currentStatus) === "admitted" ? "Admitted" : deal.currentStatus}
                     </span>
                   </td>
                   <td className="py-3 px-3">
-                    <button 
+                    <button
                       onClick={() => setSelectedDeal(deal)}
                       className="flex items-center gap-1.5 px-3 py-1.5 bg-[#8D6E63] text-white rounded-lg text-xs font-medium hover:bg-[#5D4037] transition-all"
                     >
@@ -119,7 +125,7 @@ const SuccessfulSupportDealsTable = ({ successfulDeals }) => {
                 <div><span className="text-xs text-gray-500">Location</span><p className="text-sm font-medium text-[#5D4037]">{selectedDeal.location}</p></div>
               </div>
             </div>
-            <button 
+            <button
               onClick={() => setSelectedDeal(null)}
               className="w-full mt-6 py-3 bg-gradient-to-r from-[#8D6E63] to-[#5D4037] text-white rounded-xl text-sm font-medium hover:shadow-lg transition-all"
             >
@@ -141,13 +147,7 @@ const SupportTabbedTables = ({ filters, stageFilter, loading, onStageOverride })
 
   const extractSuccessfulDeals = (smes) =>
     smes
-      .filter((sme) => {
-        const status = (sme.currentStatus || sme.pipelineStage || "").toLowerCase();
-        return status.includes("active") || 
-               status.includes("exit") || 
-               status.includes("completed") ||
-               status.includes("support approved");
-      })
+      .filter((sme) => mapStatusToStageId(sme.currentStatus || sme.pipelineStage) === "admitted")
       .map((sme) => ({
         id: sme.id,
         smseName: sme.name,
@@ -182,15 +182,15 @@ const SupportTabbedTables = ({ filters, stageFilter, loading, onStageOverride })
       <div className="flex mb-0 bg-gradient-to-r from-[#F5EBE0] to-[#FAF5EF] rounded-t-2xl p-2 border border-[#E8D5C4] border-b-0 shadow-sm">
         {[
           { id: "my-matches", icon: <Users size={18} />, label: "Pipeline Matches", count: smeMatches.length },
-          { id: "successful-deals", icon: <Trophy size={18} />, label: "Active Deals", count: successfulDeals.length },
+          { id: "successful-deals", icon: <Trophy size={18} />, label: "Admitted", count: successfulDeals.length },
         ].map(({ id, icon, label, count }) => (
           <button
             key={id}
             onClick={() => setActiveTab(id)}
             className={`
               flex-1 flex items-center justify-center gap-2 py-3 px-6 rounded-xl text-sm font-semibold transition-all duration-300
-              ${activeTab === id 
-                ? 'bg-gradient-to-r from-[#8D6E63] to-[#5D4037] text-white shadow-lg' 
+              ${activeTab === id
+                ? 'bg-gradient-to-r from-[#8D6E63] to-[#5D4037] text-white shadow-lg'
                 : 'text-[#5D4037] hover:bg-white/50'}
             `}
           >
