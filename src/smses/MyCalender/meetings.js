@@ -5,8 +5,10 @@ import Modal from './Modal';
 import CreateEventForm from './CreateEventForm';
 import MeetingDetails from './MeetingDetails';
 import { db } from '../../firebaseConfig';
-import { collection, query, where, onSnapshot, getDocs } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, getDocs, doc, getDoc, addDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
+import { getFunctions, httpsCallable } from "firebase/functions";
+import { getStorage, ref, uploadBytes, getDownloadURL } from "firebase/storage";
 
 // Color palette
 const colors = {
@@ -658,6 +660,8 @@ const Meetings = ({ stats, setStats, matchesList  }) => {
   const [meetings, setMeetings] = useState([]);
   const [loading, setLoading] = useState(false);
   const [requesterCache, setRequesterCache] = useState({});
+  const [submitting, setSubmitting] = useState(false);
+  const [notification, setNotification] = useState(null);
 
   // Memoize date calculations
   const now = useMemo(() => new Date(), []);
@@ -707,6 +711,73 @@ const Meetings = ({ stats, setStats, matchesList  }) => {
       return requesterCache;
     }
   }, [requesterCache]);
+
+
+useEffect(() => {
+  setLoading(true);
+  const auth = getAuth();
+  
+  const unsubscribeAuth = auth.onAuthStateChanged(async (user) => {
+    if (!user) {
+      setLoading(false);
+      setMeetings([]);
+      return;
+    }
+
+    const fetchMeetings = async () => {
+  try {
+    const smeSnapshot = await getDocs(
+      query(collection(db, "smeCalendarEvents"), where("smeId", "==", user.uid))
+    );
+
+    const meetingsData = smeSnapshot.docs.map(docSnap => {
+      const data = docSnap.data();
+      const slots = (data.availableDates || []).map(slot => ({
+        ...slot,
+        date: slot.date?.toDate ? slot.date.toDate() : new Date(slot.date),
+        status: slot.status || 'available'
+      }));
+
+      return {
+        docId: docSnap.id,
+        id: `smeCalendarEvents-${docSnap.id}`,
+        name: data.title || 'Meeting',
+        location: data.location || 'Virtual',
+        slots,
+        status: data.status || 'pending',
+        requesterType: 'SME',
+        requesterName: data.toName || 'Unknown',
+      };
+    });
+
+    setMeetings(meetingsData);
+    setLoading(false);
+  } catch (error) {
+    console.error("Error fetching meetings:", error);
+    setMeetings([]);
+    setLoading(false);
+  }
+};
+
+    fetchMeetings();
+
+    const unsub = onSnapshot(
+      query(collection(db, "smeCalendarEvents"), where("smeId", "==", user.uid)),
+      () => fetchMeetings(),
+      (error) => {
+        if (error.code !== 'permission-denied') {
+          console.error("Listener error:", error);
+        }
+      }
+    );
+
+    return () => {
+      unsub();
+    };
+  });
+
+  return () => unsubscribeAuth();
+}, [fetchRequesterDetails]);
 
   // Optimize Firestore listener
   useEffect(() => {
@@ -775,7 +846,7 @@ const Meetings = ({ stats, setStats, matchesList  }) => {
             requesterId: meeting.counterpartId
           }));
 
-          setMeetings(enhancedMeetings);
+          setMeetings(enhancedMeetings || []);
           setLoading(false);
         } catch (error) {
           console.error("Error fetching meetings:", error);
@@ -814,51 +885,230 @@ const Meetings = ({ stats, setStats, matchesList  }) => {
   }, [fetchRequesterDetails]);
 
   // Optimize filtering with memoization
-  const filteredMeetings = useMemo(() => {
-    return meetings.filter(meeting => {
-      // Early return for invalid meetings
-      if (!meeting.slots || meeting.slots.length === 0) return false;
+  // Filtered meetings - ADD SAFETY CHECK
+const filteredMeetings = useMemo(() => {
+  // ✅ SAFETY CHECK
+  if (!meetings || !Array.isArray(meetings)) return [];
+  
+  return meetings.filter(meeting => {
+    if (!meeting.slots || meeting.slots.length === 0) return false;
 
-      const hasValidDates = meeting.slots.some(slot => slot.date instanceof Date);
-      if (!hasValidDates) return false;
+    const hasValidDates = meeting.slots.some(slot => slot.date instanceof Date);
+    if (!hasValidDates) return false;
 
-      switch (activeTab) {
-        case 'upcoming':
-          return meeting.status === 'scheduled' && 
-                 meeting.slots.some(slot => slot.date > now);
-        
-        case 'past':
-          return meeting.status === 'completed' || 
-                 meeting.slots.every(slot => slot.date < now);
-        
-        case 'pending':
-          return meeting.status === 'pending' || 
-                 meeting.slots.some(slot => slot.status === 'pending');
-        
-        default:
-          return true;
-      }
-    });
-  }, [meetings, activeTab, now]);
+    switch (activeTab) {
+      case 'upcoming':
+        return meeting.status === 'scheduled' && 
+               meeting.slots.some(slot => slot.date > now);
+      case 'past':
+        return meeting.status === 'completed' || 
+               meeting.slots.every(slot => slot.date < now);
+      case 'pending':
+        return meeting.status === 'pending' || 
+               meeting.slots.some(slot => slot.status === 'pending');
+      default:
+        return true;
+    }
+  });
+}, [meetings, activeTab, now]);
 
-  // Optimize calendar data preparation
-  const calendarMeetings = useMemo(() => {
-    return meetings.flatMap(meeting => 
-      meeting.slots.map(slot => ({
-        ...meeting,
-        slot,
-        dateKey: slot.date.toDateString(),
-        hourKey: `${slot.date.getDate()}-${slot.date.getHours()}`
-      }))
+// Calendar meetings - ADD SAFETY CHECK
+const calendarMeetings = useMemo(() => {
+  // ✅ SAFETY CHECK
+  if (!meetings || !Array.isArray(meetings)) return [];
+  
+  return meetings.flatMap(meeting => {
+    if (!meeting.slots || !Array.isArray(meeting.slots)) return [];
+    
+    return meeting.slots.map(slot => ({
+      ...meeting,
+      slot,
+      dateKey: slot.date.toDateString(),
+      hourKey: `${slot.date.getDate()}-${slot.date.getHours()}`
+    }));
+  });
+}, [meetings]);
+
+const handleCreateEvent = useCallback(async (newEvent) => {
+  setSubmitting(true);
+  setNotification(null);
+
+  try {
+    const auth = getAuth();
+    const user = auth.currentUser;
+    if (!user) {
+      setNotification({ type: "error", message: "User not authenticated" });
+      setSubmitting(false);
+      return;
+    }
+
+    // Validate date and time
+    const dateString = newEvent.date;
+    const timeString = newEvent.time;
+
+    if (!dateString || !timeString) {
+      setNotification({ type: "error", message: "Please select a date and time" });
+      setSubmitting(false);
+      return;
+    }
+
+    // Build date
+    const [year, month, day] = dateString.split('-');
+    const [hours, minutes] = timeString.split(':');
+    
+    const eventDate = new Date(
+      parseInt(year),
+      parseInt(month) - 1,
+      parseInt(day),
+      parseInt(hours) || 0,
+      parseInt(minutes) || 0
     );
-  }, [meetings]);
 
-  // Optimize event handlers
-  const handleCreateEvent = useCallback((newEvent) => {
-    setMeetings(prev => [...prev, newEvent]);
+    if (isNaN(eventDate.getTime())) {
+      setNotification({ type: "error", message: "Invalid date/time format" });
+      setSubmitting(false);
+      return;
+    }
+
+    // Get sender name
+    let senderName = user.displayName || "Someone";
+    try {
+      const profileRef = doc(db, "MyuniversalProfiles", user.uid);
+      const profileSnap = await getDoc(profileRef);
+      if (profileSnap.exists()) {
+        const data = profileSnap.data();
+        senderName = data.formData?.entityOverview?.registeredName || 
+                     data.formData?.contactDetails?.primaryContactName ||
+                     user.displayName || "Someone";
+      }
+    } catch (error) {
+      console.error("Error fetching sender name:", error);
+    }
+
+    // Get recipient details
+    let recipientName = newEvent.toName || "Recipient";
+    let recipientEmail = newEvent.toEmail || "";
+
+    if (newEvent.to && !recipientEmail) {
+      try {
+        const profileRef = doc(db, "MyuniversalProfiles", newEvent.to);
+        const profileSnap = await getDoc(profileRef);
+        if (profileSnap.exists()) {
+          const data = profileSnap.data();
+          recipientEmail = data.formData?.contactDetails?.email || 
+                          data.formData?.entityOverview?.email ||
+                          data.email;
+          recipientName = data.formData?.entityOverview?.registeredName || 
+                         data.formData?.contactDetails?.primaryContactName ||
+                         recipientName;
+        }
+      } catch (error) {
+        console.error("Error fetching recipient details:", error);
+      }
+    }
+
+    if (newEvent.to && !recipientEmail) {
+      try {
+        const userDoc = await getDoc(doc(db, "users", newEvent.to));
+        if (userDoc.exists()) {
+          recipientEmail = userDoc.data().email;
+        }
+      } catch (error) {
+        console.error("Error fetching user email:", error);
+      }
+    }
+
+    // ✅ BUILD EVENT DATA WITH ALL FIELDS
+    const eventData = {
+      title: newEvent.title || "Meeting",
+      date: dateString,
+      time: timeString,
+      duration: newEvent.duration || "30",
+      location: newEvent.location || "Virtual",
+      description: newEvent.description || "",
+      host: senderName,
+      to: newEvent.to || "",
+      toName: recipientName,
+      toEmail: recipientEmail,
+      createdBy: user.uid,
+      createdByName: senderName,
+      createdAt: new Date().toISOString(),
+      status: "pending",
+      smeId: user.uid,
+      smeName: senderName,
+      availableDates: [
+        {
+          date: eventDate.toISOString(),
+          timeSlots: [{ start: timeString, end: timeString }],
+          timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          status: "available"
+        }
+      ]
+    };
+
+    // ✅ SAVE TO FIRESTORE
+    const eventRef = await addDoc(collection(db, "smeCalendarEvents"), eventData);
+
+    // ✅ Also save to recipient's calendar if they exist
+    if (newEvent.to) {
+      await addDoc(collection(db, "smeCalendarEvents"), {
+        ...eventData,
+        smeId: newEvent.to,
+        smeName: recipientName,
+        createdBy: user.uid,
+        createdByName: senderName,
+        isInvitation: true,
+      });
+    }
+
+    // Update local state
+    const savedEvent = {
+      ...newEvent,
+      id: eventRef.id,
+      createdAt: eventData.createdAt,
+      requesterType: 'SME',
+      requesterName: senderName,
+      status: "pending",
+    };
+
+    setMeetings(prev => [...(prev || []), savedEvent]);
     setStats(prev => ({ ...prev, created: prev.created + 1 }));
     setShowCreateModal(false);
-  }, [setStats]);
+
+    // ✅ SEND EMAIL TO RECIPIENT
+    if (recipientEmail) {
+      try {
+        const functions = getFunctions();
+        const sendMeetingInviteEmail = httpsCallable(functions, 'sendMeetingInviteEmail');
+
+        await sendMeetingInviteEmail({
+          to: recipientEmail,
+          name: recipientName,
+          senderName: senderName,
+          meetingTitle: newEvent.title || "Meeting",
+          meetingDate: dateString,
+          meetingTime: timeString,
+          location: newEvent.location || "Virtual",
+          description: newEvent.description || "",
+          linkTo: "https://www.bigmarketplace.africa/calendar"
+        });
+        console.log("✅ Meeting invite email sent to:", recipientEmail);
+      } catch (emailError) {
+        console.error("❌ Failed to send meeting invite email:", emailError);
+      }
+    }
+
+    setNotification({ type: "success", message: "✅ Event created successfully!" });
+    setTimeout(() => setNotification(null), 3000);
+
+  } catch (error) {
+    console.error("Error creating event:", error);
+    setNotification({ type: "error", message: "❌ Failed to create event. Please try again." });
+    setTimeout(() => setNotification(null), 3000);
+  } finally {
+    setSubmitting(false);
+  }
+}, [setStats]);
 
   const handleMeetingAction = useCallback(async (id, action) => {
     try {
@@ -1235,6 +1485,7 @@ const Meetings = ({ stats, setStats, matchesList  }) => {
 
   // Main render
   return (
+    
     <MeetingsContainer>
       {mainContent}
 
@@ -1303,6 +1554,44 @@ const Meetings = ({ stats, setStats, matchesList  }) => {
           </CalendarModal>
         </Modal>
       )}
+
+
+      {submitting && (
+  <div style={{
+    position: "fixed",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 9999,
+  }}>
+    <div style={{
+      backgroundColor: "white",
+      padding: "32px 40px",
+      borderRadius: "12px",
+      textAlign: "center",
+      boxShadow: "0 4px 20px rgba(0,0,0,0.15)",
+    }}>
+      <div style={{
+        width: "48px",
+        height: "48px",
+        border: "4px solid #f3e5f5",
+        borderTop: "4px solid #7d5a50",
+        borderRadius: "50%",
+        animation: "spin 1s linear infinite",
+        margin: "0 auto 16px",
+      }} />
+      <p style={{ color: "#4a352f", fontSize: "16px", fontWeight: "500", margin: 0 }}>
+        Creating event...
+      </p>
+    </div>
+  </div>
+)}
+
     </MeetingsContainer>
   );
 };
