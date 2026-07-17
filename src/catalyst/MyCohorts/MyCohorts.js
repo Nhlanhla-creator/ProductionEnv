@@ -294,6 +294,7 @@ const LoadingSkeleton = () => (
 // data, so they're left out rather than faked. "Days in Programme" is
 // included since it's honestly derivable from the existing start-date field.
 const OPTIONAL_COLUMNS = [
+  { key: "progress", label: "Progress (Company Health)" },
   { key: "daysInProgramme", label: "Days in Programme" },
   { key: "appliedDate", label: "Applied Date" },
   { key: "teamSize", label: "Employees" },
@@ -301,7 +302,7 @@ const OPTIONAL_COLUMNS = [
   { key: "servicesRequired", label: "Services" },
 ]
 const DEFAULT_COLUMN_VISIBILITY = {
-  supportValue: true, startDate: true, status: true,
+  supportValue: true, startDate: true, status: true, progress: true,
   daysInProgramme: false, appliedDate: false, teamSize: false, guarantees: false, servicesRequired: false,
 }
 
@@ -328,6 +329,73 @@ const PRESET_VIEWS = [
   { key: "completedExited", label: "Completed & Exited", filter: "exited" },
 ]
 
+// ─── Overall Business Health (Progress column) ─────────────────────────────
+// Sourced from the same cache the Growth Suite → "Overall Company Health"
+// tab reads/writes: users/{smeId}/cachedAnalyses/health_overview_{smeId}
+// (see HealthCacheService in that page). We don't re-run the AI analysis
+// here — we just read whatever is already cached for that SME and collapse
+// it to a single red/yellow/green so it fits in a table cell. If the SME
+// has never generated a report, there's nothing honest to show, so the
+// column reads "Pending" rather than guessing a status.
+const HEALTH_CATEGORY_LABELS = {
+  strategy: "Strategy & Execution",
+  finance: "Finance",
+  operations: "Operations",
+  people: "People Health",
+  marketing: "Marketing & Sales",
+  esg: "ESG",
+}
+const HEALTH_STATUS_RANK = { healthy: 0, watch: 1, risk: 2 }
+const HEALTH_COLORS = { green: "#16a34a", yellow: "#f59e0b", red: "#dc2626" }
+const HEALTH_LABELS = { green: "Healthy", yellow: "Watch", red: "At Risk" }
+
+// Mirrors the banner thresholds used on the Overall Company Health page.
+const scoreToHealth = (score) => {
+  if (score >= 75) return "green"
+  if (score >= 50) return "yellow"
+  return "red"
+}
+
+// Worst-category-wins: one red category should not be hidden by five green
+// ones — matches how "Attention Required" style flags are meant to surface
+// real risk rather than average it away.
+const categoriesToHealth = (categories) => {
+  const entries = Object.values(categories || {}).filter((c) => c && c.healthStatus)
+  if (entries.length === 0) return null
+  let worst = "healthy"
+  entries.forEach((c) => {
+    if (HEALTH_STATUS_RANK[c.healthStatus] > HEALTH_STATUS_RANK[worst]) worst = c.healthStatus
+  })
+  if (worst === "risk") return "red"
+  if (worst === "watch") return "yellow"
+  return "green"
+}
+
+const deriveOverallHealth = (cachedData) => {
+  if (!cachedData) return null
+  if (typeof cachedData.overallHealthScore === "number") return scoreToHealth(cachedData.overallHealthScore)
+  return categoriesToHealth(cachedData.categories)
+}
+
+const fetchHealthForSME = async (smeId) => {
+  try {
+    const healthRef = doc(db, `users/${smeId}/cachedAnalyses`, `health_overview_${smeId}`)
+    const healthSnap = await getDoc(healthRef)
+    if (!healthSnap.exists()) return null
+    const cached = healthSnap.data()
+    const data = cached?.data || {}
+    return {
+      overall: deriveOverallHealth(data),
+      score: typeof data.overallHealthScore === "number" ? data.overallHealthScore : null,
+      categories: data.categories || null,
+      cachedAt: cached.createdAt || null,
+    }
+  } catch (error) {
+    console.error("Error fetching health for SME:", error)
+    return null
+  }
+}
+
 function MyCohorts() {
   const [cohorts, setCohorts] = useState([])
   const [loading, setLoading] = useState(true)
@@ -349,9 +417,10 @@ function MyCohorts() {
   // or the "Completed & Exited" saved view.
   const [activeFilter, setActiveFilter] = useState(() => loadStoredView()?.activeFilter || "inProgramme")
   const [density, setDensity] = useState(() => loadStoredView()?.density || "comfortable")
-  const [columnVisibility, setColumnVisibility] = useState(() => loadStoredView()?.columnVisibility || DEFAULT_COLUMN_VISIBILITY)
+  const [columnVisibility, setColumnVisibility] = useState(() => ({ ...DEFAULT_COLUMN_VISIBILITY, ...(loadStoredView()?.columnVisibility || {}) }))
   const [rowMenu, setRowMenu] = useState(null) // { cohort, position }
   const [voucherTooltip, setVoucherTooltip] = useState(null) // { rect }
+  const [healthPopover, setHealthPopover] = useState(null) // { cohort, rect }
 
   // ─── New: search, filters, columns, saved views, bulk, expand, notes ────
   const [searchQuery, setSearchQuery] = useState("")
@@ -439,6 +508,8 @@ function MyCohorts() {
             let displayStatus = data.status || "Active Support"
             if (displayStatus === "Active") displayStatus = "Active Support"
 
+            const health = await fetchHealthForSME(smeId)
+
             return {
               id: docSnap.id,
               docId: docSnap.id,
@@ -465,6 +536,7 @@ function MyCohorts() {
               archived: data.archived || false,
               exitReason: data.exitReason || null,
               statusHistory: data.statusHistory || [],
+              health,
               // TODO(backend): populate once these fields exist on the record
               programme: data.programme || null,
             }
@@ -838,6 +910,12 @@ function MyCohorts() {
     setRowMenu({ cohort, position: { x, y } })
   }
 
+  const openHealthPopover = (cohort, event) => {
+    event.stopPropagation()
+    const rect = event.currentTarget.getBoundingClientRect()
+    setHealthPopover({ cohort, rect })
+  }
+
   const toggleColumn = (key) => setColumnVisibility((prev) => ({ ...prev, [key]: !prev[key] }))
   const resetColumns = () => setColumnVisibility(DEFAULT_COLUMN_VISIBILITY)
 
@@ -852,7 +930,7 @@ function MyCohorts() {
   }
 
   const loadSavedView = (view) => {
-    setActiveFilter(view.activeFilter); setColumnVisibility(view.columnVisibility); setDensity(view.density)
+    setActiveFilter(view.activeFilter); setColumnVisibility({ ...DEFAULT_COLUMN_VISIBILITY, ...(view.columnVisibility || {}) }); setDensity(view.density)
     setShowSaveView(false)
   }
 
@@ -878,7 +956,7 @@ function MyCohorts() {
     const meta = getStatusMeta(cohort.currentStatus)
     if (meta.group === "exited") return { label: "View Record", handler: handleViewGrowthSuite }
     if (needsAttention(cohort)) return { label: "Review SME", handler: handleViewGrowthSuite }
-    return { label: "View Progress", handler: handleViewGrowthSuite }
+    return { label: "Deep Dive", handler: handleViewGrowthSuite }
   }
 
   const modalOverlayStyle = {
@@ -1127,7 +1205,8 @@ function MyCohorts() {
                     {columnVisibility.teamSize && <th className={`mc-th ${rowPad} text-left font-semibold text-xs uppercase tracking-wide whitespace-nowrap sticky top-0 z-20`} style={{ backgroundColor: '#f0e6d9' }}>Employees</th>}
                     {columnVisibility.guarantees && <th className={`mc-th ${rowPad} text-left font-semibold text-xs uppercase tracking-wide whitespace-nowrap sticky top-0 z-20`} style={{ backgroundColor: '#f0e6d9' }}>Guarantees</th>}
                     {columnVisibility.servicesRequired && <th className={`mc-th ${rowPad} text-left font-semibold text-xs uppercase tracking-wide whitespace-nowrap sticky top-0 z-20`} style={{ backgroundColor: '#f0e6d9' }}>Services</th>}
-                    {columnVisibility.status && <th className={`mc-th ${rowPad} text-left font-semibold text-xs uppercase tracking-wide whitespace-nowrap sticky top-0 z-20`} style={{ backgroundColor: '#f0e6d9' }}>Status</th>}
+                    {columnVisibility.status && <th className={`mc-th ${rowPad} text-left font-semibold text-xs uppercase tracking-wide whitespace-nowrap sticky top-0 z-20`} style={{ backgroundColor: '#f0e6d9', minWidth: '130px', paddingRight: '8px' }}>Status</th>}
+                    {columnVisibility.progress && <th className={`mc-th ${rowPad} text-left font-semibold text-xs uppercase tracking-wide whitespace-nowrap sticky top-0 z-20`} style={{ backgroundColor: '#f0e6d9', minWidth: '110px', paddingLeft: '8px' }}>Progress</th>}
                     <th className={`mc-th ${rowPad} text-center font-semibold text-xs uppercase tracking-wide whitespace-nowrap sticky top-0 z-20`} style={{ backgroundColor: '#f0e6d9' }}>
                       Action
                     </th>
@@ -1140,6 +1219,8 @@ function MyCohorts() {
                     const isExpanded = expandedRows.has(cohort.id)
                     const primaryAction = getPrimaryAction(cohort)
                     const days = daysInProgramme(cohort)
+                    const healthColor = cohort.health?.overall ? HEALTH_COLORS[cohort.health.overall] : "#a89482"
+                    const healthLabel = cohort.health?.overall ? HEALTH_LABELS[cohort.health.overall] : "Pending"
 
                     return (
                       <React.Fragment key={cohort.id}>
@@ -1155,13 +1236,19 @@ function MyCohorts() {
                                 {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                               </button>
                               <div>
-                                <button
-                                  onClick={() => handleViewDetails(cohort)}
-                                  className="text-left font-semibold text-[#4a352f] hover:text-[#7d5a50] transition-colors block"
-                                  style={{ textDecoration: 'underline', textUnderlineOffset: '2px' }}
-                                >
-                                  {cohort.smeName}
-                                </button>
+                                <div className="flex items-center gap-1.5">
+                                  <span className="font-semibold text-[#4a352f]">
+                                    {cohort.smeName}
+                                  </span>
+                                  <button
+                                    onClick={() => handleViewDetails(cohort)}
+                                    className="text-[#a89482] hover:text-[#7d5a50] transition-colors flex-shrink-0"
+                                    aria-label={`View summary for ${cohort.smeName}`}
+                                    title="View summary"
+                                  >
+                                    <Eye size={13} />
+                                  </button>
+                                </div>
                                 <div className="text-xs text-[#7d5a50] mt-0.5">
                                   {cohort.sector} · {cohort.location}
                                 </div>
@@ -1206,7 +1293,7 @@ function MyCohorts() {
                           )}
 
                           {columnVisibility.status && (
-                            <td className={`${rowPad}`} style={{ minWidth: '180px' }}>
+                            <td className={`${rowPad}`} style={{ minWidth: '130px', paddingRight: '8px' }}>
                               <div className="flex items-center gap-1.5 flex-wrap">
                                 <span
                                   className="px-2.5 py-1 rounded-full text-xs font-semibold inline-block whitespace-nowrap"
@@ -1224,6 +1311,20 @@ function MyCohorts() {
                                   </span>
                                 )}
                               </div>
+                            </td>
+                          )}
+
+                          {columnVisibility.progress && (
+                            <td className={`${rowPad}`} style={{ minWidth: '110px', paddingLeft: '8px' }}>
+                              <button
+                                onClick={(e) => openHealthPopover(cohort, e)}
+                                className="px-2.5 py-1 rounded-full text-xs font-semibold inline-flex items-center gap-1.5 whitespace-nowrap"
+                                style={{ backgroundColor: healthColor + "20", color: healthColor }}
+                              >
+                                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: healthColor }} />
+                                {healthLabel}
+                                <ChevronDown size={11} />
+                              </button>
                             </td>
                           )}
 
@@ -1252,7 +1353,7 @@ function MyCohorts() {
                         {isExpanded && (
                           <tr className="bg-[#faf7f2] border-b border-[#f0e6d9]">
                             <td></td>
-                            <td colSpan={8} className="px-4 py-4">
+                            <td colSpan={9} className="px-4 py-4">
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                   <p className="text-xs font-semibold text-[#4a352f] mb-1 uppercase tracking-wide">Description</p>
@@ -1376,6 +1477,79 @@ function MyCohorts() {
       )}
 
       {voucherTooltip && <VoucherInfoTooltip anchorRect={voucherTooltip.rect} />}
+
+      {/* ─── Health / Progress popover ───────────────────────────────────── */}
+      {healthPopover && (() => {
+        const { cohort, rect } = healthPopover
+        const width = 300
+        let x = rect.left
+        let y = rect.bottom + 8
+        if (x + width > window.innerWidth - 16) x = window.innerWidth - width - 16
+        if (x < 16) x = 16
+        if (y + 320 > window.innerHeight - 16) y = rect.top - 320 - 8
+        const health = cohort.health
+        const overall = health?.overall
+        const overallColor = overall ? HEALTH_COLORS[overall] : "#a89482"
+        const overallLabel = overall ? HEALTH_LABELS[overall] : "Pending"
+
+        return (
+          <Portal>
+            <div className="fixed inset-0 z-[1190]" onClick={() => setHealthPopover(null)} />
+            <div
+              className="fixed z-[1200] bg-white border border-[#e6d7c3] rounded-xl shadow-2xl p-4"
+              style={{ top: y, left: x, width }}
+            >
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-semibold text-[#4a352f]">Overall Business Health</span>
+                <button onClick={() => setHealthPopover(null)} className="text-[#a89482] hover:text-[#4a352f]"><X size={14} /></button>
+              </div>
+
+              <div className="flex items-center gap-2 mb-3 px-2.5 py-2 rounded-lg" style={{ backgroundColor: overallColor + "15" }}>
+                <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: overallColor }} />
+                <span className="text-sm font-semibold" style={{ color: overallColor }}>{overallLabel}</span>
+                {health?.score != null && <span className="text-xs text-[#7d5a50] ml-auto">{health.score}/100</span>}
+              </div>
+
+              {health?.categories ? (
+                <div className="space-y-1.5 mb-2">
+                  {Object.entries(HEALTH_CATEGORY_LABELS).map(([key, label]) => {
+                    const cat = health.categories[key]
+                    if (!cat?.healthStatus) return null
+                    const catColor = cat.healthStatus === "risk" ? HEALTH_COLORS.red : cat.healthStatus === "watch" ? HEALTH_COLORS.yellow : HEALTH_COLORS.green
+                    return (
+                      <div key={key} className="flex items-center justify-between text-xs">
+                        <span className="text-[#5d4037]">{label}</span>
+                        <span className="flex items-center gap-1.5" style={{ color: catColor }}>
+                          <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: catColor }} />
+                          {cat.healthStatus === "risk" ? "Risk" : cat.healthStatus === "watch" ? "Watch" : "Healthy"}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : (
+                <p className="text-xs text-[#a89482] italic mb-2">
+                  This business hasn't generated a Company Health report yet in their Growth Suite.
+                </p>
+              )}
+
+              {health?.cachedAt && (
+                <p className="text-[10px] text-[#a89482] mt-2 pt-2 border-t border-[#e6d7c3]">
+                  From their Growth Suite · updated {formatDate(health.cachedAt)}
+                </p>
+              )}
+
+              <button
+                onClick={() => { setHealthPopover(null); handleViewGrowthSuite(cohort) }}
+                className="w-full mt-3 px-3 py-1.5 rounded-lg text-xs font-semibold text-white"
+                style={{ backgroundColor: "#a67c52" }}
+              >
+                Open Growth Suite
+              </button>
+            </div>
+          </Portal>
+        )
+      })()}
 
       {/* ─── Add Note Modal ──────────────────────────────────────────────── */}
       {noteModal && (
