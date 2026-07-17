@@ -888,12 +888,16 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
                                 <div className={`${ds.avatarSize} rounded-full bg-gradient-to-br from-[#7d5a50] to-[#4a352f] flex items-center justify-center text-white font-bold text-xs flex-shrink-0 mt-0.5`}>{sme.name.charAt(0)}</div>
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-start gap-1.5 flex-wrap">
+                                    <span className={`${ds.fontSize} font-normal leading-snug text-[#4a352f]`}>
+                                      {sme.name}
+                                    </span>
                                     <button
                                       onClick={() => handleViewDetails(sme)}
-                                      className={`${ds.fontSize} font-normal leading-snug text-left hover:text-[#7d5a50] transition-colors`}
-                                      style={{ textDecoration: 'underline', textUnderlineOffset: '2px' }}
+                                      className="text-[#a89482] hover:text-[#7d5a50] transition-colors flex-shrink-0 mt-0.5"
+                                      aria-label={`View profile for ${sme.name}`}
+                                      title="View profile"
                                     >
-                                      {sme.name}
+                                      <Eye size={13} />
                                     </button>
                                     {/* Attention indicator (feedback #11) */}
                                     {attentionReasons.length > 0 && (
