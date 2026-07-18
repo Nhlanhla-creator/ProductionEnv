@@ -19,7 +19,7 @@ function getNestedValue(obj, path) {
 }
 
 // Then update the hook to use it
-export function useUserProfile(collection, nameField, fallback = "User") {
+export function useUserProfile(collection, nameField, fallback = "User", customDocId = null) {
   const [user, setUser] = useState(null)
   const [userName, setUserName] = useState(fallback)
   const [loading, setLoading] = useState(true)
@@ -29,7 +29,7 @@ export function useUserProfile(collection, nameField, fallback = "User") {
       if (currentUser) {
         setUser(currentUser)
         try {
-          const userDocRef = doc(db, collection, currentUser.uid)
+          const userDocRef = doc(db, collection, customDocId || currentUser.uid)
           const userDocSnap = await getDoc(userDocRef)
           
           if (userDocSnap.exists()) {

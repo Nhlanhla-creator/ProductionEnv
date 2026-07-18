@@ -796,12 +796,6 @@ export const smeMenuItems = [
 // ─── Capital and Market Facilitator Menu Items ────────────────────────────────
 export const capitalMarketFacilitatorMenuItems = [
   {
-    id: "home",
-    label: "Home",
-    icon: <Home size={18} />,
-    route: "/cmf-home",
-  },
-  {
     id: "profile",
     label: "My Profile",
     icon: <User size={18} />,

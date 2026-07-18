@@ -40,6 +40,7 @@ function Header({
   enableAdvancedMessages = true,
   messagesRoute = "/messages",
   messageSenderCollection = "MyuniversalProfiles",
+  customDocId = null,
 }) {
   const navigate = useNavigate()
   const [date, setDate] = useState(new Date())
@@ -47,7 +48,8 @@ function Header({
     userCollection,
     userNameField,
     logoField,
-    portalName === 'Portal' ? 'User' : portalName
+    portalName === 'Portal' ? 'User' : portalName,
+    customDocId
   )
   const [showProfileMenu, setShowProfileMenu] = useState(false)
   const [showMessages, setShowMessages] = useState(false)
@@ -221,7 +223,7 @@ function Header({
       const uploadResult = await uploadBytes(storageRef, file)
       const downloadURL = await getDownloadURL(uploadResult.ref)
 
-      const userDocRef = doc(db, userCollection, currentUser.uid)
+      const userDocRef = doc(db, userCollection, customDocId || currentUser.uid)
       const currentProfileDoc = await getDoc(userDocRef)
       const currentData = currentProfileDoc.exists() ? currentProfileDoc.data() : {}
 
