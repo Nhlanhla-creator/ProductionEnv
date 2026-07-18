@@ -7,6 +7,7 @@ import { collection, getDocs, doc, getDoc, setDoc, addDoc, serverTimestamp, upda
 import { auth, db } from "../../firebaseConfig"
 import emailjs from '@emailjs/browser';
 import { API_KEYS } from "../../API";
+import { getFunctions, httpsCallable } from "firebase/functions";
 
 // Status definitions with color scheme
 const STATUS_TYPES = {
@@ -695,332 +696,448 @@ export function InternTable({ interns = [] }) {
       document.removeEventListener("mousedown", handleClickOutside)
     }
   }, [showFilters])
-
   const handleConnectClick = async (intern) => {
+  try {
+    const user = auth.currentUser;
+    if (!user) {
+      setNotification({ type: "error", message: "User not authenticated. Please log in." });
+      return;
+    }
+
+    console.log("Starting application submission for:", intern.smseName);
+    console.log("User ID:", user.uid);
+
+    // Get user profile data
+    let userData = {};
     try {
-      const user = auth.currentUser;
-      if (!user) {
-        setNotification({ type: "error", message: "User not authenticated. Please log in." });
-        return;
+      const userDoc = await getDoc(doc(db, "internProfiles", user.uid));
+      userData = userDoc.exists() ? userDoc.data() : {};
+    } catch (userError) {
+      console.warn("Could not retrieve user profile:", userError);
+    }
+
+    // Get sponsor data
+    let sponsorData = {};
+    try {
+      const sponsorDoc = await getDoc(doc(db, "internApplications", intern.originalSponsorId));
+      sponsorData = sponsorDoc.exists() ? sponsorDoc.data() : {};
+    } catch (sponsorError) {
+      console.warn("Could not retrieve sponsor profile:", sponsorError);
+    }
+
+    // Fetch evaluation scores
+    let evaluationScores = {
+      academic: 0,
+      bigInternScore: 0,
+      professionalPresentation: 0,
+      professionalSkills: 0,
+      workExperience: 0,
+      lastUpdated: null,
+      updatedAt: null
+    };
+
+    try {
+      const evaluationDoc = await getDoc(doc(db, "internEvaluations", user.uid));
+      if (evaluationDoc.exists()) {
+        const evalData = evaluationDoc.data();
+        evaluationScores = {
+          academic: evalData.scores?.academic || 0,
+          bigInternScore: evalData.scores?.bigInternScore || 0,
+          professionalPresentation: evalData.scores?.professionalPresentation || 0,
+          professionalSkills: evalData.scores?.professionalSkills || 0,
+          workExperience: evalData.scores?.workExperience || 0,
+          lastUpdated: evalData.scores?.lastUpdated || null,
+          updatedAt: evalData.scores?.updatedAt || null
+        };
       }
+    } catch (evaluationError) {
+      console.warn("Could not retrieve evaluation scores:", evaluationError);
+    }
 
-      console.log("Starting application submission for:", intern.smseName);
-      console.log("User ID:", user.uid);
-      console.log("Intern object:", intern);
+    // Build application ID
+    const internId = user.uid;
+    const sponsorId = intern.originalSponsorId || intern.id.split("_")[0] || intern.id;
+    const applicationDocId = `${sponsorId}_${internId}`;
 
-      // Get user profile data for more complete application
-      let userData = {};
-      try {
-        const userDoc = await getDoc(doc(db, "internProfiles", user.uid));
-        userData = userDoc.exists() ? userDoc.data() : {};
-        console.log("User data retrieved:", userData);
-      } catch (userError) {
-        console.warn("Could not retrieve user profile:", userError);
-      }
+    // Get user details
+    const userFormData = userData.formData || {};
+    const userProfile = userData.entityOverview || {};
 
-      // Get sponsor data
-      let sponsorData = {};
-      try {
-        const sponsorDoc = await getDoc(doc(db, "internApplications", intern.originalSponsorId));
-        sponsorData = sponsorDoc.exists() ? sponsorDoc.data() : {};
-        console.log("Sponsor data retrieved:", sponsorData);
-      } catch (sponsorError) {
-        console.warn("Could not retrieve sponsor profile:", sponsorError);
-      }
+    // Calculate match score
+    const matchResult = calculateMatchScore(userData, sponsorData);
 
-      // Fetch evaluation scores from internEvaluations collection
-      let evaluationScores = {
-        academic: 0,
-        bigInternScore: 0,
-        professionalPresentation: 0,
-        professionalSkills: 0,
-        workExperience: 0,
-        lastUpdated: null,
-        updatedAt: null
-      };
-
-      try {
-        const evaluationDoc = await getDoc(doc(db, "internEvaluations", user.uid));
-        if (evaluationDoc.exists()) {
-          const evalData = evaluationDoc.data();
-          console.log("Evaluation data retrieved:", evalData);
-          
-          evaluationScores = {
-            academic: evalData.scores?.academic || 0,
-            bigInternScore: evalData.scores?.bigInternScore || 0,
-            professionalPresentation: evalData.scores?.professionalPresentation || 0,
-            professionalSkills: evalData.scores?.professionalSkills || 0,
-            workExperience: evalData.scores?.workExperience || 0,
-            lastUpdated: evalData.scores?.lastUpdated || null,
-            updatedAt: evalData.scores?.updatedAt || null
-          };
-        } else {
-          console.log("No evaluation scores found for user:", user.uid);
-        }
-      } catch (evaluationError) {
-        console.warn("Could not retrieve evaluation scores:", evaluationError);
-      }
-
-      // Build the composite ID for the application document
-      const internId = user.uid;
-      const sponsorId = intern.originalSponsorId || intern.id.split("_")[0] || intern.id;
-      const applicationDocId = `${sponsorId}_${internId}`;
-
-      console.log("Application document ID:", applicationDocId);
-      console.log("Sponsor ID:", sponsorId);
-
-      // Get more detailed user information if available
-      const userFormData = userData.formData || {};
-      const userProfile = userData.entityOverview || {};
-
-      // Calculate fresh match breakdown for the application
-      const matchResult = calculateMatchScore(userData, sponsorData);
-      console.log("Match result with breakdown:", matchResult);
-
-      // Application data structure with match breakdown and evaluation scores included
-      const applicationData = {
-        // Applicant Information
-        applicantId: internId,
-        applicantName: userFormData.personalOverview?.fullName || "Anonymous",
-        applicantEmail: user.email || userFormData.personalOverview?.email || "Not provided",
-
-        // Educational Information
-        institution: userFormData.academicOverview?.institution || userProfile.organizationName || "Not Provided",
-        degree: userFormData.academicOverview?.degree || userFormData.studyLevel || "Not Provided",
-        field: userFormData.academicOverview?.fieldOfStudy || userFormData.sector || "Not Provided",
-        locationFlexibility: userFormData.academicOverview?.locationFlexibility || userFormData.locationFlexibility || "Not Provided",
-        
-        // Applicant Skills and Preferences
-        technicalSkills: userFormData.skillsInterests?.technicalSkills || [],
-        availabilityStart: userFormData.skillsInterests?.availabilityStart || "Not specified",
-        provinces: userFormData.personalOverview?.provinces || [],
-        cities: userFormData.personalOverview?.cities || [],
-
-        // Internship Details
-        sponsorId: sponsorId,
-        sponsorName: intern.smseName,
-        location: intern.location || "N/A",
-        type: "Internship",
-        role: intern.internshipRole || "N/A",
-        sector: intern.sector || "N/A",
-
-        // Funding Information
-        funding: intern.stipend === "Pro-Bono" || intern.stipend === "not specified" ? "No" : "Yes",
-        fundType: intern.stipend || "not specified",
-
-        // Timeline
-        startDate: intern.startDate || "TBD",
-        appliedDate: new Date().toISOString(),
-
-        // AI EVALUATION SCORES - NEW SECTION
-        aiAcademicScore: evaluationScores.academic,
-        aiProfessionalSkillsScore: evaluationScores.professionalSkills,
-        aiWorkExperienceScore: evaluationScores.workExperience,
-        aiPresentationScore: evaluationScores.professionalPresentation,
-        bigInternScore: evaluationScores.bigInternScore,
-        evaluationLastUpdated: evaluationScores.lastUpdated,
-        evaluationUpdatedAt: evaluationScores.updatedAt,
-
-        // MATCH BREAKDOWN INFORMATION
-        matchAnalysis: {
-          overallScore: matchResult.score,
-          calculatedAt: new Date().toISOString(),
-          breakdown: {
-            skillsMatch: {
-              score: matchResult.breakdown.skillsMatch.score,
-              maxScore: matchResult.breakdown.skillsMatch.maxScore,
-              matched: matchResult.breakdown.skillsMatch.matched,
-              description: matchResult.breakdown.skillsMatch.description,
-              applicantSkills: matchResult.breakdown.skillsMatch.details.internSkills,
-              requiredRole: matchResult.breakdown.skillsMatch.details.sponsorRole,
-              preferredSkills: matchResult.breakdown.skillsMatch.details.sponsorSkills
-            },
-            workModeCompatibility: {
-              score: matchResult.breakdown.workModeMatch.score,
-              maxScore: matchResult.breakdown.workModeMatch.maxScore,
-              matched: matchResult.breakdown.workModeMatch.matched,
-              description: matchResult.breakdown.workModeMatch.description,
-              applicantFlexibility: matchResult.breakdown.workModeMatch.details.internFlexibility,
-              requiredType: matchResult.breakdown.workModeMatch.details.sponsorType
-            },
-            locationCompatibility: {
-              score: matchResult.breakdown.locationMatch.score,
-              maxScore: matchResult.breakdown.locationMatch.maxScore,
-              description: matchResult.breakdown.locationMatch.description,
-              applicantProvinces: matchResult.breakdown.locationMatch.details.internProvinces,
-              applicantCities: matchResult.breakdown.locationMatch.details.internCities,
-              requiredProvince: matchResult.breakdown.locationMatch.details.sponsorProvince,
-              requiredCities: matchResult.breakdown.locationMatch.details.sponsorCities,
-              isLocationRelevant: matchResult.breakdown.locationMatch.details.isLocationRelevant
-            },
-            availabilityAlignment: {
-              score: matchResult.breakdown.availabilityMatch.score,
-              maxScore: matchResult.breakdown.availabilityMatch.maxScore,
-              matched: matchResult.breakdown.availabilityMatch.matched,
-              description: matchResult.breakdown.availabilityMatch.description,
-              applicantStartDate: matchResult.breakdown.availabilityMatch.details.internStartDate,
-              requiredStartDate: matchResult.breakdown.availabilityMatch.details.sponsorStartDate
-            },
-            profileCompleteness: {
-              score: matchResult.breakdown.additionalFactors.score,
-              maxScore: matchResult.breakdown.additionalFactors.maxScore,
-              matched: matchResult.breakdown.additionalFactors.matched,
-              description: matchResult.breakdown.additionalFactors.description,
-              hasGraduationYear: matchResult.breakdown.additionalFactors.details.hasGradYear,
-              hasInternshipType: matchResult.breakdown.additionalFactors.details.hasInternType
-            }
+    // Build application data
+    const applicationData = {
+      applicantId: internId,
+      applicantName: userFormData.personalOverview?.fullName || "Anonymous",
+      applicantEmail: user.email || userFormData.personalOverview?.email || "Not provided",
+      institution: userFormData.academicOverview?.institution || userProfile.organizationName || "Not Provided",
+      degree: userFormData.academicOverview?.degree || userFormData.studyLevel || "Not Provided",
+      field: userFormData.academicOverview?.fieldOfStudy || userFormData.sector || "Not Provided",
+      locationFlexibility: userFormData.academicOverview?.locationFlexibility || userFormData.locationFlexibility || "Not Provided",
+      technicalSkills: userFormData.skillsInterests?.technicalSkills || [],
+      availabilityStart: userFormData.skillsInterests?.availabilityStart || "Not specified",
+      provinces: userFormData.personalOverview?.provinces || [],
+      cities: userFormData.personalOverview?.cities || [],
+      sponsorId: sponsorId,
+      sponsorName: intern.smseName,
+      location: intern.location || "N/A",
+      type: "Internship",
+      role: intern.internshipRole || "N/A",
+      sector: intern.sector || "N/A",
+      funding: intern.stipend === "Pro-Bono" || intern.stipend === "not specified" ? "No" : "Yes",
+      fundType: intern.stipend || "not specified",
+      startDate: intern.startDate || "TBD",
+      appliedDate: new Date().toISOString(),
+      aiAcademicScore: evaluationScores.academic,
+      aiProfessionalSkillsScore: evaluationScores.professionalSkills,
+      aiWorkExperienceScore: evaluationScores.workExperience,
+      aiPresentationScore: evaluationScores.professionalPresentation,
+      bigInternScore: evaluationScores.bigInternScore,
+      evaluationLastUpdated: evaluationScores.lastUpdated,
+      evaluationUpdatedAt: evaluationScores.updatedAt,
+      matchAnalysis: {
+        overallScore: matchResult.score,
+        calculatedAt: new Date().toISOString(),
+        breakdown: {
+          skillsMatch: {
+            score: matchResult.breakdown.skillsMatch.score,
+            maxScore: matchResult.breakdown.skillsMatch.maxScore,
+            matched: matchResult.breakdown.skillsMatch.matched,
+            description: matchResult.breakdown.skillsMatch.description,
+            applicantSkills: matchResult.breakdown.skillsMatch.details.internSkills,
+            requiredRole: matchResult.breakdown.skillsMatch.details.sponsorRole,
+            preferredSkills: matchResult.breakdown.skillsMatch.details.sponsorSkills
           },
-          // Summary for quick review
-          matchSummary: {
-            strongPoints: [],
-            weakPoints: [],
-            recommendations: []
+          workModeCompatibility: {
+            score: matchResult.breakdown.workModeMatch.score,
+            maxScore: matchResult.breakdown.workModeMatch.maxScore,
+            matched: matchResult.breakdown.workModeMatch.matched,
+            description: matchResult.breakdown.workModeMatch.description,
+            applicantFlexibility: matchResult.breakdown.workModeMatch.details.internFlexibility,
+            requiredType: matchResult.breakdown.workModeMatch.details.sponsorType
+          },
+          locationCompatibility: {
+            score: matchResult.breakdown.locationMatch.score,
+            maxScore: matchResult.breakdown.locationMatch.maxScore,
+            description: matchResult.breakdown.locationMatch.description,
+            applicantProvinces: matchResult.breakdown.locationMatch.details.internProvinces,
+            applicantCities: matchResult.breakdown.locationMatch.details.internCities,
+            requiredProvince: matchResult.breakdown.locationMatch.details.sponsorProvince,
+            requiredCities: matchResult.breakdown.locationMatch.details.sponsorCities,
+            isLocationRelevant: matchResult.breakdown.locationMatch.details.isLocationRelevant
+          },
+          availabilityAlignment: {
+            score: matchResult.breakdown.availabilityMatch.score,
+            maxScore: matchResult.breakdown.availabilityMatch.maxScore,
+            matched: matchResult.breakdown.availabilityMatch.matched,
+            description: matchResult.breakdown.availabilityMatch.description,
+            applicantStartDate: matchResult.breakdown.availabilityMatch.details.internStartDate,
+            requiredStartDate: matchResult.breakdown.availabilityMatch.details.sponsorStartDate
+          },
+          profileCompleteness: {
+            score: matchResult.breakdown.additionalFactors.score,
+            maxScore: matchResult.breakdown.additionalFactors.maxScore,
+            matched: matchResult.breakdown.additionalFactors.matched,
+            description: matchResult.breakdown.additionalFactors.description,
+            hasGraduationYear: matchResult.breakdown.additionalFactors.details.hasGradYear,
+            hasInternshipType: matchResult.breakdown.additionalFactors.details.hasInternType
           }
         },
-
-        // Status Tracking
-        status: "Applied",
-        action: intern.action || "Send Application",
-        rating: intern.ratingRecommendation || "Pending",
-
-        // Metadata
-        submittedAt: new Date().toISOString(),
-        lastUpdated: new Date().toISOString(),
-        applicationVersion: "2.1" // Updated version to indicate evaluation scores inclusion
-      };
-
-      // Generate match summary
-      const breakdown = matchResult.breakdown;
-      const strongPoints = [];
-      const weakPoints = [];
-      const recommendations = [];
-
-      // Analyze each component
-      if (breakdown.skillsMatch.matched) {
-        strongPoints.push("Skills align well with role requirements");
-      } else {
-        weakPoints.push("Skills don't match role requirements");
-        recommendations.push("Consider highlighting transferable skills or willingness to learn");
-      }
-
-      if (breakdown.workModeMatch.matched) {
-        strongPoints.push("Work mode preferences are compatible");
-      } else {
-        weakPoints.push("Work mode preferences don't align");
-        recommendations.push("Consider discussing flexibility in work arrangements");
-      }
-
-      if (breakdown.locationMatch.score >= 15) {
-        strongPoints.push("Good location compatibility");
-      } else if (breakdown.locationMatch.score > 0) {
-        strongPoints.push("Some location flexibility");
-      } else {
-        weakPoints.push("Location requirements not met");
-        recommendations.push("Discuss remote work possibilities or relocation");
-      }
-
-      if (breakdown.availabilityMatch.matched) {
-        strongPoints.push("Availability aligns with timeline");
-      } else {
-        weakPoints.push("Availability doesn't match preferred timeline");
-        recommendations.push("Discuss flexible start dates");
-      }
-
-      // Add evaluation-based insights to summary
-      if (evaluationScores.bigInternScore >= 70) {
-        strongPoints.push("High overall evaluation score");
-      } else if (evaluationScores.bigInternScore >= 50) {
-        strongPoints.push("Good evaluation score");
-      } else if (evaluationScores.bigInternScore > 0) {
-        weakPoints.push("Lower evaluation score");
-        recommendations.push("Consider highlighting achievements and growth potential");
-      }
-
-      // Add summary to application data
-      applicationData.matchAnalysis.matchSummary = {
-        strongPoints,
-        weakPoints,
-        recommendations,
-        overallAssessment: matchResult.score >= 80 ? "Excellent Match" :
-                          matchResult.score >= 60 ? "Good Match" :
-                          matchResult.score >= 40 ? "Fair Match" : "Poor Match"
-      };
-
-      // Save to Firestore with error handling
-      await setDoc(doc(db, "internshipApplications", applicationDocId), applicationData, { merge: true });
-      
-      console.log("Application successfully saved to Firestore with evaluation scores");
-
-      // Update UI state
-      setStatuses((prev) => ({ ...prev, [intern.id]: "Applied" }));
-      
-      // Send email notification to sponsor
-      await sendApplicationEmail(intern, user, applicationData);
-
-      // Dispatch notification event to the sponsor
-      const dispatchNotification = () => {
-        const notificationMessage = `New application from ${applicationData.applicantName} for ${intern.internshipRole}!`;
-        console.log('Dispatching sponsor notification:', notificationMessage);
-        
-        const event = new CustomEvent('newNotification', {
-          detail: { 
-            message: notificationMessage,
-            type: 'success',
-            timestamp: new Date().toISOString(),
-            recipientId: sponsorId // Add recipient ID for targeted notifications
-          },
-          bubbles: true,
-          cancelable: true,
-          composed: true
-        });
-
-        setTimeout(() => {
-          window.dispatchEvent(event);
-          console.log('Sponsor notification event dispatched');
-        }, 100);
-      };
-
-      dispatchNotification();
-
-      // Show success notification to applicant
-      setNotification({ 
-        type: "success", 
-        message: `Application successfully submitted to ${intern.smseName}!` 
-      });
-      setTimeout(() => setNotification(null), 4000);
-
-    } catch (error) {
-      console.error("Detailed error in handleConnectClick:", error);
-      console.error("Error code:", error.code);
-      console.error("Error message:", error.message);
-      
-      // More specific error messages
-      let errorMessage = "Failed to submit application.";
-      
-      if (error.code === 'permission-denied') {
-        errorMessage = "Permission denied. Please check your account permissions.";
-      } else if (error.code === 'unavailable') {
-        errorMessage = "Service temporarily unavailable. Please try again.";
-      } else if (error.code === 'network-request-failed') {
-        errorMessage = "Network error. Please check your internet connection.";
-      } else if (error.message.includes('auth')) {
-        errorMessage = "Authentication error. Please log in again.";
-      }
-      
-      // Dispatch error notification
-      const errorEvent = new CustomEvent('newNotification', {
-        detail: {
-          message: errorMessage,
-          type: 'error',
-          timestamp: new Date().toISOString()
+        matchSummary: {
+          strongPoints: [],
+          weakPoints: [],
+          recommendations: [],
+          overallAssessment: matchResult.score >= 80 ? "Excellent Match" :
+                            matchResult.score >= 60 ? "Good Match" :
+                            matchResult.score >= 40 ? "Fair Match" : "Poor Match"
         }
-      });
-      window.dispatchEvent(errorEvent);
-      
-      setNotification({ type: "error", message: errorMessage });
-      setTimeout(() => setNotification(null), 5000);
+      },
+      status: "Applied",
+      action: intern.action || "Send Application",
+      rating: intern.ratingRecommendation || "Pending",
+      submittedAt: new Date().toISOString(),
+      lastUpdated: new Date().toISOString(),
+      applicationVersion: "2.1"
+    };
+
+    // Build match summary
+    const breakdown = matchResult.breakdown;
+    const strongPoints = [];
+    const weakPoints = [];
+    const recommendations = [];
+
+    if (breakdown.skillsMatch.matched) {
+      strongPoints.push("Skills align well with role requirements");
+    } else {
+      weakPoints.push("Skills don't match role requirements");
+      recommendations.push("Consider highlighting transferable skills or willingness to learn");
     }
-  };
+
+    if (breakdown.workModeMatch.matched) {
+      strongPoints.push("Work mode preferences are compatible");
+    } else {
+      weakPoints.push("Work mode preferences don't align");
+      recommendations.push("Consider discussing flexibility in work arrangements");
+    }
+
+    if (breakdown.locationMatch.score >= 15) {
+      strongPoints.push("Good location compatibility");
+    } else if (breakdown.locationMatch.score > 0) {
+      strongPoints.push("Some location flexibility");
+    } else {
+      weakPoints.push("Location requirements not met");
+      recommendations.push("Discuss remote work possibilities or relocation");
+    }
+
+    if (breakdown.availabilityMatch.matched) {
+      strongPoints.push("Availability aligns with timeline");
+    } else {
+      weakPoints.push("Availability doesn't match preferred timeline");
+      recommendations.push("Discuss flexible start dates");
+    }
+
+    if (evaluationScores.bigInternScore >= 70) {
+      strongPoints.push("High overall evaluation score");
+    } else if (evaluationScores.bigInternScore >= 50) {
+      strongPoints.push("Good evaluation score");
+    } else if (evaluationScores.bigInternScore > 0) {
+      weakPoints.push("Lower evaluation score");
+      recommendations.push("Consider highlighting achievements and growth potential");
+    }
+
+    applicationData.matchAnalysis.matchSummary.strongPoints = strongPoints;
+    applicationData.matchAnalysis.matchSummary.weakPoints = weakPoints;
+    applicationData.matchAnalysis.matchSummary.recommendations = recommendations;
+
+    // Save to Firestore
+    await setDoc(doc(db, "internshipApplications", applicationDocId), applicationData, { merge: true });
+    console.log("Application successfully saved to Firestore");
+
+    // Update UI state
+    setStatuses((prev) => ({ ...prev, [intern.id]: "Applied" }));
+
+    // ==========================================
+    // GET INTERN NAME FOR MESSAGES
+    // ==========================================
+
+    let internName = user.displayName || "Intern";
+    try {
+      const internProfileRef = doc(db, "internProfiles", user.uid);
+      const internProfileSnap = await getDoc(internProfileRef);
+      if (internProfileSnap.exists()) {
+        const profileData = internProfileSnap.data();
+        const formData = profileData.formData || {};
+        const personalOverview = formData.personalOverview || {};
+        internName = personalOverview.fullName || user.displayName || "Intern";
+      }
+    } catch (error) {
+      console.error("Error fetching intern profile:", error);
+    }
+
+    // ==========================================
+    // SEND IN-APP MESSAGES
+    // ==========================================
+
+    // 1. Message to sponsor (SME)
+    try {
+      await addDoc(collection(db, "messages"), {
+        to: sponsorId,
+        toName: intern.smseName || "Sponsor",
+         from: "system",           // ← Change this
+        fromName: "BIG Marketplace",  // ← Change this
+        subject: `📋 New Application: ${intern.internshipRole}`,
+        content: `Dear ${intern.smseName},\n\n` +
+                 `You have received a new internship application from ${internName}.\n\n` +
+                `📧 Contact: ${applicationData.applicantEmail}\n\n` +  // ← Use this
+                 `Application Details:\n` +
+                 `- Role: ${intern.internshipRole}\n` +
+                 `- Match Score: ${applicationData.matchAnalysis?.overallScore || 0}%\n` +
+                 `- Institution: ${applicationData.institution}\n` +
+                 `- Field of Study: ${applicationData.field}\n` +
+                 `- Availability: ${applicationData.availabilityStart}\n\n` +
+                 `Match Analysis Summary:\n` +
+                 `- Overall Assessment: ${applicationData.matchAnalysis.matchSummary.overallAssessment}\n` +
+                 `- Strong Points: ${applicationData.matchAnalysis.matchSummary.strongPoints.join(", ") || "None"}\n\n` +
+                 `Please get back to the intern once you have made a decision.`,
+        date: new Date().toISOString(),
+        read: false,
+        type: "inbox",
+        applicationId: applicationDocId,
+        linkTo: "/sponsor/applications"
+      });
+      console.log("✅ In-app message sent to sponsor");
+    } catch (error) {
+      console.warn("Could not send in-app message to sponsor:", error);
+    }
+
+    // 2. Confirmation message to intern (applicant)
+    try {
+      await addDoc(collection(db, "messages"), {
+        to: user.uid,
+        toName: internName,
+        from: "system",
+        fromName: "BIG Marketplace",
+        subject: `✅ Application Submitted: ${intern.internshipRole}`,
+        content: `Dear ${internName},\n\n` +
+                 `Your application for "${intern.internshipRole}" at ${intern.smseName} has been submitted successfully.\n\n` +
+                 `Application Details:\n` +
+                 `- Role: ${intern.internshipRole}\n` +
+                 `- Sponsor: ${intern.smseName}\n` +
+                 `- Match Score: ${applicationData.matchAnalysis?.overallScore || 0}%\n` +
+                 `- Institution: ${applicationData.institution}\n` +
+                 `- Field of Study: ${applicationData.field}\n` +
+                 `- Availability: ${applicationData.availabilityStart}\n\n` +
+                 `Match Analysis Summary:\n` +
+                 `- Overall Assessment: ${applicationData.matchAnalysis.matchSummary.overallAssessment}\n` +
+                 `- Strong Points: ${applicationData.matchAnalysis.matchSummary.strongPoints.join(", ") || "None"}\n\n` +
+                 `The sponsor will review your application and contact you.`,
+        date: new Date().toISOString(),
+        read: false,
+        type: "inbox",
+        applicationId: applicationDocId,
+        linkTo: "/intern/applications"
+      });
+      console.log("✅ In-app confirmation sent to intern");
+    } catch (error) {
+      console.warn("Could not send in-app confirmation to intern:", error);
+    }
+
+    // ==========================================
+    // SEND EMAIL NOTIFICATIONS
+    // ==========================================
+
+    // 1. Email to sponsor (SME)
+    try {
+      const functions = getFunctions();
+      const sendInternApplicationEmail = httpsCallable(functions, 'internSendApplicationEmail');
+      
+      let sponsorEmail = null;
+      try {
+        const sponsorProfileRef = doc(db, "universalProfiles", sponsorId);
+        const sponsorProfileSnap = await getDoc(sponsorProfileRef);
+        if (sponsorProfileSnap.exists()) {
+          const profileData = sponsorProfileSnap.data();
+          sponsorEmail = profileData.email || 
+                         profileData.contactDetails?.email ||
+                         profileData.contactEmail ||
+                         profileData.businessEmail ||
+                         profileData.personalEmail;
+        }
+      } catch (fetchError) {
+        console.error("Error fetching sponsor email:", fetchError);
+      }
+
+      if (sponsorEmail) {
+        const emailMessage = `Dear ${intern.smseName},\n\n` +
+          `You have received a new internship application from ${applicationData.applicantName}.\n\n` +
+         `📧 Contact: ${applicationData.applicantEmail}\n\n` +  // ← Use this
+          `Application Details:\n` +
+          `- Role: ${intern.internshipRole}\n` +
+          `- Match Score: ${applicationData.matchAnalysis.overallScore}%\n` +
+          `- Institution: ${applicationData.institution}\n` +
+          `- Field of Study: ${applicationData.field}\n` +
+          `- Availability: ${applicationData.availabilityStart}\n\n` +
+          `Match Analysis Summary:\n` +
+          `- Overall Assessment: ${applicationData.matchAnalysis.matchSummary.overallAssessment}\n` +
+          `- Strong Points: ${applicationData.matchAnalysis.matchSummary.strongPoints.join(", ") || "None"}\n\n` +
+          `Please log in to review the full application.\n\n` +
+          `Best regards,\nBIG Marketplace Africa Internship Team`;
+
+        await sendInternApplicationEmail({
+          sponsorEmail: sponsorEmail,
+          sponsorName: intern.smseName || "Sponsor",
+          applicantName: applicationData.applicantName,
+          applicantEmail: user.email,
+          role: intern.internshipRole,
+          matchScore: applicationData.matchAnalysis.overallScore,
+          applicationId: applicationDocId,
+          applicationLink: `https://www.bigmarketplace.africa/applications/${applicationDocId}`,
+          message: emailMessage
+        });
+        console.log("✅ Application email sent to sponsor:", sponsorEmail);
+      }
+    } catch (emailError) {
+      console.error("❌ Application email to sponsor failed:", emailError);
+    }
+
+    // 2. Confirmation email to intern (applicant)
+    try {
+      const functions = getFunctions();
+      const sendApplicationConfirmation = httpsCallable(functions, 'internSendApplicationConfirmation');
+      
+      await sendApplicationConfirmation({
+        to: user.email,
+        name: applicationData.applicantName,
+        sponsorName: intern.smseName || "Sponsor",
+        role: intern.internshipRole,
+        applicationDate: new Date().toISOString(),
+        applicationId: applicationDocId,
+        linkTo: "https://www.bigmarketplace.africa/intern/applications"
+      });
+      console.log("✅ Confirmation email sent to intern:", user.email);
+    } catch (emailError) {
+      console.error("❌ Confirmation email to intern failed:", emailError);
+    }
+
+    // ==========================================
+    // DISPATCH NOTIFICATION
+    // ==========================================
+
+    const dispatchNotification = () => {
+      const notificationMessage = `New application from ${internName} for ${intern.internshipRole}!`;
+      const event = new CustomEvent('newNotification', {
+        detail: { 
+          message: notificationMessage,
+          type: 'success',
+          timestamp: new Date().toISOString(),
+          recipientId: sponsorId
+        },
+        bubbles: true,
+        cancelable: true,
+        composed: true
+      });
+      setTimeout(() => {
+        window.dispatchEvent(event);
+      }, 100);
+    };
+    dispatchNotification();
+
+    setNotification({ 
+      type: "success", 
+      message: `Application successfully submitted to ${intern.smseName}!` 
+    });
+    setTimeout(() => setNotification(null), 4000);
+
+  } catch (error) {
+    console.error("Detailed error in handleConnectClick:", error);
+    console.error("Error code:", error.code);
+    console.error("Error message:", error.message);
+    
+    let errorMessage = "Failed to submit application.";
+    if (error.code === 'permission-denied') {
+      errorMessage = "Permission denied. Please check your account permissions.";
+    } else if (error.code === 'unavailable') {
+      errorMessage = "Service temporarily unavailable. Please try again.";
+    } else if (error.code === 'network-request-failed') {
+      errorMessage = "Network error. Please check your internet connection.";
+    } else if (error.message.includes('auth')) {
+      errorMessage = "Authentication error. Please log in again.";
+    }
+    
+    const errorEvent = new CustomEvent('newNotification', {
+      detail: {
+        message: errorMessage,
+        type: 'error',
+        timestamp: new Date().toISOString()
+      }
+    });
+    window.dispatchEvent(errorEvent);
+    
+    setNotification({ type: "error", message: errorMessage });
+    setTimeout(() => setNotification(null), 5000);
+  }
+};
 
   const sendApplicationEmail = async (intern, user, applicationData) => {
     try {
@@ -1443,129 +1560,147 @@ export function InternTable({ interns = [] }) {
     }
   };
 
-  const handleSendInternMessage = async () => {
-    if (!selectedIntern || !messageText.trim()) return;
 
-    const user = auth.currentUser;
-    if (!user) {
-      setNotification({ type: "error", message: "User not authenticated" });
-      return;
-    }
+const handleSendInternMessage = async () => {
+  if (!selectedIntern || !messageText.trim()) return;
 
+  const user = auth.currentUser;
+  if (!user) {
+    setNotification({ type: "error", message: "User not authenticated" });
+    return;
+  }
+
+  // ✅ DECLARE VARIABLES OUTSIDE THE TRY BLOCK
+  let sponsorId;
+  let internId;
+  let subject;
+  let content;
+
+  try {
+    internId = user.uid;
+    sponsorId = selectedIntern.originalSponsorId || selectedIntern.id.split("_")[0];
+
+    subject = `Message regarding Internship Application at ${selectedIntern.smseName}`;
+    content = messageText.trim();
+
+    // Get intern name
+    let internName = user.displayName || "Intern";
     try {
-      const internId = user.uid;
-      const sponsorId = selectedIntern.originalSponsorId || selectedIntern.id.split("_")[0];
-
-      const subject = `Message regarding Internship Application at ${selectedIntern.smseName}`;
-      const content = messageText.trim();
-
-      const basePayload = {
-        to: sponsorId,
-        from: internId,
-        subject,
-        content,
-        date: new Date().toISOString(),
-        applicationId: `${sponsorId}_${internId}`,
-        read: false,
-        attachments: [],
-      };
-
-      await Promise.all([
-        addDoc(collection(db, "messages"), { ...basePayload, type: "inbox" }),
-        addDoc(collection(db, "messages"), { ...basePayload, type: "sent", read: true }),
-      ]);
-
-      // Send email notification for the message
-      await sendMessageEmail(selectedIntern, user, content);
-
-      setNotification({
-        type: "success",
-        message: `Message sent to ${selectedIntern.smseName}`,
-      });
-
-      setShowMessageModal(false);
-      setMessageText("");
-
+      const internProfileRef = doc(db, "internProfiles", user.uid);
+      const internProfileSnap = await getDoc(internProfileRef);
+      if (internProfileSnap.exists()) {
+        const profileData = internProfileSnap.data();
+        const formData = profileData.formData || {};
+        const personalOverview = formData.personalOverview || {};
+        internName = personalOverview.fullName || user.displayName || "Intern";
+      }
     } catch (error) {
-      console.error("Error sending message:", error);
-      setNotification({ type: "error", message: "Failed to send message" });
+      console.error("Error fetching intern profile:", error);
     }
-  };
 
-  const sendMessageEmail = async (intern, user, message) => {
+    const basePayload = {
+      to: sponsorId,
+      toName: selectedIntern.smseName,
+      from: internId,
+      fromName: internName,
+      subject,
+      content,
+      date: new Date().toISOString(),
+      applicationId: `${sponsorId}_${internId}`,
+      read: false,
+      attachments: [],
+    };
+
+    await Promise.all([
+      addDoc(collection(db, "messages"), { ...basePayload, type: "inbox" }),
+      addDoc(collection(db, "messages"), { ...basePayload, type: "sent", read: true }),
+    ]);
+
+    // Send email notification
+    await sendMessageEmail(selectedIntern, user, content);
+
+    setNotification({
+      type: "success",
+      message: `Message sent to ${selectedIntern.smseName}`,
+    });
+
+    setShowMessageModal(false);
+    setMessageText("");
+
+  } catch (error) {
+    console.error("Error sending message:", error);
+    setNotification({ type: "error", message: "Failed to send message" });
+  }
+};
+
+const sendMessageEmail = async (intern, user, message) => {
+  try {
+    console.log("🔄 Sending message email via Cloud Function...");
+
+    const functions = getFunctions();
+    const sendInternMessageEmail = httpsCallable(functions, 'internSendMessageEmail');
+
+    // Get intern name from internProfiles
+    let internName = "Intern";
+    let internEmail = user?.email || "No email provided";
+
     try {
-      console.log("🔄 Sending message email...");
-
-      const emailjsConfig = {
-        serviceId: API_KEYS.SERVICE_ID_MESSAGES,
-        templateId: API_KEYS.TEMPLATE_ID_MESSAGES,
-        publicKey: API_KEYS.PUBLIC_KEY_ID_MESSAGES
-      };
-
-      if (!window.emailjs) {
-        emailjs.init(emailjsConfig.publicKey);
-        window.emailjs = emailjs;
+      const internProfileRef = doc(db, "internProfiles", user.uid);
+      const internProfileSnap = await getDoc(internProfileRef);
+      if (internProfileSnap.exists()) {
+        const profileData = internProfileSnap.data();
+        const formData = profileData.formData || {};
+        const personalOverview = formData.personalOverview || {};
+        internName = personalOverview.fullName || "Intern";
+        internEmail = personalOverview.email || user?.email || "No email provided";
       }
-
-      const internName = user?.displayName || "Intern";
-      const sponsorName = intern.smseName;
-
-      // Get sponsor email
-      let sponsorEmail = null;
-      try {
-        const sponsorProfileRef = doc(db, "universalProfiles", intern.originalSponsorId);
-        const sponsorProfileSnap = await getDoc(sponsorProfileRef);
-        
-        if (sponsorProfileSnap.exists()) {
-          const profileData = sponsorProfileSnap.data();
-          sponsorEmail = profileData.email || 
-                         profileData.contactDetails?.email ||
-                         profileData.contactEmail ||
-                         profileData.businessEmail ||
-                         profileData.personalEmail;
-        }
-      } catch (fetchError) {
-        console.error("Error fetching sponsor email:", fetchError);
-      }
-
-      if (!sponsorEmail) {
-        sponsorEmail = "support@bigmarketplace.africa";
-      }
-
-      const emailMessage = `Dear ${sponsorName},\n\n` +
-        `You have received a new message from ${internName} regarding your internship opportunity.\n\n` +
-        `Message:\n"${message}"\n\n` +
-        `Internship Role: ${intern.internshipRole}\n` +
-        `Intern: ${internName}\n\n` +
-        `Please log in to your dashboard to respond to this message.\n\n` +
-        `Best regards,\nBIG Marketplace Africa Internship Team`;
-
-      const templateParams = {
-        to_email: sponsorEmail,
-        subject: `New Message from ${internName} - ${intern.internshipRole}`,
-        from_name: "BIG Marketplace Africa",
-        date: new Date().toLocaleDateString(),
-        message: emailMessage,
-        portal_url: `https://www.bigmarketplace.africa/messages`,
-        has_attachments: "false",
-        attachments_count: "0"
-      };
-
-      console.log("📨 Sending message email...");
-
-      await window.emailjs.send(
-        emailjsConfig.serviceId,
-        emailjsConfig.templateId,
-        templateParams,
-        emailjsConfig.publicKey
-      );
-      
-      console.log("✅ Message email sent successfully!");
-      
-    } catch (emailError) {
-      console.error("❌ Message email failed:", emailError);
+    } catch (error) {
+      console.error("Error fetching intern profile:", error);
     }
-  };
+
+    const sponsorName = intern.smseName;
+
+    // Get sponsor email
+    let sponsorEmail = null;
+    try {
+      const sponsorProfileRef = doc(db, "universalProfiles", intern.originalSponsorId);
+      const sponsorProfileSnap = await getDoc(sponsorProfileRef);
+      
+      if (sponsorProfileSnap.exists()) {
+        const profileData = sponsorProfileSnap.data();
+        sponsorEmail = profileData.email || 
+                       profileData.contactDetails?.email ||
+                       profileData.contactEmail ||
+                       profileData.businessEmail ||
+                       profileData.personalEmail;
+      }
+    } catch (fetchError) {
+      console.error("Error fetching sponsor email:", fetchError);
+    }
+
+    if (!sponsorEmail) {
+      console.warn("⚠️ No sponsor email found, using fallback");
+      sponsorEmail = "support@bigmarketplace.africa";
+    }
+
+    // ✅ Send only raw data - template will build the email
+    await sendInternMessageEmail({
+      to: sponsorEmail,
+      name: sponsorName,
+      internName: internName,
+      internEmail: internEmail,
+      message: message,  // ← Raw user message only
+      role: intern.internshipRole,
+      applicationId: intern.id,
+      dashboardLink: "https://www.bigmarketplace.africa/messages"
+    });
+    
+    console.log("✅ Message email sent to sponsor:", sponsorEmail);
+
+  } catch (emailError) {
+    console.error("❌ Message email failed:", emailError);
+  }
+};
 
   const handleViewDetails = (intern) => {
     setSelectedIntern(intern)
@@ -1959,44 +2094,48 @@ export function InternTable({ interns = [] }) {
                           {intern.status || currentStatus}
                         </span>
                       </td>
-
-                      {/* Action */}
-                      <td style={tableCellStyle}>
-                        <div style={actionButtonsStyle}>
-                         {currentStatus === "Confirmed" ? (
-                            <span style={confirmedBadgeStyle}>
-                              <Check size={12} /> Confirmed
-                            </span>
-                          ) : currentStatus === "Contacted" ? (
-                            <span style={contactedBadgeStyle}>Contacted</span>
-                          ) : currentStatus === "Applied" ||  currentStatus != "New Match" && currentStatus != "Requested"   ? ( // Check for both statuses
-                            <span style={{
-                              background: "#E3F2FD",
-                              color: "#1976D2", 
-                              padding: "0.3rem 0.5rem",
-                              borderRadius: "3px",
-                              fontSize: "0.65rem",
-                              fontWeight: "500",
-                              whiteSpace: "nowrap"
-                            }}>
-                              Application Sent
-                            </span>
-                          ) : currentStatus === "Requested" ? ( // Check for both statuses
-                            <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                              <button onClick={() => acceptRequest(intern)} style={connectButtonStyle}>
-                                Accept
-                              </button>
-                            </div>
-                          ): (
-                            <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                              <button onClick={() => handleConnectClick(intern)} style={connectButtonStyle}>
-                                {intern.action}
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      </td>
-
+      
+            <td style={tableCellStyle}>
+              <div style={actionButtonsStyle}>
+                {currentStatus === "Confirmed" ? (
+                  <span style={confirmedBadgeStyle}>
+                    <Check size={12} /> Confirmed
+                  </span>
+                ) : currentStatus === "Contacted" ? (
+                  <span style={contactedBadgeStyle}>Contacted</span>
+                ) : currentStatus === "Applied" || currentStatus === "Accepted" ? (
+                  <span style={{
+                    background: "#E3F2FD",
+                    color: "#1976D2", 
+                    padding: "0.3rem 0.5rem",
+                    borderRadius: "3px",
+                    fontSize: "0.65rem",
+                    fontWeight: "500",
+                    whiteSpace: "nowrap"
+                  }}>
+                    Application Sent
+                  </span>
+                ) : currentStatus === "Requested" ? (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                    <button onClick={() => acceptRequest(intern)} style={connectButtonStyle}>
+                      Accept
+                    </button>
+                  </div>
+                ) : currentStatus === "New Match" ? (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                    <button onClick={() => handleConnectClick(intern)} style={connectButtonStyle}>
+                      {intern.action || "Send Application"}
+                    </button>
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                    <button onClick={() => handleConnectClick(intern)} style={connectButtonStyle}>
+                      {intern.action || "Send Application"}
+                    </button>
+                  </div>
+                )}
+              </div>
+            </td>
                       {/* Rating & Recommendation */}
                       <td style={{ ...tableCellStyle, borderRight: "none" }}>
                         <span style={{ color: "#999", fontSize: "0.65rem" }}>
