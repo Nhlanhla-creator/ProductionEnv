@@ -15,7 +15,8 @@ export function useHeaderProfile(
   collection,
   nameField,
   logoField,
-  fallbackName = "User"
+  fallbackName = "User",
+  customDocId = null
 ) {
   const [user, setUser] = useState(null)
   const [userName, setUserName] = useState(fallbackName)
@@ -27,7 +28,7 @@ export function useHeaderProfile(
   const fetchProfileData = useCallback(async (currentUser) => {
     if (!currentUser) return
     try {
-      const userDocRef = doc(db, collection, currentUser.uid)
+      const userDocRef = doc(db, collection, customDocId || currentUser.uid)
       const userDocSnap = await getDoc(userDocRef)
       if (userDocSnap.exists()) {
         const data = userDocSnap.data()
@@ -44,7 +45,7 @@ export function useHeaderProfile(
       setError(err)
       setUserName(getDisplayName(null, currentUser, nameField, fallbackName))
     }
-  }, [collection, nameField, logoField, fallbackName])
+  }, [collection, nameField, logoField, fallbackName, customDocId])
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {

@@ -22,15 +22,22 @@ function Sidebar({
   onLogout,
   storageKey = "sidebarCollapsed",
   autoExpandMenus = {},
-  enableNested = false  // ← NEW: enables nested submenus (3rd level)
+  enableNested = false,  // ← NEW: enables nested submenus (3rd level)
+  customDocId = null
 }) {
   const navigate = useNavigate()
   const location = useLocation()
   const [expandedMenus, setExpandedMenus] = useState(autoExpandMenus)
   const [isCollapsed, setIsCollapsed] = useState(false)
   const [showHelpModal, setShowHelpModal] = useState(false)
-  // Use central hook to fetch profile name when parent doesn't pass it
-  const { userName: hookUserName } = useHeaderProfile(userCollection, userNameField, "entityOverview.companyLogo", "User")
+  const { userName: hookUserName } = useHeaderProfile(
+    userCollection,
+    userNameField,
+    "entityOverview.companyLogo",
+    "User",
+    customDocId
+  )
+
   const effectiveUserName = propUserName || hookUserName || "User"
 
   // Memoize menuItems to prevent unnecessary re-renders

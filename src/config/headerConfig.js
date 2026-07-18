@@ -85,7 +85,7 @@ export const headerProfiles = {
     fallbackName: "Associator",
   },
   capitalMarketFacilitator: {
-    collection: "capitalMarketProfiles",
+    collection: "MyuniversalProfiles",
     nameField: "formData.entityOverview.registeredName",
     logoField: "formData.entityOverview.companyLogo",
     portalName: "CMF Dashboard",
