@@ -34,6 +34,7 @@ import {
 } from './services/qa';
 import { loadDocChecklist, saveDocChecklist } from './services/docGovChecklist';
 import { loadQATable, saveQATable } from './services/qaMasterTable';
+import { addNotification } from './services/notifications';
 import { useAuth } from '../../smses/hooks/useAuth';
 import { AlertCircle, ClipboardList, CheckCircle, X } from 'lucide-react';
 import AddTaskModal from './structure/AddTaskModal';
@@ -350,9 +351,58 @@ const ProductPlatform = () => {
   }, []);
 
   // ── QA table handlers ─────────────────────────────────────────────────────
+  const persistQATasks = useCallback((tasks) => {
+    debouncedQARef.current?.(tasks);
+  }, []);
+
+  const clearNewQAFlags = useCallback(() => {
+    setQaTasks(prev => {
+      const hasAnyNew = prev.some(t => t._new);
+      if (!hasAnyNew) return prev;
+      const updated = prev.map(t => t._new ? { ...t, _new: false } : t);
+      persistQATasks(updated);
+      return updated;
+    });
+  }, [persistQATasks]);
+
+  // Activity dot - track _new entries from sprints for QA Master Table
+  const activityDots = useMemo(() => {
+    const hasNew = qaTasks.some(t => t._new === true);
+    if (!hasNew) return new Set();
+    return new Set(['3_QA & Testing > QA Master Table']);
+  }, [qaTasks]);
+
+  // Clear new QA flags when the user views the QA Master Table
+  useEffect(() => {
+    if (isQATableSelected) {
+      clearNewQAFlags();
+    }
+  }, [isQATableSelected, clearNewQAFlags]);
+
   const handleUpdateTask = useCallback((rowIdx, colId, value) => {
     setQaTasks(prev => {
+      const oldTask = prev[rowIdx];
       const updated = prev.map((t, i) => i === rowIdx ? { ...t, [colId]: value } : t);
+
+      // Fire notification when status changes from dash/empty to Pass or Fail
+      if (colId === 'status' && oldTask) {
+        const oldStatus = oldTask.status || '—';
+        if ((oldStatus === '—' || oldStatus === '') && (value === 'Pass' || value === 'Fail')) {
+          const assignee = oldTask.assignedTo || 'Unassigned';
+          addNotification({
+            type: 'qa_status_change',
+            message: `QA task "${oldTask.taskName || oldTask.taskId}" marked as ${value}`,
+            taskOwner: assignee,
+            sprintName: oldTask.section || '',
+            taskName: oldTask.taskName || oldTask.taskId || '',
+            qaStatus: value,
+            dashboard: oldTask.dashboard || '',
+            sourceSprintId: oldTask._sourceSprintId ? String(oldTask._sourceSprintId) : '',
+            sourceTaskId: oldTask._sourceTaskId ? String(oldTask._sourceTaskId) : '',
+          }).catch(err => console.error('Failed to send QA status notification:', err));
+        }
+      }
+
       debouncedQARef.current?.(updated);
       return updated;
     });
@@ -504,6 +554,7 @@ const ProductPlatform = () => {
                 onAddItem={handleAddItem}
                 onDeleteItem={handleDeleteItem}
                 contentStatus={contentStatus}
+                activityDots={activityDots}
               />
 
               {/* File uploader — right panel */}

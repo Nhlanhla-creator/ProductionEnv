@@ -52,10 +52,7 @@ function AdminSidebar() {
       return false;
     }
   });
-  // Track if user manually toggled (chevron)
-  const [manualOverride, setManualOverride] = useState(false);
-  // Track if sidebar is hovered (except chevron)
-  const [isHovered, setIsHovered] = useState(false);
+
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
   const location = useLocation();
@@ -373,37 +370,11 @@ function AdminSidebar() {
     }
   };
 
-  // Manual chevron click: override hover
+  // Manual chevron click: toggle collapse state
   const toggleSidebar = (e) => {
     if (e) e.stopPropagation();
-    setIsCollapsed((prev) => {
-      setManualOverride(true);
-      return !prev;
-    });
+    setIsCollapsed((prev) => !prev);
   };
-
-  // Hover handlers for sidebar (not chevron)
-  const handleSidebarMouseEnter = () => {
-    if (!manualOverride) {
-      setIsCollapsed(false);
-    }
-    setIsHovered(true);
-  };
-  const handleSidebarMouseLeave = () => {
-    setIsHovered(false);
-    if (!manualOverride) {
-      setIsCollapsed(true);
-    }
-  };
-
-  // If user clicks anywhere else, reset manual override
-  useEffect(() => {
-    if (!isHovered && manualOverride) {
-      // If sidebar is not hovered and was manually expanded, keep state
-      // But if sidebar is collapsed and not hovered, reset override
-      if (isCollapsed) setManualOverride(false);
-    }
-  }, [isHovered, isCollapsed, manualOverride]);
 
   // Get company initials for logo
   const getCompanyInitials = (name) => {
@@ -429,15 +400,11 @@ function AdminSidebar() {
 
       <div
         className={`${styles.sidebar} ${isCollapsed ? styles.collapsed : ""}`}
-        onMouseEnter={handleSidebarMouseEnter}
-        onMouseLeave={handleSidebarMouseLeave}
       >
         {/* Toggle Button (chevron) */}
         <button
           className={styles.sidebarToggle}
           onClick={toggleSidebar}
-          onMouseEnter={(e) => e.stopPropagation()} // Prevent hover expand on chevron
-          onMouseLeave={(e) => e.stopPropagation()}
         >
           {isCollapsed ? <ChevronRight size={20} /> : <ChevronLeft size={20} />}
         </button>

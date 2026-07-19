@@ -27,7 +27,8 @@ const FileExplorerItem = memo(({
   onSelectItem,
   onAddItem,
   onDeleteItem,
-  contentStatus
+  contentStatus,
+  activityDots
 }) => {
   const [hovered, setHovered] = useState(false);
   const currentPath = [...path, name];
@@ -153,6 +154,35 @@ const FileExplorerItem = memo(({
           </button>
         )}
 
+        {/* Pulsing activity dot for new sprint items in QA Master Table or folders */}
+        {activityDots && (() => {
+          const hasActivity = [...activityDots].some(dotPath => dotPath === pathKey || dotPath.startsWith(pathKey + ' > '));
+          if (!hasActivity) return null;
+          return (
+            <>
+              <style>{`
+                @keyframes fileExplorerPulse {
+                  0%, 100% { transform: scale(1); opacity: 1; }
+                  50% { transform: scale(0.85); opacity: 0.65; }
+                }
+              `}</style>
+              <div
+                style={{
+                  width: 7,
+                  height: 7,
+                  borderRadius: '50%',
+                  background: '#f59e0b',
+                  marginLeft: 6,
+                  animation: 'fileExplorerPulse 1.5s infinite ease-in-out',
+                  boxShadow: '0 0 4px #f59e0b',
+                  flexShrink: 0
+                }}
+                title="New activity from sprint tasks"
+              />
+            </>
+          );
+        })()}
+
         {/* Dot indicator for file content */}
         {!isFolder && !isChecklist && !isQATable && hasContent && (
           <div style={{ width: 6, height: 6, borderRadius: '50%', background: isSelected ? 'white' : 'var(--primary-brown)', marginLeft: 4 }} />
@@ -191,6 +221,7 @@ const FileExplorerItem = memo(({
                   onAddItem={onAddItem}
                   onDeleteItem={onDeleteItem}
                   contentStatus={contentStatus}
+                  activityDots={activityDots}
                 />
               )
             ))}
@@ -210,7 +241,8 @@ export const FileExplorer = memo(({
   onDeleteItem,
   contentStatus = {},
   explorerState = 'normal',
-  onToggleState
+  onToggleState,
+  activityDots
 }) => {
   if (explorerState === 'minimized') {
     return (
@@ -366,6 +398,7 @@ export const FileExplorer = memo(({
             onAddItem={onAddItem}
             onDeleteItem={onDeleteItem}
             contentStatus={contentStatus}
+            activityDots={activityDots}
           />
         ))}
       </div>

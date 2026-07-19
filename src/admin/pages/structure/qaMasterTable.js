@@ -49,12 +49,14 @@ const QACell = memo(({ col, value, isEditing, onSave, onCancel }) => {
   // ── Read-only display ──
   if (!isEditing) {
     if (col.type === 'status') {
-      const c = STATUS_COLORS[value] || { bg: '#6b7280', text: '#fff' };
-      return <Badge label={value} bg={c.bg} text={c.text} />;
+      const displayValue = value || '—';
+      const c = STATUS_COLORS[displayValue] || { bg: '#e5e7eb', text: '#6b7280' };
+      return <Badge label={displayValue} bg={c.bg} text={c.text} />;
     }
     if (col.type === 'action') {
-      const c = ACTION_COLORS[value] || { bg: '#6b7280', text: '#fff' };
-      return <Badge label={value} bg={c.bg} text={c.text} />;
+      const displayValue = value || '—';
+      const c = ACTION_COLORS[displayValue] || { bg: '#e5e7eb', text: '#6b7280' };
+      return <Badge label={displayValue} bg={c.bg} text={c.text} />;
     }
     if (col.id === 'dashboard') {
       if (!value) return <span style={{ color: '#aaa', fontSize: 12 }}>—</span>;
@@ -186,7 +188,7 @@ export const QAMasterTable = ({ tasks, onUpdateTask, onAddTask, onDeleteTask, is
   // ── Stats ──
   const passCount = tasks.filter(t => t.status === 'Pass').length;
   const failCount = tasks.filter(t => t.status === 'Fail').length;
-  const nsCount   = tasks.filter(t => t.status === 'Not started').length;
+  const pendingCount = tasks.filter(t => !t.status || t.status === '—').length;
 
   return (
     <div style={{ marginBottom: 32 }}>
@@ -198,7 +200,7 @@ export const QAMasterTable = ({ tasks, onUpdateTask, onAddTask, onDeleteTask, is
           <div style={{ display: 'flex', gap: 8, marginTop: 6, flexWrap: 'wrap', alignItems: 'center' }}>
             <Badge label={`✓ Pass: ${passCount}`}      bg={STATUS_COLORS['Pass'].bg} />
             <Badge label={`✗ Fail: ${failCount}`}      bg={STATUS_COLORS['Fail'].bg} />
-            <Badge label={`○ Pending: ${nsCount}`}     bg={STATUS_COLORS['Not started'].bg} />
+            <Badge label={`○ Pending: ${pendingCount}`} bg='#9ca3af' />
             {isSaving && (
               <span style={{ fontSize: 12, color: '#a67c52', display: 'flex', alignItems: 'center', gap: 4 }}>
                 <RefreshCw size={12} style={{ animation: 'spin 1s linear infinite' }} /> Saving…

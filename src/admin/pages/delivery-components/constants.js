@@ -28,7 +28,8 @@ export const STATUSES = ['Not done', 'Done'];
 
 export const STATUS_COLORS = {
   'Not done': '#ef4444',
-  'Done': '#10b981'
+  'Done': '#10b981',
+  '—': '#9ca3af'
 };
 
 export const CATEGORY_COLORS = {
@@ -103,5 +104,12 @@ export const DEFAULT_SPRINT_COLUMNS = [
     type: "select", 
     editable: true,
     options: STATUSES
+  },
+  {
+    id: "qa",
+    label: "QA",
+    type: "qa-checkbox",
+    editable: false,
+    system: true
   }
 ];

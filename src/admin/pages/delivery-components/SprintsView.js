@@ -15,7 +15,8 @@ export const SprintsView = ({
   handleAddSprint,
   handleDeleteSprint,
   handleUpdateSprint,
-  handleUpdateColumnOptions
+  handleUpdateColumnOptions,
+  handleQAToggle
 }) => {
   const sortedSprints = useMemo(() => {
     return Object.values(sprintsData).sort((a, b) => a.id - b.id);
@@ -49,6 +50,7 @@ export const SprintsView = ({
           onUpdateColumnOptions={(columnId, newOptions) =>
             handleUpdateColumnOptions(sprint.id, columnId, newOptions)
           }
+          onQAToggle={(task, checked) => handleQAToggle(task, sprint, checked)}
         />
       ))}
     </div>

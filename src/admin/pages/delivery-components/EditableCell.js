@@ -20,14 +20,15 @@ export const EditableCell = memo(({
 
   if (!isEditing) {
     if (columnType === 'select') {
+      const displayValue = value || '—';
       return (
         <span
           style={{
             ...styles.statusBadge,
-            background: STATUS_COLORS[value] || '#6b7280'
+            background: STATUS_COLORS[displayValue] || '#6b7280'
           }}
         >
-          {value || 'Not started'}
+          {displayValue}
         </span>
       );
     }

@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { FileExplorer } from './shared/FileExplorer';
 import { FileUploader } from './shared/FileUploader';
 import { QA_STRUCTURE } from './structure/qaStructure';
@@ -12,6 +12,7 @@ import { useAuth } from '../../smses/hooks/useAuth';
 import { AlertCircle, CheckCircle, X } from 'lucide-react';
 import { QAMasterTable } from './structure/qaMasterTable';
 import { loadQATable, saveQATable } from './services/qaMasterTable';
+import { addNotification } from './services/notifications';
 import AddTaskModal from './structure/AddTaskModal';
 
 function debounce(fn, ms) {
@@ -75,7 +76,28 @@ const QATesting = () => {
 
   const handleUpdateTask = useCallback((rowIdx, colId, value) => {
     setQaTasks(prev => {
+      const oldTask = prev[rowIdx];
       const updated = prev.map((t, i) => i === rowIdx ? { ...t, [colId]: value } : t);
+
+      // Fire notification when status changes from dash/empty to Pass or Fail
+      if (colId === 'status' && oldTask) {
+        const oldStatus = oldTask.status || '—';
+        if ((oldStatus === '—' || oldStatus === '') && (value === 'Pass' || value === 'Fail')) {
+          const assignee = oldTask.assignedTo || 'Unassigned';
+          addNotification({
+            type: 'qa_status_change',
+            message: `QA task "${oldTask.taskName || oldTask.taskId}" marked as ${value}`,
+            taskOwner: assignee,
+            sprintName: oldTask.section || '',
+            taskName: oldTask.taskName || oldTask.taskId || '',
+            qaStatus: value,
+            dashboard: oldTask.dashboard || '',
+            sourceSprintId: oldTask._sourceSprintId ? String(oldTask._sourceSprintId) : '',
+            sourceTaskId: oldTask._sourceTaskId ? String(oldTask._sourceTaskId) : '',
+          }).catch(err => console.error('Failed to send QA status notification:', err));
+        }
+      }
+
       persistTasks(updated);
       return updated;
     });
@@ -104,6 +126,26 @@ const QATesting = () => {
     if (!window.confirm('Delete this test row?')) return;
     setQaTasks(prev => {
       const updated = prev.filter((_, i) => i !== rowIdx);
+      persistTasks(updated);
+      return updated;
+    });
+  }, [persistTasks]);
+
+  // ── Activity dot — track _new entries from sprints ──
+  const activityDots = useMemo(() => {
+    const hasNew = qaTasks.some(t => t._new === true);
+    if (!hasNew) return new Set();
+    // The QA Master Table is not a FileExplorer entry in QA_STRUCTURE;
+    // we use a synthetic key that the component can check
+    return new Set(['__qa_master_table__']);
+  }, [qaTasks]);
+
+  // Clear _new flags on all tasks (called when user views QA Master Table)
+  const clearNewFlags = useCallback(() => {
+    setQaTasks(prev => {
+      const hasAnyNew = prev.some(t => t._new);
+      if (!hasAnyNew) return prev;
+      const updated = prev.map(t => t._new ? { ...t, _new: false } : t);
       persistTasks(updated);
       return updated;
     });
@@ -208,6 +250,10 @@ const QATesting = () => {
           --background-brown: #faf7f2; --pale-brown: #f0e6d9;
         }
         @keyframes spin { to { transform: rotate(360deg); } }
+        @keyframes qaActivityPulse {
+          0%, 100% { opacity: 1; transform: scale(1); }
+          50% { opacity: 0.5; transform: scale(0.8); }
+        }
         * { box-sizing: border-box; }
       `}</style>
 
@@ -219,7 +265,41 @@ const QATesting = () => {
           </p>
         </div>
 
-        <div style={{ background: '#fff', borderRadius: 8, border: '1px solid #e6d7c3', padding: 20, marginBottom: 28 }}>
+        <div
+          style={{ background: '#fff', borderRadius: 8, border: '1px solid #e6d7c3', padding: 20, marginBottom: 28, position: 'relative' }}
+          onClick={clearNewFlags}
+        >
+          {activityDots.has('__qa_master_table__') && (
+            <div
+              style={{
+                position: 'absolute',
+                top: 14,
+                right: 14,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '4px 10px',
+                background: '#fef3c7',
+                border: '1px solid #f59e0b',
+                borderRadius: 12,
+                fontSize: 11,
+                fontWeight: 600,
+                color: '#92400e',
+                zIndex: 10,
+              }}
+            >
+              <span
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: '50%',
+                  background: '#f59e0b',
+                  animation: 'qaActivityPulse 1.5s ease-in-out infinite',
+                }}
+              />
+              New tasks from Sprint
+            </div>
+          )}
           <QAMasterTable
             tasks={qaTasks}
             onUpdateTask={handleUpdateTask}
@@ -254,6 +334,7 @@ const QATesting = () => {
             onToggleFolder={handleToggleFolder}
             onSelectItem={handleSelectItem}
             contentStatus={contentStatus}
+            activityDots={activityDots}
           />
 
           {selectedPath && selectedItem && (

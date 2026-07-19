@@ -6,13 +6,36 @@ import {
   initializeSprintsForUser,
   saveAllSprints
 } from '../admin/pages/services/sprints';
+import { DEFAULT_SPRINT_COLUMNS } from '../admin/pages/delivery-components/constants';
+
+/**
+ * Ensures that all sprints in the data map contain the QA column.
+ */
+const ensureQAColumn = (sprints) => {
+  if (!sprints) return sprints;
+  const updated = {};
+  const qaCol = DEFAULT_SPRINT_COLUMNS.find(col => col.id === 'qa');
+  if (!qaCol) return sprints;
+
+  Object.entries(sprints).forEach(([key, sprint]) => {
+    let columns = sprint.columns || [];
+    if (!columns.some(col => col.id === 'qa')) {
+      columns = [...columns, qaCol];
+    }
+    updated[key] = {
+      ...sprint,
+      columns
+    };
+  });
+  return updated;
+};
 
 /**
  * Custom hook for syncing sprints with Firebase
  * Handles loading, saving, and real-time updates
  */
 export const useSprintSync = (initialSprintsData, user) => {
-  const [sprintsData, setSprintsData] = useState(initialSprintsData);
+  const [sprintsData, setSprintsData] = useState(() => ensureQAColumn(initialSprintsData));
   const [isLoading, setIsLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncError, setSyncError] = useState(null);
@@ -49,12 +72,12 @@ export const useSprintSync = (initialSprintsData, user) => {
             console.warn('💡 Use the "Re-seed Sprint Data" button to fix this issue.');
           }
           
-          setSprintsData(remoteSprints);
+          setSprintsData(ensureQAColumn(remoteSprints));
         } else {
           // Initialize with default data for new users
           console.log('🆕 Initializing default sprints');
           await initializeSprintsForUser(initialSprintsData);
-          setSprintsData(initialSprintsData);
+          setSprintsData(ensureQAColumn(initialSprintsData));
         }
 
         setLastSyncTime(new Date());
@@ -62,7 +85,7 @@ export const useSprintSync = (initialSprintsData, user) => {
         console.error('❌ Error loading sprints:', error);
         setSyncError(error.message);
         // Fall back to initial data
-        setSprintsData(initialSprintsData);
+        setSprintsData(ensureQAColumn(initialSprintsData));
       } finally {
         setIsLoading(false);
       }
@@ -76,7 +99,7 @@ export const useSprintSync = (initialSprintsData, user) => {
     if (!user) return;
 
     const unsubscribe = subscribeToSprints((updatedSprints) => {
-      setSprintsData(updatedSprints);
+      setSprintsData(ensureQAColumn(updatedSprints));
       setLastSyncTime(new Date());
     });
 
@@ -141,7 +164,7 @@ export const useSprintSync = (initialSprintsData, user) => {
     try {
       setIsLoading(true);
       const remoteSprints = await loadSprintsFromFirebase();
-      setSprintsData(remoteSprints);
+      setSprintsData(ensureQAColumn(remoteSprints));
       setLastSyncTime(new Date());
       return { success: true };
     } catch (error) {
