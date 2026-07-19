@@ -9,6 +9,8 @@ import { styles } from './delivery-components/styles';
 import { useAuth } from '../../smses/hooks/useAuth'; // Adjust path as needed
 import { useSprintSync } from '../../hooks/useSprintSync';
 import { syncSprintToFirebase, deleteSprint } from './services/sprints';
+import { appendSprintTask } from './services/qaMasterTable';
+import { addNotification } from './services/notifications';
 
 // ============================================================================
 // MAIN DELIVERY COMPONENT
@@ -318,6 +320,37 @@ const Delivery = () => {
     }
   }, [user]);
 
+  // ========== QA TOGGLE HANDLER ==========
+  const handleQAToggle = useCallback(async (task, sprint, checked) => {
+    // Update the task's qa field
+    handleUpdateTask(sprint.id, task.id, 'qa', checked);
+
+    if (checked && user) {
+      try {
+        // Append to QA Master Table
+        await appendSprintTask(task, sprint);
+
+        // Build notification
+        const assignee = Array.isArray(task.assignee)
+          ? task.assignee.join(', ')
+          : task.assignee || 'Unassigned';
+
+        await addNotification({
+          type: 'qa_flagged',
+          message: `Task "${task.action || task.name || task.id}" flagged for QA`,
+          taskOwner: assignee,
+          sprintName: sprint.name || `Sprint ${sprint.id}`,
+          taskName: task.action || task.name || `Task ${task.id}`,
+          dashboard: Array.isArray(task.category) ? task.category[0] || '' : task.category || '',
+          sourceSprintId: String(sprint.id),
+          sourceTaskId: String(task.id),
+        });
+      } catch (err) {
+        console.error('Failed to append task to QA table or send notification:', err);
+      }
+    }
+  }, [user, handleUpdateTask]);
+
   // ========== RENDER ==========
   
   // Show loading state while auth or sprints are loading
@@ -536,6 +569,7 @@ const Delivery = () => {
                 handleDeleteSprint={handleDeleteSprint}
                 handleUpdateSprint={handleUpdateSprint}
                 handleUpdateColumnOptions={handleUpdateColumnOptions}
+                handleQAToggle={handleQAToggle}
               />
             )}
           </div>

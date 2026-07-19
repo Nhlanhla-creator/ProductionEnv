@@ -198,10 +198,10 @@ export const styles = {
     background: "var(--pale-brown)",
   },
   tableHeader: {
-    padding: "12px 16px",
+    padding: "6px 16px",
     textAlign: "left",
     fontWeight: 600,
-    color: "var(--text-brown)",
+    color: "var(--text-brown) !important",
     borderBottom: "2px solid var(--medium-brown)",
     whiteSpace: "nowrap",
   },

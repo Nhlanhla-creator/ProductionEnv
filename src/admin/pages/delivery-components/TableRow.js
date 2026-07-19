@@ -1,6 +1,7 @@
 import React, { useCallback, memo } from 'react';
 import { Trash2 } from 'lucide-react';
 import { EditableCell } from './EditableCell';
+import { QACheckboxCell } from './QACheckboxCell';
 import { styles } from './styles';
 
 export const TableRow = memo(({ 
@@ -8,6 +9,7 @@ export const TableRow = memo(({
   columns, 
   onUpdateTask, 
   onRequestDelete,
+  onQAToggle,
   editingCell,
   setEditingCell
 }) => {
@@ -30,6 +32,18 @@ export const TableRow = memo(({
   return (
     <tr style={styles.tableRow}>
       {columns.map(column => {
+        // QA checkbox column — special renderer
+        if (column.type === 'qa-checkbox') {
+          return (
+            <td key={column.id} style={styles.tableCell}>
+              <QACheckboxCell
+                task={task}
+                onQAToggle={onQAToggle}
+              />
+            </td>
+          );
+        }
+
         const cellKey = `${task.id}-${column.id}`;
         const isEditing = editingCell === cellKey;
         

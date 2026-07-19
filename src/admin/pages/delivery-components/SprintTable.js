@@ -12,7 +12,8 @@ export const SprintTable = memo(({
   onAddColumn,
   onDeleteSprint,
   onDeleteColumn,
-  onUpdateColumnOptions
+  onUpdateColumnOptions,
+  onQAToggle
 }) => {
   const [editingCell, setEditingCell] = useState(null);
   const [showAddColumnModal, setShowAddColumnModal] = useState(false);
@@ -278,7 +279,7 @@ export const SprintTable = memo(({
                 <th key={column.id} style={styles.tableHeader}>
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                     <span>{column.label}</span>
-                    {isEditMode && column.editable !== false && (
+                    {isEditMode && column.editable !== false && !column.system && (
                       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
                         {column.type === 'multi-select' && (
                           <button
@@ -349,6 +350,7 @@ export const SprintTable = memo(({
                   columns={sprint.columns}
                   onUpdateTask={onUpdateTask}
                   onRequestDelete={setTaskToDelete}
+                  onQAToggle={onQAToggle}
                   editingCell={editingCell}
                   setEditingCell={setEditingCell}
                 />

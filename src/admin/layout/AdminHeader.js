@@ -1,7 +1,7 @@
 "use client"
 import { useState, useRef, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
-import { Bell, Mail, Calendar, Settings, LogOut, User, HelpCircle, Upload, Users, Shield, Activity } from "lucide-react"
+import { Bell, Mail, Calendar, Settings, LogOut, User, HelpCircle, Upload, Users, Shield, Activity, FlaskConical, ArrowRightLeft } from "lucide-react"
 import styles from "./admin-header.module.css"
 import { auth } from "../../firebaseConfig"
 import { db, storage } from "../../firebaseConfig"
@@ -11,6 +11,7 @@ import { getAuth } from "firebase/auth"
 import { onAuthStateChanged } from "firebase/auth"
 import { doc } from "firebase/firestore"
 import { ref, uploadBytes, getDownloadURL, deleteObject } from "firebase/storage"
+import { useNotifications } from "../../hooks/useNotifications"
 
 function AdminHeader({ companyName, profileImage, setProfileImage, isSidebarCollapsed }) {
   const navigate = useNavigate()
@@ -19,36 +20,8 @@ function AdminHeader({ companyName, profileImage, setProfileImage, isSidebarColl
 
   const [showProfileMenu, setShowProfileMenu] = useState(false)
   const [notificationsOpen, setNotificationsOpen] = useState(false)
-  const [notifications, setNotifications] = useState([
-    {
-      id: 1,
-      type: "user",
-      message: "New SME registration pending approval",
-      time: "30 minutes ago",
-      read: false,
-    },
-    {
-      id: 2,
-      type: "document",
-      message: "5 new documents require review",
-      time: "1 hour ago",
-      read: false,
-    },
-    {
-      id: 3,
-      type: "system",
-      message: "System backup completed successfully",
-      time: "2 hours ago",
-      read: true,
-    },
-    {
-      id: 4,
-      type: "alert",
-      message: "High server load detected",
-      time: "1 day ago",
-      read: true,
-    },
-  ])
+  // Real-time Firestore notifications via hook
+  const { notifications, unreadCount, markAsRead, markAllAsRead, isRead } = useNotifications()
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
   const [userName, setUserName] = useState(user ? user.displayName || user.email.split("@")[0] : "Admin")
@@ -298,9 +271,8 @@ function AdminHeader({ companyName, profileImage, setProfileImage, isSidebarColl
 
   const triggerFileInput = () => fileInputRef.current.click()
 
-  const markAllAsRead = () => {
-    const updated = notifications.map((n) => ({ ...n, read: true }))
-    setNotifications(updated)
+  const handleMarkAllAsRead = () => {
+    markAllAsRead()
   }
 
   const handleLogout = () => {
@@ -314,9 +286,35 @@ function AdminHeader({ companyName, profileImage, setProfileImage, isSidebarColl
       })
   }
 
-  const unreadCount = notifications.filter((n) => !n.read).length
-
   const userEmail = user ? user.email : ""
+
+  // Helper: relative time display
+  const getRelativeTime = (timestamp) => {
+    if (!timestamp) return ''
+    try {
+      const date = new Date(timestamp)
+      const now = new Date()
+      const diffMs = now - date
+      const diffMin = Math.floor(diffMs / 60000)
+      if (diffMin < 1) return 'Just now'
+      if (diffMin < 60) return `${diffMin}m ago`
+      const diffHr = Math.floor(diffMin / 60)
+      if (diffHr < 24) return `${diffHr}h ago`
+      const diffDay = Math.floor(diffHr / 24)
+      return `${diffDay}d ago`
+    } catch {
+      return ''
+    }
+  }
+
+  // Helper: notification type icon
+  const getNotificationIcon = (type) => {
+    switch (type) {
+      case 'qa_flagged': return <FlaskConical size={14} />
+      case 'qa_status_change': return <ArrowRightLeft size={14} />
+      default: return <Bell size={14} />
+    }
+  }
 
   const formattedDate = date.toLocaleDateString("en-US", {
     weekday: "long",
@@ -368,7 +366,7 @@ function AdminHeader({ companyName, profileImage, setProfileImage, isSidebarColl
                 <div className={styles["dropdown-header"]}>
                   <h3>Notifications</h3>
                   {unreadCount > 0 && (
-                    <button onClick={markAllAsRead} className={styles["mark-read-button"]}>
+                    <button onClick={handleMarkAllAsRead} className={styles["mark-read-button"]}>
                       Mark all as read
                     </button>
                   )}
@@ -376,15 +374,38 @@ function AdminHeader({ companyName, profileImage, setProfileImage, isSidebarColl
                 <div className={styles["dropdown-divider"]}></div>
                 <div className={styles["notifications-list"]}>
                   {notifications.length > 0 ? (
-                    notifications.map((notification) => (
+                    notifications.slice(0, 20).map((notification) => (
                       <div
                         key={notification.id}
-                        className={`${styles["notification-item"]} ${!notification.read ? styles.unread : ""}`}
+                        className={`${styles["notification-item"]} ${!isRead(notification.id) ? styles.unread : ""}`}
+                        onClick={() => markAsRead(notification.id)}
+                        style={{ cursor: 'pointer' }}
                       >
-                        <div className={`${styles["notification-icon"]} ${styles[notification.type]}`}></div>
+                        <div
+                          className={`${styles["notification-icon"]}`}
+                          style={{
+                            background: notification.type === 'qa_flagged' ? '#a67c52'
+                              : notification.type === 'qa_status_change' ? '#3b82f6'
+                              : '#6b7280',
+                            borderRadius: '50%',
+                            width: 28,
+                            height: 28,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: '#fff',
+                            flexShrink: 0,
+                          }}
+                        >
+                          {getNotificationIcon(notification.type)}
+                        </div>
                         <div className={styles["notification-content"]}>
                           <p className={styles["notification-text"]}>{notification.message}</p>
-                          <p className={styles["notification-time"]}>{notification.time}</p>
+                          <p className={styles["notification-time"]}>
+                            {notification.taskOwner && `${notification.taskOwner} · `}
+                            {notification.sprintName && `${notification.sprintName} · `}
+                            {getRelativeTime(notification.timestamp)}
+                          </p>
                         </div>
                       </div>
                     ))

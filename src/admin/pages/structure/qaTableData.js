@@ -22,8 +22,8 @@ export const QA_COLUMNS = [
 
 export const DASHBOARD_OPTIONS   = ['SMSE', 'Investor', 'Advisor', 'Catalyst', 'Intern', 'All'];
 export const CATEGORY_OPTIONS    = ['Security', 'Unit Tests', 'Integration Tests', 'E2E Tests', 'Performance Tests', 'Test Data'];
-export const STATUS_OPTIONS      = ['Pass', 'Fail', 'Not started', 'In progress', 'Blocked'];
-export const ACTION_STATUS_OPTIONS = ['Done', 'Not started', 'In progress'];
+export const STATUS_OPTIONS      = ['Pass', 'Fail'];
+export const ACTION_STATUS_OPTIONS = ['Done', 'Not done'];
 export const TEST_TYPE_OPTIONS   = ['Security', 'Integration', 'Functionality', 'Performance'];
 export const ASSIGNEE_OPTIONS    = ['Lindelani', 'Nhlanhla Msomi', 'Makha', 'Lerato Nama', 'Molefi', 'Owami Ngobese', 'Lethabo', 'Sbonelo'];
 
@@ -34,15 +34,13 @@ export const ASSIGNEE_OPTIONS    = ['Lindelani', 'Nhlanhla Msomi', 'Makha', 'Ler
 export const STATUS_COLORS = {
   'Pass':        { bg: '#10b981', text: '#fff' },
   'Fail':        { bg: '#ef4444', text: '#fff' },
-  'Not started': { bg: '#6b7280', text: '#fff' },
-  'In progress': { bg: '#f59e0b', text: '#fff' },
-  'Blocked':     { bg: '#8b5cf6', text: '#fff' },
+  '—':           { bg: '#e5e7eb', text: '#6b7280' },
 };
 
 export const ACTION_COLORS = {
   'Done':        { bg: '#10b981', text: '#fff' },
-  'Not started': { bg: '#6b7280', text: '#fff' },
-  'In progress': { bg: '#f59e0b', text: '#fff' },
+  'Not done':    { bg: '#ef4444', text: '#fff' },
+  '—':           { bg: '#e5e7eb', text: '#6b7280' },
 };
 
 export const DASHBOARD_COLORS = {
