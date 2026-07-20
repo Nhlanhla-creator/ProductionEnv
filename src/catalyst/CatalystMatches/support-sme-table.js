@@ -5,11 +5,11 @@ import { createPortal } from "react-dom";
 import {
   Info, MapPin, Calendar, Filter, X, Eye, BarChart3,
   ChevronDown, ChevronUp, MoreVertical, CheckCircle, XCircle,
-  AlertCircle, Clock, TrendingUp, Users, DollarSign, Building,
-  LayoutGrid, Columns, Search, Download, MessageSquare, FileText,
+  Clock, Users, DollarSign, Building,
+  LayoutGrid, Download, MessageSquare,
   Share2, ArrowRight, ArrowUp, ArrowDown, SlidersHorizontal,
-  RotateCcw, Settings, Shield, FileCheck, Target, Briefcase,
-  Video, Link, Flag, LogOut, Bookmark, Trash2
+  RotateCcw, Settings, Target, Briefcase,
+  Video, Link, Flag, LogOut, Bookmark, Trash2, Plus
 } from "lucide-react";
 import { db, auth, storage } from "../../firebaseConfig";
 import { serverTimestamp, doc, updateDoc, getDoc, addDoc, collection, query, where, getDocs } from "firebase/firestore";
@@ -29,9 +29,6 @@ const BIG_SCORE_LABELS = {
   critical: { min: 0, label: "Critical", color: "#dc2626" }
 };
 
-// Match % now maps to a plain label + fit bar instead of a 5-star rating
-// (feedback #5: stars read as a customer-satisfaction score, not a fit
-// score, and duplicated what the percentage already communicates).
 const MATCH_LABELS = {
   excellent: { min: 80, label: "Excellent Fit", color: "#22c55e" },
   strong: { min: 60, label: "Strong Fit", color: "#86efac" },
@@ -54,8 +51,6 @@ const getMatchLabel = (score) => {
   return MATCH_LABELS.poor;
 };
 
-// Stage lookup built from the shared config (feedback #3: one place stages
-// are named/defined, shared with the pipeline view so the two can't drift).
 const STAGE_BY_ID = Object.fromEntries(DEFAULT_STAGES.map((s) => [s.id, s]));
 const getStageById = (id) => STAGE_BY_ID[id] || STAGE_BY_ID.matched;
 
@@ -65,11 +60,6 @@ const getStatusStyle = (status) => {
   return { bg: colors.bgColor, text: colors.color, border: colors.borderColor, dot: colors.color, stage };
 };
 
-// Reads whatever the catalyst admin configured in the pipeline's "Stage
-// Actions" settings panel (persisted via stageConfig.js's shared helpers),
-// falling back to the sensible defaults there if nothing's been customized.
-// This used to be a hardcoded switch statement with no way for an admin to
-// change it — now it's just reading data.
 const getStageFields = (stageName) => {
   const id = mapStatusToStageId(stageName);
   const overrides = loadPipelineSettings().customization?.stageActions || {};
@@ -91,12 +81,7 @@ const formatCurrency = (value) => {
   return `R${num}`;
 };
 
-// ─── Attention indicator (feedback #11) ────────────────────────────────────
-// Flags records that need catalyst action. Reasons are computed from
-// whatever's already on the record; reasons that need fields the schema
-// doesn't yet have (e.g. "documents outstanding") are left out rather than
-// invented, consistent with this codebase's existing honesty-over-mocking
-// convention for data that isn't backed by a real field yet.
+// ─── Attention indicator helper ──────────────────────────────────────────────
 const getAttentionReasons = (sme) => {
   const reasons = [];
   if ((sme.daysInStage || 0) >= 14) reasons.push("Stalled for 14+ days");
@@ -107,18 +92,12 @@ const getAttentionReasons = (sme) => {
   return reasons;
 };
 
-// Small helper component so all popups can be portaled straight to <body>.
 const PopupPortal = ({ children }) => {
   if (typeof document === "undefined") return null;
   return createPortal(children, document.body);
 };
 
 // ─── Column header info tooltip ────────────────────────────────────────────
-// Replaces a bare `title="..."` attribute (native browser tooltips are slow
-// to appear, easy to miss, and inconsistent across browsers — which is why
-// it looked like "it does nothing"). This renders an actual, immediately
-// visible tooltip on hover, portaled to <body> so it never clips inside the
-// scrolling table container.
 const HeaderInfoTooltip = ({ text }) => {
   const [rect, setRect] = useState(null);
   return (
@@ -127,7 +106,7 @@ const HeaderInfoTooltip = ({ text }) => {
       onMouseLeave={() => setRect(null)}
       className="inline-flex"
     >
-      <Info size={12} style={{ color: "#a89482" }} />
+      <Info size={12} style={{ color: "#d9c7b8" }} className="opacity-80 hover:opacity-100" />
       {rect && (
         <PopupPortal>
           <div
@@ -148,14 +127,6 @@ const HeaderInfoTooltip = ({ text }) => {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOverride }) {
-  // Table layout preferences (visible columns, density, sort) previously
-  // lived only in component state, which resets to these hardcoded defaults
-  // every time the component unmounts — i.e. the moment you navigate away.
-  // Persisting to localStorage means "leave and come back" actually keeps
-  // what was customized. `savedViews`/`saveCurrentView`/`loadView` further
-  // down already existed in this file but were never wired to a visible
-  // button or to any storage, so nothing they set could ever actually stick
-  // — that's fixed below too, with a real "Save View" control in the toolbar.
   const VIEW_STORAGE_KEY = "sme-table-current-view-v1";
   const SAVED_VIEWS_STORAGE_KEY = "sme-table-saved-views-v1";
 
@@ -181,15 +152,14 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
   const [expandedRows, setExpandedRows] = useState(new Set());
   const [columnVisibility, setColumnVisibility] = useState(() => loadStoredView()?.columnVisibility || DEFAULT_COLUMN_VISIBILITY);
   const [showColumnChooser, setShowColumnChooser] = useState(false);
-  // Default sort now prioritises records that need attention (feedback #11)
   const [sortConfig, setSortConfig] = useState(() => loadStoredView()?.sortConfig || DEFAULT_SORT_CONFIG);
-  const [searchQuery, setSearchQuery] = useState('');
   const [density, setDensity] = useState(() => loadStoredView()?.density || 'comfortable');
-  const [showFilters, setShowFilters] = useState(false);
+  const [headerFilterOpen, setHeaderFilterOpen] = useState(null);
   const [localFilters, setLocalFilters] = useState({
-    fundingStage: [], bigScoreRange: [0, 100], status: [], sector: []
+    name: '', fundingStage: [], bigScoreRange: [0, 100], status: [], sector: []
   });
   const [notification, setNotification] = useState(null);
+  const [hoveredRowKey, setHoveredRowKey] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
   const [savedViews, setSavedViews] = useState(() => {
@@ -229,9 +199,6 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
 
   const { enriched, catalystFormData, loading } = usePortfolio();
 
-  // Auto-persist the current layout on every change — this is what actually
-  // fixes "resets when I leave and come back", as opposed to only saving
-  // when the person explicitly clicks something.
   useEffect(() => {
     if (typeof window === "undefined") return;
     try {
@@ -285,10 +252,6 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
 
     let mapped = enriched.map(mapRow);
 
-    // Feedback #1: once an SME is Admitted (formerly "Active") it should
-    // ordinarily live in My Cohorts, not stay mixed into this matching
-    // table — unless the caller explicitly asked to see admitted records
-    // via stageFilter.
     if (stageFilter !== "admitted" && stageFilter !== "active") {
       mapped = mapped.filter((s) => mapStatusToStageId(s.pipelineStage) !== "admitted");
     }
@@ -307,13 +270,9 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
   const filteredAndSortedSMEs = useMemo(() => {
     let result = [...smes];
 
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase().trim();
-      result = result.filter(sme =>
-        sme.name.toLowerCase().includes(query) || sme.sector.toLowerCase().includes(query) ||
-        sme.location.toLowerCase().includes(query) || (sme.industry || "").toLowerCase().includes(query) ||
-        (sme.director || "").toLowerCase().includes(query) || (sme.email || "").toLowerCase().includes(query)
-      );
+    if (localFilters.name?.trim()) {
+      const query = localFilters.name.toLowerCase().trim();
+      result = result.filter(sme => sme.name.toLowerCase().includes(query));
     }
 
     if (localFilters.fundingStage?.length > 0) {
@@ -350,10 +309,19 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
     }
 
     return result;
-  }, [smes, searchQuery, sortConfig, localFilters]);
+  }, [smes, sortConfig, localFilters]);
 
   const totalPages = Math.ceil(filteredAndSortedSMEs.length / pageSize);
   const paginatedSMEs = filteredAndSortedSMEs.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+
+  const sectorOptions = useMemo(
+    () => [...new Set(smes.map((s) => s.sector).filter((s) => s && s !== "N/A"))].sort(),
+    [smes]
+  );
+
+  const activeFilterCount = (localFilters.name?.trim() ? 1 : 0)
+    + localFilters.fundingStage.length + localFilters.status.length + localFilters.sector.length
+    + (localFilters.bigScoreRange[0] > 0 || localFilters.bigScoreRange[1] < 100 ? 1 : 0);
 
   // ─── Handlers ───────────────────────────────────────────────────────────────
   const handleSort = (key) => {
@@ -361,6 +329,24 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
   };
 
   const toggleColumn = (key) => setColumnVisibility(prev => ({ ...prev, [key]: !prev[key] }));
+
+  const openHeaderFilter = (type, event) => {
+    event.stopPropagation();
+    const rect = event.currentTarget.getBoundingClientRect();
+    setHeaderFilterOpen(prev => (prev?.type === type ? null : { type, rect }));
+  };
+  const closeHeaderFilter = () => setHeaderFilterOpen(null);
+
+  const FilterTrigger = ({ type, active }) => (
+    <button
+      type="button"
+      onClick={(e) => openHeaderFilter(type, e)}
+      className={`p-0.5 rounded transition-colors ${active ? "text-[#e6d7c3]" : "text-[#c8b6a6] hover:text-white"}`}
+      title="Filter this column"
+    >
+      <SlidersHorizontal size={11} />
+    </button>
+  );
 
   const handleViewDetails = (sme) => {
     setSelectedSMEDetails(sme);
@@ -540,9 +526,6 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
     }
   };
 
-  // Match breakdown now carries a percentage per component (feedback #7:
-  // "why this match?" should be answerable without opening the full
-  // profile), not just a matched/unmatched flag.
   const calculateMatchScore = (smeProfileData, catalystFormData, program = null) => {
     const breakdown = {
       fundingStage: { score: 0, maxScore: 12.5, matched: false, details: {} },
@@ -570,22 +553,6 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
 
     const totalScore = Object.values(breakdown).reduce((sum, b) => sum + (b.score || 0), 0);
     return { score: Math.round(totalScore), breakdown };
-  };
-
-  // "Monitor" → "View Progress" (feedback #8: more specific about what the
-  // action does than a generic, slightly passive verb).
-  const getContextualAction = (sme) => {
-    const stageId = mapStatusToStageId(sme.currentStatus);
-    switch (stageId) {
-      case "matched": return { label: "Review Match", icon: <Eye size={14} />, color: "#7d5a50" };
-      case "applied": return { label: "Review App", icon: <FileText size={14} />, color: "#7d5a50" };
-      case "evaluation": return { label: "Evaluate", icon: <Search size={14} />, color: "#7d5a50" };
-      case "dueDiligence": return { label: "Start DD", icon: <Shield size={14} />, color: "#7d5a50" };
-      case "decision": return { label: "Decide", icon: <AlertCircle size={14} />, color: "#7d5a50" };
-      case "offer": return { label: "Send Offer", icon: <FileCheck size={14} />, color: "#7d5a50" };
-      case "admitted": return { label: "View Progress", icon: <TrendingUp size={14} />, color: "#7d5a50" };
-      default: return { label: "Review", icon: <Eye size={14} />, color: "#7d5a50" };
-    }
   };
 
   const densityStyles = {
@@ -641,11 +608,6 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
     });
   };
 
-  const clearAllFilters = () => {
-    setLocalFilters({ fundingStage: [], bigScoreRange: [0, 100], status: [], sector: [] });
-    setSearchQuery('');
-  };
-
   const handleDateSelect = (dates) => setTempDates(dates || []);
   const handleTimeChange = (field, value) => setTimeSlot(prev => ({ ...prev, [field]: value }));
   const removeAvailability = (date) => setAvailabilities(prev => prev.filter(a => a.date?.getTime?.() !== date?.getTime?.()));
@@ -654,7 +616,7 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
     const newAvailabilities = [
       ...availabilities,
       ...tempDates
-        .filter(date => !availabilities.some(a => a.date?.getTime?.() === date.getTime?.()))
+        .filter(date => !availabilities.some(a => a.date?.getTime?.() === date?.getTime?.()))
         .map(date => ({ date, timeSlots: [{ ...timeSlot }], timeZone, status: "available" }))
     ];
     setAvailabilities(newAvailabilities);
@@ -677,16 +639,17 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
       {/* Toolbar */}
       <div className="bg-[#faf7f2] rounded-t-2xl p-4 border border-[#e6d7c3] border-b-0 shadow-sm">
         <div className="flex items-center justify-between gap-4 flex-wrap">
-          <div className="flex-1 min-w-[200px] max-w-md relative">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#7d5a50]" />
-            <input type="text" placeholder="Search by name, sector, location..." value={searchQuery} onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }} className="w-full pl-10 pr-4 py-2.5 bg-white border border-[#c8b6a6] rounded-xl text-sm focus:outline-none focus:border-[#7d5a50] focus:ring-2 focus:ring-[#7d5a50]/20 transition-all" />
-            {searchQuery && <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#7d5a50]"><X size={14} /></button>}
+          <div className="flex items-center gap-2">
+            {activeFilterCount > 0 && (
+              <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#fff3e0] text-[#e65100] border border-[#e65100]/30">
+                <SlidersHorizontal size={12} /> {activeFilterCount} filter{activeFilterCount > 1 ? "s" : ""} active
+              </span>
+            )}
           </div>
-
           <div className="flex items-center gap-2">
             <div className="relative">
               <button onClick={() => setShowColumnChooser(!showColumnChooser)} className="flex items-center gap-2 px-4 py-2.5 bg-white border border-[#c8b6a6] rounded-xl text-sm text-[#4a352f] hover:bg-[#f5f0e1] transition-all shadow-sm">
-                <Columns size={16} /> Columns <ChevronDown size={14} className={`transition-transform ${showColumnChooser ? 'rotate-180' : ''}`} />
+                <Plus size={16} /> Add New Field <ChevronDown size={14} className={`transition-transform ${showColumnChooser ? 'rotate-180' : ''}`} />
               </button>
               {showColumnChooser && (
                 <>
@@ -717,13 +680,6 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
               <option value="ultra-compact">Ultra Compact</option>
             </select>
 
-            <button onClick={() => setShowFilters(!showFilters)} className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all shadow-sm ${showFilters ? 'bg-[#7d5a50] text-white' : 'bg-white border border-[#c8b6a6] text-[#4a352f] hover:bg-[#f5f0e1]'}`}>
-              <SlidersHorizontal size={16} /> Filters
-            </button>
-
-            {/* Save View: current column/density/sort layout auto-saves as
-                you go (see the persistence effect above), but this lets you
-                also save named snapshots and switch between them. */}
             <div className="relative">
               <button onClick={() => setShowSaveView(!showSaveView)} className="flex items-center gap-2 px-4 py-2.5 bg-white border border-[#c8b6a6] rounded-xl text-sm text-[#4a352f] hover:bg-[#f5f0e1] transition-all shadow-sm">
                 <Bookmark size={16} /> Views {savedViews.length > 0 && <span className="text-xs text-[#a89482]">({savedViews.length})</span>}
@@ -767,36 +723,6 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
             </button>
           </div>
         </div>
-
-        {showFilters && (
-          <div className="mt-4 p-5 bg-[#faf7f2] rounded-2xl border-2 border-[#e6d7c3] grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-white rounded-xl p-4 border border-[#e6d7c3]">
-              <label className="block text-xs font-semibold text-[#4a352f] mb-3">BIG Score: {localFilters.bigScoreRange[0]} - {localFilters.bigScoreRange[1]}</label>
-              <div className="flex items-center gap-3 mb-3">
-                <input type="number" min="0" max="100" value={localFilters.bigScoreRange[0]} onChange={(e) => setLocalFilters(prev => ({ ...prev, bigScoreRange: [Math.min(parseInt(e.target.value) || 0, prev.bigScoreRange[1]), prev.bigScoreRange[1]] }))} className="w-16 px-2 py-1.5 border border-[#c8b6a6] rounded-lg text-sm text-center" />
-                <span className="text-[#7d5a50]">to</span>
-                <input type="number" min="0" max="100" value={localFilters.bigScoreRange[1]} onChange={(e) => setLocalFilters(prev => ({ ...prev, bigScoreRange: [prev.bigScoreRange[0], Math.max(parseInt(e.target.value) || 0, prev.bigScoreRange[0])] }))} className="w-16 px-2 py-1.5 border border-[#c8b6a6] rounded-lg text-sm text-center" />
-              </div>
-              <input type="range" min="0" max="100" value={localFilters.bigScoreRange[0]} onChange={(e) => setLocalFilters(prev => ({ ...prev, bigScoreRange: [parseInt(e.target.value), prev.bigScoreRange[1]] }))} className="w-full accent-[#7d5a50]" />
-            </div>
-            <div className="bg-white rounded-xl p-4 border border-[#e6d7c3]">
-              <label className="block text-xs font-semibold text-[#4a352f] mb-3">Status</label>
-              <div className="flex flex-wrap gap-1.5">
-                {DEFAULT_STAGES.map(s => (
-                  <button key={s.id} onClick={() => setLocalFilters(prev => ({ ...prev, status: prev.status.includes(s.name) ? prev.status.filter(x => x !== s.name) : [...prev.status, s.name] }))} className={`px-2.5 py-1 rounded-full text-xs font-medium ${localFilters.status.includes(s.name) ? 'bg-[#7d5a50] text-white' : 'bg-[#f5f0e1] text-[#4a352f] hover:bg-[#e6d7c3]'}`}>{s.name}</button>
-                ))}
-              </div>
-            </div>
-            <div className="bg-white rounded-xl p-4 border border-[#e6d7c3]">
-              <label className="block text-xs font-semibold text-[#4a352f] mb-3">Funding Stage</label>
-              <div className="flex flex-wrap gap-1.5">
-                {["Startup","Growth","Scale","Established"].map(s => (
-                  <button key={s} onClick={() => setLocalFilters(prev => ({ ...prev, fundingStage: prev.fundingStage.includes(s) ? prev.fundingStage.filter(x => x !== s) : [...prev.fundingStage, s] }))} className={`px-2.5 py-1 rounded-full text-xs font-medium ${localFilters.fundingStage.includes(s) ? 'bg-[#7d5a50] text-white' : 'bg-[#f5f0e1] text-[#4a352f] hover:bg-[#e6d7c3]'}`}>{s}</button>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Table */}
@@ -806,58 +732,71 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
         ) : (
           <>
             <div className="overflow-auto" style={{ maxHeight: '70vh' }}>
-              {/*
-                Header weight reduced (feedback #12): the page already carries
-                several dark brown elements (active tab, export button, action
-                buttons). The table header moves to a lighter tan background
-                with dark text so the brand brown reads as one dominant accent
-                (the CTA/active states) instead of competing across layers.
-
-                Header text color is enforced via the .smt-th / .smt-th-btn
-                classes below with `!important`, rather than plain inline
-                styles — some columns were rendering white by default despite
-                an inline color, which points to something elsewhere in the
-                app's stylesheet winning the cascade for those cells. A local
-                !important class beats that regardless of where it comes from.
-              */}
               <style>{`
-                .smt-th { color: #4a352f !important; line-height: 1.1; font-size: 0.75rem !important; font-weight: 600 !important; text-transform: uppercase !important; letter-spacing: 0.05em !important; font-family: inherit !important; }
-                .smt-th-btn { color: #4a352f !important; background: transparent; border: none; padding: 0; margin: 0; cursor: pointer; transition: color .15s ease; white-space: nowrap; font-size: inherit !important; font-weight: inherit !important; text-transform: inherit !important; letter-spacing: inherit !important; font-family: inherit !important; }
-                .smt-th-btn:hover { color: #7d5a50 !important; }
+                .smt-th { color: #faf7f2 !important; line-height: 1.1; font-size: 0.75rem !important; font-weight: 600 !important; text-transform: uppercase !important; letter-spacing: 0.05em !important; font-family: inherit !important; }
+                .smt-th-btn { color: #faf7f2 !important; background: transparent; border: none; padding: 0; margin: 0; cursor: pointer; transition: color .15s ease; white-space: nowrap; font-size: inherit !important; font-weight: inherit !important; text-transform: inherit !important; letter-spacing: inherit !important; font-family: inherit !important; }
+                .smt-th-btn:hover { color: #e6d7c3 !important; }
               `}</style>
               <table className="w-full border-collapse" style={{ minWidth: '960px' }}>
                 <thead>
-                  <tr className="bg-[#f0e6d9]">
-                    <th className={`smt-th py-3 px-3 text-left font-semibold uppercase tracking-wider text-xs whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 left-0 z-30`} style={{ backgroundColor: '#f0e6d9', minWidth: '220px', maxWidth: '260px' }}><button type="button" onClick={() => handleSort('name')} className="smt-th-btn flex items-center gap-1">Business Name <span className="flex flex-col -space-y-1 opacity-60"><ArrowUp size={10} /><ArrowDown size={10} /></span></button></th>
+                  <tr className="bg-[#4a352f]">
+                    <th className={`smt-th py-3 px-3 text-left font-semibold uppercase tracking-wider text-xs whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 left-0 z-30`} style={{ backgroundColor: '#4a352f', minWidth: '220px', maxWidth: '260px' }}>
+                      <div className="flex items-center gap-1">
+                        <button type="button" onClick={() => handleSort('name')} className="smt-th-btn flex items-center gap-1">Business Name <span className="flex flex-col -space-y-1 opacity-60"><ArrowUp size={10} /><ArrowDown size={10} /></span></button>
+                        <FilterTrigger type="name" active={!!localFilters.name.trim()} />
+                      </div>
+                    </th>
                     {columnVisibility.bigScore && (
-                      <th className={`smt-th py-3 px-3 text-center font-semibold uppercase tracking-wider text-xs whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ minWidth: '100px', backgroundColor: '#f0e6d9' }}>
+                      <th className={`smt-th py-3 px-3 text-center font-semibold uppercase tracking-wider text-xs whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ minWidth: '100px', backgroundColor: '#4a352f' }}>
                         <div className="flex items-center justify-center gap-1">
                           <button type="button" onClick={() => handleSort('bigScore')} className="smt-th-btn flex items-center gap-1">BIG Score <span className="flex flex-col -space-y-1 opacity-60"><ArrowUp size={10} /><ArrowDown size={10} /></span></button>
+                          <FilterTrigger type="bigScore" active={localFilters.bigScoreRange[0] > 0 || localFilters.bigScoreRange[1] < 100} />
                           <HeaderInfoTooltip text="BIG Score measures SME credibility and readiness — compliance, legitimacy, fundability, PIS, and leadership." />
                         </div>
                       </th>
                     )}
                     {columnVisibility.match && (
-                      <th className={`smt-th py-3 px-3 text-center font-semibold uppercase tracking-wider text-xs whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ minWidth: '110px', backgroundColor: '#f0e6d9' }}>
+                      <th className={`smt-th py-3 px-3 text-center font-semibold uppercase tracking-wider text-xs whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ minWidth: '110px', backgroundColor: '#4a352f' }}>
                         <div className="flex items-center justify-center gap-1">
                           <button type="button" onClick={() => handleSort('matchPercentage')} className="smt-th-btn flex items-center gap-1">Match % <span className="flex flex-col -space-y-1 opacity-60"><ArrowUp size={10} /><ArrowDown size={10} /></span></button>
                           <HeaderInfoTooltip text="Match Score measures programme fit — alignment with this programme's mandate and criteria." />
                         </div>
                       </th>
                     )}
-                    {columnVisibility.fundingStage && <th className={`smt-th py-3 px-3 text-left font-semibold uppercase tracking-wider text-xs whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ backgroundColor: '#f0e6d9' }}>Funding Stage</th>}
-                    {columnVisibility.fundingRequired && <th className={`smt-th py-3 px-3 text-left font-semibold uppercase tracking-wider text-xs whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ backgroundColor: '#f0e6d9' }}><button type="button" onClick={() => handleSort('fundingAmount')} className="smt-th-btn flex items-center gap-1">Funding <span className="flex flex-col -space-y-1 opacity-60"><ArrowUp size={10} /><ArrowDown size={10} /></span></button></th>}
-                    {columnVisibility.status && <th className={`smt-th py-3 px-3 text-left font-semibold uppercase tracking-wider text-xs whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ backgroundColor: '#f0e6d9' }}>Status</th>}
-                    {columnVisibility.applied && <th className={`smt-th py-3 px-3 text-left font-semibold uppercase tracking-wider text-xs whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ backgroundColor: '#f0e6d9' }}><button type="button" onClick={() => handleSort('applicationDateRaw')} className="smt-th-btn flex items-center gap-1">Applied <span className="flex flex-col -space-y-1 opacity-60"><ArrowUp size={10} /><ArrowDown size={10} /></span></button></th>}
-                    {columnVisibility.daysInStage && <th className={`smt-th py-3 px-3 text-left font-semibold uppercase tracking-wider text-xs whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ backgroundColor: '#f0e6d9' }}><button type="button" onClick={() => handleSort('daysInStage')} className="smt-th-btn flex items-center gap-1">Days in Stage <span className="flex flex-col -space-y-1 opacity-60"><ArrowUp size={10} /><ArrowDown size={10} /></span></button></th>}
-                    {columnVisibility.lastActivity && <th className={`smt-th py-3 px-3 text-left font-semibold uppercase tracking-wider text-xs whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ backgroundColor: '#f0e6d9' }}>Last Activity</th>}
-                    {columnVisibility.location && <th className={`smt-th py-3 px-3 text-left font-semibold uppercase tracking-wider text-xs whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ backgroundColor: '#f0e6d9' }}>Location</th>}
-                    {columnVisibility.sector && <th className={`smt-th py-3 px-3 text-left font-semibold uppercase tracking-wider text-xs whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ backgroundColor: '#f0e6d9' }}>Sector</th>}
-                    {columnVisibility.equity && <th className={`smt-th py-3 px-3 text-left font-semibold uppercase tracking-wider text-xs whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ backgroundColor: '#f0e6d9' }}>Equity</th>}
-                    {columnVisibility.guarantees && <th className={`smt-th py-3 px-3 text-left font-semibold uppercase tracking-wider text-xs whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ backgroundColor: '#f0e6d9' }}>Guarantees</th>}
-                    {columnVisibility.support && <th className={`smt-th py-3 px-3 text-left font-semibold uppercase tracking-wider text-xs whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ backgroundColor: '#f0e6d9' }}>Support</th>}
-                    {columnVisibility.services && <th className={`smt-th py-3 px-3 text-left font-semibold uppercase tracking-wider text-xs whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ backgroundColor: '#f0e6d9' }}>Services</th>}
-                    {columnVisibility.action && <th className={`smt-th py-3 px-3 text-center font-semibold uppercase tracking-wider text-xs whitespace-nowrap sticky top-0 z-20`} style={{ minWidth: '190px', backgroundColor: '#f0e6d9' }}>Actions</th>}
+                    {columnVisibility.fundingStage && (
+                      <th className={`smt-th py-3 px-3 text-left font-semibold uppercase tracking-wider text-xs whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ backgroundColor: '#4a352f' }}>
+                        <div className="flex items-center gap-1">
+                          Funding Stage
+                          <FilterTrigger type="fundingStage" active={localFilters.fundingStage.length > 0} />
+                        </div>
+                      </th>
+                    )}
+                    {columnVisibility.fundingRequired && <th className={`smt-th py-3 px-3 text-left font-semibold uppercase tracking-wider text-xs whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ backgroundColor: '#4a352f' }}><button type="button" onClick={() => handleSort('fundingAmount')} className="smt-th-btn flex items-center gap-1">Funding <span className="flex flex-col -space-y-1 opacity-60"><ArrowUp size={10} /><ArrowDown size={10} /></span></button></th>}
+                    {columnVisibility.status && (
+                      <th className={`smt-th py-3 px-3 text-left font-semibold uppercase tracking-wider text-xs whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ backgroundColor: '#4a352f' }}>
+                        <div className="flex items-center gap-1">
+                          Status
+                          <FilterTrigger type="status" active={localFilters.status.length > 0} />
+                        </div>
+                      </th>
+                    )}
+                    {columnVisibility.applied && <th className={`smt-th py-3 px-3 text-left font-semibold uppercase tracking-wider text-xs whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ backgroundColor: '#4a352f' }}><button type="button" onClick={() => handleSort('applicationDateRaw')} className="smt-th-btn flex items-center gap-1">Applied <span className="flex flex-col -space-y-1 opacity-60"><ArrowUp size={10} /><ArrowDown size={10} /></span></button></th>}
+                    {columnVisibility.daysInStage && <th className={`smt-th py-3 px-3 text-left font-semibold uppercase tracking-wider text-xs whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ backgroundColor: '#4a352f' }}><button type="button" onClick={() => handleSort('daysInStage')} className="smt-th-btn flex items-center gap-1">Days in Stage <span className="flex flex-col -space-y-1 opacity-60"><ArrowUp size={10} /><ArrowDown size={10} /></span></button></th>}
+                    {columnVisibility.lastActivity && <th className={`smt-th py-3 px-3 text-left font-semibold uppercase tracking-wider text-xs whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ backgroundColor: '#4a352f' }}>Last Activity</th>}
+                    {columnVisibility.location && <th className={`smt-th py-3 px-3 text-left font-semibold uppercase tracking-wider text-xs whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ backgroundColor: '#4a352f' }}>Location</th>}
+                    {columnVisibility.sector && (
+                      <th className={`smt-th py-3 px-3 text-left font-semibold uppercase tracking-wider text-xs whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ backgroundColor: '#4a352f' }}>
+                        <div className="flex items-center gap-1">
+                          Sector
+                          <FilterTrigger type="sector" active={localFilters.sector.length > 0} />
+                        </div>
+                      </th>
+                    )}
+                    {columnVisibility.equity && <th className={`smt-th py-3 px-3 text-left font-semibold uppercase tracking-wider text-xs whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ backgroundColor: '#4a352f' }}>Equity</th>}
+                    {columnVisibility.guarantees && <th className={`smt-th py-3 px-3 text-left font-semibold uppercase tracking-wider text-xs whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ backgroundColor: '#4a352f' }}>Guarantees</th>}
+                    {columnVisibility.support && <th className={`smt-th py-3 px-3 text-left font-semibold uppercase tracking-wider text-xs whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ backgroundColor: '#4a352f' }}>Support</th>}
+                    {columnVisibility.services && <th className={`smt-th py-3 px-3 text-left font-semibold uppercase tracking-wider text-xs whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ backgroundColor: '#4a352f' }}>Services</th>}
+                    {columnVisibility.action && <th className={`smt-th py-3 px-3 text-center font-semibold uppercase tracking-wider text-xs whitespace-nowrap sticky top-0 z-20`} style={{ minWidth: '190px', backgroundColor: '#4a352f' }}>Actions</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -873,17 +812,28 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
                       const bigScoreLabel = getBigScoreLabel(sme.bigScore);
                       const matchLabel = getMatchLabel(sme.matchPercentage);
                       const statusStyle = getStatusStyle(sme.currentStatus);
-                      const contextualAction = getContextualAction(sme);
+                      const isTerminalNegative = /declined|withdrawn/i.test(statusStyle.stage.name || "");
+                      const nextStageLabel = sme.nextStage || "—";
                       const smeKey = `${sme.id}_${sme.programIndex}`;
                       const currentStatus = updatedStages[smeKey] || sme.currentStatus;
                       const showNDAButton = mapStatusToStageId(currentStatus) === "evaluation";
                       const ndaSent = sentNDAs[smeKey];
+                      // Keep the function call for sorting but don't display the flag
                       const attentionReasons = getAttentionReasons(sme);
 
                       return (
-                        <tr key={smeKey} className="border-b border-[#f0e6d9] hover:bg-[#fdf8f4] transition-all">
+                        <tr
+                          key={smeKey}
+                          className="border-b border-[#f0e6d9] transition-all"
+                          style={{ backgroundColor: hoveredRowKey === smeKey ? '#fdf8f4' : undefined }}
+                          onMouseEnter={() => setHoveredRowKey(smeKey)}
+                          onMouseLeave={() => setHoveredRowKey(null)}
+                        >
                           {columnVisibility.sme && (
-                            <td className={`${ds.cell} ${ds.fontSize} text-[#4a352f] sticky left-0 bg-white border-r border-[#f0e6d9] z-10`} style={{ minWidth: '220px', maxWidth: '260px' }}>
+                            <td
+                              className={`${ds.cell} ${ds.fontSize} text-[#4a352f] sticky left-0 border-r border-b border-[#f0e6d9] z-10 transition-colors`}
+                              style={{ minWidth: '220px', maxWidth: '260px', backgroundColor: hoveredRowKey === smeKey ? '#fdf8f4' : '#ffffff' }}
+                            >
                               <div className="flex items-start gap-2">
                                 <div className={`${ds.avatarSize} rounded-full bg-gradient-to-br from-[#7d5a50] to-[#4a352f] flex items-center justify-center text-white font-bold text-xs flex-shrink-0 mt-0.5`}>{sme.name.charAt(0)}</div>
                                 <div className="flex-1 min-w-0">
@@ -899,15 +849,6 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
                                     >
                                       <Eye size={13} />
                                     </button>
-                                    {/* Attention indicator (feedback #11) */}
-                                    {attentionReasons.length > 0 && (
-                                      <span
-                                        className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-[#fff3e0] text-[#e65100] flex-shrink-0"
-                                        title={`Action required: ${attentionReasons.join(", ")}`}
-                                      >
-                                        <Flag size={9} /> Action
-                                      </span>
-                                    )}
                                   </div>
                                 </div>
                               </div>
@@ -928,9 +869,6 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
                             </td>
                           )}
                           {columnVisibility.match && (
-                            // Feedback #5: percentage + label + a horizontal fit
-                            // bar, replacing the star rating (which read like a
-                            // customer-satisfaction score rather than a fit score).
                             <td className={`${ds.cell} text-center cursor-pointer`} onClick={(e) => openPopupFromEvent('match', sme, e)}>
                               <div className="flex flex-col items-center gap-1 w-full max-w-[90px] mx-auto">
                                 <span className={`${ds.fontSize} font-normal text-[#4a352f]`}>{sme.matchPercentage}%</span>
@@ -964,27 +902,26 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
                           {columnVisibility.support && <td className={`${ds.cell} ${ds.fontSize} text-[#4a352f]`}><span className="line-clamp-1">{sme.supportRequired}</span></td>}
                           {columnVisibility.services && <td className={`${ds.cell} ${ds.fontSize} text-[#4a352f]`}><span className="line-clamp-1">{sme.servicesRequired}</span></td>}
                           {columnVisibility.action && (
-                            // Feedback #9: primary action + a separate ⋮ menu
-                            // button for secondary actions. Previously these
-                            // were visually fused with a hard divider line and
-                            // a column too narrow for the label, so "Review
-                            // Match" / "Send Offer" wrapped to two lines and
-                            // looked cramped — widened the column and gave
-                            // each button its own rounded shape and breathing
-                            // room instead.
                             <td className={`${ds.cell} text-center`} style={{ minWidth: '190px' }}>
                               <div className="flex items-center justify-center gap-1.5">
                                 <button
-                                  onClick={(e) => openPopupFromEvent('stage', sme, e)}
-                                  className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold text-white whitespace-nowrap transition-all hover:shadow-md hover:brightness-105"
-                                  style={{ backgroundColor: contextualAction.color }}
+                                  onClick={(e) => { if (!isTerminalNegative) openPopupFromEvent('stage', sme, e); }}
+                                  disabled={isTerminalNegative}
+                                  title={isTerminalNegative ? `${statusStyle.stage.name} — no further stage` : `Move to ${nextStageLabel}`}
+                                  className={`inline-flex items-center justify-center gap-1.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all flex-shrink-0 ${
+                                    isTerminalNegative
+                                      ? "bg-[#e6d7c3]/60 text-[#a89482] cursor-not-allowed"
+                                      : "text-white hover:shadow-md hover:brightness-105"
+                                  }`}
+                                  style={{ width: '128px', height: '34px', backgroundColor: isTerminalNegative ? undefined : "#7d5a50" }}
                                 >
-                                  {contextualAction.icon} {contextualAction.label}
+                                  {!isTerminalNegative && <ArrowRight size={13} className="flex-shrink-0" />}
+                                  <span className="truncate">{isTerminalNegative ? statusStyle.stage.name : nextStageLabel}</span>
                                 </button>
                                 <button
                                   onClick={(e) => openPopupFromEvent('quickActions', sme, e)}
-                                  className="inline-flex items-center justify-center w-8 h-8 rounded-lg border transition-all hover:bg-[#f5f0e1]"
-                                  style={{ borderColor: contextualAction.color + '50', color: contextualAction.color }}
+                                  className="inline-flex items-center justify-center w-8 h-8 rounded-lg border transition-all hover:bg-[#f5f0e1] flex-shrink-0"
+                                  style={{ borderColor: "#7d5a5050", color: "#7d5a50" }}
                                   title="More actions"
                                 >
                                   <MoreVertical size={14} />
@@ -1023,7 +960,105 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
         )}
       </div>
 
-      {/* ─── BIG Score Popup ─────────────────────────────────────────────────── */}
+      {/* ─── Column header filter popover ───────────────────────────────────── */}
+      {headerFilterOpen && (
+        <PopupPortal>
+          <div className="fixed inset-0 z-[1090]" onClick={closeHeaderFilter} />
+          <div
+            className="fixed z-[1091] bg-white rounded-2xl shadow-2xl border border-[#e6d7c3] p-4"
+            style={{
+              top: headerFilterOpen.rect.bottom + 8,
+              left: Math.min(Math.max(headerFilterOpen.rect.left - 20, 12), window.innerWidth - 292),
+              width: '280px',
+            }}
+          >
+            {headerFilterOpen.type === 'name' && (
+              <>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-semibold text-[#4a352f]">Filter by business name</label>
+                  {localFilters.name && (
+                    <button onClick={() => setLocalFilters(prev => ({ ...prev, name: '' }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>
+                  )}
+                </div>
+                <input
+                  autoFocus
+                  type="text"
+                  value={localFilters.name}
+                  onChange={(e) => { setLocalFilters(prev => ({ ...prev, name: e.target.value })); setCurrentPage(1); }}
+                  placeholder="Search business name..."
+                  className="w-full px-3 py-2 border border-[#c8b6a6] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#7d5a50]/20"
+                />
+              </>
+            )}
+
+            {headerFilterOpen.type === 'bigScore' && (
+              <>
+                <div className="flex items-center justify-between mb-3">
+                  <label className="text-xs font-semibold text-[#4a352f]">BIG Score: {localFilters.bigScoreRange[0]} - {localFilters.bigScoreRange[1]}</label>
+                  {(localFilters.bigScoreRange[0] > 0 || localFilters.bigScoreRange[1] < 100) && (
+                    <button onClick={() => setLocalFilters(prev => ({ ...prev, bigScoreRange: [0, 100] }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>
+                  )}
+                </div>
+                <div className="flex items-center gap-3 mb-3">
+                  <input type="number" min="0" max="100" value={localFilters.bigScoreRange[0]} onChange={(e) => setLocalFilters(prev => ({ ...prev, bigScoreRange: [Math.min(parseInt(e.target.value) || 0, prev.bigScoreRange[1]), prev.bigScoreRange[1]] }))} className="w-16 px-2 py-1.5 border border-[#c8b6a6] rounded-lg text-sm text-center" />
+                  <span className="text-[#7d5a50]">to</span>
+                  <input type="number" min="0" max="100" value={localFilters.bigScoreRange[1]} onChange={(e) => setLocalFilters(prev => ({ ...prev, bigScoreRange: [prev.bigScoreRange[0], Math.max(parseInt(e.target.value) || 0, prev.bigScoreRange[0])] }))} className="w-16 px-2 py-1.5 border border-[#c8b6a6] rounded-lg text-sm text-center" />
+                </div>
+                <input type="range" min="0" max="100" value={localFilters.bigScoreRange[0]} onChange={(e) => setLocalFilters(prev => ({ ...prev, bigScoreRange: [parseInt(e.target.value), prev.bigScoreRange[1]] }))} className="w-full accent-[#7d5a50]" />
+              </>
+            )}
+
+            {headerFilterOpen.type === 'status' && (
+              <>
+                <div className="flex items-center justify-between mb-3">
+                  <label className="text-xs font-semibold text-[#4a352f]">Status</label>
+                  {localFilters.status.length > 0 && (
+                    <button onClick={() => setLocalFilters(prev => ({ ...prev, status: [] }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {DEFAULT_STAGES.map(s => (
+                    <button key={s.id} onClick={() => setLocalFilters(prev => ({ ...prev, status: prev.status.includes(s.name) ? prev.status.filter(x => x !== s.name) : [...prev.status, s.name] }))} className={`px-2.5 py-1 rounded-full text-xs font-medium ${localFilters.status.includes(s.name) ? 'bg-[#7d5a50] text-white' : 'bg-[#f5f0e1] text-[#4a352f] hover:bg-[#e6d7c3]'}`}>{s.name}</button>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {headerFilterOpen.type === 'fundingStage' && (
+              <>
+                <div className="flex items-center justify-between mb-3">
+                  <label className="text-xs font-semibold text-[#4a352f]">Funding Stage</label>
+                  {localFilters.fundingStage.length > 0 && (
+                    <button onClick={() => setLocalFilters(prev => ({ ...prev, fundingStage: [] }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {["Startup","Growth","Scale","Established"].map(s => (
+                    <button key={s} onClick={() => setLocalFilters(prev => ({ ...prev, fundingStage: prev.fundingStage.includes(s) ? prev.fundingStage.filter(x => x !== s) : [...prev.fundingStage, s] }))} className={`px-2.5 py-1 rounded-full text-xs font-medium ${localFilters.fundingStage.includes(s) ? 'bg-[#7d5a50] text-white' : 'bg-[#f5f0e1] text-[#4a352f] hover:bg-[#e6d7c3]'}`}>{s}</button>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {headerFilterOpen.type === 'sector' && (
+              <>
+                <div className="flex items-center justify-between mb-3">
+                  <label className="text-xs font-semibold text-[#4a352f]">Sector</label>
+                  {localFilters.sector.length > 0 && (
+                    <button onClick={() => setLocalFilters(prev => ({ ...prev, sector: [] }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-1.5 max-h-[180px] overflow-y-auto">
+                  {sectorOptions.length === 0 && <span className="text-xs text-[#a89482]">No sector data available</span>}
+                  {sectorOptions.map(s => (
+                    <button key={s} onClick={() => setLocalFilters(prev => ({ ...prev, sector: prev.sector.includes(s) ? prev.sector.filter(x => x !== s) : [...prev.sector, s] }))} className={`px-2.5 py-1 rounded-full text-xs font-medium ${localFilters.sector.includes(s) ? 'bg-[#7d5a50] text-white' : 'bg-[#f5f0e1] text-[#4a352f] hover:bg-[#e6d7c3]'}`}>{s}</button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        </PopupPortal>
+      )}
       {activePopup?.type === 'bigScore' && selectedSMEForPopup && (
         <PopupPortal>
           <div className="fixed inset-0 z-[1000]" onClick={closePopup} />
@@ -1067,7 +1102,7 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
         </PopupPortal>
       )}
 
-      {/* ─── Match Breakdown Popup ("Why this match?" — feedback #7) ─────────── */}
+      {/* ─── Match Breakdown Popup ─────────────────────────────────────────── */}
       {activePopup?.type === 'match' && selectedSMEForPopup && (
         <PopupPortal>
           <div className="fixed inset-0 z-[1000]" onClick={closePopup} />
@@ -1286,8 +1321,4 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
   );
 }
 
-// Default export added alongside the named export above so this component
-// resolves correctly whether the importing file does
-// `import SupportSMETable from "./SupportSMETable"` (default) or
-// `import { SupportSMETable } from "./SupportSMETable"` (named).
 export default SupportSMETable;
