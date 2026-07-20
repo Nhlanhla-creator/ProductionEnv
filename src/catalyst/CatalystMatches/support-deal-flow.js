@@ -78,7 +78,7 @@ const STAGE_ACTION_FIELDS = [
   { key: "showTermSheet", label: "Offer/agreement upload" },
 ];
 
-const StageCustomizePanel = ({ stages, customization, onChange, onClose }) => {
+const StageCustomizePanel = ({ stages, customization, onChange, onClose, programmeType, setProgrammeType }) => {
   const [localRenames, setLocalRenames] = useState(customization.renames || {});
   const [localHidden, setLocalHidden] = useState(customization.hidden || []);
   const [localOrder, setLocalOrder] = useState(stages.map((s) => s.id));
@@ -129,17 +129,35 @@ const StageCustomizePanel = ({ stages, customization, onChange, onClose }) => {
 
   return (
     <PopupPortal>
-      <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-[#4a352f]/40 backdrop-blur-sm" onClick={onClose}>
+      <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-[#4a352f]/40 backdrop-blur-sm font-sans" onClick={onClose}>
         <div className="bg-white rounded-3xl shadow-2xl border border-[#e6d7c3] w-[540px] max-h-[85vh] overflow-y-auto p-7" onClick={(e) => e.stopPropagation()}>
           <div className="flex items-center justify-between mb-5">
             <div>
-              <h3 className="text-xl font-bold text-[#4a352f]">Customize Pipeline</h3>
+              <h3 className="text-xl font-bold text-[#4a352f]">Customize Stages</h3>
               <p className="text-xs text-[#7d5a50] mt-0.5">Rename, hide, reorder, or add custom stages</p>
             </div>
             <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-[#f5f0e1] transition-colors text-[#7d5a50]">
               <X size={20} />
             </button>
           </div>
+
+          {setProgrammeType && (
+            <div className="mb-5">
+              <label className="block text-xs font-semibold text-[#4a352f] mb-2">Programme Type</label>
+              <select
+                value={programmeType}
+                onChange={(e) => setProgrammeType(e.target.value)}
+                className="w-full px-3 py-2.5 bg-[#faf7f2] border border-[#e6d7c3] rounded-xl text-sm font-semibold text-[#4a352f] focus:outline-none focus:ring-2 focus:ring-[#7d5a50]/20 cursor-pointer"
+                title="Choose the stage sequence for this programme type"
+              >
+                {Object.entries(PROGRAMME_TEMPLATES).map(([key, tpl]) => (
+                  <option key={key} value={key}>{tpl.label}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          <p className="text-xs font-semibold text-[#a89482] uppercase tracking-wide mb-2">Stages in this pipeline</p>
 
           <div className="space-y-2 mb-5 max-h-[280px] overflow-y-auto pr-1">
             {localOrder.map((id, i) => {
@@ -340,49 +358,54 @@ export function SupportDealFlowPipeline({
   const renderStageCard = (stage) => {
     const isHovered = hoveredStage?.id === stage.id;
     const isSelected = selectedStage === stage.id;
-    const count = counts[stage.id] || 0;
+    // Matched is the entry point every SME passes through, so "Matched"
+    // should read as a running total — everyone who has ever been matched,
+    // not just whoever hasn't moved on yet. That's the same number as the
+    // total across every stage (live and terminal).
+    const count = stage.id === "matched" ? totalBusinesses : (counts[stage.id] || 0);
     const percentage = getStagePercentage(count);
     const isNegativeOutcome = stage.terminal && /declined|withdrawn/i.test(stage.name || "");
     const theme = isNegativeOutcome
       ? { from: "#4b4844", to: "#242220" } // dark grey — Declined / Withdrawn
       : { from: "#4a352f", to: "#241a14" }; // dark brown — every other stage
+    const borderColor = isSelected ? "#d9b98a" : "rgba(255,255,255,0.1)";
 
     return (
       <div
         className={`relative flex-shrink-0 cursor-pointer group transition-all duration-300 ${
           isSelected ? "scale-105" : "hover:scale-[1.02]"
         }`}
-        style={{ width: "140px" }}
+        style={{ width: "104px" }}
         onMouseEnter={(e) => setHoveredStage({ id: stage.id, rect: e.currentTarget.getBoundingClientRect() })}
         onMouseLeave={() => setHoveredStage(null)}
         onClick={() => handleStageClick(stage.id)}
       >
         <div
-          className={`rounded-2xl p-4 transition-all duration-300 ${
+          className={`rounded-xl p-2.5 transition-all duration-300 ${
             isHovered || isSelected ? "shadow-xl -translate-y-1" : "shadow-md hover:shadow-lg"
           }`}
           style={{
             background: `linear-gradient(135deg, ${theme.from} 0%, ${theme.to} 100%)`,
-            border: `2px solid ${isSelected ? "#d9b98a" : "rgba(255,255,255,0.1)"}`,
+            border: `1.5px solid ${borderColor}`,
           }}
         >
-          <div className="flex items-center gap-2 mb-2.5">
-            <div className="w-7 h-7 rounded-xl flex items-center justify-center bg-white/10 flex-shrink-0">
-              {getIcon(stage.icon, 14, "#ffffff")}
+          <div className="flex items-center gap-1.5 mb-1.5">
+            <div className="w-5 h-5 rounded-lg flex items-center justify-center bg-white/10 flex-shrink-0">
+              {getIcon(stage.icon, 11, "#ffffff")}
             </div>
-            <h3 className="font-semibold text-white text-[11px] uppercase tracking-wide leading-tight truncate flex-1">{stage.name}</h3>
+            <h3 className="font-semibold text-white text-[9px] uppercase tracking-wide leading-tight truncate flex-1">{stage.name}</h3>
           </div>
-          <div className="flex items-baseline">
-            <span className="text-[28px] font-extrabold leading-none text-white">{count}</span>
+          <div className="flex items-baseline justify-center">
+            <span className="text-lg font-extrabold leading-none text-white">{count}</span>
           </div>
-          <div className="flex items-center gap-2 mt-3">
-            <div className="flex-1 h-2 rounded-full overflow-hidden" style={{ backgroundColor: "rgba(0,0,0,0.3)" }}>
+          <div className="flex items-center gap-1.5 mt-2">
+            <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: "rgba(0,0,0,0.3)" }}>
               <div
                 className="h-full rounded-full transition-all duration-500"
                 style={{ width: `${percentage}%`, backgroundColor: "#c9986a" }}
               />
             </div>
-            <span className="text-[10px] font-semibold flex-shrink-0" style={{ color: "#d9c4b0" }}>{percentage}%</span>
+            <span className="text-[8px] font-semibold flex-shrink-0" style={{ color: "#d9c4b0" }}>{percentage}%</span>
           </div>
         </div>
 
@@ -390,7 +413,7 @@ export function SupportDealFlowPipeline({
         {isHovered && (
           <PopupPortal>
             <div
-              className="fixed z-[1200] pointer-events-none w-[230px]"
+              className="fixed z-[1200] pointer-events-none w-[230px] font-sans"
               style={{
                 top: hoveredStage.rect.bottom + 10,
                 left: Math.min(Math.max(hoveredStage.rect.left + hoveredStage.rect.width / 2 - 115, 12), window.innerWidth - 242),
@@ -412,7 +435,7 @@ export function SupportDealFlowPipeline({
   };
 
   return (
-    <div className={`w-full bg-gradient-to-br from-[#faf7f2] to-[#f5f0e1] rounded-3xl p-7 shadow-xl border border-[#e6d7c3] ${className}`}>
+    <div className={`w-full font-sans bg-gradient-to-br from-[#faf7f2] to-[#f5f0e1] rounded-3xl p-7 shadow-xl border border-[#e6d7c3] ${className}`}>
       {/* Header */}
       <div className="flex items-center justify-between mb-7 flex-wrap gap-5">
         <div className="flex items-center gap-4">
@@ -421,38 +444,31 @@ export function SupportDealFlowPipeline({
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-xl font-bold text-[#4a352f] tracking-tight">DealFlow Pipeline</h2>
+              <h2 className="text-xl font-bold text-[#4a352f] tracking-tight">Dealflow Pipeline</h2>
               <Sparkles size={14} className="text-[#a67c52]" />
             </div>
             <p className="text-xs text-[#7d5a50] mt-0.5">Track your business journey, stage by stage</p>
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <div className="flex items-baseline gap-2 bg-white/70 backdrop-blur-sm px-5 py-2.5 rounded-2xl border border-[#e6d7c3]">
-            <span className="text-3xl font-extrabold text-[#4a352f] leading-none">{totalBusinesses}</span>
-            <span className="text-[10px] text-[#7d5a50] font-semibold uppercase tracking-wide">Businesses</span>
-          </div>
+          <button
+            onClick={() => handleStageClick("matched")}
+            className="flex items-center gap-2 bg-white/70 backdrop-blur-sm px-5 py-2.5 rounded-2xl border transition-all hover:bg-[#f5f0e1]"
+            style={{ borderColor: selectedStage === "matched" ? "#d9b98a" : "#e6d7c3" }}
+            title="Show newly matched businesses"
+          >
+            <span className="text-3xl font-extrabold text-[#4a352f] leading-none">{counts["matched"] || 0}</span>
+            <span className="text-[10px] text-[#7d5a50] font-semibold uppercase tracking-wide">New Businesses</span>
+          </button>
           {showFilter && (
-            <div className="flex items-center gap-1.5 bg-white/70 backdrop-blur-sm p-1.5 rounded-2xl border border-[#e6d7c3]">
-              <select
-                value={programmeType}
-                onChange={(e) => setProgrammeType(e.target.value)}
-                className="px-3 py-1.5 bg-transparent border-0 rounded-xl text-sm font-semibold text-[#4a352f] focus:outline-none focus:ring-2 focus:ring-[#7d5a50]/30 hover:bg-[#f5f0e1] transition-colors cursor-pointer"
-                title="Choose the stage sequence for this programme type"
-              >
-                {Object.entries(PROGRAMME_TEMPLATES).map(([key, tpl]) => (
-                  <option key={key} value={key}>{tpl.label}</option>
-                ))}
-              </select>
-              <div className="w-px h-5 bg-[#e6d7c3]" />
-              <button
-                onClick={() => setShowCustomizePanel(true)}
-                className="p-2 rounded-xl text-[#7d5a50] hover:bg-[#f5f0e1] hover:text-[#4a352f] transition-all"
-                title="Rename, hide, reorder, or add stages"
-              >
-                <Settings size={16} />
-              </button>
-            </div>
+            <button
+              onClick={() => setShowCustomizePanel(true)}
+              className="flex items-center gap-2 bg-white/70 backdrop-blur-sm px-5 py-2.5 rounded-2xl border border-[#e6d7c3] text-sm font-semibold text-[#4a352f] hover:bg-[#f5f0e1] transition-all"
+              title="Rename, hide, reorder, or add stages"
+            >
+              <Settings size={16} className="text-[#7d5a50]" />
+              Customize Stages
+            </button>
           )}
         </div>
       </div>
@@ -463,12 +479,6 @@ export function SupportDealFlowPipeline({
         <EmptyState />
       ) : (
         <>
-          {/* Caption for pipeline flow direction (the proportional strip
-              that used to sit above this was removed per feedback). */}
-          <div className="mb-4">
-            <p className="text-[10px] text-[#a89482] font-medium">Shape of the pipeline, left to right</p>
-          </div>
-
           {/* Stage Cards */}
           <div className="flex items-stretch overflow-x-auto pb-3 scrollbar-thin scrollbar-thumb-[#c8b6a6] scrollbar-track-transparent gap-1">
             {liveStages.map((stage, idx) => (
@@ -485,7 +495,7 @@ export function SupportDealFlowPipeline({
                   const toCount = cumulativeCounts[nextStage.id] || 0;
                   const rate = fromCount > 0 ? ((toCount / fromCount) * 100).toFixed(1) : "0.0";
                   return (
-                    <div className="flex flex-col items-center px-1 flex-shrink-0" style={{ minWidth: "38px" }}>
+                    <div className="flex flex-col items-center px-0.5 flex-shrink-0" style={{ minWidth: "30px" }}>
                       <span className="text-[10px] font-bold text-[#7d5a50] mb-0.5 whitespace-nowrap" title="Share of this stage that reaches the next">
                         {rate}%
                       </span>
@@ -502,21 +512,36 @@ export function SupportDealFlowPipeline({
             {/* Terminal outcomes now live at the end of the same pipeline
                 row (previously tucked away in a collapsible Insights
                 section) — a slim divider marks them as endpoints, but they
-                use the exact same card shape/size as the flow stages. */}
-            {terminalStages.length > 0 && (
-              <div className="flex items-center flex-shrink-0">
-                <div className="flex flex-col items-center px-2 flex-shrink-0 self-stretch justify-center">
-                  <div className="w-px h-12 bg-[#e6d7c3]" />
+                use the exact same card shape/size as the flow stages.
+                Declined/Withdrawn get one shared red border wrapping the
+                pair, rather than each card having its own. */}
+            {terminalStages.length > 0 && (() => {
+              const negativeStages = terminalStages.filter((s) => /declined|withdrawn/i.test(s.name || ""));
+              const otherStages = terminalStages.filter((s) => !/declined|withdrawn/i.test(s.name || ""));
+              return (
+                <div className="flex items-center flex-shrink-0">
+                  <div className="flex flex-col items-center px-2 flex-shrink-0 self-stretch justify-center">
+                    <div className="w-px h-10 bg-[#e6d7c3]" />
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    {otherStages.map((stage) => (
+                      <div key={stage.id} className="flex-shrink-0">
+                        {renderStageCard(stage)}
+                      </div>
+                    ))}
+                    {negativeStages.length > 0 && (
+                      <div className="flex items-center gap-1.5 flex-shrink-0 p-1.5 rounded-2xl" style={{ border: "2px solid #dc2626" }}>
+                        {negativeStages.map((stage) => (
+                          <div key={stage.id} className="flex-shrink-0">
+                            {renderStageCard(stage)}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  {terminalStages.map((stage) => (
-                    <div key={stage.id} className="flex-shrink-0">
-                      {renderStageCard(stage)}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
+              );
+            })()}
           </div>
 
           <div className="flex items-center mt-4 flex-wrap gap-3">
@@ -545,6 +570,8 @@ export function SupportDealFlowPipeline({
           customization={customization}
           onChange={setCustomization}
           onClose={() => setShowCustomizePanel(false)}
+          programmeType={programmeType}
+          setProgrammeType={setProgrammeType}
         />
       )}
     </div>

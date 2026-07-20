@@ -5,7 +5,7 @@ import {
   Trophy, Users, TrendingUp, Building, MapPin, DollarSign, Calendar, Eye, Wrench,
   Loader, RefreshCw, X, BarChart3, ChevronDown, ChevronUp, FileText, Ticket, Copy,
   CheckCircle, MoreVertical, AlertCircle, Info, GraduationCap, Layers,
-  SlidersHorizontal, Bookmark, Trash2, StickyNote, Archive,
+  SlidersHorizontal, Trash2, StickyNote, Archive,
   ArrowUpDown, Download, Square, CheckSquare, Plus
 } from "lucide-react"
 import { collection, query, where, getDocs, doc, getDoc, addDoc, updateDoc, arrayUnion, serverTimestamp } from "firebase/firestore"
@@ -58,6 +58,21 @@ const formatDate = (dateValue, { fallback = "Not recorded" } = {}) => {
     month: "short",
     day: "numeric",
   })
+}
+
+// Shared date coercion used by several filters/columns below — handles both
+// Firestore Timestamps and plain date strings, returns null instead of an
+// "Invalid Date" object when the value can't be parsed.
+const toDateSafe = (value) => {
+  if (!value) return null
+  const d = typeof value === "object" && typeof value.toDate === "function" ? value.toDate() : new Date(value)
+  return isNaN(d.getTime()) ? null : d
+}
+
+const daysInProgramme = (cohort) => {
+  const d = toDateSafe(cohort.completionDate)
+  if (!d) return null
+  return Math.max(0, Math.floor((Date.now() - d.getTime()) / (1000 * 60 * 60 * 24)))
 }
 
 // ─── Status vocabulary ──────────────────────────────────────────────────────
@@ -468,13 +483,20 @@ function MyCohorts() {
   // tracks which header's popover is open) rather than a separate search
   // bar or Filters panel.
   const [headerFilterOpen, setHeaderFilterOpen] = useState(null) // { type, rect }
-  const [localFilters, setLocalFilters] = useState({ name: "", sector: [], location: [] })
+  const [localFilters, setLocalFilters] = useState({
+    name: "", sector: [], location: [],
+    hasAllocation: "any", // "any" | "yes" | "no"
+    startDateFrom: "", startDateTo: "",
+    daysRange: [0, 3650],
+    appliedDateFrom: "", appliedDateTo: "",
+    teamSize: [], guarantees: "", services: "",
+    status: [], progress: [],
+  })
   // Drives full-row hover highlighting, including the sticky Business column
   // — that column needs its own opaque background to stay legible while the
   // table scrolls horizontally, which a plain CSS `tr:hover` can't reach.
   const [hoveredRowKey, setHoveredRowKey] = useState(null)
   const [showColumnChooser, setShowColumnChooser] = useState(false)
-  const [showSaveView, setShowSaveView] = useState(false)
   const [viewName, setViewName] = useState("")
   const [savedViews, setSavedViews] = useState(() => {
     if (typeof window === "undefined") return []
@@ -911,8 +933,26 @@ function MyCohorts() {
   // ─── Derived: filter options from real data ──────────────────────────────
   const sectorOptions = useMemo(() => [...new Set(visibleCohorts.map((c) => c.sector).filter((s) => s && s !== "Not specified"))].sort(), [visibleCohorts])
   const locationOptions = useMemo(() => [...new Set(visibleCohorts.map((c) => c.location).filter((l) => l && l !== "Not specified"))].sort(), [visibleCohorts])
+  const teamSizeOptions = useMemo(() => [...new Set(visibleCohorts.map((c) => c.teamSize).filter((t) => t && t !== "Not specified"))].sort(), [visibleCohorts])
+  const statusOptions = useMemo(() => [...new Set(Object.values(STATUS_META).map((m) => m.label))], [])
+  const progressOptions = [
+    { key: "green", label: HEALTH_LABELS.green },
+    { key: "yellow", label: HEALTH_LABELS.yellow },
+    { key: "red", label: HEALTH_LABELS.red },
+    { key: "pending", label: "Pending" },
+  ]
 
-  const activeFilterCount = (localFilters.name.trim() ? 1 : 0) + localFilters.sector.length + localFilters.location.length
+  const activeFilterCount = (localFilters.name.trim() ? 1 : 0)
+    + localFilters.sector.length + localFilters.location.length
+    + (localFilters.hasAllocation !== "any" ? 1 : 0)
+    + (localFilters.startDateFrom || localFilters.startDateTo ? 1 : 0)
+    + (localFilters.daysRange[0] > 0 || localFilters.daysRange[1] < 3650 ? 1 : 0)
+    + (localFilters.appliedDateFrom || localFilters.appliedDateTo ? 1 : 0)
+    + localFilters.teamSize.length
+    + (localFilters.guarantees.trim() ? 1 : 0)
+    + (localFilters.services.trim() ? 1 : 0)
+    + localFilters.status.length
+    + localFilters.progress.length
 
   // ─── Filtering, search, sort ──────────────────────────────────────────────
   const filteredCohorts = useMemo(() => {
@@ -932,6 +972,64 @@ function MyCohorts() {
 
     if (localFilters.sector.length > 0) result = result.filter((c) => localFilters.sector.includes(c.sector))
     if (localFilters.location.length > 0) result = result.filter((c) => localFilters.location.includes(c.location))
+
+    if (localFilters.hasAllocation !== "any") {
+      result = result.filter((c) => {
+        const hasAlloc = !!(c.dealAmount && c.dealAmount !== "Not specified")
+        return localFilters.hasAllocation === "yes" ? hasAlloc : !hasAlloc
+      })
+    }
+
+    if (localFilters.startDateFrom || localFilters.startDateTo) {
+      result = result.filter((c) => {
+        const d = toDateSafe(c.completionDate)
+        if (!d) return false
+        if (localFilters.startDateFrom && d < new Date(localFilters.startDateFrom)) return false
+        if (localFilters.startDateTo && d > new Date(localFilters.startDateTo + "T23:59:59")) return false
+        return true
+      })
+    }
+
+    if (localFilters.daysRange[0] > 0 || localFilters.daysRange[1] < 3650) {
+      result = result.filter((c) => {
+        const days = daysInProgramme(c)
+        if (days === null) return false
+        return days >= localFilters.daysRange[0] && days <= localFilters.daysRange[1]
+      })
+    }
+
+    if (localFilters.appliedDateFrom || localFilters.appliedDateTo) {
+      result = result.filter((c) => {
+        const d = toDateSafe(c.applicationDateRaw)
+        if (!d) return false
+        if (localFilters.appliedDateFrom && d < new Date(localFilters.appliedDateFrom)) return false
+        if (localFilters.appliedDateTo && d > new Date(localFilters.appliedDateTo + "T23:59:59")) return false
+        return true
+      })
+    }
+
+    if (localFilters.teamSize.length > 0) result = result.filter((c) => localFilters.teamSize.includes(c.teamSize))
+
+    if (localFilters.guarantees.trim()) {
+      const q = localFilters.guarantees.toLowerCase().trim()
+      result = result.filter((c) => (c.guarantees || "").toLowerCase().includes(q))
+    }
+
+    if (localFilters.services.trim()) {
+      const q = localFilters.services.toLowerCase().trim()
+      result = result.filter((c) => (c.servicesRequired || "").toLowerCase().includes(q))
+    }
+
+    if (localFilters.status.length > 0) {
+      result = result.filter((c) => localFilters.status.includes(getStatusMeta(c.currentStatus).label))
+    }
+
+    if (localFilters.progress.length > 0) {
+      result = result.filter((c) => {
+        const key = c.health?.overall || "pending"
+        return localFilters.progress.includes(key)
+      })
+    }
 
     return [...result].sort((a, b) => {
       const rankDiff = cohortSortRank(a) - cohortSortRank(b)
@@ -991,12 +1089,11 @@ function MyCohorts() {
       try { window.localStorage.setItem(SAVED_VIEWS_STORAGE_KEY, JSON.stringify(next)) } catch {}
       return next
     })
-    setViewName(""); setShowSaveView(false)
+    setViewName("")
   }
 
   const loadSavedView = (view) => {
     setActiveFilter(view.activeFilter); setColumnVisibility({ ...DEFAULT_COLUMN_VISIBILITY, ...(view.columnVisibility || {}) }); setDensity(view.density)
-    setShowSaveView(false)
   }
 
   const deleteSavedView = (name) => {
@@ -1005,13 +1102,6 @@ function MyCohorts() {
       try { window.localStorage.setItem(SAVED_VIEWS_STORAGE_KEY, JSON.stringify(next)) } catch {}
       return next
     })
-  }
-
-  const daysInProgramme = (cohort) => {
-    if (!cohort.completionDate) return null
-    const d = typeof cohort.completionDate === "object" && cohort.completionDate.toDate ? cohort.completionDate.toDate() : new Date(cohort.completionDate)
-    if (isNaN(d.getTime())) return null
-    return Math.max(0, Math.floor((Date.now() - d.getTime()) / (1000 * 60 * 60 * 24)))
   }
 
   // Spec §6: one contextual primary action instead of always "View
@@ -1061,14 +1151,6 @@ function MyCohorts() {
             >
               <Archive size={14} /> {showArchived ? "Hiding archived: off" : "Show archived"}
             </button>
-            <select
-              value={density}
-              onChange={(e) => setDensity(e.target.value)}
-              className="px-3 py-2.5 bg-white border-2 border-[#c8b6a6] rounded-lg text-xs font-semibold text-[#4a352f] cursor-pointer"
-            >
-              <option value="comfortable">Comfortable</option>
-              <option value="compact">Compact</option>
-            </select>
             <button
               onClick={handleRefresh}
               disabled={refreshing}
@@ -1082,20 +1164,7 @@ function MyCohorts() {
 
         <CohortStagePipeline counts={counts} activeFilter={activeFilter} setActiveFilter={setActiveFilter} />
 
-        {/* Saved views (user-created named layouts — distinct from the
-            quick-filter cards above, so not part of the de-duplication) */}
-        {savedViews.length > 0 && (
-          <div className="flex items-center gap-2 flex-wrap mb-4">
-            {savedViews.map((v) => (
-              <span key={v.name} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold border border-[#c8b6a6] bg-white text-[#4a352f]">
-                <button onClick={() => loadSavedView(v)} className="hover:text-[#7d5a50]">{v.name}</button>
-                <button onClick={() => deleteSavedView(v.name)} className="text-[#a89482] hover:text-red-500"><Trash2 size={11} /></button>
-              </span>
-            ))}
-          </div>
-        )}
-
-        {/* Toolbar: columns, save view (filtering now lives on headers) */}
+        {/* Toolbar: columns, density, save view (filtering lives on headers) */}
         <div className="bg-[#faf7f2] rounded-t-2xl p-4 border border-[#e6d7c3] border-b-0 shadow-sm">
           <div className="flex items-center justify-between gap-4 flex-wrap">
             <div className="flex items-center gap-2">
@@ -1113,7 +1182,7 @@ function MyCohorts() {
                 {showColumnChooser && (
                   <>
                     <div className="fixed inset-0 z-40" onClick={() => setShowColumnChooser(false)} />
-                    <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-2xl shadow-2xl border border-[#e6d7c3] p-4 z-50">
+                    <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-2xl shadow-2xl border border-[#e6d7c3] p-5 z-50 max-h-[560px] overflow-y-auto">
                       <h4 className="text-sm font-semibold text-[#4a352f] mb-2">Column Visibility</h4>
                       {OPTIONAL_COLUMNS.map(({ key, label }) => (
                         <label key={key} className="flex items-center gap-3 py-1.5 px-2 rounded-lg hover:bg-[#faf7f2] cursor-pointer">
@@ -1123,21 +1192,31 @@ function MyCohorts() {
                       ))}
                       <div className="border-t border-[#e6d7c3] my-2" />
                       <button onClick={resetColumns} className="text-xs text-[#7d5a50] underline hover:text-[#4a352f]">Reset to default</button>
-                    </div>
-                  </>
-                )}
-              </div>
 
-              <div className="relative">
-                <button onClick={() => setShowSaveView(!showSaveView)} className="flex items-center gap-2 px-4 py-2.5 bg-white border border-[#c8b6a6] rounded-xl text-sm text-[#4a352f] hover:bg-[#f5f0e1] transition-all shadow-sm">
-                  <Bookmark size={16} /> Save View
-                </button>
-                {showSaveView && (
-                  <>
-                    <div className="fixed inset-0 z-40" onClick={() => setShowSaveView(false)} />
-                    <div className="absolute right-0 top-full mt-2 w-72 bg-white rounded-2xl shadow-2xl border border-[#e6d7c3] p-4 z-50">
-                      <h4 className="text-sm font-semibold text-[#4a352f] mb-2">Save current layout</h4>
-                      <div className="flex items-center gap-2">
+                      {/* Density — was a separate dropdown up in the page
+                          header, folded in here so there's one place to
+                          shape how the table looks. */}
+                      <div className="border-t border-[#e6d7c3] my-4" />
+                      <h4 className="text-sm font-semibold text-[#4a352f] mb-3">Density</h4>
+                      <div className="flex gap-1.5">
+                        {[{ key: 'comfortable', label: 'Comfortable' }, { key: 'compact', label: 'Compact' }].map((d) => (
+                          <button
+                            key={d.key}
+                            onClick={() => setDensity(d.key)}
+                            className={`flex-1 px-2 py-1.5 rounded-lg text-xs font-semibold transition-all ${density === d.key ? 'bg-[#7d5a50] text-white' : 'bg-[#f5f0e1] text-[#4a352f] hover:bg-[#e6d7c3]'}`}
+                          >
+                            {d.label}
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Save View — current column/density layout
+                          auto-saves as you go (see the persistence effect
+                          above), but this lets you also save named
+                          snapshots and switch between them. */}
+                      <div className="border-t border-[#e6d7c3] my-4" />
+                      <h4 className="text-sm font-semibold text-[#4a352f] mb-2">Save View</h4>
+                      <div className="flex items-center gap-2 mb-3">
                         <input
                           value={viewName}
                           onChange={(e) => setViewName(e.target.value)}
@@ -1147,6 +1226,19 @@ function MyCohorts() {
                         />
                         <button onClick={saveCurrentView} disabled={!viewName.trim()} className="px-3 py-1.5 bg-[#7d5a50] text-white rounded-lg text-xs font-semibold disabled:opacity-40">Save</button>
                       </div>
+                      {savedViews.length > 0 && (
+                        <>
+                          <h4 className="text-xs font-semibold text-[#a89482] uppercase tracking-wide mb-2">Saved views</h4>
+                          <div className="space-y-1 max-h-[180px] overflow-y-auto">
+                            {savedViews.map((v) => (
+                              <div key={v.name} className="flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg hover:bg-[#faf7f2]">
+                                <button onClick={() => loadSavedView(v)} className="flex-1 text-left text-sm text-[#4a352f]">{v.name}</button>
+                                <button onClick={() => deleteSavedView(v.name)} className="text-[#a89482] hover:text-red-500 p-1"><Trash2 size={13} /></button>
+                              </div>
+                            ))}
+                          </div>
+                        </>
+                      )}
                     </div>
                   </>
                 )}
@@ -1185,27 +1277,90 @@ function MyCohorts() {
               <table className="w-full border-collapse text-sm">
                 <thead>
                   <tr className="bg-[#4a352f]">
-                    <th className={`mc-th ${rowPad} sticky top-0 left-0 z-30`} style={{ backgroundColor: '#4a352f', width: '40px' }}>
+                    <th className={`mc-th ${rowPad} sticky top-0 left-0 z-30 border-r border-[#e6d7c3]`} style={{ backgroundColor: '#4a352f', width: '40px' }}>
                       <button onClick={() => toggleSelectAll(filteredCohorts)} className="flex items-center justify-center">
                         {allVisibleSelected ? <CheckSquare size={16} /> : <Square size={16} />}
                       </button>
                     </th>
-                    <th className={`mc-th ${rowPad} text-left font-semibold text-xs uppercase tracking-wide whitespace-nowrap sticky top-0 left-0 z-30`} style={{ backgroundColor: '#4a352f' }}>
+                    <th className={`mc-th ${rowPad} text-left font-semibold text-xs uppercase tracking-wide whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 left-0 z-30`} style={{ backgroundColor: '#4a352f' }}>
                       <div className="flex items-center gap-1">
                         Business
                         <FilterTrigger type="business" active={activeFilterCount > 0} />
                       </div>
                     </th>
-                    {columnVisibility.supportValue && <th className={`mc-th ${rowPad} text-left font-semibold text-xs uppercase tracking-wide whitespace-nowrap sticky top-0 z-20`} style={{ backgroundColor: '#4a352f' }}>Support Value</th>}
-                    {columnVisibility.startDate && <th className={`mc-th ${rowPad} text-left font-semibold text-xs uppercase tracking-wide whitespace-nowrap sticky top-0 z-20`} style={{ backgroundColor: '#4a352f' }}>Start Date</th>}
-                    {columnVisibility.daysInProgramme && <th className={`mc-th ${rowPad} text-left font-semibold text-xs uppercase tracking-wide whitespace-nowrap sticky top-0 z-20`} style={{ backgroundColor: '#4a352f' }}>Days in Programme</th>}
-                    {columnVisibility.appliedDate && <th className={`mc-th ${rowPad} text-left font-semibold text-xs uppercase tracking-wide whitespace-nowrap sticky top-0 z-20`} style={{ backgroundColor: '#4a352f' }}>Applied Date</th>}
-                    {columnVisibility.teamSize && <th className={`mc-th ${rowPad} text-left font-semibold text-xs uppercase tracking-wide whitespace-nowrap sticky top-0 z-20`} style={{ backgroundColor: '#4a352f' }}>Employees</th>}
-                    {columnVisibility.guarantees && <th className={`mc-th ${rowPad} text-left font-semibold text-xs uppercase tracking-wide whitespace-nowrap sticky top-0 z-20`} style={{ backgroundColor: '#4a352f' }}>Guarantees</th>}
-                    {columnVisibility.servicesRequired && <th className={`mc-th ${rowPad} text-left font-semibold text-xs uppercase tracking-wide whitespace-nowrap sticky top-0 z-20`} style={{ backgroundColor: '#4a352f' }}>Services</th>}
-                    {columnVisibility.status && <th className={`mc-th ${rowPad} text-left font-semibold text-xs uppercase tracking-wide whitespace-nowrap sticky top-0 z-20`} style={{ backgroundColor: '#4a352f', minWidth: '130px', paddingRight: '8px' }}>Status</th>}
-                    {columnVisibility.progress && <th className={`mc-th ${rowPad} text-left font-semibold text-xs uppercase tracking-wide whitespace-nowrap sticky top-0 z-20`} style={{ backgroundColor: '#4a352f', minWidth: '110px', paddingLeft: '8px' }}>Progress</th>}
-                    <th className={`mc-th ${rowPad} text-center font-semibold text-xs uppercase tracking-wide whitespace-nowrap sticky top-0 z-20`} style={{ backgroundColor: '#4a352f' }}>
+                    {columnVisibility.supportValue && (
+                      <th className={`mc-th ${rowPad} text-left font-semibold text-xs uppercase tracking-wide whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ backgroundColor: '#4a352f' }}>
+                        <div className="flex items-center gap-1">
+                          Support Value
+                          <FilterTrigger type="supportValue" active={localFilters.hasAllocation !== "any"} />
+                        </div>
+                      </th>
+                    )}
+                    {columnVisibility.startDate && (
+                      <th className={`mc-th ${rowPad} text-left font-semibold text-xs uppercase tracking-wide whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ backgroundColor: '#4a352f' }}>
+                        <div className="flex items-center gap-1">
+                          Start Date
+                          <FilterTrigger type="startDate" active={!!(localFilters.startDateFrom || localFilters.startDateTo)} />
+                        </div>
+                      </th>
+                    )}
+                    {columnVisibility.daysInProgramme && (
+                      <th className={`mc-th ${rowPad} text-left font-semibold text-xs uppercase tracking-wide whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ backgroundColor: '#4a352f' }}>
+                        <div className="flex items-center gap-1">
+                          Days in Programme
+                          <FilterTrigger type="daysInProgramme" active={localFilters.daysRange[0] > 0 || localFilters.daysRange[1] < 3650} />
+                        </div>
+                      </th>
+                    )}
+                    {columnVisibility.appliedDate && (
+                      <th className={`mc-th ${rowPad} text-left font-semibold text-xs uppercase tracking-wide whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ backgroundColor: '#4a352f' }}>
+                        <div className="flex items-center gap-1">
+                          Applied Date
+                          <FilterTrigger type="appliedDate" active={!!(localFilters.appliedDateFrom || localFilters.appliedDateTo)} />
+                        </div>
+                      </th>
+                    )}
+                    {columnVisibility.teamSize && (
+                      <th className={`mc-th ${rowPad} text-left font-semibold text-xs uppercase tracking-wide whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ backgroundColor: '#4a352f' }}>
+                        <div className="flex items-center gap-1">
+                          Employees
+                          <FilterTrigger type="teamSize" active={localFilters.teamSize.length > 0} />
+                        </div>
+                      </th>
+                    )}
+                    {columnVisibility.guarantees && (
+                      <th className={`mc-th ${rowPad} text-left font-semibold text-xs uppercase tracking-wide whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ backgroundColor: '#4a352f' }}>
+                        <div className="flex items-center gap-1">
+                          Guarantees
+                          <FilterTrigger type="guarantees" active={!!localFilters.guarantees.trim()} />
+                        </div>
+                      </th>
+                    )}
+                    {columnVisibility.servicesRequired && (
+                      <th className={`mc-th ${rowPad} text-left font-semibold text-xs uppercase tracking-wide whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ backgroundColor: '#4a352f' }}>
+                        <div className="flex items-center gap-1">
+                          Services
+                          <FilterTrigger type="services" active={!!localFilters.services.trim()} />
+                        </div>
+                      </th>
+                    )}
+                    {columnVisibility.status && (
+                      <th className={`mc-th ${rowPad} text-left font-semibold text-xs uppercase tracking-wide whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ backgroundColor: '#4a352f', minWidth: '130px', paddingRight: '8px' }}>
+                        <div className="flex items-center gap-1">
+                          Status
+                          <FilterTrigger type="status" active={localFilters.status.length > 0} />
+                        </div>
+                      </th>
+                    )}
+                    {columnVisibility.progress && (
+                      <th className={`mc-th ${rowPad} text-left font-semibold text-xs uppercase tracking-wide whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ backgroundColor: '#4a352f', minWidth: '110px', paddingLeft: '8px' }}>
+                        <div className="flex items-center gap-1">
+                          Progress
+                          <FilterTrigger type="progress" active={localFilters.progress.length > 0} />
+                        </div>
+                      </th>
+                    )}
+                    <th className={`mc-th ${rowPad} text-center font-semibold text-xs uppercase tracking-wide whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ backgroundColor: '#4a352f' }}>
                       Action
                     </th>
                   </tr>
@@ -1228,13 +1383,13 @@ function MyCohorts() {
                           onMouseEnter={() => setHoveredRowKey(cohort.id)}
                           onMouseLeave={() => setHoveredRowKey(null)}
                         >
-                          <td className={`${rowPad}`}>
+                          <td className={`${rowPad} border-r border-[#e6d7c3]`}>
                             <button onClick={() => toggleRowSelected(cohort.id)} className="flex items-center justify-center">
                               {selectedRows.has(cohort.id) ? <CheckSquare size={16} className="text-[#7d5a50]" /> : <Square size={16} className="text-[#c8b6a6]" />}
                             </button>
                           </td>
                           <td
-                            className={`${rowPad} sticky left-0 z-10 border-r border-b border-[#f0e6d9] transition-colors`}
+                            className={`${rowPad} sticky left-0 z-10 border-r border-b border-[#e6d7c3] transition-colors`}
                             style={{ minWidth: '220px', backgroundColor: hoveredRowKey === cohort.id ? '#faf7f2' : '#ffffff' }}
                           >
                             <div className="flex items-start gap-1.5">
@@ -1263,43 +1418,43 @@ function MyCohorts() {
                           </td>
 
                           {columnVisibility.supportValue && (
-                            <td className={`${rowPad}`} style={{ minWidth: '130px' }}>
+                            <td className={`${rowPad} border-r border-[#e6d7c3]`} style={{ minWidth: '130px' }}>
                               <span className="font-semibold text-[#4a352f]">{formatCurrency(cohort.dealAmount)}</span>
                             </td>
                           )}
 
                           {columnVisibility.startDate && (
-                            <td className={`${rowPad}`} style={{ minWidth: '120px' }}>
+                            <td className={`${rowPad} border-r border-[#e6d7c3]`} style={{ minWidth: '120px' }}>
                               <span className="text-[#5d4037]">{formatDate(cohort.completionDate)}</span>
                             </td>
                           )}
 
                           {columnVisibility.daysInProgramme && (
-                            <td className={`${rowPad}`} style={{ minWidth: '120px' }}>
+                            <td className={`${rowPad} border-r border-[#e6d7c3]`} style={{ minWidth: '120px' }}>
                               <span className="text-[#5d4037]">{days === null ? "Not available" : `${days} days`}</span>
                             </td>
                           )}
 
                           {columnVisibility.appliedDate && (
-                            <td className={`${rowPad}`} style={{ minWidth: '120px' }}>
+                            <td className={`${rowPad} border-r border-[#e6d7c3]`} style={{ minWidth: '120px' }}>
                               <span className="text-[#5d4037]">{cohort.applicationDate}</span>
                             </td>
                           )}
 
                           {columnVisibility.teamSize && (
-                            <td className={`${rowPad}`}><span className="text-[#5d4037]">{cohort.teamSize}</span></td>
+                            <td className={`${rowPad} border-r border-[#e6d7c3]`}><span className="text-[#5d4037]">{cohort.teamSize}</span></td>
                           )}
 
                           {columnVisibility.guarantees && (
-                            <td className={`${rowPad}`}><span className="text-[#5d4037] line-clamp-1">{cohort.guarantees}</span></td>
+                            <td className={`${rowPad} border-r border-[#e6d7c3]`}><span className="text-[#5d4037] line-clamp-1">{cohort.guarantees}</span></td>
                           )}
 
                           {columnVisibility.servicesRequired && (
-                            <td className={`${rowPad}`}><span className="text-[#5d4037] line-clamp-1">{cohort.servicesRequired}</span></td>
+                            <td className={`${rowPad} border-r border-[#e6d7c3]`}><span className="text-[#5d4037] line-clamp-1">{cohort.servicesRequired}</span></td>
                           )}
 
                           {columnVisibility.status && (
-                            <td className={`${rowPad}`} style={{ minWidth: '130px', paddingRight: '8px' }}>
+                            <td className={`${rowPad} border-r border-[#e6d7c3]`} style={{ minWidth: '130px', paddingRight: '8px' }}>
                               <div className="flex items-center gap-1.5 flex-wrap">
                                 <span
                                   className="px-2.5 py-1 rounded-full text-xs font-semibold inline-block whitespace-nowrap"
@@ -1321,7 +1476,7 @@ function MyCohorts() {
                           )}
 
                           {columnVisibility.progress && (
-                            <td className={`${rowPad}`} style={{ minWidth: '110px', paddingLeft: '8px' }}>
+                            <td className={`${rowPad} border-r border-[#e6d7c3]`} style={{ minWidth: '110px', paddingLeft: '8px' }}>
                               <button
                                 onClick={(e) => openHealthPopover(cohort, e)}
                                 className="px-2.5 py-1 rounded-full text-xs font-semibold inline-flex items-center gap-1.5 whitespace-nowrap"
@@ -1414,7 +1569,7 @@ function MyCohorts() {
                 ? <>No SMEs have entered this cohort yet. Businesses will appear here once support is approved and they reach an active stage.</>
                 : activeFilter === "inProgramme"
                   ? <>There are currently no active SMEs in this programme.</>
-                  : <>No SMEs match the selected filters. <button onClick={() => { setActiveFilter("inProgramme"); setLocalFilters({ name: "", sector: [], location: [] }) }} className="underline hover:text-[#4a352f]">Clear filters</button></>}
+                  : <>No SMEs match the selected filters. <button onClick={() => { setActiveFilter("inProgramme"); setLocalFilters({ name: "", sector: [], location: [], hasAllocation: "any", startDateFrom: "", startDateTo: "", daysRange: [0, 3650], appliedDateFrom: "", appliedDateTo: "", teamSize: [], guarantees: "", services: "", status: [], progress: [] }) }} className="underline hover:text-[#4a352f]">Clear filters</button></>}
             </p>
           </div>
         )}
@@ -1477,6 +1632,161 @@ function MyCohorts() {
                   {locationOptions.length === 0 && <span className="text-xs text-[#a89482]">No location data available</span>}
                   {locationOptions.map((l) => (
                     <button key={l} onClick={() => setLocalFilters((prev) => ({ ...prev, location: prev.location.includes(l) ? prev.location.filter((x) => x !== l) : [...prev.location, l] }))} className={`px-2.5 py-1 rounded-full text-xs font-medium ${localFilters.location.includes(l) ? 'bg-[#7d5a50] text-white' : 'bg-[#f5f0e1] text-[#4a352f] hover:bg-[#e6d7c3]'}`}>{l}</button>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {headerFilterOpen.type === 'supportValue' && (
+              <>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-semibold text-[#4a352f]">Support Value</label>
+                  {localFilters.hasAllocation !== "any" && (
+                    <button onClick={() => setLocalFilters((prev) => ({ ...prev, hasAllocation: "any" }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>
+                  )}
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  {[{ key: "any", label: "Any" }, { key: "yes", label: "Has allocation" }, { key: "no", label: "No allocation" }].map((opt) => (
+                    <button
+                      key={opt.key}
+                      onClick={() => setLocalFilters((prev) => ({ ...prev, hasAllocation: opt.key }))}
+                      className={`text-left px-3 py-2 rounded-lg text-sm font-medium ${localFilters.hasAllocation === opt.key ? 'bg-[#7d5a50] text-white' : 'bg-[#f5f0e1] text-[#4a352f] hover:bg-[#e6d7c3]'}`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {headerFilterOpen.type === 'startDate' && (
+              <>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-semibold text-[#4a352f]">Start Date</label>
+                  {(localFilters.startDateFrom || localFilters.startDateTo) && (
+                    <button onClick={() => setLocalFilters((prev) => ({ ...prev, startDateFrom: '', startDateTo: '' }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>
+                  )}
+                </div>
+                <label className="block text-[10px] text-[#7d5a50] mb-1">From</label>
+                <input type="date" value={localFilters.startDateFrom} onChange={(e) => setLocalFilters((prev) => ({ ...prev, startDateFrom: e.target.value }))} className="w-full px-3 py-2 border border-[#c8b6a6] rounded-lg text-sm mb-3" />
+                <label className="block text-[10px] text-[#7d5a50] mb-1">To</label>
+                <input type="date" value={localFilters.startDateTo} onChange={(e) => setLocalFilters((prev) => ({ ...prev, startDateTo: e.target.value }))} className="w-full px-3 py-2 border border-[#c8b6a6] rounded-lg text-sm" />
+              </>
+            )}
+
+            {headerFilterOpen.type === 'daysInProgramme' && (
+              <>
+                <div className="flex items-center justify-between mb-3">
+                  <label className="text-xs font-semibold text-[#4a352f]">Days in Programme: {localFilters.daysRange[0]} - {localFilters.daysRange[1]}</label>
+                  {(localFilters.daysRange[0] > 0 || localFilters.daysRange[1] < 3650) && (
+                    <button onClick={() => setLocalFilters((prev) => ({ ...prev, daysRange: [0, 3650] }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>
+                  )}
+                </div>
+                <div className="flex items-center gap-3">
+                  <input type="number" min="0" max="3650" value={localFilters.daysRange[0]} onChange={(e) => setLocalFilters((prev) => ({ ...prev, daysRange: [Math.min(parseInt(e.target.value) || 0, prev.daysRange[1]), prev.daysRange[1]] }))} className="w-20 px-2 py-1.5 border border-[#c8b6a6] rounded-lg text-sm text-center" />
+                  <span className="text-[#7d5a50]">to</span>
+                  <input type="number" min="0" max="3650" value={localFilters.daysRange[1]} onChange={(e) => setLocalFilters((prev) => ({ ...prev, daysRange: [prev.daysRange[0], Math.max(parseInt(e.target.value) || 0, prev.daysRange[0])] }))} className="w-20 px-2 py-1.5 border border-[#c8b6a6] rounded-lg text-sm text-center" />
+                </div>
+              </>
+            )}
+
+            {headerFilterOpen.type === 'appliedDate' && (
+              <>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-semibold text-[#4a352f]">Applied Date</label>
+                  {(localFilters.appliedDateFrom || localFilters.appliedDateTo) && (
+                    <button onClick={() => setLocalFilters((prev) => ({ ...prev, appliedDateFrom: '', appliedDateTo: '' }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>
+                  )}
+                </div>
+                <label className="block text-[10px] text-[#7d5a50] mb-1">From</label>
+                <input type="date" value={localFilters.appliedDateFrom} onChange={(e) => setLocalFilters((prev) => ({ ...prev, appliedDateFrom: e.target.value }))} className="w-full px-3 py-2 border border-[#c8b6a6] rounded-lg text-sm mb-3" />
+                <label className="block text-[10px] text-[#7d5a50] mb-1">To</label>
+                <input type="date" value={localFilters.appliedDateTo} onChange={(e) => setLocalFilters((prev) => ({ ...prev, appliedDateTo: e.target.value }))} className="w-full px-3 py-2 border border-[#c8b6a6] rounded-lg text-sm" />
+              </>
+            )}
+
+            {headerFilterOpen.type === 'teamSize' && (
+              <>
+                <div className="flex items-center justify-between mb-3">
+                  <label className="text-xs font-semibold text-[#4a352f]">Employees</label>
+                  {localFilters.teamSize.length > 0 && (
+                    <button onClick={() => setLocalFilters((prev) => ({ ...prev, teamSize: [] }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {teamSizeOptions.length === 0 && <span className="text-xs text-[#a89482]">No employee data available</span>}
+                  {teamSizeOptions.map((t) => (
+                    <button key={t} onClick={() => setLocalFilters((prev) => ({ ...prev, teamSize: prev.teamSize.includes(t) ? prev.teamSize.filter((x) => x !== t) : [...prev.teamSize, t] }))} className={`px-2.5 py-1 rounded-full text-xs font-medium ${localFilters.teamSize.includes(t) ? 'bg-[#7d5a50] text-white' : 'bg-[#f5f0e1] text-[#4a352f] hover:bg-[#e6d7c3]'}`}>{t}</button>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {headerFilterOpen.type === 'guarantees' && (
+              <>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-semibold text-[#4a352f]">Guarantees</label>
+                  {localFilters.guarantees && (
+                    <button onClick={() => setLocalFilters((prev) => ({ ...prev, guarantees: '' }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>
+                  )}
+                </div>
+                <input
+                  autoFocus
+                  type="text"
+                  value={localFilters.guarantees}
+                  onChange={(e) => setLocalFilters((prev) => ({ ...prev, guarantees: e.target.value }))}
+                  placeholder="Search guarantees..."
+                  className="w-full px-3 py-2 border border-[#c8b6a6] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#7d5a50]/20"
+                />
+              </>
+            )}
+
+            {headerFilterOpen.type === 'services' && (
+              <>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-semibold text-[#4a352f]">Services</label>
+                  {localFilters.services && (
+                    <button onClick={() => setLocalFilters((prev) => ({ ...prev, services: '' }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>
+                  )}
+                </div>
+                <input
+                  autoFocus
+                  type="text"
+                  value={localFilters.services}
+                  onChange={(e) => setLocalFilters((prev) => ({ ...prev, services: e.target.value }))}
+                  placeholder="Search services..."
+                  className="w-full px-3 py-2 border border-[#c8b6a6] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#7d5a50]/20"
+                />
+              </>
+            )}
+
+            {headerFilterOpen.type === 'status' && (
+              <>
+                <div className="flex items-center justify-between mb-3">
+                  <label className="text-xs font-semibold text-[#4a352f]">Status</label>
+                  {localFilters.status.length > 0 && (
+                    <button onClick={() => setLocalFilters((prev) => ({ ...prev, status: [] }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {statusOptions.map((s) => (
+                    <button key={s} onClick={() => setLocalFilters((prev) => ({ ...prev, status: prev.status.includes(s) ? prev.status.filter((x) => x !== s) : [...prev.status, s] }))} className={`px-2.5 py-1 rounded-full text-xs font-medium ${localFilters.status.includes(s) ? 'bg-[#7d5a50] text-white' : 'bg-[#f5f0e1] text-[#4a352f] hover:bg-[#e6d7c3]'}`}>{s}</button>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {headerFilterOpen.type === 'progress' && (
+              <>
+                <div className="flex items-center justify-between mb-3">
+                  <label className="text-xs font-semibold text-[#4a352f]">Progress</label>
+                  {localFilters.progress.length > 0 && (
+                    <button onClick={() => setLocalFilters((prev) => ({ ...prev, progress: [] }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {progressOptions.map((p) => (
+                    <button key={p.key} onClick={() => setLocalFilters((prev) => ({ ...prev, progress: prev.progress.includes(p.key) ? prev.progress.filter((x) => x !== p.key) : [...prev.progress, p.key] }))} className={`px-2.5 py-1 rounded-full text-xs font-medium ${localFilters.progress.includes(p.key) ? 'bg-[#7d5a50] text-white' : 'bg-[#f5f0e1] text-[#4a352f] hover:bg-[#e6d7c3]'}`}>{p.label}</button>
                   ))}
                 </div>
               </>
