@@ -4,8 +4,8 @@ import { createPortal } from "react-dom"
 import {
   Trophy, Users, TrendingUp, Building, MapPin, DollarSign, Calendar, Eye, Wrench,
   Loader, RefreshCw, X, BarChart3, ChevronDown, ChevronUp, FileText, Ticket, Copy,
-  CheckCircle, MoreVertical, AlertCircle, Info, ArrowRight, GraduationCap, Layers,
-  Search, SlidersHorizontal, Columns, Bookmark, Trash2, StickyNote, Archive,
+  CheckCircle, MoreVertical, AlertCircle, Info, GraduationCap, Layers,
+  SlidersHorizontal, Bookmark, Trash2, StickyNote, Archive,
   ArrowUpDown, Download, Square, CheckSquare, Plus
 } from "lucide-react"
 import { collection, query, where, getDocs, doc, getDoc, addDoc, updateDoc, arrayUnion, serverTimestamp } from "firebase/firestore"
@@ -91,49 +91,101 @@ const EXIT_REASONS = [
   "Other",
 ]
 
-// ─── Post-admission pipeline (feedback #14) ─────────────────────────────────
-const POST_ADMISSION_STAGES = [
-  { id: "onboarding", name: "Onboarding", color: "#a67c52", bg: "#f5f0e1", icon: Layers, pending: true },
-  { id: "active", name: "Active", color: "#4caf50", bg: "#e8f5e9", icon: TrendingUp },
-  { id: "graduated", name: "Graduated / Exited", color: "#9e9e9e", bg: "#f3f4f6", icon: GraduationCap },
+// ─── Cohort stage pipeline (feedback #14, consolidated) ────────────────────
+// Previously three separate, overlapping UIs all did roughly the same job:
+// the "Post-Admission Journey" strip, the 5 summary tiles, and the "Active
+// Cohort / Attention Required / Completed & Exited" preset pills. Graduated,
+// Exited, and "Completed & Exited" were the exact same count rendered three
+// times; "Attention Required" appeared twice. This single widget replaces
+// all three: pipeline-styled cards (matching the DealFlow Pipeline's visual
+// language) that double as the quick filters the tiles/pills used to be.
+// Active and Attention Required stay mutually exclusive counts (each SME
+// counted once) so the row reads as a real breakdown, not overlapping sets.
+const COHORT_STAGE_CARDS = [
+  { key: "active", label: "Active", icon: TrendingUp },
+  { key: "attention", label: "Attention Required", icon: AlertCircle },
+  { key: "exited", label: "Graduated / Exited", icon: GraduationCap, note: true },
 ]
 
-const PostAdmissionPipeline = ({ cohorts }) => {
-  const activeCount = cohorts.filter((c) => getStatusMeta(c.currentStatus).group === "active").length
-  const graduatedCount = cohorts.filter((c) => getStatusMeta(c.currentStatus).group === "exited").length
-  const countsByStage = { onboarding: 0, active: activeCount, graduated: graduatedCount }
-  const total = activeCount + graduatedCount || 1
+const CohortStagePipeline = ({ counts, activeFilter, setActiveFilter }) => {
+  const total = counts.total || 1
+  const toggle = (key) => setActiveFilter(activeFilter === key ? "inProgramme" : key)
 
   return (
     <div className="bg-white rounded-2xl border border-[#e6d7c3] shadow-sm p-4 mb-6">
-      <div className="flex items-center gap-2 mb-3">
-        <h3 className="text-sm font-semibold text-[#4a352f]">Post-Admission Journey</h3>
-        <span title="Businesses arrive here once admitted from Deal Flow. Declined/Withdrawn applications never reach this stage.">
-          <Info size={12} className="text-[#a89482]" />
-        </span>
+      <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+        <div className="flex items-center gap-2">
+          <h3 className="text-sm font-semibold text-[#4a352f]">Post-Admission Journey</h3>
+          <span title="Businesses arrive here once admitted from Deal Flow. Declined/Withdrawn applications never reach this stage.">
+            <Info size={12} className="text-[#a89482]" />
+          </span>
+        </div>
+        {/* Total SMEs — the old "Total SMEs" tile, now the hero stat rather
+            than a fifth card competing for attention with the others. */}
+        <button
+          onClick={() => toggle("all")}
+          className="flex items-baseline gap-1.5 px-3 py-1 rounded-xl transition-all hover:bg-[#f5f0e1]"
+          style={{ backgroundColor: activeFilter === "all" ? "#f5f0e1" : "transparent" }}
+        >
+          <span className="text-lg font-extrabold text-[#4a352f]">{counts.total}</span>
+          <span className="text-[10px] text-[#7d5a50] font-semibold uppercase tracking-wide">Total SMEs</span>
+        </button>
       </div>
-      <div className="flex items-center gap-1 flex-wrap">
-        {POST_ADMISSION_STAGES.map((stage, idx) => {
-          const count = countsByStage[stage.id] || 0
-          const pct = stage.pending ? 0 : Math.round((count / total) * 100)
-          const Icon = stage.icon
+
+      <div className="flex items-stretch gap-2 overflow-x-auto pb-1">
+        {/* Onboarding — pending, informational only; no backend status field
+            exists yet to make this clickable/filterable. */}
+        <div
+          className="flex items-center gap-2 px-3 py-2.5 rounded-2xl border border-dashed flex-shrink-0 opacity-60"
+          style={{
+            width: "128px",
+            borderColor: "rgba(255,255,255,0.25)",
+            background: "linear-gradient(135deg, #4a352f 0%, #241a14 100%)",
+          }}
+          title="Awaiting a backend Onboarding status field"
+        >
+          <Layers size={14} className="text-white flex-shrink-0" />
+          <div>
+            <div className="text-[11px] font-semibold text-white uppercase tracking-wide">Onboarding</div>
+            <div className="text-[10px] text-[#d9c4b0]">Pending data</div>
+          </div>
+        </div>
+
+        {COHORT_STAGE_CARDS.map(({ key, label, icon: Icon, note }) => {
+          const count = counts[key] || 0
+          const pct = Math.round((count / total) * 100)
+          const isSelected = activeFilter === key
           return (
-            <div key={stage.id} className="flex items-center">
-              <div
-                className={`flex items-center gap-2 px-3 py-2 rounded-xl border ${stage.pending ? "border-dashed opacity-60" : ""}`}
-                style={{ backgroundColor: stage.bg, borderColor: stage.pending ? "#c8b6a6" : stage.color + "60" }}
-                title={stage.pending ? "Awaiting a backend Onboarding status field" : undefined}
-              >
-                <Icon size={14} style={{ color: stage.color }} />
-                <div>
-                  <div className="text-xs font-semibold" style={{ color: stage.color }}>{stage.name}</div>
-                  <div className="text-[10px] text-[#7d5a50]">{stage.pending ? "Pending data" : `${count} · ${pct}%`}</div>
+            <button
+              key={key}
+              onClick={() => toggle(key)}
+              className={`text-left rounded-2xl p-3 flex-shrink-0 transition-all duration-300 ${
+                isSelected ? "shadow-lg -translate-y-0.5" : "hover:-translate-y-0.5 shadow-sm hover:shadow-md"
+              }`}
+              style={{
+                width: "150px",
+                background: "linear-gradient(135deg, #4a352f 0%, #241a14 100%)",
+                border: `2px solid ${isSelected ? "#d9b98a" : "rgba(255,255,255,0.12)"}`,
+              }}
+              title={note ? "Graduated vs. Exited aren't yet distinguished on the record — both show the same count until a backend outcome field exists." : undefined}
+            >
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <div className="w-6 h-6 rounded-lg bg-white/10 flex items-center justify-center flex-shrink-0">
+                  <Icon size={12} className="text-white" />
                 </div>
+                <span className="text-[10px] font-semibold text-white uppercase tracking-wide leading-tight flex items-center gap-1">
+                  {label}
+                  {note && <Info size={9} className="text-[#d9c4b0] flex-shrink-0" />}
+                </span>
               </div>
-              {idx < POST_ADMISSION_STAGES.length - 1 && (
-                <ArrowRight size={14} className="text-[#c8b6a6] mx-1.5 flex-shrink-0" />
-              )}
-            </div>
+              <span className="text-xl font-extrabold text-white leading-none">{count}</span>
+              <div className="flex items-center gap-1.5 mt-2">
+                <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: "rgba(0,0,0,0.3)" }}>
+                  <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: "#c9986a" }} />
+                </div>
+                <span className="text-[9px] font-semibold flex-shrink-0" style={{ color: "#d9c4b0" }}>{pct}%</span>
+              </div>
+            </button>
           )
         })}
       </div>
@@ -318,17 +370,6 @@ const loadStoredView = () => {
   }
 }
 
-// Spec §10: a few standard presets. "Support Management", "Programme
-// Performance", "Graduation Pipeline" and "My SMEs" from the spec all need
-// fields that don't exist yet (support breakdown, BIG Score history,
-// milestones, assigned programme manager) — included here are only the
-// presets fully answerable with today's data.
-const PRESET_VIEWS = [
-  { key: "activeCohort", label: "Active Cohort", filter: "inProgramme" },
-  { key: "attentionRequired", label: "Attention Required", filter: "attention" },
-  { key: "completedExited", label: "Completed & Exited", filter: "exited" },
-]
-
 // ─── Overall Business Health (Progress column) ─────────────────────────────
 // Sourced from the same cache the Growth Suite → "Overall Company Health"
 // tab reads/writes: users/{smeId}/cachedAnalyses/health_overview_{smeId}
@@ -423,9 +464,15 @@ function MyCohorts() {
   const [healthPopover, setHealthPopover] = useState(null) // { cohort, rect }
 
   // ─── New: search, filters, columns, saved views, bulk, expand, notes ────
-  const [searchQuery, setSearchQuery] = useState("")
-  const [showFilters, setShowFilters] = useState(false)
-  const [localFilters, setLocalFilters] = useState({ sector: [], location: [] })
+  // Filtering now lives on the column headers themselves (headerFilterOpen
+  // tracks which header's popover is open) rather than a separate search
+  // bar or Filters panel.
+  const [headerFilterOpen, setHeaderFilterOpen] = useState(null) // { type, rect }
+  const [localFilters, setLocalFilters] = useState({ name: "", sector: [], location: [] })
+  // Drives full-row hover highlighting, including the sticky Business column
+  // — that column needs its own opaque background to stay legible while the
+  // table scrolls horizontally, which a plain CSS `tr:hover` can't reach.
+  const [hoveredRowKey, setHoveredRowKey] = useState(null)
   const [showColumnChooser, setShowColumnChooser] = useState(false)
   const [showSaveView, setShowSaveView] = useState(false)
   const [viewName, setViewName] = useState("")
@@ -865,7 +912,7 @@ function MyCohorts() {
   const sectorOptions = useMemo(() => [...new Set(visibleCohorts.map((c) => c.sector).filter((s) => s && s !== "Not specified"))].sort(), [visibleCohorts])
   const locationOptions = useMemo(() => [...new Set(visibleCohorts.map((c) => c.location).filter((l) => l && l !== "Not specified"))].sort(), [visibleCohorts])
 
-  const activeFilterCount = localFilters.sector.length + localFilters.location.length
+  const activeFilterCount = (localFilters.name.trim() ? 1 : 0) + localFilters.sector.length + localFilters.location.length
 
   // ─── Filtering, search, sort ──────────────────────────────────────────────
   const filteredCohorts = useMemo(() => {
@@ -878,13 +925,9 @@ function MyCohorts() {
       return true // "all"
     })
 
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase().trim()
-      result = result.filter((c) =>
-        c.smeName.toLowerCase().includes(q) ||
-        c.sector.toLowerCase().includes(q) ||
-        c.location.toLowerCase().includes(q)
-      )
+    if (localFilters.name.trim()) {
+      const q = localFilters.name.toLowerCase().trim()
+      result = result.filter((c) => c.smeName.toLowerCase().includes(q))
     }
 
     if (localFilters.sector.length > 0) result = result.filter((c) => localFilters.sector.includes(c.sector))
@@ -895,7 +938,7 @@ function MyCohorts() {
       if (rankDiff !== 0) return rankDiff
       return a.smeName.localeCompare(b.smeName)
     })
-  }, [visibleCohorts, activeFilter, searchQuery, localFilters])
+  }, [visibleCohorts, activeFilter, localFilters])
 
   const rowPad = density === "compact" ? "py-2.5 px-3" : "py-3.5 px-4"
 
@@ -918,6 +961,28 @@ function MyCohorts() {
 
   const toggleColumn = (key) => setColumnVisibility((prev) => ({ ...prev, [key]: !prev[key] }))
   const resetColumns = () => setColumnVisibility(DEFAULT_COLUMN_VISIBILITY)
+
+  // Filtering happens straight from the column header: clicking the filter
+  // icon opens a small popover anchored to that header.
+  const openHeaderFilter = (type, event) => {
+    event.stopPropagation()
+    const rect = event.currentTarget.getBoundingClientRect()
+    setHeaderFilterOpen((prev) => (prev?.type === type ? null : { type, rect }))
+  }
+  const closeHeaderFilter = () => setHeaderFilterOpen(null)
+
+  // Small icon button placed on a column header; lights up when that
+  // column currently has an active filter.
+  const FilterTrigger = ({ type, active }) => (
+    <button
+      type="button"
+      onClick={(e) => openHeaderFilter(type, e)}
+      className={`p-0.5 rounded transition-colors ${active ? "text-[#e6d7c3]" : "text-[#c8b6a6] hover:text-white"}`}
+      title="Filter this column"
+    >
+      <SlidersHorizontal size={11} />
+    </button>
+  )
 
   const saveCurrentView = () => {
     if (!viewName.trim()) return
@@ -1015,71 +1080,35 @@ function MyCohorts() {
           </div>
         </div>
 
-        <PostAdmissionPipeline cohorts={visibleCohorts} />
+        <CohortStagePipeline counts={counts} activeFilter={activeFilter} setActiveFilter={setActiveFilter} />
 
-        {/* Summary counters — 5 tiles per spec §3, also act as quick filters */}
-        <div className="grid grid-cols-[repeat(auto-fit,minmax(150px,1fr))] gap-3 mb-6">
-          {[
-            { key: "all", label: "Total SMEs", value: counts.total, color: "#a67c52" },
-            { key: "active", label: "Active", value: counts.active, color: "#4caf50" },
-            { key: "attention", label: "Attention Required", value: counts.attention, color: "#e65100" },
-            { key: "exited", label: "Graduated", value: counts.exited, color: "#2e7d32", note: true },
-            { key: "exited", label: "Exited", value: counts.exited, color: "#9e9e9e", note: true },
-          ].map(({ key, label, value, color, note }, i) => (
-            <button
-              key={label + i}
-              onClick={() => setActiveFilter(activeFilter === key ? "inProgramme" : key)}
-              className={`text-left bg-white p-3.5 rounded-xl shadow-md border-2 transition-all ${activeFilter === key ? 'ring-2 ring-offset-1' : ''}`}
-              style={{ borderColor: activeFilter === key ? color : "#e6d7c3" }}
-              title={note ? "Graduated vs. Exited aren't yet distinguished on the record — both show the same count until a backend outcome field exists." : undefined}
-            >
-              <h3 className="text-[11px] font-semibold text-[#7d5a50] m-0 mb-1 uppercase tracking-wide flex items-center gap-1">
-                {label}
-                {note && <Info size={10} className="text-[#a89482]" />}
-              </h3>
-              <p className="text-xl font-bold m-0" style={{ color }}>{value}</p>
-            </button>
-          ))}
-        </div>
+        {/* Saved views (user-created named layouts — distinct from the
+            quick-filter cards above, so not part of the de-duplication) */}
+        {savedViews.length > 0 && (
+          <div className="flex items-center gap-2 flex-wrap mb-4">
+            {savedViews.map((v) => (
+              <span key={v.name} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold border border-[#c8b6a6] bg-white text-[#4a352f]">
+                <button onClick={() => loadSavedView(v)} className="hover:text-[#7d5a50]">{v.name}</button>
+                <button onClick={() => deleteSavedView(v.name)} className="text-[#a89482] hover:text-red-500"><Trash2 size={11} /></button>
+              </span>
+            ))}
+          </div>
+        )}
 
-        {/* Saved / preset views */}
-        <div className="flex items-center gap-2 flex-wrap mb-4">
-          {PRESET_VIEWS.map((v) => (
-            <button
-              key={v.key}
-              onClick={() => setActiveFilter(v.filter)}
-              className={`px-3 py-1.5 rounded-full text-xs font-semibold border transition-all ${activeFilter === v.filter ? 'bg-[#7d5a50] text-white border-[#7d5a50]' : 'bg-white text-[#4a352f] border-[#c8b6a6] hover:bg-[#f5f0e1]'}`}
-            >
-              {v.label}
-            </button>
-          ))}
-          {savedViews.map((v) => (
-            <span key={v.name} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold border border-[#c8b6a6] bg-white text-[#4a352f]">
-              <button onClick={() => loadSavedView(v)} className="hover:text-[#7d5a50]">{v.name}</button>
-              <button onClick={() => deleteSavedView(v.name)} className="text-[#a89482] hover:text-red-500"><Trash2 size={11} /></button>
-            </span>
-          ))}
-        </div>
-
-        {/* Toolbar: search, filters, columns, save view */}
+        {/* Toolbar: columns, save view (filtering now lives on headers) */}
         <div className="bg-[#faf7f2] rounded-t-2xl p-4 border border-[#e6d7c3] border-b-0 shadow-sm">
           <div className="flex items-center justify-between gap-4 flex-wrap">
-            <div className="flex-1 min-w-[200px] max-w-md relative">
-              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#7d5a50]" />
-              <input
-                type="text"
-                placeholder="Search cohort SMEs..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 bg-white border border-[#c8b6a6] rounded-xl text-sm focus:outline-none focus:border-[#7d5a50] focus:ring-2 focus:ring-[#7d5a50]/20 transition-all"
-              />
-              {searchQuery && <button onClick={() => setSearchQuery('')} className="absolute right-3 top-1/2 -translate-y-1/2 text-[#7d5a50]"><X size={14} /></button>}
+            <div className="flex items-center gap-2">
+              {activeFilterCount > 0 && (
+                <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#fff3e0] text-[#e65100] border border-[#e65100]/30">
+                  <SlidersHorizontal size={12} /> {activeFilterCount} filter{activeFilterCount > 1 ? "s" : ""} active
+                </span>
+              )}
             </div>
-
             <div className="flex items-center gap-2">
               <div className="relative">
                 <button onClick={() => setShowColumnChooser(!showColumnChooser)} className="flex items-center gap-2 px-4 py-2.5 bg-white border border-[#c8b6a6] rounded-xl text-sm text-[#4a352f] hover:bg-[#f5f0e1] transition-all shadow-sm">
-                  <Columns size={16} /> Columns <ChevronDown size={14} className={`transition-transform ${showColumnChooser ? 'rotate-180' : ''}`} />
+                  <Plus size={16} /> Add New Field <ChevronDown size={14} className={`transition-transform ${showColumnChooser ? 'rotate-180' : ''}`} />
                 </button>
                 {showColumnChooser && (
                   <>
@@ -1097,12 +1126,6 @@ function MyCohorts() {
                     </div>
                   </>
                 )}
-              </div>
-
-              <div className="relative">
-                <button onClick={() => setShowFilters(!showFilters)} className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all shadow-sm ${showFilters ? 'bg-[#7d5a50] text-white' : activeFilterCount > 0 ? 'bg-[#fff3e0] border border-[#e65100] text-[#e65100]' : 'bg-white border border-[#c8b6a6] text-[#4a352f] hover:bg-[#f5f0e1]'}`}>
-                  <SlidersHorizontal size={16} /> Filters {activeFilterCount > 0 && `(${activeFilterCount})`}
-                </button>
               </div>
 
               <div className="relative">
@@ -1130,34 +1153,6 @@ function MyCohorts() {
               </div>
             </div>
           </div>
-
-          {showFilters && (
-            <div className="mt-4 p-5 bg-[#faf7f2] rounded-2xl border-2 border-[#e6d7c3] grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="bg-white rounded-xl p-4 border border-[#e6d7c3]">
-                <label className="block text-xs font-semibold text-[#4a352f] mb-3">Sector</label>
-                <div className="flex flex-wrap gap-1.5">
-                  {sectorOptions.length === 0 && <span className="text-xs text-[#a89482]">No sector data available</span>}
-                  {sectorOptions.map((s) => (
-                    <button key={s} onClick={() => setLocalFilters((prev) => ({ ...prev, sector: prev.sector.includes(s) ? prev.sector.filter((x) => x !== s) : [...prev.sector, s] }))} className={`px-2.5 py-1 rounded-full text-xs font-medium ${localFilters.sector.includes(s) ? 'bg-[#7d5a50] text-white' : 'bg-[#f5f0e1] text-[#4a352f] hover:bg-[#e6d7c3]'}`}>{s}</button>
-                  ))}
-                </div>
-              </div>
-              <div className="bg-white rounded-xl p-4 border border-[#e6d7c3]">
-                <label className="block text-xs font-semibold text-[#4a352f] mb-3">Location</label>
-                <div className="flex flex-wrap gap-1.5">
-                  {locationOptions.length === 0 && <span className="text-xs text-[#a89482]">No location data available</span>}
-                  {locationOptions.map((l) => (
-                    <button key={l} onClick={() => setLocalFilters((prev) => ({ ...prev, location: prev.location.includes(l) ? prev.location.filter((x) => x !== l) : [...prev.location, l] }))} className={`px-2.5 py-1 rounded-full text-xs font-medium ${localFilters.location.includes(l) ? 'bg-[#7d5a50] text-white' : 'bg-[#f5f0e1] text-[#4a352f] hover:bg-[#e6d7c3]'}`}>{l}</button>
-                  ))}
-                </div>
-              </div>
-              {activeFilterCount > 0 && (
-                <div className="md:col-span-2">
-                  <button onClick={() => setLocalFilters({ sector: [], location: [] })} className="text-xs text-[#7d5a50] underline hover:text-[#4a352f]">Clear all</button>
-                </div>
-              )}
-            </div>
-          )}
         </div>
 
         {/* Bulk action bar */}
@@ -1186,28 +1181,31 @@ function MyCohorts() {
             </div>
 
             <div className="overflow-auto" style={{ maxHeight: '70vh' }}>
-              <style>{`.mc-th { color: #4a352f !important; }`}</style>
+              <style>{`.mc-th { color: #faf7f2 !important; }`}</style>
               <table className="w-full border-collapse text-sm">
                 <thead>
-                  <tr className="bg-[#f0e6d9]">
-                    <th className={`mc-th ${rowPad} sticky top-0 left-0 z-30`} style={{ backgroundColor: '#f0e6d9', width: '40px' }}>
+                  <tr className="bg-[#4a352f]">
+                    <th className={`mc-th ${rowPad} sticky top-0 left-0 z-30`} style={{ backgroundColor: '#4a352f', width: '40px' }}>
                       <button onClick={() => toggleSelectAll(filteredCohorts)} className="flex items-center justify-center">
                         {allVisibleSelected ? <CheckSquare size={16} /> : <Square size={16} />}
                       </button>
                     </th>
-                    <th className={`mc-th ${rowPad} text-left font-semibold text-xs uppercase tracking-wide whitespace-nowrap sticky top-0 left-0 z-30`} style={{ backgroundColor: '#f0e6d9' }}>
-                      Business
+                    <th className={`mc-th ${rowPad} text-left font-semibold text-xs uppercase tracking-wide whitespace-nowrap sticky top-0 left-0 z-30`} style={{ backgroundColor: '#4a352f' }}>
+                      <div className="flex items-center gap-1">
+                        Business
+                        <FilterTrigger type="business" active={activeFilterCount > 0} />
+                      </div>
                     </th>
-                    {columnVisibility.supportValue && <th className={`mc-th ${rowPad} text-left font-semibold text-xs uppercase tracking-wide whitespace-nowrap sticky top-0 z-20`} style={{ backgroundColor: '#f0e6d9' }}>Support Value</th>}
-                    {columnVisibility.startDate && <th className={`mc-th ${rowPad} text-left font-semibold text-xs uppercase tracking-wide whitespace-nowrap sticky top-0 z-20`} style={{ backgroundColor: '#f0e6d9' }}>Start Date</th>}
-                    {columnVisibility.daysInProgramme && <th className={`mc-th ${rowPad} text-left font-semibold text-xs uppercase tracking-wide whitespace-nowrap sticky top-0 z-20`} style={{ backgroundColor: '#f0e6d9' }}>Days in Programme</th>}
-                    {columnVisibility.appliedDate && <th className={`mc-th ${rowPad} text-left font-semibold text-xs uppercase tracking-wide whitespace-nowrap sticky top-0 z-20`} style={{ backgroundColor: '#f0e6d9' }}>Applied Date</th>}
-                    {columnVisibility.teamSize && <th className={`mc-th ${rowPad} text-left font-semibold text-xs uppercase tracking-wide whitespace-nowrap sticky top-0 z-20`} style={{ backgroundColor: '#f0e6d9' }}>Employees</th>}
-                    {columnVisibility.guarantees && <th className={`mc-th ${rowPad} text-left font-semibold text-xs uppercase tracking-wide whitespace-nowrap sticky top-0 z-20`} style={{ backgroundColor: '#f0e6d9' }}>Guarantees</th>}
-                    {columnVisibility.servicesRequired && <th className={`mc-th ${rowPad} text-left font-semibold text-xs uppercase tracking-wide whitespace-nowrap sticky top-0 z-20`} style={{ backgroundColor: '#f0e6d9' }}>Services</th>}
-                    {columnVisibility.status && <th className={`mc-th ${rowPad} text-left font-semibold text-xs uppercase tracking-wide whitespace-nowrap sticky top-0 z-20`} style={{ backgroundColor: '#f0e6d9', minWidth: '130px', paddingRight: '8px' }}>Status</th>}
-                    {columnVisibility.progress && <th className={`mc-th ${rowPad} text-left font-semibold text-xs uppercase tracking-wide whitespace-nowrap sticky top-0 z-20`} style={{ backgroundColor: '#f0e6d9', minWidth: '110px', paddingLeft: '8px' }}>Progress</th>}
-                    <th className={`mc-th ${rowPad} text-center font-semibold text-xs uppercase tracking-wide whitespace-nowrap sticky top-0 z-20`} style={{ backgroundColor: '#f0e6d9' }}>
+                    {columnVisibility.supportValue && <th className={`mc-th ${rowPad} text-left font-semibold text-xs uppercase tracking-wide whitespace-nowrap sticky top-0 z-20`} style={{ backgroundColor: '#4a352f' }}>Support Value</th>}
+                    {columnVisibility.startDate && <th className={`mc-th ${rowPad} text-left font-semibold text-xs uppercase tracking-wide whitespace-nowrap sticky top-0 z-20`} style={{ backgroundColor: '#4a352f' }}>Start Date</th>}
+                    {columnVisibility.daysInProgramme && <th className={`mc-th ${rowPad} text-left font-semibold text-xs uppercase tracking-wide whitespace-nowrap sticky top-0 z-20`} style={{ backgroundColor: '#4a352f' }}>Days in Programme</th>}
+                    {columnVisibility.appliedDate && <th className={`mc-th ${rowPad} text-left font-semibold text-xs uppercase tracking-wide whitespace-nowrap sticky top-0 z-20`} style={{ backgroundColor: '#4a352f' }}>Applied Date</th>}
+                    {columnVisibility.teamSize && <th className={`mc-th ${rowPad} text-left font-semibold text-xs uppercase tracking-wide whitespace-nowrap sticky top-0 z-20`} style={{ backgroundColor: '#4a352f' }}>Employees</th>}
+                    {columnVisibility.guarantees && <th className={`mc-th ${rowPad} text-left font-semibold text-xs uppercase tracking-wide whitespace-nowrap sticky top-0 z-20`} style={{ backgroundColor: '#4a352f' }}>Guarantees</th>}
+                    {columnVisibility.servicesRequired && <th className={`mc-th ${rowPad} text-left font-semibold text-xs uppercase tracking-wide whitespace-nowrap sticky top-0 z-20`} style={{ backgroundColor: '#4a352f' }}>Services</th>}
+                    {columnVisibility.status && <th className={`mc-th ${rowPad} text-left font-semibold text-xs uppercase tracking-wide whitespace-nowrap sticky top-0 z-20`} style={{ backgroundColor: '#4a352f', minWidth: '130px', paddingRight: '8px' }}>Status</th>}
+                    {columnVisibility.progress && <th className={`mc-th ${rowPad} text-left font-semibold text-xs uppercase tracking-wide whitespace-nowrap sticky top-0 z-20`} style={{ backgroundColor: '#4a352f', minWidth: '110px', paddingLeft: '8px' }}>Progress</th>}
+                    <th className={`mc-th ${rowPad} text-center font-semibold text-xs uppercase tracking-wide whitespace-nowrap sticky top-0 z-20`} style={{ backgroundColor: '#4a352f' }}>
                       Action
                     </th>
                   </tr>
@@ -1224,13 +1222,21 @@ function MyCohorts() {
 
                     return (
                       <React.Fragment key={cohort.id}>
-                        <tr className="border-b border-[#f0e6d9] last:border-b-0 hover:bg-[#faf7f2] transition-colors duration-200">
+                        <tr
+                          className="last:border-b-0 border-b border-[#f0e6d9] transition-colors duration-200"
+                          style={{ backgroundColor: hoveredRowKey === cohort.id ? '#faf7f2' : undefined }}
+                          onMouseEnter={() => setHoveredRowKey(cohort.id)}
+                          onMouseLeave={() => setHoveredRowKey(null)}
+                        >
                           <td className={`${rowPad}`}>
                             <button onClick={() => toggleRowSelected(cohort.id)} className="flex items-center justify-center">
                               {selectedRows.has(cohort.id) ? <CheckSquare size={16} className="text-[#7d5a50]" /> : <Square size={16} className="text-[#c8b6a6]" />}
                             </button>
                           </td>
-                          <td className={`${rowPad} sticky left-0 bg-white z-10 border-r border-[#f0e6d9]`} style={{ minWidth: '220px' }}>
+                          <td
+                            className={`${rowPad} sticky left-0 z-10 border-r border-b border-[#f0e6d9] transition-colors`}
+                            style={{ minWidth: '220px', backgroundColor: hoveredRowKey === cohort.id ? '#faf7f2' : '#ffffff' }}
+                          >
                             <div className="flex items-start gap-1.5">
                               <button onClick={() => toggleExpandRow(cohort)} className="mt-0.5 text-[#a89482] hover:text-[#4a352f] flex-shrink-0">
                                 {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
@@ -1408,11 +1414,76 @@ function MyCohorts() {
                 ? <>No SMEs have entered this cohort yet. Businesses will appear here once support is approved and they reach an active stage.</>
                 : activeFilter === "inProgramme"
                   ? <>There are currently no active SMEs in this programme.</>
-                  : <>No SMEs match the selected filters. <button onClick={() => { setActiveFilter("inProgramme"); setLocalFilters({ sector: [], location: [] }); setSearchQuery(""); }} className="underline hover:text-[#4a352f]">Clear filters</button></>}
+                  : <>No SMEs match the selected filters. <button onClick={() => { setActiveFilter("inProgramme"); setLocalFilters({ name: "", sector: [], location: [] }) }} className="underline hover:text-[#4a352f]">Clear filters</button></>}
             </p>
           </div>
         )}
       </div>
+
+      {/* ─── Column header filter popover ───────────────────────────────────
+          Replaces the old standalone Filters panel — the Business header
+          opens a popover covering name, sector, and location, since those
+          three are all shown together in that one column. */}
+      {headerFilterOpen && (
+        <Portal>
+          <div className="fixed inset-0 z-[1090]" onClick={closeHeaderFilter} />
+          <div
+            className="fixed z-[1091] bg-white rounded-2xl shadow-2xl border border-[#e6d7c3] p-4"
+            style={{
+              top: headerFilterOpen.rect.bottom + 8,
+              left: Math.min(Math.max(headerFilterOpen.rect.left - 20, 12), window.innerWidth - 312),
+              width: '300px',
+              maxHeight: '70vh',
+              overflowY: 'auto',
+            }}
+          >
+            {headerFilterOpen.type === 'business' && (
+              <>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-semibold text-[#4a352f]">Business name</label>
+                  {localFilters.name && (
+                    <button onClick={() => setLocalFilters((prev) => ({ ...prev, name: '' }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>
+                  )}
+                </div>
+                <input
+                  autoFocus
+                  type="text"
+                  value={localFilters.name}
+                  onChange={(e) => setLocalFilters((prev) => ({ ...prev, name: e.target.value }))}
+                  placeholder="Search business name..."
+                  className="w-full px-3 py-2 border border-[#c8b6a6] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#7d5a50]/20 mb-4"
+                />
+
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-semibold text-[#4a352f]">Sector</label>
+                  {localFilters.sector.length > 0 && (
+                    <button onClick={() => setLocalFilters((prev) => ({ ...prev, sector: [] }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-1.5 mb-4">
+                  {sectorOptions.length === 0 && <span className="text-xs text-[#a89482]">No sector data available</span>}
+                  {sectorOptions.map((s) => (
+                    <button key={s} onClick={() => setLocalFilters((prev) => ({ ...prev, sector: prev.sector.includes(s) ? prev.sector.filter((x) => x !== s) : [...prev.sector, s] }))} className={`px-2.5 py-1 rounded-full text-xs font-medium ${localFilters.sector.includes(s) ? 'bg-[#7d5a50] text-white' : 'bg-[#f5f0e1] text-[#4a352f] hover:bg-[#e6d7c3]'}`}>{s}</button>
+                  ))}
+                </div>
+
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-semibold text-[#4a352f]">Location</label>
+                  {localFilters.location.length > 0 && (
+                    <button onClick={() => setLocalFilters((prev) => ({ ...prev, location: [] }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {locationOptions.length === 0 && <span className="text-xs text-[#a89482]">No location data available</span>}
+                  {locationOptions.map((l) => (
+                    <button key={l} onClick={() => setLocalFilters((prev) => ({ ...prev, location: prev.location.includes(l) ? prev.location.filter((x) => x !== l) : [...prev.location, l] }))} className={`px-2.5 py-1 rounded-full text-xs font-medium ${localFilters.location.includes(l) ? 'bg-[#7d5a50] text-white' : 'bg-[#f5f0e1] text-[#4a352f] hover:bg-[#e6d7c3]'}`}>{l}</button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        </Portal>
+      )}
 
       {/* ─── Row secondary-action menu (⋮) — spec §6 expanded set ───────────── */}
       {rowMenu && (
