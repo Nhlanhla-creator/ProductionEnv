@@ -95,7 +95,12 @@ export const DEFAULT_STAGES = [
 // Keyword mapping so existing/legacy status strings in Firestore records
 // (e.g. "Matching", "Application", "Active", "Exit", "Term Sheet") continue
 // to resolve to the right stage under the new names, with no data migration
-// required.
+// required. NOTE: this is a *fallback* used only when a status string
+// doesn't directly match a stage id/name in the currently active stage list
+// — see mapStatusToStageId below. It intentionally only covers the BIG
+// default stage ids; programme-template-specific ids (e.g. "committee",
+// "eligibility") are resolved via direct id/name matching instead, since
+// they're already unambiguous.
 export const STAGE_KEYWORDS = {
   matched: ["matched", "matching", "new", "initial", "prospect", "lead"],
   applied: ["applied", "application", "submitted", "application received"],
@@ -108,13 +113,38 @@ export const STAGE_KEYWORDS = {
   withdrawn: ["withdrawn", "withdraw", "exit", "exited", "cancelled", "completed", "graduated"],
 };
 
-export const mapStatusToStageId = (status) => {
-  if (!status) return "matched";
+// `stages` should be the *currently active* stage list (i.e. the result of
+// applyStageCustomization(PROGRAMME_TEMPLATES[programmeType].stages, customization)),
+// not always DEFAULT_STAGES — otherwise programme-specific stages (like a
+// Grant Programme's "Committee") can never be recognized correctly, even if
+// a business's stored status string is literally "Committee".
+//
+// Resolution order:
+//   1. Exact match against the active stage list's id or name (case-insensitive).
+//      This covers every programme template, default or custom, directly.
+//   2. Legacy keyword fuzzy-matching (for old/freeform status strings), but
+//      only if the matched stage id actually exists in the active list —
+//      otherwise a keyword hit for a stage the current programme doesn't
+//      have (e.g. matching "decision" while on the Grant template) would
+//      incorrectly resolve to an id nothing in the UI recognizes.
+//   3. Fall back to the first stage in the active list.
+export const mapStatusToStageId = (status, stages = DEFAULT_STAGES) => {
+  const fallbackId = stages[0]?.id || "matched";
+  if (!status) return fallbackId;
   const normalized = status.toString().toLowerCase().trim();
+
+  const direct = stages.find(
+    (s) => s.id.toLowerCase() === normalized || s.name.toLowerCase() === normalized
+  );
+  if (direct) return direct.id;
+
   for (const [stageId, keywords] of Object.entries(STAGE_KEYWORDS)) {
-    if (keywords.some((keyword) => normalized.includes(keyword))) return stageId;
+    if (keywords.some((keyword) => normalized.includes(keyword))) {
+      if (stages.some((s) => s.id === stageId)) return stageId;
+    }
   }
-  return "matched";
+
+  return fallbackId;
 };
 
 // ─── Programme-specific templates (feedback #4) ────────────────────────────
@@ -245,18 +275,32 @@ export const DEFAULT_STAGE_ACTIONS = {
   withdrawn: { showMessage: true, showMeeting: false, showAvailability: false, showTermSheet: false },
 };
 
+// Fallback used for any stage id not covered above (e.g. a programme
+// template's own ids like "committee", "eligibility", "screening" — these
+// don't have bespoke entries yet, so they get a sensible default rather than
+// silently rendering an empty form).
+const FALLBACK_STAGE_ACTIONS = { showMessage: true, showMeeting: true, showAvailability: false, showTermSheet: false };
+
 export const getStageActionConfig = (stageId, overrides = {}) => ({
-  ...(DEFAULT_STAGE_ACTIONS[stageId] || DEFAULT_STAGE_ACTIONS.matched),
+  ...(DEFAULT_STAGE_ACTIONS[stageId] || FALLBACK_STAGE_ACTIONS),
   ...(overrides?.[stageId] || {}),
 });
 
 // ─── Shared settings persistence ────────────────────────────────────────────
 // One localStorage key, one shape, used by both SupportDealFlowPipeline.jsx
 // (which writes programmeType/customization/stageActions) and
-// SupportSMETable.jsx (which only needs to read stageActions to know what
-// the Update Stage form should show). Centralizing this avoids the two
-// files silently drifting onto different keys or shapes.
+// SupportSMETable.jsx (which reads programmeType + customization to know
+// which stages are active, and stageActions to know what the Update Stage
+// form should show). Centralizing this avoids the two files silently
+// drifting onto different keys or shapes.
 export const PIPELINE_SETTINGS_STORAGE_KEY = "dealflow-pipeline-settings-v1";
+
+// Dispatched on `window` whenever settings are saved, so any other mounted
+// view (e.g. the SME table, if rendered alongside the pipeline view rather
+// than navigated to separately) can refresh immediately instead of only
+// picking up the change on next mount, a tab focus, or a cross-tab
+// `storage` event (which doesn't fire in the same tab that made the change).
+export const PIPELINE_SETTINGS_EVENT = "dealflow-pipeline-settings-changed";
 
 export const DEFAULT_PIPELINE_CUSTOMIZATION = { renames: {}, hidden: [], order: [], custom: [], stageActions: {} };
 
@@ -275,10 +319,20 @@ export const loadPipelineSettings = () => {
   }
 };
 
+// Convenience helper: resolves the fully-applied, currently-active stage
+// list in one call (template lookup + customization applied). Both
+// SupportDealFlowPipeline.jsx and SupportSMETable.jsx should use this rather
+// than each re-implementing the same two-step lookup, so they can't drift.
+export const getActiveStages = (settings = loadPipelineSettings()) => {
+  const template = PROGRAMME_TEMPLATES[settings.programmeType] || PROGRAMME_TEMPLATES.default;
+  return applyStageCustomization(template.stages, settings.customization);
+};
+
 export const savePipelineSettings = (programmeType, customization) => {
   if (typeof window === "undefined") return;
   try {
     window.localStorage.setItem(PIPELINE_SETTINGS_STORAGE_KEY, JSON.stringify({ programmeType, customization }));
+    window.dispatchEvent(new CustomEvent(PIPELINE_SETTINGS_EVENT));
   } catch {
     // Storage can fail (private browsing, quota) — settings still work for
     // the current session, they just won't persist.
