@@ -261,7 +261,7 @@ export default function CMFSMETable({
           </div>
 
           {/* Density Selector */}
-          <div className="relative">
+          {/* <div className="relative">
             <button
               onClick={() => {
                 setShowDensityChooser(!showDensityChooser)
@@ -289,15 +289,15 @@ export default function CMFSMETable({
                 ))}
               </div>
             )}
-          </div>
+          </div> */}
 
           {/* Filters toggle */}
-          <button
+          {/* <button
             className="flex items-center gap-1.5 px-3 py-2 border border-[#E8D5C4] rounded-lg text-xs text-[#5D4037] bg-white hover:bg-gray-50 font-semibold"
           >
             <Filter size={14} />
             Filters
-          </button>
+          </button> */}
 
           {/* Views dropdown */}
           <div className="relative">
@@ -348,52 +348,52 @@ export default function CMFSMETable({
           <thead>
             <tr className="bg-[#4a352f] border-b border-[#E8D5C4]">
               {columnVisibility.name && (
-                <th onClick={() => requestSort("name")} className="py-3 px-4 text-left font-bold text-xs text-[#4a352f] uppercase cursor-pointer tracking-wider hover:bg-black/5">
+                <th onClick={() => requestSort("name")} className="py-3 px-4 text-left font-bold text-xs text-[#ffffff] uppercase cursor-pointer tracking-wider hover:bg-black/5">
                   Business Name {sortConfig.key === "name" && (sortConfig.direction === "asc" ? "▲" : "▼")}
                 </th>
               )}
               {columnVisibility.bigScore && (
-                <th onClick={() => requestSort("bigScore")} className="py-3 px-4 text-center font-bold text-xs text-[#4a352f] uppercase cursor-pointer tracking-wider hover:bg-black/5">
+                <th onClick={() => requestSort("bigScore")} className="py-3 px-4 text-center font-bold text-xs text-[#ffffff] uppercase cursor-pointer tracking-wider hover:bg-black/5">
                   BIG Score {sortConfig.key === "bigScore" && (sortConfig.direction === "asc" ? "▲" : "▼")}
                 </th>
               )}
               {columnVisibility.matchPercentage && (
-                <th onClick={() => requestSort("matchPercentage")} className="py-3 px-4 text-center font-bold text-xs text-[#4a352f] uppercase cursor-pointer tracking-wider hover:bg-black/5">
+                <th onClick={() => requestSort("matchPercentage")} className="py-3 px-4 text-center font-bold text-xs text-[#ffffff] uppercase cursor-pointer tracking-wider hover:bg-black/5">
                   Match % {sortConfig.key === "matchPercentage" && (sortConfig.direction === "asc" ? "▲" : "▼")}
                 </th>
               )}
               {columnVisibility.fundingStage && (
-                <th className="py-3 px-4 text-left font-bold text-xs text-[#4a352f] uppercase tracking-wider">
+                <th className="py-3 px-4 text-left font-bold text-xs text-[#ffffff] uppercase tracking-wider">
                   Funding Stage
                 </th>
               )}
               {columnVisibility.fundingRequired && (
-                <th onClick={() => requestSort("fundingAmount")} className="py-3 px-4 text-left font-bold text-xs text-[#4a352f] uppercase cursor-pointer tracking-wider hover:bg-black/5">
+                <th onClick={() => requestSort("fundingAmount")} className="py-3 px-4 text-left font-bold text-xs text-[#ffffff] uppercase cursor-pointer tracking-wider hover:bg-black/5">
                   Funding
                 </th>
               )}
               {columnVisibility.status && (
-                <th className="py-3 px-4 text-left font-bold text-xs text-[#4a352f] uppercase tracking-wider">
+                <th className="py-3 px-4 text-left font-bold text-xs text-[#ffffff] uppercase tracking-wider">
                   Status
                 </th>
               )}
               {columnVisibility.applied && (
-                <th onClick={() => requestSort("applicationDate")} className="py-3 px-4 text-left font-bold text-xs text-[#4a352f] uppercase cursor-pointer tracking-wider hover:bg-black/5">
+                <th onClick={() => requestSort("applicationDate")} className="py-3 px-4 text-left font-bold text-xs text-[#ffffff] uppercase cursor-pointer tracking-wider hover:bg-black/5">
                   Applied
                 </th>
               )}
               {columnVisibility.daysInStage && (
-                <th className="py-3 px-4 text-left font-bold text-xs text-[#4a352f] uppercase tracking-wider">
+                <th className="py-3 px-4 text-left font-bold text-xs text-[#ffffff] uppercase tracking-wider">
                   Days in Stage
                 </th>
               )}
               {columnVisibility.lastActivity && (
-                <th className="py-3 px-4 text-left font-bold text-xs text-[#4a352f] uppercase tracking-wider">
+                <th className="py-3 px-4 text-left font-bold text-xs text-[#ffffff] uppercase tracking-wider">
                   Last Activity
                 </th>
               )}
               {columnVisibility.actions && (
-                <th className="py-3 px-4 text-left font-bold text-xs text-[#4a352f] uppercase tracking-wider">
+                <th className="py-3 px-4 text-left font-bold text-xs text-[#ffffff] uppercase tracking-wider">
                   Actions
                 </th>
               )}

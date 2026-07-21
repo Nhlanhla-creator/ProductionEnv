@@ -8,7 +8,7 @@ function CMFSidebar() {
   const customDocId = userId ? `${userId}_cmf` : null
 
   const { userName } = useUserProfile(
-    "MyuniversalProfiles",
+    "cmfProfiles",
     "formData.entityOverview.registeredName",
     "Facilitator",
     customDocId
@@ -19,7 +19,7 @@ function CMFSidebar() {
       menuItems={capitalMarketFacilitatorMenuItems}
       userName={userName}
       portalTitle="CMF Dashboard"
-      userCollection="MyuniversalProfiles"
+      userCollection="cmfProfiles"
       userNameField="formData.entityOverview.registeredName"
       storageKey="cmfSidebarCollapsed"
       customDocId={customDocId}
