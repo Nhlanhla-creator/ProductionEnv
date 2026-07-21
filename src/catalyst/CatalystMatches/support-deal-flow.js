@@ -7,7 +7,7 @@ import {
   TrendingUp, FileText, Search, Shield, AlertCircle,
   FileCheck, CheckCircle, XCircle, ArrowRight, LogOut,
   Users, Target, Briefcase, Layers, DollarSign, Settings,
-  ChevronUp, ChevronDown, Plus, X, Info, ChevronsUpDown, Sparkles
+  ChevronUp, ChevronDown, Plus, X, Sparkles
 } from "lucide-react";
 import {
   PROGRAMME_TEMPLATES, mapStatusToStageId, getStageColors,
@@ -78,7 +78,7 @@ const STAGE_ACTION_FIELDS = [
   { key: "showTermSheet", label: "Offer/agreement upload" },
 ];
 
-const StageCustomizePanel = ({ stages, customization, onChange, onClose }) => {
+const StageCustomizePanel = ({ stages, customization, onChange, onClose, programmeType, setProgrammeType }) => {
   const [localRenames, setLocalRenames] = useState(customization.renames || {});
   const [localHidden, setLocalHidden] = useState(customization.hidden || []);
   const [localOrder, setLocalOrder] = useState(stages.map((s) => s.id));
@@ -129,17 +129,35 @@ const StageCustomizePanel = ({ stages, customization, onChange, onClose }) => {
 
   return (
     <PopupPortal>
-      <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-[#4a352f]/40 backdrop-blur-sm" onClick={onClose}>
+      <div className="fixed inset-0 z-[1000] flex items-center justify-center bg-[#4a352f]/40 backdrop-blur-sm font-sans" onClick={onClose}>
         <div className="bg-white rounded-3xl shadow-2xl border border-[#e6d7c3] w-[540px] max-h-[85vh] overflow-y-auto p-7" onClick={(e) => e.stopPropagation()}>
           <div className="flex items-center justify-between mb-5">
             <div>
-              <h3 className="text-xl font-bold text-[#4a352f]">Customize Pipeline</h3>
+              <h3 className="text-xl font-bold text-[#4a352f]">Customize Stages</h3>
               <p className="text-xs text-[#7d5a50] mt-0.5">Rename, hide, reorder, or add custom stages</p>
             </div>
             <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-[#f5f0e1] transition-colors text-[#7d5a50]">
               <X size={20} />
             </button>
           </div>
+
+          {setProgrammeType && (
+            <div className="mb-5">
+              <label className="block text-xs font-semibold text-[#4a352f] mb-2">Programme Type</label>
+              <select
+                value={programmeType}
+                onChange={(e) => setProgrammeType(e.target.value)}
+                className="w-full px-3 py-2.5 bg-[#faf7f2] border border-[#e6d7c3] rounded-xl text-sm font-semibold text-[#4a352f] focus:outline-none focus:ring-2 focus:ring-[#7d5a50]/20 cursor-pointer"
+                title="Choose the stage sequence for this programme type"
+              >
+                {Object.entries(PROGRAMME_TEMPLATES).map(([key, tpl]) => (
+                  <option key={key} value={key}>{tpl.label}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          <p className="text-xs font-semibold text-[#a89482] uppercase tracking-wide mb-2">Stages in this pipeline</p>
 
           <div className="space-y-2 mb-5 max-h-[280px] overflow-y-auto pr-1">
             {localOrder.map((id, i) => {
@@ -275,7 +293,6 @@ export function SupportDealFlowPipeline({
   }, [programmeType, customization]);
 
   const [showCustomizePanel, setShowCustomizePanel] = useState(false);
-  const [showDetails, setShowDetails] = useState(false);
 
   const STAGES = useMemo(() => {
     const base = PROGRAMME_TEMPLATES[programmeType]?.stages || PROGRAMME_TEMPLATES.default.stages;
@@ -325,86 +342,133 @@ export function SupportDealFlowPipeline({
     return result;
   }, [liveStages, counts]);
 
-  const activeStageId = useMemo(() => {
-    let maxCount = 0;
-    let maxStage = null;
-    for (const stage of liveStages) {
-      const c = counts[stage.id] || 0;
-      if (c > maxCount) { maxCount = c; maxStage = stage.id; }
-    }
-    return maxStage;
-  }, [liveStages, counts]);
-
   const handleStageClick = useCallback((stageId) => {
     const newSelected = stageId === selectedStage ? null : stageId;
     setSelectedStage(newSelected);
     onStageClick?.(newSelected);
   }, [selectedStage, onStageClick]);
 
-  const conversionMetrics = useMemo(() => {
-    const sorted = [...liveStages].sort((a, b) => a.order - b.order);
-    const rows = [];
-    for (let i = 0; i < sorted.length - 1; i++) {
-      const from = sorted[i], to = sorted[i + 1];
-      const fromCount = cumulativeCounts[from.id] || 0;
-      const toCount = cumulativeCounts[to.id] || 0;
-      const rate = fromCount > 0 ? ((toCount / fromCount) * 100).toFixed(1) : "0.0";
-      rows.push({ fromLabel: from.name, toLabel: to.name, rate });
-    }
-    return rows;
-  }, [liveStages, cumulativeCounts]);
+  // Every stage card — sequential or terminal — shares this renderer, so
+  // Declined/Withdrawn are guaranteed the same shape and size as the rest
+  // rather than needing a second, drifting implementation. Cards use a dark
+  // brown theme with white text; Declined/Withdrawn use dark grey instead,
+  // as the one deliberate signal that those two are a different kind of
+  // outcome — everything else about the card (size, layout, type scale) is
+  // identical.
+  const renderStageCard = (stage) => {
+    const isHovered = hoveredStage?.id === stage.id;
+    const isSelected = selectedStage === stage.id;
+    // Matched is the entry point every SME passes through, so "Matched"
+    // should read as a running total — everyone who has ever been matched,
+    // not just whoever hasn't moved on yet. That's the same number as the
+    // total across every stage (live and terminal).
+    const count = stage.id === "matched" ? totalBusinesses : (counts[stage.id] || 0);
+    const percentage = getStagePercentage(count);
+    const isNegativeOutcome = stage.terminal && /declined|withdrawn/i.test(stage.name || "");
+    const theme = isNegativeOutcome
+      ? { from: "#4b4844", to: "#242220" } // dark grey — Declined / Withdrawn
+      : { from: "#4a352f", to: "#241a14" }; // dark brown — every other stage
+    const borderColor = isSelected ? "#d9b98a" : "rgba(255,255,255,0.1)";
 
-  const evaluationToAdmissionRate = useMemo(() => {
-    const evalStage = liveStages.find((s) => s.id === "evaluation");
-    const admittedStage = liveStages.find((s) => s.id === "admitted");
-    if (!evalStage || !admittedStage) return null;
-    const evalCount = cumulativeCounts["evaluation"] || 0;
-    const admittedCount = cumulativeCounts["admitted"] || 0;
-    const rate = evalCount > 0 ? ((admittedCount / evalCount) * 100).toFixed(1) : "0.0";
-    return { fromLabel: evalStage.name, toLabel: admittedStage.name, rate };
-  }, [liveStages, cumulativeCounts]);
+    return (
+      <div
+        className={`relative flex-shrink-0 cursor-pointer group transition-all duration-300 ${
+          isSelected ? "scale-105" : "hover:scale-[1.02]"
+        }`}
+        style={{ width: "104px" }}
+        onMouseEnter={(e) => setHoveredStage({ id: stage.id, rect: e.currentTarget.getBoundingClientRect() })}
+        onMouseLeave={() => setHoveredStage(null)}
+        onClick={() => handleStageClick(stage.id)}
+      >
+        <div
+          className={`rounded-xl p-2.5 transition-all duration-300 ${
+            isHovered || isSelected ? "shadow-xl -translate-y-1" : "shadow-md hover:shadow-lg"
+          }`}
+          style={{
+            background: `linear-gradient(135deg, ${theme.from} 0%, ${theme.to} 100%)`,
+            border: `1.5px solid ${borderColor}`,
+          }}
+        >
+          <div className="flex items-center gap-1.5 mb-1.5">
+            <div className="w-5 h-5 rounded-lg flex items-center justify-center bg-white/10 flex-shrink-0">
+              {getIcon(stage.icon, 11, "#ffffff")}
+            </div>
+            <h3 className="font-semibold text-white text-[9px] uppercase tracking-wide leading-tight truncate flex-1">{stage.name}</h3>
+          </div>
+          <div className="flex items-baseline justify-center">
+            <span className="text-lg font-extrabold leading-none text-white">{count}</span>
+          </div>
+          <div className="flex items-center gap-1.5 mt-2">
+            <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: "rgba(0,0,0,0.3)" }}>
+              <div
+                className="h-full rounded-full transition-all duration-500"
+                style={{ width: `${percentage}%`, backgroundColor: "#c9986a" }}
+              />
+            </div>
+            <span className="text-[8px] font-semibold flex-shrink-0" style={{ color: "#d9c4b0" }}>{percentage}%</span>
+          </div>
+        </div>
+
+        {/* Tooltip */}
+        {isHovered && (
+          <PopupPortal>
+            <div
+              className="fixed z-[1200] pointer-events-none w-[230px] font-sans"
+              style={{
+                top: hoveredStage.rect.bottom + 10,
+                left: Math.min(Math.max(hoveredStage.rect.left + hoveredStage.rect.width / 2 - 115, 12), window.innerWidth - 242),
+              }}
+            >
+              <div className="bg-[#4a352f] text-[#faf7f2] text-xs rounded-2xl px-4 py-3.5 shadow-2xl">
+                <p className="font-semibold mb-1.5 text-sm">{stage.name}</p>
+                <p className="text-[#e6d7c3] leading-relaxed">{stage.tooltip}</p>
+                <div className="mt-2.5 pt-2.5 border-t border-white/10 flex items-center justify-between">
+                  <span className="text-[#c8b6a6]">{percentage}% of pipeline</span>
+                  <span className="text-[#a67c52] font-semibold">{count} businesses</span>
+                </div>
+              </div>
+            </div>
+          </PopupPortal>
+        )}
+      </div>
+    );
+  };
 
   return (
-    <div className={`w-full bg-gradient-to-br from-[#faf7f2] to-[#f5f0e1] rounded-3xl p-7 shadow-xl border border-[#e6d7c3] ${className}`}>
+    <div className={`w-full font-sans bg-gradient-to-br from-[#faf7f2] to-[#f5f0e1] rounded-3xl p-7 shadow-xl border border-[#e6d7c3] ${className}`}>
       {/* Header */}
-      <div className="flex items-center justify-between mb-6 flex-wrap gap-4">
+      <div className="flex items-center justify-between mb-7 flex-wrap gap-5">
         <div className="flex items-center gap-4">
           <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#7d5a50] to-[#4a352f] flex items-center justify-center shadow-md">
-            <Briefcase size={22} className="text-[#faf7f2]" />
+            <Briefcase size={20} className="text-[#faf7f2]" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h2 className="text-2xl font-bold text-[#4a352f]">DealFlow Pipeline</h2>
-              <Sparkles size={16} className="text-[#a67c52]" />
+              <h2 className="text-xl font-bold text-[#4a352f] tracking-tight">Dealflow Pipeline</h2>
+              <Sparkles size={14} className="text-[#a67c52]" />
             </div>
-            <p className="text-sm text-[#7d5a50]">Track your business journey</p>
+            <p className="text-xs text-[#7d5a50] mt-0.5">Track your business journey, stage by stage</p>
           </div>
         </div>
-        <div className="flex items-center gap-4">
-          <div className="text-right bg-white/60 backdrop-blur-sm px-5 py-2 rounded-2xl border border-[#e6d7c3]">
-            <div className="text-2xl font-extrabold text-[#4a352f]">{totalBusinesses}</div>
-            <div className="text-xs text-[#7d5a50] font-medium">Total Businesses</div>
-          </div>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => handleStageClick("matched")}
+            className="flex items-center gap-2 bg-white/70 backdrop-blur-sm px-5 py-2.5 rounded-2xl border transition-all hover:bg-[#f5f0e1]"
+            style={{ borderColor: selectedStage === "matched" ? "#d9b98a" : "#e6d7c3" }}
+            title="Show newly matched businesses"
+          >
+            <span className="text-3xl font-extrabold text-[#4a352f] leading-none">{counts["matched"] || 0}</span>
+            <span className="text-[10px] text-[#7d5a50] font-semibold uppercase tracking-wide">New Businesses</span>
+          </button>
           {showFilter && (
-            <>
-              <select
-                value={programmeType}
-                onChange={(e) => setProgrammeType(e.target.value)}
-                className="px-4 py-2.5 bg-white border border-[#e6d7c3] rounded-xl text-sm font-semibold text-[#4a352f] focus:outline-none focus:ring-2 focus:ring-[#7d5a50]/20 hover:border-[#c8b6a6] transition-colors cursor-pointer"
-                title="Choose the stage sequence for this programme type"
-              >
-                {Object.entries(PROGRAMME_TEMPLATES).map(([key, tpl]) => (
-                  <option key={key} value={key}>{tpl.label}</option>
-                ))}
-              </select>
-              <button
-                onClick={() => setShowCustomizePanel(true)}
-                className="p-2.5 rounded-xl border border-[#e6d7c3] bg-white text-[#7d5a50] hover:bg-[#f5f0e1] hover:border-[#c8b6a6] transition-all hover:shadow-md"
-                title="Rename, hide, reorder, or add stages"
-              >
-                <Settings size={18} />
-              </button>
-            </>
+            <button
+              onClick={() => setShowCustomizePanel(true)}
+              className="flex items-center gap-2 bg-white/70 backdrop-blur-sm px-5 py-2.5 rounded-2xl border border-[#e6d7c3] text-sm font-semibold text-[#4a352f] hover:bg-[#f5f0e1] transition-all"
+              title="Rename, hide, reorder, or add stages"
+            >
+              <Settings size={16} className="text-[#7d5a50]" />
+              Customize Stages
+            </button>
           )}
         </div>
       </div>
@@ -417,181 +481,86 @@ export function SupportDealFlowPipeline({
         <>
           {/* Stage Cards */}
           <div className="flex items-stretch overflow-x-auto pb-3 scrollbar-thin scrollbar-thumb-[#c8b6a6] scrollbar-track-transparent gap-1">
-            {liveStages.map((stage, idx) => {
-              const isHovered = hoveredStage?.id === stage.id;
-              const isSelected = selectedStage === stage.id;
-              const isActive = activeStageId === stage.id;
-              const count = counts[stage.id] || 0;
-              const percentage = getStagePercentage(count);
-              const colors = getStageColors(stage.group);
+            {liveStages.map((stage, idx) => (
+              <div key={stage.id} className="flex items-center">
+                {renderStageCard(stage)}
 
-              return (
-                <div key={stage.id} className="flex items-center">
-                  <div
-                    className={`relative flex-shrink-0 cursor-pointer group transition-all duration-300 ${
-                      isSelected ? "scale-105" : "hover:scale-[1.02]"
-                    }`}
-                    style={{ width: "135px" }}
-                    onMouseEnter={(e) => setHoveredStage({ id: stage.id, rect: e.currentTarget.getBoundingClientRect() })}
-                    onMouseLeave={() => setHoveredStage(null)}
-                    onClick={() => handleStageClick(stage.id)}
-                  >
-                    <div
-                      className={`rounded-2xl p-4 transition-all duration-300 ${
-                        isHovered || isSelected ? "shadow-xl -translate-y-1" : "shadow-md hover:shadow-lg"
-                      }`}
-                      style={{
-                        background: `linear-gradient(135deg, ${colors.bgColor} 0%, ${colors.bgColor}cc 100%)`,
-                        border: `2.5px solid ${isSelected || isActive ? colors.color : colors.borderColor}`,
-                      }}
-                    >
-                      <div className="flex items-center gap-2 mb-2">
-                        <div className="w-7 h-7 rounded-xl flex items-center justify-center bg-white/40 backdrop-blur-sm" style={{ color: colors.color }}>
-                          {getIcon(stage.icon, 14)}
-                        </div>
-                        <h3 className="font-bold text-[#4a352f] text-xs leading-tight truncate flex-1">{stage.name}</h3>
-                      </div>
-                      <div className="flex items-baseline gap-1.5">
-                        <span className="text-2xl font-extrabold" style={{ color: colors.color }}>{count}</span>
-                        <span className="text-[10px] text-[#7d5a50] font-medium">· {percentage}%</span>
-                      </div>
-                      <div className="w-full h-1.5 bg-white/30 rounded-full overflow-hidden mt-2.5 backdrop-blur-sm">
-                        <div
-                          className="h-full rounded-full transition-all duration-500"
-                          style={{ width: `${percentage}%`, backgroundColor: colors.color }}
-                        />
+                {/* Connector — conversion rate to the next stage, shown
+                    above the arrow (previously a separate "Pipeline
+                    Insights" card; now lives where it's actually useful,
+                    right on the flow it describes). */}
+                {idx < liveStages.length - 1 && (() => {
+                  const nextStage = liveStages[idx + 1];
+                  const fromCount = cumulativeCounts[stage.id] || 0;
+                  const toCount = cumulativeCounts[nextStage.id] || 0;
+                  const rate = fromCount > 0 ? ((toCount / fromCount) * 100).toFixed(1) : "0.0";
+                  return (
+                    <div className="flex flex-col items-center px-0.5 flex-shrink-0" style={{ minWidth: "30px" }}>
+                      <span className="text-[10px] font-bold text-[#7d5a50] mb-0.5 whitespace-nowrap" title="Share of this stage that reaches the next">
+                        {rate}%
+                      </span>
+                      <div className="flex items-center">
+                        <div className="w-5 h-[2px] bg-gradient-to-r from-[#c8b6a6] to-[#e6d7c3]" />
+                        <ArrowRight size={14} className="text-[#c8b6a6] -ml-1" />
                       </div>
                     </div>
+                  );
+                })()}
+              </div>
+            ))}
 
-                    {/* Tooltip */}
-                    {isHovered && (
-                      <PopupPortal>
-                        <div
-                          className="fixed z-[1200] pointer-events-none w-[230px]"
-                          style={{
-                            top: hoveredStage.rect.bottom + 10,
-                            left: Math.min(Math.max(hoveredStage.rect.left + hoveredStage.rect.width / 2 - 115, 12), window.innerWidth - 242),
-                          }}
-                        >
-                          <div className="bg-[#4a352f] text-[#faf7f2] text-xs rounded-2xl px-4 py-3.5 shadow-2xl">
-                            <p className="font-semibold mb-1.5 text-sm">{stage.name}</p>
-                            <p className="text-[#e6d7c3] leading-relaxed">{stage.tooltip}</p>
-                            <div className="mt-2.5 pt-2.5 border-t border-white/10 flex items-center justify-between">
-                              <span className="text-[#c8b6a6]">{percentage}% of pipeline</span>
-                              <span className="text-[#a67c52] font-semibold">{count} businesses</span>
-                            </div>
+            {/* Terminal outcomes now live at the end of the same pipeline
+                row (previously tucked away in a collapsible Insights
+                section) — a slim divider marks them as endpoints, but they
+                use the exact same card shape/size as the flow stages.
+                Declined/Withdrawn get one shared red border wrapping the
+                pair, rather than each card having its own. */}
+            {terminalStages.length > 0 && (() => {
+              const negativeStages = terminalStages.filter((s) => /declined|withdrawn/i.test(s.name || ""));
+              const otherStages = terminalStages.filter((s) => !/declined|withdrawn/i.test(s.name || ""));
+              return (
+                <div className="flex items-center flex-shrink-0">
+                  <div className="flex flex-col items-center px-2 flex-shrink-0 self-stretch justify-center">
+                    <div className="w-px h-10 bg-[#e6d7c3]" />
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    {otherStages.map((stage) => (
+                      <div key={stage.id} className="flex-shrink-0">
+                        {renderStageCard(stage)}
+                      </div>
+                    ))}
+                    {negativeStages.length > 0 && (
+                      <div className="flex items-center gap-1.5 flex-shrink-0 p-1.5 rounded-2xl" style={{ border: "2px solid #dc2626" }}>
+                        {negativeStages.map((stage) => (
+                          <div key={stage.id} className="flex-shrink-0">
+                            {renderStageCard(stage)}
                           </div>
-                        </div>
-                      </PopupPortal>
+                        ))}
+                      </div>
                     )}
                   </div>
-
-                  {/* Connector */}
-                  {idx < liveStages.length - 1 && (
-                    <div className="flex items-center px-1 flex-shrink-0">
-                      <div className="w-5 h-[2px] bg-gradient-to-r from-[#c8b6a6] to-[#e6d7c3]" />
-                      <ArrowRight size={14} className="text-[#c8b6a6] -ml-1" />
-                    </div>
-                  )}
                 </div>
               );
-            })}
+            })()}
           </div>
 
-          <div className="flex items-center justify-between mt-4 flex-wrap gap-3">
-            <p className="text-xs text-[#7d5a50] font-medium">
-              Click a stage to filter
-              {selectedStage && (
-                <span className="ml-3 text-[#a67c52] font-semibold">
-                  · Filtering: {STAGES.find((s) => s.id === selectedStage)?.name}
-                  <button onClick={() => handleStageClick(null)} className="ml-2 text-[#7d5a50] hover:text-[#4a352f] underline font-medium">
-                    Clear
-                  </button>
-                </span>
-              )}
-            </p>
-            <button
-              onClick={() => setShowDetails((v) => !v)}
-              className="flex items-center gap-2 text-sm font-semibold px-4 py-2 rounded-xl bg-white border border-[#e6d7c3] text-[#7d5a50] hover:bg-[#f5f0e1] hover:border-[#c8b6a6] transition-all hover:shadow-md"
-            >
-              <ChevronsUpDown size={14} />
-              {showDetails ? "Hide Insights" : "Show Insights"}
-            </button>
-          </div>
-
-          {showDetails && (
-            <>
-              {/* Terminal Outcomes */}
-              {terminalStages.length > 0 && (
-                <div className="mt-6 pt-5 border-t border-[#e6d7c3]">
-                  <p className="text-[10px] uppercase tracking-wider text-[#a89482] font-semibold mb-3">
-                    Terminal Outcomes
-                  </p>
-                  <div className="flex gap-3 flex-wrap">
-                    {terminalStages.map((stage) => {
-                      const colors = getStageColors(stage.group);
-                      const count = counts[stage.id] || 0;
-                      const percentage = getStagePercentage(count);
-                      const isSelected = selectedStage === stage.id;
-                      return (
-                        <button
-                          key={stage.id}
-                          onClick={() => handleStageClick(stage.id)}
-                          className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl border-2 transition-all hover:shadow-md ${
-                            isSelected ? "shadow-lg" : ""
-                          }`}
-                          style={{
-                            background: `linear-gradient(135deg, ${colors.bgColor} 0%, ${colors.bgColor}80 100%)`,
-                            borderColor: isSelected ? colors.color : colors.borderColor,
-                          }}
-                          title={stage.tooltip}
-                        >
-                          <span style={{ color: colors.color }}>{getIcon(stage.icon, 15)}</span>
-                          <span className="text-sm font-semibold" style={{ color: colors.color }}>{stage.name}</span>
-                          <span className="text-xs text-[#7d5a50] font-medium">{count} · {percentage}%</span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* Pipeline Insights */}
-              <div className="mt-6 pt-5 border-t border-[#e6d7c3]">
-                <div className="flex items-center gap-2 mb-4">
-                  <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#7d5a50] to-[#4a352f] flex items-center justify-center shadow-md">
-                    <TrendingUp size={16} className="text-[#faf7f2]" />
-                  </div>
-                  <h4 className="text-base font-bold text-[#4a352f]">Pipeline Insights</h4>
-                  <div className="relative group">
-                    <Info size={14} className="text-[#a89482] cursor-help" />
-                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-1.5 bg-[#4a352f] text-[#faf7f2] text-xs rounded-lg whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                      Conversion = share of SMEs at or beyond stage A that are also at or beyond stage B
-                    </div>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                  {conversionMetrics.map((m, i) => (
-                    <div key={i} className="bg-white rounded-xl border border-[#e6d7c3] px-4 py-3 shadow-sm hover:shadow-md transition-shadow">
-                      <p className="text-[10px] text-[#a89482] font-medium uppercase tracking-wide">{m.fromLabel} → {m.toLabel}</p>
-                      <p className="text-lg font-bold text-[#4a352f] mt-0.5">{m.rate}%</p>
-                    </div>
-                  ))}
-                  {evaluationToAdmissionRate && (
-                    <div className="bg-gradient-to-br from-[#a67c52]/10 to-[#a67c52]/5 rounded-xl border-2 border-[#a67c52] px-4 py-3 shadow-sm">
-                      <p className="text-[10px] text-[#a67c52] font-bold uppercase tracking-wide">Overall</p>
-                      <p className="text-[10px] text-[#7d5a50]">{evaluationToAdmissionRate.fromLabel} → {evaluationToAdmissionRate.toLabel}</p>
-                      <p className="text-lg font-bold text-[#4a352f] mt-0.5">{evaluationToAdmissionRate.rate}%</p>
-                    </div>
-                  )}
-                  <div className="bg-white rounded-xl border border-dashed border-[#e6d7c3] px-4 py-3 flex flex-col justify-center">
-                    <p className="text-[10px] text-[#a89482] font-medium uppercase tracking-wide">Avg. Time to Decision</p>
-                    <p className="text-xs text-[#a89482] italic mt-1">Needs stage-change timestamps</p>
-                  </div>
-                </div>
+          <div className="flex items-center mt-4 flex-wrap gap-3">
+            {selectedStage ? (
+              <div className="inline-flex items-center gap-2 pl-3 pr-1.5 py-1.5 rounded-full bg-[#a67c52]/10 border border-[#a67c52]/40">
+                <span className="text-xs font-semibold text-[#7d5a50]">Filtering</span>
+                <span className="text-xs font-bold text-[#4a352f]">{STAGES.find((s) => s.id === selectedStage)?.name}</span>
+                <button
+                  onClick={() => handleStageClick(null)}
+                  className="p-1 rounded-full hover:bg-white/70 text-[#7d5a50] hover:text-[#4a352f] transition-colors"
+                  title="Clear filter"
+                >
+                  <X size={12} />
+                </button>
               </div>
-            </>
-          )}
+            ) : (
+              <p className="text-xs text-[#a89482] font-medium">Click a stage to filter the list below</p>
+            )}
+          </div>
         </>
       )}
 
@@ -601,6 +570,8 @@ export function SupportDealFlowPipeline({
           customization={customization}
           onChange={setCustomization}
           onClose={() => setShowCustomizePanel(false)}
+          programmeType={programmeType}
+          setProgrammeType={setProgrammeType}
         />
       )}
     </div>
