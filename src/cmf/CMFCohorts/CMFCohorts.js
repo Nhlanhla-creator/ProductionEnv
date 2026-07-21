@@ -1,6 +1,6 @@
 "use client"
 import React, { useState, useEffect } from "react"
-import { Trophy, Users, TrendingUp, Building, MapPin, DollarSign, Calendar, Eye, RefreshCw, X, BarChart3, ChevronDown, FileText, Copy, CheckCircle } from "lucide-react"
+import { Trophy, Users, TrendingUp, Building, MapPin, DollarSign, Calendar, Eye, RefreshCw, X, BarChart3, ChevronDown, FileText, Copy, CheckCircle, Ticket, MoreVertical } from "lucide-react"
 import { collection, addDoc } from "firebase/firestore"
 import { db, auth } from "../../firebaseConfig"
 
@@ -125,6 +125,17 @@ export default function CMFCohorts() {
   const [generatedVoucher, setGeneratedVoucher] = useState(null)
   const [copied, setCopied] = useState(false)
   const [savingVoucher, setSavingVoucher] = useState(false)
+  const [openActionMenuId, setOpenActionMenuId] = useState(null)
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (!event.target.closest('.action-dropdown-container')) {
+        setOpenActionMenuId(null)
+      }
+    }
+    document.addEventListener('click', handleClickOutside)
+    return () => document.removeEventListener('click', handleClickOutside)
+  }, [])
 
   const handleRefresh = () => {
     setRefreshing(true)
@@ -346,7 +357,7 @@ export default function CMFCohorts() {
         </div>
 
         {/* Voucher Info Banner */}
-        <div style={{
+        {/* <div style={{
           backgroundColor: "#f0f7ff",
           border: "1px solid #a67c52",
           borderRadius: "8px",
@@ -375,7 +386,7 @@ export default function CMFCohorts() {
               💡 You can set an expiration date for each voucher - after that date/time, the voucher will no longer be valid!
             </p>
           </div>
-        </div>
+        </div> */}
 
         {/* Stats Cards */}
         <div className="grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-5 mb-8">
@@ -427,8 +438,8 @@ export default function CMFCohorts() {
             <div className="overflow-x-auto">
               <table className="w-full border-collapse text-sm">
                 <thead>
-                  <tr className="bg-[#faf7f2] border-b-2 border-[#e6d7c3]">
-                    <th className="p-5 text-left font-semibold text-[#4a352f] text-xs uppercase tracking-wide whitespace-nowrap">
+                  <tr className="bg-[#faf7f2] border-b-2 border-[#e6d7c3] text-[#4a352f]">
+                    <th className="p-5 text-left font-semibold text-[#4a352f] text-xs uppercase tracking-wide whitespace-nowrap" style={{ color: "#4a352f !important"}}>
                       Company
                     </th>
                     <th className="p-5 text-left font-semibold text-[#4a352f] text-xs uppercase tracking-wide whitespace-nowrap">
@@ -511,35 +522,73 @@ export default function CMFCohorts() {
                         </span>
                       </td>
 
-                      <td className="p-5 min-w-[200px]">
-                        <div className="flex flex-wrap gap-2 justify-center">
+                      <td className="p-5 text-center min-w-[200px]">
+                        <div className="flex items-center justify-center gap-2 relative action-dropdown-container">
                           <button
+                            type="button"
                             onClick={() => handleViewGrowthSuite(cohort)}
-                            className="bg-[#a67c52] hover:bg-[#8d6e63] text-white rounded-lg px-3 py-1.5 text-xs font-semibold cursor-pointer transition-all duration-200"
+                            className="bg-[#a67c52] hover:bg-[#8d6e63] text-white rounded-lg px-3 py-1.5 text-xs font-semibold cursor-pointer transition-all duration-200 shadow-sm flex items-center gap-1.5 whitespace-nowrap"
                           >
-                            Growth Suite
+                            <TrendingUp size={13} />
+                            <span>Growth Suite</span>
                           </button>
 
                           <button
-                            onClick={() => handleViewDocuments(cohort)}
-                            className="bg-[#74635b] hover:bg-[#5d4f48] text-white rounded-lg px-3 py-1.5 text-xs font-semibold cursor-pointer transition-all duration-200"
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setOpenActionMenuId(openActionMenuId === cohort.id ? null : cohort.id)
+                            }}
+                            title="More actions"
+                            className="p-1.5 border border-[#a67c52]/40 hover:bg-[#f0e6d9] bg-[#FAF5EF] text-[#4a352f] rounded-lg cursor-pointer transition-all duration-200 shadow-sm flex items-center justify-center"
                           >
-                            Documents
+                            <MoreVertical size={15} />
                           </button>
 
-                          <button
-                            onClick={() => handleGenerateVoucher(cohort, "premium")}
-                            className="bg-[#4caf50] hover:bg-[#45a049] text-white rounded-lg px-3 py-1.5 text-xs font-semibold cursor-pointer transition-all duration-200"
-                          >
-                            Generate Voucher
-                          </button>
+                          {openActionMenuId === cohort.id && (
+                            <div className="absolute right-0 top-full mt-1.5 z-50 bg-white border border-[#e6d7c3] rounded-xl shadow-xl p-1.5 min-w-[170px] flex flex-col gap-0.5 animate-in fade-in duration-150 text-left">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setOpenActionMenuId(null)
+                                  handleViewDocuments(cohort)
+                                }}
+                                className="w-full text-left px-3 py-2 text-xs font-semibold text-[#4a352f] hover:bg-[#FAF5EF] hover:text-[#a67c52] rounded-lg flex items-center gap-2.5 transition-colors cursor-pointer"
+                              >
+                                <FileText size={14} className="text-[#74635b]" />
+                                <span>Documents</span>
+                              </button>
 
-                          <button
-                            onClick={() => handleViewDetails(cohort)}
-                            className="bg-white border-2 border-[#a67c52] text-[#a67c52] hover:bg-[#FAF5EF] rounded-lg px-3 py-1.5 text-xs font-semibold cursor-pointer transition-all duration-200"
-                          >
-                            View Summary
-                          </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setOpenActionMenuId(null)
+                                  handleGenerateVoucher(cohort, "premium")
+                                }}
+                                className="w-full text-left px-3 py-2 text-xs font-semibold text-[#4a352f] hover:bg-[#FAF5EF] hover:text-[#4caf50] rounded-lg flex items-center gap-2.5 transition-colors cursor-pointer"
+                              >
+                                <Ticket size={14} className="text-[#4caf50]" />
+                                <span>Generate Voucher</span>
+                              </button>
+
+                              <div className="my-1 border-t border-[#f0e6d9]" />
+
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setOpenActionMenuId(null)
+                                  handleViewDetails(cohort)
+                                }}
+                                className="w-full text-left px-3 py-2 text-xs font-semibold text-[#4a352f] hover:bg-[#FAF5EF] hover:text-[#a67c52] rounded-lg flex items-center gap-2.5 transition-colors cursor-pointer"
+                              >
+                                <Eye size={14} className="text-[#a67c52]" />
+                                <span>View Summary</span>
+                              </button>
+                            </div>
+                          )}
                         </div>
                       </td>
                     </tr>
