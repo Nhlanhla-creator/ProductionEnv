@@ -8,14 +8,14 @@ function CMFHeader() {
 
   return (
     <Header
-      userCollection="MyuniversalProfiles"
+      userCollection="cmfProfiles"
       userNameField="formData.entityOverview.registeredName"
       logoField="formData.entityOverview.companyLogo"
       portalName="CMF Dashboard"
       roleOptions={profileRoleOptions.capitalMarketFacilitator}
       enableAdvancedMessages={true}
       messagesRoute="/cmf-messages"
-      messageSenderCollection="MyuniversalProfiles"
+      messageSenderCollection="cmfProfiles"
       customDocId={customDocId}
     />
   )
