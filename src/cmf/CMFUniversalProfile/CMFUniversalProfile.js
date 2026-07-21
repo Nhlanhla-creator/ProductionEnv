@@ -13,9 +13,9 @@ import LegalCompliance from "../../smses/UniversalProfile/legal-compliance"
 import ProductsServices from "../../smses/UniversalProfile/products-services"
 import HowDidYouHear from "../../smses/UniversalProfile/how-did-you-hear"
 import CMFDocumentUpload from "./CMFDocumentUpload"
-import FundDetailsSection from "../../Investor/InvestorUniversalProfile/FundDetails\u200b"
-import ApplicationBriefSection from "../../Investor/InvestorUniversalProfile/ApplicationBrief\u200b"
-import GeneralInvestmentPreferenceSection from "../../Investor/InvestorUniversalProfile/GeneralInvestmentPreference\u200b"
+import FundDetailsSection from "../../Investor/InvestorUniversalProfile/FundDetails​"
+import ApplicationBriefSection from "../../Investor/InvestorUniversalProfile/ApplicationBrief​"
+import GeneralInvestmentPreferenceSection from "../../Investor/InvestorUniversalProfile/GeneralInvestmentPreference​"
 import DeclarationConsent from "../../smses/UniversalProfile/declaration-consent"
 import CMFProfileSummary from "./CMFProfileSummary"
 import { onAuthStateChanged } from "firebase/auth"
@@ -215,7 +215,7 @@ export default function CMFUniversalProfile() {
     declarationConsent: { accuracy: false, dataProcessing: false, termsConditions: false },
   })
 
-  const FIRESTORE_COLLECTION = "MyuniversalProfiles"
+  const FIRESTORE_COLLECTION = "cmfProfiles"
   const LOCAL_STORAGE_KEY_PREFIX = "cmfProfileData"
   const LOCAL_STORAGE_SECTIONS_KEY = "cmfProfileCompletedSections"
 
