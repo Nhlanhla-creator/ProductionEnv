@@ -9,7 +9,7 @@ import {
   LayoutGrid, Download, MessageSquare,
   Share2, ArrowRight, ArrowUp, ArrowDown, SlidersHorizontal,
   RotateCcw, Settings, Target, Briefcase,
-  Video, Link, Flag, LogOut, Trash2, Plus
+  Video, Link, LogOut, Trash2, Plus
 } from "lucide-react";
 import { db, auth, storage } from "../../firebaseConfig";
 import { serverTimestamp, doc, updateDoc, getDoc, addDoc, collection, query, where, getDocs } from "firebase/firestore";
@@ -30,8 +30,6 @@ const BIG_SCORE_LABELS = {
 };
 
 // Match % now maps to a plain label + fit bar instead of a 5-star rating
-// (feedback #5: stars read as a customer-satisfaction score, not a fit
-// score, and duplicated what the percentage already communicates).
 const MATCH_LABELS = {
   excellent: { min: 80, label: "Excellent Fit", color: "#22c55e" },
   strong: { min: 60, label: "Strong Fit", color: "#86efac" },
@@ -54,8 +52,7 @@ const getMatchLabel = (score) => {
   return MATCH_LABELS.poor;
 };
 
-// Stage lookup built from the shared config (feedback #3: one place stages
-// are named/defined, shared with the pipeline view so the two can't drift).
+// Stage lookup built from the shared config
 const STAGE_BY_ID = Object.fromEntries(DEFAULT_STAGES.map((s) => [s.id, s]));
 const getStageById = (id) => STAGE_BY_ID[id] || STAGE_BY_ID.matched;
 
@@ -66,10 +63,7 @@ const getStatusStyle = (status) => {
 };
 
 // Reads whatever the catalyst admin configured in the pipeline's "Stage
-// Actions" settings panel (persisted via stageConfig.js's shared helpers),
-// falling back to the sensible defaults there if nothing's been customized.
-// This used to be a hardcoded switch statement with no way for an admin to
-// change it — now it's just reading data.
+// Actions" settings panel
 const getStageFields = (stageName) => {
   const id = mapStatusToStageId(stageName);
   const overrides = loadPipelineSettings().customization?.stageActions || {};
@@ -91,12 +85,7 @@ const formatCurrency = (value) => {
   return `R${num}`;
 };
 
-// ─── Attention indicator (feedback #11) ────────────────────────────────────
-// Flags records that need catalyst action. Reasons are computed from
-// whatever's already on the record; reasons that need fields the schema
-// doesn't yet have (e.g. "documents outstanding") are left out rather than
-// invented, consistent with this codebase's existing honesty-over-mocking
-// convention for data that isn't backed by a real field yet.
+// ─── Attention indicator ────────────────────────────────────
 const getAttentionReasons = (sme) => {
   const reasons = [];
   if ((sme.daysInStage || 0) >= 14) reasons.push("Stalled for 14+ days");
@@ -114,11 +103,6 @@ const PopupPortal = ({ children }) => {
 };
 
 // ─── Column header info tooltip ────────────────────────────────────────────
-// Replaces a bare `title="..."` attribute (native browser tooltips are slow
-// to appear, easy to miss, and inconsistent across browsers — which is why
-// it looked like "it does nothing"). This renders an actual, immediately
-// visible tooltip on hover, portaled to <body> so it never clips inside the
-// scrolling table container.
 const HeaderInfoTooltip = ({ text }) => {
   const [rect, setRect] = useState(null);
   return (
@@ -148,14 +132,7 @@ const HeaderInfoTooltip = ({ text }) => {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOverride }) {
-  // Table layout preferences (visible columns, density, sort) previously
-  // lived only in component state, which resets to these hardcoded defaults
-  // every time the component unmounts — i.e. the moment you navigate away.
-  // Persisting to localStorage means "leave and come back" actually keeps
-  // what was customized. `savedViews`/`saveCurrentView`/`loadView` further
-  // down already existed in this file but were never wired to a visible
-  // button or to any storage, so nothing they set could ever actually stick
-  // — that's fixed below too, with a real "Save View" control in the toolbar.
+  // Table layout preferences
   const VIEW_STORAGE_KEY = "sme-table-current-view-v1";
   const SAVED_VIEWS_STORAGE_KEY = "sme-table-saved-views-v1";
 
@@ -181,22 +158,13 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
   const [expandedRows, setExpandedRows] = useState(new Set());
   const [columnVisibility, setColumnVisibility] = useState(() => loadStoredView()?.columnVisibility || DEFAULT_COLUMN_VISIBILITY);
   const [showColumnChooser, setShowColumnChooser] = useState(false);
-  // Default sort now prioritises records that need attention (feedback #11)
   const [sortConfig, setSortConfig] = useState(() => loadStoredView()?.sortConfig || DEFAULT_SORT_CONFIG);
   const [density, setDensity] = useState(() => loadStoredView()?.density || 'comfortable');
-  // Filtering now lives on the column headers themselves (headerFilterOpen
-  // tracks which header's popover is open) rather than a separate Filters
-  // panel or a standalone search bar.
-  const [headerFilterOpen, setHeaderFilterOpen] = useState(null); // { type, rect }
+  const [headerFilterOpen, setHeaderFilterOpen] = useState(null);
   const [localFilters, setLocalFilters] = useState({
     name: '', fundingStage: [], bigScoreRange: [0, 100], status: [], sector: []
   });
   const [notification, setNotification] = useState(null);
-  // Drives full-row hover highlighting, including the sticky Business Name
-  // column — that column needs its own opaque background to stay readable
-  // while the table scrolls horizontally, which meant a plain CSS
-  // `tr:hover` rule never showed through it. Tracking hover in state lets
-  // both the row and the sticky cell share one source of truth.
   const [hoveredRowKey, setHoveredRowKey] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
@@ -236,16 +204,13 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
 
   const { enriched, catalystFormData, loading } = usePortfolio();
 
-  // Auto-persist the current layout on every change — this is what actually
-  // fixes "resets when I leave and come back", as opposed to only saving
-  // when the person explicitly clicks something.
+  // Auto-persist the current layout on every change
   useEffect(() => {
     if (typeof window === "undefined") return;
     try {
       window.localStorage.setItem(VIEW_STORAGE_KEY, JSON.stringify({ columnVisibility, density, sortConfig }));
     } catch {
       // Storage can fail (private browsing, quota) — the table still works
-      // for the current session, it just won't persist.
     }
   }, [columnVisibility, density, sortConfig]);
 
@@ -292,10 +257,6 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
 
     let mapped = enriched.map(mapRow);
 
-    // Feedback #1: once an SME is Admitted (formerly "Active") it should
-    // ordinarily live in My Cohorts, not stay mixed into this matching
-    // table — unless the caller explicitly asked to see admitted records
-    // via stageFilter.
     if (stageFilter !== "admitted" && stageFilter !== "active") {
       mapped = mapped.filter((s) => mapStatusToStageId(s.pipelineStage) !== "admitted");
     }
@@ -358,9 +319,6 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
   const totalPages = Math.ceil(filteredAndSortedSMEs.length / pageSize);
   const paginatedSMEs = filteredAndSortedSMEs.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
-  // Sector options are derived from real data now that Sector is filterable
-  // from its own header — there's no fixed list to hardcode the way Funding
-  // Stage and Status have one.
   const sectorOptions = useMemo(
     () => [...new Set(smes.map((s) => s.sector).filter((s) => s && s !== "N/A"))].sort(),
     [smes]
@@ -377,9 +335,6 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
 
   const toggleColumn = (key) => setColumnVisibility(prev => ({ ...prev, [key]: !prev[key] }));
 
-  // Filtering now happens straight from the column header: clicking the
-  // filter icon on a header opens a small popover anchored to that header,
-  // instead of a separate Filters panel.
   const openHeaderFilter = (type, event) => {
     event.stopPropagation();
     const rect = event.currentTarget.getBoundingClientRect();
@@ -387,8 +342,6 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
   };
   const closeHeaderFilter = () => setHeaderFilterOpen(null);
 
-  // Small icon button placed on a column header; opens that column's filter
-  // popover. Lit up (darker) when that column currently has an active filter.
   const FilterTrigger = ({ type, active }) => (
     <button
       type="button"
@@ -578,9 +531,7 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
     }
   };
 
-  // Match breakdown now carries a percentage per component (feedback #7:
-  // "why this match?" should be answerable without opening the full
-  // profile), not just a matched/unmatched flag.
+  // Match breakdown now carries a percentage per component
   const calculateMatchScore = (smeProfileData, catalystFormData, program = null) => {
     const breakdown = {
       fundingStage: { score: 0, maxScore: 12.5, matched: false, details: {} },
@@ -727,8 +678,6 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
                       </label>
                     ))}
 
-                    {/* Density — was a separate dropdown, folded in here so
-                        there's one place to shape how the table looks. */}
                     <div className="border-t border-[#e6d7c3] my-4" />
                     <h4 className="text-sm font-semibold text-[#4a352f] mb-3">Density</h4>
                     <div className="flex gap-1.5 mb-1">
@@ -743,10 +692,6 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
                       ))}
                     </div>
 
-                    {/* Save View — was its own "Views" dropdown; current
-                        column/density/sort layout auto-saves as you go (see
-                        the persistence effect above), but this lets you also
-                        save named snapshots and switch between them. */}
                     <div className="border-t border-[#e6d7c3] my-4" />
                     <h4 className="text-sm font-semibold text-[#4a352f] mb-2">Save View</h4>
                     <div className="flex items-center gap-2 mb-3">
@@ -791,20 +736,6 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
         ) : (
           <>
             <div className="overflow-auto" style={{ maxHeight: '70vh' }}>
-              {/*
-                Header weight reduced (feedback #12): the page already carries
-                several dark brown elements (active tab, export button, action
-                buttons). The table header moves to a lighter tan background
-                with dark text so the brand brown reads as one dominant accent
-                (the CTA/active states) instead of competing across layers.
-
-                Header text color is enforced via the .smt-th / .smt-th-btn
-                classes below with `!important`, rather than plain inline
-                styles — some columns were rendering white by default despite
-                an inline color, which points to something elsewhere in the
-                app's stylesheet winning the cascade for those cells. A local
-                !important class beats that regardless of where it comes from.
-              */}
               <style>{`
                 .smt-th { color: #faf7f2 !important; line-height: 1.1; font-size: 0.75rem !important; font-weight: 600 !important; text-transform: uppercase !important; letter-spacing: 0.05em !important; font-family: inherit !important; }
                 .smt-th-btn { color: #faf7f2 !important; background: transparent; border: none; padding: 0; margin: 0; cursor: pointer; transition: color .15s ease; white-space: nowrap; font-size: inherit !important; font-weight: inherit !important; text-transform: inherit !important; letter-spacing: inherit !important; font-family: inherit !important; }
@@ -885,8 +816,6 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
                       const bigScoreLabel = getBigScoreLabel(sme.bigScore);
                       const matchLabel = getMatchLabel(sme.matchPercentage);
                       const statusStyle = getStatusStyle(sme.currentStatus);
-                      // Declined/Withdrawn are terminal negative outcomes —
-                      // there's no meaningful "next stage" to move them to.
                       const isTerminalNegative = /declined|withdrawn/i.test(statusStyle.stage.name || "");
                       const nextStageLabel = sme.nextStage || "—";
                       const smeKey = `${sme.id}_${sme.programIndex}`;
@@ -943,9 +872,6 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
                             </td>
                           )}
                           {columnVisibility.match && (
-                            // Feedback #5: percentage + label + a horizontal fit
-                            // bar, replacing the star rating (which read like a
-                            // customer-satisfaction score rather than a fit score).
                             <td className={`${ds.cell} text-center cursor-pointer border-r border-[#e6d7c3]`} onClick={(e) => openPopupFromEvent('match', sme, e)}>
                               <div className="flex flex-col items-center gap-1 w-full max-w-[90px] mx-auto">
                                 <span className={`${ds.fontSize} font-normal text-[#4a352f]`}>{sme.matchPercentage}%</span>
@@ -979,23 +905,9 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
                           {columnVisibility.support && <td className={`${ds.cell} ${ds.fontSize} text-[#4a352f] border-r border-[#e6d7c3]`}><span className="line-clamp-1">{sme.supportRequired}</span></td>}
                           {columnVisibility.services && <td className={`${ds.cell} ${ds.fontSize} text-[#4a352f] border-r border-[#e6d7c3]`}><span className="line-clamp-1">{sme.servicesRequired}</span></td>}
                           {columnVisibility.action && (
-                            // Fixed width+height button so "Offer" and "Due
-                            // Diligence" occupy the same footprint; long
-                            // labels truncate with an ellipsis and the full
-                            // name is still available via the title tooltip.
-                            // Attention indicator (feedback #11) now lives
-                            // here too, next to the action it's calling for,
-                            // rather than crowding the business name cell.
                             <td className={`${ds.cell} text-center`} style={{ minWidth: '190px' }}>
                               <div className="flex flex-col items-center gap-1">
-                                {attentionReasons.length > 0 && (
-                                  <span
-                                    className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-[#fff3e0] text-[#e65100] flex-shrink-0"
-                                    title={`Action required: ${attentionReasons.join(", ")}`}
-                                  >
-                                    <Flag size={9} /> Action
-                                  </span>
-                                )}
+                                
                                 <div className="flex items-center justify-center gap-1.5">
                                   <button
                                     onClick={(e) => { if (!isTerminalNegative) openPopupFromEvent('stage', sme, e); }}
@@ -1054,10 +966,7 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
         )}
       </div>
 
-      {/* ─── Column header filter popover ─────────────────────────────────────
-          Replaces the old standalone Filters panel — each filterable column
-          (Business Name, BIG Score, Status, Funding Stage, Sector) opens its
-          own small popover anchored to its header. */}
+      {/* ─── Column header filter popover ───────────────────────────────────── */}
       {headerFilterOpen && (
         <PopupPortal>
           <div className="fixed inset-0 z-[1090]" onClick={closeHeaderFilter} />
@@ -1199,7 +1108,7 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
         </PopupPortal>
       )}
 
-      {/* ─── Match Breakdown Popup ("Why this match?" — feedback #7) ─────────── */}
+      {/* ─── Match Breakdown Popup ─────────────────────────── */}
       {activePopup?.type === 'match' && selectedSMEForPopup && (
         <PopupPortal>
           <div className="fixed inset-0 z-[1000]" onClick={closePopup} />
