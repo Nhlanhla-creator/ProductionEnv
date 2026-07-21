@@ -9,16 +9,17 @@ import {
   LayoutGrid, Download, MessageSquare,
   Share2, ArrowRight, ArrowUp, ArrowDown, SlidersHorizontal,
   RotateCcw, Settings, Target, Briefcase,
-  Video, Link, LogOut, Trash2, Plus
+  Video, Link, LogOut, Trash2, Plus, GripVertical
 } from "lucide-react";
 import { db, auth, storage } from "../../firebaseConfig";
 import { serverTimestamp, doc, updateDoc, getDoc, addDoc, collection, query, where, getDocs } from "firebase/firestore";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { DayPicker } from "react-day-picker";
 import "react-day-picker/dist/style.css";
+import * as XLSX from "xlsx";
 import { usePortfolio } from "../../context/PortfolioContext";
 import SMEDetailsModal from "./SMEDetailsModal";
-import { DEFAULT_STAGES, mapStatusToStageId, getStageColors, getNextStageId, getStageActionConfig, loadPipelineSettings } from "./stageConfig";
+import { DEFAULT_STAGES, mapStatusToStageId, getStageColors, getNextStageId, getStageActionConfig, loadPipelineSettings, PROGRAMME_TEMPLATES, applyStageCustomization, getActiveStages, PIPELINE_SETTINGS_EVENT } from "./stageConfig";
 
 // ─── Constants & Helpers ──────────────────────────────────────────────────────
 const BIG_SCORE_LABELS = {
@@ -52,28 +53,35 @@ const getMatchLabel = (score) => {
   return MATCH_LABELS.poor;
 };
 
-// Stage lookup built from the shared config
-const STAGE_BY_ID = Object.fromEntries(DEFAULT_STAGES.map((s) => [s.id, s]));
-const getStageById = (id) => STAGE_BY_ID[id] || STAGE_BY_ID.matched;
+// Stage lookup helpers now take the currently *active* stage list as a
+// parameter (BIG Default, or whichever PROGRAMME_TEMPLATES entry the
+// catalyst has switched to, with any admin customization applied) — rather
+// than always resolving against the flat DEFAULT_STAGES import. Without
+// this, a catalyst switching to e.g. the Grant Programme template (which
+// introduces a "Committee" stage) would find that stage never shows up
+// anywhere in this table, since every lookup would keep resolving against
+// the 9 BIG-default stages regardless of which programme is active.
+const getStageById = (id, stages = DEFAULT_STAGES) =>
+  stages.find((s) => s.id === id) || stages[0];
 
-const getStatusStyle = (status) => {
-  const stage = getStageById(mapStatusToStageId(status));
+const getStatusStyle = (status, stages = DEFAULT_STAGES) => {
+  const stage = getStageById(mapStatusToStageId(status, stages), stages);
   const colors = getStageColors(stage.group);
   return { bg: colors.bgColor, text: colors.color, border: colors.borderColor, dot: colors.color, stage };
 };
 
 // Reads whatever the catalyst admin configured in the pipeline's "Stage
 // Actions" settings panel
-const getStageFields = (stageName) => {
-  const id = mapStatusToStageId(stageName);
+const getStageFields = (stageName, stages = DEFAULT_STAGES) => {
+  const id = mapStatusToStageId(stageName, stages);
   const overrides = loadPipelineSettings().customization?.stageActions || {};
   return getStageActionConfig(id, overrides);
 };
 
-const getNextStage = (currentStage) => {
-  const currentId = mapStatusToStageId(currentStage);
-  const nextId = getNextStageId(DEFAULT_STAGES, currentId);
-  return getStageById(nextId).name;
+const getNextStage = (currentStage, stages = DEFAULT_STAGES) => {
+  const currentId = mapStatusToStageId(currentStage, stages);
+  const nextId = getNextStageId(stages, currentId);
+  return getStageById(nextId, stages).name;
 };
 
 const formatCurrency = (value) => {
@@ -86,11 +94,11 @@ const formatCurrency = (value) => {
 };
 
 // ─── Attention indicator ────────────────────────────────────
-const getAttentionReasons = (sme) => {
+const getAttentionReasons = (sme, stages = DEFAULT_STAGES) => {
   const reasons = [];
   if ((sme.daysInStage || 0) >= 14) reasons.push("Stalled for 14+ days");
   if ((sme.bigScore || 0) < 40 && sme.bigScore > 0) reasons.push("BIG Score below threshold");
-  const stageId = mapStatusToStageId(sme.pipelineStage);
+  const stageId = mapStatusToStageId(sme.pipelineStage, stages);
   if (stageId === "decision") reasons.push("Decision pending");
   if (stageId === "evaluation" && (sme.daysInStage || 0) >= 7) reasons.push("Evaluation overdue");
   return reasons;
@@ -130,36 +138,198 @@ const HeaderInfoTooltip = ({ text }) => {
   );
 };
 
+// ─── Reorderable column definitions ────────────────────────────────────────
+// These are the columns that live *between* the pinned "Business Name" (always
+// first) and "Actions" (always last) columns. Users can drag these to reorder
+// them; the array below is only the default/fallback order.
+const DEFAULT_COLUMN_ORDER = [
+  "bigScore", "match", "fundingStage", "fundingRequired", "status", "applied",
+  "daysInStage", "lastActivity", "location", "sector", "equity", "guarantees",
+  "support", "services"
+];
+
+const COLUMN_DEFS = {
+  bigScore: { label: "BIG Score", align: "center", minWidth: "100px", sortKey: "bigScore", filterType: "bigScore", tooltip: "BIG Score measures SME credibility and readiness — compliance, legitimacy, fundability, PIS, and leadership." },
+  match: { label: "Match %", align: "center", minWidth: "110px", sortKey: "matchPercentage", tooltip: "Match Score measures programme fit — alignment with this programme's mandate and criteria." },
+  fundingStage: { label: "Funding Stage", align: "left", filterType: "fundingStage" },
+  fundingRequired: { label: "Funding", align: "left", sortKey: "fundingAmount" },
+  status: { label: "Status", align: "left", filterType: "status" },
+  applied: { label: "Applied", align: "left", sortKey: "applicationDateRaw" },
+  daysInStage: { label: "Days in Stage", align: "left", sortKey: "daysInStage" },
+  lastActivity: { label: "Last Activity", align: "left" },
+  location: { label: "Location", align: "left" },
+  sector: { label: "Sector", align: "left", filterType: "sector" },
+  equity: { label: "Equity", align: "left" },
+  guarantees: { label: "Guarantees", align: "left" },
+  support: { label: "Support", align: "left" },
+  services: { label: "Services", align: "left" }
+};
+
+// Maps a column key (used for visibility/order) to the actual field name on
+// the mapped SME row object — these don't always match (e.g. the "sme"
+// column shows the `name` field, "match" shows `matchPercentage`).
+const EXPORT_FIELD_MAP = {
+  sme: "name",
+  bigScore: "bigScore",
+  match: "matchPercentage",
+  fundingStage: "fundingStage",
+  fundingRequired: "fundingRequired",
+  status: "currentStatus",
+  applied: "applicationDate",
+  location: "location",
+  sector: "sector",
+  equity: "equityOffered",
+  guarantees: "guarantees",
+  support: "supportRequired",
+  services: "servicesRequired",
+  daysInStage: "daysInStage",
+  lastActivity: "lastActivity",
+  notes: "notes",
+  assignedUser: "assignedUser"
+  // Note: "action" is intentionally omitted — it's a UI-only column
+  // (the stage-advance button), not a data field on the SME row.
+};
+
+const EXPORT_HEADERS = {
+  sme: "Business Name", bigScore: "BIG Score", match: "Match %",
+  fundingStage: "Funding Stage", fundingRequired: "Funding Required",
+  status: "Status", applied: "Applied Date", location: "Location",
+  sector: "Sector", equity: "Equity Offered", guarantees: "Guarantees",
+  support: "Support Required", services: "Services Required",
+  daysInStage: "Days in Stage", lastActivity: "Last Activity",
+  notes: "Notes", assignedUser: "Assigned User"
+};
+
+// ─── Custom Views ───────────────────────────────────────────────────────────
+// A "view" bundles every layout preference a person can customize — column
+// visibility, column order, sort, and density — into one named, describable
+// object, with exactly one view "active" at a time. Editing the table always
+// edits the active view; there's no separate hidden "current layout" that
+// can silently drift out of sync with whatever view you think you're on.
+// That drift (edit while a saved view is loaded, then have the view reload
+// later and wipe those edits) was the source of columns appearing to
+// "randomly" rearrange or vanish.
+const DEFAULT_COLUMN_VISIBILITY = {
+  sme: true, bigScore: true, match: true, fundingStage: true,
+  fundingRequired: true, status: true, applied: true, action: true,
+  location: false, sector: false, equity: false, guarantees: false,
+  support: false, services: false, notes: false, assignedUser: false,
+  daysInStage: true, lastActivity: true
+};
+const DEFAULT_SORT_CONFIG = { key: 'attentionThenScore', direction: 'desc' };
+const DEFAULT_DENSITY = 'comfortable';
+
+const BUILTIN_VIEW_ID = "__default__";
+const VIEWS_STORAGE_KEY = "sme-table-views-v2";
+
+// Keeps a stored column order valid against the columns this build of the
+// table actually knows about: drops keys that no longer exist, and appends
+// any newly-introduced columns (hidden by default) so a future column
+// addition can't silently corrupt an old saved view's header row.
+const sanitizeColumnOrder = (order) => {
+  if (!Array.isArray(order)) return [...DEFAULT_COLUMN_ORDER];
+  const known = new Set(DEFAULT_COLUMN_ORDER);
+  const deduped = order.filter((key) => known.has(key));
+  const missing = DEFAULT_COLUMN_ORDER.filter((key) => !deduped.includes(key));
+  return [...deduped, ...missing];
+};
+
+const createDefaultViewLayout = () => ({
+  columnVisibility: { ...DEFAULT_COLUMN_VISIBILITY },
+  columnOrder: [...DEFAULT_COLUMN_ORDER],
+  sortConfig: { ...DEFAULT_SORT_CONFIG },
+  density: DEFAULT_DENSITY,
+});
+
+const createBuiltinDefaultView = () => ({
+  id: BUILTIN_VIEW_ID,
+  name: "Default",
+  description: "",
+  builtin: true,
+  ...createDefaultViewLayout(),
+});
+
+// Defends against a stored view missing fields (older schema, partial
+// write, etc.) by filling in safe defaults rather than letting a column set
+// come out blank.
+const sanitizeView = (view, fallbackId) => ({
+  id: view?.id || fallbackId,
+  name: (view?.name || "Untitled view").toString(),
+  description: (view?.description || "").toString(),
+  builtin: !!view?.builtin,
+  columnVisibility: { ...DEFAULT_COLUMN_VISIBILITY, ...(view?.columnVisibility || {}) },
+  columnOrder: sanitizeColumnOrder(view?.columnOrder),
+  sortConfig: view?.sortConfig?.key ? view.sortConfig : { ...DEFAULT_SORT_CONFIG },
+  density: view?.density || DEFAULT_DENSITY,
+});
+
+const loadViewsState = () => {
+  const freshDefault = () => ({ activeViewId: BUILTIN_VIEW_ID, views: { [BUILTIN_VIEW_ID]: createBuiltinDefaultView() } });
+  if (typeof window === "undefined") return freshDefault();
+  try {
+    const saved = JSON.parse(window.localStorage.getItem(VIEWS_STORAGE_KEY) || "null");
+    const rawViews = saved?.views && typeof saved.views === "object" ? saved.views : {};
+    const views = {};
+    Object.entries(rawViews).forEach(([id, v]) => { views[id] = sanitizeView(v, id); });
+    // The builtin Default view must always exist and keep its identity,
+    // even on first load or if it was somehow dropped from storage.
+    views[BUILTIN_VIEW_ID] = views[BUILTIN_VIEW_ID]
+      ? { ...views[BUILTIN_VIEW_ID], id: BUILTIN_VIEW_ID, name: "Default", builtin: true }
+      : createBuiltinDefaultView();
+    const activeViewId = saved?.activeViewId && views[saved.activeViewId] ? saved.activeViewId : BUILTIN_VIEW_ID;
+    return { activeViewId, views };
+  } catch {
+    return freshDefault();
+  }
+};
+
+const persistViewsState = (state) => {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(VIEWS_STORAGE_KEY, JSON.stringify(state));
+  } catch {
+    // Storage can fail (private browsing, quota) — the table still works
+    // for the current session, it just won't persist across reloads.
+  }
+};
+
+const generateViewId = () => {
+  try {
+    return `view_${crypto.randomUUID()}`;
+  } catch {
+    return `view_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  }
+};
+
 // ─── Component ────────────────────────────────────────────────────────────────
 export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOverride }) {
-  // Table layout preferences
-  const VIEW_STORAGE_KEY = "sme-table-current-view-v1";
-  const SAVED_VIEWS_STORAGE_KEY = "sme-table-saved-views-v1";
-
-  const DEFAULT_COLUMN_VISIBILITY = {
-    sme: true, bigScore: true, match: true, fundingStage: true,
-    fundingRequired: true, status: true, applied: true, action: true,
-    location: false, sector: false, equity: false, guarantees: false,
-    support: false, services: false, notes: false, assignedUser: false,
-    daysInStage: true, lastActivity: true
-  };
-  const DEFAULT_SORT_CONFIG = { key: 'attentionThenScore', direction: 'desc' };
-
-  const loadStoredView = () => {
-    if (typeof window === "undefined") return null;
-    try {
-      return JSON.parse(window.localStorage.getItem(VIEW_STORAGE_KEY) || "null");
-    } catch {
-      return null;
-    }
-  };
-
   const [smes, setSmes] = useState([]);
   const [expandedRows, setExpandedRows] = useState(new Set());
-  const [columnVisibility, setColumnVisibility] = useState(() => loadStoredView()?.columnVisibility || DEFAULT_COLUMN_VISIBILITY);
+
+  // ─── Views ──────────────────────────────────────────────────────────────
+  // viewsState = { activeViewId, views: { [id]: {id,name,description,builtin,
+  // columnVisibility,columnOrder,sortConfig,density} } }. The four "live"
+  // pieces below (columnVisibility/columnOrder/sortConfig/density) are what
+  // the rest of the table actually reads/renders from; they're initialized
+  // from the active view and, via the effect further down, auto-saved back
+  // into that same view on every change. Switching views is the only thing
+  // that reassigns them from a *different* view's stored layout.
+  const [viewsState, setViewsState] = useState(() => loadViewsState());
+  const initialActiveView = viewsState.views[viewsState.activeViewId] || viewsState.views[BUILTIN_VIEW_ID];
+  const [columnVisibility, setColumnVisibility] = useState(() => initialActiveView.columnVisibility);
+  const [columnOrder, setColumnOrder] = useState(() => initialActiveView.columnOrder);
+  const [sortConfig, setSortConfig] = useState(() => initialActiveView.sortConfig);
+  const [density, setDensity] = useState(() => initialActiveView.density);
+
   const [showColumnChooser, setShowColumnChooser] = useState(false);
-  const [sortConfig, setSortConfig] = useState(() => loadStoredView()?.sortConfig || DEFAULT_SORT_CONFIG);
-  const [density, setDensity] = useState(() => loadStoredView()?.density || 'comfortable');
+  const [columnChooserRect, setColumnChooserRect] = useState(null);
+  const [showViewsMenu, setShowViewsMenu] = useState(false);
+  const [viewsMenuRect, setViewsMenuRect] = useState(null);
+  const [showNewViewForm, setShowNewViewForm] = useState(false);
+  const [newViewName, setNewViewName] = useState("");
+  const [newViewDescription, setNewViewDescription] = useState("");
+  const [editingViewMeta, setEditingViewMeta] = useState(null); // { id, name, description } while renaming/describing an existing view
+
   const [headerFilterOpen, setHeaderFilterOpen] = useState(null);
   const [localFilters, setLocalFilters] = useState({
     name: '', fundingStage: [], bigScoreRange: [0, 100], status: [], sector: []
@@ -168,18 +338,14 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
   const [hoveredRowKey, setHoveredRowKey] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(25);
-  const [savedViews, setSavedViews] = useState(() => {
-    if (typeof window === "undefined") return [];
-    try {
-      return JSON.parse(window.localStorage.getItem(SAVED_VIEWS_STORAGE_KEY) || "[]");
-    } catch {
-      return [];
-    }
-  });
-  const [viewName, setViewName] = useState("");
   const [sentNDAs, setSentNDAs] = useState({});
   const [isNDASharing, setIsNDASharing] = useState({});
   const [updatedStages, setUpdatedStages] = useState({});
+
+  // Column drag-to-reorder state
+  const [draggedColumn, setDraggedColumn] = useState(null);
+  const [dragOverColumn, setDragOverColumn] = useState(null);
+  const [dragHintRect, setDragHintRect] = useState(null);
 
   // Popup states
   const [activePopup, setActivePopup] = useState(null);
@@ -204,15 +370,155 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
 
   const { enriched, catalystFormData, loading } = usePortfolio();
 
-  // Auto-persist the current layout on every change
+  // ─── Programme-aware pipeline stages ───────────────────────────────────────
+  // The pipeline settings (which programme template is active, plus any
+  // admin customization — renames/hidden/reordered/custom stages) live in
+  // the same shared localStorage key that SupportDealFlowPipeline.jsx writes
+  // to. We read them here so the table's stage list always matches whatever
+  // programme is actually selected, instead of being permanently locked to
+  // the BIG default stages.
+  const [pipelineSettings, setPipelineSettings] = useState(() => loadPipelineSettings());
+
   useEffect(() => {
-    if (typeof window === "undefined") return;
-    try {
-      window.localStorage.setItem(VIEW_STORAGE_KEY, JSON.stringify({ columnVisibility, density, sortConfig }));
-    } catch {
-      // Storage can fail (private browsing, quota) — the table still works
+    const refreshPipelineSettings = () => setPipelineSettings(loadPipelineSettings());
+    // 'storage' fires when another tab/window changes the settings;
+    // PIPELINE_SETTINGS_EVENT fires when this same tab changes them (e.g. the
+    // catalyst edits the pipeline programme type/stages and switches back to
+    // this table without a full page reload); 'focus' is a cheap safety net
+    // for either case.
+    window.addEventListener("storage", refreshPipelineSettings);
+    window.addEventListener(PIPELINE_SETTINGS_EVENT, refreshPipelineSettings);
+    window.addEventListener("focus", refreshPipelineSettings);
+    return () => {
+      window.removeEventListener("storage", refreshPipelineSettings);
+      window.removeEventListener(PIPELINE_SETTINGS_EVENT, refreshPipelineSettings);
+      window.removeEventListener("focus", refreshPipelineSettings);
+    };
+  }, []);
+
+  const activeProgrammeLabel = (PROGRAMME_TEMPLATES[pipelineSettings.programmeType] || PROGRAMME_TEMPLATES.default).label;
+  const activeStages = useMemo(
+    () => getActiveStages(pipelineSettings),
+    [pipelineSettings]
+  );
+
+  // The currently active view, derived straight from viewsState — this is
+  // what the UI displays as "you're editing X". Falls back to the builtin
+  // Default view defensively (should never actually be missing).
+  const activeView = viewsState.views[viewsState.activeViewId] || viewsState.views[BUILTIN_VIEW_ID];
+
+  // Auto-save: any edit to columns/order/sort/density writes straight back
+  // into the active view (and persists immediately) — there's no separate
+  // "unsaved changes" state to lose track of, and no way for a view to
+  // silently go stale relative to what's on screen.
+  useEffect(() => {
+    setViewsState(prev => {
+      const current = prev.views[prev.activeViewId];
+      if (!current) return prev;
+      const updated = { ...current, columnVisibility, columnOrder, sortConfig, density };
+      const next = { ...prev, views: { ...prev.views, [prev.activeViewId]: updated } };
+      persistViewsState(next);
+      return next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [columnVisibility, columnOrder, sortConfig, density]);
+
+  // Switch the active view: loads that view's layout into the live state
+  // (which then drives everything else in the table) and marks it active.
+  const switchToView = (viewId) => {
+    const target = viewsState.views[viewId];
+    if (!target) return;
+    setViewsState(prev => {
+      const next = { ...prev, activeViewId: viewId };
+      persistViewsState(next);
+      return next;
+    });
+    setColumnVisibility(target.columnVisibility);
+    setColumnOrder(target.columnOrder);
+    setSortConfig(target.sortConfig);
+    setDensity(target.density);
+    setShowViewsMenu(false);
+  };
+
+  // Creates a new named (optionally described) view as a snapshot of
+  // whatever the table currently looks like, and switches to it. This is
+  // the only explicit "save" action left — everything else auto-saves.
+  const createNewView = () => {
+    const trimmedName = newViewName.trim();
+    if (!trimmedName) return;
+    const id = generateViewId();
+    const newView = {
+      id, name: trimmedName, description: newViewDescription.trim(), builtin: false,
+      columnVisibility: { ...columnVisibility }, columnOrder: [...columnOrder],
+      sortConfig: { ...sortConfig }, density,
+    };
+    setViewsState(prev => {
+      const next = { activeViewId: id, views: { ...prev.views, [id]: newView } };
+      persistViewsState(next);
+      return next;
+    });
+    setNewViewName("");
+    setNewViewDescription("");
+    setShowNewViewForm(false);
+    setNotification({ type: "success", message: `View "${trimmedName}" created` });
+  };
+
+  const startEditingViewMeta = (view) => setEditingViewMeta({ id: view.id, name: view.name, description: view.description, builtin: !!view.builtin });
+
+  // Renames/redescribes an existing view without touching its layout. The
+  // builtin Default view's name is protected (identity stays fixed), but
+  // its description can still be edited like any other view's.
+  const saveViewMeta = () => {
+    if (!editingViewMeta) return;
+    const trimmedName = editingViewMeta.name.trim();
+    if (!trimmedName && !editingViewMeta.builtin) return;
+    setViewsState(prev => {
+      const existing = prev.views[editingViewMeta.id];
+      if (!existing) return prev;
+      const updated = {
+        ...existing,
+        name: existing.builtin ? existing.name : trimmedName,
+        description: editingViewMeta.description.trim(),
+      };
+      const next = { ...prev, views: { ...prev.views, [editingViewMeta.id]: updated } };
+      persistViewsState(next);
+      return next;
+    });
+    setEditingViewMeta(null);
+  };
+
+  // Deletes a saved (non-builtin) view; if it was active, falls back to Default.
+  const removeView = (viewId) => {
+    if (viewId === BUILTIN_VIEW_ID) return;
+    const wasActive = viewsState.activeViewId === viewId;
+    setViewsState(prev => {
+      const { [viewId]: _removed, ...restViews } = prev.views;
+      const nextActiveId = prev.activeViewId === viewId ? BUILTIN_VIEW_ID : prev.activeViewId;
+      const next = { activeViewId: nextActiveId, views: restViews };
+      persistViewsState(next);
+      return next;
+    });
+    if (wasActive) {
+      const def = viewsState.views[BUILTIN_VIEW_ID];
+      setColumnVisibility(def.columnVisibility);
+      setColumnOrder(def.columnOrder);
+      setSortConfig(def.sortConfig);
+      setDensity(def.density);
     }
-  }, [columnVisibility, density, sortConfig]);
+    setNotification({ type: "success", message: "View deleted" });
+  };
+
+  // Resets whichever view is currently active back to factory-default
+  // columns/order/sort/density — without touching its name or description,
+  // and without deleting it.
+  const resetActiveViewToDefault = () => {
+    const layout = createDefaultViewLayout();
+    setColumnVisibility(layout.columnVisibility);
+    setColumnOrder(layout.columnOrder);
+    setSortConfig(layout.sortConfig);
+    setDensity(layout.density);
+    setNotification({ type: "success", message: `"${activeView.name}" reset to factory defaults` });
+  };
 
   // ─── Data Processing ────────────────────────────────────────────────────────
   useEffect(() => {
@@ -243,7 +549,7 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
         fundability: a.fundability || 0, pis: a.pis || 0, leadership: a.leadership || 0,
         currentStatus: a.pipelineStage || a.status || "Matched",
         pipelineStage: a.pipelineStage || a.status || "Matched",
-        nextStage: a.nextStage || getNextStage(a.pipelineStage || a.status),
+        nextStage: a.nextStage || getNextStage(a.pipelineStage || a.status, activeStages),
         availableDates: a.availableDates || [],
         lastActivity: a.lastActivity || "N/A", daysInStage: a.daysInStage || 0,
         assignedUser: a.assignedUser || "Unassigned",
@@ -258,18 +564,18 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
     let mapped = enriched.map(mapRow);
 
     if (stageFilter !== "admitted" && stageFilter !== "active") {
-      mapped = mapped.filter((s) => mapStatusToStageId(s.pipelineStage) !== "admitted");
+      mapped = mapped.filter((s) => mapStatusToStageId(s.pipelineStage, activeStages) !== "admitted");
     }
 
     if (stageFilter && stageFilter !== "initial") {
       const validIds = new Set([stageFilter]);
-      mapped = mapped.filter((s) => validIds.has(mapStatusToStageId(s.pipelineStage)));
+      mapped = mapped.filter((s) => validIds.has(mapStatusToStageId(s.pipelineStage, activeStages)));
     }
 
     mapped.sort((a, b) => b.bigScore - a.bigScore);
     setSmes(mapped);
     onSMEsLoaded?.(mapped);
-  }, [enriched, stageFilter, catalystFormData]);
+  }, [enriched, stageFilter, catalystFormData, activeStages]);
 
   // ─── Filtering & Sorting ────────────────────────────────────────────────────
   const filteredAndSortedSMEs = useMemo(() => {
@@ -296,8 +602,8 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
 
     if (sortConfig.key === 'attentionThenScore') {
       result.sort((a, b) => {
-        const aFlag = getAttentionReasons(a).length > 0 ? 1 : 0;
-        const bFlag = getAttentionReasons(b).length > 0 ? 1 : 0;
+        const aFlag = getAttentionReasons(a, activeStages).length > 0 ? 1 : 0;
+        const bFlag = getAttentionReasons(b, activeStages).length > 0 ? 1 : 0;
         if (aFlag !== bFlag) return bFlag - aFlag;
         return b.bigScore - a.bigScore;
       });
@@ -314,7 +620,7 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
     }
 
     return result;
-  }, [smes, sortConfig, localFilters]);
+  }, [smes, sortConfig, localFilters, activeStages]);
 
   const totalPages = Math.ceil(filteredAndSortedSMEs.length / pageSize);
   const paginatedSMEs = filteredAndSortedSMEs.slice((currentPage - 1) * pageSize, currentPage * pageSize);
@@ -334,6 +640,59 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
   };
 
   const toggleColumn = (key) => setColumnVisibility(prev => ({ ...prev, [key]: !prev[key] }));
+
+  const getFilterActive = (filterType) => {
+    switch (filterType) {
+      case 'bigScore': return localFilters.bigScoreRange[0] > 0 || localFilters.bigScoreRange[1] < 100;
+      case 'fundingStage': return localFilters.fundingStage.length > 0;
+      case 'status': return localFilters.status.length > 0;
+      case 'sector': return localFilters.sector.length > 0;
+      default: return false;
+    }
+  };
+
+  // ─── Column drag-to-reorder ─────────────────────────────────────────────────
+  const handleColumnDragStart = (e, key) => {
+    setDraggedColumn(key);
+    setDragHintRect(null);
+    try {
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', key);
+    } catch {
+      // Some browsers are picky about dataTransfer in certain contexts — safe to ignore
+    }
+  };
+
+  const handleColumnDragOver = (e, key) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (key !== dragOverColumn) setDragOverColumn(key);
+  };
+
+  const handleColumnDrop = (e, key) => {
+    e.preventDefault();
+    if (!draggedColumn || draggedColumn === key) {
+      setDraggedColumn(null);
+      setDragOverColumn(null);
+      return;
+    }
+    setColumnOrder(prev => {
+      const next = [...prev];
+      const fromIdx = next.indexOf(draggedColumn);
+      const toIdx = next.indexOf(key);
+      if (fromIdx === -1 || toIdx === -1) return prev;
+      next.splice(fromIdx, 1);
+      next.splice(toIdx, 0, draggedColumn);
+      return next;
+    });
+    setDraggedColumn(null);
+    setDragOverColumn(null);
+  };
+
+  const handleColumnDragEnd = () => {
+    setDraggedColumn(null);
+    setDragOverColumn(null);
+  };
 
   const openHeaderFilter = (type, event) => {
     event.stopPropagation();
@@ -409,7 +768,7 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
     }
     if (type === 'stage') {
       setStageUpdateData({
-        nextStage: sme.nextStage || getNextStage(sme.currentStatus),
+        nextStage: sme.nextStage || getNextStage(sme.currentStatus, activeStages),
         message: "", meetingTime: "", meetingLocation: "", meetingPurpose: "", termSheetFile: null
       });
       setStageFormErrors({});
@@ -430,7 +789,7 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
   };
 
   const handleStageUpdate = async () => {
-    const stageFields = getStageFields(stageUpdateData.nextStage);
+    const stageFields = getStageFields(stageUpdateData.nextStage, activeStages);
     const errors = {};
     if (!stageUpdateData.nextStage) errors.nextStage = "Please select a stage";
     if (stageFields.showMessage && !stageUpdateData.message.trim()) errors.message = "Please provide a message";
@@ -447,7 +806,7 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
 
       const updateData = {
         status: stageUpdateData.nextStage, pipelineStage: stageUpdateData.nextStage,
-        nextStage: getNextStage(stageUpdateData.nextStage),
+        nextStage: getNextStage(stageUpdateData.nextStage, activeStages),
         updatedAt: serverTimestamp(), lastMessage: stageUpdateData.message,
         lastActivity: new Date().toISOString()
       };
@@ -465,7 +824,7 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
       setUpdatedStages(prev => ({ ...prev, [stageKey]: stageUpdateData.nextStage }));
       setSmes(prev => prev.map(s =>
         s.id === smeId && s.programIndex === programIndex
-          ? { ...s, currentStatus: stageUpdateData.nextStage, pipelineStage: stageUpdateData.nextStage, nextStage: getNextStage(stageUpdateData.nextStage) }
+          ? { ...s, currentStatus: stageUpdateData.nextStage, pipelineStage: stageUpdateData.nextStage, nextStage: getNextStage(stageUpdateData.nextStage, activeStages) }
           : s
       ));
 
@@ -516,18 +875,57 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
 
   const handleExport = () => {
     try {
-      const visibleCols = Object.entries(columnVisibility).filter(([_, v]) => v).map(([k]) => k);
-      const headers = { sme: 'Business Name', bigScore: 'BIG Score', match: 'Match %', fundingStage: 'Funding Stage', fundingRequired: 'Funding Required', status: 'Status', applied: 'Applied Date', location: 'Location', sector: 'Sector', equity: 'Equity Offered', guarantees: 'Guarantees', support: 'Support Required', services: 'Services Required', daysInStage: 'Days in Stage', lastActivity: 'Last Activity' };
-      const headerRow = visibleCols.map(col => headers[col] || col).join(',');
-      const dataRows = filteredAndSortedSMEs.map(sme => visibleCols.map(col => `"${String(sme[col] || '').replace(/"/g, '""')}"`).join(','));
-      const csv = [headerRow, ...dataRows].join('\n');
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a'); link.href = url; link.download = `business-export-${new Date().toISOString().split('T')[0]}.csv`; link.click();
-      URL.revokeObjectURL(url);
+      // Respect the table's current visual order: pinned "Business Name"
+      // first, then the reorderable columns in whatever order the user has
+      // dragged them into, skipping the UI-only "Action" column and any
+      // hidden columns.
+      const visibleCols = [
+        "sme",
+        ...columnOrder.filter((key) => key !== "sme" && key !== "action" && columnVisibility[key])
+      ].filter((key) => columnVisibility[key] && EXPORT_FIELD_MAP[key]);
+
+      if (visibleCols.length === 0) {
+        setNotification({ type: "error", message: "No visible columns to export" });
+        return;
+      }
+      if (filteredAndSortedSMEs.length === 0) {
+        setNotification({ type: "error", message: "No businesses to export" });
+        return;
+      }
+
+      const rows = filteredAndSortedSMEs.map((sme) => {
+        const row = {};
+        visibleCols.forEach((key) => {
+          const field = EXPORT_FIELD_MAP[key];
+          const label = EXPORT_HEADERS[key] || key;
+          let value = sme[field];
+          if (key === "match") value = value != null ? `${value}%` : "";
+          if (value === null || value === undefined) value = "";
+          row[label] = value;
+        });
+        return row;
+      });
+
+      const headerOrder = visibleCols.map((key) => EXPORT_HEADERS[key] || key);
+      const worksheet = XLSX.utils.json_to_sheet(rows, { header: headerOrder });
+
+      // Reasonable auto column widths based on header/content length so the
+      // sheet doesn't open with everything squashed into narrow columns.
+      worksheet["!cols"] = headerOrder.map((label, i) => {
+        const key = visibleCols[i];
+        const contentLengths = rows.map((r) => String(r[label] ?? "").length);
+        const maxLen = Math.max(label.length, ...contentLengths, 8);
+        return { wch: Math.min(maxLen + 2, 45) };
+      });
+
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Businesses");
+      XLSX.writeFile(workbook, `business-export-${new Date().toISOString().split('T')[0]}.xlsx`);
+
       setNotification({ type: "success", message: "Export downloaded" });
     } catch (error) {
-      setNotification({ type: "error", message: "Export failed" });
+      console.error("Export error:", error);
+      setNotification({ type: "error", message: `Export failed: ${error.message}` });
     }
   };
 
@@ -583,39 +981,6 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
     if (auth.currentUser) loadSentNDAs();
   }, []);
 
-  const saveCurrentView = () => {
-    if (!viewName.trim()) return;
-    setSavedViews(prev => {
-      const next = [...prev.filter(v => v.name !== viewName.trim()), { name: viewName.trim(), columns: { ...columnVisibility }, sort: { ...sortConfig }, density }];
-      try {
-        if (typeof window !== "undefined") window.localStorage.setItem(SAVED_VIEWS_STORAGE_KEY, JSON.stringify(next));
-      } catch {
-        // Non-fatal — the view still applies for this session.
-      }
-      return next;
-    });
-    setNotification({ type: "success", message: `View "${viewName.trim()}" saved!` });
-    setViewName("");
-  };
-
-  const loadView = (view) => {
-    setColumnVisibility(view.columns); setSortConfig(view.sort); setDensity(view.density);
-    setNotification({ type: "success", message: `View "${view.name}" loaded!` });
-  };
-
-  const deleteView = (name) => {
-    setSavedViews(prev => {
-      const next = prev.filter(v => v.name !== name);
-      try {
-        if (typeof window !== "undefined") window.localStorage.setItem(SAVED_VIEWS_STORAGE_KEY, JSON.stringify(next));
-      } catch {
-        // Non-fatal.
-      }
-      return next;
-    });
-  };
-
-
   const handleDateSelect = (dates) => setTempDates(dates || []);
   const handleTimeChange = (field, value) => setTimeSlot(prev => ({ ...prev, [field]: value }));
   const removeAvailability = (date) => setAvailabilities(prev => prev.filter(a => a.date?.getTime?.() !== date?.getTime?.()));
@@ -647,7 +1012,19 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
       {/* Toolbar */}
       <div className="bg-[#faf7f2] rounded-t-2xl p-4 border border-[#e6d7c3] border-b-0 shadow-sm">
         <div className="flex items-center justify-between gap-4 flex-wrap">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#f5f0e1] text-[#7d5a50] border border-[#c8b6a6]" title="Determined by the pipeline's programme type setting">
+              <Briefcase size={12} /> {activeProgrammeLabel} pipeline
+            </span>
+            {/* Always-visible active view name (+ description, if any) — no
+                hover required, so it's never ambiguous which view is live. */}
+            <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-white text-[#4a352f] border border-[#c8b6a6]">
+              <LayoutGrid size={12} className="text-[#7d5a50] flex-shrink-0" />
+              Viewing: {activeView.name}
+              {activeView.description && (
+                <span className="font-normal text-[#a89482]"> — {activeView.description}</span>
+              )}
+            </span>
             {activeFilterCount > 0 && (
               <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#fff3e0] text-[#e65100] border border-[#e65100]/30">
                 <SlidersHorizontal size={12} /> {activeFilterCount} filter{activeFilterCount > 1 ? "s" : ""} active
@@ -655,15 +1032,177 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
             )}
           </div>
           <div className="flex items-center gap-2">
+
+            {/* ─── Views control ─────────────────────────────────────────── */}
             <div className="relative">
-              <button onClick={() => setShowColumnChooser(!showColumnChooser)} className="flex items-center gap-2 px-4 py-2.5 bg-white border border-[#c8b6a6] rounded-xl text-sm text-[#4a352f] hover:bg-[#f5f0e1] transition-all shadow-sm">
-                <Plus size={16} /> Add New Field <ChevronDown size={14} className={`transition-transform ${showColumnChooser ? 'rotate-180' : ''}`} />
+              <button
+                onClick={(e) => {
+                  if (showViewsMenu) {
+                    setShowViewsMenu(false);
+                    setViewsMenuRect(null);
+                  } else {
+                    setViewsMenuRect(e.currentTarget.getBoundingClientRect());
+                    setShowViewsMenu(true);
+                    setShowNewViewForm(false);
+                    setEditingViewMeta(null);
+                  }
+                }}
+                className="flex items-center gap-2 px-4 py-2.5 bg-white border border-[#c8b6a6] rounded-xl text-sm text-[#4a352f] hover:bg-[#f5f0e1] transition-all shadow-sm"
+              >
+                <LayoutGrid size={16} /> Views <ChevronDown size={14} className={`transition-transform ${showViewsMenu ? 'rotate-180' : ''}`} />
               </button>
-              {showColumnChooser && (
-                <>
-                  <div className="fixed inset-0 z-40" onClick={() => setShowColumnChooser(false)} />
-                  <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-2xl shadow-2xl border border-[#e6d7c3] p-5 z-50 max-h-[560px] overflow-y-auto">
+              {showViewsMenu && viewsMenuRect && (() => {
+                const panelWidth = 320;
+                const margin = 12;
+                let left = viewsMenuRect.right - panelWidth;
+                left = Math.min(Math.max(left, margin), window.innerWidth - panelWidth - margin);
+                const spaceBelow = window.innerHeight - viewsMenuRect.bottom - margin - 8;
+                const spaceAbove = viewsMenuRect.top - margin - 8;
+                const openUpward = spaceBelow < 320 && spaceAbove > spaceBelow;
+                const maxHeight = Math.max(200, Math.min(480, openUpward ? spaceAbove : spaceBelow));
+                const top = openUpward ? undefined : viewsMenuRect.bottom + 8;
+                const bottom = openUpward ? window.innerHeight - viewsMenuRect.top + 8 : undefined;
+                const allViews = Object.values(viewsState.views).sort((a, b) => (a.builtin ? -1 : b.builtin ? 1 : a.name.localeCompare(b.name)));
+                return (
+                  <PopupPortal>
+                    <div className="fixed inset-0 z-40" onClick={() => { setShowViewsMenu(false); setViewsMenuRect(null); setShowNewViewForm(false); setEditingViewMeta(null); }} />
+                    <div
+                      className="fixed bg-white rounded-2xl shadow-2xl border border-[#e6d7c3] p-4 z-50 overflow-y-auto"
+                      style={{ left, width: panelWidth, top, bottom, maxHeight }}
+                    >
+                      <h4 className="text-sm font-semibold text-[#4a352f] mb-1">Views</h4>
+                      <p className="text-xs text-[#a89482] mb-3">Edits to columns, order, sort, and density auto-save into whichever view is selected.</p>
+
+                      <div className="space-y-1 mb-3">
+                        {allViews.map((view) => {
+                          const isActive = view.id === viewsState.activeViewId;
+                          const isEditing = editingViewMeta?.id === view.id;
+                          if (isEditing) {
+                            return (
+                              <div key={view.id} className="p-2.5 rounded-lg border border-[#c8b6a6] bg-[#faf7f2] space-y-2">
+                                {!view.builtin ? (
+                                  <input
+                                    autoFocus
+                                    value={editingViewMeta.name}
+                                    onChange={(e) => setEditingViewMeta(prev => ({ ...prev, name: e.target.value }))}
+                                    placeholder="View name"
+                                    className="w-full px-2.5 py-1.5 border border-[#c8b6a6] rounded-lg text-sm"
+                                  />
+                                ) : (
+                                  <p className="text-sm font-semibold text-[#4a352f]">Default <span className="font-normal text-[#a89482] text-xs">(name can't be changed)</span></p>
+                                )}
+                                <textarea
+                                  value={editingViewMeta.description}
+                                  onChange={(e) => setEditingViewMeta(prev => ({ ...prev, description: e.target.value }))}
+                                  placeholder="Description (optional) — what is this view for?"
+                                  rows={2}
+                                  className="w-full px-2.5 py-1.5 border border-[#c8b6a6] rounded-lg text-xs resize-none"
+                                />
+                                <div className="flex justify-end gap-2">
+                                  <button onClick={() => setEditingViewMeta(null)} className="px-2.5 py-1 text-xs text-[#7d5a50] hover:text-[#4a352f]">Cancel</button>
+                                  <button onClick={saveViewMeta} className="px-2.5 py-1 bg-[#7d5a50] text-white rounded-lg text-xs font-semibold">Save</button>
+                                </div>
+                              </div>
+                            );
+                          }
+                          return (
+                            <div key={view.id} className={`flex items-start justify-between gap-2 px-2.5 py-2 rounded-lg ${isActive ? 'bg-[#f5f0e1]' : 'hover:bg-[#faf7f2]'}`}>
+                              <button onClick={() => switchToView(view.id)} className="flex-1 text-left min-w-0">
+                                <div className="flex items-center gap-1.5">
+                                  {isActive && <CheckCircle size={12} className="text-[#7d5a50] flex-shrink-0" />}
+                                  <span className={`text-sm ${isActive ? 'font-semibold text-[#4a352f]' : 'text-[#4a352f]'}`}>{view.name}</span>
+                                  {view.builtin && <span className="text-[10px] uppercase tracking-wide text-[#a89482] font-semibold">Built-in</span>}
+                                </div>
+                                {view.description && <p className="text-xs text-[#a89482] mt-0.5 truncate">{view.description}</p>}
+                              </button>
+                              <div className="flex items-center gap-0.5 flex-shrink-0">
+                                <button onClick={() => startEditingViewMeta(view)} title="Rename / edit description" className="text-[#a89482] hover:text-[#7d5a50] p-1">
+                                  <Settings size={13} />
+                                </button>
+                                {!view.builtin && (
+                                  <button onClick={() => removeView(view.id)} title="Delete view" className="text-[#a89482] hover:text-red-500 p-1">
+                                    <Trash2 size={13} />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      <div className="border-t border-[#e6d7c3] pt-3">
+                        {showNewViewForm ? (
+                          <div className="space-y-2">
+                            <input
+                              autoFocus
+                              value={newViewName}
+                              onChange={(e) => setNewViewName(e.target.value)}
+                              placeholder="New view name..."
+                              className="w-full px-2.5 py-1.5 border border-[#c8b6a6] rounded-lg text-sm"
+                            />
+                            <textarea
+                              value={newViewDescription}
+                              onChange={(e) => setNewViewDescription(e.target.value)}
+                              placeholder="Description (optional) — what is this view for?"
+                              rows={2}
+                              className="w-full px-2.5 py-1.5 border border-[#c8b6a6] rounded-lg text-xs resize-none"
+                            />
+                            <div className="flex justify-end gap-2">
+                              <button onClick={() => { setShowNewViewForm(false); setNewViewName(""); setNewViewDescription(""); }} className="px-2.5 py-1 text-xs text-[#7d5a50] hover:text-[#4a352f]">Cancel</button>
+                              <button onClick={createNewView} disabled={!newViewName.trim()} className="px-3 py-1.5 bg-[#7d5a50] text-white rounded-lg text-xs font-semibold disabled:opacity-40">Create view</button>
+                            </div>
+                          </div>
+                        ) : (
+                          <button onClick={() => setShowNewViewForm(true)} className="w-full flex items-center justify-center gap-1.5 px-3 py-2 border border-dashed border-[#c8b6a6] rounded-lg text-xs font-semibold text-[#7d5a50] hover:bg-[#faf7f2]">
+                            <Plus size={13} /> New view from current layout
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </PopupPortal>
+                );
+              })()}
+            </div>
+
+            {/* ─── Columns control ────────────────────────────────────────── */}
+            <div className="relative">
+              <button
+                onClick={(e) => {
+                  if (showColumnChooser) {
+                    setShowColumnChooser(false);
+                    setColumnChooserRect(null);
+                  } else {
+                    setColumnChooserRect(e.currentTarget.getBoundingClientRect());
+                    setShowColumnChooser(true);
+                  }
+                }}
+                className="flex items-center gap-2 px-4 py-2.5 bg-white border border-[#c8b6a6] rounded-xl text-sm text-[#4a352f] hover:bg-[#f5f0e1] transition-all shadow-sm"
+              >
+                <SlidersHorizontal size={16} /> Columns <ChevronDown size={14} className={`transition-transform ${showColumnChooser ? 'rotate-180' : ''}`} />
+              </button>
+              {showColumnChooser && columnChooserRect && (() => {
+                const panelWidth = 320;
+                const margin = 12;
+                let left = columnChooserRect.right - panelWidth;
+                left = Math.min(Math.max(left, margin), window.innerWidth - panelWidth - margin);
+                // Available vertical space below the button; fall back to opening upward if it's too tight.
+                const spaceBelow = window.innerHeight - columnChooserRect.bottom - margin - 8;
+                const spaceAbove = columnChooserRect.top - margin - 8;
+                const openUpward = spaceBelow < 320 && spaceAbove > spaceBelow;
+                const maxHeight = Math.max(200, Math.min(560, openUpward ? spaceAbove : spaceBelow));
+                const top = openUpward ? undefined : columnChooserRect.bottom + 8;
+                const bottom = openUpward ? window.innerHeight - columnChooserRect.top + 8 : undefined;
+                return (
+                  <PopupPortal>
+                    <div className="fixed inset-0 z-40" onClick={() => { setShowColumnChooser(false); setColumnChooserRect(null); }} />
+                    <div
+                      className="fixed bg-white rounded-2xl shadow-2xl border border-[#e6d7c3] p-5 z-50 overflow-y-auto"
+                      style={{ left, width: panelWidth, top, bottom, maxHeight }}
+                    >
                     <h4 className="text-sm font-semibold text-[#4a352f] mb-3">Column Visibility</h4>
+                    <p className="text-xs text-[#a89482] mb-3 flex items-center gap-1.5">
+                      <GripVertical size={12} className="flex-shrink-0" /> Tip: drag any column header in the table to reorder it.
+                    </p>
                     {[{ key: 'sme', label: 'Business Name' },{ key: 'bigScore', label: 'BIG Score' },{ key: 'match', label: 'Match %' },{ key: 'status', label: 'Status' },{ key: 'action', label: 'Action' }].map(({ key, label }) => (
                       <label key={key} className="flex items-center gap-3 py-2 px-2 rounded-lg opacity-75">
                         <input type="checkbox" checked={true} disabled={true} className="rounded border-[#c8b6a6]" />
@@ -693,37 +1232,17 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
                     </div>
 
                     <div className="border-t border-[#e6d7c3] my-4" />
-                    <h4 className="text-sm font-semibold text-[#4a352f] mb-2">Save View</h4>
-                    <div className="flex items-center gap-2 mb-3">
-                      <input
-                        value={viewName}
-                        onChange={(e) => setViewName(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && saveCurrentView()}
-                        placeholder="View name..."
-                        className="flex-1 px-2.5 py-1.5 border border-[#c8b6a6] rounded-lg text-sm"
-                      />
-                      <button onClick={saveCurrentView} disabled={!viewName.trim()} className="px-3 py-1.5 bg-[#7d5a50] text-white rounded-lg text-xs font-semibold disabled:opacity-40">Save</button>
+                    <button onClick={resetActiveViewToDefault} className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold text-[#a67c52] hover:text-[#4a352f] hover:bg-[#faf7f2] border border-[#e6d7c3]">
+                      <RotateCcw size={12} /> Reset "{activeView.name}" to factory defaults
+                    </button>
                     </div>
-                    {savedViews.length > 0 && (
-                      <>
-                        <h4 className="text-xs font-semibold text-[#a89482] uppercase tracking-wide mb-2">Saved views</h4>
-                        <div className="space-y-1 max-h-[180px] overflow-y-auto">
-                          {savedViews.map((view) => (
-                            <div key={view.name} className="flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg hover:bg-[#faf7f2]">
-                              <button onClick={() => loadView(view)} className="flex-1 text-left text-sm text-[#4a352f]">{view.name}</button>
-                              <button onClick={() => deleteView(view.name)} className="text-[#a89482] hover:text-red-500 p-1"><Trash2 size={13} /></button>
-                            </div>
-                          ))}
-                        </div>
-                      </>
-                    )}
-                  </div>
-                </>
-              )}
+                  </PopupPortal>
+                );
+              })()}
             </div>
 
-            <button onClick={handleExport} className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-[#7d5a50] to-[#4a352f] text-white rounded-xl text-sm font-medium hover:shadow-lg transition-all shadow-sm">
-              <Download size={16} /> Export
+            <button onClick={handleExport} className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-[#7d5a50] to-[#4a352f] text-white rounded-xl text-sm font-medium hover:shadow-lg transition-all shadow-sm" title="Export the currently filtered/sorted businesses to Excel (.xlsx)">
+              <Download size={16} /> Export to Excel
             </button>
           </div>
         </div>
@@ -740,6 +1259,8 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
                 .smt-th { color: #faf7f2 !important; line-height: 1.1; font-size: 0.75rem !important; font-weight: 600 !important; text-transform: uppercase !important; letter-spacing: 0.05em !important; font-family: inherit !important; }
                 .smt-th-btn { color: #faf7f2 !important; background: transparent; border: none; padding: 0; margin: 0; cursor: pointer; transition: color .15s ease; white-space: nowrap; font-size: inherit !important; font-weight: inherit !important; text-transform: inherit !important; letter-spacing: inherit !important; font-family: inherit !important; }
                 .smt-th-btn:hover { color: #e6d7c3 !important; }
+                .smt-th-draggable { cursor: grab; }
+                .smt-th-draggable:active { cursor: grabbing; }
               `}</style>
               <table className="w-full border-collapse" style={{ minWidth: '960px' }}>
                 <thead>
@@ -750,56 +1271,42 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
                         <FilterTrigger type="name" active={!!localFilters.name.trim()} />
                       </div>
                     </th>
-                    {columnVisibility.bigScore && (
-                      <th className={`smt-th py-3 px-3 text-center font-semibold uppercase tracking-wider text-xs whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ minWidth: '100px', backgroundColor: '#4a352f' }}>
-                        <div className="flex items-center justify-center gap-1">
-                          <button type="button" onClick={() => handleSort('bigScore')} className="smt-th-btn flex items-center gap-1">BIG Score <span className="flex flex-col -space-y-1 opacity-60"><ArrowUp size={10} /><ArrowDown size={10} /></span></button>
-                          <FilterTrigger type="bigScore" active={localFilters.bigScoreRange[0] > 0 || localFilters.bigScoreRange[1] < 100} />
-                          <HeaderInfoTooltip text="BIG Score measures SME credibility and readiness — compliance, legitimacy, fundability, PIS, and leadership." />
-                        </div>
-                      </th>
-                    )}
-                    {columnVisibility.match && (
-                      <th className={`smt-th py-3 px-3 text-center font-semibold uppercase tracking-wider text-xs whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ minWidth: '110px', backgroundColor: '#4a352f' }}>
-                        <div className="flex items-center justify-center gap-1">
-                          <button type="button" onClick={() => handleSort('matchPercentage')} className="smt-th-btn flex items-center gap-1">Match % <span className="flex flex-col -space-y-1 opacity-60"><ArrowUp size={10} /><ArrowDown size={10} /></span></button>
-                          <HeaderInfoTooltip text="Match Score measures programme fit — alignment with this programme's mandate and criteria." />
-                        </div>
-                      </th>
-                    )}
-                    {columnVisibility.fundingStage && (
-                      <th className={`smt-th py-3 px-3 text-left font-semibold uppercase tracking-wider text-xs whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ backgroundColor: '#4a352f' }}>
-                        <div className="flex items-center gap-1">
-                          Funding Stage
-                          <FilterTrigger type="fundingStage" active={localFilters.fundingStage.length > 0} />
-                        </div>
-                      </th>
-                    )}
-                    {columnVisibility.fundingRequired && <th className={`smt-th py-3 px-3 text-left font-semibold uppercase tracking-wider text-xs whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ backgroundColor: '#4a352f' }}><button type="button" onClick={() => handleSort('fundingAmount')} className="smt-th-btn flex items-center gap-1">Funding <span className="flex flex-col -space-y-1 opacity-60"><ArrowUp size={10} /><ArrowDown size={10} /></span></button></th>}
-                    {columnVisibility.status && (
-                      <th className={`smt-th py-3 px-3 text-left font-semibold uppercase tracking-wider text-xs whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ backgroundColor: '#4a352f' }}>
-                        <div className="flex items-center gap-1">
-                          Status
-                          <FilterTrigger type="status" active={localFilters.status.length > 0} />
-                        </div>
-                      </th>
-                    )}
-                    {columnVisibility.applied && <th className={`smt-th py-3 px-3 text-left font-semibold uppercase tracking-wider text-xs whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ backgroundColor: '#4a352f' }}><button type="button" onClick={() => handleSort('applicationDateRaw')} className="smt-th-btn flex items-center gap-1">Applied <span className="flex flex-col -space-y-1 opacity-60"><ArrowUp size={10} /><ArrowDown size={10} /></span></button></th>}
-                    {columnVisibility.daysInStage && <th className={`smt-th py-3 px-3 text-left font-semibold uppercase tracking-wider text-xs whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ backgroundColor: '#4a352f' }}><button type="button" onClick={() => handleSort('daysInStage')} className="smt-th-btn flex items-center gap-1">Days in Stage <span className="flex flex-col -space-y-1 opacity-60"><ArrowUp size={10} /><ArrowDown size={10} /></span></button></th>}
-                    {columnVisibility.lastActivity && <th className={`smt-th py-3 px-3 text-left font-semibold uppercase tracking-wider text-xs whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ backgroundColor: '#4a352f' }}>Last Activity</th>}
-                    {columnVisibility.location && <th className={`smt-th py-3 px-3 text-left font-semibold uppercase tracking-wider text-xs whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ backgroundColor: '#4a352f' }}>Location</th>}
-                    {columnVisibility.sector && (
-                      <th className={`smt-th py-3 px-3 text-left font-semibold uppercase tracking-wider text-xs whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ backgroundColor: '#4a352f' }}>
-                        <div className="flex items-center gap-1">
-                          Sector
-                          <FilterTrigger type="sector" active={localFilters.sector.length > 0} />
-                        </div>
-                      </th>
-                    )}
-                    {columnVisibility.equity && <th className={`smt-th py-3 px-3 text-left font-semibold uppercase tracking-wider text-xs whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ backgroundColor: '#4a352f' }}>Equity</th>}
-                    {columnVisibility.guarantees && <th className={`smt-th py-3 px-3 text-left font-semibold uppercase tracking-wider text-xs whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ backgroundColor: '#4a352f' }}>Guarantees</th>}
-                    {columnVisibility.support && <th className={`smt-th py-3 px-3 text-left font-semibold uppercase tracking-wider text-xs whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ backgroundColor: '#4a352f' }}>Support</th>}
-                    {columnVisibility.services && <th className={`smt-th py-3 px-3 text-left font-semibold uppercase tracking-wider text-xs whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ backgroundColor: '#4a352f' }}>Services</th>}
+
+                    {/* ─── Reorderable columns ────────────────────────────── */}
+                    {columnOrder.filter((key) => columnVisibility[key]).map((key) => {
+                      const col = COLUMN_DEFS[key];
+                      if (!col) return null;
+                      const isDragging = draggedColumn === key;
+                      const isDragOver = dragOverColumn === key && draggedColumn !== key;
+                      return (
+                        <th
+                          key={key}
+                          draggable
+                          onDragStart={(e) => handleColumnDragStart(e, key)}
+                          onDragOver={(e) => handleColumnDragOver(e, key)}
+                          onDrop={(e) => handleColumnDrop(e, key)}
+                          onDragEnd={handleColumnDragEnd}
+                          onMouseEnter={(e) => setDragHintRect(e.currentTarget.getBoundingClientRect())}
+                          onMouseLeave={() => setDragHintRect(null)}
+                          className={`smt-th smt-th-draggable py-3 px-3 font-semibold uppercase tracking-wider text-xs whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20 select-none transition-opacity ${col.align === 'center' ? 'text-center' : 'text-left'} ${isDragging ? 'opacity-40' : ''}`}
+                          style={{ minWidth: col.minWidth, backgroundColor: isDragOver ? '#5a423b' : '#4a352f' }}
+                        >
+                          <div className={`flex items-center gap-1 ${col.align === 'center' ? 'justify-center' : ''}`}>
+                            <GripVertical size={11} className="opacity-40 flex-shrink-0" />
+                            {col.sortKey ? (
+                              <button type="button" onClick={() => handleSort(col.sortKey)} className="smt-th-btn flex items-center gap-1">
+                                {col.label} <span className="flex flex-col -space-y-1 opacity-60"><ArrowUp size={10} /><ArrowDown size={10} /></span>
+                              </button>
+                            ) : (
+                              <span>{col.label}</span>
+                            )}
+                            {col.filterType && <FilterTrigger type={col.filterType} active={getFilterActive(col.filterType)} />}
+                            {col.tooltip && <HeaderInfoTooltip text={col.tooltip} />}
+                          </div>
+                        </th>
+                      );
+                    })}
+
                     {columnVisibility.action && <th className={`smt-th py-3 px-3 text-center font-semibold uppercase tracking-wider text-xs whitespace-nowrap sticky top-0 z-20`} style={{ minWidth: '190px', backgroundColor: '#4a352f' }}>Actions</th>}
                   </tr>
                 </thead>
@@ -815,14 +1322,110 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
                     paginatedSMEs.map((sme) => {
                       const bigScoreLabel = getBigScoreLabel(sme.bigScore);
                       const matchLabel = getMatchLabel(sme.matchPercentage);
-                      const statusStyle = getStatusStyle(sme.currentStatus);
+                      const statusStyle = getStatusStyle(sme.currentStatus, activeStages);
                       const isTerminalNegative = /declined|withdrawn/i.test(statusStyle.stage.name || "");
                       const nextStageLabel = sme.nextStage || "—";
                       const smeKey = `${sme.id}_${sme.programIndex}`;
                       const currentStatus = updatedStages[smeKey] || sme.currentStatus;
-                      const showNDAButton = mapStatusToStageId(currentStatus) === "evaluation";
+                      const showNDAButton = mapStatusToStageId(currentStatus, activeStages) === "evaluation";
                       const ndaSent = sentNDAs[smeKey];
-                      const attentionReasons = getAttentionReasons(sme);
+                      const attentionReasons = getAttentionReasons(sme, activeStages);
+
+                      const renderCell = (key) => {
+                        switch (key) {
+                          case 'bigScore':
+                            return (
+                              <td key={key} className={`${ds.cell} text-center cursor-pointer border-r border-[#e6d7c3]`} onClick={(e) => openPopupFromEvent('bigScore', sme, e)}>
+                                <div className="flex flex-col items-center gap-1">
+                                  <div className="relative w-11 h-11">
+                                    <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
+                                      <circle cx="18" cy="18" r="14" fill="none" stroke="#e6d7c3" strokeWidth="3" />
+                                      <circle cx="18" cy="18" r="14" fill="none" stroke={bigScoreLabel.color} strokeWidth="3" strokeDasharray={`${sme.bigScore * 0.88} 88`} strokeLinecap="round" />
+                                    </svg>
+                                    <span className={`absolute inset-0 flex items-center justify-center ${ds.fontSize} font-normal`} style={{ color: bigScoreLabel.color }}>{sme.bigScore}</span>
+                                  </div>
+                                  <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ backgroundColor: `${bigScoreLabel.color}20`, color: bigScoreLabel.color }}>{bigScoreLabel.label}</span>
+                                </div>
+                              </td>
+                            );
+                          case 'match':
+                            return (
+                              <td key={key} className={`${ds.cell} text-center cursor-pointer border-r border-[#e6d7c3]`} onClick={(e) => openPopupFromEvent('match', sme, e)}>
+                                <div className="flex flex-col items-center gap-1 w-full max-w-[90px] mx-auto">
+                                  <span className={`${ds.fontSize} font-normal text-[#4a352f]`}>{sme.matchPercentage}%</span>
+                                  <span className="text-xs font-medium" style={{ color: matchLabel.color }}>{matchLabel.label}</span>
+                                  <div className="w-full h-1.5 bg-[#e6d7c3] rounded-full overflow-hidden">
+                                    <div className="h-full rounded-full" style={{ width: `${sme.matchPercentage}%`, backgroundColor: matchLabel.color }} />
+                                  </div>
+                                </div>
+                              </td>
+                            );
+                          case 'fundingStage':
+                            return (
+                              <td key={key} className={`${ds.cell} ${ds.fontSize} text-[#4a352f] border-r border-[#e6d7c3]`}>
+                                <span className="inline-flex items-center gap-1 px-2 py-1 bg-[#f5f0e1] rounded-full text-xs font-medium">{sme.fundingStage}</span>
+                              </td>
+                            );
+                          case 'fundingRequired':
+                            return (
+                              <td key={key} className={`${ds.cell} ${ds.fontSize} text-[#4a352f] border-r border-[#e6d7c3]`}>
+                                <span className="font-normal">{sme.fundingRequired}</span>
+                              </td>
+                            );
+                          case 'status':
+                            return (
+                              <td key={key} className={`${ds.cell} border-r border-[#e6d7c3]`}>
+                                <span
+                                  className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold border"
+                                  style={{ backgroundColor: statusStyle.bg, color: statusStyle.text, borderColor: statusStyle.border }}
+                                  title={statusStyle.stage.tooltip}
+                                >
+                                  <span className="w-2 h-2 rounded-full" style={{ backgroundColor: statusStyle.dot }} />{statusStyle.stage.name}
+                                </span>
+                              </td>
+                            );
+                          case 'applied':
+                            return (
+                              <td key={key} className={`${ds.cell} ${ds.fontSize} text-[#4a352f] border-r border-[#e6d7c3]`}>
+                                <div className="flex items-center gap-1.5"><Calendar size={14} className="text-[#7d5a50]" />{sme.applicationDate}</div>
+                              </td>
+                            );
+                          case 'daysInStage':
+                            return (
+                              <td key={key} className={`${ds.cell} ${ds.fontSize} text-[#4a352f] border-r border-[#e6d7c3]`}>
+                                <div className="flex items-center gap-1.5"><Clock size={14} className="text-[#7d5a50]" />{sme.daysInStage} days</div>
+                              </td>
+                            );
+                          case 'lastActivity':
+                            return <td key={key} className={`${ds.cell} ${ds.fontSize} text-[#4a352f] border-r border-[#e6d7c3]`}>{sme.lastActivity}</td>;
+                          case 'location':
+                            return <td key={key} className={`${ds.cell} ${ds.fontSize} text-[#4a352f] border-r border-[#e6d7c3]`}>{sme.location}</td>;
+                          case 'sector':
+                            return <td key={key} className={`${ds.cell} ${ds.fontSize} text-[#4a352f] border-r border-[#e6d7c3]`}>{sme.sector}</td>;
+                          case 'equity':
+                            return <td key={key} className={`${ds.cell} ${ds.fontSize} text-[#4a352f] border-r border-[#e6d7c3]`}>{sme.equityOffered}</td>;
+                          case 'guarantees':
+                            return (
+                              <td key={key} className={`${ds.cell} ${ds.fontSize} text-[#4a352f] border-r border-[#e6d7c3]`}>
+                                <span className="line-clamp-1">{sme.guarantees}</span>
+                              </td>
+                            );
+                          case 'support':
+                            return (
+                              <td key={key} className={`${ds.cell} ${ds.fontSize} text-[#4a352f] border-r border-[#e6d7c3]`}>
+                                <span className="line-clamp-1">{sme.supportRequired}</span>
+                              </td>
+                            );
+                          case 'services':
+                            return (
+                              <td key={key} className={`${ds.cell} ${ds.fontSize} text-[#4a352f] border-r border-[#e6d7c3]`}>
+                                <span className="line-clamp-1">{sme.servicesRequired}</span>
+                              </td>
+                            );
+                          default:
+                            return null;
+                        }
+                      };
 
                       return (
                         <tr
@@ -857,53 +1460,9 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
                               </div>
                             </td>
                           )}
-                          {columnVisibility.bigScore && (
-                            <td className={`${ds.cell} text-center cursor-pointer border-r border-[#e6d7c3]`} onClick={(e) => openPopupFromEvent('bigScore', sme, e)}>
-                              <div className="flex flex-col items-center gap-1">
-                                <div className="relative w-11 h-11">
-                                  <svg className="w-full h-full -rotate-90" viewBox="0 0 36 36">
-                                    <circle cx="18" cy="18" r="14" fill="none" stroke="#e6d7c3" strokeWidth="3" />
-                                    <circle cx="18" cy="18" r="14" fill="none" stroke={bigScoreLabel.color} strokeWidth="3" strokeDasharray={`${sme.bigScore * 0.88} 88`} strokeLinecap="round" />
-                                  </svg>
-                                  <span className={`absolute inset-0 flex items-center justify-center ${ds.fontSize} font-normal`} style={{ color: bigScoreLabel.color }}>{sme.bigScore}</span>
-                                </div>
-                                <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ backgroundColor: `${bigScoreLabel.color}20`, color: bigScoreLabel.color }}>{bigScoreLabel.label}</span>
-                              </div>
-                            </td>
-                          )}
-                          {columnVisibility.match && (
-                            <td className={`${ds.cell} text-center cursor-pointer border-r border-[#e6d7c3]`} onClick={(e) => openPopupFromEvent('match', sme, e)}>
-                              <div className="flex flex-col items-center gap-1 w-full max-w-[90px] mx-auto">
-                                <span className={`${ds.fontSize} font-normal text-[#4a352f]`}>{sme.matchPercentage}%</span>
-                                <span className="text-xs font-medium" style={{ color: matchLabel.color }}>{matchLabel.label}</span>
-                                <div className="w-full h-1.5 bg-[#e6d7c3] rounded-full overflow-hidden">
-                                  <div className="h-full rounded-full" style={{ width: `${sme.matchPercentage}%`, backgroundColor: matchLabel.color }} />
-                                </div>
-                              </div>
-                            </td>
-                          )}
-                          {columnVisibility.fundingStage && <td className={`${ds.cell} ${ds.fontSize} text-[#4a352f] border-r border-[#e6d7c3]`}><span className="inline-flex items-center gap-1 px-2 py-1 bg-[#f5f0e1] rounded-full text-xs font-medium">{sme.fundingStage}</span></td>}
-                          {columnVisibility.fundingRequired && <td className={`${ds.cell} ${ds.fontSize} text-[#4a352f] border-r border-[#e6d7c3]`}><span className="font-normal">{sme.fundingRequired}</span></td>}
-                          {columnVisibility.status && (
-                            <td className={`${ds.cell} border-r border-[#e6d7c3]`}>
-                              <span
-                                className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold border"
-                                style={{ backgroundColor: statusStyle.bg, color: statusStyle.text, borderColor: statusStyle.border }}
-                                title={statusStyle.stage.tooltip}
-                              >
-                                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: statusStyle.dot }} />{statusStyle.stage.name}
-                              </span>
-                            </td>
-                          )}
-                          {columnVisibility.applied && <td className={`${ds.cell} ${ds.fontSize} text-[#4a352f] border-r border-[#e6d7c3]`}><div className="flex items-center gap-1.5"><Calendar size={14} className="text-[#7d5a50]" />{sme.applicationDate}</div></td>}
-                          {columnVisibility.daysInStage && <td className={`${ds.cell} ${ds.fontSize} text-[#4a352f] border-r border-[#e6d7c3]`}><div className="flex items-center gap-1.5"><Clock size={14} className="text-[#7d5a50]" />{sme.daysInStage} days</div></td>}
-                          {columnVisibility.lastActivity && <td className={`${ds.cell} ${ds.fontSize} text-[#4a352f] border-r border-[#e6d7c3]`}>{sme.lastActivity}</td>}
-                          {columnVisibility.location && <td className={`${ds.cell} ${ds.fontSize} text-[#4a352f] border-r border-[#e6d7c3]`}>{sme.location}</td>}
-                          {columnVisibility.sector && <td className={`${ds.cell} ${ds.fontSize} text-[#4a352f] border-r border-[#e6d7c3]`}>{sme.sector}</td>}
-                          {columnVisibility.equity && <td className={`${ds.cell} ${ds.fontSize} text-[#4a352f] border-r border-[#e6d7c3]`}>{sme.equityOffered}</td>}
-                          {columnVisibility.guarantees && <td className={`${ds.cell} ${ds.fontSize} text-[#4a352f] border-r border-[#e6d7c3]`}><span className="line-clamp-1">{sme.guarantees}</span></td>}
-                          {columnVisibility.support && <td className={`${ds.cell} ${ds.fontSize} text-[#4a352f] border-r border-[#e6d7c3]`}><span className="line-clamp-1">{sme.supportRequired}</span></td>}
-                          {columnVisibility.services && <td className={`${ds.cell} ${ds.fontSize} text-[#4a352f] border-r border-[#e6d7c3]`}><span className="line-clamp-1">{sme.servicesRequired}</span></td>}
+
+                          {columnOrder.filter((key) => columnVisibility[key]).map((key) => renderCell(key))}
+
                           {columnVisibility.action && (
                             <td className={`${ds.cell} text-center`} style={{ minWidth: '190px' }}>
                               <div className="flex flex-col items-center gap-1">
@@ -966,6 +1525,22 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
         )}
       </div>
 
+      {/* ─── Drag-to-reorder hint tooltip ──────────────────────────────────── */}
+      {dragHintRect && !draggedColumn && (
+        <PopupPortal>
+          <div
+            className="fixed z-[1200] bg-[#4a352f] text-[#faf7f2] text-xs rounded-lg px-3 py-2 shadow-2xl pointer-events-none normal-case font-normal flex items-center gap-1.5"
+            style={{
+              top: dragHintRect.bottom + 8,
+              left: Math.min(Math.max(dragHintRect.left, 12), window.innerWidth - 200),
+              width: '190px',
+            }}
+          >
+            <GripVertical size={12} className="flex-shrink-0" /> Drag to reorder columns
+          </div>
+        </PopupPortal>
+      )}
+
       {/* ─── Column header filter popover ───────────────────────────────────── */}
       {headerFilterOpen && (
         <PopupPortal>
@@ -1023,7 +1598,7 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
                   )}
                 </div>
                 <div className="flex flex-wrap gap-1.5">
-                  {DEFAULT_STAGES.map(s => (
+                  {activeStages.map(s => (
                     <button key={s.id} onClick={() => setLocalFilters(prev => ({ ...prev, status: prev.status.includes(s.name) ? prev.status.filter(x => x !== s.name) : [...prev.status, s.name] }))} className={`px-2.5 py-1 rounded-full text-xs font-medium ${localFilters.status.includes(s.name) ? 'bg-[#7d5a50] text-white' : 'bg-[#f5f0e1] text-[#4a352f] hover:bg-[#e6d7c3]'}`}>{s.name}</button>
                   ))}
                 </div>
@@ -1152,7 +1727,7 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
 
       {/* ─── Stage Update Popup ───────────────────────────────────────────────── */}
       {activePopup?.type === 'stage' && selectedSMEForPopup && (() => {
-        const stageFields = getStageFields(stageUpdateData.nextStage);
+        const stageFields = getStageFields(stageUpdateData.nextStage, activeStages);
         return (
           <PopupPortal>
             <div className="fixed inset-0 z-[1000]" onClick={closePopup} />
@@ -1175,7 +1750,7 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
                   <select value={stageUpdateData.nextStage} onChange={(e) => setStageUpdateData(prev => ({ ...prev, nextStage: e.target.value }))}
                     className={`w-full px-3 py-2 border-2 rounded-lg text-xs ${stageFormErrors.nextStage ? 'border-red-500' : 'border-[#c8b6a6]'}`}>
                     <option value="">Choose a stage...</option>
-                    {DEFAULT_STAGES.map(s => (<option key={s.id} value={s.name}>{s.name}</option>))}
+                    {activeStages.map(s => (<option key={s.id} value={s.name}>{s.name}</option>))}
                   </select>
                   {stageFormErrors.nextStage && <p className="text-red-500 text-xs mt-1">{stageFormErrors.nextStage}</p>}
                 </div>
@@ -1310,7 +1885,7 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
             <button onClick={() => openPopup('bigScore', selectedSMEForPopup, activePopup.rect)} className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"><BarChart3 size={12} /> BIG Score</button>
             <button onClick={() => openPopup('match', selectedSMEForPopup, activePopup.rect)} className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"><Target size={12} /> Why This Match?</button>
             <button onClick={() => { setNotification({ type: "success", message: "Messaging coming soon" }); closePopup(); }} className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"><MessageSquare size={12} /> Send Message</button>
-            {mapStatusToStageId(selectedSMEForPopup.currentStatus) === "evaluation" && !sentNDAs[`${selectedSMEForPopup.id}_${selectedSMEForPopup.programIndex}`] && (
+            {mapStatusToStageId(selectedSMEForPopup.currentStatus, activeStages) === "evaluation" && !sentNDAs[`${selectedSMEForPopup.id}_${selectedSMEForPopup.programIndex}`] && (
               <button onClick={() => handleShareNDA(selectedSMEForPopup)} disabled={isNDASharing[`${selectedSMEForPopup.id}_${selectedSMEForPopup.programIndex}`]} className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left disabled:opacity-50">
                 <Share2 size={12} /> Share NDA
               </button>
