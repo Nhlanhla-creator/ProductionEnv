@@ -747,226 +747,154 @@ export function AdvisorTable({ filters, onConnectionRequested, onCountChange }) 
 
     fetchAdvisors()
   }, [onCountChange, effectiveUserId])
+const handleConnectClick = async (advisor) => {
+  const user = auth.currentUser
+  if (!user) {
+    setNotification({ type: "error", message: "Please log in to connect." });
+    return;
+  }
 
-  const handleConnectClick = async (advisor) => {
-    const user = auth.currentUser
-    if (!user) return
+  // Check permissions
+  if (isCompanyMember && !['owner', 'admin'].includes(userRole)) {
+    setNotification({
+      type: "warning",
+      message: "Only company owners and admins can connect with advisors.",
+    })
+    return
+  }
 
-    // Check permissions for company members
-    if (isCompanyMember && !['owner', 'admin'].includes(userRole)) {
-      setNotification({
-        type: "warning",
-        message: "Only company owners and admins can connect with advisors.",
-      })
-      return
-    }
+  const smeUserId = effectiveUserId
+  const advisorUserId = advisor.id
 
-    const smeUserId = effectiveUserId
-    const advisorUserId = advisor.id
+  try {
+    // Fetch SME profile details
+    const smeDoc = await getDoc(doc(db, "universalProfiles", smeUserId))
+    const smeData = smeDoc.exists() ? smeDoc.data() : {}
+    const smeName = smeData.entityOverview?.registeredName || "A Small Business"
 
-    // Initialize matchData first
+    // Initialize matchData
     const matchData = {
       advisorId: advisorUserId,
       smeId: smeUserId,
-      submittedBy: user.uid,              // ADD THIS
+      submittedBy: user.uid,
       submittedByRole: userRole,
       createdAt: serverTimestamp(),
       status: "Contacted",
       matchPercentage: advisor.matchPercentage || 0,
       advisorName: advisor.name,
-      advisorSector: advisor.sectorFocus,
-      advisorFundingStage: advisor.fundingStage,
-      advisorEngagementType: advisor.engagementType,
-      advisorCompensationModel: advisor.compensationModel,
-      advisorAvailability: advisor.availability,
-      bigScore: 0,
-      compliance: 0,
-      fundability: 0,
-      leadership: 0,
-      legitimacy: 0,
-      pis: 0,
-      smeName: "",
-      smeLocation: "",
-      smeSector: "",
-      smeStage: "",
-      smeSupport: "",
-      revenue: 0,
+      advisorSector: advisor.sectorFocus || advisor.sector,
+      smeName: smeName,
+      smeLocation: smeData.entityOverview?.location || "",
+      smeSector: (smeData.entityOverview?.economicSectors || []).join(", "),
+      smeStage: smeData.applicationOverview?.fundingStage || "",
+      // ... other fields you need
     }
 
+    // ✅ 1. Save to Firestore
+    await Promise.all([
+      setDoc(doc(db, "AdvisoryMatches", `${smeUserId}_${advisorUserId}`), matchData),
+      setDoc(doc(db, "AdvisorApplications", `${advisorUserId}_${smeUserId}`), { ...matchData, viewType: "advisor" }),
+      setDoc(doc(db, "SmeAdvisorApplications", `${smeUserId}_${advisorUserId}`), { ...matchData, viewType: "sme" }),
+    ])
+
+    // ✅ 2. Update UI status
+    setStatuses((prev) => ({ ...prev, [advisor.id]: "Contacted" }))
+
+    // ✅ 3. SEND IN-APP MESSAGE TO ADVISOR
     try {
-      // Fetch SME profile details
-      const smeDoc = await getDoc(doc(db, "universalProfiles", smeUserId))
-      const smeData = smeDoc.exists() ? smeDoc.data() : {}
-      const smeApplicationDoc = await getDoc(doc(db, "advisoryApplications", smeUserId))
-      const smeApplicationData = smeApplicationDoc.exists() ? smeApplicationDoc.data() : {}
-      const advisoryNeedsAssessment = smeApplicationData.advisoryNeedsAssessment || {}
-      const Revenue = smeData.financialOverview?.annualRevenue || "0"
-      const smeBigScoreDoc = await getDoc(doc(db, "bigEvaluations", smeUserId))
-      const smeBigScoreData = smeBigScoreDoc.exists() ? smeBigScoreDoc.data() : {}
+      const advisorMessageContent = `Dear ${advisor.name},
 
-      // Update match data with SME details
-      matchData.bigScore = smeBigScoreData.scores?.bigScore || 0
-      matchData.smeName = smeData.entityOverview?.registeredName || ""
-      matchData.revenue = Revenue
-      matchData.compliance = smeBigScoreData.scores?.compliance || 0
-      matchData.fundability = smeBigScoreData.scores?.fundability || 0
-      matchData.leadership = smeBigScoreData.scores?.leadership || 0
-      matchData.legitimacy = smeBigScoreData.scores?.legitimacy || 0
-      matchData.smeLocation = smeData.entityOverview?.location || ""
-      matchData.smeSector = (smeData.entityOverview?.economicSectors || []).join(", ")
-      matchData.smeStage = smeData.applicationOverview?.fundingStage || ""
-      matchData.smeSupport = (advisoryNeedsAssessment.supportFocus || []).join(", ")
+We are excited to inform you that ${smeName} has requested to connect with you for advisory services!
 
-      // Save match record
-      await setDoc(doc(db, "AdvisoryMatches", `${smeUserId}_${advisorUserId}`), matchData)
-
-      // Save views for SME and advisor sides
-      const advisorAppData = { ...matchData, viewType: "advisor" }
-      const smeAppData = { ...matchData, viewType: "sme" }
-
-      await Promise.all([
-        setDoc(doc(db, "AdvisorApplications", `${advisorUserId}_${smeUserId}`), advisorAppData),
-        setDoc(doc(db, "SmeAdvisorApplications", `${smeUserId}_${advisorUserId}`), smeAppData),
-      ])
-
-      // Get advisor email from advisorProfiles collection
-      let advisorEmail = null
-      try {
-        const advisorProfileRef = doc(db, "advisorProfiles", advisorUserId)
-        const advisorProfileSnap = await getDoc(advisorProfileRef)
-
-        if (advisorProfileSnap.exists()) {
-          const advisorProfileData = advisorProfileSnap.data()
-          advisorEmail = advisorProfileData.formData?.contactDetails?.email ||
-            advisorProfileData.userEmail ||
-            advisorProfileData.contactEmail ||
-            advisorProfileData.email
-
-          console.log("Found advisor email:", advisorEmail)
-        } else {
-          console.log("No advisor profile found for:", advisorUserId)
-        }
-      } catch (emailError) {
-        console.error("Error fetching advisor email:", emailError)
-      }
-
-      // Update UI status
-      setStatuses((prev) => ({ ...prev, [advisor.id]: "Contacted" }))
-
-      // Send email notification to advisor
-      if (advisorEmail) {
-        try {
-          console.log("🔄 Using EmailJS service to send email to advisor...")
-
-          const emailjsConfig = {
-            serviceId: API_KEYS.SERVICE_ID_MESSAGES,
-            templateId: API_KEYS.TEMPLATE_ID_MESSAGES,
-            publicKey: API_KEYS.PUBLIC_KEY_ID_MESSAGES
-          };
-
-          console.log("📧 Using EmailJS config:", emailjsConfig);
-
-          if (!window.emailjs) {
-            emailjs.init(emailjsConfig.publicKey);
-            window.emailjs = emailjs;
-          }
-
-          const smeName = smeData.entityOverview?.registeredName || "A Small Business";
-          const advisorName = advisor.name;
-
-          const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-          if (!emailRegex.test(advisorEmail)) {
-            throw new Error(`Invalid email format: "${advisorEmail}"`);
-          }
-
-          const emailMessage = `Dear ${advisorName},\n\n
-We are excited to inform you that ${smeName} has requested to connect with you for advisory services!\n\n
 Business Details:
 - Name: ${smeName}
-- Location: ${matchData.smeLocation}
-- Sector: ${matchData.smeSector}
-- Stage: ${matchData.smeStage}
-- Support Needed: ${matchData.smeSupport}\n\n
-Your expertise in ${advisor.sectorFocus} and ${advisor.functionalExpertise} aligns well with their needs.\n\n
-Please log into your BIG Marketplace Africa account to view the full details and respond to this connection request.\n\n
-Best regards,\nBIG Marketplace Africa Team`;
+- Location: ${matchData.smeLocation || "Not specified"}
+- Sector: ${matchData.smeSector || "Not specified"}
+- Stage: ${matchData.smeStage || "Not specified"}
 
-          const templateParams = {
-            to_email: advisorEmail,
-            subject: `New Advisory Connection Request from ${smeName}`,
-            from_name: "BIG Marketplace Africa",
-            date: new Date().toLocaleDateString(),
-            message: emailMessage,
-            portal_url: `https://www.bigmarketplace.africa/connections/${smeUserId}_${advisorUserId}`,
-            has_attachments: "false",
-            attachments_count: "0"
-          };
+Your expertise in ${advisor.sectorFocus || advisor.sector} aligns well with their needs.
 
-          console.log("📨 Sending connection request email to advisor...", templateParams);
+Please log into your BIG Marketplace Africa account to view the full details and respond.
 
-          const response = await window.emailjs.send(
-            emailjsConfig.serviceId,
-            emailjsConfig.templateId,
-            templateParams,
-            emailjsConfig.publicKey
-          );
+Best regards,
+BIG Marketplace Africa Team`;
 
-          console.log("✅ Connection request email sent successfully to advisor!", response);
-        } catch (emailError) {
-          console.error("❌ Email to advisor failed:", emailError);
-        }
-      } else {
-        console.warn("⚠️ No advisor email found, skipping email notification");
-      }
-
-      // Dispatch notification event
-      const dispatchNotification = () => {
-        const notificationMessage = `Connection request sent to ${advisor.name}!`
-        console.log("Dispatching advisor notification:", notificationMessage)
-
-        const event = new CustomEvent("newNotification", {
-          detail: {
-            message: notificationMessage,
-            type: "success",
-            timestamp: new Date().toISOString(),
-          },
-          bubbles: true,
-          cancelable: true,
-          composed: true,
-        })
-
-        setTimeout(() => {
-          window.dispatchEvent(event)
-          console.log("Advisor notification event dispatched")
-        }, 100)
-      }
-
-      dispatchNotification()
-
-      // UI notification
-      setNotification({ type: "success", message: `Connection request sent to ${advisor.name}!` })
-      setTimeout(() => setNotification(null), 3000)
-
-      if (onConnectionRequested) {
-        onConnectionRequested()
-      }
-    } catch (error) {
-      console.error("Error saving advisor match:", error)
-
-      // Dispatch error notification
-      const errorEvent = new CustomEvent("newNotification", {
-        detail: {
-          message: `Failed to send connection request to ${advisor.name}`,
-          type: "error",
-          timestamp: new Date().toISOString(),
-        },
-      })
-      window.dispatchEvent(errorEvent)
-
-      setNotification({ type: "error", message: "Failed to send connection request." })
-      setTimeout(() => setNotification(null), 3000)
+      await addDoc(collection(db, "messages"), {
+        to: advisorUserId,
+        toName: advisor.name,
+        from: user.uid,
+        fromName: smeName,
+        subject: `📋 New Advisory Connection Request from ${smeName}`,
+        content: advisorMessageContent,
+        date: new Date().toISOString(),
+        read: false,
+        type: "inbox",
+        applicationId: `${smeUserId}_${advisorUserId}`,
+        linkTo: `/advisor/connections/${smeUserId}_${advisorUserId}`,
+      });
+      
+      console.log("✅ In-app message sent to advisor");
+    } catch (messageError) {
+      console.error("❌ Failed to send in-app message to advisor:", messageError);
     }
+
+    // ✅ 4. SEND CONFIRMATION TO SME
+    try {
+      const smeConfirmationContent = `Dear ${smeName},
+
+Your connection request to ${advisor.name} has been sent successfully!
+
+📋 Connection Details:
+- Advisor: ${advisor.name}
+- Sector: ${advisor.sectorFocus || advisor.sector}
+- Engagement Type: ${advisor.engagementType || "Consulting"}
+
+You will be notified when ${advisor.name} responds to your request.
+
+Best regards,
+BIG Marketplace Africa Team`;
+
+      await addDoc(collection(db, "messages"), {
+        to: user.uid,
+        toName: smeName,
+        from: "system",
+        fromName: "BIG Marketplace",
+        subject: `✅ Connection Request Sent to ${advisor.name}`,
+        content: smeConfirmationContent,
+        date: new Date().toISOString(),
+        read: false,
+        type: "inbox",
+        applicationId: `${smeUserId}_${advisorUserId}`,
+        linkTo: `/sme/connections/${smeUserId}_${advisorUserId}`,
+      });
+      
+      console.log("✅ In-app confirmation sent to SME");
+    } catch (messageError) {
+      console.error("❌ Failed to send in-app confirmation to SME:", messageError);
+    }
+
+    // ✅ 5. Dispatch notification
+    const notificationEvent = new CustomEvent("newNotification", {
+      detail: {
+        message: `Connection request sent to ${advisor.name}!`,
+        type: "success",
+        timestamp: new Date().toISOString(),
+      },
+      bubbles: true,
+      cancelable: true,
+      composed: true,
+    });
+    window.dispatchEvent(notificationEvent);
+
+    setNotification({ type: "success", message: `Connection request sent to ${advisor.name}!` });
+    setTimeout(() => setNotification(null), 3000);
+
+  } catch (error) {
+    console.error("Error in handleConnectClick:", error);
+    setNotification({ type: "error", message: "Failed to send connection request." });
+    setTimeout(() => setNotification(null), 3000);
   }
+};
 
   useEffect(() => {
     const fetchAdvisorApplications = async () => {
