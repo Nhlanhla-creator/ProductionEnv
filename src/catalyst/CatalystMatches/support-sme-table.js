@@ -7,9 +7,9 @@ import {
   ChevronDown, ChevronUp, MoreVertical, CheckCircle, XCircle,
   Clock, Users, DollarSign, Building,
   LayoutGrid, Download, MessageSquare,
-  Share2, ArrowRight, ArrowUp, ArrowDown, SlidersHorizontal,
+  Share2, ArrowRight, SlidersHorizontal,
   RotateCcw, Settings, Target, Briefcase,
-  Video, Link, LogOut, Trash2, Plus, GripVertical
+  Video, Link, LogOut, Trash2, Plus, GripVertical, ExternalLink
 } from "lucide-react";
 import { db, auth, storage } from "../../firebaseConfig";
 import { serverTimestamp, doc, updateDoc, getDoc, addDoc, collection, query, where, getDocs } from "firebase/firestore";
@@ -149,20 +149,20 @@ const DEFAULT_COLUMN_ORDER = [
 ];
 
 const COLUMN_DEFS = {
-  bigScore: { label: "BIG Score", align: "center", minWidth: "100px", sortKey: "bigScore", filterType: "bigScore", tooltip: "BIG Score measures SME credibility and readiness — compliance, legitimacy, fundability, PIS, and leadership." },
-  match: { label: "Match %", align: "center", minWidth: "110px", sortKey: "matchPercentage", tooltip: "Match Score measures programme fit — alignment with this programme's mandate and criteria." },
-  fundingStage: { label: "Funding Stage", align: "left", filterType: "fundingStage" },
-  fundingRequired: { label: "Funding", align: "left", sortKey: "fundingAmount" },
-  status: { label: "Status", align: "left", filterType: "status" },
-  applied: { label: "Applied", align: "left", sortKey: "applicationDateRaw" },
-  daysInStage: { label: "Days in Stage", align: "left", sortKey: "daysInStage" },
-  lastActivity: { label: "Last Activity", align: "left" },
-  location: { label: "Location", align: "left" },
-  sector: { label: "Sector", align: "left", filterType: "sector" },
-  equity: { label: "Equity", align: "left" },
-  guarantees: { label: "Guarantees", align: "left" },
-  support: { label: "Support", align: "left" },
-  services: { label: "Services", align: "left" }
+  bigScore: { label: "BIG Score", align: "center", minWidth: "100px", filterType: "bigScore", tooltip: "BIG Score measures SME credibility and readiness — compliance, legitimacy, fundability, PIS, and leadership." },
+  match: { label: "Match %", align: "center", minWidth: "110px", filterType: "match", tooltip: "Match Score measures programme fit — alignment with this programme's mandate and criteria." },
+  fundingStage: { label: "Funding Stage", align: "left", minWidth: "94px", filterType: "fundingStage" },
+  fundingRequired: { label: "Funding", align: "left", minWidth: "92px", filterType: "fundingRequired" },
+  status: { label: "Status", align: "left", minWidth: "100px", filterType: "status" },
+  applied: { label: "Applied", align: "left", minWidth: "92px", filterType: "applied" },
+  daysInStage: { label: "Days in Stage", align: "left", minWidth: "134px", filterType: "daysInStage" },
+  lastActivity: { label: "Last Activity", align: "left", minWidth: "108px", filterType: "lastActivity" },
+  location: { label: "Location", align: "left", minWidth: "92px", filterType: "location" },
+  sector: { label: "Sector", align: "left", minWidth: "100px", filterType: "sector" },
+  equity: { label: "Equity", align: "left", minWidth: "92px", filterType: "equity" },
+  guarantees: { label: "Guarantees", align: "left", minWidth: "100px", filterType: "guarantees" },
+  support: { label: "Support", align: "left", minWidth: "92px", filterType: "support" },
+  services: { label: "Services", align: "left", minWidth: "92px", filterType: "services" }
 };
 
 // Maps a column key (used for visibility/order) to the actual field name on
@@ -323,8 +323,6 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
 
   const [showColumnChooser, setShowColumnChooser] = useState(false);
   const [columnChooserRect, setColumnChooserRect] = useState(null);
-  const [showViewsMenu, setShowViewsMenu] = useState(false);
-  const [viewsMenuRect, setViewsMenuRect] = useState(null);
   const [showNewViewForm, setShowNewViewForm] = useState(false);
   const [newViewName, setNewViewName] = useState("");
   const [newViewDescription, setNewViewDescription] = useState("");
@@ -332,7 +330,9 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
 
   const [headerFilterOpen, setHeaderFilterOpen] = useState(null);
   const [localFilters, setLocalFilters] = useState({
-    name: '', fundingStage: [], bigScoreRange: [0, 100], status: [], sector: []
+    name: '', fundingStage: [], bigScoreRange: [0, 100], matchRange: [0, 100], status: [], sector: [], equity: [],
+    fundingRequiredRange: [null, null], daysInStageRange: [null, null], appliedRange: [null, null],
+    location: '', lastActivity: '', guarantees: '', support: '', services: ''
   });
   const [notification, setNotification] = useState(null);
   const [hoveredRowKey, setHoveredRowKey] = useState(null);
@@ -437,7 +437,6 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
     setColumnOrder(target.columnOrder);
     setSortConfig(target.sortConfig);
     setDensity(target.density);
-    setShowViewsMenu(false);
   };
 
   // Creates a new named (optionally described) view as a snapshot of
@@ -591,6 +590,7 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
     }
 
     result = result.filter(sme => sme.bigScore >= localFilters.bigScoreRange[0] && sme.bigScore <= localFilters.bigScoreRange[1]);
+    result = result.filter(sme => sme.matchPercentage >= localFilters.matchRange[0] && sme.matchPercentage <= localFilters.matchRange[1]);
 
     if (localFilters.status?.length > 0) {
       result = result.filter(sme => localFilters.status.some(status => sme.currentStatus.toLowerCase().includes(status.toLowerCase())));
@@ -598,6 +598,43 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
 
     if (localFilters.sector?.length > 0) {
       result = result.filter(sme => localFilters.sector.some(sector => sme.sector.toLowerCase().includes(sector.toLowerCase())));
+    }
+
+    if (localFilters.equity?.length > 0) {
+      result = result.filter(sme => localFilters.equity.some(eq => (sme.equityOffered || '').toLowerCase().includes(eq.toLowerCase())));
+    }
+
+    const [fundingMin, fundingMax] = localFilters.fundingRequiredRange;
+    if (fundingMin != null) result = result.filter(sme => sme.fundingAmount >= fundingMin);
+    if (fundingMax != null) result = result.filter(sme => sme.fundingAmount <= fundingMax);
+
+    const [daysMin, daysMax] = localFilters.daysInStageRange;
+    if (daysMin != null) result = result.filter(sme => (sme.daysInStage || 0) >= daysMin);
+    if (daysMax != null) result = result.filter(sme => (sme.daysInStage || 0) <= daysMax);
+
+    const [appliedFrom, appliedTo] = localFilters.appliedRange;
+    if (appliedFrom) result = result.filter(sme => sme.applicationDateRaw && sme.applicationDateRaw >= new Date(appliedFrom));
+    if (appliedTo) result = result.filter(sme => sme.applicationDateRaw && sme.applicationDateRaw <= new Date(new Date(appliedTo).setHours(23, 59, 59, 999)));
+
+    if (localFilters.location?.trim()) {
+      const q = localFilters.location.toLowerCase().trim();
+      result = result.filter(sme => (sme.location || '').toLowerCase().includes(q));
+    }
+    if (localFilters.lastActivity?.trim()) {
+      const q = localFilters.lastActivity.toLowerCase().trim();
+      result = result.filter(sme => (sme.lastActivity || '').toString().toLowerCase().includes(q));
+    }
+    if (localFilters.guarantees?.trim()) {
+      const q = localFilters.guarantees.toLowerCase().trim();
+      result = result.filter(sme => (sme.guarantees || '').toLowerCase().includes(q));
+    }
+    if (localFilters.support?.trim()) {
+      const q = localFilters.support.toLowerCase().trim();
+      result = result.filter(sme => (sme.supportRequired || '').toLowerCase().includes(q));
+    }
+    if (localFilters.services?.trim()) {
+      const q = localFilters.services.toLowerCase().trim();
+      result = result.filter(sme => (sme.servicesRequired || '').toLowerCase().includes(q));
     }
 
     if (sortConfig.key === 'attentionThenScore') {
@@ -629,24 +666,43 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
     () => [...new Set(smes.map((s) => s.sector).filter((s) => s && s !== "N/A"))].sort(),
     [smes]
   );
+  const equityOptions = useMemo(
+    () => [...new Set(smes.map((s) => s.equityOffered).filter((s) => s && s !== "N/A"))].sort(),
+    [smes]
+  );
 
   const activeFilterCount = (localFilters.name?.trim() ? 1 : 0)
-    + localFilters.fundingStage.length + localFilters.status.length + localFilters.sector.length
-    + (localFilters.bigScoreRange[0] > 0 || localFilters.bigScoreRange[1] < 100 ? 1 : 0);
+    + localFilters.fundingStage.length + localFilters.status.length + localFilters.sector.length + localFilters.equity.length
+    + (localFilters.bigScoreRange[0] > 0 || localFilters.bigScoreRange[1] < 100 ? 1 : 0)
+    + (localFilters.matchRange[0] > 0 || localFilters.matchRange[1] < 100 ? 1 : 0)
+    + (localFilters.fundingRequiredRange[0] != null || localFilters.fundingRequiredRange[1] != null ? 1 : 0)
+    + (localFilters.daysInStageRange[0] != null || localFilters.daysInStageRange[1] != null ? 1 : 0)
+    + (localFilters.appliedRange[0] || localFilters.appliedRange[1] ? 1 : 0)
+    + (localFilters.location?.trim() ? 1 : 0)
+    + (localFilters.lastActivity?.trim() ? 1 : 0)
+    + (localFilters.guarantees?.trim() ? 1 : 0)
+    + (localFilters.support?.trim() ? 1 : 0)
+    + (localFilters.services?.trim() ? 1 : 0);
 
   // ─── Handlers ───────────────────────────────────────────────────────────────
-  const handleSort = (key) => {
-    setSortConfig(current => ({ key, direction: current.key === key && current.direction === 'desc' ? 'asc' : 'desc' }));
-  };
-
   const toggleColumn = (key) => setColumnVisibility(prev => ({ ...prev, [key]: !prev[key] }));
 
   const getFilterActive = (filterType) => {
     switch (filterType) {
       case 'bigScore': return localFilters.bigScoreRange[0] > 0 || localFilters.bigScoreRange[1] < 100;
+      case 'match': return localFilters.matchRange[0] > 0 || localFilters.matchRange[1] < 100;
       case 'fundingStage': return localFilters.fundingStage.length > 0;
+      case 'fundingRequired': return localFilters.fundingRequiredRange[0] != null || localFilters.fundingRequiredRange[1] != null;
       case 'status': return localFilters.status.length > 0;
+      case 'applied': return !!(localFilters.appliedRange[0] || localFilters.appliedRange[1]);
+      case 'daysInStage': return localFilters.daysInStageRange[0] != null || localFilters.daysInStageRange[1] != null;
+      case 'lastActivity': return !!localFilters.lastActivity?.trim();
+      case 'location': return !!localFilters.location?.trim();
       case 'sector': return localFilters.sector.length > 0;
+      case 'equity': return localFilters.equity.length > 0;
+      case 'guarantees': return !!localFilters.guarantees?.trim();
+      case 'support': return !!localFilters.support?.trim();
+      case 'services': return !!localFilters.services?.trim();
       default: return false;
     }
   };
@@ -705,7 +761,7 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
     <button
       type="button"
       onClick={(e) => openHeaderFilter(type, e)}
-      className={`p-0.5 rounded transition-colors ${active ? "text-[#e6d7c3]" : "text-[#c8b6a6] hover:text-white"}`}
+      className={`flex-shrink-0 w-5 h-5 flex items-center justify-center rounded transition-colors ${active ? "text-[#e6d7c3]" : "text-[#c8b6a6] hover:text-white"}`}
       title="Filter this column"
     >
       <SlidersHorizontal size={11} />
@@ -716,6 +772,23 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
     setSelectedSMEDetails(sme);
     setShowSMEDetails(true);
     setActivePopup(null);
+  };
+
+  // Sends the catalyst to this SME's own /dashboard, restricted to just the
+  // BIG Score tab (no "Improve My BIG Score" tools tab, no ability to
+  // switch), with a visible "Back" control to return. Uses the same
+  // session-storage "investor view" pattern the Growth Suite / Documents
+  // navigation elsewhere in the app already relies on (viewingSMEId/
+  // viewingSMEName/investorViewMode/viewOrigin), plus a new
+  // viewOnlyBigScore flag that Dashboard.jsx checks to lock the view down
+  // to just that one tab and show the Back button.
+  const handleViewBigScorePage = (sme) => {
+    sessionStorage.setItem('viewingSMEId', sme.userId || sme.id);
+    sessionStorage.setItem('viewingSMEName', sme.name);
+    sessionStorage.setItem('investorViewMode', 'true');
+    sessionStorage.setItem('viewOrigin', 'catalyst');
+    sessionStorage.setItem('viewOnlyBigScore', 'true');
+    window.location.href = '/dashboard';
   };
 
   const openPopup = (type, sme, rect) => {
@@ -1033,45 +1106,47 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
           </div>
           <div className="flex items-center gap-2">
 
-            {/* ─── Views control ─────────────────────────────────────────── */}
+            {/* ─── Customize Table control (Views + Hide/Unhide + Density + Reset) ── */}
             <div className="relative">
               <button
                 onClick={(e) => {
-                  if (showViewsMenu) {
-                    setShowViewsMenu(false);
-                    setViewsMenuRect(null);
+                  if (showColumnChooser) {
+                    setShowColumnChooser(false);
+                    setColumnChooserRect(null);
                   } else {
-                    setViewsMenuRect(e.currentTarget.getBoundingClientRect());
-                    setShowViewsMenu(true);
+                    setColumnChooserRect(e.currentTarget.getBoundingClientRect());
+                    setShowColumnChooser(true);
                     setShowNewViewForm(false);
                     setEditingViewMeta(null);
                   }
                 }}
                 className="flex items-center gap-2 px-4 py-2.5 bg-white border border-[#c8b6a6] rounded-xl text-sm text-[#4a352f] hover:bg-[#f5f0e1] transition-all shadow-sm"
               >
-                <LayoutGrid size={16} /> Views <ChevronDown size={14} className={`transition-transform ${showViewsMenu ? 'rotate-180' : ''}`} />
+                <SlidersHorizontal size={16} /> Customize Table <ChevronDown size={14} className={`transition-transform ${showColumnChooser ? 'rotate-180' : ''}`} />
               </button>
-              {showViewsMenu && viewsMenuRect && (() => {
+              {showColumnChooser && columnChooserRect && (() => {
                 const panelWidth = 320;
                 const margin = 12;
-                let left = viewsMenuRect.right - panelWidth;
+                let left = columnChooserRect.right - panelWidth;
                 left = Math.min(Math.max(left, margin), window.innerWidth - panelWidth - margin);
-                const spaceBelow = window.innerHeight - viewsMenuRect.bottom - margin - 8;
-                const spaceAbove = viewsMenuRect.top - margin - 8;
+                // Available vertical space below the button; fall back to opening upward if it's too tight.
+                const spaceBelow = window.innerHeight - columnChooserRect.bottom - margin - 8;
+                const spaceAbove = columnChooserRect.top - margin - 8;
                 const openUpward = spaceBelow < 320 && spaceAbove > spaceBelow;
-                const maxHeight = Math.max(200, Math.min(480, openUpward ? spaceAbove : spaceBelow));
-                const top = openUpward ? undefined : viewsMenuRect.bottom + 8;
-                const bottom = openUpward ? window.innerHeight - viewsMenuRect.top + 8 : undefined;
+                const maxHeight = Math.max(200, Math.min(620, openUpward ? spaceAbove : spaceBelow));
+                const top = openUpward ? undefined : columnChooserRect.bottom + 8;
+                const bottom = openUpward ? window.innerHeight - columnChooserRect.top + 8 : undefined;
                 const allViews = Object.values(viewsState.views).sort((a, b) => (a.builtin ? -1 : b.builtin ? 1 : a.name.localeCompare(b.name)));
                 return (
                   <PopupPortal>
-                    <div className="fixed inset-0 z-40" onClick={() => { setShowViewsMenu(false); setViewsMenuRect(null); setShowNewViewForm(false); setEditingViewMeta(null); }} />
+                    <div className="fixed inset-0 z-40" onClick={() => { setShowColumnChooser(false); setColumnChooserRect(null); setShowNewViewForm(false); setEditingViewMeta(null); }} />
                     <div
-                      className="fixed bg-white rounded-2xl shadow-2xl border border-[#e6d7c3] p-4 z-50 overflow-y-auto"
+                      className="fixed bg-white rounded-2xl shadow-2xl border border-[#e6d7c3] p-5 z-50 overflow-y-auto"
                       style={{ left, width: panelWidth, top, bottom, maxHeight }}
                     >
+                      {/* ─── Views ─────────────────────────────────────────── */}
                       <h4 className="text-sm font-semibold text-[#4a352f] mb-1">Views</h4>
-                      <p className="text-xs text-[#a89482] mb-3">Edits to columns, order, sort, and density auto-save into whichever view is selected.</p>
+                      <p className="text-xs text-[#a89482] mb-3">Edits below auto-save into whichever view is selected.</p>
 
                       <div className="space-y-1 mb-3">
                         {allViews.map((view) => {
@@ -1130,111 +1205,72 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
                         })}
                       </div>
 
-                      <div className="border-t border-[#e6d7c3] pt-3">
-                        {showNewViewForm ? (
-                          <div className="space-y-2">
-                            <input
-                              autoFocus
-                              value={newViewName}
-                              onChange={(e) => setNewViewName(e.target.value)}
-                              placeholder="New view name..."
-                              className="w-full px-2.5 py-1.5 border border-[#c8b6a6] rounded-lg text-sm"
-                            />
-                            <textarea
-                              value={newViewDescription}
-                              onChange={(e) => setNewViewDescription(e.target.value)}
-                              placeholder="Description (optional) — what is this view for?"
-                              rows={2}
-                              className="w-full px-2.5 py-1.5 border border-[#c8b6a6] rounded-lg text-xs resize-none"
-                            />
-                            <div className="flex justify-end gap-2">
-                              <button onClick={() => { setShowNewViewForm(false); setNewViewName(""); setNewViewDescription(""); }} className="px-2.5 py-1 text-xs text-[#7d5a50] hover:text-[#4a352f]">Cancel</button>
-                              <button onClick={createNewView} disabled={!newViewName.trim()} className="px-3 py-1.5 bg-[#7d5a50] text-white rounded-lg text-xs font-semibold disabled:opacity-40">Create view</button>
-                            </div>
+                      {showNewViewForm ? (
+                        <div className="space-y-2 mb-1">
+                          <input
+                            autoFocus
+                            value={newViewName}
+                            onChange={(e) => setNewViewName(e.target.value)}
+                            placeholder="New view name..."
+                            className="w-full px-2.5 py-1.5 border border-[#c8b6a6] rounded-lg text-sm"
+                          />
+                          <textarea
+                            value={newViewDescription}
+                            onChange={(e) => setNewViewDescription(e.target.value)}
+                            placeholder="Description (optional) — what is this view for?"
+                            rows={2}
+                            className="w-full px-2.5 py-1.5 border border-[#c8b6a6] rounded-lg text-xs resize-none"
+                          />
+                          <div className="flex justify-end gap-2">
+                            <button onClick={() => { setShowNewViewForm(false); setNewViewName(""); setNewViewDescription(""); }} className="px-2.5 py-1 text-xs text-[#7d5a50] hover:text-[#4a352f]">Cancel</button>
+                            <button onClick={createNewView} disabled={!newViewName.trim()} className="px-3 py-1.5 bg-[#7d5a50] text-white rounded-lg text-xs font-semibold disabled:opacity-40">Create view</button>
                           </div>
-                        ) : (
-                          <button onClick={() => setShowNewViewForm(true)} className="w-full flex items-center justify-center gap-1.5 px-3 py-2 border border-dashed border-[#c8b6a6] rounded-lg text-xs font-semibold text-[#7d5a50] hover:bg-[#faf7f2]">
-                            <Plus size={13} /> New view from current layout
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </PopupPortal>
-                );
-              })()}
-            </div>
-
-            {/* ─── Columns control ────────────────────────────────────────── */}
-            <div className="relative">
-              <button
-                onClick={(e) => {
-                  if (showColumnChooser) {
-                    setShowColumnChooser(false);
-                    setColumnChooserRect(null);
-                  } else {
-                    setColumnChooserRect(e.currentTarget.getBoundingClientRect());
-                    setShowColumnChooser(true);
-                  }
-                }}
-                className="flex items-center gap-2 px-4 py-2.5 bg-white border border-[#c8b6a6] rounded-xl text-sm text-[#4a352f] hover:bg-[#f5f0e1] transition-all shadow-sm"
-              >
-                <SlidersHorizontal size={16} /> Columns <ChevronDown size={14} className={`transition-transform ${showColumnChooser ? 'rotate-180' : ''}`} />
-              </button>
-              {showColumnChooser && columnChooserRect && (() => {
-                const panelWidth = 320;
-                const margin = 12;
-                let left = columnChooserRect.right - panelWidth;
-                left = Math.min(Math.max(left, margin), window.innerWidth - panelWidth - margin);
-                // Available vertical space below the button; fall back to opening upward if it's too tight.
-                const spaceBelow = window.innerHeight - columnChooserRect.bottom - margin - 8;
-                const spaceAbove = columnChooserRect.top - margin - 8;
-                const openUpward = spaceBelow < 320 && spaceAbove > spaceBelow;
-                const maxHeight = Math.max(200, Math.min(560, openUpward ? spaceAbove : spaceBelow));
-                const top = openUpward ? undefined : columnChooserRect.bottom + 8;
-                const bottom = openUpward ? window.innerHeight - columnChooserRect.top + 8 : undefined;
-                return (
-                  <PopupPortal>
-                    <div className="fixed inset-0 z-40" onClick={() => { setShowColumnChooser(false); setColumnChooserRect(null); }} />
-                    <div
-                      className="fixed bg-white rounded-2xl shadow-2xl border border-[#e6d7c3] p-5 z-50 overflow-y-auto"
-                      style={{ left, width: panelWidth, top, bottom, maxHeight }}
-                    >
-                    <h4 className="text-sm font-semibold text-[#4a352f] mb-3">Column Visibility</h4>
-                    <p className="text-xs text-[#a89482] mb-3 flex items-center gap-1.5">
-                      <GripVertical size={12} className="flex-shrink-0" /> Tip: drag any column header in the table to reorder it.
-                    </p>
-                    {[{ key: 'sme', label: 'Business Name' },{ key: 'bigScore', label: 'BIG Score' },{ key: 'match', label: 'Match %' },{ key: 'status', label: 'Status' },{ key: 'action', label: 'Action' }].map(({ key, label }) => (
-                      <label key={key} className="flex items-center gap-3 py-2 px-2 rounded-lg opacity-75">
-                        <input type="checkbox" checked={true} disabled={true} className="rounded border-[#c8b6a6]" />
-                        <span className="text-sm text-[#4a352f]">{label}</span>
-                      </label>
-                    ))}
-                    <div className="border-t border-[#e6d7c3] my-2" />
-                    {[{ key: 'fundingStage', label: 'Funding Stage' },{ key: 'fundingRequired', label: 'Funding Required' },{ key: 'applied', label: 'Applied Date' },{ key: 'daysInStage', label: 'Days in Stage' },{ key: 'lastActivity', label: 'Last Activity' },{ key: 'location', label: 'Location' },{ key: 'sector', label: 'Sector' },{ key: 'equity', label: 'Equity Offered' },{ key: 'guarantees', label: 'Guarantees' },{ key: 'support', label: 'Support Required' },{ key: 'services', label: 'Services Required' }].map(({ key, label }) => (
-                      <label key={key} className="flex items-center gap-3 py-2 px-2 rounded-lg hover:bg-[#faf7f2] cursor-pointer">
-                        <input type="checkbox" checked={columnVisibility[key] || false} onChange={() => toggleColumn(key)} className="rounded border-[#c8b6a6] text-[#7d5a50]" />
-                        <span className="text-sm text-[#4a352f]">{label}</span>
-                      </label>
-                    ))}
-
-                    <div className="border-t border-[#e6d7c3] my-4" />
-                    <h4 className="text-sm font-semibold text-[#4a352f] mb-3">Density</h4>
-                    <div className="flex gap-1.5 mb-1">
-                      {[{ key: 'comfortable', label: 'Comfortable' }, { key: 'compact', label: 'Compact' }, { key: 'ultra-compact', label: 'Ultra Compact' }].map((d) => (
-                        <button
-                          key={d.key}
-                          onClick={() => setDensity(d.key)}
-                          className={`flex-1 px-2 py-1.5 rounded-lg text-xs font-semibold transition-all ${density === d.key ? 'bg-[#7d5a50] text-white' : 'bg-[#f5f0e1] text-[#4a352f] hover:bg-[#e6d7c3]'}`}
-                        >
-                          {d.label}
+                        </div>
+                      ) : (
+                        <button onClick={() => setShowNewViewForm(true)} className="w-full flex items-center justify-center gap-1.5 px-3 py-2 border border-dashed border-[#c8b6a6] rounded-lg text-xs font-semibold text-[#7d5a50] hover:bg-[#faf7f2]">
+                          <Plus size={13} /> New view from current layout
                         </button>
-                      ))}
-                    </div>
+                      )}
 
-                    <div className="border-t border-[#e6d7c3] my-4" />
-                    <button onClick={resetActiveViewToDefault} className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold text-[#a67c52] hover:text-[#4a352f] hover:bg-[#faf7f2] border border-[#e6d7c3]">
-                      <RotateCcw size={12} /> Reset "{activeView.name}" to factory defaults
-                    </button>
+                      <div className="border-t border-[#e6d7c3] my-4" />
+
+                      {/* ─── Hide/Unhide ───────────────────────────────────── */}
+                      <h4 className="text-sm font-semibold text-[#4a352f] mb-3">Hide/Unhide</h4>
+                      <p className="text-xs text-[#a89482] mb-3 flex items-center gap-1.5">
+                        <GripVertical size={12} className="flex-shrink-0" /> Tip: drag any column header in the table to reorder it.
+                      </p>
+                      {[{ key: 'sme', label: 'Business Name' },{ key: 'bigScore', label: 'BIG Score' },{ key: 'match', label: 'Match %' },{ key: 'status', label: 'Status' },{ key: 'action', label: 'Action' }].map(({ key, label }) => (
+                        <label key={key} className="flex items-center gap-3 py-2 px-2 rounded-lg opacity-75">
+                          <input type="checkbox" checked={true} disabled={true} className="rounded border-[#c8b6a6]" />
+                          <span className="text-sm text-[#4a352f]">{label}</span>
+                        </label>
+                      ))}
+                      <div className="border-t border-[#e6d7c3] my-2" />
+                      {[{ key: 'fundingStage', label: 'Funding Stage' },{ key: 'fundingRequired', label: 'Funding Required' },{ key: 'applied', label: 'Applied Date' },{ key: 'daysInStage', label: 'Days in Stage' },{ key: 'lastActivity', label: 'Last Activity' },{ key: 'location', label: 'Location' },{ key: 'sector', label: 'Sector' },{ key: 'equity', label: 'Equity Offered' },{ key: 'guarantees', label: 'Guarantees' },{ key: 'support', label: 'Support Required' },{ key: 'services', label: 'Services Required' }].map(({ key, label }) => (
+                        <label key={key} className="flex items-center gap-3 py-2 px-2 rounded-lg hover:bg-[#faf7f2] cursor-pointer">
+                          <input type="checkbox" checked={columnVisibility[key] || false} onChange={() => toggleColumn(key)} className="rounded border-[#c8b6a6] text-[#7d5a50]" />
+                          <span className="text-sm text-[#4a352f]">{label}</span>
+                        </label>
+                      ))}
+
+                      <div className="border-t border-[#e6d7c3] my-4" />
+                      <h4 className="text-sm font-semibold text-[#4a352f] mb-3">Density</h4>
+                      <div className="flex gap-1.5 mb-1">
+                        {[{ key: 'comfortable', label: 'Comfortable' }, { key: 'compact', label: 'Compact' }, { key: 'ultra-compact', label: 'Ultra Compact' }].map((d) => (
+                          <button
+                            key={d.key}
+                            onClick={() => setDensity(d.key)}
+                            className={`flex-1 px-2 py-1.5 rounded-lg text-xs font-semibold transition-all ${density === d.key ? 'bg-[#7d5a50] text-white' : 'bg-[#f5f0e1] text-[#4a352f] hover:bg-[#e6d7c3]'}`}
+                          >
+                            {d.label}
+                          </button>
+                        ))}
+                      </div>
+
+                      <div className="border-t border-[#e6d7c3] my-4" />
+                      <button onClick={resetActiveViewToDefault} className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold text-[#a67c52] hover:text-[#4a352f] hover:bg-[#faf7f2] border border-[#e6d7c3]">
+                        <RotateCcw size={12} /> Reset "{activeView.name}" to factory defaults
+                      </button>
                     </div>
                   </PopupPortal>
                 );
@@ -1256,18 +1292,24 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
           <>
             <div className="overflow-auto" style={{ maxHeight: '70vh' }}>
               <style>{`
-                .smt-th { color: #faf7f2 !important; line-height: 1.1; font-size: 0.75rem !important; font-weight: 600 !important; text-transform: uppercase !important; letter-spacing: 0.05em !important; font-family: inherit !important; }
-                .smt-th-btn { color: #faf7f2 !important; background: transparent; border: none; padding: 0; margin: 0; cursor: pointer; transition: color .15s ease; white-space: nowrap; font-size: inherit !important; font-weight: inherit !important; text-transform: inherit !important; letter-spacing: inherit !important; font-family: inherit !important; }
-                .smt-th-btn:hover { color: #e6d7c3 !important; }
+                .smt-th { color: #faf7f2 !important; line-height: 1.1; font-size: 0.75rem !important; font-weight: 600 !important; text-transform: uppercase !important; letter-spacing: 0.05em !important; font-family: inherit !important; vertical-align: top !important; }
                 .smt-th-draggable { cursor: grab; }
                 .smt-th-draggable:active { cursor: grabbing; }
+                /* Wrap header labels onto at most 2 lines instead of forcing
+                   the column wider than needed (Excel-style sizing). This only
+                   lays out cleanly because each column now also has a real
+                   min-width set in COLUMN_DEFS — without that floor, the
+                   browser sizes wrapped-text columns to their smallest
+                   possible content, which is what cut words down to 1-2
+                   letters before. */
+                .smt-th-label { flex: 1 1 auto; min-width: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; white-space: normal; overflow-wrap: break-word; line-height: 1.2; }
               `}</style>
-              <table className="w-full border-collapse" style={{ minWidth: '960px' }}>
+              <table className="border-collapse" style={{ tableLayout: 'auto' }}>
                 <thead>
                   <tr className="bg-[#4a352f]">
-                    <th className={`smt-th py-3 px-3 text-left font-semibold uppercase tracking-wider text-xs whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 left-0 z-30`} style={{ backgroundColor: '#4a352f', minWidth: '220px', maxWidth: '260px' }}>
-                      <div className="flex items-center gap-1">
-                        <button type="button" onClick={() => handleSort('name')} className="smt-th-btn flex items-center gap-1">Business Name <span className="flex flex-col -space-y-1 opacity-60"><ArrowUp size={10} /><ArrowDown size={10} /></span></button>
+                    <th className={`smt-th py-3 px-3 text-left font-semibold uppercase tracking-wider text-xs border-r border-[#e6d7c3] sticky top-0 left-0 z-30`} style={{ backgroundColor: '#4a352f', minWidth: '170px', maxWidth: '190px' }}>
+                      <div className="flex items-start gap-1 min-w-0">
+                        <span className="smt-th-label">Business Name</span>
                         <FilterTrigger type="name" active={!!localFilters.name.trim()} />
                       </div>
                     </th>
@@ -1288,19 +1330,13 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
                           onDragEnd={handleColumnDragEnd}
                           onMouseEnter={(e) => setDragHintRect(e.currentTarget.getBoundingClientRect())}
                           onMouseLeave={() => setDragHintRect(null)}
-                          className={`smt-th smt-th-draggable py-3 px-3 font-semibold uppercase tracking-wider text-xs whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20 select-none transition-opacity ${col.align === 'center' ? 'text-center' : 'text-left'} ${isDragging ? 'opacity-40' : ''}`}
+                          className={`smt-th smt-th-draggable py-3 px-3 font-semibold uppercase tracking-wider text-xs border-r border-[#e6d7c3] sticky top-0 z-20 select-none transition-opacity ${col.align === 'center' ? 'text-center' : 'text-left'} ${isDragging ? 'opacity-40' : ''}`}
                           style={{ minWidth: col.minWidth, backgroundColor: isDragOver ? '#5a423b' : '#4a352f' }}
                         >
-                          <div className={`flex items-center gap-1 ${col.align === 'center' ? 'justify-center' : ''}`}>
-                            <GripVertical size={11} className="opacity-40 flex-shrink-0" />
-                            {col.sortKey ? (
-                              <button type="button" onClick={() => handleSort(col.sortKey)} className="smt-th-btn flex items-center gap-1">
-                                {col.label} <span className="flex flex-col -space-y-1 opacity-60"><ArrowUp size={10} /><ArrowDown size={10} /></span>
-                              </button>
-                            ) : (
-                              <span>{col.label}</span>
-                            )}
-                            {col.filterType && <FilterTrigger type={col.filterType} active={getFilterActive(col.filterType)} />}
+                          <div className={`flex items-start gap-1 min-w-0 ${col.align === 'center' ? 'justify-center' : ''}`}>
+                            <GripVertical size={11} className="opacity-40 flex-shrink-0 mt-0.5" />
+                            <span className="smt-th-label">{col.label}</span>
+                            <FilterTrigger type={col.filterType} active={getFilterActive(col.filterType)} />
                             {col.tooltip && <HeaderInfoTooltip text={col.tooltip} />}
                           </div>
                         </th>
@@ -1438,7 +1474,7 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
                           {columnVisibility.sme && (
                             <td
                               className={`${ds.cell} ${ds.fontSize} text-[#4a352f] sticky left-0 border-r border-b border-[#e6d7c3] z-10 transition-colors`}
-                              style={{ minWidth: '220px', maxWidth: '260px', backgroundColor: hoveredRowKey === smeKey ? '#fdf8f4' : '#ffffff' }}
+                              style={{ minWidth: '170px', maxWidth: '190px', backgroundColor: hoveredRowKey === smeKey ? '#fdf8f4' : '#ffffff' }}
                             >
                               <div className="flex items-start gap-2">
                                 <div className={`${ds.avatarSize} rounded-full bg-gradient-to-br from-[#7d5a50] to-[#4a352f] flex items-center justify-center text-white font-bold text-xs flex-shrink-0 mt-0.5`}>{sme.name.charAt(0)}</div>
@@ -1635,6 +1671,147 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
                     <button key={s} onClick={() => setLocalFilters(prev => ({ ...prev, sector: prev.sector.includes(s) ? prev.sector.filter(x => x !== s) : [...prev.sector, s] }))} className={`px-2.5 py-1 rounded-full text-xs font-medium ${localFilters.sector.includes(s) ? 'bg-[#7d5a50] text-white' : 'bg-[#f5f0e1] text-[#4a352f] hover:bg-[#e6d7c3]'}`}>{s}</button>
                   ))}
                 </div>
+              </>
+            )}
+
+            {headerFilterOpen.type === 'match' && (
+              <>
+                <div className="flex items-center justify-between mb-3">
+                  <label className="text-xs font-semibold text-[#4a352f]">Match %: {localFilters.matchRange[0]} - {localFilters.matchRange[1]}</label>
+                  {(localFilters.matchRange[0] > 0 || localFilters.matchRange[1] < 100) && (
+                    <button onClick={() => setLocalFilters(prev => ({ ...prev, matchRange: [0, 100] }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>
+                  )}
+                </div>
+                <div className="flex items-center gap-3 mb-3">
+                  <input type="number" min="0" max="100" value={localFilters.matchRange[0]} onChange={(e) => setLocalFilters(prev => ({ ...prev, matchRange: [Math.min(parseInt(e.target.value) || 0, prev.matchRange[1]), prev.matchRange[1]] }))} className="w-16 px-2 py-1.5 border border-[#c8b6a6] rounded-lg text-sm text-center" />
+                  <span className="text-[#7d5a50]">to</span>
+                  <input type="number" min="0" max="100" value={localFilters.matchRange[1]} onChange={(e) => setLocalFilters(prev => ({ ...prev, matchRange: [prev.matchRange[0], Math.max(parseInt(e.target.value) || 0, prev.matchRange[0])] }))} className="w-16 px-2 py-1.5 border border-[#c8b6a6] rounded-lg text-sm text-center" />
+                </div>
+                <input type="range" min="0" max="100" value={localFilters.matchRange[0]} onChange={(e) => setLocalFilters(prev => ({ ...prev, matchRange: [parseInt(e.target.value), prev.matchRange[1]] }))} className="w-full accent-[#7d5a50]" />
+              </>
+            )}
+
+            {headerFilterOpen.type === 'equity' && (
+              <>
+                <div className="flex items-center justify-between mb-3">
+                  <label className="text-xs font-semibold text-[#4a352f]">Equity Offered</label>
+                  {localFilters.equity.length > 0 && (
+                    <button onClick={() => setLocalFilters(prev => ({ ...prev, equity: [] }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-1.5 max-h-[180px] overflow-y-auto">
+                  {equityOptions.length === 0 && <span className="text-xs text-[#a89482]">No equity data available</span>}
+                  {equityOptions.map(s => (
+                    <button key={s} onClick={() => setLocalFilters(prev => ({ ...prev, equity: prev.equity.includes(s) ? prev.equity.filter(x => x !== s) : [...prev.equity, s] }))} className={`px-2.5 py-1 rounded-full text-xs font-medium ${localFilters.equity.includes(s) ? 'bg-[#7d5a50] text-white' : 'bg-[#f5f0e1] text-[#4a352f] hover:bg-[#e6d7c3]'}`}>{s}</button>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {headerFilterOpen.type === 'fundingRequired' && (
+              <>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-semibold text-[#4a352f]">Funding Required (R)</label>
+                  {(localFilters.fundingRequiredRange[0] != null || localFilters.fundingRequiredRange[1] != null) && (
+                    <button onClick={() => setLocalFilters(prev => ({ ...prev, fundingRequiredRange: [null, null] }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>
+                  )}
+                </div>
+                <div className="flex items-center gap-3">
+                  <input type="number" min="0" placeholder="Min" value={localFilters.fundingRequiredRange[0] ?? ''} onChange={(e) => setLocalFilters(prev => ({ ...prev, fundingRequiredRange: [e.target.value === '' ? null : Number(e.target.value), prev.fundingRequiredRange[1]] }))} className="w-full px-2 py-1.5 border border-[#c8b6a6] rounded-lg text-sm text-center" />
+                  <span className="text-[#7d5a50]">to</span>
+                  <input type="number" min="0" placeholder="Max" value={localFilters.fundingRequiredRange[1] ?? ''} onChange={(e) => setLocalFilters(prev => ({ ...prev, fundingRequiredRange: [prev.fundingRequiredRange[0], e.target.value === '' ? null : Number(e.target.value)] }))} className="w-full px-2 py-1.5 border border-[#c8b6a6] rounded-lg text-sm text-center" />
+                </div>
+              </>
+            )}
+
+            {headerFilterOpen.type === 'daysInStage' && (
+              <>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-semibold text-[#4a352f]">Days in Stage</label>
+                  {(localFilters.daysInStageRange[0] != null || localFilters.daysInStageRange[1] != null) && (
+                    <button onClick={() => setLocalFilters(prev => ({ ...prev, daysInStageRange: [null, null] }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>
+                  )}
+                </div>
+                <div className="flex items-center gap-3">
+                  <input type="number" min="0" placeholder="Min" value={localFilters.daysInStageRange[0] ?? ''} onChange={(e) => setLocalFilters(prev => ({ ...prev, daysInStageRange: [e.target.value === '' ? null : Number(e.target.value), prev.daysInStageRange[1]] }))} className="w-full px-2 py-1.5 border border-[#c8b6a6] rounded-lg text-sm text-center" />
+                  <span className="text-[#7d5a50]">to</span>
+                  <input type="number" min="0" placeholder="Max" value={localFilters.daysInStageRange[1] ?? ''} onChange={(e) => setLocalFilters(prev => ({ ...prev, daysInStageRange: [prev.daysInStageRange[0], e.target.value === '' ? null : Number(e.target.value)] }))} className="w-full px-2 py-1.5 border border-[#c8b6a6] rounded-lg text-sm text-center" />
+                </div>
+              </>
+            )}
+
+            {headerFilterOpen.type === 'applied' && (
+              <>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-semibold text-[#4a352f]">Applied Date</label>
+                  {(localFilters.appliedRange[0] || localFilters.appliedRange[1]) && (
+                    <button onClick={() => setLocalFilters(prev => ({ ...prev, appliedRange: [null, null] }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>
+                  )}
+                </div>
+                <div className="space-y-2">
+                  <input type="date" value={localFilters.appliedRange[0] || ''} onChange={(e) => setLocalFilters(prev => ({ ...prev, appliedRange: [e.target.value || null, prev.appliedRange[1]] }))} className="w-full px-2.5 py-1.5 border border-[#c8b6a6] rounded-lg text-sm" />
+                  <input type="date" value={localFilters.appliedRange[1] || ''} onChange={(e) => setLocalFilters(prev => ({ ...prev, appliedRange: [prev.appliedRange[0], e.target.value || null] }))} className="w-full px-2.5 py-1.5 border border-[#c8b6a6] rounded-lg text-sm" />
+                </div>
+              </>
+            )}
+
+            {headerFilterOpen.type === 'location' && (
+              <>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-semibold text-[#4a352f]">Filter by location</label>
+                  {localFilters.location && (
+                    <button onClick={() => setLocalFilters(prev => ({ ...prev, location: '' }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>
+                  )}
+                </div>
+                <input autoFocus type="text" value={localFilters.location} onChange={(e) => setLocalFilters(prev => ({ ...prev, location: e.target.value }))} placeholder="Search location..." className="w-full px-3 py-2 border border-[#c8b6a6] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#7d5a50]/20" />
+              </>
+            )}
+
+            {headerFilterOpen.type === 'lastActivity' && (
+              <>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-semibold text-[#4a352f]">Filter by last activity</label>
+                  {localFilters.lastActivity && (
+                    <button onClick={() => setLocalFilters(prev => ({ ...prev, lastActivity: '' }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>
+                  )}
+                </div>
+                <input autoFocus type="text" value={localFilters.lastActivity} onChange={(e) => setLocalFilters(prev => ({ ...prev, lastActivity: e.target.value }))} placeholder="Search last activity..." className="w-full px-3 py-2 border border-[#c8b6a6] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#7d5a50]/20" />
+              </>
+            )}
+
+            {headerFilterOpen.type === 'guarantees' && (
+              <>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-semibold text-[#4a352f]">Filter by guarantees</label>
+                  {localFilters.guarantees && (
+                    <button onClick={() => setLocalFilters(prev => ({ ...prev, guarantees: '' }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>
+                  )}
+                </div>
+                <input autoFocus type="text" value={localFilters.guarantees} onChange={(e) => setLocalFilters(prev => ({ ...prev, guarantees: e.target.value }))} placeholder="Search guarantees..." className="w-full px-3 py-2 border border-[#c8b6a6] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#7d5a50]/20" />
+              </>
+            )}
+
+            {headerFilterOpen.type === 'support' && (
+              <>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-semibold text-[#4a352f]">Filter by support required</label>
+                  {localFilters.support && (
+                    <button onClick={() => setLocalFilters(prev => ({ ...prev, support: '' }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>
+                  )}
+                </div>
+                <input autoFocus type="text" value={localFilters.support} onChange={(e) => setLocalFilters(prev => ({ ...prev, support: e.target.value }))} placeholder="Search support required..." className="w-full px-3 py-2 border border-[#c8b6a6] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#7d5a50]/20" />
+              </>
+            )}
+
+            {headerFilterOpen.type === 'services' && (
+              <>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-semibold text-[#4a352f]">Filter by services required</label>
+                  {localFilters.services && (
+                    <button onClick={() => setLocalFilters(prev => ({ ...prev, services: '' }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>
+                  )}
+                </div>
+                <input autoFocus type="text" value={localFilters.services} onChange={(e) => setLocalFilters(prev => ({ ...prev, services: e.target.value }))} placeholder="Search services required..." className="w-full px-3 py-2 border border-[#c8b6a6] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#7d5a50]/20" />
               </>
             )}
           </div>
@@ -1882,7 +2059,7 @@ export function SupportSMETable({ filters, stageFilter, onSMEsLoaded, onStageOve
               <button onClick={closePopup} className="text-[#7d5a50] hover:text-[#4a352f]"><X size={14} /></button>
             </div>
             <button onClick={() => { handleViewDetails(selectedSMEForPopup); closePopup(); }} className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"><Eye size={12} /> View Profile</button>
-            <button onClick={() => openPopup('bigScore', selectedSMEForPopup, activePopup.rect)} className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"><BarChart3 size={12} /> BIG Score</button>
+            <button onClick={() => { handleViewBigScorePage(selectedSMEForPopup); closePopup(); }} className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"><ExternalLink size={12} /> Open BIG Score Page</button>
             <button onClick={() => openPopup('match', selectedSMEForPopup, activePopup.rect)} className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"><Target size={12} /> Why This Match?</button>
             <button onClick={() => { setNotification({ type: "success", message: "Messaging coming soon" }); closePopup(); }} className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"><MessageSquare size={12} /> Send Message</button>
             {mapStatusToStageId(selectedSMEForPopup.currentStatus, activeStages) === "evaluation" && !sentNDAs[`${selectedSMEForPopup.id}_${selectedSMEForPopup.programIndex}`] && (
