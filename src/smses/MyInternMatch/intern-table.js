@@ -1234,7 +1234,7 @@ const MatchBreakdownModal = ({ intern, onClose }) => {
   )
 }
 
-export function InternTablePage({ filters, stageFilter, matchesCount, profileMatchesCount }) {
+export function InternTablePage({ filters, stageFilter, matchesCount, profileMatchesCount, onMatchesCountChange }) {
   const [interns, setInterns] = useState([])
   const [filteredInterns, setFilteredInterns] = useState([])
   const [selectedIntern, setSelectedIntern] = useState(null)
@@ -2847,6 +2847,12 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
   useEffect(() => {
     applyLocalFilters()
   }, [localFilters, interns])
+
+  useEffect(() => {
+    if (onMatchesCountChange) {
+      onMatchesCountChange(filteredInterns.length)
+    }
+  }, [filteredInterns, onMatchesCountChange])
 
   if (loading) {
     return <div style={{ padding: "40px", textAlign: "center" }}>Loading applications...</div>

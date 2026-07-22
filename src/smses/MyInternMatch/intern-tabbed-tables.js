@@ -950,20 +950,11 @@ const InternTabbedTables = ({
       where("status", "in", ["Accepted", "Confirmed", "Confirmed/Term Sheet Sign", "Completed"]),
     )
 
-    // get and set applications count for My Matches tab
-    const unsubscribeMatches = onSnapshot(query(
-      collection(db, "internshipApplications"),
-      where("sponsorId", "==", user.uid),
-    ), (querySnapshot) => {
-      setMyMatchesCount(querySnapshot.docs.length)
-    })
-
     const unsubscribe = onSnapshot(q, (querySnapshot) => {
       setSuccessfulDealsCount(querySnapshot.docs.length)
     })
 
     return () => {
-      unsubscribeMatches()
       unsubscribe()
     }
   }, [])
@@ -1094,20 +1085,21 @@ const InternTabbedTables = ({
         }}
       >
         {/* My Matches Content - FIRST */}
-        {currentActiveTab === "my-matches" && (
-          <div>
-            <InternTablePage
-              filters={filters}
-              stageFilter={stageFilter}
-              onDealComplete={onDealComplete}
-              matchesCount={myMatchesCount}
-              profileMatchesCount={setProfileMatchesCount}
-            />
-          </div>
-        )}
+        <div style={{ display: currentActiveTab === "my-matches" ? "block" : "none" }}>
+          <InternTablePage
+            filters={filters}
+            stageFilter={stageFilter}
+            onDealComplete={onDealComplete}
+            matchesCount={myMatchesCount}
+            profileMatchesCount={setProfileMatchesCount}
+            onMatchesCountChange={setMyMatchesCount}
+          />
+        </div>
 
         {/* Successful Deals Content - SECOND */}
-        {currentActiveTab === "successful-deals" && <SuccessfulInternDealsTable />}
+        <div style={{ display: currentActiveTab === "successful-deals" ? "block" : "none" }}>
+          <SuccessfulInternDealsTable />
+        </div>
       </div>
 
       {/* Enhanced styling for tab transitions */}
