@@ -287,12 +287,12 @@ export const getStageActionConfig = (stageId, overrides = {}) => ({
 });
 
 // ─── Shared settings persistence ────────────────────────────────────────────
-// One localStorage key, one shape, used by both SupportDealFlowPipeline.jsx
-// (which writes programmeType/customization/stageActions) and
-// SupportSMETable.jsx (which reads programmeType + customization to know
-// which stages are active, and stageActions to know what the Update Stage
-// form should show). Centralizing this avoids the two files silently
-// drifting onto different keys or shapes.
+// One localStorage key, used by both SupportDealFlowPipeline.jsx (which
+// writes programmeType/customization/stageActions) and SupportSMETable.jsx
+// (which reads programmeType + customization to know which stages are
+// active, and stageActions to know what the Update Stage form should show).
+// Centralizing this avoids the two files silently drifting onto different
+// keys or shapes.
 export const PIPELINE_SETTINGS_STORAGE_KEY = "dealflow-pipeline-settings-v1";
 
 // Dispatched on `window` whenever settings are saved, so any other mounted
@@ -304,19 +304,56 @@ export const PIPELINE_SETTINGS_EVENT = "dealflow-pipeline-settings-changed";
 
 export const DEFAULT_PIPELINE_CUSTOMIZATION = { renames: {}, hidden: [], order: [], custom: [], stageActions: {} };
 
-export const loadPipelineSettings = () => {
-  if (typeof window === "undefined") {
-    return { programmeType: "default", customization: DEFAULT_PIPELINE_CUSTOMIZATION };
-  }
+// FIX: customization (renames/hidden/order/custom stages/stage actions) is
+// now stored *per programme type*, not as one shared object applied to
+// whichever template happens to be active. Previously, saving from the
+// Customize Stages panel — even without touching anything — while, say,
+// "Accelerator" was selected would write Accelerator's own stage-id order
+// into a single global slot; switching to "BIG Default" afterward then
+// applied that same (mismatched) order to Default's completely different
+// stage IDs, silently scrambling it even though the user never customized
+// Default at all. Storage is now keyed by programme type internally, so
+// switching types can never bleed one template's settings into another's.
+//
+// `readRawSettings` is the one place that actually reads the stored blob,
+// including migrating the old single-`customization` shape (pre-fix data)
+// onto whichever programme type it was saved under — never applying it to
+// every type, which would repeat the same bug for existing users.
+const readRawSettings = () => {
+  const fallback = { programmeType: "default", customizationByType: {} };
+  if (typeof window === "undefined") return fallback;
   try {
     const saved = JSON.parse(window.localStorage.getItem(PIPELINE_SETTINGS_STORAGE_KEY) || "null");
-    return {
-      programmeType: saved?.programmeType || "default",
-      customization: { ...DEFAULT_PIPELINE_CUSTOMIZATION, ...(saved?.customization || {}) },
-    };
+    const programmeType = saved?.programmeType || "default";
+    let customizationByType = saved?.customizationByType;
+    if (!customizationByType || typeof customizationByType !== "object") {
+      // Legacy shape: a single `customization` blob with no per-type
+      // scoping. Migrate it onto the type it was actually saved under —
+      // not every type — so old data doesn't re-trigger this same bug.
+      customizationByType = saved?.customization ? { [programmeType]: saved.customization } : {};
+    }
+    return { programmeType, customizationByType };
   } catch {
-    return { programmeType: "default", customization: DEFAULT_PIPELINE_CUSTOMIZATION };
+    return fallback;
   }
+};
+
+export const loadPipelineSettings = () => {
+  const { programmeType, customizationByType } = readRawSettings();
+  return {
+    programmeType,
+    customization: { ...DEFAULT_PIPELINE_CUSTOMIZATION, ...(customizationByType[programmeType] || {}) },
+  };
+};
+
+// Fetches the saved customization for a *specific* programme type,
+// regardless of which type is currently active — used when switching
+// programme types in the Customize Stages panel, so the newly-selected
+// type's own settings (or a clean factory default, never the previous
+// type's) load immediately instead of carrying old state forward.
+export const loadCustomizationForType = (type) => {
+  const { customizationByType } = readRawSettings();
+  return { ...DEFAULT_PIPELINE_CUSTOMIZATION, ...(customizationByType[type] || {}) };
 };
 
 // Convenience helper: resolves the fully-applied, currently-active stage
@@ -331,7 +368,9 @@ export const getActiveStages = (settings = loadPipelineSettings()) => {
 export const savePipelineSettings = (programmeType, customization) => {
   if (typeof window === "undefined") return;
   try {
-    window.localStorage.setItem(PIPELINE_SETTINGS_STORAGE_KEY, JSON.stringify({ programmeType, customization }));
+    const { customizationByType } = readRawSettings();
+    const nextByType = { ...customizationByType, [programmeType]: customization };
+    window.localStorage.setItem(PIPELINE_SETTINGS_STORAGE_KEY, JSON.stringify({ programmeType, customizationByType: nextByType }));
     window.dispatchEvent(new CustomEvent(PIPELINE_SETTINGS_EVENT));
   } catch {
     // Storage can fail (private browsing, quota) — settings still work for
