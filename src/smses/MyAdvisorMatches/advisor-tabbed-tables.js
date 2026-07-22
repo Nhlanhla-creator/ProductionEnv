@@ -235,8 +235,8 @@ BIG Marketplace Africa Team`;
       await addDoc(collection(db, "messages"), {
         to: advisorUserId,
         toName: advisorName,
-        from: user.uid,
-        fromName: smeName,
+        from: "system",
+        fromName: "BIG Marketplace",
         subject: `📋 New Advisory Connection Request from ${smeName}`,
         content: advisorMessageContent,
         date: new Date().toISOString(),
