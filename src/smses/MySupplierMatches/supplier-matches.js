@@ -193,19 +193,20 @@ Please log into your BIG Marketplace Africa account to view the complete applica
 Best regards,
 BIG Marketplace Africa Team`;
 
-      await addDoc(collection(db, "messages"), {
+   await addDoc(collection(db, "messages"), {
         to: supplierId,
         toName: supplierName,
-        from: currentUser.uid,
-        fromName: customerName,
+        from: "system",
+        fromName: "BIG Marketplace", 
         subject: `📋 New Customer Interest from ${customerName}`,
         content: supplierMessageContent,
         date: new Date().toISOString(),
         read: false,
-        type: "inbox",
+        type: "inbox",  
         applicationId: payload.id || `app_${Date.now()}`,
         linkTo: "/supplier/applications",
       });
+      
       
       console.log("✅ In-app message sent to supplier:", supplierName);
     } catch (messageError) {
