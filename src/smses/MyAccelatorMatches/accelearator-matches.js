@@ -54,6 +54,14 @@ export default function SupportProgramsPage() {
   // Initialize filters state
   const [filters, setFilters] = useState({})
 
+  // The actual missing wire: the pipeline (AcceleratorFlowPipeline) and the
+  // table (rendered inside AcceleratorTabbedTables → AcceleratorTable) are
+  // two separate components with no way to talk to each other except
+  // through whatever renders them both — this page. Clicking a stage in
+  // the pipeline now updates this state, which gets passed down as the
+  // stageFilter prop for the table to actually filter by.
+  const [stageFilter, setStageFilter] = useState(null)
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
       setUser(firebaseUser)
@@ -429,10 +437,15 @@ export default function SupportProgramsPage() {
             }}
             className={styles.sectionContent}
           >
-            <h2 style={{ ...headerStyle, margin: '0 0 5px 0' }}>DealFlow Pipeline</h2>
+            {/* Removed the redundant plain "DealFlow Pipeline" heading that
+                used to sit here — AcceleratorFlowPipeline already renders
+                its own header (icon + "Dealflow Pipeline" title + tagline),
+                so this was two headings saying the same thing stacked on
+                top of each other. */}
             <AcceleratorFlowPipeline
               accelerators={accelerators}
               applications={applications}
+              onStageClick={setStageFilter}
             />
           </div>
         </div>
@@ -453,6 +466,7 @@ export default function SupportProgramsPage() {
         >
           <AcceleratorTabbedTables
             filters={filters}
+            stageFilter={stageFilter}
             onApplicationSubmitted={handleApplicationSubmitted}
           />
         </div>
