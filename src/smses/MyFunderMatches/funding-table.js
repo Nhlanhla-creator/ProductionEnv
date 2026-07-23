@@ -1832,6 +1832,7 @@ export const FundingTable = ({ filters = {}, onInsightsData, onPrimaryMatchCount
   const isAllDocumentsSubmitted = () => {
     return selectedDocs.every((doc) => submittedDocuments.includes(doc))
   }
+  
 const submitApplication = async (funder) => {
   try {
     const auth = getAuth();
