@@ -10,6 +10,7 @@ import { SupplierFlowPipeline } from "./supplier-flow-pipeline";
 import SupplierTabbedTables from "./supplier-tabbed-tables";
 import styles from "./supplier.module.css";
 import { X, ArrowRight } from 'lucide-react';
+import { getFunctions, httpsCallable } from "firebase/functions";
 
 const onboardingSteps = [
   {
@@ -111,7 +112,8 @@ export default function SupplierMatchesPage() {
       closePopup();
     }
   };
-const handleSupplierContacted = async (supplier) => {
+
+  const handleSupplierContacted = async (supplier) => {
   const supplierId = supplier?.id;
   if (!supplierId) return;
 
@@ -129,16 +131,19 @@ const handleSupplierContacted = async (supplier) => {
     let customerLocation = "Not specified";
     let customerType = "Not specified";
     let customerSector = "Not specified";
+    let customerEmail = null;  // ✅ DECLARE OUTSIDE
 
     try {
       const cSnap = await getDoc(doc(db, "universalProfiles", currentUser.uid));
       if (cSnap.exists()) {
         const cData = cSnap.data() || {};
         const entityOverview = cData.entityOverview || {};
+        const contactDetails = cData.contactDetails || {};
         customerName = entityOverview.tradingName || entityOverview.registeredName || customerName;
         customerLocation = entityOverview.location || customerLocation;
         customerType = entityOverview.entityType || customerType;
         customerSector = entityOverview.economicSectors?.[0] || customerSector;
+        customerEmail = contactDetails.email || cData.email || currentUser.email;
       }
     } catch (err) {
       console.error("Failed to fetch customer profile:", err);
@@ -150,6 +155,18 @@ const handleSupplierContacted = async (supplier) => {
                          supplier.name || 
                          "Unnamed Supplier";
     
+    // ✅ DECLARE supplierEmail OUTSIDE
+    let supplierEmail = null;
+    try {
+      const sSnap = await getDoc(doc(db, "universalProfiles", supplierId));
+      if (sSnap.exists()) {
+        const sData = sSnap.data() || {};
+        supplierEmail = sData.contactDetails?.email || sData.email;
+      }
+    } catch (err) {
+      console.error("Failed to fetch supplier email:", err);
+    }
+
     const payload = {
       applicationSource: "supplier-directory",
       status: "Pending",
@@ -213,7 +230,32 @@ BIG Marketplace Africa Team`;
       console.error("❌ Failed to send in-app message to supplier:", messageError);
     }
 
-    // ✅ 5. SEND CONFIRMATION TO CUSTOMER
+    // ✅ 5. SEND EMAIL TO SUPPLIER
+    if (supplierEmail) {
+      try {
+        const functions = getFunctions();
+        const sendSupplierInterestEmail = httpsCallable(functions, 'sendSupplierInterestEmail');
+
+        await sendSupplierInterestEmail({
+          to: supplierEmail,
+          name: supplierName,
+          customerName: customerName,
+          customerLocation: customerLocation || "Not specified",
+          customerSector: customerSector || "Not specified",
+          matchPercentage: payload.matchPercentage || 0,
+          applicationId: payload.id || `app_${Date.now()}`,
+          linkTo: "https://www.bigmarketplace.africa/supplier/applications"
+        });
+        
+        console.log("✅ Supplier interest email sent to:", supplierEmail);
+      } catch (emailError) {
+        console.error("❌ Failed to send supplier interest email:", emailError);
+      }
+    } else {
+      console.warn("⚠️ No supplier email found, skipping email");
+    }
+
+      // ✅ 5. SEND CONFIRMATION IN-APP MESSAGE TO CUSTOMER
     try {
       const customerConfirmationContent = `Dear ${customerName},
 
@@ -222,6 +264,7 @@ Your interest in ${supplierName} has been sent successfully!
 📋 Details:
 - Supplier: ${supplierName}
 - Location: ${supplier.entityOverview?.location || "Not specified"}
+- Match Score: ${payload.matchPercentage}%
 
 You will be notified when ${supplierName} responds to your interest.
 
@@ -247,7 +290,28 @@ BIG Marketplace Africa Team`;
       console.error("❌ Failed to send in-app confirmation to customer:", messageError);
     }
 
-    // ✅ 6. Dispatch notification
+    // ✅ 6. SEND CONFIRMATION EMAIL TO CUSTOMER
+    if (customerEmail) {
+      try {
+        const functions = getFunctions();
+        const sendCustomerConfirmationEmail = httpsCallable(functions, 'sendCustomerConfirmationEmail');
+
+        await sendCustomerConfirmationEmail({
+          to: customerEmail,
+          name: customerName,
+          supplierName: supplierName,
+          matchPercentage: payload.matchPercentage || 0,
+          applicationId: payload.id || `app_${Date.now()}`,
+          linkTo: "https://www.bigmarketplace.africa/customer/applications"
+        });
+        
+        console.log("✅ Customer confirmation email sent to:", customerEmail);
+      } catch (emailError) {
+        console.error("❌ Failed to send customer confirmation email:", emailError);
+      }
+    }
+
+    // ✅ 7. Dispatch notification
     const notificationMessage = `Contact request to ${supplierName} sent successfully`;
     const event = new CustomEvent("newNotification", {
       detail: {
@@ -267,7 +331,6 @@ BIG Marketplace Africa Team`;
     throw err;
   }
 };
-
   // Function to update the suppliers list from child component
   const handleSuppliersUpdate = (allSuppliersList, filteredSuppliersList) => {
     setAllSuppliers(allSuppliersList);

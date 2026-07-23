@@ -4,7 +4,7 @@ import { Trophy, Users, Star, Eye, X } from "lucide-react"
 import AdvisorMatchesTable from "./AdvisorMatchesTable"
 import { db, auth } from "../../firebaseConfig"
 import { collection, doc, query, where, onSnapshot, updateDoc, serverTimestamp, addDoc, getDoc } from "firebase/firestore"
-
+import { getFunctions, httpsCallable } from 'firebase/functions';
 // Star Rating Component (for successful deals)
 const StarRating = ({ rating, readOnly = true, size = 14 }) => {
   return (
@@ -198,22 +198,107 @@ const AdvisorTabbedTables = ({ onConnectionRequested }) => {
       return;
     }
 
-    // ✅ 1. Update Firestore status
+    // 1. Update Firestore status
     await updateDoc(doc(db, "smseAdvisoryMatches", advisor.id), {
       status: "contacted",
       contactedAt: serverTimestamp(),
     });
 
-    // ✅ 2. Get SME details for the message
-const smeUserId = user.uid;    const smeDoc = await getDoc(doc(db, "universalProfiles", smeUserId));
+
+// 2. Get SME details
+    const smeUserId = user.uid;
+    const smeDoc = await getDoc(doc(db, "universalProfiles", smeUserId));
     const smeData = smeDoc.exists() ? smeDoc.data() : {};
     const smeName = smeData.entityOverview?.registeredName || "A Small Business";
+    const smeLocation = smeData.entityOverview?.location || "Not specified";
+    const smeSector = (smeData.entityOverview?.economicSectors || []).join(", ") || "Not specified";
+    const smeStage = smeData.applicationOverview?.fundingStage || "Not specified";
 
-    // ✅ 3. Get advisor details
+    // 3. Get advisor details
     const advisorName = advisor.name || advisor.advisorName || "Advisor";
     const advisorUserId = advisor.advisorId || advisor.id;
+    const advisorSector = advisor.sectorFocus || advisor.sector || "Not specified";
+    const advisorExpertise = advisor.functionalExpertise || advisor.expertise || "Not specified";
+    const engagementType = advisor.engagementType || "Consulting";
+    const matchPercentage = advisor.matchPercentage || 0;
 
-    // ✅ 4. SEND IN-APP MESSAGE TO ADVISOR
+     // 4. Get advisor email
+    let advisorEmail = null;
+    try {
+      const advisorProfileRef = doc(db, "advisorProfiles", advisorUserId);
+      const advisorProfileSnap = await getDoc(advisorProfileRef);
+      if (advisorProfileSnap.exists()) {
+        const advisorProfileData = advisorProfileSnap.data();
+        advisorEmail = advisorProfileData.formData?.contactDetails?.email ||
+                       advisorProfileData.userEmail ||
+                       advisorProfileData.contactEmail ||
+                       advisorProfileData.email;
+      }
+    } catch (emailError) {
+      console.error("Error fetching advisor email:", emailError);
+    }
+
+    // 5. Get SME email
+    let smeEmail = null;
+    try {
+      const smeProfileRef = doc(db, "universalProfiles", smeUserId);
+      const smeProfileSnap = await getDoc(smeProfileRef);
+      if (smeProfileSnap.exists()) {
+        const smeProfileData = smeProfileSnap.data();
+        smeEmail = smeProfileData.contactDetails?.email || smeProfileData.email || user.email;
+      }
+    } catch (emailError) {
+      console.error("Error fetching SME email:", emailError);
+    }
+
+    // 6. Send email to advisor
+    if (advisorEmail) {
+      try {
+        const functions = getFunctions();
+        const sendAdvisorConnectionRequestEmail = httpsCallable(functions, 'sendAdvisorConnectionRequestEmail');
+
+        await sendAdvisorConnectionRequestEmail({
+          to: advisorEmail,
+          name: advisorName,
+          smeName: smeName,
+          smeLocation: smeLocation,
+          smeSector: smeSector,
+          smeStage: smeStage,
+          smeSupport: "Advisory services",
+          matchPercentage: matchPercentage,
+          linkTo: `https://www.bigmarketplace.africa/advisor/connections/${smeUserId}_${advisorUserId}`
+        });
+
+        console.log("✅ Advisor connection request email sent to:", advisorEmail);
+      } catch (emailError) {
+        console.error("❌ Failed to send advisor connection request email:", emailError);
+      }
+    }
+
+    // 7. Send confirmation email to SME
+    if (smeEmail) {
+      try {
+        const functions = getFunctions();
+        const sendSMEConnectionConfirmationEmail = httpsCallable(functions, 'sendSMEConnectionConfirmationEmail');
+
+        await sendSMEConnectionConfirmationEmail({
+          to: smeEmail,
+          name: smeName,
+          advisorName: advisorName,
+          advisorSector: advisorSector,
+          advisorExpertise: advisorExpertise,
+          engagementType: engagementType,
+          matchPercentage: matchPercentage,
+          linkTo: `https://www.bigmarketplace.africa/sme/connections/${smeUserId}_${advisorUserId}`
+        });
+
+        console.log("✅ SME connection confirmation email sent to:", smeEmail);
+      } catch (emailError) {
+        console.error("❌ Failed to send SME connection confirmation email:", emailError);
+      }
+    }
+
+    // 8. SEND IN-APP MESSAGE TO ADVISOR
     try {
       const advisorMessageContent = `Dear ${advisorName},
 
@@ -251,7 +336,7 @@ BIG Marketplace Africa Team`;
       console.error("❌ Failed to send in-app message to advisor:", messageError);
     }
 
-    // ✅ 5. SEND CONFIRMATION TO SME
+    // 9. SEND CONFIRMATION TO SME
     try {
       const smeConfirmationContent = `Dear ${smeName},
 
@@ -285,7 +370,7 @@ BIG Marketplace Africa Team`;
       console.error("❌ Failed to send in-app confirmation to SME:", messageError);
     }
 
-    // ✅ 6. Dispatch notification event
+    // 10. Dispatch notification event
     const notificationEvent = new CustomEvent("newNotification", {
       detail: {
         message: `Connection request sent to ${advisorName}!`,
@@ -298,7 +383,7 @@ BIG Marketplace Africa Team`;
     });
     window.dispatchEvent(notificationEvent);
 
-    // ✅ 7. Call callback if provided
+    //11. Call callback if provided
     if (onConnectionRequested) {
       onConnectionRequested();
     }
