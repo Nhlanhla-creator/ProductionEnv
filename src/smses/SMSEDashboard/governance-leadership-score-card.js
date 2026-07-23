@@ -19,16 +19,17 @@ import {
 //
 // Internally this is organised into three sub-sections that mirror how the
 // business actually thinks about this pillar:
-//   A. Ownership & Structure   — directors, shareholders, succession, PIS
-//      (sourced from the deterministic Board Structure scorer + local PIS calc)
+//   A. Ownership & Structure   — directors, shareholders, succession,
+//      exec/non-exec balance, advisor structure
+//      (structural completeness heuristic)
 //   B. Leadership Quality      — founder experience, qualifications,
-//      industry expertise, execution capability, ambition, learning mindset
+//      industry expertise, execution capability, ambition, learning mindset,
+//      critical role coverage
 //      (sourced from the AI leadership evaluation)
-//   C. Governance Maturity     — board, advisors, policies, reporting,
-//      risk management, integrity & risk, sanctions, conflicts, legal,
-//      reputation
-//      (sourced from the deterministic Strategic/Risk/Transparency/Policies
-//      scorers, i.e. calculateGovernanceScore() minus the board component)
+//   C. Governance Maturity     — PIS stage, board structure, advisors,
+//      policies, reporting, risk management, integrity & risk, sanctions,
+//      conflicts, legal, reputation
+//      (sourced from ALL calculateGovernanceScore() categories including board)
 // ─────────────────────────────────────────────────────────────────────────
 
 const SECTION_WEIGHTS = {
@@ -69,7 +70,7 @@ export function GovernanceLeadershipScoreCard({ styles, profileData, onScoreUpda
 
   // ── A. Ownership & Structure ──
   const [ownershipScore, setOwnershipScore] = useState(0)
-  const [ownershipDetail, setOwnershipDetail] = useState(null)
+  const [ownershipDetail, setOwnershipDetail] = useState(null) // kept for backward compat, no longer rendered
   const [pisCalculation, setPisCalculation] = useState({
     employees: 0, turnover: 0, liabilities: 0, shareholders: 1,
     turnoverComponent: 0, liabilitiesComponent: 0, totalPIS: 1,
@@ -121,12 +122,9 @@ export function GovernanceLeadershipScoreCard({ styles, profileData, onScoreUpda
   // ─────────────────────────────────────────────────────────────────────
   // PIS calculation — same formula as the standalone PIS card:
   //   PIS = Employees + (Turnover / R1m) + (Liabilities / R1m) + Shareholders
-  // This is the number that decides which governance "stage" (Advisors /
-  // Emerging Board / Full Board) a business sits in, and it's the number
-  // that used to only live on the old PIS card. It belongs here now because
-  // it's fundamentally an Ownership & Structure input (shareholder count
-  // is one of its four terms, and the stage it produces IS the ownership
-  // section's headline read).
+  // Displayed under Governance Maturity — it determines the governance stage
+  // (Advisors / Emerging Board / Full Board) which is a maturity signal, not
+  // purely an ownership signal.
   // ─────────────────────────────────────────────────────────────────────
   const calculatePIS = () => {
     const employees = parseInt(profileData?.entityOverview?.employeeCount) || 0
@@ -170,6 +168,8 @@ export function GovernanceLeadershipScoreCard({ styles, profileData, onScoreUpda
   // critical operational roles are covered, and by whom. A person covering
   // 2+ critical buckets, or holding 3+ distinct board roles, comes back in
   // overloadedPeople as a "spread thin / potential conflict" risk signal.
+  // Displayed under Leadership Quality — role coverage is a leadership
+  // structure concern, not just an ownership structure concern.
   // ─────────────────────────────────────────────────────────────────────
   const computeRoleCoverage = (validDirectors, validExecutives) => {
     const bucketCoverage = {}
@@ -219,8 +219,16 @@ export function GovernanceLeadershipScoreCard({ styles, profileData, onScoreUpda
   }
 
   // ─────────────────────────────────────────────────────────────────────
-  // Deterministic scoring — runs on every profileData change, no AI needed
-  // for Ownership & Structure / Governance Maturity.
+  // Deterministic scoring — runs on every profileData change, no AI needed.
+  //
+  // Ownership & Structure: structural completeness heuristic based on
+  // shareholder presence, director count/mix, executive presence, advisors,
+  // and conflict-of-interest signals. Board Structure scoring has moved to
+  // Governance Maturity.
+  //
+  // Governance Maturity: ALL calculateGovernanceScore() categories are
+  // included (Board Structure + Strategic + Risk + Transparency + Policies),
+  // re-normalised to 100% across their combined weights.
   // ─────────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!profileData) return
@@ -236,20 +244,17 @@ export function GovernanceLeadershipScoreCard({ styles, profileData, onScoreUpda
     }
 
     const gov = calculateGovernanceScore(cleanProfile)
-    const boardCat = gov.categories.find((c) => c.name === "Board Structure")
-    const nonBoardCats = gov.categories.filter((c) => c.name !== "Board Structure")
 
-    // Re-normalise the non-board categories to their own 100% so "Governance
-    // Maturity" reads as a standalone score, not diluted by board weight.
-    const nonBoardWeightTotal = nonBoardCats.reduce((s, c) => s + c.weight, 0) || 1
+    // ── Governance Maturity — Board Structure now included ──
+    // All categories (including Board Structure) are re-normalised to 100%
+    // so Governance Maturity reads as a complete standalone score.
+    const allWeightTotal = gov.categories.reduce((s, c) => s + c.weight, 0) || 1
     const maturityOverall = Math.round(
-      nonBoardCats.reduce((s, c) => s + c.score * (c.weight / nonBoardWeightTotal), 0)
+      gov.categories.reduce((s, c) => s + c.score * (c.weight / allWeightTotal), 0)
     )
 
-    setOwnershipScore(boardCat?.score || 0)
-    setOwnershipDetail(boardCat || null)
     setMaturityScore(maturityOverall)
-    setMaturityBreakdown(nonBoardCats)
+    setMaturityBreakdown(gov.categories) // includes Board Structure
     setGovernanceStage(gov.stage)
 
     const recommendation =
@@ -260,9 +265,7 @@ export function GovernanceLeadershipScoreCard({ styles, profileData, onScoreUpda
         : "Advisors sufficient"
     setGovernanceRecommendation(recommendation)
 
-    // ── Ownership & Structure display detail (mirrors prepareLeadershipData,
-    // but computed unconditionally so the section always has content even
-    // before any AI call has run) ──
+    // ── Ownership & Structure display detail ──
     const om = profileData?.ownershipManagement || {}
     const validShareholders = (om.shareholders || []).filter((s) => s?.name && s.name.trim() !== "")
     const validDirectors = (om.directors || []).filter((d) => d?.name && d.name.trim() !== "")
@@ -279,6 +282,7 @@ export function GovernanceLeadershipScoreCard({ styles, profileData, onScoreUpda
     )
 
     const activeInterests = om.activeInterests || []
+    const previousInterests = om.previousInterests || []
     const activeConflicts = activeInterests.filter(
       (i) => i?.assignedTo && i.businessStatus && i.businessStatus !== "Closed"
     )
@@ -290,6 +294,31 @@ export function GovernanceLeadershipScoreCard({ styles, profileData, onScoreUpda
         : "None declared"
 
     const roleCoverage = computeRoleCoverage(validDirectors, validExecutives)
+
+    // ── Ownership & Structure score — structural completeness heuristic ──
+    // Board Structure scoring has moved to Governance Maturity.
+    // This score reflects whether the business has the basic people-structure
+    // (shareholders, directors, executives, advisors) that a funder expects.
+    const shareholderScore = validShareholders.length >= 1
+      ? (validShareholders.length <= 8 ? 100 : 60)
+      : 0
+    const directorScore = validDirectors.length === 0
+      ? 0
+      : validDirectors.length === 1 ? 55
+      : validDirectors.length <= 6 ? 100
+      : 75
+    const executiveScore = validExecutives.length >= 1 ? 100 : 0
+    const advisorBonus = profileData?.enterpriseReadiness?.hasAdvisors === "yes" ? 100 : 0
+    // Active undisclosed conflicts carry a penalty; declared is better than hidden
+    const conflictPenalty = Math.min(activeConflicts.length * 15, 40)
+    const rawOwnershipScore = Math.round(
+      shareholderScore * 0.25 +
+      directorScore * 0.35 +
+      executiveScore * 0.20 +
+      advisorBonus * 0.15 +
+      5 // base points for having a profile at all
+    ) - conflictPenalty
+    setOwnershipScore(Math.min(Math.max(rawOwnershipScore, 0), 100))
 
     setOwnershipStructureDetail({
       shareholderCount: validShareholders.length,
@@ -492,11 +521,6 @@ export function GovernanceLeadershipScoreCard({ styles, profileData, onScoreUpda
     )
 
     // ── Conflict of interest signal — feeds Leadership Behaviour ──
-    // A shareholder/director/executive with a declared ACTIVE interest in
-    // another operating business is a potential conflict of interest. This
-    // is a distinct data source from Governance.js's own conflict-of-interest
-    // section — both should be weighed, but this one is specifically tied to
-    // named individuals via the Ownership & Management "Interests Declaration".
     const activeInterests = om.activeInterests || []
     const previousInterests = om.previousInterests || []
     const activeConflicts = activeInterests.filter((i) => i?.assignedTo && i.businessStatus && i.businessStatus !== "Closed")
@@ -685,7 +709,11 @@ Evidence: (cite specific data — including openness to advice, any conflict-of-
   const scoreLevel = getScoreLevel(overallScore)
   const ScoreIcon = scoreLevel.icon
 
-  const formatAiResult = (text) => {
+  // injections: { "keyword": <JSX> } — keyword is matched case-insensitively against the
+  // ### section heading. When a match is found the JSX is rendered as a data panel that is
+  // visually attached to the bottom of that section's content block, making it feel like a
+  // first-class part of that section rather than a separate panel stapled above everything.
+  const formatAiResult = (text, injections = {}) => {
     if (!text) return null
     const cleaned = text.replace(/\*\*(.*?)\*\*/g, "$1")
     const sections = cleaned.split(/(?=###\s)/g)
@@ -693,14 +721,18 @@ Evidence: (cite specific data — including openness to advice, any conflict-of-
       const trimmed = section.trim()
       if (!trimmed) return null
 
-      // Pull the heading out on its own so it can be highlighted, even when
-      // the model puts "Score: X/5 Confidence: ... Evidence: ..." right on
-      // the same line as "### N. Label" instead of the line below it.
       const headingMatch = trimmed.match(/^###\s*(.+?)(?=\s+Score\s*:|\n|$)/i)
       const heading = headingMatch ? headingMatch[1].trim() : null
       const rest = heading
         ? trimmed.slice(trimmed.indexOf(heading) + heading.length).replace(/^###\s*/, "").trim()
         : trimmed.replace(/^###\s*/, "")
+
+      // Find a matching injection for this heading (case-insensitive substring)
+      const injectedContent = heading
+        ? (Object.entries(injections).find(([key]) =>
+            heading.toLowerCase().includes(key.toLowerCase())
+          ) || [])[1]
+        : undefined
 
       return (
         <div key={index} style={{ marginBottom: "15px" }}>
@@ -709,17 +741,49 @@ Evidence: (cite specific data — including openness to advice, any conflict-of-
               {heading}
             </div>
           )}
-          <div style={{ fontSize: "14px", lineHeight: "1.6", color: "#6d4c41", whiteSpace: "pre-wrap", backgroundColor: "white", padding: "16px", borderRadius: heading ? "0 0 8px 8px" : "8px", border: "1px solid #e8d8cf", borderTop: heading ? "none" : "1px solid #e8d8cf" }}>
+          {/* AI text — bottom radius removed when an injection follows */}
+          <div style={{
+            fontSize: "14px", lineHeight: "1.6", color: "#6d4c41", whiteSpace: "pre-wrap",
+            backgroundColor: "white", padding: "16px",
+            borderRadius: heading ? (injectedContent ? "0" : "0 0 8px 8px") : "8px",
+            border: "1px solid #e8d8cf",
+            borderTop: heading ? "none" : "1px solid #e8d8cf",
+            borderBottom: injectedContent ? "none" : "1px solid #e8d8cf",
+          }}>
             {rest || trimmed}
           </div>
+          {/* Injected data panel — visually connected to the section above */}
+          {injectedContent && (
+            <div style={{
+              backgroundColor: "#efebe9",
+              border: "1px solid #e8d8cf",
+              borderTop: "1px dashed #d7ccc8",
+              borderRadius: "0 0 8px 8px",
+              padding: "14px 16px",
+            }}>
+              <div style={{ fontSize: "10px", color: "#8d6e63", fontWeight: "700", textTransform: "uppercase", letterSpacing: "0.6px", marginBottom: "10px" }}>
+                Supporting data
+              </div>
+              {injectedContent}
+            </div>
+          )}
         </div>
       )
     }).filter(Boolean)
   }
 
   // ── Reusable collapsible sub-section ──
-  const SubSection = ({ id, title, score, breakdown, aiText, extra }) => {
+  // aiInjections: { "section keyword": <JSX> } — when provided, the matching JSX is
+  // embedded inside the ### section of that name in the AI text (see formatAiResult).
+  // extra: content that renders when no AI text is loaded yet (fallback state).
+  //   For sections with no AI at all (Ownership), extra always renders.
+  //   For sections with AI (Leadership, Maturity), extra only shows until AI loads.
+  const SubSection = ({ id, title, score, breakdown, aiText, extra, aiInjections }) => {
     const isOpen = openSection === id
+    const hasInjections = aiInjections && Object.keys(aiInjections).length > 0
+    // Show extra as fallback only: always for non-AI sections; only pre-load for AI sections
+    const showExtra = extra && (!hasInjections || !aiText)
+
     return (
       <div style={{ marginTop: "16px", border: "1px solid #d7ccc8", borderRadius: "8px", overflow: "hidden" }}>
         <div
@@ -734,7 +798,7 @@ Evidence: (cite specific data — including openness to advice, any conflict-of-
         </div>
         {isOpen && (
           <div style={{ backgroundColor: "#f5f2f0", padding: "18px" }}>
-            {extra}
+            {showExtra && extra}
             {breakdown && breakdown.length > 0 && (
               <div style={{ marginBottom: "10px" }}>
                 {breakdown.map((item, i) => (
@@ -761,8 +825,8 @@ Evidence: (cite specific data — including openness to advice, any conflict-of-
               </div>
             )}
             {aiText ? (
-              <div style={{ backgroundColor: "white", padding: "16px", borderRadius: "8px", border: "1px solid #e8d8cf", maxHeight: "320px", overflowY: "auto" }}>
-                {formatAiResult(aiText)}
+              <div style={{ backgroundColor: "white", padding: "16px", borderRadius: "8px", border: "1px solid #e8d8cf", maxHeight: "420px", overflowY: "auto" }}>
+                {formatAiResult(aiText, aiInjections || {})}
               </div>
             ) : (
               <div style={{ fontSize: "12px", color: "#8d6e63", fontStyle: "italic", display: "flex", alignItems: "center", gap: "6px" }}>
@@ -852,9 +916,7 @@ Evidence: (cite specific data — including openness to advice, any conflict-of-
                 </div>
               )}
 
-              {/* ── About Score — moved to the top, right after the headline
-                  score/stage, same position as it sits on the standalone
-                  PIS card (above the section breakdowns, not below them) ── */}
+              {/* ── About Score ── */}
               <div style={{ border: "1px solid #d7ccc8", borderRadius: "8px", overflow: "hidden", marginBottom: "8px" }}>
                 <div style={{ backgroundColor: "#8d6e63", color: "white", padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", fontWeight: "bold" }}
                   onClick={() => setShowAboutScore(!showAboutScore)}>
@@ -867,14 +929,14 @@ Evidence: (cite specific data — including openness to advice, any conflict-of-
                       Leadership &amp; Governance answers one question for a funder: <strong>can we trust the people and decision-making structures behind this business?</strong> It replaces the old separate Leadership and Governance/PIS cards with a single view across three weighted areas:
                     </p>
                     <ul style={{ margin: "0 0 14px 0", paddingLeft: "18px" }}>
-                      <li><strong>Ownership &amp; Structure ({SECTION_WEIGHTS.ownership}%)</strong> — directors, shareholders, succession, and the Public Interest Score (PIS) that decides your governance stage</li>
-                      <li><strong>Leadership Quality ({SECTION_WEIGHTS.leadership}%)</strong> — founder experience, qualifications, industry expertise, execution capability, ambition, learning mindset</li>
-                      <li><strong>Governance Maturity ({SECTION_WEIGHTS.maturity}%)</strong> — board, advisors, policies, reporting, risk management, integrity &amp; risk, sanctions, conflicts, legal, reputation</li>
+                      <li><strong>Ownership &amp; Structure ({SECTION_WEIGHTS.ownership}%)</strong> — shareholders, directors (exec/non-exec mix), executives, and advisor structure; structural completeness of the people behind the business</li>
+                      <li><strong>Leadership Quality ({SECTION_WEIGHTS.leadership}%)</strong> — founder experience, qualifications, industry expertise, execution capability, ambition, learning mindset, and critical role coverage across the operational team</li>
+                      <li><strong>Governance Maturity ({SECTION_WEIGHTS.maturity}%)</strong> — Public Interest Score (PIS) and governance stage, board structure, advisors, policies, reporting, risk management, integrity &amp; risk, sanctions, conflicts, legal, reputation</li>
                     </ul>
 
-                    <div style={{ backgroundColor: "#efebe9", padding: "16px", borderRadius: "8px", borderLeft: "4px solid #8d6e63" }}>
-                      <p style={{ fontWeight: "bold", marginBottom: "10px", color: "#6d4c41" }}>Public Interest Score (PIS) — the number behind Ownership &amp; Structure</p>
-                      <p style={{ marginBottom: "8px" }}>PIS decides which governance stage a business sits in:</p>
+                    {/* <div style={{ backgroundColor: "#efebe9", padding: "16px", borderRadius: "8px", borderLeft: "4px solid #8d6e63" }}>
+                      <p style={{ fontWeight: "bold", marginBottom: "10px", color: "#6d4c41" }}>Public Interest Score (PIS) — shown under Governance Maturity</p>
+                      <p style={{ marginBottom: "8px" }}>PIS decides which governance stage a business sits in, and is displayed alongside the Board Structure score under Governance Maturity:</p>
                       <ul style={{ margin: "0 0 10px 0", paddingLeft: "18px", color: "#6d4c41" }}>
                         <li style={{ marginBottom: "4px" }}>PIS &lt; 100: <strong>Advisors Stage</strong> — light governance structures suitable for smaller operations</li>
                         <li style={{ marginBottom: "4px" }}>PIS 100–349: <strong>Emerging Board Stage</strong> — informal board recommended for growing businesses</li>
@@ -883,7 +945,7 @@ Evidence: (cite specific data — including openness to advice, any conflict-of-
                       <p style={{ margin: 0, fontFamily: "monospace", fontSize: "12.5px", backgroundColor: "white", padding: "8px 10px", borderRadius: "6px", border: "1px solid #e0d5c8" }}>
                         PIS = Employees + (Turnover ÷ R1m) + (Liabilities ÷ R1m) + Shareholders
                       </p>
-                    </div>
+                    </div> */}
                   </div>
                 )}
               </div>
@@ -894,6 +956,10 @@ Evidence: (cite specific data — including openness to advice, any conflict-of-
                 <span>Governance Maturity {SECTION_WEIGHTS.maturity}%</span>
               </div>
 
+              {/* ── A. Ownership & Structure ──
+                  Shows: structural completeness (shareholders, directors, executives, advisors, conflicts).
+                  PIS and Board Structure have moved to Governance Maturity.
+                  Critical role coverage has moved to Leadership Quality. ── */}
               <SubSection
                 id="ownership"
                 title="Ownership & Structure"
@@ -906,32 +972,7 @@ Evidence: (cite specific data — including openness to advice, any conflict-of-
                       Directors, shareholders and succession readiness — derived from your board composition, exec / non-exec mix, decision governance and advisory structure.
                     </p>
 
-                    {/* PIS breakdown + formula */}
-                    <div style={{ padding: "12px 14px", background: "white", borderRadius: "8px", border: "1px solid #f0e8e0", marginBottom: "10px" }}>
-                      <div style={{ fontWeight: "700", color: "#5d4037", marginBottom: "8px", fontSize: "12.5px" }}>Public Interest Score (PIS)</div>
-                      <div style={{ fontSize: "12.5px", color: "#6d4c41", lineHeight: 1.7 }}>
-                        <div>Employees: <strong>{pisCalculation.employees}</strong></div>
-                        <div>Annual Turnover: <strong>R {pisCalculation.turnover.toLocaleString()}</strong> → {pisCalculation.turnoverComponent}</div>
-                        <div>Liabilities: <strong>R {pisCalculation.liabilities.toLocaleString()}</strong> → {pisCalculation.liabilitiesComponent}</div>
-                        <div>Shareholders: <strong>{pisCalculation.shareholders}</strong></div>
-                        <div style={{ marginTop: "8px", fontFamily: "monospace", fontSize: "12px", backgroundColor: "#f9f5f0", padding: "6px 8px", borderRadius: "6px" }}>
-                          PIS = {pisCalculation.employees} + {pisCalculation.turnoverComponent} + {pisCalculation.liabilitiesComponent} + {pisCalculation.shareholders} = <strong>{pisCalculation.totalPIS}</strong>
-                        </div>
-                        <div style={{ marginTop: "6px" }}>
-                          Stage: <strong>{governanceStage || "—"}</strong>{governanceRecommendation ? ` — ${governanceRecommendation}` : ""}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Board Structure deterministic score */}
-                    {ownershipDetail && (
-                      <div style={{ padding: "10px 14px", background: "white", borderRadius: "8px", border: "1px solid #f0e8e0", fontSize: "12.5px", marginBottom: "10px" }}>
-                        Board Structure score: <strong>{ownershipDetail.score}%</strong>
-                        {ownershipDetail.weight != null && <span style={{ color: "#8d6e63" }}> (weight {ownershipDetail.weight}% within Governance Maturity's deterministic model)</span>}
-                      </div>
-                    )}
-
-                    {/* Directors / shareholders / advisors breakdown */}
+                    {/* Directors / shareholders / advisors / conflicts breakdown */}
                     <div style={{ padding: "12px 14px", background: "white", borderRadius: "8px", border: "1px solid #f0e8e0" }}>
                       <div style={{ fontWeight: "700", color: "#5d4037", marginBottom: "8px", fontSize: "12.5px" }}>Structure detail</div>
                       <div style={{ fontSize: "12.5px", color: "#6d4c41", lineHeight: 1.8 }}>
@@ -945,9 +986,72 @@ Evidence: (cite specific data — including openness to advice, any conflict-of-
                         )}
                       </div>
                     </div>
+                  </div>
+                }
+              />
 
-                    {/* Critical role coverage */}
-                    <div style={{ padding: "12px 14px", background: "white", borderRadius: "8px", border: "1px solid #f0e8e0", marginTop: "10px" }}>
+              {/* ── B. Leadership Quality ──
+                  Shows: AI score breakdown (Credentials / Structure / Behaviour),
+                  then AI analysis text with critical role coverage injected INTO
+                  the "Leadership Structure" section where it belongs contextually.
+                  Before AI loads, the role coverage panel shows as a fallback via extra. ── */}
+              <SubSection
+                id="leadership"
+                title="Leadership Quality"
+                score={leadershipScore}
+                breakdown={leadershipBreakdown}
+                aiText={leadershipAiResult}
+                aiInjections={{
+                  // "leadership structure" matches "### 2. Leadership Structure" case-insensitively
+                  "leadership structure": (
+                    <div style={{ fontSize: "12.5px", color: "#6d4c41", lineHeight: 1.6 }}>
+                      {/* Critical role coverage */}
+                      <div style={{ marginBottom: o.roleCoverage?.overloadedPeople?.length > 0 ? "10px" : "0" }}>
+                        <div style={{ fontWeight: "700", color: "#5d4037", marginBottom: "8px" }}>Critical role coverage</div>
+                        <div style={{ lineHeight: 1.9 }}>
+                          {CRITICAL_ROLE_BUCKETS.map((b) => {
+                            const holders = o.roleCoverage?.bucketCoverage?.[b.key] || []
+                            const covered = holders.length > 0
+                            return (
+                              <div key={b.key} style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "2px" }}>
+                                <span style={{ display: "inline-block", width: "8px", height: "8px", borderRadius: "50%", flexShrink: 0, backgroundColor: covered ? "#4CAF50" : "#F44336" }} />
+                                <span>
+                                  <strong>{b.label}:</strong>{" "}
+                                  {covered
+                                    ? holders.map((h) => `${h.name} (${h.source})`).join(", ")
+                                    : <span style={{ color: "#B71C1C", fontWeight: 600 }}>Not covered — risk</span>}
+                                </span>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                      {/* Role concentration / spread-thin risk */}
+                      {o.roleCoverage?.overloadedPeople?.length > 0 && (
+                        <div style={{ padding: "10px 12px", background: "#fdecea", borderRadius: "6px", border: "1px solid #e6b8ac" }}>
+                          <div style={{ fontWeight: "700", color: "#B71C1C", marginBottom: "5px", fontSize: "12px", display: "flex", alignItems: "center", gap: "6px" }}>
+                            <AlertCircle size={13} /> Role concentration risk
+                          </div>
+                          <div style={{ color: "#8d3a2e", lineHeight: 1.8 }}>
+                            {o.roleCoverage.overloadedPeople.map((p, i) => (
+                              <div key={i} style={{ marginBottom: "3px" }}>
+                                <strong>{p.name}</strong>
+                                {p.buckets.length > 0 && ` covers ${p.buckets.join(" + ")}`}
+                                {p.buckets.length > 0 && p.directorRoleCount >= DIRECTOR_ROLE_OVERLOAD_THRESHOLD && "; "}
+                                {p.directorRoleCount >= DIRECTOR_ROLE_OVERLOAD_THRESHOLD && `holds ${p.directorRoleCount} distinct board roles`}
+                                {" "}— spread too thin; a succession and conflict-of-interest risk.
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ),
+                }}
+                extra={
+                  // Fallback: shown only before AI loads
+                  <div style={{ fontSize: "13px", color: "#5d4037", marginBottom: "12px", lineHeight: 1.6 }}>
+                    <div style={{ padding: "12px 14px", background: "white", borderRadius: "8px", border: "1px solid #f0e8e0", marginBottom: "10px" }}>
                       <div style={{ fontWeight: "700", color: "#5d4037", marginBottom: "8px", fontSize: "12.5px" }}>Critical role coverage</div>
                       <div style={{ fontSize: "12.5px", color: "#6d4c41", lineHeight: 1.9 }}>
                         {CRITICAL_ROLE_BUCKETS.map((b) => {
@@ -955,10 +1059,7 @@ Evidence: (cite specific data — including openness to advice, any conflict-of-
                           const covered = holders.length > 0
                           return (
                             <div key={b.key} style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "2px" }}>
-                              <span style={{
-                                display: "inline-block", width: "8px", height: "8px", borderRadius: "50%", flexShrink: 0,
-                                backgroundColor: covered ? "#4CAF50" : "#F44336",
-                              }} />
+                              <span style={{ display: "inline-block", width: "8px", height: "8px", borderRadius: "50%", flexShrink: 0, backgroundColor: covered ? "#4CAF50" : "#F44336" }} />
                               <span>
                                 <strong>{b.label}:</strong>{" "}
                                 {covered
@@ -970,10 +1071,8 @@ Evidence: (cite specific data — including openness to advice, any conflict-of-
                         })}
                       </div>
                     </div>
-
-                    {/* Role concentration / spread-thin risk */}
                     {o.roleCoverage?.overloadedPeople?.length > 0 && (
-                      <div style={{ padding: "12px 14px", background: "#fdecea", borderRadius: "8px", border: "1px solid #e6b8ac", marginTop: "10px" }}>
+                      <div style={{ padding: "12px 14px", background: "#fdecea", borderRadius: "8px", border: "1px solid #e6b8ac", marginBottom: "10px" }}>
                         <div style={{ fontWeight: "700", color: "#B71C1C", marginBottom: "6px", fontSize: "12.5px", display: "flex", alignItems: "center", gap: "6px" }}>
                           <AlertCircle size={14} /> Role concentration risk
                         </div>
@@ -994,20 +1093,56 @@ Evidence: (cite specific data — including openness to advice, any conflict-of-
                 }
               />
 
-              <SubSection
-                id="leadership"
-                title="Leadership Quality"
-                score={leadershipScore}
-                breakdown={leadershipBreakdown}
-                aiText={leadershipAiResult}
-              />
-
+              {/* ── C. Governance Maturity ──
+                  Shows: all category scores including Board Structure,
+                  then AI analysis text with PIS injected INTO the "Board Structure"
+                  section where it belongs contextually (PIS is what drives the stage
+                  that determines the board structure requirement).
+                  Before AI loads, PIS shows as a fallback via extra. ── */}
               <SubSection
                 id="maturity"
                 title="Governance Maturity"
                 score={maturityScore}
                 breakdown={maturityBreakdown}
                 aiText={governanceAiResult}
+                aiInjections={{
+                  // "board structure" matches "### Board Structure" case-insensitively
+                  "board structure": (
+                    <div style={{ fontSize: "12.5px", color: "#6d4c41", lineHeight: 1.7 }}>
+                      <div style={{ fontWeight: "700", color: "#5d4037", marginBottom: "8px" }}>Public Interest Score (PIS)</div>
+                      <div>Employees: <strong>{pisCalculation.employees}</strong></div>
+                      <div>Annual Turnover: <strong>R {pisCalculation.turnover.toLocaleString()}</strong> → {pisCalculation.turnoverComponent}</div>
+                      <div>Liabilities: <strong>R {pisCalculation.liabilities.toLocaleString()}</strong> → {pisCalculation.liabilitiesComponent}</div>
+                      <div>Shareholders: <strong>{pisCalculation.shareholders}</strong></div>
+                      <div style={{ marginTop: "8px", fontFamily: "monospace", fontSize: "12px", backgroundColor: "white", padding: "6px 8px", borderRadius: "6px", border: "1px solid #d7ccc8" }}>
+                        PIS = {pisCalculation.employees} + {pisCalculation.turnoverComponent} + {pisCalculation.liabilitiesComponent} + {pisCalculation.shareholders} = <strong>{pisCalculation.totalPIS}</strong>
+                      </div>
+                      <div style={{ marginTop: "6px" }}>
+                        Stage: <strong>{governanceStage || "—"}</strong>{governanceRecommendation ? ` — ${governanceRecommendation}` : ""}
+                      </div>
+                    </div>
+                  ),
+                }}
+                extra={
+                  // Fallback: shown only before AI loads
+                  <div style={{ fontSize: "13px", color: "#5d4037", marginBottom: "12px", lineHeight: 1.6 }}>
+                    <div style={{ padding: "12px 14px", background: "white", borderRadius: "8px", border: "1px solid #f0e8e0", marginBottom: "10px" }}>
+                      <div style={{ fontWeight: "700", color: "#5d4037", marginBottom: "8px", fontSize: "12.5px" }}>Public Interest Score (PIS)</div>
+                      <div style={{ fontSize: "12.5px", color: "#6d4c41", lineHeight: 1.7 }}>
+                        <div>Employees: <strong>{pisCalculation.employees}</strong></div>
+                        <div>Annual Turnover: <strong>R {pisCalculation.turnover.toLocaleString()}</strong> → {pisCalculation.turnoverComponent}</div>
+                        <div>Liabilities: <strong>R {pisCalculation.liabilities.toLocaleString()}</strong> → {pisCalculation.liabilitiesComponent}</div>
+                        <div>Shareholders: <strong>{pisCalculation.shareholders}</strong></div>
+                        <div style={{ marginTop: "8px", fontFamily: "monospace", fontSize: "12px", backgroundColor: "#f9f5f0", padding: "6px 8px", borderRadius: "6px" }}>
+                          PIS = {pisCalculation.employees} + {pisCalculation.turnoverComponent} + {pisCalculation.liabilitiesComponent} + {pisCalculation.shareholders} = <strong>{pisCalculation.totalPIS}</strong>
+                        </div>
+                        <div style={{ marginTop: "6px" }}>
+                          Stage: <strong>{governanceStage || "—"}</strong>{governanceRecommendation ? ` — ${governanceRecommendation}` : ""}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                }
               />
 
               {evaluationError && (
