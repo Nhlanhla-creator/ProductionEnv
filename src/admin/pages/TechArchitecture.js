@@ -6,7 +6,8 @@ import {
   uploadFile,
   deleteFile,
   loadContent,
-  loadAllContent
+  loadAllContent,
+  renameFile
 } from './services/tech';
 import { useAuth } from '../../smses/hooks/useAuth';
 import { AlertCircle } from 'lucide-react';
@@ -169,6 +170,18 @@ const TechArchitecture = () => {
     setCurrentContent(null);
   }, []);
 
+  const handleRenameFile = useCallback(async (fileIndex, newName) => {
+    if (!selectedPath || !user) return;
+    try {
+      await renameFile(selectedPath, fileIndex, newName);
+      const updatedContent = await loadContent(selectedPath);
+      setCurrentContent(updatedContent);
+    } catch (error) {
+      console.error('Error renaming file:', error);
+      alert('Failed to rename file. Please try again.');
+    }
+  }, [selectedPath, user]);
+
   // Loading state
   if (authLoading || isLoading) {
     return (
@@ -290,6 +303,7 @@ const TechArchitecture = () => {
               content={currentContent}
               onUpload={handleUploadFile}
               onDelete={handleDeleteFile}
+              onRenameFile={handleRenameFile}
               onClose={handleCloseEditor}
               isUploading={isUploading}
             />

@@ -6,6 +6,8 @@ import {
   addItemToStructure,
   removeItemFromStructure,
   collectFilePaths,
+  renameItemInStructure,
+  deleteItemInStructure,
 } from '../structure/growthStructure';
 
 /**
@@ -25,6 +27,7 @@ export const useCustomStructure = ({
   loadUserStructure,
   saveUserStructure,
   deleteContent,
+  renameContent,
   enableTables = false,
 }) => {
   const [customStructure, setCustomStructure] = useState({});
@@ -110,12 +113,12 @@ export const useCustomStructure = ({
     [createDialog, customStructure, saveUserStructure, closeCreateDialog, enableTables]
   );
 
-  // Delete a user-created folder/file. Folders also remove every uploaded
+  // Delete a folder/file. Folders also remove every uploaded
   // file inside the subtree (best effort, via the supplied deleteContent).
   // Returns { handled, basePath, deletedFilePaths } on success.
   const deleteItem = useCallback(
     async (path, item) => {
-      if (!item?._custom) return { handled: false };
+      if (!item) return { handled: false };
       const isFolder = item.type === 'folder';
       const childFilePaths = collectFilePaths(item, path);
       const fileCount = childFilePaths.length;
@@ -141,7 +144,7 @@ export const useCustomStructure = ({
           }
         }
 
-        const next = removeItemFromStructure(customStructure, path);
+        const next = deleteItemInStructure(customStructure, staticStructure, path);
         setCustomStructure(next);
         await saveUserStructure(next);
         return { handled: true, basePath: path, deletedFilePaths: childFilePaths };
@@ -152,7 +155,47 @@ export const useCustomStructure = ({
         return { handled: false };
       }
     },
-    [customStructure, saveUserStructure, deleteContent]
+    [customStructure, staticStructure, saveUserStructure, deleteContent]
+  );
+
+  // Rename a folder/file.
+  const renameItem = useCallback(
+    async (path, newName) => {
+      const oldName = path[path.length - 1];
+      if (oldName === newName) return { handled: true, oldPath: path, newPath: path };
+
+      const parentPath = path.slice(0, -1);
+
+      // Sibling check for collisions
+      let current = mergedStructure;
+      for (const seg of parentPath) {
+        if (!current[seg] || !current[seg].items) break;
+        current = current[seg].items;
+      }
+      if (current && current[newName]) {
+        alert(`An item named "${newName}" already exists in this folder.`);
+        return { handled: false };
+      }
+
+      const previous = customStructure;
+      const next = renameItemInStructure(customStructure, staticStructure, path, newName);
+      setCustomStructure(next);
+
+      try {
+        const newPath = [...parentPath, newName];
+        if (renameContent) {
+          await renameContent(path, newPath);
+        }
+        await saveUserStructure(next);
+        return { handled: true, oldPath: path, newPath };
+      } catch (e) {
+        console.error('Failed to rename item:', e);
+        alert('Failed to rename. Please try again.');
+        setCustomStructure(previous);
+        return { handled: false };
+      }
+    },
+    [customStructure, staticStructure, mergedStructure, saveUserStructure, renameContent]
   );
 
   // Sibling names at the dialog's parent path (for collision check)
@@ -175,6 +218,7 @@ export const useCustomStructure = ({
     closeCreateDialog,
     createItem,
     deleteItem,
+    renameItem,
   };
 };
 

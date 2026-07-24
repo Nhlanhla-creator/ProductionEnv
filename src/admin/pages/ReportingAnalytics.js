@@ -12,7 +12,9 @@ import {
   loadAllContent,
   loadUserStructure,
   saveUserStructure,
-  deleteContent
+  deleteContent,
+  renameContent,
+  renameFile
 } from './services/reports';
 import { useAuth } from '../../smses/hooks/useAuth';
 import { AlertCircle } from 'lucide-react';
@@ -36,12 +38,14 @@ const ReportingAnalytics = () => {
     closeCreateDialog,
     createItem,
     deleteItem,
+    renameItem,
   } = useCustomStructure({
     user,
     staticStructure: REPORTS_STRUCTURE,
     loadUserStructure,
     saveUserStructure,
     deleteContent,
+    renameContent,
   });
 
   // Keep selectedItem in sync with the merged structure
@@ -170,6 +174,70 @@ const ReportingAnalytics = () => {
     }
   }, [deleteItem, selectedPath]);
 
+  const handleRenameItem = useCallback(async (path, newName) => {
+    const result = await renameItem(path, newName);
+    if (!result?.handled) return;
+
+    setContentStatus(prev => {
+      const n = { ...prev };
+      const oldKey = result.oldPath.join(' > ');
+      const newKey = result.newPath.join(' > ');
+
+      Object.keys(n).forEach(key => {
+        if (key === oldKey) {
+          n[newKey] = n[oldKey];
+          delete n[oldKey];
+        } else if (key.startsWith(oldKey + ' > ')) {
+          const suffix = key.substring(oldKey.length);
+          n[newKey + suffix] = n[key];
+          delete n[key];
+        }
+      });
+      return n;
+    });
+
+    setExpandedFolders(prev => {
+      const n = { ...prev };
+      const oldKey = result.oldPath.join(' > ');
+      const newKey = result.newPath.join(' > ');
+
+      Object.keys(n).forEach(key => {
+        if (key === oldKey) {
+          n[newKey] = n[oldKey];
+          delete n[oldKey];
+        } else if (key.startsWith(oldKey + ' > ')) {
+          const suffix = key.substring(oldKey.length);
+          n[newKey + suffix] = n[key];
+          delete n[key];
+        }
+      });
+      return n;
+    });
+
+    if (selectedPath) {
+      const selKey = selectedPath.join(' > ');
+      const oldKey = result.oldPath.join(' > ');
+      if (selKey === oldKey) {
+        setSelectedPath(result.newPath);
+      } else if (selKey.startsWith(oldKey + ' > ')) {
+        const suffix = selKey.substring(oldKey.length);
+        setSelectedPath([...result.newPath, ...suffix.split(' > ').filter(Boolean)]);
+      }
+    }
+  }, [renameItem, selectedPath]);
+
+  const handleRenameFile = useCallback(async (fileIndex, newName) => {
+    if (!selectedPath || !user) return;
+    try {
+      await renameFile(selectedPath, fileIndex, newName);
+      const updatedContent = await loadContent(selectedPath);
+      setCurrentContent(updatedContent);
+    } catch (error) {
+      console.error('Error renaming file:', error);
+      alert('Failed to rename file. Please try again.');
+    }
+  }, [selectedPath, user]);
+
   if (authLoading || isLoading) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh',}}>
@@ -206,8 +274,8 @@ const ReportingAnalytics = () => {
           <p style={{ fontSize: 14, color: '#666', margin: '4px 0 0 0' }}>Platform metrics, ESG impact, investor reports, and board presentations</p>
         </div>
         <div style={{ display: 'grid', gridTemplateColumns: selectedPath ? '350px 1fr' : '1fr', gap: 20, height: 'calc(100vh - 160px)' }}>
-          <FileExplorer structure={mergedStructure} expandedFolders={expandedFolders} selectedPath={selectedPath} onToggleFolder={handleToggleFolder} onSelectItem={handleSelectItem} onAddItem={handleAddItem} onDeleteItem={handleDeleteItem} contentStatus={contentStatus} />
-          {selectedPath && selectedItem && <FileUploader path={selectedPath} itemConfig={selectedItem} content={currentContent} onUpload={handleUploadFile} onDelete={handleDeleteFile} onClose={handleCloseEditor} isUploading={isUploading} />}
+          <FileExplorer structure={mergedStructure} expandedFolders={expandedFolders} selectedPath={selectedPath} onToggleFolder={handleToggleFolder} onSelectItem={handleSelectItem} onAddItem={handleAddItem} onDeleteItem={handleDeleteItem} onRenameItem={handleRenameItem} contentStatus={contentStatus} />
+          {selectedPath && selectedItem && <FileUploader path={selectedPath} itemConfig={selectedItem} content={currentContent} onUpload={handleUploadFile} onDelete={handleDeleteFile} onRenameFile={handleRenameFile} onClose={handleCloseEditor} isUploading={isUploading} />}
           {!selectedPath && (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'white', borderRadius: 8, border: '1px solid var(--medium-brown)' }}>
               <div style={{ textAlign: 'center', padding: 40, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>

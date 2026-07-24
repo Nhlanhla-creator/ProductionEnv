@@ -6,7 +6,8 @@ import {
   uploadFile,
   deleteFile,
   loadContent,
-  loadAllContent
+  loadAllContent,
+  renameFile
 } from './services/qa';
 import { useAuth } from '../../smses/hooks/useAuth';
 import { AlertCircle, CheckCircle, X } from 'lucide-react';
@@ -217,6 +218,17 @@ const QATesting = () => {
     setCurrentContent(null);
   }, []);
 
+  const handleRenameFile = useCallback(async (fileIndex, newName) => {
+    if (!selectedPath || !user) return;
+    try {
+      await renameFile(selectedPath, fileIndex, newName);
+      setCurrentContent(await loadContent(selectedPath));
+    } catch (error) {
+      console.error('Error renaming file:', error);
+      alert('Failed to rename file. Please try again.');
+    }
+  }, [selectedPath, user]);
+
   if (authLoading || isLoading) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh' }}>
@@ -344,6 +356,7 @@ const QATesting = () => {
               content={currentContent}
               onUpload={handleUploadFile}
               onDelete={handleDeleteFile}
+              onRenameFile={handleRenameFile}
               onClose={handleCloseEditor}
               isUploading={isUploading}
             />

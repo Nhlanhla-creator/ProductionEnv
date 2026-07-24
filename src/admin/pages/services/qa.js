@@ -196,3 +196,68 @@ export const deleteContent = async (path) => {
     throw error;
   }
 };
+
+export const renameContent = async (oldPath, newPath) => {
+  try {
+    const user = getCurrentUser();
+    const q = query(collection(db, QA_COLLECTION), where('userId', '==', user.uid));
+    const querySnapshot = await getDocs(q);
+
+    for (const docSnap of querySnapshot.docs) {
+      const data = docSnap.data();
+      const currentPath = data.path || [];
+      const startsWith = currentPath.length >= oldPath.length &&
+        oldPath.every((seg, idx) => currentPath[idx] === seg);
+
+      if (startsWith) {
+        const suffix = currentPath.slice(oldPath.length);
+        const updatedPath = [...newPath, ...suffix];
+        const newDocId = getDocId(user.uid, updatedPath);
+        const newDocRef = doc(db, QA_COLLECTION, newDocId);
+
+        await setDoc(newDocRef, {
+          ...data,
+          path: updatedPath,
+          updatedAt: serverTimestamp()
+        });
+
+        const oldDocId = getDocId(user.uid, currentPath);
+        const oldDocRef = doc(db, QA_COLLECTION, oldDocId);
+        await deleteDoc(oldDocRef);
+      }
+    }
+    return { success: true };
+  } catch (error) {
+    console.error('❌ Error renaming content:', error);
+    throw error;
+  }
+};
+
+export const renameFile = async (path, fileIndex, newName) => {
+  try {
+    const user = getCurrentUser();
+    const docId = getDocId(user.uid, path);
+    const docRef = doc(db, QA_COLLECTION, docId);
+    const docSnap = await getDoc(docRef);
+    if (!docSnap.exists()) throw new Error('Document not found');
+    const files = docSnap.data().files || [];
+    if (!files[fileIndex]) throw new Error('File not found');
+
+    const oldName = files[fileIndex].name;
+    const ext = oldName.includes('.') ? oldName.substring(oldName.lastIndexOf('.')) : '';
+    let finalName = newName;
+    if (ext && !finalName.endsWith(ext)) {
+      finalName += ext;
+    }
+    files[fileIndex].name = finalName;
+
+    await setDoc(docRef, {
+      files,
+      updatedAt: serverTimestamp()
+    }, { merge: true });
+    return { success: true };
+  } catch (error) {
+    console.error('❌ Error renaming file:', error);
+    throw error;
+  }
+};
