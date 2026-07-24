@@ -13,7 +13,8 @@ import {
   FolderPlus,
   ChevronLeft,
   Maximize2,
-  Minimize2
+  Minimize2,
+  Edit2
 } from 'lucide-react';
 
 const FileExplorerItem = memo(({
@@ -27,6 +28,7 @@ const FileExplorerItem = memo(({
   onSelectItem,
   onAddItem,
   onDeleteItem,
+  onRenameItem,
   contentStatus,
   activityDots
 }) => {
@@ -42,6 +44,11 @@ const FileExplorerItem = memo(({
   const isCustom    = !!item._custom;
   const showActions = hovered || isSelected;
 
+  // Label helper: strip leading "N_" prefix for display
+  const displayName = name.replace(/^\d+_/, '');
+  const [isEditing, setIsEditing] = useState(false);
+  const [editName, setEditName] = useState(displayName);
+
   const handleClick = () => {
     if (isFolder) {
       onToggleFolder(currentPath);
@@ -50,8 +57,15 @@ const FileExplorerItem = memo(({
     }
   };
 
-  // Label helper: strip leading "N_" prefix for display
-  const displayName = name.replace(/^\d+_/, '');
+  const handleSaveRename = () => {
+    setIsEditing(false);
+    const trimmed = editName.trim();
+    if (trimmed && trimmed !== displayName) {
+      const match = name.match(/^(\d+_)/);
+      const prefix = match ? match[1] : '';
+      onRenameItem(currentPath, prefix + trimmed);
+    }
+  };
 
   return (
     <div>
@@ -99,16 +113,61 @@ const FileExplorerItem = memo(({
         )}
 
         {/* Name */}
-        <span style={{
-          flex: 1,
-          fontSize: 14,
-          fontWeight: isFolder ? 500 : 400,
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap'
-        }}>
-          {displayName}
-        </span>
+        {isEditing ? (
+          <input
+            value={editName}
+            onChange={e => setEditName(e.target.value)}
+            onBlur={handleSaveRename}
+            onKeyDown={e => {
+              if (e.key === 'Enter') handleSaveRename();
+              if (e.key === 'Escape') { setEditName(displayName); setIsEditing(false); }
+            }}
+            onClick={e => e.stopPropagation()}
+            autoFocus
+            style={{
+              flex: 1,
+              fontSize: 14,
+              padding: '2px 6px',
+              border: '1px solid var(--primary-brown)',
+              borderRadius: 4,
+              color: 'black',
+              background: 'white'
+            }}
+          />
+        ) : (
+          <span style={{
+            flex: 1,
+            fontSize: 14,
+            fontWeight: isFolder ? 500 : 400,
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap'
+          }}>
+            {displayName}
+          </span>
+        )}
+
+        {/* Rename */}
+        {onRenameItem && !isEditing && (
+          <button
+            onClick={(e) => { e.stopPropagation(); setIsEditing(true); setEditName(displayName); }}
+            title="Rename"
+            style={{
+              opacity: hovered || isSelected ? 0.75 : 0,
+              transition: 'opacity 0.15s',
+              padding: 4,
+              background: 'transparent',
+              border: 'none',
+              cursor: 'pointer',
+              color: isSelected ? 'white' : 'var(--text-brown)',
+              display: 'flex',
+              alignItems: 'center',
+              borderRadius: 4
+            }}
+          >
+            <Edit2 size={14} />
+          </button>
+        )}
 
         {/* Add child (folders only) */}
         {isFolder && onAddItem && (
@@ -132,8 +191,8 @@ const FileExplorerItem = memo(({
           </button>
         )}
 
-        {/* Delete (custom items only) */}
-        {isCustom && onDeleteItem && (
+        {/* Delete */}
+        {onDeleteItem && (
           <button
             onClick={(e) => { e.stopPropagation(); onDeleteItem(currentPath, item); }}
             title="Delete"
@@ -220,6 +279,7 @@ const FileExplorerItem = memo(({
                   onSelectItem={onSelectItem}
                   onAddItem={onAddItem}
                   onDeleteItem={onDeleteItem}
+                  onRenameItem={onRenameItem}
                   contentStatus={contentStatus}
                   activityDots={activityDots}
                 />
@@ -239,6 +299,7 @@ export const FileExplorer = memo(({
   onSelectItem,
   onAddItem,
   onDeleteItem,
+  onRenameItem,
   contentStatus = {},
   explorerState = 'normal',
   onToggleState,
@@ -397,6 +458,7 @@ export const FileExplorer = memo(({
             onSelectItem={onSelectItem}
             onAddItem={onAddItem}
             onDeleteItem={onDeleteItem}
+            onRenameItem={onRenameItem}
             contentStatus={contentStatus}
             activityDots={activityDots}
           />

@@ -308,8 +308,11 @@ export const FILE_TYPE_PRESETS = {
 export const mergeStructures = (staticStruct, customStruct) => {
   const merged = {};
   for (const [name, item] of Object.entries(staticStruct || {})) {
+    const customChild = customStruct?.[name];
+    if (customChild && customChild._deleted) {
+      continue;
+    }
     if (item.type === 'folder') {
-      const customChild = customStruct?.[name];
       const customItems = customChild?.items || {};
       merged[name] = {
         ...item,
@@ -320,6 +323,9 @@ export const mergeStructures = (staticStruct, customStruct) => {
     }
   }
   for (const [name, item] of Object.entries(customStruct || {})) {
+    if (item && item._deleted) {
+      continue;
+    }
     if (!merged[name]) {
       merged[name] = markCustomRecursively(item);
     }
@@ -332,6 +338,18 @@ const markCustomRecursively = (item) => {
     const items = {};
     for (const [n, i] of Object.entries(item.items || {})) {
       items[n] = markCustomRecursively(i);
+    }
+    return { ...item, _custom: true, items };
+  }
+  return { ...item, _custom: true };
+};
+
+export const convertStaticToCustom = (item) => {
+  if (!item) return null;
+  if (item.type === 'folder') {
+    const items = {};
+    for (const [name, child] of Object.entries(item.items || {})) {
+      items[name] = convertStaticToCustom(child);
     }
     return { ...item, _custom: true, items };
   }
@@ -370,6 +388,44 @@ export const removeItemFromStructure = (structure, path) => {
   return next;
 };
 
+// Delete any item (including static ones) by marking them as deleted or deleting the key.
+export const deleteItemInStructure = (structure, staticStructure, path) => {
+  if (!path || path.length === 0) return structure;
+  const next = structure ? JSON.parse(JSON.stringify(structure)) : {};
+  
+  // Helper to check if path exists in staticStructure
+  let inStatic = staticStructure;
+  for (const segment of path) {
+    if (inStatic && inStatic[segment]) {
+      inStatic = inStatic[segment].items || inStatic[segment];
+    } else {
+      inStatic = null;
+      break;
+    }
+  }
+  const isStatic = !!inStatic;
+
+  const parentPath = path.slice(0, -1);
+  const name = path[path.length - 1];
+
+  let current = next;
+  for (const segment of parentPath) {
+    if (!current[segment]) {
+      current[segment] = { type: 'folder', items: {} };
+    } else if (!current[segment].items) {
+      current[segment].items = {};
+    }
+    current = current[segment].items;
+  }
+
+  if (isStatic) {
+    current[name] = { _deleted: true };
+  } else {
+    delete current[name];
+  }
+  return next;
+};
+
 // Look up the item at a given path in any structure (static, custom, or merged).
 export const findItemAtPath = (structure, path) => {
   if (!structure || !path || path.length === 0) return null;
@@ -395,4 +451,52 @@ export const collectFilePaths = (item, basePath = []) => {
     }
   }
   return paths;
+};
+
+// Rename any item (including static ones) by marking the old path as deleted and creating custom replica under newName.
+export const renameItemInStructure = (structure, staticStructure, path, newName) => {
+  if (!path || path.length === 0) return structure;
+  const next = structure ? JSON.parse(JSON.stringify(structure)) : {};
+
+  // Helper to check if path is static
+  let inStatic = staticStructure;
+  let staticItem = null;
+  for (const segment of path) {
+    if (inStatic && inStatic[segment]) {
+      staticItem = inStatic[segment];
+      inStatic = inStatic[segment].items || inStatic[segment];
+    } else {
+      staticItem = null;
+      inStatic = null;
+      break;
+    }
+  }
+  const isStatic = !!staticItem;
+
+  const parentPath = path.slice(0, -1);
+  const oldName = path[path.length - 1];
+
+  let current = next;
+  for (const segment of parentPath) {
+    if (!current[segment]) {
+      current[segment] = { type: 'folder', items: {} };
+    } else if (!current[segment].items) {
+      current[segment].items = {};
+    }
+    current = current[segment].items;
+  }
+
+  if (isStatic) {
+    // 1. Mark the old static path as deleted
+    current[oldName] = { _deleted: true };
+    // 2. Create the renamed item as custom
+    current[newName] = convertStaticToCustom(staticItem);
+  } else {
+    // It's custom, just rename the key
+    if (current[oldName]) {
+      current[newName] = current[oldName];
+      delete current[oldName];
+    }
+  }
+  return next;
 };

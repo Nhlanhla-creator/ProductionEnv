@@ -16,21 +16,27 @@ import {
   loadAllContent as loadAllProductContent,
   deleteContent as deleteProductContent,
   loadUserStructure,
-  saveUserStructure
+  saveUserStructure,
+  renameContent as renameProductContent,
+  renameFile as renameProductFile
 } from './services/product';
 import {
   uploadFile as uploadTechFile,
   deleteFile as deleteTechFile,
   loadContent as loadTechContent,
   loadAllContent as loadAllTechContent,
-  deleteContent as deleteTechContent
+  deleteContent as deleteTechContent,
+  renameContent as renameTechContent,
+  renameFile as renameTechFile
 } from './services/tech';
 import {
   uploadFile as uploadQAFile,
   deleteFile as deleteQAFile,
   loadContent as loadQAContent,
   loadAllContent as loadAllQAContent,
-  deleteContent as deleteQAContent
+  deleteContent as deleteQAContent,
+  renameContent as renameQAContent,
+  renameFile as renameQAFile
 } from './services/qa';
 import { loadDocChecklist, saveDocChecklist } from './services/docGovChecklist';
 import { loadQATable, saveQATable } from './services/qaMasterTable';
@@ -111,6 +117,17 @@ const ProductPlatform = () => {
     return deleteProductContent(path);
   }, []);
 
+  const routedRenameContent = useCallback(async (oldPath, newPath) => {
+    const key = oldPath.join(' > ');
+    if (key.startsWith(TECH_PREFIX + ' > ')) {
+      return renameTechContent(oldPath.slice(1), newPath.slice(1));
+    }
+    if (key.startsWith(QA_PREFIX + ' > ') && key !== QA_TABLE_PATH_KEY) {
+      return renameQAContent(oldPath.slice(1), newPath.slice(1));
+    }
+    return renameProductContent(oldPath, newPath);
+  }, []);
+
   // Custom structure (folders/file entries created on the frontend)
   const {
     mergedStructure,
@@ -120,12 +137,14 @@ const ProductPlatform = () => {
     closeCreateDialog,
     createItem,
     deleteItem,
+    renameItem,
   } = useCustomStructure({
     user,
     staticStructure: fullStaticStructure,
     loadUserStructure,
     saveUserStructure,
     deleteContent: routedDeleteContent,
+    renameContent: routedRenameContent,
   });
 
   // Keep selectedItem in sync with the merged structure so newly created
@@ -318,6 +337,87 @@ const ProductPlatform = () => {
     } catch (err) {
       console.error(err);
       alert('Failed to delete file. Please try again.');
+    }
+  }, [user]);
+
+  const handleRenameItem = useCallback(async (path, newName) => {
+    const result = await renameItem(path, newName);
+    if (!result?.handled) return;
+
+    setContentStatus(prev => {
+      const n = { ...prev };
+      const oldKey = result.oldPath.join(' > ');
+      const newKey = result.newPath.join(' > ');
+
+      Object.keys(n).forEach(key => {
+        if (key === oldKey) {
+          n[newKey] = n[oldKey];
+          delete n[oldKey];
+        } else if (key.startsWith(oldKey + ' > ')) {
+          const suffix = key.substring(oldKey.length);
+          n[newKey + suffix] = n[key];
+          delete n[key];
+        }
+      });
+      return n;
+    });
+
+    setExpandedFolders(prev => {
+      const n = { ...prev };
+      const oldKey = result.oldPath.join(' > ');
+      const newKey = result.newPath.join(' > ');
+
+      Object.keys(n).forEach(key => {
+        if (key === oldKey) {
+          n[newKey] = n[oldKey];
+          delete n[oldKey];
+        } else if (key.startsWith(oldKey + ' > ')) {
+          const suffix = key.substring(oldKey.length);
+          n[newKey + suffix] = n[key];
+          delete n[key];
+        }
+      });
+      return n;
+    });
+
+    if (selectedPath) {
+      const selKey = selectedPath.join(' > ');
+      const oldKey = result.oldPath.join(' > ');
+      if (selKey === oldKey) {
+        setSelectedPath(result.newPath);
+        selectedPathRef.current = result.newPath;
+      } else if (selKey.startsWith(oldKey + ' > ')) {
+        const suffix = selKey.substring(oldKey.length);
+        const finalPath = [...result.newPath, ...suffix.split(' > ').filter(Boolean)];
+        setSelectedPath(finalPath);
+        selectedPathRef.current = finalPath;
+      }
+    }
+  }, [renameItem, selectedPath]);
+
+  const handleRenameFile = useCallback(async (fileIndex, newName) => {
+    const currentPath = selectedPathRef.current;
+    if (!currentPath || !user) return;
+    const key    = currentPath.join(' > ');
+    const isTech = key.startsWith(TECH_PREFIX + ' > ');
+    const isQA   = key.startsWith(QA_PREFIX + ' > ') && key !== QA_TABLE_PATH_KEY;
+
+    try {
+      if (isTech) {
+        const subPath = currentPath.slice(1);
+        await renameTechFile(subPath, fileIndex, newName);
+        setTechContent(await loadTechContent(subPath));
+      } else if (isQA) {
+        const subPath = currentPath.slice(1);
+        await renameQAFile(subPath, fileIndex, newName);
+        setQaFileContent(await loadQAContent(subPath));
+      } else {
+        await renameProductFile(currentPath, fileIndex, newName);
+        setProductContent(await loadProductContent(currentPath));
+      }
+    } catch (error) {
+      console.error('Error renaming file:', error);
+      alert('Failed to rename file. Please try again.');
     }
   }, [user]);
 
@@ -553,6 +653,7 @@ const ProductPlatform = () => {
                 onSelectItem={handleSelectItem}
                 onAddItem={handleAddItem}
                 onDeleteItem={handleDeleteItem}
+                onRenameItem={handleRenameItem}
                 contentStatus={contentStatus}
                 activityDots={activityDots}
               />
@@ -565,6 +666,7 @@ const ProductPlatform = () => {
                   content={currentContent}
                   onUpload={handleUploadFile}
                   onDelete={handleDeleteFile}
+                  onRenameFile={handleRenameFile}
                   onClose={handleCloseEditor}
                   isUploading={isUploading}
                 />
