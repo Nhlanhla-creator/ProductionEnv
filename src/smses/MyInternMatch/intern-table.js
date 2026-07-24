@@ -1,7 +1,7 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { Filter, X, ExternalLink, Eye, ChevronRight } from "lucide-react"
+import { useState, useEffect, useMemo } from "react"
+import { X, ExternalLink, Eye, ChevronRight, ChevronDown, SlidersHorizontal, GripVertical, RotateCcw, Settings, Trash2, Plus, LayoutGrid, CheckCircle } from "lucide-react"
 import {
   doc,
   getDoc,
@@ -224,7 +224,7 @@ const TruncatedText = ({ text, maxLength = 30 }) => {
   const [isExpanded, setIsExpanded] = useState(false)
 
   if (!text || text === "-" || text === "Not specified" || text === "Various") {
-    return <span style={{ color: "#999", fontSize: "0.75rem" }}>{text || "-"}</span>
+    return <span style={{ color: "#a89482", fontSize: "0.75rem" }}>{text || "-"}</span>
   }
 
   const shouldTruncate = text.length > maxLength
@@ -609,10 +609,10 @@ const NextStageIndicator = ({ currentStage, onStageUpdate, isLoading }) => {
       <div
         style={{
           padding: "4px 8px",
-          backgroundColor: "#f5f5f5",
+          backgroundColor: "#f5f0e1",
           borderRadius: "4px",
           fontSize: "12px",
-          color: "#999",
+          color: "#a89482",
           display: "inline-block",
         }}
       >
@@ -626,10 +626,10 @@ const NextStageIndicator = ({ currentStage, onStageUpdate, isLoading }) => {
       <div
         style={{
           padding: "4px 8px",
-          backgroundColor: "#f5f5f5",
+          backgroundColor: "#f5f0e1",
           borderRadius: "4px",
           fontSize: "12px",
-          color: "#999",
+          color: "#a89482",
           display: "inline-block",
         }}
       >
@@ -653,12 +653,12 @@ const NextStageIndicator = ({ currentStage, onStageUpdate, isLoading }) => {
           gap: "4px",
         }}
       >
-        <ChevronRight size={14} color="#5d4037" />
+        <ChevronRight size={14} color="#7d5a50" />
         <span
           style={{
             fontSize: "12px",
             fontWeight: "500",
-            color: "#5d4037",
+            color: "#4a352f",
           }}
         >
           {formatStageName(nextStage)}
@@ -669,6 +669,29 @@ const NextStageIndicator = ({ currentStage, onStageUpdate, isLoading }) => {
 }
 
 // Sample Intern Data (for initial load or when no data is found)
+// Standalone version of NextStageIndicator's stage-resolution logic, for use
+// by the Next Stage column filter (which needs a plain string, not a
+// rendered component). NextStageIndicator itself is untouched.
+const computeNextStageName = (currentStage) => {
+  if (!currentStage) return ""
+  const pipelineStage = STATUS_TO_PIPELINE_MAP[currentStage] || currentStage.toLowerCase()
+  const currentIndex = PIPELINE_STAGES.indexOf(pipelineStage)
+  if (currentIndex === -1) return ""
+
+  let nextStage = null
+  if (CUSTOM_NEXT_STAGE_MAP[pipelineStage]) {
+    nextStage = CUSTOM_NEXT_STAGE_MAP[pipelineStage]
+  } else if (currentIndex < PIPELINE_STAGES.length - 1) {
+    nextStage = PIPELINE_STAGES[currentIndex + 1]
+  }
+  if (!nextStage) return ""
+
+  return nextStage
+    .split("_")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ")
+}
+
 const sampleInterns = []
 
 // Helper to extract the first URL from an array of document objects
@@ -979,8 +1002,8 @@ const MatchBreakdownModal = ({ intern, onClose }) => {
             justifyContent: "space-between",
             alignItems: "center",
             padding: "1.5rem",
-            borderBottom: "1px solid #E8D5C4",
-            background: "#FEFCFA",
+            borderBottom: "1px solid #e6d7c3",
+            background: "#faf7f2",
           }}
         >
           <h3
@@ -988,7 +1011,7 @@ const MatchBreakdownModal = ({ intern, onClose }) => {
               margin: "0",
               fontSize: "1.25rem",
               fontWeight: "600",
-              color: "#5D2A0A",
+              color: "#4a352f",
             }}
           >
             Match Breakdown - {intern?.internName || "Applicant"}
@@ -1000,7 +1023,7 @@ const MatchBreakdownModal = ({ intern, onClose }) => {
               border: "none",
               fontSize: "1.25rem",
               cursor: "pointer",
-              color: "#5D2A0A",
+              color: "#4a352f",
               padding: "0.25rem",
             }}
           >
@@ -1015,7 +1038,7 @@ const MatchBreakdownModal = ({ intern, onClose }) => {
               textAlign: "center",
               marginBottom: "2rem",
               paddingBottom: "1rem",
-              borderBottom: "2px solid #E8D5C4",
+              borderBottom: "2px solid #e6d7c3",
             }}
           >
             <div
@@ -1031,7 +1054,7 @@ const MatchBreakdownModal = ({ intern, onClose }) => {
             <p
               style={{
                 fontSize: "1rem",
-                color: "#8D6E63",
+                color: "#7d5a50",
                 margin: "0",
               }}
             >
@@ -1056,8 +1079,8 @@ const MatchBreakdownModal = ({ intern, onClose }) => {
                 <div
                   key={key}
                   style={{
-                    background: "#FEFCFA",
-                    border: "1px solid #E8D5C4",
+                    background: "#faf7f2",
+                    border: "1px solid #e6d7c3",
                     borderRadius: "8px",
                     padding: "1.25rem",
                     borderLeft: `4px solid ${scoreColor}`,
@@ -1075,7 +1098,7 @@ const MatchBreakdownModal = ({ intern, onClose }) => {
                       style={{
                         fontSize: "0.875rem",
                         fontWeight: "600",
-                        color: "#5D2A0A",
+                        color: "#4a352f",
                         margin: "0",
                         lineHeight: "1.3",
                         flex: "1",
@@ -1097,7 +1120,7 @@ const MatchBreakdownModal = ({ intern, onClose }) => {
 
                   <div
                     style={{
-                      background: "#E8D5C4",
+                      background: "#e6d7c3",
                       borderRadius: "4px",
                       height: "8px",
                       overflow: "hidden",
@@ -1124,7 +1147,7 @@ const MatchBreakdownModal = ({ intern, onClose }) => {
                     <span
                       style={{
                         fontSize: "0.75rem",
-                        color: "#8D6E63",
+                        color: "#7d5a50",
                       }}
                     >
                       Weight: {details.weight}%
@@ -1132,7 +1155,7 @@ const MatchBreakdownModal = ({ intern, onClose }) => {
                     <span
                       style={{
                         fontSize: "0.75rem",
-                        color: "#8D6E63",
+                        color: "#7d5a50",
                       }}
                     >
                       Contribution: {Math.round((percentage * details.weight) / 100)}%
@@ -1146,8 +1169,8 @@ const MatchBreakdownModal = ({ intern, onClose }) => {
           {/* Improvement Suggestions */}
           <div
             style={{
-              background: "#F5EBE0",
-              border: "1px solid #E8D5C4",
+              background: "#f5f0e1",
+              border: "1px solid #e6d7c3",
               borderRadius: "8px",
               padding: "1.5rem",
               marginBottom: "2rem",
@@ -1157,7 +1180,7 @@ const MatchBreakdownModal = ({ intern, onClose }) => {
               style={{
                 fontSize: "1rem",
                 fontWeight: "600",
-                color: "#5D2A0A",
+                color: "#4a352f",
                 margin: "0 0 1rem 0",
               }}
             >
@@ -1180,7 +1203,7 @@ const MatchBreakdownModal = ({ intern, onClose }) => {
                     key={key}
                     style={{
                       background: "white",
-                      border: "1px solid #E8D5C4",
+                      border: "1px solid #e6d7c3",
                       borderRadius: "6px",
                       padding: "1rem",
                     }}
@@ -1198,7 +1221,7 @@ const MatchBreakdownModal = ({ intern, onClose }) => {
                     <p
                       style={{
                         fontSize: "0.8rem",
-                        color: "#5D2A0A",
+                        color: "#4a352f",
                         margin: "0",
                         lineHeight: "1.4",
                       }}
@@ -1216,7 +1239,7 @@ const MatchBreakdownModal = ({ intern, onClose }) => {
               onClick={onClose}
               style={{
                 padding: "12px 32px",
-                backgroundColor: "#5D2A0A",
+                backgroundColor: "#7d5a50",
                 color: "white",
                 border: "none",
                 borderRadius: "8px",
@@ -1233,6 +1256,88 @@ const MatchBreakdownModal = ({ intern, onClose }) => {
     </div>
   )
 }
+
+// ─── Column config (drag order + filters + widths) ─────────────────────────
+// Every column has a filter, matching the catalyst/accelerator tables' design.
+const COLUMN_DEFS = {
+  location: { label: "Location", minWidth: "88px", filterType: "location" },
+  institution: { label: "Institution", minWidth: "104px", filterType: "institution" },
+  degree: { label: "Degree", minWidth: "92px", filterType: "degree" },
+  field: { label: "Field", minWidth: "92px", filterType: "field" },
+  locationFlexibility: { label: "Location Flexibility", minWidth: "112px", filterType: "locationFlexibility" },
+  role: { label: "Role", minWidth: "92px", filterType: "role" },
+  fundingProgramType: { label: "Funding Program", minWidth: "104px", filterType: "fundingProgramType" },
+  matchPercentage: { label: "Match %", align: "center", minWidth: "110px", filterType: "match" },
+  bigScore: { label: "BIG Score", align: "center", minWidth: "100px", filterType: "bigScore" },
+  status: { label: "Status", minWidth: "100px", filterType: "status" },
+  nextStage: { label: "Next Stage", minWidth: "100px", filterType: "nextStage" },
+}
+const DEFAULT_COLUMN_ORDER = Object.keys(COLUMN_DEFS)
+const DEFAULT_COLUMN_VISIBILITY = Object.fromEntries(DEFAULT_COLUMN_ORDER.map((k) => [k, true]))
+const DEFAULT_DENSITY = "comfortable"
+
+// ─── Custom Views (same model as the catalyst/accelerator tables) ──────────
+const BUILTIN_VIEW_ID = "__default__"
+const VIEWS_STORAGE_KEY = "intern-table-views-v1"
+
+const sanitizeColumnOrder = (order) => {
+  if (!Array.isArray(order)) return [...DEFAULT_COLUMN_ORDER]
+  const known = new Set(DEFAULT_COLUMN_ORDER)
+  const deduped = order.filter((key) => known.has(key))
+  const missing = DEFAULT_COLUMN_ORDER.filter((key) => !deduped.includes(key))
+  return [...deduped, ...missing]
+}
+const createDefaultViewLayout = () => ({
+  columnVisibility: { ...DEFAULT_COLUMN_VISIBILITY },
+  columnOrder: [...DEFAULT_COLUMN_ORDER],
+  density: DEFAULT_DENSITY,
+})
+const createBuiltinDefaultView = () => ({ id: BUILTIN_VIEW_ID, name: "Default", description: "", builtin: true, ...createDefaultViewLayout() })
+const sanitizeView = (view, fallbackId) => ({
+  id: view?.id || fallbackId,
+  name: (view?.name || "Untitled view").toString(),
+  description: (view?.description || "").toString(),
+  builtin: !!view?.builtin,
+  columnVisibility: { ...DEFAULT_COLUMN_VISIBILITY, ...(view?.columnVisibility || {}) },
+  columnOrder: sanitizeColumnOrder(view?.columnOrder),
+  density: view?.density || DEFAULT_DENSITY,
+})
+const loadViewsState = () => {
+  const freshDefault = () => ({ activeViewId: BUILTIN_VIEW_ID, views: { [BUILTIN_VIEW_ID]: createBuiltinDefaultView() } })
+  if (typeof window === "undefined") return freshDefault()
+  try {
+    const saved = JSON.parse(window.localStorage.getItem(VIEWS_STORAGE_KEY) || "null")
+    const rawViews = saved?.views && typeof saved.views === "object" ? saved.views : {}
+    const views = {}
+    Object.entries(rawViews).forEach(([id, v]) => { views[id] = sanitizeView(v, id) })
+    views[BUILTIN_VIEW_ID] = views[BUILTIN_VIEW_ID]
+      ? { ...views[BUILTIN_VIEW_ID], id: BUILTIN_VIEW_ID, name: "Default", builtin: true }
+      : createBuiltinDefaultView()
+    const activeViewId = saved?.activeViewId && views[saved.activeViewId] ? saved.activeViewId : BUILTIN_VIEW_ID
+    return { activeViewId, views }
+  } catch {
+    return freshDefault()
+  }
+}
+const persistViewsState = (state) => {
+  if (typeof window === "undefined") return
+  try { window.localStorage.setItem(VIEWS_STORAGE_KEY, JSON.stringify(state)) } catch {
+    // Storage can fail (private browsing, quota) — table still works this session.
+  }
+}
+const generateViewId = () => {
+  try { return `view_${crypto.randomUUID()}` } catch { return `view_${Date.now()}_${Math.random().toString(36).slice(2, 8)}` }
+}
+
+const PopupPortal = ({ children }) => {
+  if (typeof document === "undefined") return null
+  return createPortal(children, document.body)
+}
+
+// Institution/degree option lists flattened for the filter chip UI (the
+// full South African institution/degree lists already defined above).
+const institutionFilterOptions = southAfricanInstitutions
+const degreeFilterOptions = degreeOptions.flatMap((g) => g.options)
 
 export function InternTablePage({ filters, stageFilter, matchesCount, profileMatchesCount, onMatchesCountChange }) {
   const [interns, setInterns] = useState([])
@@ -1265,19 +1370,36 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
   const [timeSlot, setTimeSlot] = useState({ start: "09:00", end: "17:00" })
   const [timeZone, setTimeZone] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone)
   const [localFilters, setLocalFilters] = useState({
-    location: "",
-    matchScore: 0,
-    institution: "",
-    degree: "",
-    field: "",
-    internType: "",
-    fundingProgram: "",
-    fundingProgramType: "",
-    startDate: "",
-    sortBy: "matchPercentage",
+    name: "",
+    location: [], institution: [], degree: [], field: [], locationFlexibility: [], fundingProgramType: [],
+    role: "",
+    matchRange: [0, 100], bigScoreRange: [0, 100],
+    status: [], nextStage: [],
   })
   const [updatingStageForIntern, setUpdatingStageForIntern] = useState(null)
-  const [showFilters, setShowFilters] = useState(false)
+
+  // ─── Views (column visibility / order / density) ─────────────────────────
+  const [viewsState, setViewsState] = useState(() => loadViewsState())
+  const initialActiveView = viewsState.views[viewsState.activeViewId] || viewsState.views[BUILTIN_VIEW_ID]
+  const [columnVisibility, setColumnVisibility] = useState(() => initialActiveView.columnVisibility)
+  const [columnOrder, setColumnOrder] = useState(() => initialActiveView.columnOrder)
+  const [density, setDensity] = useState(() => initialActiveView.density)
+
+  const [showCustomizeMenu, setShowCustomizeMenu] = useState(false)
+  const [customizeMenuRect, setCustomizeMenuRect] = useState(null)
+  const [showNewViewForm, setShowNewViewForm] = useState(false)
+  const [newViewName, setNewViewName] = useState("")
+  const [newViewDescription, setNewViewDescription] = useState("")
+  const [editingViewMeta, setEditingViewMeta] = useState(null)
+
+  // Column drag-to-reorder
+  const [draggedColumn, setDraggedColumn] = useState(null)
+  const [dragOverColumn, setDragOverColumn] = useState(null)
+  const [dragHintRect, setDragHintRect] = useState(null)
+
+  // Per-column header filters
+  const [headerFilterOpen, setHeaderFilterOpen] = useState(null)
+
   const [bigScoreData, setBigScoreData] = useState({
     PresentationScore: { score: 0, color: "#000" },
     ProfessionalSkillsScore: { score: 0, color: "#000" },
@@ -1820,31 +1942,138 @@ export function InternTablePage({ filters, stageFilter, matchesCount, profileMat
     fetchInternApplications()
   }, [effectiveUserId])
 
-  const handleFilterChange = (filterName, value) => {
-    setLocalFilters((prev) => ({
-      ...prev,
-      [filterName]: value,
-    }))
-  }
+  // ─── Views actions (identical model to the catalyst/accelerator tables) ──
+  const activeView = viewsState.views[viewsState.activeViewId] || viewsState.views[BUILTIN_VIEW_ID]
 
-  const clearFilters = () => {
-    setLocalFilters({
-      location: "",
-      matchScore: 0,
-      institution: "",
-      degree: "",
-      field: "",
-      internType: "",
-      fundingProgram: "",
-      fundingProgramType: "",
-      startDate: "",
-      sortBy: "matchPercentage",
+  useEffect(() => {
+    setViewsState((prev) => {
+      const current = prev.views[prev.activeViewId]
+      if (!current) return prev
+      const updated = { ...current, columnVisibility, columnOrder, density }
+      const next = { ...prev, views: { ...prev.views, [prev.activeViewId]: updated } }
+      persistViewsState(next)
+      return next
     })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [columnVisibility, columnOrder, density])
+
+  const switchToView = (viewId) => {
+    const target = viewsState.views[viewId]
+    if (!target) return
+    setViewsState((prev) => {
+      const next = { ...prev, activeViewId: viewId }
+      persistViewsState(next)
+      return next
+    })
+    setColumnVisibility(target.columnVisibility)
+    setColumnOrder(target.columnOrder)
+    setDensity(target.density)
   }
 
-  const applyFilters = () => {
-    setShowFilters(false)
+  const createNewView = () => {
+    const trimmedName = newViewName.trim()
+    if (!trimmedName) return
+    const id = generateViewId()
+    const newView = { id, name: trimmedName, description: newViewDescription.trim(), builtin: false, columnVisibility: { ...columnVisibility }, columnOrder: [...columnOrder], density }
+    setViewsState((prev) => {
+      const next = { activeViewId: id, views: { ...prev.views, [id]: newView } }
+      persistViewsState(next)
+      return next
+    })
+    setNewViewName("")
+    setNewViewDescription("")
+    setShowNewViewForm(false)
   }
+
+  const startEditingViewMeta = (view) => setEditingViewMeta({ id: view.id, name: view.name, description: view.description, builtin: !!view.builtin })
+
+  const saveViewMeta = () => {
+    if (!editingViewMeta) return
+    const trimmedName = editingViewMeta.name.trim()
+    if (!trimmedName && !editingViewMeta.builtin) return
+    setViewsState((prev) => {
+      const existing = prev.views[editingViewMeta.id]
+      if (!existing) return prev
+      const updated = { ...existing, name: existing.builtin ? existing.name : trimmedName, description: editingViewMeta.description.trim() }
+      const next = { ...prev, views: { ...prev.views, [editingViewMeta.id]: updated } }
+      persistViewsState(next)
+      return next
+    })
+    setEditingViewMeta(null)
+  }
+
+  const removeView = (viewId) => {
+    if (viewId === BUILTIN_VIEW_ID) return
+    const wasActive = viewsState.activeViewId === viewId
+    setViewsState((prev) => {
+      const { [viewId]: _removed, ...restViews } = prev.views
+      const nextActiveId = prev.activeViewId === viewId ? BUILTIN_VIEW_ID : prev.activeViewId
+      const next = { activeViewId: nextActiveId, views: restViews }
+      persistViewsState(next)
+      return next
+    })
+    if (wasActive) {
+      const def = viewsState.views[BUILTIN_VIEW_ID]
+      setColumnVisibility(def.columnVisibility)
+      setColumnOrder(def.columnOrder)
+      setDensity(def.density)
+    }
+  }
+
+  const resetActiveViewToDefault = () => {
+    const layout = createDefaultViewLayout()
+    setColumnVisibility(layout.columnVisibility)
+    setColumnOrder(layout.columnOrder)
+    setDensity(layout.density)
+  }
+
+  const toggleColumn = (key) => setColumnVisibility((prev) => ({ ...prev, [key]: !prev[key] }))
+
+  // ─── Column drag-to-reorder ───────────────────────────────────────────────
+  const handleColumnDragStart = (e, key) => {
+    setDraggedColumn(key)
+    setDragHintRect(null)
+    try { e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", key) } catch {}
+  }
+  const handleColumnDragOver = (e, key) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = "move"
+    if (key !== dragOverColumn) setDragOverColumn(key)
+  }
+  const handleColumnDrop = (e, key) => {
+    e.preventDefault()
+    if (!draggedColumn || draggedColumn === key) { setDraggedColumn(null); setDragOverColumn(null); return }
+    setColumnOrder((prev) => {
+      const next = [...prev]
+      const fromIdx = next.indexOf(draggedColumn)
+      const toIdx = next.indexOf(key)
+      if (fromIdx === -1 || toIdx === -1) return prev
+      next.splice(fromIdx, 1)
+      next.splice(toIdx, 0, draggedColumn)
+      return next
+    })
+    setDraggedColumn(null)
+    setDragOverColumn(null)
+  }
+  const handleColumnDragEnd = () => { setDraggedColumn(null); setDragOverColumn(null) }
+
+  const openHeaderFilter = (type, event) => {
+    event.stopPropagation()
+    const rect = event.currentTarget.getBoundingClientRect()
+    setHeaderFilterOpen((prev) => (prev?.type === type ? null : { type, rect }))
+  }
+  const closeHeaderFilter = () => setHeaderFilterOpen(null)
+
+  const FilterTrigger = ({ type, active }) => (
+    <button
+      type="button"
+      onClick={(e) => openHeaderFilter(type, e)}
+      className={`flex-shrink-0 w-5 h-5 flex items-center justify-center rounded transition-colors ${active ? "text-[#e6d7c3]" : "text-[#c8b6a6] hover:text-white"}`}
+      title="Filter this column"
+    >
+      <SlidersHorizontal size={11} />
+    </button>
+  )
 
   const handleStageAction = (intern) => {
     setSelectedInternForStage(intern)
@@ -2685,29 +2914,29 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
   }
 
   const tableHeaderStyle = {
-    background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
-    color: "#FEFCFA",
-    padding: "0.5rem 0.25rem",
+    background: "#4a352f",
+    color: "#faf7f2",
+    padding: "0.6rem 0.4rem",
     textAlign: "left",
     fontWeight: "600",
     fontSize: "0.75rem",
-    letterSpacing: "0.3px",
+    letterSpacing: "0.05em",
     textTransform: "uppercase",
     position: "sticky",
     top: "0",
     zIndex: "10",
-    borderBottom: "2px solid #1a0c02",
-    borderRight: "1px solid #1a0c02",
+    borderBottom: "2px solid #e6d7c3",
+    borderRight: "1px solid #e6d7c3",
     lineHeight: "1.2",
   }
 
   const tableCellStyle = {
-    padding: "0.5rem 0.25rem",
-    borderBottom: "1px solid #E8D5C4",
-    borderRight: "1px solid #E8D5C4",
+    padding: "0.6rem 0.4rem",
+    borderBottom: "1px solid #e6d7c3",
+    borderRight: "1px solid #e6d7c3",
     fontSize: "0.8rem",
     verticalAlign: "top",
-    color: "#5d4037",
+    color: "#4a352f",
     lineHeight: "1.3",
     maxWidth: "0",
     overflow: "hidden",
@@ -2723,7 +2952,7 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
   const progressBarStyle = {
     width: "60%",
     height: "6px",
-    background: "#E2E8F0",
+    background: "#e6d7c3",
     borderRadius: "3px",
     overflow: "hidden",
   }
@@ -2736,13 +2965,13 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
 
   const matchScoreStyle = {
     fontWeight: "600",
-    color: "#5D2A0A",
+    color: "#4a352f",
     fontSize: "0.75rem",
   }
 
   const statusBadgeStyle = {
-    padding: "4px 8px",
-    borderRadius: "4px",
+    padding: "4px 10px",
+    borderRadius: "9999px",
     fontSize: "11px",
     fontWeight: "600",
     display: "inline-block",
@@ -2790,63 +3019,38 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
     return missingCount > 4
   }
 
-  const applyLocalFilters = () => {
-    let updatedInterns = [...interns]
+  useEffect(() => {
+    const user = auth.currentUser
+    const updated = interns.filter((intern) => {
+      if ((user && intern.internId === user.uid) || (effectiveUserId && intern.internId === effectiveUserId)) return false
+      if (hasTooManyMissingFields(intern)) return false
 
-    updatedInterns = updatedInterns.filter((intern) => {
-      const user = auth.currentUser
-      if ((user && intern.internId === user.uid) || (effectiveUserId && intern.internId === effectiveUserId)) {
-        return false
-      }
+      if (localFilters.name.trim() && !intern.internName.toLowerCase().includes(localFilters.name.toLowerCase().trim())) return false
 
-      if (hasTooManyMissingFields(intern)) {
-        return false
-      }
+      if (localFilters.location.length > 0 && !localFilters.location.some((v) => (intern.location || "").toLowerCase().includes(v.toLowerCase()))) return false
+      if (localFilters.institution.length > 0 && !localFilters.institution.some((v) => (intern.institution || "").toLowerCase().includes(v.toLowerCase()))) return false
+      if (localFilters.degree.length > 0 && !localFilters.degree.some((v) => (intern.degree || "").toLowerCase().includes(v.toLowerCase()))) return false
+      if (localFilters.field.length > 0 && !localFilters.field.some((v) => formatLabel(intern.field).toLowerCase().includes(v.toLowerCase()))) return false
+      if (localFilters.locationFlexibility.length > 0 && !localFilters.locationFlexibility.some((v) => (intern.locationFlexibility || "").toLowerCase().includes(v.toLowerCase()))) return false
+      if (localFilters.fundingProgramType.length > 0 && !localFilters.fundingProgramType.some((v) => (intern.fundingProgramType || "").toLowerCase().includes(v.toLowerCase()))) return false
 
-      if (localFilters.location) {
-        if (!intern.location || !intern.location.toLowerCase().includes(localFilters.location.toLowerCase())) {
-          return false
-        }
-      }
+      if (localFilters.role.trim() && !formatLabel(intern.role).toLowerCase().includes(localFilters.role.toLowerCase().trim())) return false
 
-      if (localFilters.institution) {
-        if (!intern.institution || !intern.institution.toLowerCase().includes(localFilters.institution.toLowerCase())) {
-          return false
-        }
-      }
+      if ((intern.matchPercentage || 0) < localFilters.matchRange[0] || (intern.matchPercentage || 0) > localFilters.matchRange[1]) return false
+      if ((intern.bigScore || 0) < localFilters.bigScoreRange[0] || (intern.bigScore || 0) > localFilters.bigScoreRange[1]) return false
 
-      if (localFilters.degree) {
-        if (!intern.degree || !intern.degree.toLowerCase().includes(localFilters.degree.toLowerCase())) {
-          return false
-        }
-      }
-
-      if (localFilters.matchScore > 0) {
-        if (!intern.matchPercentage || intern.matchPercentage < localFilters.matchScore) {
-          return false
-        }
+      const currentStatusForFilter = updatedStages[intern.id] || intern.pipelineStage || intern.status
+      if (localFilters.status.length > 0 && !localFilters.status.some((v) => (currentStatusForFilter || "").toLowerCase().includes(v.toLowerCase()))) return false
+      if (localFilters.nextStage.length > 0) {
+        const nextStageName = computeNextStageName(currentStatusForFilter)
+        if (!localFilters.nextStage.some((v) => (nextStageName || "").toLowerCase().includes(v.toLowerCase()))) return false
       }
 
       return true
     })
 
-    updatedInterns.sort((a, b) => {
-      if (localFilters.sortBy === "matchPercentage") {
-        return b.matchPercentage - a.matchPercentage
-      } else if (localFilters.sortBy === "bigScore") {
-        return b.bigScore - a.bigScore
-      } else if (localFilters.sortBy === "internName") {
-        return a.internName.localeCompare(b.internName)
-      }
-      return 0
-    })
-
-    setFilteredInterns(updatedInterns)
-  }
-
-  useEffect(() => {
-    applyLocalFilters()
-  }, [localFilters, interns])
+    setFilteredInterns(updated)
+  }, [localFilters, interns, updatedStages, effectiveUserId])
 
   useEffect(() => {
     if (onMatchesCountChange) {
@@ -2860,6 +3064,46 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
 
   // Determine current stage fields based on the selected stage in the modal
   const currentStageFields = getStageFields(selectedStage)
+
+  // ─── Derived filter options from real data (for columns with no fixed
+  // predefined list) ─────────────────────────────────────────────────────
+  const uniqueFields = [...new Set(interns.map((i) => formatLabel(i.field)).filter((v) => v && v !== "Not Specified"))]
+  const uniqueLocationFlex = [...new Set(interns.map((i) => i.locationFlexibility).filter((v) => v && v !== "Not specified"))]
+  const uniqueFundingPrograms = [...new Set(interns.map((i) => i.fundingProgramType).filter((v) => v && v !== "Not specified"))]
+  const statusFilterOptions = applicationStages.map((s) => s.name)
+
+  const activeFilterCount = (localFilters.name.trim() ? 1 : 0)
+    + localFilters.location.length + localFilters.institution.length + localFilters.degree.length
+    + localFilters.field.length + localFilters.locationFlexibility.length + localFilters.fundingProgramType.length
+    + (localFilters.role.trim() ? 1 : 0)
+    + (localFilters.matchRange[0] > 0 || localFilters.matchRange[1] < 100 ? 1 : 0)
+    + (localFilters.bigScoreRange[0] > 0 || localFilters.bigScoreRange[1] < 100 ? 1 : 0)
+    + localFilters.status.length + localFilters.nextStage.length
+
+  const getFilterActive = (filterType) => {
+    switch (filterType) {
+      case "location": return localFilters.location.length > 0
+      case "institution": return localFilters.institution.length > 0
+      case "degree": return localFilters.degree.length > 0
+      case "field": return localFilters.field.length > 0
+      case "locationFlexibility": return localFilters.locationFlexibility.length > 0
+      case "fundingProgramType": return localFilters.fundingProgramType.length > 0
+      case "role": return !!localFilters.role.trim()
+      case "match": return localFilters.matchRange[0] > 0 || localFilters.matchRange[1] < 100
+      case "bigScore": return localFilters.bigScoreRange[0] > 0 || localFilters.bigScoreRange[1] < 100
+      case "status": return localFilters.status.length > 0
+      case "nextStage": return localFilters.nextStage.length > 0
+      default: return false
+    }
+  }
+
+  const densityStyles = {
+    comfortable: { cell: "0.6rem 0.4rem", header: "0.6rem 0.4rem" },
+    compact: { cell: "0.4rem 0.3rem", header: "0.4rem 0.3rem" },
+  }
+  const ds = densityStyles[density] || densityStyles.comfortable
+
+  const visibleColumnKeys = columnOrder.filter((key) => columnVisibility[key])
 
   return (
     <div style={{ width: "100%", maxWidth: "100vw", overflowX: "hidden" }}>
@@ -2905,28 +3149,140 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
         </div>
       )}
 
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
-        <h2 style={{ fontSize: "20px", fontWeight: "bold", margin: 0 }}>Intern Applications</h2>
-        <button
-          onClick={() => setShowFilters(true)}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "6px",
-            padding: "10px 20px",
-            backgroundColor: "#a67c52",
-            color: "white",
-            border: "none",
-            borderRadius: "6px",
-            cursor: "pointer",
-            fontWeight: "500",
-            fontSize: "0.8rem",
-            boxShadow: "0 2px 6px rgba(166, 124, 82, 0.3)",
-          }}
-        >
-          <Filter size={14} />
-          Filter Applications
-        </button>
+      {/* Toolbar */}
+      <div className="bg-[#faf7f2] rounded-t-2xl p-4 border border-[#e6d7c3] border-b-0 shadow-sm">
+        <div className="flex items-center justify-between gap-4 flex-wrap">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h2 className="text-lg font-bold text-[#4a352f] m-0">Intern Applications</h2>
+            <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-white text-[#4a352f] border border-[#c8b6a6]">
+              <LayoutGrid size={12} className="text-[#7d5a50] flex-shrink-0" />
+              Viewing: {activeView.name}
+              {activeView.description && <span className="font-normal text-[#a89482]"> — {activeView.description}</span>}
+            </span>
+            {activeFilterCount > 0 && (
+              <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#fff3e0] text-[#e65100] border border-[#e65100]/30">
+                <SlidersHorizontal size={12} /> {activeFilterCount} filter{activeFilterCount > 1 ? "s" : ""} active
+              </span>
+            )}
+          </div>
+          <div className="relative">
+            <button
+              onClick={(e) => {
+                if (showCustomizeMenu) { setShowCustomizeMenu(false); setCustomizeMenuRect(null) }
+                else { setCustomizeMenuRect(e.currentTarget.getBoundingClientRect()); setShowCustomizeMenu(true); setShowNewViewForm(false); setEditingViewMeta(null) }
+              }}
+              className="flex items-center gap-2 px-4 py-2.5 bg-white border border-[#c8b6a6] rounded-xl text-sm text-[#4a352f] hover:bg-[#f5f0e1] transition-all shadow-sm"
+            >
+              <SlidersHorizontal size={16} /> Customize Table <ChevronDown size={14} className={`transition-transform ${showCustomizeMenu ? "rotate-180" : ""}`} />
+            </button>
+            {showCustomizeMenu && customizeMenuRect && (() => {
+              const panelWidth = 320
+              const margin = 12
+              let left = customizeMenuRect.right - panelWidth
+              left = Math.min(Math.max(left, margin), window.innerWidth - panelWidth - margin)
+              const spaceBelow = window.innerHeight - customizeMenuRect.bottom - margin - 8
+              const spaceAbove = customizeMenuRect.top - margin - 8
+              const openUpward = spaceBelow < 320 && spaceAbove > spaceBelow
+              const maxHeight = Math.max(200, Math.min(620, openUpward ? spaceAbove : spaceBelow))
+              const top = openUpward ? undefined : customizeMenuRect.bottom + 8
+              const bottom = openUpward ? window.innerHeight - customizeMenuRect.top + 8 : undefined
+              const allViews = Object.values(viewsState.views).sort((a, b) => (a.builtin ? -1 : b.builtin ? 1 : a.name.localeCompare(b.name)))
+              return (
+                <PopupPortal>
+                  <div className="fixed inset-0 z-40" onClick={() => { setShowCustomizeMenu(false); setCustomizeMenuRect(null); setShowNewViewForm(false); setEditingViewMeta(null) }} />
+                  <div className="fixed bg-white rounded-2xl shadow-2xl border border-[#e6d7c3] p-5 z-50 overflow-y-auto" style={{ left, width: panelWidth, top, bottom, maxHeight }}>
+                    <h4 className="text-sm font-semibold text-[#4a352f] mb-1">Views</h4>
+                    <p className="text-xs text-[#a89482] mb-3">Edits below auto-save into whichever view is selected.</p>
+                    <div className="space-y-1 mb-3">
+                      {allViews.map((view) => {
+                        const isActive = view.id === viewsState.activeViewId
+                        const isEditing = editingViewMeta?.id === view.id
+                        if (isEditing) {
+                          return (
+                            <div key={view.id} className="p-2.5 rounded-lg border border-[#c8b6a6] bg-[#faf7f2] space-y-2">
+                              {!view.builtin ? (
+                                <input autoFocus value={editingViewMeta.name} onChange={(e) => setEditingViewMeta((prev) => ({ ...prev, name: e.target.value }))} placeholder="View name" className="w-full px-2.5 py-1.5 border border-[#c8b6a6] rounded-lg text-sm" />
+                              ) : (
+                                <p className="text-sm font-semibold text-[#4a352f]">Default <span className="font-normal text-[#a89482] text-xs">(name can't be changed)</span></p>
+                              )}
+                              <textarea value={editingViewMeta.description} onChange={(e) => setEditingViewMeta((prev) => ({ ...prev, description: e.target.value }))} placeholder="Description (optional) — what is this view for?" rows={2} className="w-full px-2.5 py-1.5 border border-[#c8b6a6] rounded-lg text-xs resize-none" />
+                              <div className="flex justify-end gap-2">
+                                <button onClick={() => setEditingViewMeta(null)} className="px-2.5 py-1 text-xs text-[#7d5a50] hover:text-[#4a352f]">Cancel</button>
+                                <button onClick={saveViewMeta} className="px-2.5 py-1 bg-[#7d5a50] text-white rounded-lg text-xs font-semibold">Save</button>
+                              </div>
+                            </div>
+                          )
+                        }
+                        return (
+                          <div key={view.id} className={`flex items-start justify-between gap-2 px-2.5 py-2 rounded-lg ${isActive ? "bg-[#f5f0e1]" : "hover:bg-[#faf7f2]"}`}>
+                            <button onClick={() => switchToView(view.id)} className="flex-1 text-left min-w-0">
+                              <div className="flex items-center gap-1.5">
+                                {isActive && <CheckCircle size={12} className="text-[#7d5a50] flex-shrink-0" />}
+                                <span className={`text-sm ${isActive ? "font-semibold text-[#4a352f]" : "text-[#4a352f]"}`}>{view.name}</span>
+                                {view.builtin && <span className="text-[10px] uppercase tracking-wide text-[#a89482] font-semibold">Built-in</span>}
+                              </div>
+                              {view.description && <p className="text-xs text-[#a89482] mt-0.5 truncate">{view.description}</p>}
+                            </button>
+                            <div className="flex items-center gap-0.5 flex-shrink-0">
+                              <button onClick={() => startEditingViewMeta(view)} title="Rename / edit description" className="text-[#a89482] hover:text-[#7d5a50] p-1"><Settings size={13} /></button>
+                              {!view.builtin && <button onClick={() => removeView(view.id)} title="Delete view" className="text-[#a89482] hover:text-red-500 p-1"><Trash2 size={13} /></button>}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                    {showNewViewForm ? (
+                      <div className="space-y-2 mb-1">
+                        <input autoFocus value={newViewName} onChange={(e) => setNewViewName(e.target.value)} placeholder="New view name..." className="w-full px-2.5 py-1.5 border border-[#c8b6a6] rounded-lg text-sm" />
+                        <textarea value={newViewDescription} onChange={(e) => setNewViewDescription(e.target.value)} placeholder="Description (optional) — what is this view for?" rows={2} className="w-full px-2.5 py-1.5 border border-[#c8b6a6] rounded-lg text-xs resize-none" />
+                        <div className="flex justify-end gap-2">
+                          <button onClick={() => { setShowNewViewForm(false); setNewViewName(""); setNewViewDescription("") }} className="px-2.5 py-1 text-xs text-[#7d5a50] hover:text-[#4a352f]">Cancel</button>
+                          <button onClick={createNewView} disabled={!newViewName.trim()} className="px-3 py-1.5 bg-[#7d5a50] text-white rounded-lg text-xs font-semibold disabled:opacity-40">Create view</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <button onClick={() => setShowNewViewForm(true)} className="w-full flex items-center justify-center gap-1.5 px-3 py-2 border border-dashed border-[#c8b6a6] rounded-lg text-xs font-semibold text-[#7d5a50] hover:bg-[#faf7f2]">
+                        <Plus size={13} /> New view from current layout
+                      </button>
+                    )}
+
+                    <div className="border-t border-[#e6d7c3] my-4" />
+                    <h4 className="text-sm font-semibold text-[#4a352f] mb-3">Hide/Unhide</h4>
+                    <p className="text-xs text-[#a89482] mb-3 flex items-center gap-1.5">
+                      <GripVertical size={12} className="flex-shrink-0" /> Tip: drag any column header in the table to reorder it.
+                    </p>
+                    <label className="flex items-center gap-3 py-1.5 px-2 rounded-lg opacity-75">
+                      <input type="checkbox" checked={true} disabled={true} className="rounded border-[#c8b6a6]" />
+                      <span className="text-sm text-[#4a352f]">Intern Name</span>
+                    </label>
+                    <div className="border-t border-[#e6d7c3] my-2" />
+                    {DEFAULT_COLUMN_ORDER.map((key) => (
+                      <label key={key} className="flex items-center gap-3 py-1.5 px-2 rounded-lg hover:bg-[#faf7f2] cursor-pointer">
+                        <input type="checkbox" checked={columnVisibility[key] || false} onChange={() => toggleColumn(key)} className="rounded border-[#c8b6a6] text-[#7d5a50]" />
+                        <span className="text-sm text-[#4a352f]">{COLUMN_DEFS[key].label}</span>
+                      </label>
+                    ))}
+
+                    <div className="border-t border-[#e6d7c3] my-4" />
+                    <h4 className="text-sm font-semibold text-[#4a352f] mb-3">Density</h4>
+                    <div className="flex gap-1.5">
+                      {[{ key: "comfortable", label: "Comfortable" }, { key: "compact", label: "Compact" }].map((d) => (
+                        <button key={d.key} onClick={() => setDensity(d.key)} className={`flex-1 px-2 py-1.5 rounded-lg text-xs font-semibold transition-all ${density === d.key ? "bg-[#7d5a50] text-white" : "bg-[#f5f0e1] text-[#4a352f] hover:bg-[#e6d7c3]"}`}>
+                          {d.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="border-t border-[#e6d7c3] my-4" />
+                    <button onClick={resetActiveViewToDefault} className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold text-[#a67c52] hover:text-[#4a352f] hover:bg-[#faf7f2] border border-[#e6d7c3]">
+                      <RotateCcw size={12} /> Reset "{activeView.name}" to factory defaults
+                    </button>
+                  </div>
+                </PopupPortal>
+              )
+            })()}
+          </div>
+        </div>
       </div>
 
       {notification && (
@@ -2945,72 +3301,68 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
         </div>
       )}
 
-      <div
-        style={{
-          borderRadius: "6px",
-          border: "1px solid #E8D5C4",
-          boxShadow: "0 3px 20px rgba(139, 69, 19, 0.08)",
-          width: "100%",
-        }}
-      >
+      <div className="bg-white rounded-2xl border border-[#e6d7c3] shadow-lg overflow-hidden">
+        <div className="overflow-auto" style={{ maxHeight: "70vh" }}>
+          <style>{`
+            .it-th { color: #faf7f2 !important; vertical-align: top !important; }
+            .it-th-draggable { cursor: grab; }
+            .it-th-draggable:active { cursor: grabbing; }
+            .it-th-label { flex: 1 1 auto; min-width: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; white-space: normal; overflow-wrap: break-word; line-height: 1.2; }
+          `}</style>
         <table
           style={{
             width: "100%",
             borderCollapse: "collapse",
             background: "white",
             fontSize: "0.8rem",
-            backgroundColor: "#FEFCFA",
-            tableLayout: "fixed",
+            backgroundColor: "#faf7f2",
+            tableLayout: "auto",
           }}
         >
-          <colgroup>
-            <col style={{ width: "8%" }} />
-            <col style={{ width: "7%" }} />
-            <col style={{ width: "9%" }} />
-            <col style={{ width: "8%" }} />
-            <col style={{ width: "10%" }} />
-            <col style={{ width: "8%" }} />
-            <col style={{ width: "9%" }} />
-            <col style={{ width: "8%" }} />
-            <col style={{ width: "6%" }} />
-            <col style={{ width: "7%" }} />
-            <col style={{ width: "7%" }} />
-            <col style={{ width: "7%" }} />
-            <col style={{ width: "13%" }} />
-          </colgroup>
           <thead>
-            <tr>
-              <th style={tableHeaderStyle}>
-                Intern
-                <br />
-                Name
+            <tr className="bg-[#4a352f]">
+              <th className="it-th py-3 px-3 text-left font-semibold uppercase tracking-wider text-xs border-r border-[#e6d7c3] sticky top-0 left-0 z-30" style={{ backgroundColor: "#4a352f", minWidth: "180px", maxWidth: "200px" }}>
+                <div className="flex items-start gap-1 min-w-0">
+                  <span className="it-th-label">Intern Name</span>
+                  <FilterTrigger type="name" active={!!localFilters.name.trim()} />
+                </div>
               </th>
-              <th style={tableHeaderStyle}>Location</th>
-              <th style={tableHeaderStyle}>Institution</th>
-              <th style={tableHeaderStyle}>Degree</th>
-              <th style={tableHeaderStyle}>Field</th>
-              <th style={tableHeaderStyle}>
-                Location
-                <br />
-                Flexibility
+
+              {visibleColumnKeys.map((key) => {
+                const col = COLUMN_DEFS[key]
+                const isDragging = draggedColumn === key
+                const isDragOver = dragOverColumn === key && draggedColumn !== key
+                return (
+                  <th
+                    key={key}
+                    draggable
+                    onDragStart={(e) => handleColumnDragStart(e, key)}
+                    onDragOver={(e) => handleColumnDragOver(e, key)}
+                    onDrop={(e) => handleColumnDrop(e, key)}
+                    onDragEnd={handleColumnDragEnd}
+                    onMouseEnter={(e) => setDragHintRect(e.currentTarget.getBoundingClientRect())}
+                    onMouseLeave={() => setDragHintRect(null)}
+                    className={`it-th it-th-draggable py-3 px-3 font-semibold uppercase tracking-wider text-xs border-r border-[#e6d7c3] sticky top-0 z-20 select-none transition-opacity ${col.align === "center" ? "text-center" : "text-left"} ${isDragging ? "opacity-40" : ""}`}
+                    style={{ minWidth: col.minWidth, backgroundColor: isDragOver ? "#5a423b" : "#4a352f" }}
+                  >
+                    <div className={`flex items-start gap-1 min-w-0 ${col.align === "center" ? "justify-center" : ""}`}>
+                      <GripVertical size={11} className="opacity-40 flex-shrink-0 mt-0.5" />
+                      <span className="it-th-label">{col.label}</span>
+                      <FilterTrigger type={col.filterType} active={getFilterActive(col.filterType)} />
+                    </div>
+                  </th>
+                )
+              })}
+
+              <th className="it-th py-3 px-3 text-center font-semibold uppercase tracking-wider text-xs sticky top-0 z-20" style={{ backgroundColor: "#4a352f", minWidth: "150px" }}>
+                Action
               </th>
-              <th style={tableHeaderStyle}>Role</th>
-              <th style={tableHeaderStyle}>
-                Funding
-                <br />
-                Program
-              </th>
-              <th style={tableHeaderStyle}>Match %</th>
-              <th style={tableHeaderStyle}>BIG Score</th>
-              <th style={tableHeaderStyle}>Status</th>
-              <th style={tableHeaderStyle}>Next Stage</th>
-              <th style={{ ...tableHeaderStyle, borderRight: "none" }}>Action</th>
             </tr>
           </thead>
           <tbody>
             {filteredInterns.length === 0 ? (
               <tr>
-                <td colSpan="13" style={{ ...tableCellStyle, textAlign: "center", color: "#666" }}>
+                <td colSpan={visibleColumnKeys.length + 2} style={{ ...tableCellStyle, textAlign: "center", color: "#666" }}>
                   No applications found matching your criteria.
                 </td>
               </tr>
@@ -3018,146 +3370,144 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
               filteredInterns.map((intern) => {
                 const currentStatus = updatedStages[intern.id] || intern.pipelineStage || intern.status
                 const statusStyle = getStatusStyle(currentStatus)
+
+                const renderCell = (key) => {
+                  switch (key) {
+                    case "location":
+                      return (
+                        <td key={key} style={tableCellStyle}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "2px", fontSize: "0.8rem" }}>
+                            <span style={{ wordBreak: "break-word" }}>{intern.location}</span>
+                          </div>
+                        </td>
+                      )
+                    case "institution":
+                      return <td key={key} style={tableCellStyle}><TruncatedText text={intern.institution} maxLength={25} /></td>
+                    case "degree":
+                      return <td key={key} style={tableCellStyle}><TruncatedText text={intern.degree} maxLength={20} /></td>
+                    case "field":
+                      return <td key={key} style={tableCellStyle}><TruncatedText text={formatLabel(intern.field)} maxLength={25} /></td>
+                    case "locationFlexibility":
+                      return <td key={key} style={tableCellStyle}><TruncatedText text={intern.locationFlexibility} maxLength={15} /></td>
+                    case "role":
+                      return <td key={key} style={tableCellStyle}><TruncatedText text={formatLabel(intern.role)} maxLength={25} /></td>
+                    case "fundingProgramType":
+                      return <td key={key} style={tableCellStyle}><TruncatedText text={intern.fundingProgramType} maxLength={18} /></td>
+                    case "matchPercentage":
+                      return (
+                        <td key={key} style={tableCellStyle}>
+                          <div style={matchContainerStyle}>
+                            <div style={progressBarStyle}>
+                              <div
+                                style={{
+                                  ...progressFillStyle,
+                                  width: `${intern.matchPercentage}%`,
+                                  background: `linear-gradient(90deg, ${intern.matchPercentage > 75 ? "#48BB78" : intern.matchPercentage > 50 ? "#D69E2E" : "#E53E3E"}, ${intern.matchPercentage > 75 ? "#48BB78" : intern.matchPercentage > 50 ? "#D69E2E" : "#E53E3E"}aa)`,
+                                }}
+                              />
+                            </div>
+                            <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                              <span
+                                style={{
+                                  ...matchScoreStyle,
+                                  color: intern.matchPercentage > 75 ? "#48BB78" : intern.matchPercentage > 50 ? "#D69E2E" : "#E53E3E",
+                                }}
+                              >
+                                {intern.matchPercentage}%
+                              </span>
+                              <Eye
+                                size={14}
+                                style={{ cursor: "pointer", color: "#a67c52" }}
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleMatchScoreBreakdown(intern)
+                                }}
+                                title="View match breakdown"
+                              />
+                            </div>
+                          </div>
+                        </td>
+                      )
+                    case "bigScore":
+                      return (
+                        <td key={key} style={tableCellStyle}>
+                          <div style={matchContainerStyle}>
+                            <div style={progressBarStyle}>
+                              <div
+                                style={{
+                                  ...progressFillStyle,
+                                  width: `${intern.bigScore}%`,
+                                  background: `linear-gradient(90deg, ${getScoreColor(intern.bigScore)}, ${getScoreColor(intern.bigScore)}aa)`,
+                                }}
+                              />
+                            </div>
+                            <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                              <span style={{ color: getScoreColor(intern.bigScore), fontWeight: "500", fontSize: "0.75rem" }}>
+                                {intern.bigScore}%
+                              </span>
+                              <Eye
+                                size={14}
+                                style={{ cursor: "pointer", color: "#a67c52" }}
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleBigScoreClick(intern)
+                                }}
+                                title="View BIG score breakdown"
+                              />
+                            </div>
+                          </div>
+                        </td>
+                      )
+                    case "status":
+                      return (
+                        <td key={key} style={tableCellStyle}>
+                          <span style={{ ...statusBadgeStyle, backgroundColor: statusStyle.color, color: statusStyle.textColor }}>
+                            {currentStatus}
+                          </span>
+                        </td>
+                      )
+                    case "nextStage":
+                      return (
+                        <td key={key} style={tableCellStyle}>
+                          <NextStageIndicator currentStage={currentStatus} />
+                        </td>
+                      )
+                    default:
+                      return null
+                  }
+                }
+
                 return (
-                  <tr key={intern.id} style={{ borderBottom: "1px solid #E8D5C4" }}>
-                    <td style={tableCellStyle}>
-                      <button
-                        onClick={() => handleViewDetails(intern)}
-                        style={{
-                          background: "none",
-                          border: "none",
-                          color: "#a67c52",
-                          textDecoration: "underline",
-                          cursor: "pointer",
-                          fontWeight: "500",
-                          padding: "0",
-                          fontSize: "0.80rem",
-                          textAlign: "left",
-                          wordBreak: "break-word",
-                          width: "100%",
-                          lineHeight: "1.2",
-                        }}
-                      >
-                        {intern.internName}
-                      </button>
-                    </td>
-                    <td style={tableCellStyle}>
-                      <div style={{ display: "flex", alignItems: "center", gap: "2px", fontSize: "0.8rem" }}>
-                        <span style={{ wordBreak: "break-word" }}>{intern.location}</span>
+                  <tr key={intern.id} style={{ borderBottom: "1px solid #e6d7c3" }}>
+                    <td
+                      className="sticky left-0 border-r border-[#e6d7c3] z-10"
+                      style={{ ...tableCellStyle, minWidth: "180px", maxWidth: "200px", backgroundColor: "#ffffff" }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                        <span style={{ fontWeight: 500, color: "#4a352f", wordBreak: "break-word" }}>{intern.internName}</span>
+                        <button
+                          onClick={() => handleViewDetails(intern)}
+                          style={{ background: "none", border: "none", color: "#a89482", cursor: "pointer", padding: 0, flexShrink: 0, display: "flex" }}
+                          aria-label={`View details for ${intern.internName}`}
+                          title="View details"
+                        >
+                          <Eye size={13} />
+                        </button>
                       </div>
                     </td>
-                    <td style={tableCellStyle}>
-                      <TruncatedText text={intern.institution} maxLength={25} />
-                    </td>
-                    <td style={tableCellStyle}>
-                      <TruncatedText text={intern.degree} maxLength={20} />
-                    </td>
-                    <td style={tableCellStyle}>
-                      <TruncatedText text={formatLabel(intern.field)} maxLength={25} />
-                    </td>
-                    <td style={tableCellStyle}>
-                      <TruncatedText text={intern.locationFlexibility} maxLength={15} />
-                    </td>
-                    <td style={tableCellStyle}>
-                      <TruncatedText text={formatLabel(intern.role)} maxLength={25} />
-                    </td>
-                    <td style={tableCellStyle}>
-                      <TruncatedText text={intern.fundingProgramType} maxLength={18} />
-                    </td>
-                    <td style={tableCellStyle}>
-                      <div style={matchContainerStyle}>
-                        <div style={progressBarStyle}>
-                          <div
-                            style={{
-                              ...progressFillStyle,
-                              width: `${intern.matchPercentage}%`,
-                              background: `linear-gradient(90deg, ${intern.matchPercentage > 75 ? "#48BB78" : intern.matchPercentage > 50 ? "#D69E2E" : "#E53E3E"}, ${intern.matchPercentage > 75 ? "#48BB78" : intern.matchPercentage > 50 ? "#D69E2E" : "#E53E3E"}aa)`,
-                            }}
-                          />
-                        </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                          <span
-                            style={{
-                              ...matchScoreStyle,
-                              color:
-                                intern.matchPercentage > 75
-                                  ? "#48BB78"
-                                  : intern.matchPercentage > 50
-                                    ? "#D69E2E"
-                                    : "#E53E3E",
-                            }}
-                          >
-                            {intern.matchPercentage}%
-                          </span>
-                          <Eye
-                            size={14}
-                            style={{ cursor: "pointer", color: "#a67c52" }}
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              handleMatchScoreBreakdown(intern)
-                            }}
-                            title="View match breakdown"
-                          />
-                        </div>
-                      </div>
-                    </td>
-                    <td style={tableCellStyle}>
-                      <div style={matchContainerStyle}>
-                        <div style={progressBarStyle}>
-                          <div
-                            style={{
-                              ...progressFillStyle,
-                              width: `${intern.bigScore}%`,
-                              background: `linear-gradient(90deg, ${getScoreColor(intern.bigScore)}, ${getScoreColor(intern.bigScore)}aa)`,
-                            }}
-                          />
-                        </div>
-                        <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                          <span
-                            style={{
-                              color: getScoreColor(intern.bigScore),
-                              fontWeight: "500",
-                              fontSize: "0.75rem",
-                            }}
-                          >
-                            {intern.bigScore}%
-                          </span>
-                          <Eye
-                            size={14}
-                            style={{ cursor: "pointer", color: "#a67c52" }}
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              handleBigScoreClick(intern)
-                            }}
-                            title="View BIG score breakdown"
-                          />
-                        </div>
-                      </div>
-                    </td>
-                    <td style={tableCellStyle}>
-                      <span
-                        style={{
-                          ...statusBadgeStyle,
-                          backgroundColor: statusStyle.color,
-                          color: statusStyle.textColor,
-                        }}
-                      >
-                        {currentStatus}
-                      </span>
-                    </td>
-                    <td style={tableCellStyle}>
-                      <NextStageIndicator currentStage={currentStatus} />
-                    </td>
+
+                    {visibleColumnKeys.map((key) => renderCell(key))}
+
                     <td style={{ ...tableCellStyle, borderRight: "none" }}>
                       {intern.status === "Matched" ? (
                         <button
                           onClick={() => handleRequestIntern(intern)}
                           style={{
                             padding: "6px 8px",
-                            backgroundColor: "#5d4037",
+                            backgroundColor: "#7d5a50",
                             color: "white",
                             border: "none",
-                            borderRadius: "6px",
+                            borderRadius: "8px",
                             cursor: "pointer",
                             fontSize: "0.8rem",
                             fontWeight: "500",
@@ -3171,10 +3521,10 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
                         <button
                           style={{
                             padding: "6px 8px",
-                            backgroundColor: "#5d4037",
+                            backgroundColor: "#7d5a50",
                             color: "white",
                             border: "none",
-                            borderRadius: "6px",
+                            borderRadius: "8px",
                             cursor: "pointer",
                             fontSize: "0.8rem",
                             fontWeight: "500",
@@ -3189,10 +3539,10 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
                           onClick={() => handleStageAction(intern)}
                           style={{
                             padding: "6px 8px",
-                            backgroundColor: "#5d4037",
+                            backgroundColor: "#7d5a50",
                             color: "white",
                             border: "none",
-                            borderRadius: "6px",
+                            borderRadius: "8px",
                             cursor: "pointer",
                             fontSize: "0.8rem",
                             fontWeight: "500",
@@ -3210,269 +3560,191 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
             )}
           </tbody>
         </table>
+        </div>
       </div>
 
-      {/* Updated Filter Modal with Province, Institution (comprehensive list), and Degree (grouped) filters */}
-      {showFilters &&
-        createPortal(
-          <div style={modalOverlayStyle} onClick={() => setShowFilters(false)}>
-            <div style={{ ...modalContentStyle, maxWidth: "800px" }} onClick={(e) => e.stopPropagation()}>
-              <div
-                style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "32px" }}
-              >
-                <h3 style={{ fontSize: "28px", fontWeight: "800", color: "#3e2723", margin: 0 }}>
-                  Filter Internship Applications
-                </h3>
-                <button
-                  onClick={() => setShowFilters(false)}
-                  style={{
-                    background: "none",
-                    border: "none",
-                    fontSize: "24px",
-                    cursor: "pointer",
-                    color: "#666",
-                  }}
-                >
-                  <X size={24} />
-                </button>
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "24px", marginBottom: "32px" }}>
-                {/* Province Filter */}
-                <div>
-                  <label
-                    style={{
-                      display: "block",
-                      fontSize: "16px",
-                      fontWeight: "600",
-                      color: "#4a352f",
-                      marginBottom: "12px",
-                    }}
-                  >
-                    Province
-                  </label>
-                  <select
-                    value={localFilters.location}
-                    onChange={(e) => handleFilterChange("location", e.target.value)}
-                    style={{
-                      width: "100%",
-                      padding: "12px",
-                      border: "2px solid #c8b6a6",
-                      borderRadius: "8px",
-                      fontSize: "16px",
-                      backgroundColor: "#f5f0e1",
-                    }}
-                  >
-                    <option value="">All Provinces</option>
-                    {southAfricanProvinces.map((province) => (
-                      <option key={province} value={province}>
-                        {province}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+      {/* Drag-to-reorder hint tooltip */}
+      {dragHintRect && !draggedColumn && (
+        <PopupPortal>
+          <div className="fixed z-[1200] bg-[#4a352f] text-[#faf7f2] text-xs rounded-lg px-3 py-2 shadow-2xl pointer-events-none normal-case font-normal flex items-center gap-1.5" style={{ top: dragHintRect.bottom + 8, left: Math.min(Math.max(dragHintRect.left, 12), window.innerWidth - 200), width: "190px" }}>
+            <GripVertical size={12} className="flex-shrink-0" /> Drag to reorder columns
+          </div>
+        </PopupPortal>
+      )}
 
-                {/* Institution Filter */}
-                <div>
-                  <label
-                    style={{
-                      display: "block",
-                      fontSize: "16px",
-                      fontWeight: "600",
-                      color: "#4a352f",
-                      marginBottom: "12px",
-                    }}
-                  >
-                    Institution
-                  </label>
-                  <select
-                    value={localFilters.institution}
-                    onChange={(e) => handleFilterChange("institution", e.target.value)}
-                    style={{
-                      width: "100%",
-                      padding: "12px",
-                      border: "2px solid #c8b6a6",
-                      borderRadius: "8px",
-                      fontSize: "16px",
-                      backgroundColor: "#f5f0e1",
-                    }}
-                  >
-                    <option value="">All Institutions</option>
-                    {southAfricanInstitutions.map((institution) => (
-                      <option key={institution} value={institution}>
-                        {institution}
-                      </option>
-                    ))}
-                  </select>
+      {/* Column header filter popover */}
+      {headerFilterOpen && (
+        <PopupPortal>
+          <div className="fixed inset-0 z-[1090]" onClick={closeHeaderFilter} />
+          <div className="fixed z-[1091] bg-white rounded-2xl shadow-2xl border border-[#e6d7c3] p-4" style={{ top: headerFilterOpen.rect.bottom + 8, left: Math.min(Math.max(headerFilterOpen.rect.left - 20, 12), window.innerWidth - 312), width: "300px", maxHeight: "70vh", overflowY: "auto" }}>
+            {headerFilterOpen.type === "name" && (
+              <>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-semibold text-[#4a352f]">Intern name</label>
+                  {localFilters.name && <button onClick={() => setLocalFilters((p) => ({ ...p, name: "" }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>}
                 </div>
+                <input autoFocus type="text" value={localFilters.name} onChange={(e) => setLocalFilters((p) => ({ ...p, name: e.target.value }))} placeholder="Search intern name..." className="w-full px-3 py-2 border border-[#c8b6a6] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#7d5a50]/20" />
+              </>
+            )}
 
-                {/* Degree Filter - with grouped options */}
-                <div>
-                  <label
-                    style={{
-                      display: "block",
-                      fontSize: "16px",
-                      fontWeight: "600",
-                      color: "#4a352f",
-                      marginBottom: "12px",
-                    }}
-                  >
-                    Degree
-                  </label>
-                  <select
-                    value={localFilters.degree}
-                    onChange={(e) => handleFilterChange("degree", e.target.value)}
-                    style={{
-                      width: "100%",
-                      padding: "12px",
-                      border: "2px solid #c8b6a6",
-                      borderRadius: "8px",
-                      fontSize: "16px",
-                      backgroundColor: "#f5f0e1",
-                    }}
-                  >
-                    <option value="">All Degrees</option>
-                    {degreeOptions.map((group) => (
-                      <optgroup key={group.group} label={group.group}>
-                        {group.options.map((degree) => (
-                          <option key={degree} value={degree}>
-                            {degree}
-                          </option>
-                        ))}
-                      </optgroup>
-                    ))}
-                  </select>
+            {headerFilterOpen.type === "location" && (
+              <>
+                <div className="flex items-center justify-between mb-3">
+                  <label className="text-xs font-semibold text-[#4a352f]">Location (Province)</label>
+                  {localFilters.location.length > 0 && <button onClick={() => setLocalFilters((p) => ({ ...p, location: [] }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>}
                 </div>
+                <div className="flex flex-wrap gap-1.5 max-h-[220px] overflow-y-auto">
+                  {southAfricanProvinces.map((prov) => (
+                    <button key={prov} onClick={() => setLocalFilters((p) => ({ ...p, location: p.location.includes(prov) ? p.location.filter((x) => x !== prov) : [...p.location, prov] }))} className={`px-2.5 py-1 rounded-full text-xs font-medium ${localFilters.location.includes(prov) ? "bg-[#7d5a50] text-white" : "bg-[#f5f0e1] text-[#4a352f] hover:bg-[#e6d7c3]"}`}>{prov}</button>
+                  ))}
+                </div>
+              </>
+            )}
 
-                {/* Match Score Filter */}
-                <div>
-                  <label
-                    style={{
-                      display: "block",
-                      fontSize: "16px",
-                      fontWeight: "600",
-                      color: "#4a352f",
-                      marginBottom: "12px",
-                    }}
-                  >
-                    Minimum Match Score: {localFilters.matchScore}%
-                  </label>
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    value={localFilters.matchScore}
-                    onChange={(e) => handleFilterChange("matchScore", Number.parseInt(e.target.value))}
-                    style={{
-                      width: "100%",
-                      height: "8px",
-                      borderRadius: "4px",
-                      background: "#e6d7c3",
-                      outline: "none",
-                    }}
-                  />
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      fontSize: "12px",
-                      color: "#7d5a50",
-                      marginTop: "4px",
-                    }}
-                  >
-                    <span>0%</span>
-                    <span>100%</span>
-                  </div>
+            {headerFilterOpen.type === "institution" && (
+              <>
+                <div className="flex items-center justify-between mb-3">
+                  <label className="text-xs font-semibold text-[#4a352f]">Institution</label>
+                  {localFilters.institution.length > 0 && <button onClick={() => setLocalFilters((p) => ({ ...p, institution: [] }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>}
                 </div>
+                <div className="flex flex-wrap gap-1.5 max-h-[220px] overflow-y-auto">
+                  {institutionFilterOptions.map((inst) => (
+                    <button key={inst} onClick={() => setLocalFilters((p) => ({ ...p, institution: p.institution.includes(inst) ? p.institution.filter((x) => x !== inst) : [...p.institution, inst] }))} className={`px-2.5 py-1 rounded-full text-xs font-medium ${localFilters.institution.includes(inst) ? "bg-[#7d5a50] text-white" : "bg-[#f5f0e1] text-[#4a352f] hover:bg-[#e6d7c3]"}`}>{inst}</button>
+                  ))}
+                </div>
+              </>
+            )}
 
-                {/* Sort By Filter */}
-                <div>
-                  <label
-                    style={{
-                      display: "block",
-                      fontSize: "16px",
-                      fontWeight: "600",
-                      color: "#4a352f",
-                      marginBottom: "12px",
-                    }}
-                  >
-                    Sort By
-                  </label>
-                  <select
-                    value={localFilters.sortBy}
-                    onChange={(e) => handleFilterChange("sortBy", e.target.value)}
-                    style={{
-                      width: "100%",
-                      padding: "12px",
-                      border: "2px solid #c8b6a6",
-                      borderRadius: "8px",
-                      fontSize: "16px",
-                      backgroundColor: "#f5f0e1",
-                    }}
-                  >
-                    <option value="matchPercentage">Match Percentage (High to Low)</option>
-                    <option value="bigScore">BIG Score (High to Low)</option>
-                    <option value="internName">Intern Name (A-Z)</option>
-                  </select>
+            {headerFilterOpen.type === "degree" && (
+              <>
+                <div className="flex items-center justify-between mb-3">
+                  <label className="text-xs font-semibold text-[#4a352f]">Degree</label>
+                  {localFilters.degree.length > 0 && <button onClick={() => setLocalFilters((p) => ({ ...p, degree: [] }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>}
                 </div>
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", gap: "16px" }}>
-                <button
-                  onClick={clearFilters}
-                  style={{
-                    padding: "12px 24px",
-                    backgroundColor: "#e6d7c3",
-                    color: "#4a352f",
-                    border: "none",
-                    borderRadius: "8px",
-                    cursor: "pointer",
-                    fontWeight: "600",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "8px",
-                  }}
-                >
-                  <X size={16} />
-                  Clear All
-                </button>
-                <div style={{ display: "flex", gap: "12px" }}>
-                  <button
-                    onClick={() => setShowFilters(false)}
-                    style={{
-                      padding: "12px 24px",
-                      backgroundColor: "#c8b6a6",
-                      color: "#4a352f",
-                      border: "none",
-                      borderRadius: "8px",
-                      cursor: "pointer",
-                      fontWeight: "600",
-                    }}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={applyFilters}
-                    style={{
-                      padding: "12px 24px",
-                      backgroundColor: "#a67c52",
-                      color: "white",
-                      border: "none",
-                      borderRadius: "8px",
-                      cursor: "pointer",
-                      fontWeight: "600",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "8px",
-                    }}
-                  >
-                    <Filter size={16} />
-                    Apply Filters
-                  </button>
+                <div className="flex flex-wrap gap-1.5 max-h-[220px] overflow-y-auto">
+                  {degreeFilterOptions.map((deg) => (
+                    <button key={deg} onClick={() => setLocalFilters((p) => ({ ...p, degree: p.degree.includes(deg) ? p.degree.filter((x) => x !== deg) : [...p.degree, deg] }))} className={`px-2.5 py-1 rounded-full text-xs font-medium ${localFilters.degree.includes(deg) ? "bg-[#7d5a50] text-white" : "bg-[#f5f0e1] text-[#4a352f] hover:bg-[#e6d7c3]"}`}>{deg}</button>
+                  ))}
                 </div>
-              </div>
-            </div>
-          </div>,
-          document.body,
-        )}
+              </>
+            )}
+
+            {headerFilterOpen.type === "field" && (
+              <>
+                <div className="flex items-center justify-between mb-3">
+                  <label className="text-xs font-semibold text-[#4a352f]">Field</label>
+                  {localFilters.field.length > 0 && <button onClick={() => setLocalFilters((p) => ({ ...p, field: [] }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>}
+                </div>
+                <div className="flex flex-wrap gap-1.5 max-h-[220px] overflow-y-auto">
+                  {uniqueFields.length === 0 && <span className="text-xs text-[#a89482]">No field data available</span>}
+                  {uniqueFields.map((f) => (
+                    <button key={f} onClick={() => setLocalFilters((p) => ({ ...p, field: p.field.includes(f) ? p.field.filter((x) => x !== f) : [...p.field, f] }))} className={`px-2.5 py-1 rounded-full text-xs font-medium ${localFilters.field.includes(f) ? "bg-[#7d5a50] text-white" : "bg-[#f5f0e1] text-[#4a352f] hover:bg-[#e6d7c3]"}`}>{f}</button>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {headerFilterOpen.type === "locationFlexibility" && (
+              <>
+                <div className="flex items-center justify-between mb-3">
+                  <label className="text-xs font-semibold text-[#4a352f]">Location Flexibility</label>
+                  {localFilters.locationFlexibility.length > 0 && <button onClick={() => setLocalFilters((p) => ({ ...p, locationFlexibility: [] }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>}
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {uniqueLocationFlex.length === 0 && <span className="text-xs text-[#a89482]">No data available</span>}
+                  {uniqueLocationFlex.map((v) => (
+                    <button key={v} onClick={() => setLocalFilters((p) => ({ ...p, locationFlexibility: p.locationFlexibility.includes(v) ? p.locationFlexibility.filter((x) => x !== v) : [...p.locationFlexibility, v] }))} className={`px-2.5 py-1 rounded-full text-xs font-medium ${localFilters.locationFlexibility.includes(v) ? "bg-[#7d5a50] text-white" : "bg-[#f5f0e1] text-[#4a352f] hover:bg-[#e6d7c3]"}`}>{v}</button>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {headerFilterOpen.type === "role" && (
+              <>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-semibold text-[#4a352f]">Role</label>
+                  {localFilters.role && <button onClick={() => setLocalFilters((p) => ({ ...p, role: "" }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>}
+                </div>
+                <input autoFocus type="text" value={localFilters.role} onChange={(e) => setLocalFilters((p) => ({ ...p, role: e.target.value }))} placeholder="Search role..." className="w-full px-3 py-2 border border-[#c8b6a6] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#7d5a50]/20" />
+              </>
+            )}
+
+            {headerFilterOpen.type === "fundingProgramType" && (
+              <>
+                <div className="flex items-center justify-between mb-3">
+                  <label className="text-xs font-semibold text-[#4a352f]">Funding Program</label>
+                  {localFilters.fundingProgramType.length > 0 && <button onClick={() => setLocalFilters((p) => ({ ...p, fundingProgramType: [] }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>}
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {uniqueFundingPrograms.length === 0 && <span className="text-xs text-[#a89482]">No data available</span>}
+                  {uniqueFundingPrograms.map((v) => (
+                    <button key={v} onClick={() => setLocalFilters((p) => ({ ...p, fundingProgramType: p.fundingProgramType.includes(v) ? p.fundingProgramType.filter((x) => x !== v) : [...p.fundingProgramType, v] }))} className={`px-2.5 py-1 rounded-full text-xs font-medium ${localFilters.fundingProgramType.includes(v) ? "bg-[#7d5a50] text-white" : "bg-[#f5f0e1] text-[#4a352f] hover:bg-[#e6d7c3]"}`}>{v}</button>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {headerFilterOpen.type === "match" && (
+              <>
+                <div className="flex items-center justify-between mb-3">
+                  <label className="text-xs font-semibold text-[#4a352f]">Match %: {localFilters.matchRange[0]} - {localFilters.matchRange[1]}</label>
+                  {(localFilters.matchRange[0] > 0 || localFilters.matchRange[1] < 100) && <button onClick={() => setLocalFilters((p) => ({ ...p, matchRange: [0, 100] }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>}
+                </div>
+                <div className="flex items-center gap-3 mb-3">
+                  <input type="number" min="0" max="100" value={localFilters.matchRange[0]} onChange={(e) => setLocalFilters((p) => ({ ...p, matchRange: [Math.min(parseInt(e.target.value) || 0, p.matchRange[1]), p.matchRange[1]] }))} className="w-16 px-2 py-1.5 border border-[#c8b6a6] rounded-lg text-sm text-center" />
+                  <span className="text-[#7d5a50]">to</span>
+                  <input type="number" min="0" max="100" value={localFilters.matchRange[1]} onChange={(e) => setLocalFilters((p) => ({ ...p, matchRange: [p.matchRange[0], Math.max(parseInt(e.target.value) || 0, p.matchRange[0])] }))} className="w-16 px-2 py-1.5 border border-[#c8b6a6] rounded-lg text-sm text-center" />
+                </div>
+                <input type="range" min="0" max="100" value={localFilters.matchRange[0]} onChange={(e) => setLocalFilters((p) => ({ ...p, matchRange: [parseInt(e.target.value), p.matchRange[1]] }))} className="w-full accent-[#7d5a50]" />
+              </>
+            )}
+
+            {headerFilterOpen.type === "bigScore" && (
+              <>
+                <div className="flex items-center justify-between mb-3">
+                  <label className="text-xs font-semibold text-[#4a352f]">BIG Score: {localFilters.bigScoreRange[0]} - {localFilters.bigScoreRange[1]}</label>
+                  {(localFilters.bigScoreRange[0] > 0 || localFilters.bigScoreRange[1] < 100) && <button onClick={() => setLocalFilters((p) => ({ ...p, bigScoreRange: [0, 100] }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>}
+                </div>
+                <div className="flex items-center gap-3 mb-3">
+                  <input type="number" min="0" max="100" value={localFilters.bigScoreRange[0]} onChange={(e) => setLocalFilters((p) => ({ ...p, bigScoreRange: [Math.min(parseInt(e.target.value) || 0, p.bigScoreRange[1]), p.bigScoreRange[1]] }))} className="w-16 px-2 py-1.5 border border-[#c8b6a6] rounded-lg text-sm text-center" />
+                  <span className="text-[#7d5a50]">to</span>
+                  <input type="number" min="0" max="100" value={localFilters.bigScoreRange[1]} onChange={(e) => setLocalFilters((p) => ({ ...p, bigScoreRange: [p.bigScoreRange[0], Math.max(parseInt(e.target.value) || 0, p.bigScoreRange[0])] }))} className="w-16 px-2 py-1.5 border border-[#c8b6a6] rounded-lg text-sm text-center" />
+                </div>
+                <input type="range" min="0" max="100" value={localFilters.bigScoreRange[0]} onChange={(e) => setLocalFilters((p) => ({ ...p, bigScoreRange: [parseInt(e.target.value), p.bigScoreRange[1]] }))} className="w-full accent-[#7d5a50]" />
+              </>
+            )}
+
+            {headerFilterOpen.type === "status" && (
+              <>
+                <div className="flex items-center justify-between mb-3">
+                  <label className="text-xs font-semibold text-[#4a352f]">Status</label>
+                  {localFilters.status.length > 0 && <button onClick={() => setLocalFilters((p) => ({ ...p, status: [] }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>}
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {statusFilterOptions.map((s) => (
+                    <button key={s} onClick={() => setLocalFilters((p) => ({ ...p, status: p.status.includes(s) ? p.status.filter((x) => x !== s) : [...p.status, s] }))} className={`px-2.5 py-1 rounded-full text-xs font-medium ${localFilters.status.includes(s) ? "bg-[#7d5a50] text-white" : "bg-[#f5f0e1] text-[#4a352f] hover:bg-[#e6d7c3]"}`}>{s}</button>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {headerFilterOpen.type === "nextStage" && (
+              <>
+                <div className="flex items-center justify-between mb-3">
+                  <label className="text-xs font-semibold text-[#4a352f]">Next Stage</label>
+                  {localFilters.nextStage.length > 0 && <button onClick={() => setLocalFilters((p) => ({ ...p, nextStage: [] }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>}
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {statusFilterOptions.map((s) => (
+                    <button key={s} onClick={() => setLocalFilters((p) => ({ ...p, nextStage: p.nextStage.includes(s) ? p.nextStage.filter((x) => x !== s) : [...p.nextStage, s] }))} className={`px-2.5 py-1 rounded-full text-xs font-medium ${localFilters.nextStage.includes(s) ? "bg-[#7d5a50] text-white" : "bg-[#f5f0e1] text-[#4a352f] hover:bg-[#e6d7c3]"}`}>{s}</button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        </PopupPortal>
+      )}
+
 
       {/* View Details Modal */}
       {showInternDetails && selectedInternDetails && (
@@ -3492,7 +3764,7 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
               <div
                 style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px" }}
               >
-                <h3 style={{ fontSize: "24px", fontWeight: "800", color: "#3e2723", margin: 0 }}>
+                <h3 style={{ fontSize: "24px", fontWeight: "800", color: "#4a352f", margin: 0 }}>
                   Match Score Breakdown
                 </h3>
                 <button
@@ -3567,7 +3839,7 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
                   onClick={resetModal}
                   style={{
                     padding: "12px 24px",
-                    backgroundColor: "#a67c52",
+                    backgroundColor: "#7d5a50",
                     color: "white",
                     border: "none",
                     borderRadius: "8px",
@@ -3590,7 +3862,7 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
           <div style={modalOverlayStyle} onClick={resetModal}>
             <div style={{ ...modalContentStyle, maxWidth: "600px" }} onClick={(e) => e.stopPropagation()}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px" }}>
-                <h3 style={{ fontSize: "24px", fontWeight: "800", color: "#3e2723", margin: 0 }}>
+                <h3 style={{ fontSize: "24px", fontWeight: "800", color: "#4a352f", margin: 0 }}>
                   BIG Score Breakdown
                 </h3>
                 <button onClick={resetModal} style={{ background: "none", border: "none", fontSize: "24px", cursor: "pointer", color: "#666" }}>
@@ -3619,7 +3891,7 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
                 </div>
               )}
               <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "24px" }}>
-                <button onClick={resetModal} style={{ padding: "12px 24px", backgroundColor: "#a67c52", color: "white", border: "none", borderRadius: "8px", cursor: "pointer", fontWeight: "600" }}>
+                <button onClick={resetModal} style={{ padding: "12px 24px", backgroundColor: "#7d5a50", color: "white", border: "none", borderRadius: "8px", cursor: "pointer", fontWeight: "600" }}>
                   Close
                 </button>
               </div>
@@ -3636,7 +3908,7 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
               <div
                 style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px" }}
               >
-                <h3 style={{ fontSize: "24px", fontWeight: "800", color: "#3e2723", margin: 0 }}>
+                <h3 style={{ fontSize: "24px", fontWeight: "800", color: "#4a352f", margin: 0 }}>
                   Update Stage - {selectedInternForStage.internName}
                 </h3>
                 <button
@@ -3911,7 +4183,7 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
                           onClick={() => setShowCalendarModal(true)}
                           style={{
                             padding: "8px 16px",
-                            backgroundColor: "#a67c52",
+                            backgroundColor: "#7d5a50",
                             color: "white",
                             border: "none",
                             borderRadius: "6px",
@@ -3933,9 +4205,9 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
                                 justifyContent: "space-between",
                                 alignItems: "center",
                                 padding: "8px",
-                                borderBottom: "1px solid #e8d5c4",
+                                borderBottom: "1px solid #e6d7c3",
                                 fontSize: "13px",
-                                color: "#5d4037",
+                                color: "#4a352f",
                               }}
                             >
                               <span>
@@ -3963,7 +4235,7 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
                           ))}
                         </div>
                       ) : (
-                        <p style={{ fontSize: "14px", color: "#888", textAlign: "center" }}>
+                        <p style={{ fontSize: "14px", color: "#a89482", textAlign: "center" }}>
                           No availability slots added yet.
                         </p>
                       )}
@@ -4047,7 +4319,7 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
                   onClick={handleStageUpdate}
                   style={{
                     padding: "12px 24px",
-                    backgroundColor: "#5d4037",
+                    backgroundColor: "#7d5a50",
                     color: "white",
                     border: "none",
                     borderRadius: "8px",
@@ -4076,7 +4348,7 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
               <div
                 style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "24px" }}
               >
-                <h3 style={{ fontSize: "24px", fontWeight: "800", color: "#3e2723", margin: 0 }}>
+                <h3 style={{ fontSize: "24px", fontWeight: "800", color: "#4a352f", margin: 0 }}>
                   Select Availability Dates
                 </h3>
                 <button
@@ -4119,7 +4391,7 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
                       flexDirection: "column",
                       justifyContent: "center",
                       alignItems: "center",
-                      color: "#888",
+                      color: "#a89482",
                       fontSize: "14px",
                     }}
                   >
@@ -4213,7 +4485,7 @@ Best regards,\n${sponsorName}\nInternship Program Team\nBIG Marketplace Africa`
                   onClick={saveSelectedDates}
                   style={{
                     padding: "12px 24px",
-                    backgroundColor: "#a67c52",
+                    backgroundColor: "#7d5a50",
                     color: "white",
                     border: "none",
                     borderRadius: "8px",

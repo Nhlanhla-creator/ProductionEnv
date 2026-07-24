@@ -13,7 +13,7 @@ import {
   PROGRAMME_TEMPLATES, mapStatusToStageId, getStageColors,
   applyStageCustomization, DEFAULT_STAGES, DEFAULT_STAGE_ACTIONS,
   PIPELINE_SETTINGS_STORAGE_KEY, DEFAULT_PIPELINE_CUSTOMIZATION,
-  loadPipelineSettings, savePipelineSettings,
+  loadPipelineSettings, savePipelineSettings, loadCustomizationForType,
 } from "./stageConfig";
 
 // Renders straight to <body>. Without this, `position: fixed` elements (the
@@ -86,6 +86,24 @@ const StageCustomizePanel = ({ stages, customization, onChange, onClose, program
   const [localStageActions, setLocalStageActions] = useState(customization.stageActions || {});
   const [showStageActions, setShowStageActions] = useState(false);
 
+  // FIX: this local editing state used to only be set once, on mount (via
+  // the useState initializers above). If the Programme Type dropdown was
+  // changed *while this panel was already open*, these local values kept
+  // referring to the *previous* type's stages/customization — so clicking
+  // "Save Changes" right after switching types would write the old type's
+  // stage-id order (and renames/hidden/stage-actions) into the new type's
+  // slot, scrambling it even though nothing was intentionally customized.
+  // Resyncing here whenever `programmeType` changes closes that gap; by the
+  // time this runs, the parent has already updated `stages`/`customization`
+  // to match the newly-selected type (see handleProgrammeTypeChange below).
+  useEffect(() => {
+    setLocalRenames(customization.renames || {});
+    setLocalHidden(customization.hidden || []);
+    setLocalOrder(stages.map((s) => s.id));
+    setLocalStageActions(customization.stageActions || {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [programmeType]);
+
   const move = (id, dir) => {
     setLocalOrder((prev) => {
       const idx = prev.indexOf(id);
@@ -154,6 +172,9 @@ const StageCustomizePanel = ({ stages, customization, onChange, onClose, program
                   <option key={key} value={key}>{tpl.label}</option>
                 ))}
               </select>
+              <p className="text-[11px] text-[#a89482] mt-1.5">
+                Each programme type keeps its own renames, hidden stages, order, and custom stages — switching here never changes another type's setup.
+              </p>
             </div>
           )}
 
@@ -285,8 +306,21 @@ export function SupportDealFlowPipeline({
   const [hoveredStage, setHoveredStage] = useState(null);
   const [selectedStage, setSelectedStage] = useState(null);
 
-  const [programmeType, setProgrammeType] = useState(() => loadPipelineSettings().programmeType);
+  const [programmeType, setProgrammeTypeRaw] = useState(() => loadPipelineSettings().programmeType);
   const [customization, setCustomization] = useState(() => loadPipelineSettings().customization);
+
+  // FIX: switching programme types now loads *that type's own* saved
+  // customization (or a clean factory default if it's never been touched)
+  // immediately — rather than leaving whatever customization object was in
+  // state from the previously-selected type. That stale-carryover was the
+  // second half of the "stages rearrange themselves" bug: even with
+  // storage now correctly scoped per type (see stageConfig.js), the panel
+  // itself needs to actually load the right type's data the moment you
+  // switch, not just whenever it's next saved.
+  const setProgrammeType = useCallback((newType) => {
+    setProgrammeTypeRaw(newType);
+    setCustomization(loadCustomizationForType(newType));
+  }, []);
 
   useEffect(() => {
     savePipelineSettings(programmeType, customization);
@@ -317,7 +351,7 @@ export function SupportDealFlowPipeline({
     const result = {};
     for (const stage of STAGES) result[stage.id] = 0;
     for (const sme of mergedEnriched) {
-      const stageId = mapStatusToStageId(sme.pipelineStage || sme.status);
+      const stageId = mapStatusToStageId(sme.pipelineStage || sme.status, STAGES);
       if (result[stageId] !== undefined) result[stageId] += 1;
       else if (result.matched !== undefined) result.matched += 1;
     }
@@ -500,8 +534,8 @@ export function SupportDealFlowPipeline({
                         {rate}%
                       </span>
                       <div className="flex items-center">
-                        <div className="w-5 h-[2px] bg-gradient-to-r from-[#c8b6a6] to-[#e6d7c3]" />
-                        <ArrowRight size={14} className="text-[#c8b6a6] -ml-1" />
+                        <div className="w-5 h-[2px] bg-gradient-to-r from-[#7d5a50] to-[#a67c52]" />
+                        <ArrowRight size={14} className="text-[#5a4038] -ml-1" strokeWidth={2.5} />
                       </div>
                     </div>
                   );

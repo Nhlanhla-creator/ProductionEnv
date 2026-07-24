@@ -764,6 +764,7 @@ const SupplierTabbedTables = ({
   defaultActiveTab = "my-matches",
   onNewRequest = null,
   contactedSuppliers = []
+  
 }) => {
   const [activeTab, setActiveTab] = useState(defaultActiveTab)
   const [allSuppliers, setAllSuppliers] = useState([])

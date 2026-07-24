@@ -1,58 +1,69 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useMemo } from "react"
 import { createPortal } from "react-dom"
-import { Check, ChevronDown, Filter, X, Eye } from "lucide-react"
+import {
+  Check, ChevronDown, X, Eye, SlidersHorizontal, GripVertical, RotateCcw,
+  Settings, Trash2, Plus, LayoutGrid, CheckCircle, MoreVertical
+} from "lucide-react"
 import { collection, getDocs } from "firebase/firestore"
 import { auth, db } from "../../firebaseConfig"
 import { doc, setDoc, getDoc, serverTimestamp, query, where, orderBy, limit } from "firebase/firestore"
 import emailjs from '@emailjs/browser';
 import { API_KEYS } from "../../API"
-import CatalystDetailsModal  from "./accelatorDetailsModal"
+import CatalystDetailsModal from "./accelatorDetailsModal"
+import { DEFAULT_STAGES, mapStatusToStageId, getStageColors, getNextStageId } from "../../catalyst/CatalystMatches/stageConfig"
 
-// Mock data for the table
-const mockAccelerators = []
-
-// Pipeline stage definitions with colors
-const PIPELINE_STAGES = {
-  MATCH: {
-    label: "Match",
-    next: "Application Sent",
-  },
-  "APPLICATION SENT": {
-    label: "Application Sent",
-    next: "Evaluation",
-  },
-  EVALUATION: {
-    label: "Evaluation",
-    next: "Due Diligence",
-  },
-  "DUE DILIGENCE": {
-    label: "Due Diligence",
-    next: "Decision",
-  },
-  DECISION: {
-    label: "Decision",
-    next: "Support Approved",
-  },
-  "SUPPORT APPROVED": {
-    label: "Support Approved",
-    next: "Active Support",
-  },
-  "ACTIVE SUPPORT": {
-    label: "Active Support",
-    next: "Successful Deals",
-  },
-  "SUCCESSFUL DEALS": {
-    label: "Successful Deals",
-    next: "N/A",
-  },
-  "SUPPORT DECLINED": {
-    label: "Support Declined",
-    next: "N/A",
-  },
+// ─────────────────────────────────────────────────────────────────────────
+// Stage vocabulary — now sourced from the SAME stageConfig.js the catalyst
+// side (SupportSMETable.jsx / SupportDealFlowPipeline.jsx) uses, instead of
+// this file's own separate PIPELINE_STAGES list. Previously this table used
+// "Match / Application Sent / Support Approved / Active Support /
+// Successful Deals / Support Declined" while the catalyst side used
+// "Matched / Applied / Offer / Admitted / Declined / Withdrawn" — two
+// completely different vocabularies describing the same pipeline, which is
+// why applications never lined up between the two sides.
+//
+// LEGACY_STATUS_ALIASES lets any already-written Firestore records using
+// the old labels still resolve to the correct canonical stage (for
+// display/coloring) without needing a data migration. New writes from this
+// file now use the canonical stageConfig.js names directly.
+//
+// KNOWN LIMITATION: a catalyst's programme type and any stage
+// customization (renames, custom stages, reordering) currently live only in
+// that catalyst's own browser localStorage (see stageConfig.js), not
+// Firestore — so this business-side view has no way to know about a
+// specific catalyst's custom setup. What it *can* do reliably is match the
+// shared BIG-default vocabulary and colors. The status badge always shows
+// the actual raw status string on the record (so a catalyst's custom stage
+// name like "Committee" still displays correctly, verbatim) — only the
+// *color grouping* falls back to the closest canonical match.
+const LEGACY_STATUS_ALIASES = {
+  "Match": "Matched",
+  "Application Sent": "Applied",
+  "Support Approved": "Offer",
+  "Active Support": "Admitted",
+  "Successful Deals": "Admitted",
+  "Support Declined": "Declined",
 }
-// Geographic focus options - UPDATED
+const normalizeStatus = (status) => LEGACY_STATUS_ALIASES[status] || status
+
+const getStatusMeta = (status) => {
+  const normalized = normalizeStatus(status)
+  const stageId = mapStatusToStageId(normalized, DEFAULT_STAGES)
+  const stage = DEFAULT_STAGES.find((s) => s.id === stageId) || DEFAULT_STAGES[0]
+  const colors = getStageColors(stage.group)
+  return { label: status || stage.name, colors, stage }
+}
+
+const getNextStageName = (currentStatus) => {
+  const currentId = mapStatusToStageId(normalizeStatus(currentStatus), DEFAULT_STAGES)
+  const nextId = getNextStageId(DEFAULT_STAGES, currentId)
+  const stage = DEFAULT_STAGES.find((s) => s.id === nextId) || DEFAULT_STAGES[0]
+  return stage.name
+}
+
+// Geographic focus options
 const geographicFocusOptions = [
   { value: "global", label: "Global" },
   { value: "regional_na", label: "Regional (NA)" },
@@ -62,7 +73,7 @@ const geographicFocusOptions = [
   { value: "province_specific", label: "Province Specific" },
 ]
 
-// Sector focus options - UPDATED
+// Sector focus options
 const sectorFocusOptions = [
   { value: "Generalist", label: "Generalist" },
   { value: "Agriculture", label: "Agriculture" },
@@ -103,7 +114,7 @@ const sectorFocusOptions = [
   { value: "Utilities (Water, Electricity, Waste)", label: "Utilities (Water, Electricity, Waste)" },
 ]
 
-// Funding stage options - UPDATED
+// Funding stage options
 const fundingStageOptions = [
   { value: "Startup", label: "Startup" },
   { value: "Growth", label: "Growth" },
@@ -113,7 +124,7 @@ const fundingStageOptions = [
   { value: "any_stage", label: "Any Stage" },
 ]
 
-// Support offered options - UPDATED
+// Support offered options
 const supportOfferedOptions = [
   { value: "funding", label: "Funding Support" },
   { value: "capacity_building", label: "Capacity Building" },
@@ -121,224 +132,6 @@ const supportOfferedOptions = [
   { value: "technology", label: "Technology & Innovation" },
   { value: "social_impact", label: "Social Impact" },
 ]
-
-// Status options
-const statusOptions = [
-  { value: "Match", label: "Match" },
-  { value: "Application Sent", label: "Application Sent" },
-  { value: "Evaluation", label: "Evaluation" },
-  { value: "Due Diligence", label: "Due Diligence" },
-  { value: "Decision", label: "Decision" },
-  { value: "Support Approved", label: "Support Approved" },
-  { value: "Active Support", label: "Active Support" },
-  { value: "Successful Deals", label: "Successful Deals" },
-  { value: "Support Declined", label: "Support Declined" },
-]
-
-// Helper function to get the next stage
-const getNextStage = (currentStage) => {
-  const stageEntry = Object.values(PIPELINE_STAGES).find(
-    (stage) => stage.label.toLowerCase() === currentStage?.toLowerCase(),
-  )
-  return stageEntry ? stageEntry.next : "N/A"
-}
-
-// MultiSelectDropdown component
-const MultiSelectDropdown = ({ options, selectedValues, onSelect, placeholder, onRemove }) => {
-  const [isOpen, setIsOpen] = useState(false)
-  const dropdownRef = useRef(null)
-
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
-        setIsOpen(false)
-      }
-    }
-
-    document.addEventListener("mousedown", handleClickOutside)
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside)
-    }
-  }, [])
-
-  const toggleDropdown = () => {
-    setIsOpen(!isOpen)
-  }
-
-  const handleSelect = (value) => {
-    onSelect(value)
-  }
-
-  const handleRemove = (value, e) => {
-    e.stopPropagation()
-    onRemove(value)
-  }
-
-  return (
-    <div
-      ref={dropdownRef}
-      style={{
-        position: "relative",
-        width: "100%",
-      }}
-    >
-      <div
-        onClick={toggleDropdown}
-        style={{
-          width: "100%",
-          padding: "0.5rem",
-          border: "1px solid #E8D5C4",
-          borderRadius: "4px",
-          fontSize: "0.8rem",
-          cursor: "pointer",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "center",
-          backgroundColor: "white",
-          minHeight: "36px",
-        }}
-      >
-        <div
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            gap: "4px",
-            flex: 1,
-            overflow: "hidden",
-          }}
-        >
-          {selectedValues.length === 0 ? (
-            <span style={{ color: "#999" }}>{placeholder}</span>
-          ) : (
-            selectedValues.map((value) => {
-              const option = options.find((opt) => opt.value === value)
-              return (
-                <span
-                  key={value}
-                  style={{
-                    background: "#F5EBE0",
-                    color: "#5D2A0A",
-                    padding: "0.2rem 0.4rem",
-                    borderRadius: "4px",
-                    fontSize: "0.7rem",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "4px",
-                  }}
-                >
-                  {option?.label || value}
-                  <button
-                    onClick={(e) => handleRemove(value, e)}
-                    style={{
-                      background: "none",
-                      border: "none",
-                      color: "#5D2A0A",
-                      cursor: "pointer",
-                      padding: 0,
-                      display: "flex",
-                      alignItems: "center",
-                    }}
-                  >
-                    <X size={12} />
-                  </button>
-                </span>
-              )
-            })
-          )}
-        </div>
-        <ChevronDown
-          size={16}
-          style={{
-            transition: "transform 0.2s",
-            transform: isOpen ? "rotate(180deg)" : "rotate(0deg)",
-          }}
-        />
-      </div>
-
-      {isOpen && (
-        <div
-          style={{
-            position: "absolute",
-            top: "100%",
-            left: 0,
-            right: 0,
-            maxHeight: "200px",
-            overflowY: "auto",
-            background: "white",
-            border: "1px solid #E8D5C4",
-            borderRadius: "4px",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-            zIndex: 100,
-            marginTop: "4px",
-          }}
-        >
-          {options.map((option) => (
-            <div
-              key={option.value}
-              onClick={() => handleSelect(option.value)}
-              style={{
-                padding: "0.5rem",
-                cursor: "pointer",
-                backgroundColor: selectedValues.includes(option.value) ? "#F5EBE0" : "white",
-                color: selectedValues.includes(option.value) ? "#5D2A0A" : "#333",
-                display: "flex",
-                alignItems: "center",
-                gap: "8px",
-                fontSize: "0.8rem",
-                ":hover": {
-                  backgroundColor: "#F5EBE0",
-                },
-              }}
-            >
-              {selectedValues.includes(option.value) && <Check size={14} />}
-              {option.label}
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
-// Text truncation component
-const TruncatedText = ({ text, maxLength = 50 }) => {
-  const [isExpanded, setIsExpanded] = useState(false)
-
-  if (!text || text === "-" || text === "Not specified" || text === "Various") {
-    return <span style={{ color: "#999" }}>{text || "-"}</span>
-  }
-
-  const shouldTruncate = text.length > maxLength
-  const displayText = isExpanded || !shouldTruncate ? text : `${text.slice(0, maxLength)}...`
-
-  const toggleExpanded = (e) => {
-    e.stopPropagation()
-    setIsExpanded(!isExpanded)
-  }
-
-  return (
-    <div style={{ lineHeight: "1.4" }}>
-      <span style={{ wordBreak: "break-word" }}>{displayText}</span>
-      {shouldTruncate && (
-        <button
-          style={{
-            background: "none",
-            border: "none",
-            color: "#a67c52",
-            cursor: "pointer",
-            fontSize: "0.7rem",
-            marginLeft: "4px",
-            textDecoration: "underline",
-            padding: "0",
-          }}
-          onClick={toggleExpanded}
-        >
-          {isExpanded ? "Less" : "More"}
-        </button>
-      )}
-    </div>
-  )
-}
 
 const formatLabel = (value) => {
   if (!value) return ""
@@ -357,14 +150,117 @@ const formatLabel = (value) => {
     .join(", ")
 }
 
-export function AcceleratorTable({ filters, onApplicationSubmitted }) {
-  const [showFilterModal, setShowFilterModal] = useState(false)
-  const [appliedFilters, setAppliedFilters] = useState({})
+// ─── Column config (drag order + filters + widths) ─────────────────────────
+// Every column has a filter, matching the catalyst SME table's design.
+const COLUMN_DEFS = {
+  match: { label: "Match %", align: "center", minWidth: "110px", filterType: "match" },
+  geographicFocus: { label: "Geographic Focus", align: "left", minWidth: "108px", filterType: "geographicFocus" },
+  sectorFocus: { label: "Sector Focus", align: "left", minWidth: "100px", filterType: "sectorFocus" },
+  fundingStage: { label: "Funding Stage", align: "left", minWidth: "96px", filterType: "fundingStage" },
+  fundingType: { label: "Funding Type", align: "left", minWidth: "96px", filterType: "fundingType" },
+  ticketSize: { label: "Ticket Size", align: "left", minWidth: "92px", filterType: "ticketSize" },
+  supportOffered: { label: "Support Offered", align: "left", minWidth: "108px", filterType: "supportOffered" },
+  servicesOffered: { label: "Services Offered", align: "left", minWidth: "108px", filterType: "servicesOffered" },
+  deadline: { label: "Deadline", align: "left", minWidth: "88px", filterType: "deadline" },
+  speed: { label: "Speed (Days)", align: "left", minWidth: "100px", filterType: "speed" },
+  status: { label: "Status", align: "left", minWidth: "100px", filterType: "status" },
+  nextStage: { label: "Next Stage", align: "left", minWidth: "100px", filterType: "nextStage" },
+}
+const DEFAULT_COLUMN_ORDER = Object.keys(COLUMN_DEFS)
+const DEFAULT_COLUMN_VISIBILITY = Object.fromEntries(DEFAULT_COLUMN_ORDER.map((k) => [k, true]))
+const DEFAULT_DENSITY = "comfortable"
+
+// ─── Custom Views (same model as the catalyst SME table) ──────────────────
+const BUILTIN_VIEW_ID = "__default__"
+const VIEWS_STORAGE_KEY = "accelerator-table-views-v1"
+
+const sanitizeColumnOrder = (order) => {
+  if (!Array.isArray(order)) return [...DEFAULT_COLUMN_ORDER]
+  const known = new Set(DEFAULT_COLUMN_ORDER)
+  const deduped = order.filter((key) => known.has(key))
+  const missing = DEFAULT_COLUMN_ORDER.filter((key) => !deduped.includes(key))
+  return [...deduped, ...missing]
+}
+const createDefaultViewLayout = () => ({
+  columnVisibility: { ...DEFAULT_COLUMN_VISIBILITY },
+  columnOrder: [...DEFAULT_COLUMN_ORDER],
+  density: DEFAULT_DENSITY,
+})
+const createBuiltinDefaultView = () => ({ id: BUILTIN_VIEW_ID, name: "Default", description: "", builtin: true, ...createDefaultViewLayout() })
+const sanitizeView = (view, fallbackId) => ({
+  id: view?.id || fallbackId,
+  name: (view?.name || "Untitled view").toString(),
+  description: (view?.description || "").toString(),
+  builtin: !!view?.builtin,
+  columnVisibility: { ...DEFAULT_COLUMN_VISIBILITY, ...(view?.columnVisibility || {}) },
+  columnOrder: sanitizeColumnOrder(view?.columnOrder),
+  density: view?.density || DEFAULT_DENSITY,
+})
+const loadViewsState = () => {
+  const freshDefault = () => ({ activeViewId: BUILTIN_VIEW_ID, views: { [BUILTIN_VIEW_ID]: createBuiltinDefaultView() } })
+  if (typeof window === "undefined") return freshDefault()
+  try {
+    const saved = JSON.parse(window.localStorage.getItem(VIEWS_STORAGE_KEY) || "null")
+    const rawViews = saved?.views && typeof saved.views === "object" ? saved.views : {}
+    const views = {}
+    Object.entries(rawViews).forEach(([id, v]) => { views[id] = sanitizeView(v, id) })
+    views[BUILTIN_VIEW_ID] = views[BUILTIN_VIEW_ID]
+      ? { ...views[BUILTIN_VIEW_ID], id: BUILTIN_VIEW_ID, name: "Default", builtin: true }
+      : createBuiltinDefaultView()
+    const activeViewId = saved?.activeViewId && views[saved.activeViewId] ? saved.activeViewId : BUILTIN_VIEW_ID
+    return { activeViewId, views }
+  } catch {
+    return freshDefault()
+  }
+}
+const persistViewsState = (state) => {
+  if (typeof window === "undefined") return
+  try { window.localStorage.setItem(VIEWS_STORAGE_KEY, JSON.stringify(state)) } catch {
+    // Storage can fail (private browsing, quota) — table still works this session.
+  }
+}
+const generateViewId = () => {
+  try { return `view_${crypto.randomUUID()}` } catch { return `view_${Date.now()}_${Math.random().toString(36).slice(2, 8)}` }
+}
+
+const PopupPortal = ({ children }) => {
+  if (typeof document === "undefined") return null
+  return createPortal(children, document.body)
+}
+
+// Text truncation component
+const TruncatedText = ({ text, maxLength = 50 }) => {
+  const [isExpanded, setIsExpanded] = useState(false)
+
+  if (!text || text === "-" || text === "Not specified" || text === "Various") {
+    return <span className="text-[#a89482]">{text || "-"}</span>
+  }
+
+  const shouldTruncate = text.length > maxLength
+  const displayText = isExpanded || !shouldTruncate ? text : `${text.slice(0, maxLength)}...`
+
+  const toggleExpanded = (e) => {
+    e.stopPropagation()
+    setIsExpanded(!isExpanded)
+  }
+
+  return (
+    <span className="leading-snug">
+      <span className="break-words">{displayText}</span>
+      {shouldTruncate && (
+        <button onClick={toggleExpanded} className="ml-1 text-[10px] text-[#a67c52] underline hover:text-[#4a352f]">
+          {isExpanded ? "Less" : "More"}
+        </button>
+      )}
+    </span>
+  )
+}
+
+export function AcceleratorTable({ filters, stageFilter, onApplicationSubmitted }) {
   const [accelerators, setAccelerators] = useState([])
   const [loading, setLoading] = useState(false)
   const [statuses, setStatuses] = useState({})
   const [pipelineStages, setPipelineStages] = useState({})
-  const [modalAccelerator, setModalAccelerator] = useState(null)
   const [notification, setNotification] = useState(null)
   const [mounted, setMounted] = useState(false)
   const [showMatchBreakdown, setShowMatchBreakdown] = useState(false)
@@ -372,14 +268,35 @@ export function AcceleratorTable({ filters, onApplicationSubmitted }) {
   const [showCatalystDetails, setShowCatalystDetails] = useState(false)
   const [selectedCatalystDetails, setSelectedCatalystDetails] = useState(null)
 
-  // Filter states - UPDATED
-  const [selectedGeographic, setSelectedGeographic] = useState([])
-  const [selectedSectors, setSelectedSectors] = useState([])
-  const [selectedStages, setSelectedStages] = useState([])
-  const [selectedSupport, setSelectedSupport] = useState([])
-  const [selectedStatus, setSelectedStatus] = useState([])
-  const [nextStageFilter, setNextStageFilter] = useState("")
-  const [minMatchFilter, setMinMatchFilter] = useState(0)
+  // ─── Views (column visibility / order / density) ─────────────────────────
+  const [viewsState, setViewsState] = useState(() => loadViewsState())
+  const initialActiveView = viewsState.views[viewsState.activeViewId] || viewsState.views[BUILTIN_VIEW_ID]
+  const [columnVisibility, setColumnVisibility] = useState(() => initialActiveView.columnVisibility)
+  const [columnOrder, setColumnOrder] = useState(() => initialActiveView.columnOrder)
+  const [density, setDensity] = useState(() => initialActiveView.density)
+
+  const [showCustomizeMenu, setShowCustomizeMenu] = useState(false)
+  const [customizeMenuRect, setCustomizeMenuRect] = useState(null)
+  const [showNewViewForm, setShowNewViewForm] = useState(false)
+  const [newViewName, setNewViewName] = useState("")
+  const [newViewDescription, setNewViewDescription] = useState("")
+  const [editingViewMeta, setEditingViewMeta] = useState(null)
+
+  // Column drag-to-reorder
+  const [draggedColumn, setDraggedColumn] = useState(null)
+  const [dragOverColumn, setDragOverColumn] = useState(null)
+  const [dragHintRect, setDragHintRect] = useState(null)
+
+  // Per-column header filters
+  const [headerFilterOpen, setHeaderFilterOpen] = useState(null)
+  const [localFilters, setLocalFilters] = useState({
+    name: "", matchRange: [0, 100],
+    geographicFocus: [], sectorFocus: [], fundingStage: [], fundingType: [], supportOffered: [], status: [], nextStage: [],
+    ticketSize: "", servicesOffered: "", deadline: "", speed: "",
+  })
+
+  const [hoveredRowKey, setHoveredRowKey] = useState(null)
+  const [rowMenu, setRowMenu] = useState(null) // { accelerator, position }
 
   // Company member states
   const [companyOwnerId, setCompanyOwnerId] = useState(null)
@@ -387,9 +304,8 @@ export function AcceleratorTable({ filters, onApplicationSubmitted }) {
   const [effectiveUserId, setEffectiveUserId] = useState(null)
   const [userRole, setUserRole] = useState(null)
 
-
   const hasApplication = (acceleratorId) => {
-    return statuses[acceleratorId] || (pipelineStages[acceleratorId] && pipelineStages[acceleratorId] !== "Match")
+    return statuses[acceleratorId] || (pipelineStages[acceleratorId] && pipelineStages[acceleratorId] !== "Matched")
   }
 
   const isMountedRef = useRef(false)
@@ -398,6 +314,7 @@ export function AcceleratorTable({ filters, onApplicationSubmitted }) {
     setMounted(true)
     return () => setMounted(false)
   }, [])
+
   // Check company membership on mount
   useEffect(() => {
     const checkCompanyMembership = async () => {
@@ -448,8 +365,6 @@ export function AcceleratorTable({ filters, onApplicationSubmitted }) {
     checkCompanyMembership()
   }, [])
 
-
-
   const hasTooManyMissingFields = (accelerator) => {
     const fieldsToCheck = [
       accelerator.geographicFocus,
@@ -479,24 +394,18 @@ export function AcceleratorTable({ filters, onApplicationSubmitted }) {
   // Function to send email notification to catalyst
   const sendCatalystEmailNotification = async (catalystId, smeData, accelerator) => {
     try {
-      // console.log("🔄 Sending catalyst email notification...");
-
       const emailjsConfig = {
         serviceId: API_KEYS.SERVICE_ID_MESSAGES,
         templateId: API_KEYS.TEMPLATE_ID_MESSAGES,
         publicKey: API_KEYS.PUBLIC_KEY_ID_MESSAGES
       };
 
-      // console.log("📧 Using Feedback config:", emailjsConfig);
-
       if (!window.emailjs) {
         emailjs.init(emailjsConfig.publicKey);
         window.emailjs = emailjs;
       }
 
-      // Fetch catalyst email from catalystProfiles > formData > contactDetails > businessEmail
       let catalystEmail = null;
-      // console.log("📋 Fetching catalyst email for:", catalystId);
 
       try {
         const catalystProfileRef = doc(db, "catalystProfiles", catalystId);
@@ -504,20 +413,13 @@ export function AcceleratorTable({ filters, onApplicationSubmitted }) {
 
         if (catalystProfileSnap.exists()) {
           const profileData = catalystProfileSnap.data();
-          // console.log("📄 catalystProfiles data:", profileData);
-
           catalystEmail = profileData.formData?.contactDetails?.businessEmail;
 
-          if (catalystEmail) {
-            // console.log("✅ Found catalyst email:", catalystEmail);
-          } else {
-            // console.log("❌ No business email found in catalyst profile");
+          if (!catalystEmail) {
             catalystEmail = profileData.formData?.contactDetails?.email ||
               profileData.email ||
               profileData.contactEmail;
           }
-        } else {
-          // console.log("❌ No document in catalystProfiles for:", catalystId);
         }
       } catch (fetchError) {
         console.error("❌ Error fetching catalyst email:", fetchError);
@@ -528,14 +430,11 @@ export function AcceleratorTable({ filters, onApplicationSubmitted }) {
         catalystEmail = "support@bigmarketplace.africa";
       }
 
-      // console.log("📧 Final recipient email:", catalystEmail);
-
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(catalystEmail)) {
         throw new Error(`Invalid email format: "${catalystEmail}"`);
       }
 
-      const user = auth.currentUser;
       const smeName = smeData.entityOverview?.registeredName || "An SMSE";
       const catalystName = accelerator.name || "Catalyst";
 
@@ -550,7 +449,6 @@ export function AcceleratorTable({ filters, onApplicationSubmitted }) {
       emailMessage += `- Funding Stage: ${smeData.entityOverview?.operationStage || "Not specified"}\n`;
       emailMessage += `- Funding Required: ${smeData.useOfFunds?.amountRequested || "Not specified"}\n`;
       emailMessage += `- Match Score: ${accelerator.matchPercentage || 0}%\n\n`;
-
       emailMessage += `You can review this application in your catalyst dashboard.\n\n`;
       emailMessage += `Best regards,\nBIG Marketplace Africa Team`;
 
@@ -565,8 +463,6 @@ export function AcceleratorTable({ filters, onApplicationSubmitted }) {
         attachments_count: "0"
       };
 
-      // console.log("📨 Sending catalyst email with Feedback service...", templateParams);
-
       const response = await window.emailjs.send(
         emailjsConfig.serviceId,
         emailjsConfig.templateId,
@@ -574,9 +470,7 @@ export function AcceleratorTable({ filters, onApplicationSubmitted }) {
         emailjsConfig.publicKey
       );
 
-      // console.log("✅ Catalyst email sent successfully!", response);
       return true;
-
     } catch (emailError) {
       console.error("❌ Catalyst email failed:", emailError);
       return false;
@@ -591,18 +485,15 @@ export function AcceleratorTable({ filters, onApplicationSubmitted }) {
       const user = auth.currentUser
       if (!user) return
 
-      // Use effectiveUserId for SME profile
       const smeDoc = await getDoc(doc(db, "universalProfiles", effectiveUserId))
       const smeData = smeDoc.exists() ? smeDoc.data() : {}
 
-      // Get fresh data from Firebase
       const snapshot = await getDocs(collection(db, "catalystProfiles"))
 
       const profiles = await Promise.all(
         snapshot.docs.flatMap(async (docSnap) => {
           const catalystId = docSnap.id
 
-          // Skip current user's own profile
           if (catalystId === user.uid || catalystId === effectiveUserId) {
             return []
           }
@@ -636,14 +527,14 @@ export function AcceleratorTable({ filters, onApplicationSubmitted }) {
                 deadline: formData.applicationBrief?.applicationWindow || "unspecified",
                 speed: formData.applicationBrief?.estimatedReviewTime || "Unknown",
                 matchPercentage: calculateMatchScore(smeData, formData),
-                pipelineStage: appData?.pipelineStage || "Match",
-                nextStage: appData?.nextStage || "Application Review",
+                // Canonical stageConfig.js names now, matching the catalyst side directly.
+                pipelineStage: appData?.pipelineStage || "Matched",
+                nextStage: appData?.nextStage || "Applied",
                 rawFormData: formData,
               },
             ]
           }
 
-          // Create an entry for each program
           return await Promise.all(
             programs.map(async (program, index) => {
               const applicationId = `${catalystId}_${effectiveUserId}_${index}`
@@ -670,8 +561,8 @@ export function AcceleratorTable({ filters, onApplicationSubmitted }) {
                 speed: formData.applicationBrief?.estimatedReviewTime || "Unknown",
                 matchPercentage: matchResult.score,
                 matchBreakdown: matchResult.breakdown,
-                pipelineStage: appData?.pipelineStage || "Match",
-                nextStage: appData?.nextStage || "Application Review",
+                pipelineStage: appData?.pipelineStage || "Matched",
+                nextStage: appData?.nextStage || "Applied",
                 rawFormData: formData,
               }
             }),
@@ -695,12 +586,10 @@ export function AcceleratorTable({ filters, onApplicationSubmitted }) {
     if (effectiveUserId) {
       fetchAccelerators()
     }
-
     return () => {
       isMountedRef.current = false
     }
   }, [filters, effectiveUserId])
-
 
   useEffect(() => {
     if (!effectiveUserId) return
@@ -713,10 +602,9 @@ export function AcceleratorTable({ filters, onApplicationSubmitted }) {
       snapshot.docs.forEach((docSnap) => {
         const data = docSnap.data()
         if (data.smeId === effectiveUserId) {
-          // This must match accelerator.id = `${catalystId}_${programIndex}`
           const key = `${data.catalystId}_${data.programIndex ?? 0}`
           statusMap[key] = "Sent"
-          stageMap[key] = data.status || "Application Sent"
+          stageMap[key] = data.status || "Applied"
         }
       })
 
@@ -726,7 +614,6 @@ export function AcceleratorTable({ filters, onApplicationSubmitted }) {
 
     loadStatusFromFirestore()
   }, [effectiveUserId, accelerators])
-
 
   const calculateMatchScore = (smeData, acceleratorData, program = null) => {
     const totalFields = 8
@@ -743,7 +630,6 @@ export function AcceleratorTable({ filters, onApplicationSubmitted }) {
       revenueThreshold: { score: 0, maxScore: 12.5, matched: false, description: "", details: {} },
     }
 
-    // Helper functions
     const toArray = (v) => {
       if (v == null) return [];
       if (Array.isArray(v)) return v;
@@ -802,13 +688,6 @@ export function AcceleratorTable({ filters, onApplicationSubmitted }) {
 
     const normalize = (val) => (Array.isArray(val) ? val.map((v) => v.toLowerCase().trim()) : val?.toLowerCase().trim())
 
-    const includesMatch = (smeVal, accelVal) => {
-      if (!smeVal || !accelVal) return false
-      const smeSet = new Set(Array.isArray(smeVal) ? smeVal : [smeVal])
-      const accelSet = new Set(Array.isArray(accelVal) ? accelVal : [accelVal])
-      return [...smeSet].some((v) => accelSet.has(v))
-    }
-
     const cleanCurrency = (value) => {
       if (!value) return 0
       const cleaned = value.toString().replace(/[^0-9.]/g, "")
@@ -833,8 +712,6 @@ export function AcceleratorTable({ filters, onApplicationSubmitted }) {
       const accelSelectedCountries = cleanString(acceleratorGeoData.selectedCountries) || []
       const accelSelectedProvinces = cleanString(acceleratorGeoData.selectedProvinces) || []
 
-      // console.log(accelSelectedCountries)
-
       if (accelGeoFocus.includes("global")) return true
       if (
         accelGeoFocus.includes("regional_emea") ||
@@ -853,7 +730,6 @@ export function AcceleratorTable({ filters, onApplicationSubmitted }) {
     }
 
     const programData = program || acceleratorData?.programmeDetails?.programs?.[0] || {}
-    const allPrograms = acceleratorData?.programmeDetails?.programs || []
 
     // 1. Funding Stage Match
     const smeStage = smeData.entityOverview?.operationStage
@@ -1052,7 +928,6 @@ export function AcceleratorTable({ filters, onApplicationSubmitted }) {
     const user = auth.currentUser
     if (!user) return
 
-    // Check permissions for company members
     if (isCompanyMember && !['owner', 'admin'].includes(userRole)) {
       setNotification({
         type: "warning",
@@ -1073,7 +948,7 @@ export function AcceleratorTable({ filters, onApplicationSubmitted }) {
       if (appSnap.exists()) {
         const existingData = appSnap.data()
         setStatuses((prev) => ({ ...prev, [accelerator.id]: "Sent" }))
-        setPipelineStages((prev) => ({ ...prev, [accelerator.id]: existingData.pipelineStage || "Application Sent" }))
+        setPipelineStages((prev) => ({ ...prev, [accelerator.id]: existingData.pipelineStage || "Applied" }))
         setNotification({ type: "info", message: `You've already applied to ${accelerator.name}` })
         setTimeout(() => setNotification(null), 3000)
         return
@@ -1126,14 +1001,17 @@ export function AcceleratorTable({ filters, onApplicationSubmitted }) {
 
       const guaranteeSummary = guaranteeTitles.join(", ")
 
-      const pipelineStage = "Application Sent"
-      const nextStage = getNextStage(pipelineStage)
+      // Canonical stageConfig.js name — matches the catalyst side exactly,
+      // instead of the old "Application Sent" string which never lined up
+      // with the catalyst side's "Applied".
+      const pipelineStage = "Applied"
+      const nextStage = getNextStageName(pipelineStage)
 
       const applicationData = {
         catalystId: catalystId,
         programIndex: programIndex,
         smeId: smeUserId,
-        submittedBy: user.uid,              // ADD THIS
+        submittedBy: user.uid,
         submittedByRole: userRole,
         acceleratorName: accelerator.name,
         location: entity.location || "-",
@@ -1146,7 +1024,7 @@ export function AcceleratorTable({ filters, onApplicationSubmitted }) {
         servicesRequired: accelerator.servicesOffered || "-",
         applicationDate: new Date().toISOString(),
         matchPercentage: accelerator.matchPercentage || 0,
-        status: "Application Sent",
+        status: pipelineStage,
         pipelineStage,
         nextStage,
         createdAt: serverTimestamp(),
@@ -1184,157 +1062,350 @@ export function AcceleratorTable({ filters, onApplicationSubmitted }) {
     }
   }
 
-
   const handleViewMatchBreakdown = (accelerator) => {
     setSelectedAccelerator(accelerator)
     setShowMatchBreakdown(true)
+    setRowMenu(null)
   }
 
-  const closeAllModals = () => {
-    setModalAccelerator(null)
-    setShowFilterModal(false)
-    setShowMatchBreakdown(false)
-    setSelectedAccelerator(null)
-  }
+  const handleViewClick = async (accelerator) => {
+    try {
+      const user = auth.currentUser
 
-  const handleCompareClick = (accelerator) => {
-    setNotification({ type: "info", message: `Added ${accelerator.name} to comparison` })
-    setTimeout(() => setNotification(null), 3000)
-  }
-
- const handleViewClick = async (accelerator) => {
-  try {
-    const user = auth.currentUser
-    // console.log("Current user UID:", user.uid)
-    // console.log("Catalyst ID:", accelerator.originalCatalystId || accelerator.id)
-    
-    // Query shared_nda for this specific relationship
-    const sharedNDAQuery = query(
-      collection(db, "shared_nda"),
-      where("catalystId", "==", accelerator.originalCatalystId || accelerator.id),
-      where("smeId", "==", user.uid),
-      where("programIndex", "==", accelerator.programIndex || 0),
-      limit(1)
-    )
-    
-    const snapshot = await getDocs(sharedNDAQuery)
-    
-    
-    let ndaUrl = null
-    let ndaStatus = null
-    let ndaSharedDate = null
-    
-    if (!snapshot.empty) {
-      const ndaDoc = snapshot.docs[0]
-      const ndaData = ndaDoc.data()
-      // console.log("Found NDA data:", ndaData)
-      
-      ndaUrl = ndaData.ndaUrl
-      ndaStatus = ndaData.status
-      ndaSharedDate = ndaData.sharedAt?.toDate?.() || ndaData.sharedAt
-    } else {
-      // console.log("No NDA found for this relationship")
-    }
-    
-    // Set catalyst details with NDA info
-    setSelectedCatalystDetails({
-      ...accelerator,
-      ndaUrl,
-      ndaStatus,
-      ndaSharedDate
-    })
-    setShowCatalystDetails(true)
-    
-  } catch (error) {
-    console.error("Error fetching NDA info:", error)
-    // Still show the modal even if NDA fetch fails
-    setSelectedCatalystDetails(accelerator)
-    setShowCatalystDetails(true)
-  }
-}
-
-  const applyFilters = () => {
-    setShowFilterModal(false)
-  }
-
-  const resetFilters = () => {
-    setSelectedGeographic([])
-    setSelectedSectors([])
-    setSelectedStages([])
-    setSelectedSupport([])
-    setSelectedStatus([])
-    setNextStageFilter("")
-    setMinMatchFilter(0)
-    setShowFilterModal(false)
-  }
-
-  // Get unique values for filter dropdowns
-  const uniqueGeographic = [...new Set(accelerators.map((acc) => acc.geographicFocus).filter(Boolean))]
-  const uniqueSectors = [...new Set(accelerators.map((acc) => acc.sectorFocus).filter(Boolean))]
-  const uniqueStages = [...new Set(accelerators.map((acc) => acc.fundingStage).filter(Boolean))]
-  const uniqueSupport = [...new Set(accelerators.map((acc) => acc.supportOffered).filter(Boolean))]
-  const uniqueStatuses = [...new Set(accelerators.map((acc) => pipelineStages[acc.id] || "Match").filter(Boolean))]
-  const uniqueNextStages = [...new Set(accelerators.map((acc) => acc.nextStage).filter(Boolean))]
-
-  const filteredAccelerators = accelerators.filter((accelerator) => {
-    if (hasTooManyMissingFields(accelerator)) {
-      return false;
-    }
-
-    // Filter by geographic focus
-    if (
-      selectedGeographic.length > 0 &&
-      !selectedGeographic.some((geo) =>
-        formatLabel(accelerator.geographicFocus).toLowerCase().includes(geo.toLowerCase()),
+      const sharedNDAQuery = query(
+        collection(db, "shared_nda"),
+        where("catalystId", "==", accelerator.originalCatalystId || accelerator.id),
+        where("smeId", "==", user.uid),
+        where("programIndex", "==", accelerator.programIndex || 0),
+        limit(1)
       )
-    ) {
-      return false
+
+      const snapshot = await getDocs(sharedNDAQuery)
+
+      let ndaUrl = null
+      let ndaStatus = null
+      let ndaSharedDate = null
+
+      if (!snapshot.empty) {
+        const ndaDoc = snapshot.docs[0]
+        const ndaData = ndaDoc.data()
+        ndaUrl = ndaData.ndaUrl
+        ndaStatus = ndaData.status
+        ndaSharedDate = ndaData.sharedAt?.toDate?.() || ndaData.sharedAt
+      }
+
+      setSelectedCatalystDetails({ ...accelerator, ndaUrl, ndaStatus, ndaSharedDate })
+      setShowCatalystDetails(true)
+      setRowMenu(null)
+    } catch (error) {
+      console.error("Error fetching NDA info:", error)
+      setSelectedCatalystDetails(accelerator)
+      setShowCatalystDetails(true)
+      setRowMenu(null)
     }
-    // Filter by sector
-    if (
-      selectedSectors.length > 0 &&
-      !selectedSectors.some((sec) => formatLabel(accelerator.sectorFocus).toLowerCase().includes(sec.toLowerCase()))
-    ) {
-      return false
+  }
+
+  // ─── Views actions (identical model to the catalyst SME table) ──────────
+  const activeView = viewsState.views[viewsState.activeViewId] || viewsState.views[BUILTIN_VIEW_ID]
+
+  useEffect(() => {
+    setViewsState((prev) => {
+      const current = prev.views[prev.activeViewId]
+      if (!current) return prev
+      const updated = { ...current, columnVisibility, columnOrder, density }
+      const next = { ...prev, views: { ...prev.views, [prev.activeViewId]: updated } }
+      persistViewsState(next)
+      return next
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [columnVisibility, columnOrder, density])
+
+  const switchToView = (viewId) => {
+    const target = viewsState.views[viewId]
+    if (!target) return
+    setViewsState((prev) => {
+      const next = { ...prev, activeViewId: viewId }
+      persistViewsState(next)
+      return next
+    })
+    setColumnVisibility(target.columnVisibility)
+    setColumnOrder(target.columnOrder)
+    setDensity(target.density)
+  }
+
+  const createNewView = () => {
+    const trimmedName = newViewName.trim()
+    if (!trimmedName) return
+    const id = generateViewId()
+    const newView = { id, name: trimmedName, description: newViewDescription.trim(), builtin: false, columnVisibility: { ...columnVisibility }, columnOrder: [...columnOrder], density }
+    setViewsState((prev) => {
+      const next = { activeViewId: id, views: { ...prev.views, [id]: newView } }
+      persistViewsState(next)
+      return next
+    })
+    setNewViewName("")
+    setNewViewDescription("")
+    setShowNewViewForm(false)
+  }
+
+  const startEditingViewMeta = (view) => setEditingViewMeta({ id: view.id, name: view.name, description: view.description, builtin: !!view.builtin })
+
+  const saveViewMeta = () => {
+    if (!editingViewMeta) return
+    const trimmedName = editingViewMeta.name.trim()
+    if (!trimmedName && !editingViewMeta.builtin) return
+    setViewsState((prev) => {
+      const existing = prev.views[editingViewMeta.id]
+      if (!existing) return prev
+      const updated = { ...existing, name: existing.builtin ? existing.name : trimmedName, description: editingViewMeta.description.trim() }
+      const next = { ...prev, views: { ...prev.views, [editingViewMeta.id]: updated } }
+      persistViewsState(next)
+      return next
+    })
+    setEditingViewMeta(null)
+  }
+
+  const removeView = (viewId) => {
+    if (viewId === BUILTIN_VIEW_ID) return
+    const wasActive = viewsState.activeViewId === viewId
+    setViewsState((prev) => {
+      const { [viewId]: _removed, ...restViews } = prev.views
+      const nextActiveId = prev.activeViewId === viewId ? BUILTIN_VIEW_ID : prev.activeViewId
+      const next = { activeViewId: nextActiveId, views: restViews }
+      persistViewsState(next)
+      return next
+    })
+    if (wasActive) {
+      const def = viewsState.views[BUILTIN_VIEW_ID]
+      setColumnVisibility(def.columnVisibility)
+      setColumnOrder(def.columnOrder)
+      setDensity(def.density)
     }
-    // Filter by stage
-    if (
-      selectedStages.length > 0 &&
-      !selectedStages.some((stage) => formatLabel(accelerator.fundingStage).toLowerCase().includes(stage.toLowerCase()))
-    ) {
-      return false
+  }
+
+  const resetActiveViewToDefault = () => {
+    const layout = createDefaultViewLayout()
+    setColumnVisibility(layout.columnVisibility)
+    setColumnOrder(layout.columnOrder)
+    setDensity(layout.density)
+  }
+
+  const toggleColumn = (key) => setColumnVisibility((prev) => ({ ...prev, [key]: !prev[key] }))
+
+  // ─── Column drag-to-reorder ───────────────────────────────────────────────
+  const handleColumnDragStart = (e, key) => {
+    setDraggedColumn(key)
+    setDragHintRect(null)
+    try { e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", key) } catch {}
+  }
+  const handleColumnDragOver = (e, key) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = "move"
+    if (key !== dragOverColumn) setDragOverColumn(key)
+  }
+  const handleColumnDrop = (e, key) => {
+    e.preventDefault()
+    if (!draggedColumn || draggedColumn === key) { setDraggedColumn(null); setDragOverColumn(null); return }
+    setColumnOrder((prev) => {
+      const next = [...prev]
+      const fromIdx = next.indexOf(draggedColumn)
+      const toIdx = next.indexOf(key)
+      if (fromIdx === -1 || toIdx === -1) return prev
+      next.splice(fromIdx, 1)
+      next.splice(toIdx, 0, draggedColumn)
+      return next
+    })
+    setDraggedColumn(null)
+    setDragOverColumn(null)
+  }
+  const handleColumnDragEnd = () => { setDraggedColumn(null); setDragOverColumn(null) }
+
+  const openHeaderFilter = (type, event) => {
+    event.stopPropagation()
+    const rect = event.currentTarget.getBoundingClientRect()
+    setHeaderFilterOpen((prev) => (prev?.type === type ? null : { type, rect }))
+  }
+  const closeHeaderFilter = () => setHeaderFilterOpen(null)
+
+  const FilterTrigger = ({ type, active }) => (
+    <button
+      type="button"
+      onClick={(e) => openHeaderFilter(type, e)}
+      className={`flex-shrink-0 w-5 h-5 flex items-center justify-center rounded transition-colors ${active ? "text-[#e6d7c3]" : "text-[#c8b6a6] hover:text-white"}`}
+      title="Filter this column"
+    >
+      <SlidersHorizontal size={11} />
+    </button>
+  )
+
+  const openRowMenu = (accelerator, event) => {
+    event.stopPropagation()
+    const rect = event.currentTarget.getBoundingClientRect()
+    const menuWidth = 210
+    let x = rect.right - menuWidth
+    let y = rect.bottom + 6
+    if (x < 12) x = 12
+    if (y + 200 > window.innerHeight - 12) y = rect.top - 200 - 6
+    setRowMenu({ accelerator, position: { x, y } })
+  }
+
+  // ─── Derived options + filtering ─────────────────────────────────────────
+  const uniqueGeographic = useMemo(() => [...new Set(accelerators.map((a) => a.geographicFocus).filter((v) => v && v !== "-"))], [accelerators])
+  const uniqueSectors = useMemo(() => [...new Set(accelerators.map((a) => a.sectorFocus).filter((v) => v && v !== "-"))], [accelerators])
+  const uniqueFundingStages = useMemo(() => [...new Set(accelerators.map((a) => a.fundingStage).filter((v) => v && v !== "-"))], [accelerators])
+  const uniqueFundingTypes = useMemo(() => [...new Set(accelerators.map((a) => a.fundingType).filter((v) => v && v !== "-"))], [accelerators])
+  const uniqueSupport = useMemo(() => [...new Set(accelerators.map((a) => a.supportOffered).filter((v) => v && v !== "-"))], [accelerators])
+  // Canonical BIG-default names plus whatever custom/renamed stage names
+  // actually show up in the real data (e.g. a catalyst's "Committee" for a
+  // Grant programme) — otherwise those couldn't be filtered by at all, even
+  // though they already display correctly as the status/next-stage text.
+  const statusOptions = useMemo(() => {
+    const canonical = DEFAULT_STAGES.map((s) => s.name)
+    const dynamicStatuses = accelerators.map((a) => pipelineStages[a.id] || a.pipelineStage).filter(Boolean)
+    const dynamicNextStages = accelerators.map((a) => a.nextStage).filter(Boolean)
+    return [...new Set([...canonical, ...dynamicStatuses, ...dynamicNextStages])]
+  }, [accelerators, pipelineStages])
+
+  const activeFilterCount = (localFilters.name.trim() ? 1 : 0)
+    + (localFilters.matchRange[0] > 0 || localFilters.matchRange[1] < 100 ? 1 : 0)
+    + localFilters.geographicFocus.length + localFilters.sectorFocus.length + localFilters.fundingStage.length
+    + localFilters.fundingType.length + localFilters.supportOffered.length + localFilters.status.length + localFilters.nextStage.length
+    + (localFilters.ticketSize.trim() ? 1 : 0) + (localFilters.servicesOffered.trim() ? 1 : 0)
+    + (localFilters.deadline.trim() ? 1 : 0) + (localFilters.speed.trim() ? 1 : 0)
+
+  const filteredAccelerators = useMemo(() => accelerators.filter((accelerator) => {
+    if (hasTooManyMissingFields(accelerator)) return false
+
+    // Stage filter driven by clicking a card in SupportProgramsPage.jsx's
+    // Dealflow Pipeline (passed down as the stageFilter prop through
+    // AcceleratorTabbedTables). "Matched" here means "hasn't applied yet" —
+    // there's no application record to read a status off of, so that case
+    // is checked separately from the normal status lookup below.
+    if (stageFilter) {
+      const applied = hasApplication(accelerator.id)
+      if (stageFilter === "matched") {
+        if (applied) return false
+      } else {
+        if (!applied) return false
+        const currentStatusForStage = pipelineStages[accelerator.id] || accelerator.pipelineStage
+        const resolvedStageId = mapStatusToStageId(normalizeStatus(currentStatusForStage), DEFAULT_STAGES)
+        if (resolvedStageId !== stageFilter) return false
+      }
     }
-    // Filter by support offered
-    if (
-      selectedSupport.length > 0 &&
-      !selectedSupport.some((sup) => formatLabel(accelerator.supportOffered).toLowerCase().includes(sup.toLowerCase()))
-    ) {
-      return false
-    }
-    // Filter by status
-    if (
-      selectedStatus.length > 0 &&
-      !selectedStatus.some((status) =>
-        (pipelineStages[accelerator.id] || "Match").toLowerCase().includes(status.toLowerCase()))
-    ) {
-      return false
-    }
-    // Filter by next stage
-    if (nextStageFilter && !formatLabel(accelerator.nextStage).toLowerCase().includes(nextStageFilter.toLowerCase())) {
-      return false
-    }
-    // Filter by minimum match percentage
-    if (minMatchFilter > 0 && accelerator.matchPercentage < minMatchFilter) {
-      return false
-    }
+
+    if (localFilters.name.trim() && !accelerator.name.toLowerCase().includes(localFilters.name.toLowerCase().trim())) return false
+    if (accelerator.matchPercentage < localFilters.matchRange[0] || accelerator.matchPercentage > localFilters.matchRange[1]) return false
+
+    if (localFilters.geographicFocus.length > 0 && !localFilters.geographicFocus.some((v) => formatLabel(accelerator.geographicFocus).toLowerCase().includes(v.toLowerCase()))) return false
+    if (localFilters.sectorFocus.length > 0 && !localFilters.sectorFocus.some((v) => formatLabel(accelerator.sectorFocus).toLowerCase().includes(v.toLowerCase()))) return false
+    if (localFilters.fundingStage.length > 0 && !localFilters.fundingStage.some((v) => formatLabel(accelerator.fundingStage).toLowerCase().includes(v.toLowerCase()))) return false
+    if (localFilters.fundingType.length > 0 && !localFilters.fundingType.some((v) => formatLabel(accelerator.fundingType).toLowerCase().includes(v.toLowerCase()))) return false
+    if (localFilters.supportOffered.length > 0 && !localFilters.supportOffered.some((v) => formatLabel(accelerator.supportOffered).toLowerCase().includes(v.toLowerCase()))) return false
+
+    const currentStatus = pipelineStages[accelerator.id] || accelerator.pipelineStage
+    if (localFilters.status.length > 0 && !localFilters.status.some((v) => (currentStatus || "").toLowerCase().includes(v.toLowerCase()))) return false
+    if (localFilters.nextStage.length > 0 && !localFilters.nextStage.some((v) => (accelerator.nextStage || "").toLowerCase().includes(v.toLowerCase()))) return false
+
+    if (localFilters.ticketSize.trim() && !(accelerator.ticketSize || "").toLowerCase().includes(localFilters.ticketSize.toLowerCase().trim())) return false
+    if (localFilters.servicesOffered.trim() && !formatLabel(accelerator.servicesOffered).toLowerCase().includes(localFilters.servicesOffered.toLowerCase().trim())) return false
+    if (localFilters.deadline.trim() && !(accelerator.deadline || "").toLowerCase().includes(localFilters.deadline.toLowerCase().trim())) return false
+    if (localFilters.speed.trim() && !(accelerator.speed || "").toString().toLowerCase().includes(localFilters.speed.toLowerCase().trim())) return false
+
     return true
-  })
+  }), [accelerators, localFilters, pipelineStages, stageFilter])
+
+
+  const densityStyles = {
+    comfortable: { cell: "py-3 px-3", header: "py-3 px-3", fontSize: "text-sm" },
+    compact: { cell: "py-2 px-2", header: "py-2 px-2", fontSize: "text-xs" },
+    "ultra-compact": { cell: "py-1.5 px-1.5", header: "py-1.5 px-1.5", fontSize: "text-xs" },
+  }
+  const ds = densityStyles[density] || densityStyles.comfortable
+
+  const visibleColumnKeys = columnOrder.filter((key) => columnVisibility[key])
+
+  const getFilterActive = (filterType) => {
+    switch (filterType) {
+      case "match": return localFilters.matchRange[0] > 0 || localFilters.matchRange[1] < 100
+      case "geographicFocus": return localFilters.geographicFocus.length > 0
+      case "sectorFocus": return localFilters.sectorFocus.length > 0
+      case "fundingStage": return localFilters.fundingStage.length > 0
+      case "fundingType": return localFilters.fundingType.length > 0
+      case "supportOffered": return localFilters.supportOffered.length > 0
+      case "status": return localFilters.status.length > 0
+      case "nextStage": return localFilters.nextStage.length > 0
+      case "ticketSize": return !!localFilters.ticketSize.trim()
+      case "servicesOffered": return !!localFilters.servicesOffered.trim()
+      case "deadline": return !!localFilters.deadline.trim()
+      case "speed": return !!localFilters.speed.trim()
+      default: return false
+    }
+  }
+
+  const renderCell = (key, accelerator) => {
+    switch (key) {
+      case "match":
+        return (
+          <td key={key} className={`${ds.cell} text-center border-r border-[#e6d7c3] cursor-pointer`} onClick={() => handleViewMatchBreakdown(accelerator)}>
+            <div className="flex flex-col items-center gap-1 w-full max-w-[90px] mx-auto">
+              <div className="flex items-center gap-1">
+                <span className={`${ds.fontSize} font-semibold text-[#4a352f]`}>{accelerator.matchPercentage}%</span>
+                <Eye size={12} className="text-[#a67c52]" />
+              </div>
+              <div className="w-full h-1.5 bg-[#e6d7c3] rounded-full overflow-hidden">
+                <div className="h-full rounded-full bg-gradient-to-r from-[#48BB78] to-[#68d391]" style={{ width: `${accelerator.matchPercentage}%` }} />
+              </div>
+            </div>
+          </td>
+        )
+      case "geographicFocus":
+        return <td key={key} className={`${ds.cell} ${ds.fontSize} text-[#4a352f] border-r border-[#e6d7c3]`}><TruncatedText text={formatLabel(accelerator.geographicFocus)} maxLength={30} /></td>
+      case "sectorFocus":
+        return <td key={key} className={`${ds.cell} ${ds.fontSize} text-[#4a352f] border-r border-[#e6d7c3]`}><TruncatedText text={formatLabel(accelerator.sectorFocus)} maxLength={25} /></td>
+      case "fundingStage":
+        return <td key={key} className={`${ds.cell} ${ds.fontSize} text-[#4a352f] border-r border-[#e6d7c3]`}><TruncatedText text={formatLabel(accelerator.fundingStage)} maxLength={25} /></td>
+      case "fundingType":
+        return <td key={key} className={`${ds.cell} ${ds.fontSize} text-[#4a352f] border-r border-[#e6d7c3]`}><TruncatedText text={formatLabel(accelerator.fundingType)} maxLength={20} /></td>
+      case "ticketSize":
+        return <td key={key} className={`${ds.cell} ${ds.fontSize} text-[#4a352f] border-r border-[#e6d7c3]`}>{accelerator.ticketSize}</td>
+      case "supportOffered":
+        return <td key={key} className={`${ds.cell} ${ds.fontSize} text-[#4a352f] border-r border-[#e6d7c3]`}><TruncatedText text={formatLabel(accelerator.supportOffered)} maxLength={35} /></td>
+      case "servicesOffered":
+        return <td key={key} className={`${ds.cell} ${ds.fontSize} text-[#4a352f] border-r border-[#e6d7c3]`}><TruncatedText text={formatLabel(accelerator.servicesOffered)} maxLength={30} /></td>
+      case "deadline":
+        return <td key={key} className={`${ds.cell} ${ds.fontSize} text-[#4a352f] border-r border-[#e6d7c3]`}>{accelerator.deadline || "-"}</td>
+      case "speed":
+        return <td key={key} className={`${ds.cell} border-r border-[#e6d7c3]`}><span className="inline-block px-2 py-1 bg-[#f5f0e1] rounded-full text-xs font-medium text-[#4a352f]">{accelerator.speed}</span></td>
+      case "status": {
+        const currentStatus = pipelineStages[accelerator.id] || accelerator.pipelineStage
+        const meta = getStatusMeta(currentStatus)
+        return (
+          <td key={key} className={`${ds.cell} border-r border-[#e6d7c3]`}>
+            {hasApplication(accelerator.id) ? (
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold whitespace-nowrap" style={{ backgroundColor: meta.colors.bgColor, color: meta.colors.color }}>
+                <span className="w-1.5 h-1.5 rounded-full flex-shrink-0" style={{ backgroundColor: meta.colors.color }} />
+                {meta.label}
+              </span>
+            ) : (
+              <span className="text-xs text-[#a89482] italic">Not applied</span>
+            )}
+          </td>
+        )
+      }
+      case "nextStage":
+        return (
+          <td key={key} className={`${ds.cell} border-r border-[#e6d7c3]`}>
+            <span className="text-xs font-medium text-[#4a352f]">{hasApplication(accelerator.id) ? accelerator.nextStage : "—"}</span>
+          </td>
+        )
+      default:
+        return null
+    }
+  }
 
   if (loading) {
     return (
-      <div
-        style={{ display: "flex", justifyContent: "center", alignItems: "center", padding: "2rem", color: "#a67c52" }}
-      >
+      <div className="flex justify-center items-center p-8 text-[#a67c52]">
         <p>Loading accelerators...</p>
       </div>
     )
@@ -1342,837 +1413,526 @@ export function AcceleratorTable({ filters, onApplicationSubmitted }) {
 
   return (
     <>
-      {/* Main content container */}
-      <div
-        style={{
-          position: "relative",
-          filter: modalAccelerator || showFilterModal ? "blur(2px)" : "none",
-          transition: "filter 0.2s ease",
-        }}
-      >
+      <div className="relative" style={{ filter: showCatalystDetails || showMatchBreakdown ? "blur(2px)" : "none", transition: "filter 0.2s ease" }}>
 
-        {/* Company Member Banner */}
         {isCompanyMember && (
-          <div style={{
-            backgroundColor: userRole === 'viewer' ? '#fef3c7' : '#e0f2fe',
-            border: `2px solid ${userRole === 'viewer' ? '#f59e0b' : '#0369a1'}`,
-            borderRadius: '12px',
-            padding: '16px 24px',
-            marginBottom: '24px',
-            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)'
-          }}>
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '12px',
-              marginBottom: '8px'
-            }}>
-              <span style={{ fontSize: '24px' }}>🤝</span>
-              <h3 style={{
-                margin: 0,
-                color: userRole === 'viewer' ? '#f59e0b' : '#0369a1',
-                fontWeight: '700',
-                fontSize: '1.1rem'
-              }}>
+          <div className="rounded-xl mb-6 p-4 shadow-md" style={{ backgroundColor: userRole === "viewer" ? "#fef3c7" : "#e0f2fe", border: `2px solid ${userRole === "viewer" ? "#f59e0b" : "#0369a1"}` }}>
+            <div className="flex items-center gap-3 mb-2">
+              <span className="text-2xl">🤝</span>
+              <h3 className="m-0 font-bold text-lg" style={{ color: userRole === "viewer" ? "#f59e0b" : "#0369a1" }}>
                 Company Catalyst Applications - Role: {userRole?.toUpperCase()}
               </h3>
             </div>
-            <p style={{
-              margin: 0,
-              color: '#4a5568',
-              fontSize: '0.95rem',
-              lineHeight: '1.5'
-            }}>
-              {userRole === 'owner' && 'You can view and manage all company catalyst applications.'}
-              {userRole === 'admin' && 'You can view and submit catalyst applications for the company.'}
-              {userRole === 'manager' && 'You can view catalyst applications and track their progress.'}
-              {userRole === 'employee' && 'You can view company catalyst applications.'}
-              {userRole === 'viewer' && 'You have read-only access to company catalyst applications.'}
+            <p className="m-0 text-sm leading-relaxed text-[#4a5568]">
+              {userRole === "owner" && "You can view and manage all company catalyst applications."}
+              {userRole === "admin" && "You can view and submit catalyst applications for the company."}
+              {userRole === "manager" && "You can view catalyst applications and track their progress."}
+              {userRole === "employee" && "You can view company catalyst applications."}
+              {userRole === "viewer" && "You have read-only access to company catalyst applications."}
             </p>
           </div>
         )}
-        {/* Notification area */}
+
         {notification && (
-          <div
-            style={{
-              position: "fixed",
-              top: "1rem",
-              right: "1rem",
-              padding: "1rem",
-              borderRadius: "6px",
-              color: "white",
-              fontWeight: "500",
-              zIndex: 1001,
-              background:
-                notification.type === "success" ? "#48BB78" : notification.type === "error" ? "#F56565" : "#4299E1",
-            }}
-          >
+          <div className="fixed top-4 right-4 p-4 rounded-lg text-white font-medium z-[1001]" style={{ background: notification.type === "success" ? "#48BB78" : notification.type === "error" ? "#F56565" : "#4299E1" }}>
             {notification.message}
           </div>
         )}
 
-        {/* Table header with filter button */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
-          <h2
-            style={{
-              fontSize: "1.5rem",
-              fontWeight: "600",
-              color: "#5D2A0A",
-              margin: 0,
-            }}
-          ></h2>
-          <div style={{ display: "flex", gap: "0.5rem" }}>
-            <button
-              style={{
-                background: "#F5EBE0",
-                color: "#5D2A0A",
-                border: "1px solid #E8D5C4",
-                padding: "0.5rem 1rem",
-                borderRadius: "6px",
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: "0.5rem",
-                fontSize: "0.8rem",
-                transition: "all 0.2s",
-              }}
-              onClick={() => setShowFilterModal(true)}
-            >
-              <Filter size={16} />
-              Filters
-              {(selectedGeographic.length > 0 ||
-                selectedSectors.length > 0 ||
-                selectedStages.length > 0 ||
-                selectedSupport.length > 0 ||
-                selectedStatus.length > 0 ||
-                nextStageFilter ||
-                minMatchFilter > 0) && (
-                  <span
-                    style={{
-                      background: "#5D2A0A",
-                      color: "white",
-                      borderRadius: "50%",
-                      width: "20px",
-                      height: "20px",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      fontSize: "0.7rem",
-                    }}
-                  >
-                    {
-                      [
-                        selectedGeographic.length,
-                        selectedSectors.length,
-                        selectedStages.length,
-                        selectedSupport.length,
-                        selectedStatus.length,
-                        nextStageFilter,
-                        minMatchFilter > 0,
-                      ].filter(Boolean).length
-                    }
-                  </span>
-                )}
-            </button>
+        {/* Toolbar */}
+        <div className="bg-[#faf7f2] rounded-t-2xl p-4 border border-[#e6d7c3] border-b-0 shadow-sm">
+          <div className="flex items-center justify-between gap-4 flex-wrap">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-white text-[#4a352f] border border-[#c8b6a6]">
+                <LayoutGrid size={12} className="text-[#7d5a50] flex-shrink-0" />
+                Viewing: {activeView.name}
+                {activeView.description && <span className="font-normal text-[#a89482]"> — {activeView.description}</span>}
+              </span>
+              {activeFilterCount > 0 && (
+                <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#fff3e0] text-[#e65100] border border-[#e65100]/30">
+                  <SlidersHorizontal size={12} /> {activeFilterCount} filter{activeFilterCount > 1 ? "s" : ""} active
+                </span>
+              )}
+            </div>
+            <div className="relative">
+              <button
+                onClick={(e) => {
+                  if (showCustomizeMenu) { setShowCustomizeMenu(false); setCustomizeMenuRect(null) }
+                  else { setCustomizeMenuRect(e.currentTarget.getBoundingClientRect()); setShowCustomizeMenu(true); setShowNewViewForm(false); setEditingViewMeta(null) }
+                }}
+                className="flex items-center gap-2 px-4 py-2.5 bg-white border border-[#c8b6a6] rounded-xl text-sm text-[#4a352f] hover:bg-[#f5f0e1] transition-all shadow-sm"
+              >
+                <SlidersHorizontal size={16} /> Customize Table <ChevronDown size={14} className={`transition-transform ${showCustomizeMenu ? "rotate-180" : ""}`} />
+              </button>
+              {showCustomizeMenu && customizeMenuRect && (() => {
+                const panelWidth = 320
+                const margin = 12
+                let left = customizeMenuRect.right - panelWidth
+                left = Math.min(Math.max(left, margin), window.innerWidth - panelWidth - margin)
+                const spaceBelow = window.innerHeight - customizeMenuRect.bottom - margin - 8
+                const spaceAbove = customizeMenuRect.top - margin - 8
+                const openUpward = spaceBelow < 320 && spaceAbove > spaceBelow
+                const maxHeight = Math.max(200, Math.min(620, openUpward ? spaceAbove : spaceBelow))
+                const top = openUpward ? undefined : customizeMenuRect.bottom + 8
+                const bottom = openUpward ? window.innerHeight - customizeMenuRect.top + 8 : undefined
+                const allViews = Object.values(viewsState.views).sort((a, b) => (a.builtin ? -1 : b.builtin ? 1 : a.name.localeCompare(b.name)))
+                return (
+                  <PopupPortal>
+                    <div className="fixed inset-0 z-40" onClick={() => { setShowCustomizeMenu(false); setCustomizeMenuRect(null); setShowNewViewForm(false); setEditingViewMeta(null) }} />
+                    <div className="fixed bg-white rounded-2xl shadow-2xl border border-[#e6d7c3] p-5 z-50 overflow-y-auto" style={{ left, width: panelWidth, top, bottom, maxHeight }}>
+                      <h4 className="text-sm font-semibold text-[#4a352f] mb-1">Views</h4>
+                      <p className="text-xs text-[#a89482] mb-3">Edits below auto-save into whichever view is selected.</p>
+                      <div className="space-y-1 mb-3">
+                        {allViews.map((view) => {
+                          const isActive = view.id === viewsState.activeViewId
+                          const isEditing = editingViewMeta?.id === view.id
+                          if (isEditing) {
+                            return (
+                              <div key={view.id} className="p-2.5 rounded-lg border border-[#c8b6a6] bg-[#faf7f2] space-y-2">
+                                {!view.builtin ? (
+                                  <input autoFocus value={editingViewMeta.name} onChange={(e) => setEditingViewMeta((prev) => ({ ...prev, name: e.target.value }))} placeholder="View name" className="w-full px-2.5 py-1.5 border border-[#c8b6a6] rounded-lg text-sm" />
+                                ) : (
+                                  <p className="text-sm font-semibold text-[#4a352f]">Default <span className="font-normal text-[#a89482] text-xs">(name can't be changed)</span></p>
+                                )}
+                                <textarea value={editingViewMeta.description} onChange={(e) => setEditingViewMeta((prev) => ({ ...prev, description: e.target.value }))} placeholder="Description (optional) — what is this view for?" rows={2} className="w-full px-2.5 py-1.5 border border-[#c8b6a6] rounded-lg text-xs resize-none" />
+                                <div className="flex justify-end gap-2">
+                                  <button onClick={() => setEditingViewMeta(null)} className="px-2.5 py-1 text-xs text-[#7d5a50] hover:text-[#4a352f]">Cancel</button>
+                                  <button onClick={saveViewMeta} className="px-2.5 py-1 bg-[#7d5a50] text-white rounded-lg text-xs font-semibold">Save</button>
+                                </div>
+                              </div>
+                            )
+                          }
+                          return (
+                            <div key={view.id} className={`flex items-start justify-between gap-2 px-2.5 py-2 rounded-lg ${isActive ? "bg-[#f5f0e1]" : "hover:bg-[#faf7f2]"}`}>
+                              <button onClick={() => switchToView(view.id)} className="flex-1 text-left min-w-0">
+                                <div className="flex items-center gap-1.5">
+                                  {isActive && <CheckCircle size={12} className="text-[#7d5a50] flex-shrink-0" />}
+                                  <span className={`text-sm ${isActive ? "font-semibold text-[#4a352f]" : "text-[#4a352f]"}`}>{view.name}</span>
+                                  {view.builtin && <span className="text-[10px] uppercase tracking-wide text-[#a89482] font-semibold">Built-in</span>}
+                                </div>
+                                {view.description && <p className="text-xs text-[#a89482] mt-0.5 truncate">{view.description}</p>}
+                              </button>
+                              <div className="flex items-center gap-0.5 flex-shrink-0">
+                                <button onClick={() => startEditingViewMeta(view)} title="Rename / edit description" className="text-[#a89482] hover:text-[#7d5a50] p-1"><Settings size={13} /></button>
+                                {!view.builtin && <button onClick={() => removeView(view.id)} title="Delete view" className="text-[#a89482] hover:text-red-500 p-1"><Trash2 size={13} /></button>}
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                      {showNewViewForm ? (
+                        <div className="space-y-2 mb-1">
+                          <input autoFocus value={newViewName} onChange={(e) => setNewViewName(e.target.value)} placeholder="New view name..." className="w-full px-2.5 py-1.5 border border-[#c8b6a6] rounded-lg text-sm" />
+                          <textarea value={newViewDescription} onChange={(e) => setNewViewDescription(e.target.value)} placeholder="Description (optional) — what is this view for?" rows={2} className="w-full px-2.5 py-1.5 border border-[#c8b6a6] rounded-lg text-xs resize-none" />
+                          <div className="flex justify-end gap-2">
+                            <button onClick={() => { setShowNewViewForm(false); setNewViewName(""); setNewViewDescription("") }} className="px-2.5 py-1 text-xs text-[#7d5a50] hover:text-[#4a352f]">Cancel</button>
+                            <button onClick={createNewView} disabled={!newViewName.trim()} className="px-3 py-1.5 bg-[#7d5a50] text-white rounded-lg text-xs font-semibold disabled:opacity-40">Create view</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <button onClick={() => setShowNewViewForm(true)} className="w-full flex items-center justify-center gap-1.5 px-3 py-2 border border-dashed border-[#c8b6a6] rounded-lg text-xs font-semibold text-[#7d5a50] hover:bg-[#faf7f2]">
+                          <Plus size={13} /> New view from current layout
+                        </button>
+                      )}
+
+                      <div className="border-t border-[#e6d7c3] my-4" />
+                      <h4 className="text-sm font-semibold text-[#4a352f] mb-3">Hide/Unhide</h4>
+                      <p className="text-xs text-[#a89482] mb-3 flex items-center gap-1.5">
+                        <GripVertical size={12} className="flex-shrink-0" /> Tip: drag any column header in the table to reorder it.
+                      </p>
+                      <label className="flex items-center gap-3 py-1.5 px-2 rounded-lg opacity-75">
+                        <input type="checkbox" checked={true} disabled={true} className="rounded border-[#c8b6a6]" />
+                        <span className="text-sm text-[#4a352f]">Catalyst Name</span>
+                      </label>
+                      <div className="border-t border-[#e6d7c3] my-2" />
+                      {DEFAULT_COLUMN_ORDER.map((key) => (
+                        <label key={key} className="flex items-center gap-3 py-1.5 px-2 rounded-lg hover:bg-[#faf7f2] cursor-pointer">
+                          <input type="checkbox" checked={columnVisibility[key] || false} onChange={() => toggleColumn(key)} className="rounded border-[#c8b6a6] text-[#7d5a50]" />
+                          <span className="text-sm text-[#4a352f]">{COLUMN_DEFS[key].label}</span>
+                        </label>
+                      ))}
+
+                      <div className="border-t border-[#e6d7c3] my-4" />
+                      <h4 className="text-sm font-semibold text-[#4a352f] mb-3">Density</h4>
+                      <div className="flex gap-1.5">
+                        {[{ key: "comfortable", label: "Comfortable" }, { key: "compact", label: "Compact" }, { key: "ultra-compact", label: "Ultra Compact" }].map((d) => (
+                          <button key={d.key} onClick={() => setDensity(d.key)} className={`flex-1 px-2 py-1.5 rounded-lg text-xs font-semibold transition-all ${density === d.key ? "bg-[#7d5a50] text-white" : "bg-[#f5f0e1] text-[#4a352f] hover:bg-[#e6d7c3]"}`}>
+                            {d.label}
+                          </button>
+                        ))}
+                      </div>
+
+                      <div className="border-t border-[#e6d7c3] my-4" />
+                      <button onClick={resetActiveViewToDefault} className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold text-[#a67c52] hover:text-[#4a352f] hover:bg-[#faf7f2] border border-[#e6d7c3]">
+                        <RotateCcw size={12} /> Reset "{activeView.name}" to factory defaults
+                      </button>
+                    </div>
+                  </PopupPortal>
+                )
+              })()}
+            </div>
           </div>
         </div>
 
-        {/* Table structure - always show */}
-        <div
-          style={{
-            overflowX: "auto",
-            borderRadius: "8px",
-            border: "1px solid #E8D5C4",
-            boxShadow: "0 4px 24px rgba(139, 69, 19, 0.08)",
-          }}
-        >
-          <table
-            style={{
-              width: "100%",
-              borderCollapse: "collapse",
-              background: "white",
-              fontSize: "0.8rem",
-              backgroundColor: "#FEFCFA",
-              minWidth: "1200px",
-              fontFamily: "system-ui, -apple-system, sans-serif",
-            }}
-          >
-            <colgroup>
-              <col style={{ width: "160px" }} />
-              <col style={{ width: "130px" }} />
-              <col style={{ width: "120px" }} />
-              <col style={{ width: "110px" }} />
-              <col style={{ width: "110px" }} />
-              <col style={{ width: "120px" }} />
-              <col style={{ width: "140px" }} />
-              <col style={{ width: "130px" }} />
-              <col style={{ width: "100px" }} />
-              <col style={{ width: "90px" }} />
-              <col style={{ width: "100px" }} />
-              <col style={{ width: "160px" }} />
-              <col style={{ width: "130px" }} />
-            </colgroup>
-            <thead>
-              <tr>
-                <th style={tableHeaderStyle}>Catalyst Name</th>
-                <th style={tableHeaderStyle}>Geographic Focus</th>
-                <th style={tableHeaderStyle}>Sector Focus</th>
-                <th style={tableHeaderStyle}>Funding Stage</th>
-                <th style={tableHeaderStyle}>Funding Type</th>
-                <th style={tableHeaderStyle}>Ticket Size</th>
-                <th style={tableHeaderStyle}>Support Offered</th>
-                <th style={tableHeaderStyle}>Services Offered</th>
-                <th style={tableHeaderStyle}>Deadline</th>
-                <th style={tableHeaderStyle}>Speed (Days)</th>
-                <th style={tableHeaderStyle}>Match %</th>
-                <th style={tableHeaderStyle}>Status</th>
-                <th style={{ ...tableHeaderStyle, borderRight: "none" }}>Next Stage</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredAccelerators.length === 0 ? (
-                <tr>
-                  <td colSpan="13" style={{ ...tableCellStyle, textAlign: "center", padding: "2rem", borderRight: "none" }}>
-                    <span style={{ color: "#999", fontSize: "0.875rem" }}>No catalyst data available</span>
-                  </td>
-                </tr>
-              ) : (
-                filteredAccelerators.map((accelerator) => {
-                  const status = statuses[accelerator.id] || "Application not sent"
-                  const pipelineStage = pipelineStages[accelerator.id] || accelerator.pipelineStage
+        {/* Table */}
+        <div className="bg-white rounded-2xl border border-[#e6d7c3] shadow-lg overflow-hidden">
+          <div className="overflow-auto" style={{ maxHeight: "70vh" }}>
+            <style>{`
+              .at-th { color: #faf7f2 !important; vertical-align: top !important; }
+              .at-th-draggable { cursor: grab; }
+              .at-th-draggable:active { cursor: grabbing; }
+              .at-th-label { flex: 1 1 auto; min-width: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; white-space: normal; overflow-wrap: break-word; line-height: 1.2; }
+            `}</style>
+            <table className="border-collapse text-sm" style={{ tableLayout: "auto" }}>
+              <thead>
+                <tr className="bg-[#4a352f]">
+                  <th className="at-th py-3 px-3 text-left font-semibold uppercase tracking-wider text-xs border-r border-[#e6d7c3] sticky top-0 left-0 z-30" style={{ backgroundColor: "#4a352f", minWidth: "180px", maxWidth: "200px" }}>
+                    <div className="flex items-start gap-1 min-w-0">
+                      <span className="at-th-label">Catalyst Name</span>
+                      <FilterTrigger type="name" active={!!localFilters.name.trim()} />
+                    </div>
+                  </th>
 
-                  return (
-                    <tr key={accelerator.id} style={{ borderBottom: "1px solid #E8D5C4" }}>
-                      <td style={tableCellStyle}>
-                        <span
-                          onClick={() => handleViewClick(accelerator)}
-                          style={{
-                            color: "#a67c52",
-                            textDecoration: "underline",
-                            cursor: "pointer",
-                            fontWeight: "500",
-                            wordBreak: "break-word",
-                            fontSize: "0.8rem",
-                          }}
-                        >
-                          {accelerator.name}
-                        </span>
-                      </td>
-                      <td style={tableCellStyle}>
-                        <TruncatedText text={formatLabel(accelerator.geographicFocus)} maxLength={30} />
-                      </td>
-                      <td style={tableCellStyle}>
-                        <TruncatedText text={formatLabel(accelerator.sectorFocus)} maxLength={25} />
-                      </td>
-                      <td style={tableCellStyle}>
-                        <TruncatedText text={formatLabel(accelerator.fundingStage)} maxLength={25} />
-                      </td>
-                      <td style={tableCellStyle}>
-                        <TruncatedText text={formatLabel(accelerator.fundingType)} maxLength={20} />
-                      </td>
-                      <td style={tableCellStyle}>
-                        <span style={{ wordBreak: "break-word", fontSize: "0.8rem" }}>{accelerator.ticketSize}</span>
-                      </td>
-                      <td style={tableCellStyle}>
-                        <TruncatedText text={formatLabel(accelerator.supportOffered)} maxLength={35} />
-                      </td>
-                      <td style={tableCellStyle}>
-                        <TruncatedText text={formatLabel(accelerator.servicesOffered)} maxLength={30} />
-                      </td>
-                      <td style={tableCellStyle}>
-                        <span style={{ wordBreak: "break-word", fontSize: "0.8rem" }}>
-                          {accelerator.deadline || "-"}
-                        </span>
-                      </td>
-                      <td style={tableCellStyle}>
-                        <span style={waitingBadgeStyle}>{accelerator.speed}</span>
-                      </td>
-                      <td style={tableCellStyle}>
-                        <div style={matchContainerStyle}>
-                          <div style={progressBarStyle}>
-                            <div style={{ ...progressFillStyle, width: `${accelerator.matchPercentage}%` }} />
-                          </div>
-                          <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                            <span style={matchScoreStyle}>{accelerator.matchPercentage}%</span>
-                            <Eye
-                              size={14}
-                              style={{ cursor: "pointer", color: "#a67c52" }}
-                              onClick={() => handleViewMatchBreakdown(accelerator)}
-                            />
-                          </div>
+                  {visibleColumnKeys.map((key) => {
+                    const col = COLUMN_DEFS[key]
+                    const isDragging = draggedColumn === key
+                    const isDragOver = dragOverColumn === key && draggedColumn !== key
+                    return (
+                      <th
+                        key={key}
+                        draggable
+                        onDragStart={(e) => handleColumnDragStart(e, key)}
+                        onDragOver={(e) => handleColumnDragOver(e, key)}
+                        onDrop={(e) => handleColumnDrop(e, key)}
+                        onDragEnd={handleColumnDragEnd}
+                        onMouseEnter={(e) => setDragHintRect(e.currentTarget.getBoundingClientRect())}
+                        onMouseLeave={() => setDragHintRect(null)}
+                        className={`at-th at-th-draggable py-3 px-3 font-semibold uppercase tracking-wider text-xs border-r border-[#e6d7c3] sticky top-0 z-20 select-none transition-opacity ${col.align === "center" ? "text-center" : "text-left"} ${isDragging ? "opacity-40" : ""}`}
+                        style={{ minWidth: col.minWidth, backgroundColor: isDragOver ? "#5a423b" : "#4a352f" }}
+                      >
+                        <div className={`flex items-start gap-1 min-w-0 ${col.align === "center" ? "justify-center" : ""}`}>
+                          <GripVertical size={11} className="opacity-40 flex-shrink-0 mt-0.5" />
+                          <span className="at-th-label">{col.label}</span>
+                          <FilterTrigger type={col.filterType} active={getFilterActive(col.filterType)} />
                         </div>
-                      </td>
+                      </th>
+                    )
+                  })}
 
-                      <td style={tableCellStyle}>
-                        <div style={actionButtonsStyle}>
-                          {hasApplication(accelerator.id) ? (
-                            <span style={sentBadgeStyle}>
-                              <Check size={14} />
-                              {(pipelineStages[accelerator.id] || "Application Sent").length > 15
-                                ? (pipelineStages[accelerator.id] || "Application Sent").substring(0, 12) + "..."
-                                : pipelineStages[accelerator.id] || "Application Sent"}
-                            </span>
-                          ) : (
-                            <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                              <button onClick={() => handleApplyClick(accelerator)} style={applyButtonStyle}>
+                  <th className="at-th py-3 px-3 text-center font-semibold uppercase tracking-wider text-xs sticky top-0 z-20" style={{ backgroundColor: "#4a352f", minWidth: "150px" }}>
+                    Action
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredAccelerators.length === 0 ? (
+                  <tr>
+                    <td colSpan={visibleColumnKeys.length + 2} className="text-center py-16">
+                      <span className="text-[#999] text-sm">
+                        {accelerators.length === 0
+                          ? "No catalyst data available"
+                          : "No catalysts match the selected filters."}
+                      </span>
+                    </td>
+                  </tr>
+                ) : (
+                  filteredAccelerators.map((accelerator) => {
+                    const rowKey = accelerator.id
+                    const applied = hasApplication(accelerator.id)
+                    return (
+                      <tr key={rowKey} className="border-b border-[#f0e6d9]" style={{ backgroundColor: hoveredRowKey === rowKey ? "#fdf8f4" : undefined }} onMouseEnter={() => setHoveredRowKey(rowKey)} onMouseLeave={() => setHoveredRowKey(null)}>
+                        <td className={`${ds.cell} ${ds.fontSize} sticky left-0 border-r border-[#e6d7c3] z-10`} style={{ minWidth: "180px", maxWidth: "200px", backgroundColor: hoveredRowKey === rowKey ? "#fdf8f4" : "#ffffff" }}>
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-medium text-[#4a352f] break-words">{accelerator.name}</span>
+                            <button
+                              onClick={() => handleViewClick(accelerator)}
+                              className="text-[#a89482] hover:text-[#7d5a50] transition-colors flex-shrink-0"
+                              aria-label={`View details for ${accelerator.name}`}
+                              title="View catalyst details"
+                            >
+                              <Eye size={13} />
+                            </button>
+                          </div>
+                        </td>
+
+                        {visibleColumnKeys.map((key) => renderCell(key, accelerator))}
+
+                        <td className={`${ds.cell} text-center`} style={{ minWidth: "150px" }}>
+                          <div className="flex items-center justify-center gap-1.5">
+                            {applied ? (
+                              <span className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#e8f5e9] text-[#2e7d32] whitespace-nowrap">
+                                <Check size={13} /> Applied
+                              </span>
+                            ) : (
+                              <button onClick={() => handleApplyClick(accelerator)} className="px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-[#5D2A0A] hover:brightness-105 transition-all whitespace-nowrap">
                                 Apply
                               </button>
-                            </div>
-                          )}
-                        </div>
-                      </td>
-
-                      <td style={{ ...tableCellStyle, borderRight: "none" }}>
-                        <div
-                          style={{
-                            ...statusBadgeStyle,
-                            backgroundColor: "#F5EBE0",
-                            color: "#5D2A0A",
-                            fontSize: "0.55rem",
-                            padding: "0.15rem 0.3rem",
-                            textAlign: "center",
-                            lineHeight: "1.1",
-                            minHeight: "2.2rem",
-                            display: "flex",
-                            flexDirection: "column",
-                            justifyContent: "center",
-                            maxWidth: "100px",
-                            overflow: "hidden",
-                          }}
-                        >
-                          {accelerator.nextStage.split(" ").map((word, index) => (
-                            <div key={index} style={{ fontSize: "0.55rem" }}>
-                              {word}
-                            </div>
-                          ))}
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })
-              )}
-            </tbody>
-          </table>
+                            )}
+                            <button onClick={(e) => openRowMenu(accelerator, e)} className="p-2 rounded-lg border border-[#c8b6a6] text-[#7d5a50] hover:bg-[#f5f0e1] transition-all" aria-label="More actions">
+                              <MoreVertical size={14} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    )
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
 
-        {/* Message below table when no accelerators */}
-        {filteredAccelerators.length === 0 && !loading && (
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "center",
-              alignItems: "center",
-              padding: "2rem",
-              color: "#a67c52",
-              marginTop: "1rem",
-            }}
-          >
-            <p style={{ textAlign: "center", fontSize: "0.875rem" }}>
+        {filteredAccelerators.length === 0 && !loading && accelerators.length === 0 && (
+          <div className="flex justify-center items-center p-8 text-[#a67c52] mt-4">
+            <p className="text-center text-sm">
               You have not applied for any catalysts, so there are no matches available. You need to apply first.
             </p>
           </div>
         )}
       </div>
 
-      {mounted &&
-        showMatchBreakdown &&
-        selectedAccelerator &&
-        createPortal(
-          <div
-            style={{
-              position: "fixed",
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              backgroundColor: "rgba(0,0,0,0.5)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              zIndex: 1000,
-            }}
-          >
-            <div
-              style={{
-                background: "white",
-                borderRadius: "12px",
-                maxWidth: "800px",
-                width: "95%",
-                maxHeight: "90vh",
-                overflowY: "auto",
-                boxShadow: "0 20px 40px rgba(0,0,0,0.15)",
-              }}
-            >
-              <div style={modalHeaderStyle}>
-                <h3 style={modalTitleStyle}>Match Breakdown - {selectedAccelerator?.name || "Accelerator"}</h3>
-                <button onClick={closeAllModals} style={modalCloseButtonStyle}>
-                  ✖
-                </button>
-              </div>
-              <div style={modalBodyStyle}>
-                <div
-                  style={{
-                    textAlign: "center",
-                    marginBottom: "2rem",
-                    paddingBottom: "1rem",
-                    borderBottom: "2px solid #E8D5C4",
-                  }}
-                >
-                  <div
-                    style={{
-                      fontSize: "3rem",
-                      fontWeight: "bold",
-                      color:
-                        selectedAccelerator?.matchPercentage >= 80
-                          ? "#388E3C"
-                          : selectedAccelerator?.matchPercentage >= 60
-                            ? "#F57C00"
-                            : "#D32F2F",
-                      marginBottom: "0.5rem",
-                    }}
-                  >
-                    {selectedAccelerator?.matchPercentage || 0}%
-                  </div>
-                  <p
-                    style={{
-                      fontSize: "1rem",
-                      color: "#8D6E63",
-                      margin: "0",
-                    }}
-                  >
-                    Overall Match Score
-                  </p>
+      {/* ─── Drag-to-reorder hint tooltip ──────────────────────────────────── */}
+      {dragHintRect && !draggedColumn && (
+        <PopupPortal>
+          <div className="fixed z-[1200] bg-[#4a352f] text-[#faf7f2] text-xs rounded-lg px-3 py-2 shadow-2xl pointer-events-none normal-case font-normal flex items-center gap-1.5" style={{ top: dragHintRect.bottom + 8, left: Math.min(Math.max(dragHintRect.left, 12), window.innerWidth - 200), width: "190px" }}>
+            <GripVertical size={12} className="flex-shrink-0" /> Drag to reorder columns
+          </div>
+        </PopupPortal>
+      )}
+
+      {/* ─── Row quick-actions menu ─────────────────────────────────────────── */}
+      {rowMenu && (
+        <PopupPortal>
+          <div className="fixed inset-0 z-[1090]" onClick={() => setRowMenu(null)} />
+          <div className="fixed z-[1100] bg-white rounded-xl shadow-2xl border border-[#e6d7c3] py-1" style={{ top: rowMenu.position.y, left: rowMenu.position.x, width: "200px" }}>
+            <div className="flex items-center justify-between px-4 py-2 border-b border-[#e6d7c3]">
+              <span className="text-xs font-semibold text-[#4a352f]">Quick Actions</span>
+              <button onClick={() => setRowMenu(null)} className="text-[#7d5a50] hover:text-[#4a352f]"><X size={14} /></button>
+            </div>
+            <button onClick={() => handleViewClick(rowMenu.accelerator)} className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"><Eye size={12} /> View Catalyst Details</button>
+            <button onClick={() => handleViewMatchBreakdown(rowMenu.accelerator)} className="w-full flex items-center gap-2 px-4 py-2.5 text-xs text-[#4a352f] hover:bg-[#faf7f2] text-left"><SlidersHorizontal size={12} /> Why This Match?</button>
+          </div>
+        </PopupPortal>
+      )}
+
+      {/* ─── Column header filter popover ──────────────────────────────────── */}
+      {headerFilterOpen && (
+        <PopupPortal>
+          <div className="fixed inset-0 z-[1090]" onClick={closeHeaderFilter} />
+          <div className="fixed z-[1091] bg-white rounded-2xl shadow-2xl border border-[#e6d7c3] p-4" style={{ top: headerFilterOpen.rect.bottom + 8, left: Math.min(Math.max(headerFilterOpen.rect.left - 20, 12), window.innerWidth - 312), width: "300px", maxHeight: "70vh", overflowY: "auto" }}>
+            {headerFilterOpen.type === "name" && (
+              <>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-semibold text-[#4a352f]">Catalyst name</label>
+                  {localFilters.name && <button onClick={() => setLocalFilters((p) => ({ ...p, name: "" }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>}
                 </div>
+                <input autoFocus type="text" value={localFilters.name} onChange={(e) => setLocalFilters((p) => ({ ...p, name: e.target.value }))} placeholder="Search catalyst name..." className="w-full px-3 py-2 border border-[#c8b6a6] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#7d5a50]/20" />
+              </>
+            )}
 
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "repeat(auto-fit, minmax(350px, 1fr))",
-                    gap: "1rem",
-                    marginBottom: "2rem",
-                  }}
-                >
-                  {selectedAccelerator?.matchBreakdown &&
-                    Object.entries(selectedAccelerator.matchBreakdown).map(([key, breakdown]) => {
-                      if (!breakdown || typeof breakdown !== "object") {
-                        return null
-                      }
-
-                      const scoreColor = breakdown.matched ? "#388E3C" : "#D32F2F"
-
-                      const titles = {
-                        fundingStage: "Funding Stage Match",
-                        ticketSize: "Ticket Size Compatibility",
-                        geographicFit: "Geographic Fit",
-                        sectorMatch: "Sector Match",
-                        instrumentFit: "Instrument Fit",
-                        firmTypeMatch: "Firm Type Match",
-                        legalEntityFit: "Legal Entity Fit",
-                        revenueThreshold: "Revenue Threshold",
-                      }
-
-                      return (
-                        <div
-                          key={key}
-                          style={{
-                            background: "#FEFCFA",
-                            border: "1px solid #E8D5C4",
-                            borderRadius: "8px",
-                            padding: "1.25rem",
-                            borderLeft: `4px solid ${scoreColor}`,
-                          }}
-                        >
-                          <div
-                            style={{
-                              display: "flex",
-                              justifyContent: "space-between",
-                              alignItems: "flex-start",
-                              marginBottom: "0.75rem",
-                            }}
-                          >
-                            <h4
-                              style={{
-                                fontSize: "0.875rem",
-                                fontWeight: "600",
-                                color: "#5D2A0A",
-                                margin: "0",
-                                lineHeight: "1.3",
-                                flex: "1",
-                              }}
-                            >
-                              {titles[key] || formatLabel(key)}
-                            </h4>
-                            <span
-                              style={{
-                                fontSize: "0.75rem",
-                                fontWeight: "600",
-                                color: scoreColor,
-                                marginLeft: "0.5rem",
-                              }}
-                            >
-                              {breakdown.matched ? "✓ Match" : "✗ No Match"}
-                            </span>
-                          </div>
-
-                          <div style={{ fontSize: "0.75rem", color: "#666", lineHeight: "1.4" }}>
-                            <div style={{ marginBottom: "0.5rem" }}>
-                              <strong>Your Need:</strong>{" "}
-                              {breakdown.details?.smeValue || breakdown.description || "N/A"}
-                            </div>
-                            <div>
-                              <strong>Accelerator Offers:</strong>{" "}
-                              {breakdown.details?.accelValue || breakdown.details?.acceleratorValue || "N/A"}
-                            </div>
-                          </div>
-                        </div>
-                      )
-                    })}
+            {headerFilterOpen.type === "match" && (
+              <>
+                <div className="flex items-center justify-between mb-3">
+                  <label className="text-xs font-semibold text-[#4a352f]">Match %: {localFilters.matchRange[0]} - {localFilters.matchRange[1]}</label>
+                  {(localFilters.matchRange[0] > 0 || localFilters.matchRange[1] < 100) && <button onClick={() => setLocalFilters((p) => ({ ...p, matchRange: [0, 100] }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>}
                 </div>
+                <div className="flex items-center gap-3 mb-3">
+                  <input type="number" min="0" max="100" value={localFilters.matchRange[0]} onChange={(e) => setLocalFilters((p) => ({ ...p, matchRange: [Math.min(parseInt(e.target.value) || 0, p.matchRange[1]), p.matchRange[1]] }))} className="w-16 px-2 py-1.5 border border-[#c8b6a6] rounded-lg text-sm text-center" />
+                  <span className="text-[#7d5a50]">to</span>
+                  <input type="number" min="0" max="100" value={localFilters.matchRange[1]} onChange={(e) => setLocalFilters((p) => ({ ...p, matchRange: [p.matchRange[0], Math.max(parseInt(e.target.value) || 0, p.matchRange[0])] }))} className="w-16 px-2 py-1.5 border border-[#c8b6a6] rounded-lg text-sm text-center" />
+                </div>
+                <input type="range" min="0" max="100" value={localFilters.matchRange[0]} onChange={(e) => setLocalFilters((p) => ({ ...p, matchRange: [parseInt(e.target.value), p.matchRange[1]] }))} className="w-full accent-[#7d5a50]" />
+              </>
+            )}
+
+            {headerFilterOpen.type === "geographicFocus" && (
+              <>
+                <div className="flex items-center justify-between mb-3">
+                  <label className="text-xs font-semibold text-[#4a352f]">Geographic Focus</label>
+                  {localFilters.geographicFocus.length > 0 && <button onClick={() => setLocalFilters((p) => ({ ...p, geographicFocus: [] }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>}
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {geographicFocusOptions.map((opt) => (
+                    <button key={opt.value} onClick={() => setLocalFilters((p) => ({ ...p, geographicFocus: p.geographicFocus.includes(opt.label) ? p.geographicFocus.filter((x) => x !== opt.label) : [...p.geographicFocus, opt.label] }))} className={`px-2.5 py-1 rounded-full text-xs font-medium ${localFilters.geographicFocus.includes(opt.label) ? "bg-[#7d5a50] text-white" : "bg-[#f5f0e1] text-[#4a352f] hover:bg-[#e6d7c3]"}`}>{opt.label}</button>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {headerFilterOpen.type === "sectorFocus" && (
+              <>
+                <div className="flex items-center justify-between mb-3">
+                  <label className="text-xs font-semibold text-[#4a352f]">Sector Focus</label>
+                  {localFilters.sectorFocus.length > 0 && <button onClick={() => setLocalFilters((p) => ({ ...p, sectorFocus: [] }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>}
+                </div>
+                <div className="flex flex-wrap gap-1.5 max-h-[220px] overflow-y-auto">
+                  {(uniqueSectors.length > 0 ? uniqueSectors.map(formatLabel) : sectorFocusOptions.map((o) => o.label)).map((label) => (
+                    <button key={label} onClick={() => setLocalFilters((p) => ({ ...p, sectorFocus: p.sectorFocus.includes(label) ? p.sectorFocus.filter((x) => x !== label) : [...p.sectorFocus, label] }))} className={`px-2.5 py-1 rounded-full text-xs font-medium ${localFilters.sectorFocus.includes(label) ? "bg-[#7d5a50] text-white" : "bg-[#f5f0e1] text-[#4a352f] hover:bg-[#e6d7c3]"}`}>{label}</button>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {headerFilterOpen.type === "fundingStage" && (
+              <>
+                <div className="flex items-center justify-between mb-3">
+                  <label className="text-xs font-semibold text-[#4a352f]">Funding Stage</label>
+                  {localFilters.fundingStage.length > 0 && <button onClick={() => setLocalFilters((p) => ({ ...p, fundingStage: [] }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>}
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {fundingStageOptions.map((opt) => (
+                    <button key={opt.value} onClick={() => setLocalFilters((p) => ({ ...p, fundingStage: p.fundingStage.includes(opt.label) ? p.fundingStage.filter((x) => x !== opt.label) : [...p.fundingStage, opt.label] }))} className={`px-2.5 py-1 rounded-full text-xs font-medium ${localFilters.fundingStage.includes(opt.label) ? "bg-[#7d5a50] text-white" : "bg-[#f5f0e1] text-[#4a352f] hover:bg-[#e6d7c3]"}`}>{opt.label}</button>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {headerFilterOpen.type === "fundingType" && (
+              <>
+                <div className="flex items-center justify-between mb-3">
+                  <label className="text-xs font-semibold text-[#4a352f]">Funding Type</label>
+                  {localFilters.fundingType.length > 0 && <button onClick={() => setLocalFilters((p) => ({ ...p, fundingType: [] }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>}
+                </div>
+                <div className="flex flex-wrap gap-1.5 max-h-[180px] overflow-y-auto">
+                  {uniqueFundingTypes.length === 0 && <span className="text-xs text-[#a89482]">No funding type data available</span>}
+                  {uniqueFundingTypes.map(formatLabel).map((label) => (
+                    <button key={label} onClick={() => setLocalFilters((p) => ({ ...p, fundingType: p.fundingType.includes(label) ? p.fundingType.filter((x) => x !== label) : [...p.fundingType, label] }))} className={`px-2.5 py-1 rounded-full text-xs font-medium ${localFilters.fundingType.includes(label) ? "bg-[#7d5a50] text-white" : "bg-[#f5f0e1] text-[#4a352f] hover:bg-[#e6d7c3]"}`}>{label}</button>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {headerFilterOpen.type === "ticketSize" && (
+              <>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-semibold text-[#4a352f]">Ticket Size</label>
+                  {localFilters.ticketSize && <button onClick={() => setLocalFilters((p) => ({ ...p, ticketSize: "" }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>}
+                </div>
+                <input autoFocus type="text" value={localFilters.ticketSize} onChange={(e) => setLocalFilters((p) => ({ ...p, ticketSize: e.target.value }))} placeholder="Search ticket size..." className="w-full px-3 py-2 border border-[#c8b6a6] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#7d5a50]/20" />
+              </>
+            )}
+
+            {headerFilterOpen.type === "supportOffered" && (
+              <>
+                <div className="flex items-center justify-between mb-3">
+                  <label className="text-xs font-semibold text-[#4a352f]">Support Offered</label>
+                  {localFilters.supportOffered.length > 0 && <button onClick={() => setLocalFilters((p) => ({ ...p, supportOffered: [] }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>}
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {supportOfferedOptions.map((opt) => (
+                    <button key={opt.value} onClick={() => setLocalFilters((p) => ({ ...p, supportOffered: p.supportOffered.includes(opt.label) ? p.supportOffered.filter((x) => x !== opt.label) : [...p.supportOffered, opt.label] }))} className={`px-2.5 py-1 rounded-full text-xs font-medium ${localFilters.supportOffered.includes(opt.label) ? "bg-[#7d5a50] text-white" : "bg-[#f5f0e1] text-[#4a352f] hover:bg-[#e6d7c3]"}`}>{opt.label}</button>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {headerFilterOpen.type === "servicesOffered" && (
+              <>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-semibold text-[#4a352f]">Services Offered</label>
+                  {localFilters.servicesOffered && <button onClick={() => setLocalFilters((p) => ({ ...p, servicesOffered: "" }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>}
+                </div>
+                <input autoFocus type="text" value={localFilters.servicesOffered} onChange={(e) => setLocalFilters((p) => ({ ...p, servicesOffered: e.target.value }))} placeholder="Search services offered..." className="w-full px-3 py-2 border border-[#c8b6a6] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#7d5a50]/20" />
+              </>
+            )}
+
+            {headerFilterOpen.type === "deadline" && (
+              <>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-semibold text-[#4a352f]">Deadline</label>
+                  {localFilters.deadline && <button onClick={() => setLocalFilters((p) => ({ ...p, deadline: "" }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>}
+                </div>
+                <input autoFocus type="text" value={localFilters.deadline} onChange={(e) => setLocalFilters((p) => ({ ...p, deadline: e.target.value }))} placeholder="Search deadline..." className="w-full px-3 py-2 border border-[#c8b6a6] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#7d5a50]/20" />
+              </>
+            )}
+
+            {headerFilterOpen.type === "speed" && (
+              <>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-semibold text-[#4a352f]">Speed (Days)</label>
+                  {localFilters.speed && <button onClick={() => setLocalFilters((p) => ({ ...p, speed: "" }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>}
+                </div>
+                <input autoFocus type="text" value={localFilters.speed} onChange={(e) => setLocalFilters((p) => ({ ...p, speed: e.target.value }))} placeholder="Search response time..." className="w-full px-3 py-2 border border-[#c8b6a6] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#7d5a50]/20" />
+              </>
+            )}
+
+            {headerFilterOpen.type === "status" && (
+              <>
+                <div className="flex items-center justify-between mb-3">
+                  <label className="text-xs font-semibold text-[#4a352f]">Status</label>
+                  {localFilters.status.length > 0 && <button onClick={() => setLocalFilters((p) => ({ ...p, status: [] }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>}
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {statusOptions.map((s) => (
+                    <button key={s} onClick={() => setLocalFilters((p) => ({ ...p, status: p.status.includes(s) ? p.status.filter((x) => x !== s) : [...p.status, s] }))} className={`px-2.5 py-1 rounded-full text-xs font-medium ${localFilters.status.includes(s) ? "bg-[#7d5a50] text-white" : "bg-[#f5f0e1] text-[#4a352f] hover:bg-[#e6d7c3]"}`}>{s}</button>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {headerFilterOpen.type === "nextStage" && (
+              <>
+                <div className="flex items-center justify-between mb-3">
+                  <label className="text-xs font-semibold text-[#4a352f]">Next Stage</label>
+                  {localFilters.nextStage.length > 0 && <button onClick={() => setLocalFilters((p) => ({ ...p, nextStage: [] }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>}
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {statusOptions.map((s) => (
+                    <button key={s} onClick={() => setLocalFilters((p) => ({ ...p, nextStage: p.nextStage.includes(s) ? p.nextStage.filter((x) => x !== s) : [...p.nextStage, s] }))} className={`px-2.5 py-1 rounded-full text-xs font-medium ${localFilters.nextStage.includes(s) ? "bg-[#7d5a50] text-white" : "bg-[#f5f0e1] text-[#4a352f] hover:bg-[#e6d7c3]"}`}>{s}</button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        </PopupPortal>
+      )}
+
+      {/* ─── Match Breakdown Modal ──────────────────────────────────────────── */}
+      {mounted && showMatchBreakdown && selectedAccelerator && createPortal(
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[1000]">
+          <div className="bg-white rounded-2xl max-w-[800px] w-[95%] max-h-[90vh] overflow-y-auto shadow-2xl">
+            <div className="flex items-center justify-between p-6 border-b border-[#e6d7c3] bg-[#faf7f2]">
+              <h3 className="text-lg font-semibold text-[#4a352f] m-0">Match Breakdown — {selectedAccelerator?.name || "Accelerator"}</h3>
+              <button onClick={() => { setShowMatchBreakdown(false); setSelectedAccelerator(null) }} className="text-[#7d5a50] hover:text-[#4a352f] text-xl">✖</button>
+            </div>
+            <div className="p-6">
+              <div className="text-center mb-8 pb-4 border-b-2 border-[#e6d7c3]">
+                <div className="text-5xl font-bold mb-2" style={{ color: selectedAccelerator?.matchPercentage >= 80 ? "#388E3C" : selectedAccelerator?.matchPercentage >= 60 ? "#F57C00" : "#D32F2F" }}>
+                  {selectedAccelerator?.matchPercentage || 0}%
+                </div>
+                <p className="text-[#8D6E63] m-0">Overall Match Score</p>
               </div>
-              <div style={modalActionsStyle}>
-                <button onClick={() => setShowMatchBreakdown(false)} style={cancelButtonStyle}>
-                  Close
-                </button>
+              <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(350px, 1fr))" }}>
+                {selectedAccelerator?.matchBreakdown && Object.entries(selectedAccelerator.matchBreakdown).map(([key, breakdown]) => {
+                  if (!breakdown || typeof breakdown !== "object") return null
+                  const scoreColor = breakdown.matched ? "#388E3C" : "#D32F2F"
+                  const titles = {
+                    fundingStage: "Funding Stage Match", ticketSize: "Ticket Size Compatibility", geographicFit: "Geographic Fit",
+                    sectorMatch: "Sector Match", instrumentFit: "Instrument Fit", supportMatch: "Support Match",
+                    legalEntityFit: "Legal Entity Fit", revenueThreshold: "Revenue Threshold",
+                  }
+                  return (
+                    <div key={key} className="bg-[#FEFCFA] border border-[#E8D5C4] rounded-lg p-5" style={{ borderLeft: `4px solid ${scoreColor}` }}>
+                      <div className="flex justify-between items-start mb-3">
+                        <h4 className="text-sm font-semibold text-[#5D2A0A] m-0 flex-1">{titles[key] || formatLabel(key)}</h4>
+                        <span className="text-xs font-semibold ml-2" style={{ color: scoreColor }}>{breakdown.matched ? "✓ Match" : "✗ No Match"}</span>
+                      </div>
+                      <div className="text-xs text-[#666] leading-relaxed">
+                        <div className="mb-1.5"><strong>Your Need:</strong> {breakdown.details?.smeValue || breakdown.description || "N/A"}</div>
+                        <div><strong>Accelerator Offers:</strong> {breakdown.details?.accelValue || breakdown.details?.acceleratorValue || "N/A"}</div>
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
             </div>
-          </div>,
-          document.body,
-        )}
-
-      {/* Portal for Accelerator Details Modal */}
-      {mounted &&
-        modalAccelerator &&
-        createPortal(
-          <div
-            style={{
-              position: "fixed",
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              backgroundColor: "rgba(0,0,0,0.5)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              zIndex: 1000,
-            }}
-          >
-            <div
-              style={{
-                background: "white",
-                borderRadius: "12px",
-                maxWidth: "600px",
-                width: "90%",
-                maxHeight: "80vh",
-                overflowY: "auto",
-                boxShadow: "0 20px 40px rgba(0,0,0,0.15)",
-              }}
-            >
-              <div style={modalHeaderStyle}>
-                <h3 style={modalTitleStyle}>{modalAccelerator.name} Profile Summary</h3>
-                <button onClick={() => setModalAccelerator(null)} style={modalCloseButtonStyle}>
-                  ✖
-                </button>
-              </div>
-              <div style={modalBodyStyle}>
-                <div style={profileSummaryStyle}>
-                  <div style={summarySectionStyle}>
-                    <h4 style={summaryTitleStyle}>Basic Information</h4>
-                    <p style={summaryTextStyle}>
-                      <strong>Location:</strong> {modalAccelerator.location}
-                    </p>
-                    <p style={summaryTextStyle}>
-                      <strong>Geographic Focus:</strong> {modalAccelerator.geographicFocus}
-                    </p>
-                    <p style={summaryTextStyle}>
-                      <strong>Sector Focus:</strong> {modalAccelerator.sectorFocus}
-                    </p>
-                  </div>
-                  <div style={summarySectionStyle}>
-                    <h4 style={summaryTitleStyle}>Funding Details</h4>
-                    <p style={summaryTextStyle}>
-                      <strong>Stage:</strong> {modalAccelerator.fundingStage}
-                    </p>
-                    <p style={summaryTextStyle}>
-                      <strong>Type:</strong> {modalAccelerator.fundingType}
-                    </p>
-                    <p style={summaryTextStyle}>
-                      <strong>Ticket Size:</strong> {modalAccelerator.ticketSize}
-                    </p>
-                  </div>
-                  <div style={summarySectionStyle}>
-                    <h4 style={summaryTitleStyle}>Support & Services</h4>
-                    <p style={summaryTextStyle}>
-                      <strong>Support Offered:</strong> {modalAccelerator.supportOffered}
-                    </p>
-                    <p style={summaryTextStyle}>
-                      <strong>Services:</strong> {modalAccelerator.servicesOffered}
-                    </p>
-                  </div>
-                  <div style={summarySectionStyle}>
-                    <h4 style={summaryTitleStyle}>Application Details</h4>
-                    <p style={summaryTextStyle}>
-                      <strong>Deadline:</strong> {modalAccelerator.deadline}
-                    </p>
-                    <p style={summaryTextStyle}>
-                      <strong>Response Time:</strong> {modalAccelerator.speed} days
-                    </p>
-                    <p style={summaryTextStyle}>
-                      <strong>Match Score:</strong> {modalAccelerator.matchPercentage}%
-                    </p>
-                  </div>
-                </div>
-              </div>
-              <div style={modalActionsStyle}>
-                <button onClick={() => setModalAccelerator(null)} style={cancelButtonStyle}>
-                  Close
-                </button>
-              </div>
+            <div className="flex justify-end gap-2 p-6 border-t border-[#e6d7c3]">
+              <button onClick={() => { setShowMatchBreakdown(false); setSelectedAccelerator(null) }} className="px-4 py-2 bg-[#F5EBE0] text-[#5D2A0A] rounded-lg text-sm">Close</button>
             </div>
-          </div>,
-          document.body,
-        )}
-
-      {/* Portal for Filter Modal */}
-      {mounted &&
-        showFilterModal &&
-        createPortal(
-          <div
-            style={{
-              position: "fixed",
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              backgroundColor: "rgba(0,0,0,0.5)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              zIndex: 1000,
-            }}
-          >
-            <div
-              style={{
-                background: "white",
-                borderRadius: "12px",
-                maxWidth: "500px",
-                width: "90%",
-                maxHeight: "80vh",
-                overflowY: "auto",
-                boxShadow: "0 20px 40px rgba(0,0,0,0.15)",
-              }}
-            >
-              <div style={modalHeaderStyle}>
-                <h3 style={modalTitleStyle}>Filter Accelerators</h3>
-                <button onClick={() => setShowFilterModal(false)} style={modalCloseButtonStyle}>
-                  ✖
-                </button>
-              </div>
-              <div style={modalBodyStyle}>
-                <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem", padding: "1.5rem" }}>
-                  <div>
-                    <label
-                      style={{
-                        display: "block",
-                        marginBottom: "0.5rem",
-                        fontWeight: "500",
-                        color: "#5D2A0A",
-                        fontSize: "0.8rem",
-                      }}
-                    >
-                      Geographic Focus
-                    </label>
-                    <MultiSelectDropdown
-                      options={geographicFocusOptions}
-                      selectedValues={selectedGeographic}
-                      onSelect={(value) => setSelectedGeographic((prev) => [...prev, value])}
-                      onRemove={(value) => setSelectedGeographic((prev) => prev.filter((v) => v !== value))}
-                      placeholder="Select geographic focus..."
-                    />
-                  </div>
-
-                  <div>
-                    <label
-                      style={{
-                        display: "block",
-                        marginBottom: "0.5rem",
-                        fontWeight: "500",
-                        color: "#5D2A0A",
-                        fontSize: "0.8rem",
-                      }}
-                    >
-                      Sector Focus
-                    </label>
-                    <MultiSelectDropdown
-                      options={sectorFocusOptions}
-                      selectedValues={selectedSectors}
-                      onSelect={(value) => setSelectedSectors((prev) => [...prev, value])}
-                      onRemove={(value) => setSelectedSectors((prev) => prev.filter((v) => v !== value))}
-                      placeholder="Select sectors..."
-                    />
-                  </div>
-
-                  <div>
-                    <label
-                      style={{
-                        display: "block",
-                        marginBottom: "0.5rem",
-                        fontWeight: "500",
-                        color: "#5D2A0A",
-                        fontSize: "0.8rem",
-                      }}
-                    >
-                      Funding Stage
-                    </label>
-                    <MultiSelectDropdown
-                      options={fundingStageOptions}
-                      selectedValues={selectedStages}
-                      onSelect={(value) => setSelectedStages((prev) => [...prev, value])}
-                      onRemove={(value) => setSelectedStages((prev) => prev.filter((v) => v !== value))}
-                      placeholder="Select funding stages..."
-                    />
-                  </div>
-
-                  <div>
-                    <label
-                      style={{
-                        display: "block",
-                        marginBottom: "0.5rem",
-                        fontWeight: "500",
-                        color: "#5D2A0A",
-                        fontSize: "0.8rem",
-                      }}
-                    >
-                      Support Offered
-                    </label>
-                    <MultiSelectDropdown
-                      options={supportOfferedOptions}
-                      selectedValues={selectedSupport}
-                      onSelect={(value) => setSelectedSupport((prev) => [...prev, value])}
-                      onRemove={(value) => setSelectedSupport((prev) => prev.filter((v) => v !== value))}
-                      placeholder="Select support types..."
-                    />
-                  </div>
-
-                  <div>
-                    <label
-                      style={{
-                        display: "block",
-                        marginBottom: "0.5rem",
-                        fontWeight: "500",
-                        color: "#5D2A0A",
-                        fontSize: "0.8rem",
-                      }}
-                    >
-                      Status
-                    </label>
-                    <MultiSelectDropdown
-                      options={statusOptions}
-                      selectedValues={selectedStatus}
-                      onSelect={(value) => setSelectedStatus((prev) => [...prev, value])}
-                      onRemove={(value) => setSelectedStatus((prev) => prev.filter((v) => v !== value))}
-                      placeholder="Select status..."
-                    />
-                  </div>
-
-                  <div>
-                    <label
-                      style={{
-                        display: "block",
-                        marginBottom: "0.5rem",
-                        fontWeight: "500",
-                        color: "#5D2A0A",
-                        fontSize: "0.8rem",
-                      }}
-                    >
-                      Next Stage
-                    </label>
-                    <select
-                      value={nextStageFilter}
-                      onChange={(e) => setNextStageFilter(e.target.value)}
-                      style={{
-                        width: "100%",
-                        padding: "0.5rem",
-                        border: "1px solid #E8D5C4",
-                        borderRadius: "4px",
-                        fontSize: "0.8rem",
-                      }}
-                    >
-                      <option value="">All Next Stages</option>
-                      {uniqueNextStages.map((stage) => (
-                        <option key={stage} value={stage}>
-                          {stage}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label
-                      style={{
-                        display: "block",
-                        marginBottom: "0.5rem",
-                        fontWeight: "500",
-                        color: "#5D2A0A",
-                        fontSize: "0.8rem",
-                      }}
-                    >
-                      Minimum Match Percentage: {minMatchFilter}%
-                    </label>
-                    <input
-                      type="range"
-                      min="0"
-                      max="100"
-                      value={minMatchFilter}
-                      onChange={(e) => setMinMatchFilter(Number.parseInt(e.target.value))}
-                      style={{
-                        width: "100%",
-                      }}
-                    />
-                  </div>
-                </div>
-              </div>
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  padding: "1.5rem",
-                  borderTop: "1px solid #E8D5C4",
-                }}
-              >
-                <button
-                  onClick={resetFilters}
-                  style={{
-                    background: "transparent",
-                    color: "#5D2A0A",
-                    border: "1px solid #5D2A0A",
-                    padding: "0.5rem 1rem",
-                    borderRadius: "6px",
-                    cursor: "pointer",
-                    fontSize: "0.8rem",
-                  }}
-                >
-                  Reset Filters
-                </button>
-                <button
-                  onClick={applyFilters}
-                  style={{
-                    background: "#5D2A0A",
-                    color: "white",
-                    border: "none",
-                    padding: "0.5rem 1rem",
-                    borderRadius: "6px",
-                    cursor: "pointer",
-                    fontSize: "0.8rem",
-                  }}
-                >
-                  Apply Filters
-                </button>
-              </div>
-            </div>
-          </div>,
-          document.body,
-        )}
+          </div>
+        </div>,
+        document.body,
+      )}
 
       {mounted && showCatalystDetails && selectedCatalystDetails && (
         <CatalystDetailsModal
@@ -2183,188 +1943,4 @@ export function AcceleratorTable({ filters, onApplicationSubmitted }) {
       )}
     </>
   )
-}
-
-// Style constants - reduced font sizes
-const tableHeaderStyle = {
-  background: "linear-gradient(135deg, #4e2106 0%, #372c27 100%)",
-  color: "#FEFCFA",
-  padding: "0.6rem 0.4rem",
-  textAlign: "left",
-  fontWeight: "600",
-  fontSize: "0.8rem",
-  letterSpacing: "0.3px",
-  textTransform: "none",
-  position: "sticky",
-  top: "0",
-  zIndex: "10",
-  borderBottom: "2px solid #1a0c02",
-  borderRight: "1px solid #1a0c02",
-  lineHeight: "1.2",
-  fontFamily: "system-ui, -apple-system, sans-serif",
-}
-
-const tableCellStyle = {
-  padding: "0.6rem 0.4rem",
-  borderBottom: "1px solid #E8D5C4",
-  borderRight: "1px solid #E8D5C4",
-  fontSize: "0.8rem",
-  verticalAlign: "top",
-  color: "#5d2a0a",
-  lineHeight: "1.4",
-  maxWidth: "0",
-  overflow: "hidden",
-  fontFamily: "system-ui, -apple-system, sans-serif",
-}
-
-const waitingBadgeStyle = {
-  background: "#F5EBE0",
-  color: "#5D2A0A",
-  padding: "0.2rem 0.4rem",
-  borderRadius: "4px",
-  fontSize: "0.8rem",
-  fontWeight: "500",
-  whiteSpace: "nowrap",
-  fontFamily: "system-ui, -apple-system, sans-serif",
-}
-
-const matchContainerStyle = {
-  display: "flex",
-  flexDirection: "column",
-  alignItems: "flex-start",
-  gap: "0.25rem",
-}
-
-const progressBarStyle = {
-  width: "60px",
-  height: "6px",
-  background: "#E8D5C4",
-  borderRadius: "3px",
-  overflow: "hidden",
-}
-
-const progressFillStyle = {
-  height: "100%",
-  background: "linear-gradient(90deg, #48BB78, #68d391)",
-  transition: "width 0.3s ease",
-}
-
-const matchScoreStyle = {
-  fontWeight: "600",
-  color: "#5D2A0A",
-  fontSize: "0.8rem",
-  fontFamily: "system-ui, -apple-system, sans-serif",
-}
-
-const actionButtonsStyle = {
-  display: "flex",
-  flexDirection: "column",
-  gap: "0.25rem",
-  width: "100%",
-}
-
-const applyButtonStyle = {
-  padding: "0.3rem 0.5rem",
-  background: "#5D2A0A",
-  color: "white",
-  border: "none",
-  borderRadius: "4px",
-  fontSize: "0.7rem",
-  cursor: "pointer",
-  transition: "background 0.2s",
-  whiteSpace: "nowrap",
-  fontFamily: "system-ui, -apple-system, sans-serif",
-}
-
-const sentBadgeStyle = {
-  background: "#48BB78",
-  color: "white",
-  padding: "0.3rem 0.5rem",
-  borderRadius: "4px",
-  fontSize: "0.7rem",
-  fontWeight: "500",
-  display: "flex",
-  alignItems: "center",
-  gap: "0.25rem",
-  whiteSpace: "nowrap",
-  fontFamily: "system-ui, -apple-system, sans-serif",
-}
-
-const statusBadgeStyle = {
-  borderRadius: "3px",
-  fontWeight: "500",
-  display: "inline-block",
-}
-
-const modalHeaderStyle = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  padding: "1.5rem",
-  borderBottom: "1px solid #E8D5C4",
-  background: "#F5EBE0",
-}
-
-const modalTitleStyle = {
-  margin: "0",
-  fontSize: "1.1rem",
-  fontWeight: "600",
-  color: "#5D2A0A",
-  fontFamily: "system-ui, -apple-system, sans-serif",
-}
-
-const modalCloseButtonStyle = {
-  background: "none",
-  border: "none",
-  fontSize: "1.5rem",
-  cursor: "pointer",
-  color: "#5D2A0A",
-}
-
-const modalBodyStyle = {
-  padding: "1.5rem",
-}
-
-const profileSummaryStyle = {
-  display: "flex",
-  flexDirection: "column",
-  gap: "1.5rem",
-}
-
-const summarySectionStyle = {
-  // No specific styles needed
-}
-
-const summaryTitleStyle = {
-  fontSize: "0.9rem",
-  fontWeight: "600",
-  margin: "0 0 0.5rem 0",
-  color: "#5D2A0A",
-  fontFamily: "system-ui, -apple-system, sans-serif",
-}
-
-const summaryTextStyle = {
-  margin: "0.25rem 0",
-  fontSize: "0.8rem",
-  color: "#5D2A0A",
-  fontFamily: "system-ui, -apple-system, sans-serif",
-}
-
-const modalActionsStyle = {
-  display: "flex",
-  justifyContent: "flex-end",
-  gap: "0.5rem",
-  padding: "1.5rem",
-  borderTop: "1px solid #E8D5C4",
-}
-
-const cancelButtonStyle = {
-  background: "#F5EBE0",
-  color: "#5D2A0A",
-  border: "none",
-  padding: "0.5rem 1rem",
-  borderRadius: "6px",
-  cursor: "pointer",
-  fontSize: "0.8rem",
-  fontFamily: "system-ui, -apple-system, sans-serif",
 }
