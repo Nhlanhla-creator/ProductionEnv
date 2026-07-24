@@ -13,7 +13,7 @@ import { CustomerReviewsCard } from "./customer-reviews-card"
 import ShopToolsPage from "../../smses/MyGrowthTools/shop"
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore"
 import { auth, db } from "../../firebaseConfig"
-import { X, ChevronRight, Info, Smile, Star, ShieldCheck, ChevronDown, ChevronUp, FileText, TrendingUp, AlertCircle, CheckCircle, Download, Calendar, Bus } from 'lucide-react'
+import { X, ChevronRight, Info, Smile, Star, ShieldCheck, ChevronDown, ChevronUp, FileText, TrendingUp, AlertCircle, CheckCircle, Download, Calendar, Bus, ArrowLeft } from 'lucide-react'
 import "./Dashboard.css"
 import { getFunctions, httpsCallable } from "firebase/functions";
 
@@ -1197,6 +1197,45 @@ const [isCompanyMember, setIsCompanyMember] = useState(false);
 const [effectiveUserId, setEffectiveUserId] = useState(null);
 const [userRole, setUserRole] = useState(null);
 
+  // ─── Investor / catalyst "viewing this SME's dashboard" mode ─────────────
+  // Set by SupportSMETable.jsx's "Open BIG Score Page" action (and, more
+  // generally, anywhere else that already uses this session-storage
+  // pattern for Growth Suite / Documents navigation): viewingSMEId,
+  // viewingSMEName, investorViewMode, viewOrigin. viewOnlyBigScore is new —
+  // it's what tells *this* page specifically to lock down to just the BIG
+  // Score tab (no "Improve My BIG Score" tools tab, no tab switching) and
+  // show a Back control, rather than rendering the logged-in catalyst's own
+  // dashboard data.
+  const [isBigScoreOnlyView, setIsBigScoreOnlyView] = useState(false)
+  const [viewingSMEId, setViewingSMEId] = useState(null)
+  const [viewingSMEName, setViewingSMEName] = useState("")
+
+  useEffect(() => {
+    const investorViewMode = sessionStorage.getItem("investorViewMode") === "true"
+    const smeId = sessionStorage.getItem("viewingSMEId")
+    const bigScoreOnly = sessionStorage.getItem("viewOnlyBigScore") === "true"
+    if (investorViewMode && smeId && bigScoreOnly) {
+      setIsBigScoreOnlyView(true)
+      setViewingSMEId(smeId)
+      setViewingSMEName(sessionStorage.getItem("viewingSMEName") || "this business")
+      setActiveTab("bigscore")
+    }
+  }, [])
+
+  const handleBackFromBigScoreView = () => {
+    sessionStorage.removeItem("investorViewMode")
+    sessionStorage.removeItem("viewingSMEId")
+    sessionStorage.removeItem("viewingSMEName")
+    sessionStorage.removeItem("viewOrigin")
+    sessionStorage.removeItem("viewOnlyBigScore")
+    window.history.back()
+  }
+
+  // Whichever user's data should actually be displayed: the SME being
+  // viewed (catalyst mode) takes priority over the logged-in user's own
+  // effectiveUserId (company-membership resolution below).
+  const targetUserId = isBigScoreOnlyView ? viewingSMEId : effectiveUserId
+
   const apiKey = API_KEYS.OPENAI;
   const user = auth.currentUser;
   const userName = user ? user.email : "User"
@@ -1319,11 +1358,11 @@ useEffect(() => {
 }, []);
 
  useEffect(() => {
-  if (!isAuthenticated || !effectiveUserId) return;
+  if (!isAuthenticated || !targetUserId) return;
 
   const fetchProfileData = async () => {
     try {
-      const userId = effectiveUserId; // Use effectiveUserId instead of current user
+      const userId = targetUserId; // The SME being viewed (catalyst mode) or the logged-in user's own effective ID
 
       const docRef = doc(db, "universalProfiles", userId);
       const docSnap = await getDoc(docRef);
@@ -1334,9 +1373,13 @@ useEffect(() => {
         console.error("No profile found");
       }
 
-      const hasSeenDashboardPopup = localStorage.getItem(getUserSpecificKey("hasSeenDashboardPopup")) === "true";
-      if (!hasSeenDashboardPopup) {
-        setShowDashboardPopup(true);
+      // Don't show the first-time onboarding tour while a catalyst is
+      // viewing someone else's BIG Score — it's not their dashboard.
+      if (!isBigScoreOnlyView) {
+        const hasSeenDashboardPopup = localStorage.getItem(getUserSpecificKey("hasSeenDashboardPopup")) === "true";
+        if (!hasSeenDashboardPopup) {
+          setShowDashboardPopup(true);
+        }
       }
 
       setLoading(false);
@@ -1347,7 +1390,7 @@ useEffect(() => {
   };
 
   fetchProfileData();
-}, [isAuthenticated, effectiveUserId]);
+}, [isAuthenticated, targetUserId, isBigScoreOnlyView]);
 
 
   const handleNextDashboardStep = () => {
@@ -1407,8 +1450,46 @@ useEffect(() => {
 
       <div className="content">
         <main className="dashboard-main">
-          <DashboardHeader userName={userName} />
-   {isCompanyMember && (
+          <DashboardHeader userName={isBigScoreOnlyView ? viewingSMEName : userName} />
+
+          {/* ─── Catalyst "viewing this SME's BIG Score" banner ────────────
+              Only rendered in restricted view mode; this is the "back"
+              button the catalyst needs to return to their own view. */}
+          {isBigScoreOnlyView && (
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: '16px',
+              backgroundColor: '#3E2723',
+              color: '#EFEBE9',
+              borderRadius: '12px',
+              padding: '14px 20px',
+              marginTop: '24px',
+              marginBottom: '8px',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <TrendingUp size={18} color="#D7CCC8" />
+                <span style={{ fontSize: '0.95rem' }}>
+                  Viewing BIG Score for <strong>{viewingSMEName}</strong>
+                </span>
+              </div>
+              <button
+                onClick={handleBackFromBigScoreView}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: '6px',
+                  background: 'rgba(255,255,255,0.12)', border: '1px solid rgba(255,255,255,0.25)',
+                  color: '#EFEBE9', borderRadius: '8px', padding: '8px 14px',
+                  fontSize: '0.85rem', fontWeight: 600, cursor: 'pointer',
+                }}
+              >
+                <ArrowLeft size={14} /> Back
+              </button>
+            </div>
+          )}
+
+   {!isBigScoreOnlyView && isCompanyMember && (
   <div style={{
     backgroundColor: userRole === 'viewer' ? '#fef3c7' : '#e0f2fe',
     border: `2px solid ${userRole === 'viewer' ? '#f59e0b' : '#0369a1'}`,
@@ -1447,7 +1528,10 @@ useEffect(() => {
     </p>
   </div>
 )}
-          {/* Tab Navigation */}
+          {/* Tab Navigation — hidden entirely in the BIG-Score-only view;
+              there's nothing to switch to and no reason to expose the
+              tools tab for a business the catalyst is just reviewing. */}
+          {!isBigScoreOnlyView && (
           <section className="tab-navigation" style={{ marginTop: '40px', marginBottom: '30px' }}>
             <div style={{
               display: 'flex',
@@ -1513,13 +1597,18 @@ useEffect(() => {
               </button>
             </div>
           </section>
+          )}
 
-          {/* Conditional Content Based on Active Tab */}
+          {/* Conditional Content Based on Active Tab — forced to "bigscore"
+              and never "tools" while isBigScoreOnlyView is active, since
+              there's no UI left that can set activeTab to "tools" in that
+              mode (the tab nav above is hidden) and the mode-entry effect
+              always sets it to "bigscore". */}
           {activeTab === "bigscore" ? (
             <>
               {/* Top Row - Application Tracker (full width) */}
               <section className="tracker-section" style={{ marginBottom: '20px' }}>
-               <ApplicationTracker styles={styles} userId={effectiveUserId} />
+               <ApplicationTracker styles={styles} userId={targetUserId} />
 
               </section>
 
@@ -1547,7 +1636,7 @@ useEffect(() => {
                 {apiKey && (
                   <SummaryReportCard
                     styles={styles}
-                     userId={effectiveUserId}
+                     userId={targetUserId}
                     apiKey={apiKey}
                   />
                 )}
@@ -1604,7 +1693,7 @@ useEffect(() => {
   profileData={profileData?.formData}
   onScoreUpdate={setComplianceScore}
   apiKey={apiKey}
-  userId={effectiveUserId} // Add this prop
+  userId={targetUserId} // Add this prop
 />
 
 <LegitimacyScoreCard
@@ -1612,7 +1701,7 @@ useEffect(() => {
   profileData={profileData?.formData}
   onScoreUpdate={setLegitimacyScore}
   apiKey={apiKey}
-  userId={effectiveUserId} // Add this prop
+  userId={targetUserId} // Add this prop
 />
 
 <GovernanceLeadershipScoreCard
@@ -1620,7 +1709,7 @@ useEffect(() => {
   profileData={profileData?.formData}
   onScoreUpdate={setGovernanceLeadershipScore}
   apiKey={apiKey}
-  userId={effectiveUserId} // Add this prop
+  userId={targetUserId} // Add this prop
 />
 
 <OperationalStrengthScoreCard
@@ -1628,12 +1717,12 @@ useEffect(() => {
   profileData={profileData?.formData}
   onScoreUpdate={setOperationalScore}
   apiKey={apiKey}
-  userId={effectiveUserId} // Add this prop
+  userId={targetUserId} // Add this prop
 />
 
 <FundabilityScoreCard
   profileData={profileData?.formData}
-  userId={effectiveUserId} // Changed from profileData?.id
+  userId={targetUserId} // Changed from profileData?.id
   onScoreUpdate={setFundabilityScore}
   apiKey={apiKey}
 />

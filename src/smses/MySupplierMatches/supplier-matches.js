@@ -10,6 +10,7 @@ import { SupplierFlowPipeline } from "./supplier-flow-pipeline";
 import SupplierTabbedTables from "./supplier-tabbed-tables";
 import styles from "./supplier.module.css";
 import { X, ArrowRight } from 'lucide-react';
+import { getFunctions, httpsCallable } from "firebase/functions";
 
 const onboardingSteps = [
   {
@@ -113,94 +114,223 @@ export default function SupplierMatchesPage() {
   };
 
   const handleSupplierContacted = async (supplier) => {
-    const supplierId = supplier?.id;
-    if (!supplierId) return;
+  const supplierId = supplier?.id;
+  if (!supplierId) return;
 
-    if (!contactedSuppliers.includes(supplierId)) {
-      setContactedSuppliers(prev => [...prev, supplierId]);
-    }
+  if (!contactedSuppliers.includes(supplierId)) {
+    setContactedSuppliers(prev => [...prev, supplierId]);
+  }
+
+  try {
+    const auth = getAuth();
+    const currentUser = auth.currentUser;
+    if (!currentUser) return;
+
+    // 1. Fetch SMSE (Customer) Profile
+    let customerName = "Unknown Customer";
+    let customerLocation = "Not specified";
+    let customerType = "Not specified";
+    let customerSector = "Not specified";
+    let customerEmail = null;  // ✅ DECLARE OUTSIDE
 
     try {
-      const auth = getAuth();
-      const currentUser = auth.currentUser;
-      if (!currentUser) return;
-
-      // 1. Fetch SMSE (Customer) Profile to populate payload fields
-      let customerName = "Unknown Customer";
-      let customerLocation = "Not specified";
-      let customerType = "Not specified";
-      let customerSector = "Not specified";
-
-      try {
-        const cSnap = await getDoc(doc(db, "universalProfiles", currentUser.uid));
-        if (cSnap.exists()) {
-          const cData = cSnap.data() || {};
-          const entityOverview = cData.entityOverview || {};
-          customerName = entityOverview.tradingName || entityOverview.registeredName || customerName;
-          customerLocation = entityOverview.location || customerLocation;
-          customerType = entityOverview.entityType || customerType;
-          customerSector = entityOverview.economicSectors?.[0] || customerSector;
-        }
-      } catch (err) {
-        console.error("Failed to fetch customer profile:", err);
+      const cSnap = await getDoc(doc(db, "universalProfiles", currentUser.uid));
+      if (cSnap.exists()) {
+        const cData = cSnap.data() || {};
+        const entityOverview = cData.entityOverview || {};
+        const contactDetails = cData.contactDetails || {};
+        customerName = entityOverview.tradingName || entityOverview.registeredName || customerName;
+        customerLocation = entityOverview.location || customerLocation;
+        customerType = entityOverview.entityType || customerType;
+        customerSector = entityOverview.economicSectors?.[0] || customerSector;
+        customerEmail = contactDetails.email || cData.email || currentUser.email;
       }
-
-      // 2. Prepare outreach document
-      const supplierName = supplier.entityOverview?.tradingName || supplier.entityOverview?.registeredName || supplier.name || "Unnamed Supplier";
-      
-      const payload = {
-        applicationSource: "supplier-directory",
-        status: "Pending",
-        matchPercentage: supplier.matchPercentage || supplier.finalScore || 0,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-        
-        customerId: currentUser.uid,
-        customerName: customerName,
-        customerLocation: customerLocation,
-        customerType: customerType,
-        customerSector: customerSector,
-
-        supplierId: supplierId,
-        supplierName: supplierName,
-        supplierLocation: supplier.entityOverview?.location || supplier.location || "Not specified",
-        supplierType: supplier.entityOverview?.entityType || "Not specified",
-        supplierSector: supplier.entityOverview?.economicSectors?.[0] || "Not specified",
-
-        currentStage: "Contact Initiated",
-        nextStage: "Proposal Sent",
-        lastActivity: new Date().toISOString(),
-      };
-
-      // 3. Add document to supplierApplications
-      await addDoc(collection(db, "supplierApplications"), payload);
-
-      // 4. Dispatch simulated notification
-      // TO-DO: Implement full email sending and in-app notification to the supplier here.
-      // This is a placeholder for the messaging developer to integrate email / notification logic.
-      console.log(`[TO-DO / Notification Sim] Send email & notification to supplier ${supplierName} (${supplierId})`);
-
-      const notificationMessage = `Contact request to ${supplierName} sent successfully`;
-      const event = new CustomEvent("newNotification", {
-        detail: {
-          message: notificationMessage,
-          type: "success",
-          timestamp: new Date().toISOString(),
-        },
-        bubbles: true,
-        cancelable: true,
-        composed: true,
-      });
-      window.dispatchEvent(event);
-
     } catch (err) {
-      console.error("Failed to contact supplier:", err);
-      // Revert state if firestore fails
-      setContactedSuppliers(prev => prev.filter(id => id !== supplierId));
-      throw err;
+      console.error("Failed to fetch customer profile:", err);
     }
-  };
 
+    // 2. Prepare outreach document
+    const supplierName = supplier.entityOverview?.tradingName || 
+                         supplier.entityOverview?.registeredName || 
+                         supplier.name || 
+                         "Unnamed Supplier";
+    
+    // ✅ DECLARE supplierEmail OUTSIDE
+    let supplierEmail = null;
+    try {
+      const sSnap = await getDoc(doc(db, "universalProfiles", supplierId));
+      if (sSnap.exists()) {
+        const sData = sSnap.data() || {};
+        supplierEmail = sData.contactDetails?.email || sData.email;
+      }
+    } catch (err) {
+      console.error("Failed to fetch supplier email:", err);
+    }
+
+    const payload = {
+      applicationSource: "supplier-directory",
+      status: "Pending",
+      matchPercentage: supplier.matchPercentage || supplier.finalScore || 0,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+      
+      customerId: currentUser.uid,
+      customerName: customerName,
+      customerLocation: customerLocation,
+      customerType: customerType,
+      customerSector: customerSector,
+
+      supplierId: supplierId,
+      supplierName: supplierName,
+      supplierLocation: supplier.entityOverview?.location || supplier.location || "Not specified",
+      supplierType: supplier.entityOverview?.entityType || "Not specified",
+      supplierSector: supplier.entityOverview?.economicSectors?.[0] || "Not specified",
+
+      currentStage: "Contact Initiated",
+      nextStage: "Proposal Sent",
+      lastActivity: new Date().toISOString(),
+    };
+
+    // 3. Add document to supplierApplications
+    await addDoc(collection(db, "supplierApplications"), payload);
+
+    // ✅ 4. SEND IN-APP MESSAGE TO SUPPLIER
+    try {
+      const supplierMessageContent = `Dear ${supplierName},
+
+We are pleased to inform you that ${customerName} has expressed interest in your services through the BIG Marketplace Africa.
+
+📋 Application Details:
+- Customer: ${customerName}
+- Location: ${customerLocation || "Not specified"}
+- Match Score: ${payload.matchPercentage}%
+
+Please log into your BIG Marketplace Africa account to view the complete application details and respond to this opportunity.
+
+Best regards,
+BIG Marketplace Africa Team`;
+
+   await addDoc(collection(db, "messages"), {
+        to: supplierId,
+        toName: supplierName,
+        from: "system",
+        fromName: "BIG Marketplace", 
+        subject: `📋 New Customer Interest from ${customerName}`,
+        content: supplierMessageContent,
+        date: new Date().toISOString(),
+        read: false,
+        type: "inbox",  
+        applicationId: payload.id || `app_${Date.now()}`,
+        linkTo: "/supplier/applications",
+      });
+      
+      
+      console.log("✅ In-app message sent to supplier:", supplierName);
+    } catch (messageError) {
+      console.error("❌ Failed to send in-app message to supplier:", messageError);
+    }
+
+    // ✅ 5. SEND EMAIL TO SUPPLIER
+    if (supplierEmail) {
+      try {
+        const functions = getFunctions();
+        const sendSupplierInterestEmail = httpsCallable(functions, 'sendSupplierInterestEmail');
+
+        await sendSupplierInterestEmail({
+          to: supplierEmail,
+          name: supplierName,
+          customerName: customerName,
+          customerLocation: customerLocation || "Not specified",
+          customerSector: customerSector || "Not specified",
+          matchPercentage: payload.matchPercentage || 0,
+          applicationId: payload.id || `app_${Date.now()}`,
+          linkTo: "https://www.bigmarketplace.africa/supplier/applications"
+        });
+        
+        console.log("✅ Supplier interest email sent to:", supplierEmail);
+      } catch (emailError) {
+        console.error("❌ Failed to send supplier interest email:", emailError);
+      }
+    } else {
+      console.warn("⚠️ No supplier email found, skipping email");
+    }
+
+      // ✅ 5. SEND CONFIRMATION IN-APP MESSAGE TO CUSTOMER
+    try {
+      const customerConfirmationContent = `Dear ${customerName},
+
+Your interest in ${supplierName} has been sent successfully!
+
+📋 Details:
+- Supplier: ${supplierName}
+- Location: ${supplier.entityOverview?.location || "Not specified"}
+- Match Score: ${payload.matchPercentage}%
+
+You will be notified when ${supplierName} responds to your interest.
+
+Best regards,
+BIG Marketplace Africa Team`;
+
+      await addDoc(collection(db, "messages"), {
+        to: currentUser.uid,
+        toName: customerName,
+        from: "system",
+        fromName: "BIG Marketplace",
+        subject: `✅ Interest Sent to ${supplierName}`,
+        content: customerConfirmationContent,
+        date: new Date().toISOString(),
+        read: false,
+        type: "inbox",
+        applicationId: payload.id || `app_${Date.now()}`,
+        linkTo: "/customer/applications",
+      });
+      
+      console.log("✅ In-app confirmation sent to customer:", customerName);
+    } catch (messageError) {
+      console.error("❌ Failed to send in-app confirmation to customer:", messageError);
+    }
+
+    // ✅ 6. SEND CONFIRMATION EMAIL TO CUSTOMER
+    if (customerEmail) {
+      try {
+        const functions = getFunctions();
+        const sendCustomerConfirmationEmail = httpsCallable(functions, 'sendCustomerConfirmationEmail');
+
+        await sendCustomerConfirmationEmail({
+          to: customerEmail,
+          name: customerName,
+          supplierName: supplierName,
+          matchPercentage: payload.matchPercentage || 0,
+          applicationId: payload.id || `app_${Date.now()}`,
+          linkTo: "https://www.bigmarketplace.africa/customer/applications"
+        });
+        
+        console.log("✅ Customer confirmation email sent to:", customerEmail);
+      } catch (emailError) {
+        console.error("❌ Failed to send customer confirmation email:", emailError);
+      }
+    }
+
+    // ✅ 7. Dispatch notification
+    const notificationMessage = `Contact request to ${supplierName} sent successfully`;
+    const event = new CustomEvent("newNotification", {
+      detail: {
+        message: notificationMessage,
+        type: "success",
+        timestamp: new Date().toISOString(),
+      },
+      bubbles: true,
+      cancelable: true,
+      composed: true,
+    });
+    window.dispatchEvent(event);
+
+  } catch (err) {
+    console.error("Failed to contact supplier:", err);
+    setContactedSuppliers(prev => prev.filter(id => id !== supplierId));
+    throw err;
+  }
+};
   // Function to update the suppliers list from child component
   const handleSuppliersUpdate = (allSuppliersList, filteredSuppliersList) => {
     setAllSuppliers(allSuppliersList);
@@ -530,8 +660,9 @@ export default function SupplierMatchesPage() {
           <SupplierTabbedTables
             onSupplierContacted={handleSupplierContacted}
             onSuppliersUpdate={handleSuppliersUpdate}
-            defaultActiveTab="my-matches" // Pass the default tab
+            defaultActiveTab="my-matches" 
             contactedSuppliers={contactedSuppliers}
+
           />
         </div>
       </div>

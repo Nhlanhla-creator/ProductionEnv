@@ -6,7 +6,7 @@ import {
   Loader, RefreshCw, X, BarChart3, ChevronDown, ChevronUp, FileText, Ticket, Copy,
   CheckCircle, MoreVertical, AlertCircle, Info, GraduationCap, Layers,
   SlidersHorizontal, Trash2, StickyNote, Archive,
-  ArrowUpDown, Download, Square, CheckSquare, Plus
+  ArrowUpDown, Download, Square, CheckSquare, Plus, GripVertical, RotateCcw, Settings, LayoutGrid
 } from "lucide-react"
 import { collection, query, where, getDocs, doc, getDoc, addDoc, updateDoc, arrayUnion, serverTimestamp } from "firebase/firestore"
 import { db, auth } from "../../firebaseConfig"
@@ -77,15 +77,23 @@ const daysInProgramme = (cohort) => {
 
 // ─── Status vocabulary ──────────────────────────────────────────────────────
 // TODO(backend): the current schema only distinguishes "Active Support",
-// "Active" and "Exit". Spec §5.7 wants a much fuller lifecycle (Onboarding,
-// At Risk, Review Required, Graduation Pending, Graduated, Withdrawn,
-// Removed, etc.) — those states need to actually exist on the record before
-// we can display or transition between them truthfully. This mapping
-// normalizes what exists today into cleaner labels without inventing states
-// the data can't support yet.
+// "Active" and "Exit". Spec §5.7 wants a much fuller lifecycle (At Risk,
+// Review Required, Graduation Pending, Graduated, Withdrawn, Removed, etc.)
+// — those states need to actually exist on the record before we can display
+// or transition between them truthfully. This mapping normalizes what
+// exists today into cleaner labels without inventing states the data can't
+// support yet.
+//
+// "Admitted" / "Disbursed" are the BIG-default and Grant-programme names
+// (see stageConfig.js's PROGRAMME_TEMPLATES) for the exact moment an SME
+// accepts an offer and is admitted — i.e. "on contract" but not yet
+// actively being supported. Those now map to a distinct "onboarding" group
+// instead of being silently dropped, so they actually surface here.
 const STATUS_META = {
   "Active Support": { label: "Active", color: "#4caf50", group: "active" },
   "Active": { label: "Active", color: "#4caf50", group: "active" },
+  "Admitted": { label: "Onboarding", color: "#a67c52", group: "onboarding" },
+  "Disbursed": { label: "Onboarding", color: "#a67c52", group: "onboarding" },
   "Exit": { label: "Graduated / Exited", color: "#9e9e9e", group: "exited" },
   "Exit Support": { label: "Graduated / Exited", color: "#9e9e9e", group: "exited" },
 }
@@ -107,19 +115,15 @@ const EXIT_REASONS = [
 ]
 
 // ─── Cohort stage pipeline (feedback #14, consolidated) ────────────────────
-// Previously three separate, overlapping UIs all did roughly the same job:
-// the "Post-Admission Journey" strip, the 5 summary tiles, and the "Active
-// Cohort / Attention Required / Completed & Exited" preset pills. Graduated,
-// Exited, and "Completed & Exited" were the exact same count rendered three
-// times; "Attention Required" appeared twice. This single widget replaces
-// all three: pipeline-styled cards (matching the DealFlow Pipeline's visual
-// language) that double as the quick filters the tiles/pills used to be.
-// Active and Attention Required stay mutually exclusive counts (each SME
-// counted once) so the row reads as a real breakdown, not overlapping sets.
+// Onboarding is now a real, clickable, data-driven card (it used to be a
+// permanently-disabled placeholder with no backing data) — it counts SMEs
+// whose status maps to the "onboarding" group above: admitted/on-contract
+// businesses that accepted an offer but haven't started active support yet.
 const COHORT_STAGE_CARDS = [
+  { key: "onboarding", label: "Onboarding", icon: Layers, note: true, noteText: "Businesses that accepted an offer and are on contract, but haven't started active support yet." },
   { key: "active", label: "Active", icon: TrendingUp },
   { key: "attention", label: "Attention Required", icon: AlertCircle },
-  { key: "exited", label: "Graduated / Exited", icon: GraduationCap, note: true },
+  { key: "exited", label: "Graduated / Exited", icon: GraduationCap, note: true, noteText: "Graduated vs. Exited aren't yet distinguished on the record — both show the same count until a backend outcome field exists." },
 ]
 
 const CohortStagePipeline = ({ counts, activeFilter, setActiveFilter }) => {
@@ -148,25 +152,7 @@ const CohortStagePipeline = ({ counts, activeFilter, setActiveFilter }) => {
       </div>
 
       <div className="flex items-stretch gap-2 overflow-x-auto pb-1">
-        {/* Onboarding — pending, informational only; no backend status field
-            exists yet to make this clickable/filterable. */}
-        <div
-          className="flex items-center gap-2 px-3 py-2.5 rounded-2xl border border-dashed flex-shrink-0 opacity-60"
-          style={{
-            width: "128px",
-            borderColor: "rgba(255,255,255,0.25)",
-            background: "linear-gradient(135deg, #4a352f 0%, #241a14 100%)",
-          }}
-          title="Awaiting a backend Onboarding status field"
-        >
-          <Layers size={14} className="text-white flex-shrink-0" />
-          <div>
-            <div className="text-[11px] font-semibold text-white uppercase tracking-wide">Onboarding</div>
-            <div className="text-[10px] text-[#d9c4b0]">Pending data</div>
-          </div>
-        </div>
-
-        {COHORT_STAGE_CARDS.map(({ key, label, icon: Icon, note }) => {
+        {COHORT_STAGE_CARDS.map(({ key, label, icon: Icon, note, noteText }) => {
           const count = counts[key] || 0
           const pct = Math.round((count / total) * 100)
           const isSelected = activeFilter === key
@@ -182,7 +168,7 @@ const CohortStagePipeline = ({ counts, activeFilter, setActiveFilter }) => {
                 background: "linear-gradient(135deg, #4a352f 0%, #241a14 100%)",
                 border: `2px solid ${isSelected ? "#d9b98a" : "rgba(255,255,255,0.12)"}`,
               }}
-              title={note ? "Graduated vs. Exited aren't yet distinguished on the record — both show the same count until a backend outcome field exists." : undefined}
+              title={noteText}
             >
               <div className="flex items-center gap-1.5 mb-1.5">
                 <div className="w-6 h-6 rounded-lg bg-white/10 flex items-center justify-center flex-shrink-0">
@@ -216,7 +202,8 @@ const CohortStagePipeline = ({ counts, activeFilter, setActiveFilter }) => {
 // incomplete, etc.). Until those fields exist, we flag records with
 // missing/invalid core data as a conservative, honest stand-in — this is a
 // data-quality signal, not a programme-health signal, and is labeled as such
-// in the UI.
+// in the UI. Onboarding SMEs are deliberately excluded — they haven't
+// started yet, so a missing start date there is expected, not a red flag.
 const needsAttention = (cohort) => {
   const hasValidStartDate = (() => {
     if (!cohort.completionDate) return false
@@ -229,15 +216,18 @@ const needsAttention = (cohort) => {
   return !hasValidStartDate || !hasFundingInfo
 }
 
-// Spec §20: attention-required first, then active, then graduated/exited
-// last — exited SMEs shouldn't dominate the default operational view.
+// Spec §20: attention-required first, then onboarding, then active, then
+// graduated/exited last — exited SMEs shouldn't dominate the default
+// operational view, and freshly-admitted onboarding SMEs should surface
+// near the top so they don't get lost among established active ones.
 // No milestone-due-date field exists yet to sort within groups by, so ties
 // break alphabetically by name instead of fabricating urgency.
 const cohortSortRank = (cohort) => {
   const meta = getStatusMeta(cohort.currentStatus)
   if (meta.group === "active" && needsAttention(cohort)) return 0
-  if (meta.group === "active") return 1
-  return 2
+  if (meta.group === "onboarding") return 1
+  if (meta.group === "active") return 2
+  return 3
 }
 
 const Portal = ({ children }) => {
@@ -355,34 +345,114 @@ const LoadingSkeleton = () => (
 
 // ─── Customizable columns (spec §9) ────────────────────────────────────────
 // Scoped to fields that actually exist on the record. Programme, BIG Score,
-// Programme Progress, Support Utilised (vs. allocated), and Next Milestone
-// from the spec's recommended column set all need backend fields that don't
-// exist yet — adding them as columns here would mean showing fabricated
-// data, so they're left out rather than faked. "Days in Programme" is
-// included since it's honestly derivable from the existing start-date field.
-const OPTIONAL_COLUMNS = [
-  { key: "progress", label: "Progress (Company Health)" },
-  { key: "daysInProgramme", label: "Days in Programme" },
-  { key: "appliedDate", label: "Applied Date" },
-  { key: "teamSize", label: "Employees" },
-  { key: "guarantees", label: "Guarantees" },
-  { key: "servicesRequired", label: "Services" },
-]
+// Programme Progress score, Support Utilised (vs. allocated), and Next
+// Milestone from the spec's recommended column set all need backend fields
+// that don't exist yet — adding them as columns here would mean showing
+// fabricated data, so they're left out rather than faked. "Days in
+// Programme" is included since it's honestly derivable from the existing
+// start-date field. Sector, Location, and Equity Offered were previously
+// only shown as read-only subtext under the business name — they're real
+// fields already on the record, so they're promoted to first-class,
+// hideable, reorderable, filterable columns here (matching the equivalent
+// columns on the DealFlow SME table).
+//
+// This config also drives column order (drag-and-drop) and every column's
+// filter — every column has one, no exceptions.
+const COLUMN_DEFS = {
+  supportValue: { label: "Support Value", minWidth: "112px", filterType: "supportValue" },
+  startDate: { label: "Start Date", minWidth: "96px", filterType: "startDate" },
+  daysInProgramme: { label: "Days in Programme", minWidth: "136px", filterType: "daysInProgramme" },
+  appliedDate: { label: "Applied Date", minWidth: "100px", filterType: "appliedDate" },
+  teamSize: { label: "Employees", minWidth: "92px", filterType: "teamSize" },
+  sector: { label: "Sector", minWidth: "100px", filterType: "sector" },
+  location: { label: "Location", minWidth: "92px", filterType: "location" },
+  equityOffered: { label: "Equity Offered", minWidth: "108px", filterType: "equity" },
+  guarantees: { label: "Guarantees", minWidth: "100px", filterType: "guarantees" },
+  servicesRequired: { label: "Services", minWidth: "92px", filterType: "services" },
+  status: { label: "Status", minWidth: "130px", filterType: "status" },
+  progress: { label: "Progress", minWidth: "112px", filterType: "progress" },
+}
+const DEFAULT_COLUMN_ORDER = Object.keys(COLUMN_DEFS)
 const DEFAULT_COLUMN_VISIBILITY = {
   supportValue: true, startDate: true, status: true, progress: true,
-  daysInProgramme: false, appliedDate: false, teamSize: false, guarantees: false, servicesRequired: false,
+  daysInProgramme: false, appliedDate: false, teamSize: false,
+  sector: false, location: false, equityOffered: false,
+  guarantees: false, servicesRequired: false,
+}
+const DEFAULT_DENSITY = "comfortable"
+
+// ─── Custom Views (same model as the DealFlow SME table, kept consistent
+// on purpose) ─────────────────────────────────────────────────────────────
+// A "view" bundles column visibility, order, and density into one named,
+// describable object with exactly one view active at a time. Editing the
+// table always edits the active view and auto-saves immediately — there's
+// no separate hidden "current layout" that can silently drift out of sync
+// with a named view, which is what used to make column changes feel
+// unpredictable (columns "randomly" rearranging/disappearing).
+const BUILTIN_VIEW_ID = "__default__"
+const VIEWS_STORAGE_KEY = "my-cohorts-views-v2"
+const ACTIVE_FILTER_STORAGE_KEY = "my-cohorts-active-filter-v1"
+
+const sanitizeColumnOrder = (order) => {
+  if (!Array.isArray(order)) return [...DEFAULT_COLUMN_ORDER]
+  const known = new Set(DEFAULT_COLUMN_ORDER)
+  const deduped = order.filter((key) => known.has(key))
+  const missing = DEFAULT_COLUMN_ORDER.filter((key) => !deduped.includes(key))
+  return [...deduped, ...missing]
 }
 
-const VIEW_STORAGE_KEY = "my-cohorts-view-v1"
-const SAVED_VIEWS_STORAGE_KEY = "my-cohorts-saved-views-v1"
+const createDefaultViewLayout = () => ({
+  columnVisibility: { ...DEFAULT_COLUMN_VISIBILITY },
+  columnOrder: [...DEFAULT_COLUMN_ORDER],
+  density: DEFAULT_DENSITY,
+})
 
-const loadStoredView = () => {
-  if (typeof window === "undefined") return null
+const createBuiltinDefaultView = () => ({
+  id: BUILTIN_VIEW_ID, name: "Default", description: "", builtin: true, ...createDefaultViewLayout(),
+})
+
+const sanitizeView = (view, fallbackId) => ({
+  id: view?.id || fallbackId,
+  name: (view?.name || "Untitled view").toString(),
+  description: (view?.description || "").toString(),
+  builtin: !!view?.builtin,
+  columnVisibility: { ...DEFAULT_COLUMN_VISIBILITY, ...(view?.columnVisibility || {}) },
+  columnOrder: sanitizeColumnOrder(view?.columnOrder),
+  density: view?.density || DEFAULT_DENSITY,
+})
+
+const loadViewsState = () => {
+  const freshDefault = () => ({ activeViewId: BUILTIN_VIEW_ID, views: { [BUILTIN_VIEW_ID]: createBuiltinDefaultView() } })
+  if (typeof window === "undefined") return freshDefault()
   try {
-    return JSON.parse(window.localStorage.getItem(VIEW_STORAGE_KEY) || "null")
+    const saved = JSON.parse(window.localStorage.getItem(VIEWS_STORAGE_KEY) || "null")
+    const rawViews = saved?.views && typeof saved.views === "object" ? saved.views : {}
+    const views = {}
+    Object.entries(rawViews).forEach(([id, v]) => { views[id] = sanitizeView(v, id) })
+    views[BUILTIN_VIEW_ID] = views[BUILTIN_VIEW_ID]
+      ? { ...views[BUILTIN_VIEW_ID], id: BUILTIN_VIEW_ID, name: "Default", builtin: true }
+      : createBuiltinDefaultView()
+    const activeViewId = saved?.activeViewId && views[saved.activeViewId] ? saved.activeViewId : BUILTIN_VIEW_ID
+    return { activeViewId, views }
   } catch {
-    return null
+    return freshDefault()
   }
+}
+
+const persistViewsState = (state) => {
+  if (typeof window === "undefined") return
+  try { window.localStorage.setItem(VIEWS_STORAGE_KEY, JSON.stringify(state)) } catch {
+    // Storage can fail (private browsing, quota) — table still works this session.
+  }
+}
+
+const generateViewId = () => {
+  try { return `view_${crypto.randomUUID()}` } catch { return `view_${Date.now()}_${Math.random().toString(36).slice(2, 8)}` }
+}
+
+const loadStoredActiveFilter = () => {
+  if (typeof window === "undefined") return "inProgramme"
+  try { return window.localStorage.getItem(ACTIVE_FILTER_STORAGE_KEY) || "inProgramme" } catch { return "inProgramme" }
 }
 
 // ─── Overall Business Health (Progress column) ─────────────────────────────
@@ -467,24 +537,42 @@ function MyCohorts() {
   const [copied, setCopied] = useState(false)
   const [savingVoucher, setSavingVoucher] = useState(false)
 
-  // Default filter is "inProgramme" (active, whether flagged or not) rather
-  // than "all" — spec §20: exited/graduated SMEs shouldn't dominate the
-  // default operational view; they're reachable via the counter, a filter,
-  // or the "Completed & Exited" saved view.
-  const [activeFilter, setActiveFilter] = useState(() => loadStoredView()?.activeFilter || "inProgramme")
-  const [density, setDensity] = useState(() => loadStoredView()?.density || "comfortable")
-  const [columnVisibility, setColumnVisibility] = useState(() => ({ ...DEFAULT_COLUMN_VISIBILITY, ...(loadStoredView()?.columnVisibility || {}) }))
+  // Default filter is "inProgramme" (active + onboarding, whether flagged or
+  // not) rather than "all" — spec §20: exited/graduated SMEs shouldn't
+  // dominate the default operational view; they're reachable via the
+  // counter, a filter, or the "Completed & Exited" saved view.
+  const [activeFilter, setActiveFilter] = useState(() => loadStoredActiveFilter())
+
+  // ─── Views (column visibility / order / density) ─────────────────────────
+  const [viewsState, setViewsState] = useState(() => loadViewsState())
+  const initialActiveView = viewsState.views[viewsState.activeViewId] || viewsState.views[BUILTIN_VIEW_ID]
+  const [columnVisibility, setColumnVisibility] = useState(() => initialActiveView.columnVisibility)
+  const [columnOrder, setColumnOrder] = useState(() => initialActiveView.columnOrder)
+  const [density, setDensity] = useState(() => initialActiveView.density)
+
+  const [showCustomizeMenu, setShowCustomizeMenu] = useState(false)
+  const [customizeMenuRect, setCustomizeMenuRect] = useState(null)
+  const [showNewViewForm, setShowNewViewForm] = useState(false)
+  const [newViewName, setNewViewName] = useState("")
+  const [newViewDescription, setNewViewDescription] = useState("")
+  const [editingViewMeta, setEditingViewMeta] = useState(null) // { id, name, description, builtin }
+
+  // Column drag-to-reorder state
+  const [draggedColumn, setDraggedColumn] = useState(null)
+  const [dragOverColumn, setDragOverColumn] = useState(null)
+  const [dragHintRect, setDragHintRect] = useState(null)
+
   const [rowMenu, setRowMenu] = useState(null) // { cohort, position }
   const [voucherTooltip, setVoucherTooltip] = useState(null) // { rect }
   const [healthPopover, setHealthPopover] = useState(null) // { cohort, rect }
 
-  // ─── New: search, filters, columns, saved views, bulk, expand, notes ────
-  // Filtering now lives on the column headers themselves (headerFilterOpen
+  // ─── Search, filters, bulk, expand, notes ────────────────────────────────
+  // Filtering lives on the column headers themselves (headerFilterOpen
   // tracks which header's popover is open) rather than a separate search
-  // bar or Filters panel.
+  // bar or Filters panel. Every column has one.
   const [headerFilterOpen, setHeaderFilterOpen] = useState(null) // { type, rect }
   const [localFilters, setLocalFilters] = useState({
-    name: "", sector: [], location: [],
+    name: "", sector: [], location: [], equity: [],
     hasAllocation: "any", // "any" | "yes" | "no"
     startDateFrom: "", startDateTo: "",
     daysRange: [0, 3650],
@@ -496,12 +584,6 @@ function MyCohorts() {
   // — that column needs its own opaque background to stay legible while the
   // table scrolls horizontally, which a plain CSS `tr:hover` can't reach.
   const [hoveredRowKey, setHoveredRowKey] = useState(null)
-  const [showColumnChooser, setShowColumnChooser] = useState(false)
-  const [viewName, setViewName] = useState("")
-  const [savedViews, setSavedViews] = useState(() => {
-    if (typeof window === "undefined") return []
-    try { return JSON.parse(window.localStorage.getItem(SAVED_VIEWS_STORAGE_KEY) || "[]") } catch { return [] }
-  })
   const [showArchived, setShowArchived] = useState(false)
   const [selectedRows, setSelectedRows] = useState(new Set())
   const [expandedRows, setExpandedRows] = useState(new Set())
@@ -514,16 +596,131 @@ function MyCohorts() {
     fetchCohorts()
   }, [])
 
-  // Auto-persist layout (fixes "resets when I leave and come back" for this
-  // table too, same fix applied to the matching table).
+  // Auto-save: any edit to columns/order/density writes straight back into
+  // the active view (and persists immediately) — no separate "unsaved
+  // changes" state to lose track of.
+  useEffect(() => {
+    setViewsState((prev) => {
+      const current = prev.views[prev.activeViewId]
+      if (!current) return prev
+      const updated = { ...current, columnVisibility, columnOrder, density }
+      const next = { ...prev, views: { ...prev.views, [prev.activeViewId]: updated } }
+      persistViewsState(next)
+      return next
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [columnVisibility, columnOrder, density])
+
+  // activeFilter (which pipeline stage is selected) is a lightweight,
+  // separate preference — not part of a "view" — same split as the SME table.
   useEffect(() => {
     if (typeof window === "undefined") return
-    try {
-      window.localStorage.setItem(VIEW_STORAGE_KEY, JSON.stringify({ activeFilter, density, columnVisibility }))
-    } catch {
-      // Storage can fail (private browsing, quota) — still works this session.
+    try { window.localStorage.setItem(ACTIVE_FILTER_STORAGE_KEY, activeFilter) } catch {
+      // Non-fatal — still works this session.
     }
-  }, [activeFilter, density, columnVisibility])
+  }, [activeFilter])
+
+  const activeView = viewsState.views[viewsState.activeViewId] || viewsState.views[BUILTIN_VIEW_ID]
+
+  const switchToView = (viewId) => {
+    const target = viewsState.views[viewId]
+    if (!target) return
+    setViewsState((prev) => {
+      const next = { ...prev, activeViewId: viewId }
+      persistViewsState(next)
+      return next
+    })
+    setColumnVisibility(target.columnVisibility)
+    setColumnOrder(target.columnOrder)
+    setDensity(target.density)
+  }
+
+  const createNewView = () => {
+    const trimmedName = newViewName.trim()
+    if (!trimmedName) return
+    const id = generateViewId()
+    const newView = { id, name: trimmedName, description: newViewDescription.trim(), builtin: false, columnVisibility: { ...columnVisibility }, columnOrder: [...columnOrder], density }
+    setViewsState((prev) => {
+      const next = { activeViewId: id, views: { ...prev.views, [id]: newView } }
+      persistViewsState(next)
+      return next
+    })
+    setNewViewName("")
+    setNewViewDescription("")
+    setShowNewViewForm(false)
+  }
+
+  const startEditingViewMeta = (view) => setEditingViewMeta({ id: view.id, name: view.name, description: view.description, builtin: !!view.builtin })
+
+  const saveViewMeta = () => {
+    if (!editingViewMeta) return
+    const trimmedName = editingViewMeta.name.trim()
+    if (!trimmedName && !editingViewMeta.builtin) return
+    setViewsState((prev) => {
+      const existing = prev.views[editingViewMeta.id]
+      if (!existing) return prev
+      const updated = { ...existing, name: existing.builtin ? existing.name : trimmedName, description: editingViewMeta.description.trim() }
+      const next = { ...prev, views: { ...prev.views, [editingViewMeta.id]: updated } }
+      persistViewsState(next)
+      return next
+    })
+    setEditingViewMeta(null)
+  }
+
+  const removeView = (viewId) => {
+    if (viewId === BUILTIN_VIEW_ID) return
+    const wasActive = viewsState.activeViewId === viewId
+    setViewsState((prev) => {
+      const { [viewId]: _removed, ...restViews } = prev.views
+      const nextActiveId = prev.activeViewId === viewId ? BUILTIN_VIEW_ID : prev.activeViewId
+      const next = { activeViewId: nextActiveId, views: restViews }
+      persistViewsState(next)
+      return next
+    })
+    if (wasActive) {
+      const def = viewsState.views[BUILTIN_VIEW_ID]
+      setColumnVisibility(def.columnVisibility)
+      setColumnOrder(def.columnOrder)
+      setDensity(def.density)
+    }
+  }
+
+  const resetActiveViewToDefault = () => {
+    const layout = createDefaultViewLayout()
+    setColumnVisibility(layout.columnVisibility)
+    setColumnOrder(layout.columnOrder)
+    setDensity(layout.density)
+  }
+
+  // ─── Column drag-to-reorder ───────────────────────────────────────────────
+  const handleColumnDragStart = (e, key) => {
+    setDraggedColumn(key)
+    setDragHintRect(null)
+    try { e.dataTransfer.effectAllowed = "move"; e.dataTransfer.setData("text/plain", key) } catch {
+      // Some browsers are picky about dataTransfer in certain contexts — safe to ignore.
+    }
+  }
+  const handleColumnDragOver = (e, key) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = "move"
+    if (key !== dragOverColumn) setDragOverColumn(key)
+  }
+  const handleColumnDrop = (e, key) => {
+    e.preventDefault()
+    if (!draggedColumn || draggedColumn === key) { setDraggedColumn(null); setDragOverColumn(null); return }
+    setColumnOrder((prev) => {
+      const next = [...prev]
+      const fromIdx = next.indexOf(draggedColumn)
+      const toIdx = next.indexOf(key)
+      if (fromIdx === -1 || toIdx === -1) return prev
+      next.splice(fromIdx, 1)
+      next.splice(toIdx, 0, draggedColumn)
+      return next
+    })
+    setDraggedColumn(null)
+    setDragOverColumn(null)
+  }
+  const handleColumnDragEnd = () => { setDraggedColumn(null); setDragOverColumn(null) }
 
   const fetchCohorts = async () => {
     try {
@@ -531,7 +728,15 @@ function MyCohorts() {
       const currentUser = auth.currentUser
       if (!currentUser) { setLoading(false); return }
 
-      const successfulStatuses = ["Active Support", "Active", "Exit"]
+      // "Admitted" (BIG default) and "Disbursed" (Grant programme) are the
+      // moment an SME accepts an offer and is admitted — on contract, but
+      // not yet actively supported. They used to be silently excluded from
+      // this query entirely (only "Active Support"/"Active"/"Exit" were
+      // fetched), which meant a freshly-admitted SME never appeared here at
+      // all — not even as "Onboarding" — until its status later changed to
+      // one of the active values. Now they're fetched and land in the
+      // "onboarding" group above.
+      const successfulStatuses = ["Active Support", "Active", "Admitted", "Disbursed", "Exit", "Exit Support"]
       const q = query(
         collection(db, "catalystApplications"),
         where("catalystId", "==", currentUser.uid),
@@ -898,10 +1103,10 @@ function MyCohorts() {
   const handleExportSelected = (rows) => {
     try {
       const selected = rows.filter((r) => selectedRows.has(r.id))
-      const headers = ["Business Name", "Support Value", "Start Date", "Status", "Sector", "Location"]
+      const headers = ["Business Name", "Support Value", "Start Date", "Status", "Sector", "Location", "Equity Offered"]
       const dataRows = selected.map((c) => [
         c.smeName, formatCurrency(c.dealAmount), formatDate(c.completionDate),
-        getStatusMeta(c.currentStatus).label, c.sector, c.location,
+        getStatusMeta(c.currentStatus).label, c.sector, c.location, c.dealType,
       ].map((v) => `"${String(v || "").replace(/"/g, '""')}"`).join(","))
       const csv = [headers.join(","), ...dataRows].join("\n")
       const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" })
@@ -914,7 +1119,7 @@ function MyCohorts() {
     }
   }
 
-  // ─── Derived: counters (spec §3 wants 5 tiles) ───────────────────────────
+  // ─── Derived: counters (spec §3) ─────────────────────────────────────────
   // NOTE(backend): "Graduated" and "Exited" are shown as distinct tiles per
   // spec, but the schema has no field distinguishing a successful graduation
   // from an early exit — both collapse to the same "Exit" status today. Both
@@ -925,6 +1130,7 @@ function MyCohorts() {
 
   const counts = useMemo(() => ({
     total: visibleCohorts.length,
+    onboarding: visibleCohorts.filter((c) => getStatusMeta(c.currentStatus).group === "onboarding").length,
     active: visibleCohorts.filter((c) => getStatusMeta(c.currentStatus).group === "active" && !needsAttention(c)).length,
     attention: visibleCohorts.filter((c) => getStatusMeta(c.currentStatus).group === "active" && needsAttention(c)).length,
     exited: visibleCohorts.filter((c) => getStatusMeta(c.currentStatus).group === "exited").length,
@@ -933,6 +1139,7 @@ function MyCohorts() {
   // ─── Derived: filter options from real data ──────────────────────────────
   const sectorOptions = useMemo(() => [...new Set(visibleCohorts.map((c) => c.sector).filter((s) => s && s !== "Not specified"))].sort(), [visibleCohorts])
   const locationOptions = useMemo(() => [...new Set(visibleCohorts.map((c) => c.location).filter((l) => l && l !== "Not specified"))].sort(), [visibleCohorts])
+  const equityOptions = useMemo(() => [...new Set(visibleCohorts.map((c) => c.dealType).filter((e) => e && e !== "Not specified"))].sort(), [visibleCohorts])
   const teamSizeOptions = useMemo(() => [...new Set(visibleCohorts.map((c) => c.teamSize).filter((t) => t && t !== "Not specified"))].sort(), [visibleCohorts])
   const statusOptions = useMemo(() => [...new Set(Object.values(STATUS_META).map((m) => m.label))], [])
   const progressOptions = [
@@ -943,7 +1150,7 @@ function MyCohorts() {
   ]
 
   const activeFilterCount = (localFilters.name.trim() ? 1 : 0)
-    + localFilters.sector.length + localFilters.location.length
+    + localFilters.sector.length + localFilters.location.length + localFilters.equity.length
     + (localFilters.hasAllocation !== "any" ? 1 : 0)
     + (localFilters.startDateFrom || localFilters.startDateTo ? 1 : 0)
     + (localFilters.daysRange[0] > 0 || localFilters.daysRange[1] < 3650 ? 1 : 0)
@@ -958,7 +1165,8 @@ function MyCohorts() {
   const filteredCohorts = useMemo(() => {
     let result = visibleCohorts.filter((c) => {
       const meta = getStatusMeta(c.currentStatus)
-      if (activeFilter === "inProgramme") return meta.group === "active"
+      if (activeFilter === "inProgramme") return meta.group === "active" || meta.group === "onboarding"
+      if (activeFilter === "onboarding") return meta.group === "onboarding"
       if (activeFilter === "active") return meta.group === "active" && !needsAttention(c)
       if (activeFilter === "attention") return meta.group === "active" && needsAttention(c)
       if (activeFilter === "exited") return meta.group === "exited"
@@ -972,6 +1180,7 @@ function MyCohorts() {
 
     if (localFilters.sector.length > 0) result = result.filter((c) => localFilters.sector.includes(c.sector))
     if (localFilters.location.length > 0) result = result.filter((c) => localFilters.location.includes(c.location))
+    if (localFilters.equity.length > 0) result = result.filter((c) => localFilters.equity.includes(c.dealType))
 
     if (localFilters.hasAllocation !== "any") {
       result = result.filter((c) => {
@@ -1058,7 +1267,6 @@ function MyCohorts() {
   }
 
   const toggleColumn = (key) => setColumnVisibility((prev) => ({ ...prev, [key]: !prev[key] }))
-  const resetColumns = () => setColumnVisibility(DEFAULT_COLUMN_VISIBILITY)
 
   // Filtering happens straight from the column header: clicking the filter
   // icon opens a small popover anchored to that header.
@@ -1070,45 +1278,25 @@ function MyCohorts() {
   const closeHeaderFilter = () => setHeaderFilterOpen(null)
 
   // Small icon button placed on a column header; lights up when that
-  // column currently has an active filter.
+  // column currently has an active filter. Fixed-size slot so it lands in
+  // the exact same position on every header regardless of label length.
   const FilterTrigger = ({ type, active }) => (
     <button
       type="button"
       onClick={(e) => openHeaderFilter(type, e)}
-      className={`p-0.5 rounded transition-colors ${active ? "text-[#e6d7c3]" : "text-[#c8b6a6] hover:text-white"}`}
+      className={`flex-shrink-0 w-5 h-5 flex items-center justify-center rounded transition-colors ${active ? "text-[#e6d7c3]" : "text-[#c8b6a6] hover:text-white"}`}
       title="Filter this column"
     >
       <SlidersHorizontal size={11} />
     </button>
   )
 
-  const saveCurrentView = () => {
-    if (!viewName.trim()) return
-    setSavedViews((prev) => {
-      const next = [...prev.filter((v) => v.name !== viewName.trim()), { name: viewName.trim(), activeFilter, columnVisibility: { ...columnVisibility }, density }]
-      try { window.localStorage.setItem(SAVED_VIEWS_STORAGE_KEY, JSON.stringify(next)) } catch {}
-      return next
-    })
-    setViewName("")
-  }
-
-  const loadSavedView = (view) => {
-    setActiveFilter(view.activeFilter); setColumnVisibility({ ...DEFAULT_COLUMN_VISIBILITY, ...(view.columnVisibility || {}) }); setDensity(view.density)
-  }
-
-  const deleteSavedView = (name) => {
-    setSavedViews((prev) => {
-      const next = prev.filter((v) => v.name !== name)
-      try { window.localStorage.setItem(SAVED_VIEWS_STORAGE_KEY, JSON.stringify(next)) } catch {}
-      return next
-    })
-  }
-
   // Spec §6: one contextual primary action instead of always "View
   // Progress" — varies with what the record actually needs next, using only
   // signals we can honestly derive today (attention flag, group).
   const getPrimaryAction = (cohort) => {
     const meta = getStatusMeta(cohort.currentStatus)
+    if (meta.group === "onboarding") return { label: "Begin Onboarding", handler: handleViewGrowthSuite }
     if (meta.group === "exited") return { label: "View Record", handler: handleViewGrowthSuite }
     if (needsAttention(cohort)) return { label: "Review SME", handler: handleViewGrowthSuite }
     return { label: "Deep Dive", handler: handleViewGrowthSuite }
@@ -1131,6 +1319,65 @@ function MyCohorts() {
   if (loading) return <LoadingSkeleton />
 
   const allVisibleSelected = filteredCohorts.length > 0 && filteredCohorts.every((c) => selectedRows.has(c.id))
+  const visibleColumnKeys = columnOrder.filter((key) => columnVisibility[key])
+
+  // Data-driven cell renderer for every optional column — keeps header and
+  // body rendering in sync with columnOrder/columnVisibility without a
+  // long, error-prone sequence of near-duplicate JSX blocks.
+  const renderCell = (key, cohort, days, healthColor, healthLabel) => {
+    switch (key) {
+      case "supportValue":
+        return <td key={key} className={`${rowPad} border-r border-[#e6d7c3]`} style={{ minWidth: '130px' }}><span className="font-semibold text-[#4a352f]">{formatCurrency(cohort.dealAmount)}</span></td>
+      case "startDate":
+        return <td key={key} className={`${rowPad} border-r border-[#e6d7c3]`} style={{ minWidth: '120px' }}><span className="text-[#5d4037]">{formatDate(cohort.completionDate)}</span></td>
+      case "daysInProgramme":
+        return <td key={key} className={`${rowPad} border-r border-[#e6d7c3]`} style={{ minWidth: '120px' }}><span className="text-[#5d4037]">{days === null ? "Not available" : `${days} days`}</span></td>
+      case "appliedDate":
+        return <td key={key} className={`${rowPad} border-r border-[#e6d7c3]`} style={{ minWidth: '120px' }}><span className="text-[#5d4037]">{cohort.applicationDate}</span></td>
+      case "teamSize":
+        return <td key={key} className={`${rowPad} border-r border-[#e6d7c3]`}><span className="text-[#5d4037]">{cohort.teamSize}</span></td>
+      case "sector":
+        return <td key={key} className={`${rowPad} border-r border-[#e6d7c3]`}><span className="text-[#5d4037]">{cohort.sector}</span></td>
+      case "location":
+        return <td key={key} className={`${rowPad} border-r border-[#e6d7c3]`}><span className="text-[#5d4037]">{cohort.location}</span></td>
+      case "equityOffered":
+        return <td key={key} className={`${rowPad} border-r border-[#e6d7c3]`}><span className="text-[#5d4037]">{cohort.dealType}</span></td>
+      case "guarantees":
+        return <td key={key} className={`${rowPad} border-r border-[#e6d7c3]`}><span className="text-[#5d4037] line-clamp-1">{cohort.guarantees}</span></td>
+      case "servicesRequired":
+        return <td key={key} className={`${rowPad} border-r border-[#e6d7c3]`}><span className="text-[#5d4037] line-clamp-1">{cohort.servicesRequired}</span></td>
+      case "status": {
+        const meta = getStatusMeta(cohort.currentStatus)
+        const flagged = meta.group === "active" && needsAttention(cohort)
+        return (
+          <td key={key} className={`${rowPad} border-r border-[#e6d7c3]`} style={{ minWidth: '130px' }}>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="px-2.5 py-1 rounded-full text-xs font-semibold inline-block whitespace-nowrap" style={{ backgroundColor: meta.color + "20", color: meta.color }}>
+                {meta.label}
+              </span>
+              {flagged && (
+                <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold whitespace-nowrap" style={{ backgroundColor: "#fff3e0", color: "#e65100" }} title="Missing start date or funding information on record">
+                  <AlertCircle size={11} /> Attention
+                </span>
+              )}
+            </div>
+          </td>
+        )
+      }
+      case "progress":
+        return (
+          <td key={key} className={`${rowPad} border-r border-[#e6d7c3]`} style={{ minWidth: '110px' }}>
+            <button onClick={(e) => openHealthPopover(cohort, e)} className="px-2.5 py-1 rounded-full text-xs font-semibold inline-flex items-center gap-1.5 whitespace-nowrap" style={{ backgroundColor: healthColor + "20", color: healthColor }}>
+              <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: healthColor }} />
+              {healthLabel}
+              <ChevronDown size={11} />
+            </button>
+          </td>
+        )
+      default:
+        return null
+    }
+  }
 
   return (
     <div className="min-h-screen box-border transition-[margin-left] duration-300">
@@ -1164,10 +1411,15 @@ function MyCohorts() {
 
         <CohortStagePipeline counts={counts} activeFilter={activeFilter} setActiveFilter={setActiveFilter} />
 
-        {/* Toolbar: columns, density, save view (filtering lives on headers) */}
+        {/* Toolbar: Customize Table (Views + Hide/Unhide + Density + Reset), filter count */}
         <div className="bg-[#faf7f2] rounded-t-2xl p-4 border border-[#e6d7c3] border-b-0 shadow-sm">
           <div className="flex items-center justify-between gap-4 flex-wrap">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-white text-[#4a352f] border border-[#c8b6a6]">
+                <LayoutGrid size={12} className="text-[#7d5a50] flex-shrink-0" />
+                Viewing: {activeView.name}
+                {activeView.description && <span className="font-normal text-[#a89482]"> — {activeView.description}</span>}
+              </span>
               {activeFilterCount > 0 && (
                 <span className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold bg-[#fff3e0] text-[#e65100] border border-[#e65100]/30">
                   <SlidersHorizontal size={12} /> {activeFilterCount} filter{activeFilterCount > 1 ? "s" : ""} active
@@ -1176,72 +1428,124 @@ function MyCohorts() {
             </div>
             <div className="flex items-center gap-2">
               <div className="relative">
-                <button onClick={() => setShowColumnChooser(!showColumnChooser)} className="flex items-center gap-2 px-4 py-2.5 bg-white border border-[#c8b6a6] rounded-xl text-sm text-[#4a352f] hover:bg-[#f5f0e1] transition-all shadow-sm">
-                  <Plus size={16} /> Add New Field <ChevronDown size={14} className={`transition-transform ${showColumnChooser ? 'rotate-180' : ''}`} />
+                <button
+                  onClick={(e) => {
+                    if (showCustomizeMenu) { setShowCustomizeMenu(false); setCustomizeMenuRect(null) }
+                    else { setCustomizeMenuRect(e.currentTarget.getBoundingClientRect()); setShowCustomizeMenu(true); setShowNewViewForm(false); setEditingViewMeta(null) }
+                  }}
+                  className="flex items-center gap-2 px-4 py-2.5 bg-white border border-[#c8b6a6] rounded-xl text-sm text-[#4a352f] hover:bg-[#f5f0e1] transition-all shadow-sm"
+                >
+                  <SlidersHorizontal size={16} /> Customize Table <ChevronDown size={14} className={`transition-transform ${showCustomizeMenu ? 'rotate-180' : ''}`} />
                 </button>
-                {showColumnChooser && (
-                  <>
-                    <div className="fixed inset-0 z-40" onClick={() => setShowColumnChooser(false)} />
-                    <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-2xl shadow-2xl border border-[#e6d7c3] p-5 z-50 max-h-[560px] overflow-y-auto">
-                      <h4 className="text-sm font-semibold text-[#4a352f] mb-2">Column Visibility</h4>
-                      {OPTIONAL_COLUMNS.map(({ key, label }) => (
-                        <label key={key} className="flex items-center gap-3 py-1.5 px-2 rounded-lg hover:bg-[#faf7f2] cursor-pointer">
-                          <input type="checkbox" checked={columnVisibility[key] || false} onChange={() => toggleColumn(key)} className="rounded border-[#c8b6a6] text-[#7d5a50]" />
-                          <span className="text-sm text-[#4a352f]">{label}</span>
-                        </label>
-                      ))}
-                      <div className="border-t border-[#e6d7c3] my-2" />
-                      <button onClick={resetColumns} className="text-xs text-[#7d5a50] underline hover:text-[#4a352f]">Reset to default</button>
-
-                      {/* Density — was a separate dropdown up in the page
-                          header, folded in here so there's one place to
-                          shape how the table looks. */}
-                      <div className="border-t border-[#e6d7c3] my-4" />
-                      <h4 className="text-sm font-semibold text-[#4a352f] mb-3">Density</h4>
-                      <div className="flex gap-1.5">
-                        {[{ key: 'comfortable', label: 'Comfortable' }, { key: 'compact', label: 'Compact' }].map((d) => (
-                          <button
-                            key={d.key}
-                            onClick={() => setDensity(d.key)}
-                            className={`flex-1 px-2 py-1.5 rounded-lg text-xs font-semibold transition-all ${density === d.key ? 'bg-[#7d5a50] text-white' : 'bg-[#f5f0e1] text-[#4a352f] hover:bg-[#e6d7c3]'}`}
-                          >
-                            {d.label}
-                          </button>
-                        ))}
-                      </div>
-
-                      {/* Save View — current column/density layout
-                          auto-saves as you go (see the persistence effect
-                          above), but this lets you also save named
-                          snapshots and switch between them. */}
-                      <div className="border-t border-[#e6d7c3] my-4" />
-                      <h4 className="text-sm font-semibold text-[#4a352f] mb-2">Save View</h4>
-                      <div className="flex items-center gap-2 mb-3">
-                        <input
-                          value={viewName}
-                          onChange={(e) => setViewName(e.target.value)}
-                          onKeyDown={(e) => e.key === 'Enter' && saveCurrentView()}
-                          placeholder="View name..."
-                          className="flex-1 px-2.5 py-1.5 border border-[#c8b6a6] rounded-lg text-sm"
-                        />
-                        <button onClick={saveCurrentView} disabled={!viewName.trim()} className="px-3 py-1.5 bg-[#7d5a50] text-white rounded-lg text-xs font-semibold disabled:opacity-40">Save</button>
-                      </div>
-                      {savedViews.length > 0 && (
-                        <>
-                          <h4 className="text-xs font-semibold text-[#a89482] uppercase tracking-wide mb-2">Saved views</h4>
-                          <div className="space-y-1 max-h-[180px] overflow-y-auto">
-                            {savedViews.map((v) => (
-                              <div key={v.name} className="flex items-center justify-between gap-2 px-2 py-1.5 rounded-lg hover:bg-[#faf7f2]">
-                                <button onClick={() => loadSavedView(v)} className="flex-1 text-left text-sm text-[#4a352f]">{v.name}</button>
-                                <button onClick={() => deleteSavedView(v.name)} className="text-[#a89482] hover:text-red-500 p-1"><Trash2 size={13} /></button>
+                {showCustomizeMenu && customizeMenuRect && (() => {
+                  const panelWidth = 320
+                  const margin = 12
+                  let left = customizeMenuRect.right - panelWidth
+                  left = Math.min(Math.max(left, margin), window.innerWidth - panelWidth - margin)
+                  const spaceBelow = window.innerHeight - customizeMenuRect.bottom - margin - 8
+                  const spaceAbove = customizeMenuRect.top - margin - 8
+                  const openUpward = spaceBelow < 320 && spaceAbove > spaceBelow
+                  const maxHeight = Math.max(200, Math.min(620, openUpward ? spaceAbove : spaceBelow))
+                  const top = openUpward ? undefined : customizeMenuRect.bottom + 8
+                  const bottom = openUpward ? window.innerHeight - customizeMenuRect.top + 8 : undefined
+                  const allViews = Object.values(viewsState.views).sort((a, b) => (a.builtin ? -1 : b.builtin ? 1 : a.name.localeCompare(b.name)))
+                  return (
+                    <Portal>
+                      <div className="fixed inset-0 z-40" onClick={() => { setShowCustomizeMenu(false); setCustomizeMenuRect(null); setShowNewViewForm(false); setEditingViewMeta(null) }} />
+                      <div className="fixed bg-white rounded-2xl shadow-2xl border border-[#e6d7c3] p-5 z-50 overflow-y-auto" style={{ left, width: panelWidth, top, bottom, maxHeight }}>
+                        {/* ─── Views ─────────────────────────────────────── */}
+                        <h4 className="text-sm font-semibold text-[#4a352f] mb-1">Views</h4>
+                        <p className="text-xs text-[#a89482] mb-3">Edits below auto-save into whichever view is selected.</p>
+                        <div className="space-y-1 mb-3">
+                          {allViews.map((view) => {
+                            const isActive = view.id === viewsState.activeViewId
+                            const isEditing = editingViewMeta?.id === view.id
+                            if (isEditing) {
+                              return (
+                                <div key={view.id} className="p-2.5 rounded-lg border border-[#c8b6a6] bg-[#faf7f2] space-y-2">
+                                  {!view.builtin ? (
+                                    <input autoFocus value={editingViewMeta.name} onChange={(e) => setEditingViewMeta((prev) => ({ ...prev, name: e.target.value }))} placeholder="View name" className="w-full px-2.5 py-1.5 border border-[#c8b6a6] rounded-lg text-sm" />
+                                  ) : (
+                                    <p className="text-sm font-semibold text-[#4a352f]">Default <span className="font-normal text-[#a89482] text-xs">(name can't be changed)</span></p>
+                                  )}
+                                  <textarea value={editingViewMeta.description} onChange={(e) => setEditingViewMeta((prev) => ({ ...prev, description: e.target.value }))} placeholder="Description (optional) — what is this view for?" rows={2} className="w-full px-2.5 py-1.5 border border-[#c8b6a6] rounded-lg text-xs resize-none" />
+                                  <div className="flex justify-end gap-2">
+                                    <button onClick={() => setEditingViewMeta(null)} className="px-2.5 py-1 text-xs text-[#7d5a50] hover:text-[#4a352f]">Cancel</button>
+                                    <button onClick={saveViewMeta} className="px-2.5 py-1 bg-[#7d5a50] text-white rounded-lg text-xs font-semibold">Save</button>
+                                  </div>
+                                </div>
+                              )
+                            }
+                            return (
+                              <div key={view.id} className={`flex items-start justify-between gap-2 px-2.5 py-2 rounded-lg ${isActive ? 'bg-[#f5f0e1]' : 'hover:bg-[#faf7f2]'}`}>
+                                <button onClick={() => switchToView(view.id)} className="flex-1 text-left min-w-0">
+                                  <div className="flex items-center gap-1.5">
+                                    {isActive && <CheckCircle size={12} className="text-[#7d5a50] flex-shrink-0" />}
+                                    <span className={`text-sm ${isActive ? 'font-semibold text-[#4a352f]' : 'text-[#4a352f]'}`}>{view.name}</span>
+                                    {view.builtin && <span className="text-[10px] uppercase tracking-wide text-[#a89482] font-semibold">Built-in</span>}
+                                  </div>
+                                  {view.description && <p className="text-xs text-[#a89482] mt-0.5 truncate">{view.description}</p>}
+                                </button>
+                                <div className="flex items-center gap-0.5 flex-shrink-0">
+                                  <button onClick={() => startEditingViewMeta(view)} title="Rename / edit description" className="text-[#a89482] hover:text-[#7d5a50] p-1"><Settings size={13} /></button>
+                                  {!view.builtin && <button onClick={() => removeView(view.id)} title="Delete view" className="text-[#a89482] hover:text-red-500 p-1"><Trash2 size={13} /></button>}
+                                </div>
                               </div>
-                            ))}
+                            )
+                          })}
+                        </div>
+                        {showNewViewForm ? (
+                          <div className="space-y-2 mb-1">
+                            <input autoFocus value={newViewName} onChange={(e) => setNewViewName(e.target.value)} placeholder="New view name..." className="w-full px-2.5 py-1.5 border border-[#c8b6a6] rounded-lg text-sm" />
+                            <textarea value={newViewDescription} onChange={(e) => setNewViewDescription(e.target.value)} placeholder="Description (optional) — what is this view for?" rows={2} className="w-full px-2.5 py-1.5 border border-[#c8b6a6] rounded-lg text-xs resize-none" />
+                            <div className="flex justify-end gap-2">
+                              <button onClick={() => { setShowNewViewForm(false); setNewViewName(""); setNewViewDescription("") }} className="px-2.5 py-1 text-xs text-[#7d5a50] hover:text-[#4a352f]">Cancel</button>
+                              <button onClick={createNewView} disabled={!newViewName.trim()} className="px-3 py-1.5 bg-[#7d5a50] text-white rounded-lg text-xs font-semibold disabled:opacity-40">Create view</button>
+                            </div>
                           </div>
-                        </>
-                      )}
-                    </div>
-                  </>
-                )}
+                        ) : (
+                          <button onClick={() => setShowNewViewForm(true)} className="w-full flex items-center justify-center gap-1.5 px-3 py-2 border border-dashed border-[#c8b6a6] rounded-lg text-xs font-semibold text-[#7d5a50] hover:bg-[#faf7f2]">
+                            <Plus size={13} /> New view from current layout
+                          </button>
+                        )}
+
+                        <div className="border-t border-[#e6d7c3] my-4" />
+
+                        {/* ─── Hide/Unhide ───────────────────────────────── */}
+                        <h4 className="text-sm font-semibold text-[#4a352f] mb-3">Hide/Unhide</h4>
+                        <p className="text-xs text-[#a89482] mb-3 flex items-center gap-1.5">
+                          <GripVertical size={12} className="flex-shrink-0" /> Tip: drag any column header in the table to reorder it.
+                        </p>
+                        <label className="flex items-center gap-3 py-1.5 px-2 rounded-lg opacity-75">
+                          <input type="checkbox" checked={true} disabled={true} className="rounded border-[#c8b6a6]" />
+                          <span className="text-sm text-[#4a352f]">Business</span>
+                        </label>
+                        <div className="border-t border-[#e6d7c3] my-2" />
+                        {DEFAULT_COLUMN_ORDER.map((key) => (
+                          <label key={key} className="flex items-center gap-3 py-1.5 px-2 rounded-lg hover:bg-[#faf7f2] cursor-pointer">
+                            <input type="checkbox" checked={columnVisibility[key] || false} onChange={() => toggleColumn(key)} className="rounded border-[#c8b6a6] text-[#7d5a50]" />
+                            <span className="text-sm text-[#4a352f]">{COLUMN_DEFS[key].label}</span>
+                          </label>
+                        ))}
+
+                        <div className="border-t border-[#e6d7c3] my-4" />
+                        <h4 className="text-sm font-semibold text-[#4a352f] mb-3">Density</h4>
+                        <div className="flex gap-1.5">
+                          {[{ key: 'comfortable', label: 'Comfortable' }, { key: 'compact', label: 'Compact' }].map((d) => (
+                            <button key={d.key} onClick={() => setDensity(d.key)} className={`flex-1 px-2 py-1.5 rounded-lg text-xs font-semibold transition-all ${density === d.key ? 'bg-[#7d5a50] text-white' : 'bg-[#f5f0e1] text-[#4a352f] hover:bg-[#e6d7c3]'}`}>
+                              {d.label}
+                            </button>
+                          ))}
+                        </div>
+
+                        <div className="border-t border-[#e6d7c3] my-4" />
+                        <button onClick={resetActiveViewToDefault} className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold text-[#a67c52] hover:text-[#4a352f] hover:bg-[#faf7f2] border border-[#e6d7c3]">
+                          <RotateCcw size={12} /> Reset "{activeView.name}" to factory defaults
+                        </button>
+                      </div>
+                    </Portal>
+                  )
+                })()}
               </div>
             </div>
           </div>
@@ -1273,8 +1577,13 @@ function MyCohorts() {
             </div>
 
             <div className="overflow-auto" style={{ maxHeight: '70vh' }}>
-              <style>{`.mc-th { color: #faf7f2 !important; }`}</style>
-              <table className="w-full border-collapse text-sm">
+              <style>{`
+                .mc-th { color: #faf7f2 !important; vertical-align: top !important; }
+                .mc-th-draggable { cursor: grab; }
+                .mc-th-draggable:active { cursor: grabbing; }
+                .mc-th-label { flex: 1 1 auto; min-width: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; white-space: normal; overflow-wrap: break-word; line-height: 1.2; }
+              `}</style>
+              <table className="border-collapse text-sm" style={{ tableLayout: 'auto' }}>
                 <thead>
                   <tr className="bg-[#4a352f]">
                     <th className={`mc-th ${rowPad} sticky top-0 left-0 z-30 border-r border-[#e6d7c3]`} style={{ backgroundColor: '#4a352f', width: '40px' }}>
@@ -1282,84 +1591,56 @@ function MyCohorts() {
                         {allVisibleSelected ? <CheckSquare size={16} /> : <Square size={16} />}
                       </button>
                     </th>
-                    <th className={`mc-th ${rowPad} text-left font-semibold text-xs uppercase tracking-wide whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 left-0 z-30`} style={{ backgroundColor: '#4a352f' }}>
-                      <div className="flex items-center gap-1">
-                        Business
-                        <FilterTrigger type="business" active={activeFilterCount > 0} />
+                    <th className={`mc-th ${rowPad} text-left font-semibold text-xs uppercase tracking-wide border-r border-[#e6d7c3] sticky top-0 left-0 z-30`} style={{ backgroundColor: '#4a352f', minWidth: '190px', maxWidth: '210px' }}>
+                      <div className="flex items-start gap-1 min-w-0">
+                        <span className="mc-th-label">Business</span>
+                        <FilterTrigger type="business" active={!!localFilters.name.trim()} />
                       </div>
                     </th>
-                    {columnVisibility.supportValue && (
-                      <th className={`mc-th ${rowPad} text-left font-semibold text-xs uppercase tracking-wide whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ backgroundColor: '#4a352f' }}>
-                        <div className="flex items-center gap-1">
-                          Support Value
-                          <FilterTrigger type="supportValue" active={localFilters.hasAllocation !== "any"} />
-                        </div>
-                      </th>
-                    )}
-                    {columnVisibility.startDate && (
-                      <th className={`mc-th ${rowPad} text-left font-semibold text-xs uppercase tracking-wide whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ backgroundColor: '#4a352f' }}>
-                        <div className="flex items-center gap-1">
-                          Start Date
-                          <FilterTrigger type="startDate" active={!!(localFilters.startDateFrom || localFilters.startDateTo)} />
-                        </div>
-                      </th>
-                    )}
-                    {columnVisibility.daysInProgramme && (
-                      <th className={`mc-th ${rowPad} text-left font-semibold text-xs uppercase tracking-wide whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ backgroundColor: '#4a352f' }}>
-                        <div className="flex items-center gap-1">
-                          Days in Programme
-                          <FilterTrigger type="daysInProgramme" active={localFilters.daysRange[0] > 0 || localFilters.daysRange[1] < 3650} />
-                        </div>
-                      </th>
-                    )}
-                    {columnVisibility.appliedDate && (
-                      <th className={`mc-th ${rowPad} text-left font-semibold text-xs uppercase tracking-wide whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ backgroundColor: '#4a352f' }}>
-                        <div className="flex items-center gap-1">
-                          Applied Date
-                          <FilterTrigger type="appliedDate" active={!!(localFilters.appliedDateFrom || localFilters.appliedDateTo)} />
-                        </div>
-                      </th>
-                    )}
-                    {columnVisibility.teamSize && (
-                      <th className={`mc-th ${rowPad} text-left font-semibold text-xs uppercase tracking-wide whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ backgroundColor: '#4a352f' }}>
-                        <div className="flex items-center gap-1">
-                          Employees
-                          <FilterTrigger type="teamSize" active={localFilters.teamSize.length > 0} />
-                        </div>
-                      </th>
-                    )}
-                    {columnVisibility.guarantees && (
-                      <th className={`mc-th ${rowPad} text-left font-semibold text-xs uppercase tracking-wide whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ backgroundColor: '#4a352f' }}>
-                        <div className="flex items-center gap-1">
-                          Guarantees
-                          <FilterTrigger type="guarantees" active={!!localFilters.guarantees.trim()} />
-                        </div>
-                      </th>
-                    )}
-                    {columnVisibility.servicesRequired && (
-                      <th className={`mc-th ${rowPad} text-left font-semibold text-xs uppercase tracking-wide whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ backgroundColor: '#4a352f' }}>
-                        <div className="flex items-center gap-1">
-                          Services
-                          <FilterTrigger type="services" active={!!localFilters.services.trim()} />
-                        </div>
-                      </th>
-                    )}
-                    {columnVisibility.status && (
-                      <th className={`mc-th ${rowPad} text-left font-semibold text-xs uppercase tracking-wide whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ backgroundColor: '#4a352f', minWidth: '130px', paddingRight: '8px' }}>
-                        <div className="flex items-center gap-1">
-                          Status
-                          <FilterTrigger type="status" active={localFilters.status.length > 0} />
-                        </div>
-                      </th>
-                    )}
-                    {columnVisibility.progress && (
-                      <th className={`mc-th ${rowPad} text-left font-semibold text-xs uppercase tracking-wide whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ backgroundColor: '#4a352f', minWidth: '110px', paddingLeft: '8px' }}>
-                        <div className="flex items-center gap-1">
-                          Progress
-                          <FilterTrigger type="progress" active={localFilters.progress.length > 0} />
-                        </div>
-                      </th>
-                    )}
+
+                    {/* ─── Reorderable columns ────────────────────────────── */}
+                    {visibleColumnKeys.map((key) => {
+                      const col = COLUMN_DEFS[key]
+                      const isDragging = draggedColumn === key
+                      const isDragOver = dragOverColumn === key && draggedColumn !== key
+                      return (
+                        <th
+                          key={key}
+                          draggable
+                          onDragStart={(e) => handleColumnDragStart(e, key)}
+                          onDragOver={(e) => handleColumnDragOver(e, key)}
+                          onDrop={(e) => handleColumnDrop(e, key)}
+                          onDragEnd={handleColumnDragEnd}
+                          onMouseEnter={(e) => setDragHintRect(e.currentTarget.getBoundingClientRect())}
+                          onMouseLeave={() => setDragHintRect(null)}
+                          className={`mc-th mc-th-draggable ${rowPad} text-left font-semibold text-xs uppercase tracking-wide border-r border-[#e6d7c3] sticky top-0 z-20 select-none transition-opacity ${isDragging ? 'opacity-40' : ''}`}
+                          style={{ minWidth: col.minWidth, backgroundColor: isDragOver ? '#5a423b' : '#4a352f' }}
+                        >
+                          <div className="flex items-start gap-1 min-w-0">
+                            <GripVertical size={11} className="opacity-40 flex-shrink-0 mt-0.5" />
+                            <span className="mc-th-label">{col.label}</span>
+                            <FilterTrigger
+                              type={col.filterType}
+                              active={
+                                col.filterType === "supportValue" ? localFilters.hasAllocation !== "any" :
+                                col.filterType === "startDate" ? !!(localFilters.startDateFrom || localFilters.startDateTo) :
+                                col.filterType === "daysInProgramme" ? (localFilters.daysRange[0] > 0 || localFilters.daysRange[1] < 3650) :
+                                col.filterType === "appliedDate" ? !!(localFilters.appliedDateFrom || localFilters.appliedDateTo) :
+                                col.filterType === "teamSize" ? localFilters.teamSize.length > 0 :
+                                col.filterType === "sector" ? localFilters.sector.length > 0 :
+                                col.filterType === "location" ? localFilters.location.length > 0 :
+                                col.filterType === "equity" ? localFilters.equity.length > 0 :
+                                col.filterType === "guarantees" ? !!localFilters.guarantees.trim() :
+                                col.filterType === "services" ? !!localFilters.services.trim() :
+                                col.filterType === "status" ? localFilters.status.length > 0 :
+                                col.filterType === "progress" ? localFilters.progress.length > 0 :
+                                false
+                              }
+                            />
+                          </div>
+                        </th>
+                      )
+                    })}
                     <th className={`mc-th ${rowPad} text-center font-semibold text-xs uppercase tracking-wide whitespace-nowrap border-r border-[#e6d7c3] sticky top-0 z-20`} style={{ backgroundColor: '#4a352f' }}>
                       Action
                     </th>
@@ -1367,8 +1648,6 @@ function MyCohorts() {
                 </thead>
                 <tbody>
                   {filteredCohorts.map((cohort) => {
-                    const meta = getStatusMeta(cohort.currentStatus)
-                    const flagged = meta.group === "active" && needsAttention(cohort)
                     const isExpanded = expandedRows.has(cohort.id)
                     const primaryAction = getPrimaryAction(cohort)
                     const days = daysInProgramme(cohort)
@@ -1390,7 +1669,7 @@ function MyCohorts() {
                           </td>
                           <td
                             className={`${rowPad} sticky left-0 z-10 border-r border-b border-[#e6d7c3] transition-colors`}
-                            style={{ minWidth: '220px', backgroundColor: hoveredRowKey === cohort.id ? '#faf7f2' : '#ffffff' }}
+                            style={{ minWidth: '190px', maxWidth: '210px', backgroundColor: hoveredRowKey === cohort.id ? '#faf7f2' : '#ffffff' }}
                           >
                             <div className="flex items-start gap-1.5">
                               <button onClick={() => toggleExpandRow(cohort)} className="mt-0.5 text-[#a89482] hover:text-[#4a352f] flex-shrink-0">
@@ -1417,77 +1696,7 @@ function MyCohorts() {
                             </div>
                           </td>
 
-                          {columnVisibility.supportValue && (
-                            <td className={`${rowPad} border-r border-[#e6d7c3]`} style={{ minWidth: '130px' }}>
-                              <span className="font-semibold text-[#4a352f]">{formatCurrency(cohort.dealAmount)}</span>
-                            </td>
-                          )}
-
-                          {columnVisibility.startDate && (
-                            <td className={`${rowPad} border-r border-[#e6d7c3]`} style={{ minWidth: '120px' }}>
-                              <span className="text-[#5d4037]">{formatDate(cohort.completionDate)}</span>
-                            </td>
-                          )}
-
-                          {columnVisibility.daysInProgramme && (
-                            <td className={`${rowPad} border-r border-[#e6d7c3]`} style={{ minWidth: '120px' }}>
-                              <span className="text-[#5d4037]">{days === null ? "Not available" : `${days} days`}</span>
-                            </td>
-                          )}
-
-                          {columnVisibility.appliedDate && (
-                            <td className={`${rowPad} border-r border-[#e6d7c3]`} style={{ minWidth: '120px' }}>
-                              <span className="text-[#5d4037]">{cohort.applicationDate}</span>
-                            </td>
-                          )}
-
-                          {columnVisibility.teamSize && (
-                            <td className={`${rowPad} border-r border-[#e6d7c3]`}><span className="text-[#5d4037]">{cohort.teamSize}</span></td>
-                          )}
-
-                          {columnVisibility.guarantees && (
-                            <td className={`${rowPad} border-r border-[#e6d7c3]`}><span className="text-[#5d4037] line-clamp-1">{cohort.guarantees}</span></td>
-                          )}
-
-                          {columnVisibility.servicesRequired && (
-                            <td className={`${rowPad} border-r border-[#e6d7c3]`}><span className="text-[#5d4037] line-clamp-1">{cohort.servicesRequired}</span></td>
-                          )}
-
-                          {columnVisibility.status && (
-                            <td className={`${rowPad} border-r border-[#e6d7c3]`} style={{ minWidth: '130px', paddingRight: '8px' }}>
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                <span
-                                  className="px-2.5 py-1 rounded-full text-xs font-semibold inline-block whitespace-nowrap"
-                                  style={{ backgroundColor: meta.color + "20", color: meta.color }}
-                                >
-                                  {meta.label}
-                                </span>
-                                {flagged && (
-                                  <span
-                                    className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold whitespace-nowrap"
-                                    style={{ backgroundColor: "#fff3e0", color: "#e65100" }}
-                                    title="Missing start date or funding information on record"
-                                  >
-                                    <AlertCircle size={11} /> Attention
-                                  </span>
-                                )}
-                              </div>
-                            </td>
-                          )}
-
-                          {columnVisibility.progress && (
-                            <td className={`${rowPad} border-r border-[#e6d7c3]`} style={{ minWidth: '110px', paddingLeft: '8px' }}>
-                              <button
-                                onClick={(e) => openHealthPopover(cohort, e)}
-                                className="px-2.5 py-1 rounded-full text-xs font-semibold inline-flex items-center gap-1.5 whitespace-nowrap"
-                                style={{ backgroundColor: healthColor + "20", color: healthColor }}
-                              >
-                                <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ backgroundColor: healthColor }} />
-                                {healthLabel}
-                                <ChevronDown size={11} />
-                              </button>
-                            </td>
-                          )}
+                          {visibleColumnKeys.map((key) => renderCell(key, cohort, days, healthColor, healthLabel))}
 
                           <td className={`${rowPad} text-center`} style={{ minWidth: '170px' }}>
                             <div className="flex items-center justify-center gap-1.5">
@@ -1514,7 +1723,7 @@ function MyCohorts() {
                         {isExpanded && (
                           <tr className="bg-[#faf7f2] border-b border-[#f0e6d9]">
                             <td></td>
-                            <td colSpan={9} className="px-4 py-4">
+                            <td colSpan={visibleColumnKeys.length + 2} className="px-4 py-4">
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                 <div>
                                   <p className="text-xs font-semibold text-[#4a352f] mb-1 uppercase tracking-wide">Description</p>
@@ -1569,16 +1778,25 @@ function MyCohorts() {
                 ? <>No SMEs have entered this cohort yet. Businesses will appear here once support is approved and they reach an active stage.</>
                 : activeFilter === "inProgramme"
                   ? <>There are currently no active SMEs in this programme.</>
-                  : <>No SMEs match the selected filters. <button onClick={() => { setActiveFilter("inProgramme"); setLocalFilters({ name: "", sector: [], location: [], hasAllocation: "any", startDateFrom: "", startDateTo: "", daysRange: [0, 3650], appliedDateFrom: "", appliedDateTo: "", teamSize: [], guarantees: "", services: "", status: [], progress: [] }) }} className="underline hover:text-[#4a352f]">Clear filters</button></>}
+                  : <>No SMEs match the selected filters. <button onClick={() => { setActiveFilter("inProgramme"); setLocalFilters({ name: "", sector: [], location: [], equity: [], hasAllocation: "any", startDateFrom: "", startDateTo: "", daysRange: [0, 3650], appliedDateFrom: "", appliedDateTo: "", teamSize: [], guarantees: "", services: "", status: [], progress: [] }) }} className="underline hover:text-[#4a352f]">Clear filters</button></>}
             </p>
           </div>
         )}
       </div>
 
+      {/* ─── Drag-to-reorder hint tooltip ──────────────────────────────────── */}
+      {dragHintRect && !draggedColumn && (
+        <Portal>
+          <div className="fixed z-[1200] bg-[#4a352f] text-[#faf7f2] text-xs rounded-lg px-3 py-2 shadow-2xl pointer-events-none normal-case font-normal flex items-center gap-1.5" style={{ top: dragHintRect.bottom + 8, left: Math.min(Math.max(dragHintRect.left, 12), window.innerWidth - 200), width: '190px' }}>
+            <GripVertical size={12} className="flex-shrink-0" /> Drag to reorder columns
+          </div>
+        </Portal>
+      )}
+
       {/* ─── Column header filter popover ───────────────────────────────────
-          Replaces the old standalone Filters panel — the Business header
-          opens a popover covering name, sector, and location, since those
-          three are all shown together in that one column. */}
+          The Business header now only covers name search — Sector and
+          Location got promoted to their own columns with their own
+          filters, so they're not duplicated here too. */}
       {headerFilterOpen && (
         <Portal>
           <div className="fixed inset-0 z-[1090]" onClick={closeHeaderFilter} />
@@ -1606,34 +1824,8 @@ function MyCohorts() {
                   value={localFilters.name}
                   onChange={(e) => setLocalFilters((prev) => ({ ...prev, name: e.target.value }))}
                   placeholder="Search business name..."
-                  className="w-full px-3 py-2 border border-[#c8b6a6] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#7d5a50]/20 mb-4"
+                  className="w-full px-3 py-2 border border-[#c8b6a6] rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#7d5a50]/20"
                 />
-
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-xs font-semibold text-[#4a352f]">Sector</label>
-                  {localFilters.sector.length > 0 && (
-                    <button onClick={() => setLocalFilters((prev) => ({ ...prev, sector: [] }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>
-                  )}
-                </div>
-                <div className="flex flex-wrap gap-1.5 mb-4">
-                  {sectorOptions.length === 0 && <span className="text-xs text-[#a89482]">No sector data available</span>}
-                  {sectorOptions.map((s) => (
-                    <button key={s} onClick={() => setLocalFilters((prev) => ({ ...prev, sector: prev.sector.includes(s) ? prev.sector.filter((x) => x !== s) : [...prev.sector, s] }))} className={`px-2.5 py-1 rounded-full text-xs font-medium ${localFilters.sector.includes(s) ? 'bg-[#7d5a50] text-white' : 'bg-[#f5f0e1] text-[#4a352f] hover:bg-[#e6d7c3]'}`}>{s}</button>
-                  ))}
-                </div>
-
-                <div className="flex items-center justify-between mb-2">
-                  <label className="text-xs font-semibold text-[#4a352f]">Location</label>
-                  {localFilters.location.length > 0 && (
-                    <button onClick={() => setLocalFilters((prev) => ({ ...prev, location: [] }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>
-                  )}
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {locationOptions.length === 0 && <span className="text-xs text-[#a89482]">No location data available</span>}
-                  {locationOptions.map((l) => (
-                    <button key={l} onClick={() => setLocalFilters((prev) => ({ ...prev, location: prev.location.includes(l) ? prev.location.filter((x) => x !== l) : [...prev.location, l] }))} className={`px-2.5 py-1 rounded-full text-xs font-medium ${localFilters.location.includes(l) ? 'bg-[#7d5a50] text-white' : 'bg-[#f5f0e1] text-[#4a352f] hover:bg-[#e6d7c3]'}`}>{l}</button>
-                  ))}
-                </div>
               </>
             )}
 
@@ -1717,6 +1909,57 @@ function MyCohorts() {
                   {teamSizeOptions.length === 0 && <span className="text-xs text-[#a89482]">No employee data available</span>}
                   {teamSizeOptions.map((t) => (
                     <button key={t} onClick={() => setLocalFilters((prev) => ({ ...prev, teamSize: prev.teamSize.includes(t) ? prev.teamSize.filter((x) => x !== t) : [...prev.teamSize, t] }))} className={`px-2.5 py-1 rounded-full text-xs font-medium ${localFilters.teamSize.includes(t) ? 'bg-[#7d5a50] text-white' : 'bg-[#f5f0e1] text-[#4a352f] hover:bg-[#e6d7c3]'}`}>{t}</button>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {headerFilterOpen.type === 'sector' && (
+              <>
+                <div className="flex items-center justify-between mb-3">
+                  <label className="text-xs font-semibold text-[#4a352f]">Sector</label>
+                  {localFilters.sector.length > 0 && (
+                    <button onClick={() => setLocalFilters((prev) => ({ ...prev, sector: [] }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-1.5 max-h-[180px] overflow-y-auto">
+                  {sectorOptions.length === 0 && <span className="text-xs text-[#a89482]">No sector data available</span>}
+                  {sectorOptions.map((s) => (
+                    <button key={s} onClick={() => setLocalFilters((prev) => ({ ...prev, sector: prev.sector.includes(s) ? prev.sector.filter((x) => x !== s) : [...prev.sector, s] }))} className={`px-2.5 py-1 rounded-full text-xs font-medium ${localFilters.sector.includes(s) ? 'bg-[#7d5a50] text-white' : 'bg-[#f5f0e1] text-[#4a352f] hover:bg-[#e6d7c3]'}`}>{s}</button>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {headerFilterOpen.type === 'location' && (
+              <>
+                <div className="flex items-center justify-between mb-3">
+                  <label className="text-xs font-semibold text-[#4a352f]">Location</label>
+                  {localFilters.location.length > 0 && (
+                    <button onClick={() => setLocalFilters((prev) => ({ ...prev, location: [] }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-1.5 max-h-[180px] overflow-y-auto">
+                  {locationOptions.length === 0 && <span className="text-xs text-[#a89482]">No location data available</span>}
+                  {locationOptions.map((l) => (
+                    <button key={l} onClick={() => setLocalFilters((prev) => ({ ...prev, location: prev.location.includes(l) ? prev.location.filter((x) => x !== l) : [...prev.location, l] }))} className={`px-2.5 py-1 rounded-full text-xs font-medium ${localFilters.location.includes(l) ? 'bg-[#7d5a50] text-white' : 'bg-[#f5f0e1] text-[#4a352f] hover:bg-[#e6d7c3]'}`}>{l}</button>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {headerFilterOpen.type === 'equity' && (
+              <>
+                <div className="flex items-center justify-between mb-3">
+                  <label className="text-xs font-semibold text-[#4a352f]">Equity Offered</label>
+                  {localFilters.equity.length > 0 && (
+                    <button onClick={() => setLocalFilters((prev) => ({ ...prev, equity: [] }))} className="text-xs text-[#a67c52] hover:text-[#4a352f] font-medium">Clear</button>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-1.5 max-h-[180px] overflow-y-auto">
+                  {equityOptions.length === 0 && <span className="text-xs text-[#a89482]">No equity data available</span>}
+                  {equityOptions.map((s) => (
+                    <button key={s} onClick={() => setLocalFilters((prev) => ({ ...prev, equity: prev.equity.includes(s) ? prev.equity.filter((x) => x !== s) : [...prev.equity, s] }))} className={`px-2.5 py-1 rounded-full text-xs font-medium ${localFilters.equity.includes(s) ? 'bg-[#7d5a50] text-white' : 'bg-[#f5f0e1] text-[#4a352f] hover:bg-[#e6d7c3]'}`}>{s}</button>
                   ))}
                 </div>
               </>

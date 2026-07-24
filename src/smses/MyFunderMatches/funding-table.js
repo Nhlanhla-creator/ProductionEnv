@@ -1832,6 +1832,7 @@ export const FundingTable = ({ filters = {}, onInsightsData, onPrimaryMatchCount
   const isAllDocumentsSubmitted = () => {
     return selectedDocs.every((doc) => submittedDocuments.includes(doc))
   }
+  
 const submitApplication = async (funder) => {
   try {
     const auth = getAuth();
@@ -1927,8 +1928,6 @@ const submitApplication = async (funder) => {
 
     const dispatchNotification = () => {
       const notificationMessage = `Application to ${funder.name} submitted successfully`
-      // console.log("Dispatching notification:", notificationMessage)
-
       const event = new CustomEvent("newNotification", {
         detail: {
           message: notificationMessage,
@@ -1939,13 +1938,10 @@ const submitApplication = async (funder) => {
         cancelable: true,
         composed: true,
       })
-
       setTimeout(() => {
         window.dispatchEvent(event)
-        // console.log("Notification event dispatched")
       }, 100)
     }
-
     dispatchNotification()
 
     setAllFunders((prevFunders) => prevFunders.map((f) => (f.id === funder.id ? { ...f, hasApplication: true } : f)))
@@ -1967,7 +1963,6 @@ const submitApplication = async (funder) => {
           applicationId: `${funder.funderId}_${effectiveUserId}`,
           dashboardLink: "https://www.bigmarketplace.africa/my-applications"
         });
-        // console.log("✅ Application confirmation email sent to SME");
       } catch (emailError) {
         console.error("Failed to send confirmation email:", emailError);
       }
@@ -2008,12 +2003,85 @@ const submitApplication = async (funder) => {
           bigScore: currentBusiness.bigScore || 0,
           applicationLink: "https://www.bigmarketplace.africa/funder/applications"
         });
-        // console.log("✅ Funding application notification email sent to funder");
       } catch (emailError) {
         console.error("Failed to send funder notification:", emailError);
       }
     }
     // ========== END EMAIL NOTIFICATIONS ==========
+
+    // ========== SEND IN-APP MESSAGES ==========
+    // 1. Send in-app message to funder
+    try {
+      const funderMessageContent = `Dear ${funderName},
+
+We are pleased to inform you that ${smeName} has submitted an application for funding through the BIG Marketplace Africa.
+
+📋 Application Details:
+- SME: ${smeName}
+- Location: ${currentBusiness.location || "Not specified"}
+- Sector: ${currentBusiness.economicSectors?.join(", ") || "Not specified"}
+- Funding Required: ${currentBusiness.useOfFunds?.amountRequested || "Not specified"}
+- Match Score: ${funder.matchPercentage || 0}%
+
+Please log into your BIG Marketplace Africa account to review the full application and respond.
+
+Best regards,
+BIG Marketplace Africa Team`;
+
+      await addDoc(collection(db, "messages"), {
+        to: funder.funderId,
+        toName: funderName,
+        from: "system",
+        fromName: "BIG Marketplace",
+        subject: `📋 New Funding Application from ${smeName}`,
+        content: funderMessageContent,
+        date: new Date().toISOString(),
+        read: false,
+        type: "inbox",
+        applicationId: `${funder.funderId}_${effectiveUserId}`,
+        linkTo: "/funder/applications",
+      });
+      
+      console.log("✅ In-app message sent to funder:", funderName);
+    } catch (messageError) {
+      console.error("❌ Failed to send in-app message to funder:", messageError);
+    }
+
+    // 2. Send in-app confirmation to SME
+    try {
+      const smeConfirmationContent = `Dear ${smeName},
+
+Your funding application to ${funderName} has been submitted successfully!
+
+📋 Application Details:
+- Funder: ${funderName}
+- Investment Type: ${funder.investmentType || "Not specified"}
+- Match Score: ${funder.matchPercentage || 0}%
+
+You will be notified when ${funderName} responds to your application.
+
+Best regards,
+BIG Marketplace Africa Team`;
+
+      await addDoc(collection(db, "messages"), {
+        to: effectiveUserId,
+        toName: smeName,
+        from: "system",
+        fromName: "BIG Marketplace",
+        subject: `✅ Application Submitted to ${funderName}`,
+        content: smeConfirmationContent,
+        date: new Date().toISOString(),
+        read: false,
+        type: "inbox",
+        applicationId: `${funder.funderId}_${effectiveUserId}`,
+        linkTo: "/my-applications",
+      });
+      
+      console.log("✅ In-app confirmation sent to SME:", smeName);
+    } catch (messageError) {
+      console.error("❌ Failed to send in-app confirmation to SME:", messageError);
+    }
+    // ========== END IN-APP MESSAGES ==========
 
     setNotification({ type: "success", message: "Application submitted!" })
     setApplyingFunder(null)
