@@ -232,13 +232,13 @@ app.use("/api/tenders", (req, res, next) => {
 //   next();
 // }, supplierMatchingRoutes);
 
-// // Advisor matching AI route (local dev/testing path)
+// Advisor matching AI route (local dev/testing path)
 // app.use("/api/advisors", (req, res, next) => {
 //   res.setHeader('x-vercel-protection-bypass', '1');
 //   next();
 // }, advisorMatchingRoutes);
 
-// // Intern matching AI route (local)
+// Intern matching AI route (local)
 // app.use("/api/interns", (req, res, next) => {
 //   res.setHeader('x-vercel-protection-bypass', '1');
 //   next();

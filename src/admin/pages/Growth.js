@@ -3,6 +3,7 @@ import { FileExplorer } from './shared/FileExplorer';
 import { FileUploader } from './shared/FileUploader';
 import { SpreadsheetEditor } from './shared/SpreadsheetEditor';
 import { CreateItemDialog } from './shared/CreateItemDialog';
+import { MoveCopyModal } from './shared/MoveCopyModal';
 import { useCustomStructure } from './shared/useCustomStructure';
 import {
   GROWTH_STRUCTURE,
@@ -18,6 +19,7 @@ import {
   deleteContent,
   saveTableContent,
   renameContent,
+  copyContent,
   renameFile
 } from './services/growth';
 import { useAuth } from '../../smses/hooks/useAuth';
@@ -44,6 +46,9 @@ const Growth = () => {
     createItem,
     deleteItem,
     renameItem,
+    moveItem,
+    copyItem,
+    convertItemType,
   } = useCustomStructure({
     user,
     staticStructure: GROWTH_STRUCTURE,
@@ -51,8 +56,56 @@ const Growth = () => {
     saveUserStructure,
     deleteContent,
     renameContent,
+    copyContent,
     enableTables: true,
   });
+
+  // Move / Copy dialog state
+  const [moveCopyState, setMoveCopyState] = useState({
+    isOpen: false,
+    action: 'move',
+    itemName: '',
+    itemPath: []
+  });
+
+  const handleOpenMove = useCallback((path, item) => {
+    setMoveCopyState({
+      isOpen: true,
+      action: 'move',
+      itemName: path[path.length - 1],
+      itemPath: path
+    });
+  }, []);
+
+  const handleOpenCopy = useCallback((path, item) => {
+    setMoveCopyState({
+      isOpen: true,
+      action: 'copy',
+      itemName: path[path.length - 1],
+      itemPath: path
+    });
+  }, []);
+
+  const handleMoveCopySubmit = useCallback(async (targetParentPath) => {
+    const { action, itemPath } = moveCopyState;
+    setMoveCopyState(prev => ({ ...prev, isOpen: false }));
+    
+    if (action === 'move') {
+      const res = await moveItem(itemPath, targetParentPath);
+      if (res && res.handled) {
+        if (selectedPath) {
+          const isDescendantOrSelf = selectedPath.length >= itemPath.length &&
+            itemPath.every((seg, idx) => selectedPath[idx] === seg);
+          if (isDescendantOrSelf) {
+            const suffix = selectedPath.slice(itemPath.length);
+            setSelectedPath([...res.newPath, ...suffix]);
+          }
+        }
+      }
+    } else {
+      await copyItem(itemPath, targetParentPath);
+    }
+  }, [moveCopyState, moveItem, copyItem, selectedPath]);
 
   // Load all content on mount
   useEffect(() => {
@@ -88,7 +141,7 @@ const Growth = () => {
       return;
     }
     const item = findItemAtPath(mergedStructure, selectedPath);
-    if (!item || item.type === 'folder') {
+    if (!item) {
       setSelectedPath(null);
       setSelectedItem(null);
       setCurrentContent(null);
@@ -452,6 +505,9 @@ const Growth = () => {
             onAddItem={handleAddItem}
             onDeleteItem={handleDeleteItem}
             onRenameItem={handleRenameItem}
+            onMoveItem={handleOpenMove}
+            onCopyItem={handleOpenCopy}
+            onConvertItemType={convertItemType}
             contentStatus={contentStatus}
             explorerState={explorerState}
             onToggleState={setExplorerState}
@@ -476,6 +532,7 @@ const Growth = () => {
                 onDelete={handleDeleteFile}
                 onRenameFile={handleRenameFile}
                 onClose={handleCloseEditor}
+                onAddItem={openCreateDialog}
                 isUploading={isUploading}
               />
             )
@@ -509,6 +566,16 @@ const Growth = () => {
         existingNames={existingNamesAtParent}
         onClose={closeCreateDialog}
         onCreate={handleCreateItem}
+      />
+
+      <MoveCopyModal
+        isOpen={moveCopyState.isOpen}
+        onClose={() => setMoveCopyState(prev => ({ ...prev, isOpen: false }))}
+        action={moveCopyState.action}
+        itemName={moveCopyState.itemName}
+        itemPath={moveCopyState.itemPath}
+        structure={mergedStructure}
+        onSubmit={handleMoveCopySubmit}
       />
     </>
   );

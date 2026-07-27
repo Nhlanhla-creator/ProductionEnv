@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { Plus, Trash2, Save, Download, Upload, Search, Edit2, Check, X, FileText, ArrowDownAz, RefreshCw, AlertCircle } from 'lucide-react';
+import { Plus, Trash2, Save, Download, Upload, Search, Edit2, Check, X, FileText, ArrowDownAz, RefreshCw, AlertCircle, ArrowLeft, ArrowRight } from 'lucide-react';
 import * as XLSX from 'xlsx';
 
 const DEFAULT_COLUMNS = [
@@ -291,6 +291,20 @@ export const SpreadsheetEditor = ({ path, itemConfig, content, onSave, onClose }
   const handleStartHeaderEdit = (idx, name) => {
     setEditingHeaderIdx(idx);
     setHeaderEditVal(name);
+  };
+
+  const handleMoveColumn = (idx, direction) => {
+    const targetIdx = direction === 'left' ? idx - 1 : idx + 1;
+    if (targetIdx < 0 || targetIdx >= columns.length) return;
+
+    setColumns(prev => {
+      const nextCols = [...prev];
+      const temp = nextCols[idx];
+      nextCols[idx] = nextCols[targetIdx];
+      nextCols[targetIdx] = temp;
+      return nextCols;
+    });
+    setHasChanges(true);
   };
 
   const handleSaveHeaderEdit = (idx) => {
@@ -708,6 +722,42 @@ export const SpreadsheetEditor = ({ path, itemConfig, content, onSave, onClose }
                         </span>
                         
                         <div style={{ display: 'flex', gap: 2 }}>
+                          {idx > 0 && (
+                            <button
+                              onClick={() => handleMoveColumn(idx, 'left')}
+                              title="Move Column Left"
+                              style={{
+                                background: 'transparent',
+                                border: 'none',
+                                color: 'var(--text-brown)',
+                                cursor: 'pointer',
+                                padding: 2,
+                                borderRadius: 4,
+                                display: 'flex',
+                                alignItems: 'center'
+                              }}
+                            >
+                              <ArrowLeft size={11} />
+                            </button>
+                          )}
+                          {idx < columns.length - 1 && (
+                            <button
+                              onClick={() => handleMoveColumn(idx, 'right')}
+                              title="Move Column Right"
+                              style={{
+                                background: 'transparent',
+                                border: 'none',
+                                color: 'var(--text-brown)',
+                                cursor: 'pointer',
+                                padding: 2,
+                                borderRadius: 4,
+                                display: 'flex',
+                                alignItems: 'center'
+                              }}
+                            >
+                              <ArrowRight size={11} />
+                            </button>
+                          )}
                           <button
                             onClick={() => handleStartHeaderEdit(idx, col)}
                             title="Rename Column"

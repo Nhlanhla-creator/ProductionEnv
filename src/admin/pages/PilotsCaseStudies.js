@@ -2,6 +2,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { FileExplorer } from './shared/FileExplorer';
 import { FileUploader } from './shared/FileUploader';
 import { CreateItemDialog } from './shared/CreateItemDialog';
+import { MoveCopyModal } from './shared/MoveCopyModal';
 import { useCustomStructure } from './shared/useCustomStructure';
 import { findItemAtPath } from './structure/growthStructure';
 import { PILOTS_STRUCTURE } from './structure/pilotsStructure';
@@ -14,6 +15,7 @@ import {
   saveUserStructure,
   deleteContent,
   renameContent,
+  copyContent,
   renameFile
 } from './services/pilots';
 import { useAuth } from '../../smses/hooks/useAuth';
@@ -39,6 +41,9 @@ const PilotsCaseStudies = () => {
     createItem,
     deleteItem,
     renameItem,
+    moveItem,
+    copyItem,
+    convertItemType,
   } = useCustomStructure({
     user,
     staticStructure: PILOTS_STRUCTURE,
@@ -46,13 +51,61 @@ const PilotsCaseStudies = () => {
     saveUserStructure,
     deleteContent,
     renameContent,
+    copyContent,
   });
+
+  // Move / Copy dialog state
+  const [moveCopyState, setMoveCopyState] = useState({
+    isOpen: false,
+    action: 'move',
+    itemName: '',
+    itemPath: []
+  });
+
+  const handleOpenMove = useCallback((path, item) => {
+    setMoveCopyState({
+      isOpen: true,
+      action: 'move',
+      itemName: path[path.length - 1],
+      itemPath: path
+    });
+  }, []);
+
+  const handleOpenCopy = useCallback((path, item) => {
+    setMoveCopyState({
+      isOpen: true,
+      action: 'copy',
+      itemName: path[path.length - 1],
+      itemPath: path
+    });
+  }, []);
+
+  const handleMoveCopySubmit = useCallback(async (targetParentPath) => {
+    const { action, itemPath } = moveCopyState;
+    setMoveCopyState(prev => ({ ...prev, isOpen: false }));
+
+    if (action === 'move') {
+      const res = await moveItem(itemPath, targetParentPath);
+      if (res && res.handled) {
+        if (selectedPath) {
+          const isDescendantOrSelf = selectedPath.length >= itemPath.length &&
+            itemPath.every((seg, idx) => selectedPath[idx] === seg);
+          if (isDescendantOrSelf) {
+            const suffix = selectedPath.slice(itemPath.length);
+            setSelectedPath([...res.newPath, ...suffix]);
+          }
+        }
+      }
+    } else {
+      await copyItem(itemPath, targetParentPath);
+    }
+  }, [moveCopyState, moveItem, copyItem, selectedPath]);
 
   // Keep selectedItem in sync with the merged structure
   useEffect(() => {
     if (!selectedPath) { setSelectedItem(null); return; }
     const item = findItemAtPath(mergedStructure, selectedPath);
-    if (!item || item.type === 'folder') {
+    if (!item) {
       setSelectedPath(null); setSelectedItem(null); setCurrentContent(null);
       return;
     }
@@ -139,7 +192,7 @@ const PilotsCaseStudies = () => {
 
     try {
       setIsUploading(true);
-      
+
       await uploadFile(selectedPath, file);
 
       const pathKey = selectedPath.join(' > ');
@@ -279,7 +332,7 @@ const PilotsCaseStudies = () => {
 
   if (authLoading || isLoading) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh',}}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', }}>
         <div style={{ textAlign: 'center' }}>
           <div style={{ width: 40, height: 40, border: '4px solid var(--pale-brown)', borderTopColor: 'var(--primary-brown)', borderRadius: '50%', animation: 'spin 1s linear infinite', margin: '0 auto 16px' }} />
           <p style={{ color: 'var(--text-brown)' }}>{authLoading ? 'Authenticating...' : 'Loading pilots...'}</p>
@@ -290,7 +343,7 @@ const PilotsCaseStudies = () => {
 
   if (!user) {
     return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh',}}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', }}>
         <div style={{ textAlign: 'center', padding: 40, background: 'white', borderRadius: 8, border: '1px solid var(--medium-brown)' }}>
           <AlertCircle size={48} color="var(--accent-brown)" style={{ marginBottom: 16 }} />
           <h2 style={{ color: 'var(--text-brown)', marginBottom: 8 }}>Authentication Required</h2>
@@ -315,8 +368,33 @@ const PilotsCaseStudies = () => {
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: selectedPath ? '350px 1fr' : '1fr', gap: 20, height: 'calc(100vh - 160px)' }}>
-          <FileExplorer structure={mergedStructure} expandedFolders={expandedFolders} selectedPath={selectedPath} onToggleFolder={handleToggleFolder} onSelectItem={handleSelectItem} onAddItem={handleAddItem} onDeleteItem={handleDeleteItem} onRenameItem={handleRenameItem} contentStatus={contentStatus} />
-          {selectedPath && selectedItem && <FileUploader path={selectedPath} itemConfig={selectedItem} content={currentContent} onUpload={handleUploadFile} onDelete={handleDeleteFile} onRenameFile={handleRenameFile} onClose={handleCloseEditor} isUploading={isUploading} />}
+          <FileExplorer
+            structure={mergedStructure}
+            expandedFolders={expandedFolders}
+            selectedPath={selectedPath}
+            onToggleFolder={handleToggleFolder}
+            onSelectItem={handleSelectItem}
+            onAddItem={handleAddItem}
+            onDeleteItem={handleDeleteItem}
+            onRenameItem={handleRenameItem}
+            onMoveItem={handleOpenMove}
+            onCopyItem={handleOpenCopy}
+            onConvertItemType={convertItemType}
+            contentStatus={contentStatus}
+          />
+          {selectedPath && selectedItem && (
+            <FileUploader
+              path={selectedPath}
+              itemConfig={selectedItem}
+              content={currentContent}
+              onUpload={handleUploadFile}
+              onDelete={handleDeleteFile}
+              onRenameFile={handleRenameFile}
+              onClose={handleCloseEditor}
+              onAddItem={openCreateDialog}
+              isUploading={isUploading}
+            />
+          )}
           {!selectedPath && (
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'white', borderRadius: 8, border: '1px solid var(--medium-brown)' }}>
               <AlertCircle size={48} color="var(--accent-brown)" style={{ marginBottom: 16 }} />
@@ -333,6 +411,16 @@ const PilotsCaseStudies = () => {
         existingNames={existingNamesAtParent}
         onClose={closeCreateDialog}
         onCreate={handleCreateItem}
+      />
+
+      <MoveCopyModal
+        isOpen={moveCopyState.isOpen}
+        onClose={() => setMoveCopyState(prev => ({ ...prev, isOpen: false }))}
+        action={moveCopyState.action}
+        itemName={moveCopyState.itemName}
+        itemPath={moveCopyState.itemPath}
+        structure={mergedStructure}
+        onSubmit={handleMoveCopySubmit}
       />
     </>
   );
