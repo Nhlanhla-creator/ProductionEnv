@@ -233,6 +233,38 @@ export const renameContent = async (oldPath, newPath) => {
   }
 };
 
+export const copyContent = async (oldPath, newPath) => {
+  try {
+    const user = getCurrentUser();
+    const q = query(collection(db, QA_COLLECTION), where('userId', '==', user.uid));
+    const querySnapshot = await getDocs(q);
+
+    for (const docSnap of querySnapshot.docs) {
+      const data = docSnap.data();
+      const currentPath = data.path || [];
+      const startsWith = currentPath.length >= oldPath.length &&
+        oldPath.every((seg, idx) => currentPath[idx] === seg);
+
+      if (startsWith) {
+        const suffix = currentPath.slice(oldPath.length);
+        const updatedPath = [...newPath, ...suffix];
+        const newDocId = getDocId(user.uid, updatedPath);
+        const newDocRef = doc(db, QA_COLLECTION, newDocId);
+
+        await setDoc(newDocRef, {
+          ...data,
+          path: updatedPath,
+          updatedAt: serverTimestamp()
+        });
+      }
+    }
+    return { success: true };
+  } catch (error) {
+    console.error('❌ Error copying content:', error);
+    throw error;
+  }
+};
+
 export const renameFile = async (path, fileIndex, newName) => {
   try {
     const user = getCurrentUser();

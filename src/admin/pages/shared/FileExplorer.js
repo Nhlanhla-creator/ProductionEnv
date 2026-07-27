@@ -14,7 +14,11 @@ import {
   ChevronLeft,
   Maximize2,
   Minimize2,
-  Edit2
+  Edit2,
+  FolderInput,
+  Copy,
+  RefreshCw,
+  MoreVertical
 } from 'lucide-react';
 
 const FileExplorerItem = memo(({
@@ -29,10 +33,14 @@ const FileExplorerItem = memo(({
   onAddItem,
   onDeleteItem,
   onRenameItem,
+  onMoveItem,
+  onCopyItem,
+  onConvertItemType,
   contentStatus,
   activityDots
 }) => {
   const [hovered, setHovered] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const currentPath = [...path, name];
   const pathKey     = currentPath.join(' > ');
   const isExpanded  = expandedFolders[pathKey];
@@ -41,8 +49,6 @@ const FileExplorerItem = memo(({
   const isChecklist  = item.type === 'checklist';
   const isQATable    = item.type === 'qa-table' || item.type === 'table' || item.type === 'database';
   const hasContent  = contentStatus[pathKey];
-  const isCustom    = !!item._custom;
-  const showActions = hovered || isSelected;
 
   // Label helper: strip leading "N_" prefix for display
   const displayName = name.replace(/^\d+_/, '');
@@ -52,6 +58,7 @@ const FileExplorerItem = memo(({
   const handleClick = () => {
     if (isFolder) {
       onToggleFolder(currentPath);
+      onSelectItem(currentPath, item);
     } else {
       onSelectItem(currentPath, item);
     }
@@ -67,8 +74,43 @@ const FileExplorerItem = memo(({
     }
   };
 
+  const menuItemStyle = {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    width: '100%',
+    background: 'transparent',
+    border: 'none',
+    padding: '8px 12px',
+    cursor: 'pointer',
+    fontSize: '12px',
+    color: 'var(--text-brown)',
+    textAlign: 'left',
+    transition: 'background 0.1s'
+  };
+
   return (
-    <div>
+    <div style={{ position: 'relative' }}>
+      {/* Invisible backdrop to dismiss popup menu on click outside */}
+      {menuOpen && (
+        <div
+          onClick={(e) => {
+            e.stopPropagation();
+            setMenuOpen(false);
+          }}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            zIndex: 999,
+            background: 'transparent',
+            cursor: 'default'
+          }}
+        />
+      )}
+
       <div
         onClick={handleClick}
         style={{
@@ -78,60 +120,61 @@ const FileExplorerItem = memo(({
           paddingBottom: 8,
           display: 'flex',
           alignItems: 'center',
-          gap: 8,
+          gap: 6,
           cursor: 'pointer',
-          background: isSelected ? 'var(--primary-brown)' : 'transparent',
+          background: isSelected
+            ? 'var(--primary-brown)'
+            : hovered
+              ? 'var(--pale-brown)'
+              : 'transparent',
           color: isSelected ? 'white' : 'var(--text-brown)',
+          borderRadius: 6,
+          margin: '2px 8px',
           transition: 'all 0.15s',
-          userSelect: 'none'
+          position: 'relative',
+          zIndex: menuOpen ? 1000 : 'auto'
         }}
-        onMouseEnter={e => { setHovered(true); if (!isSelected) e.currentTarget.style.background = 'var(--pale-brown)'; }}
-        onMouseLeave={e => { setHovered(false); if (!isSelected) e.currentTarget.style.background = 'transparent'; }}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
       >
-        {/* Expand / chevron */}
         {isFolder ? (
-          <div style={{ width: 16, display: 'flex', alignItems: 'center' }}>
-            {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-          </div>
+          isExpanded ? <ChevronDown size={16} style={{ flexShrink: 0 }} /> : <ChevronRight size={16} style={{ flexShrink: 0 }} />
         ) : (
-          <div style={{ width: 16 }} />
+          <div style={{ width: 16, height: 16, flexShrink: 0 }} />
         )}
 
-        {/* Icon */}
+        {/* Icon based on item type */}
         {isFolder ? (
-          isExpanded
-            ? <FolderOpen size={18} color={isSelected ? 'white' : 'var(--primary-brown)'} />
-            : <Folder    size={18} color={isSelected ? 'white' : 'var(--primary-brown)'} />
+          isExpanded ? (
+            <FolderOpen size={16} style={{ flexShrink: 0, color: isSelected ? 'white' : 'var(--accent-brown)' }} />
+          ) : (
+            <Folder size={16} style={{ flexShrink: 0, color: isSelected ? 'white' : 'var(--accent-brown)' }} />
+          )
         ) : isChecklist ? (
-          <ClipboardList size={18} color={isSelected ? 'white' : '#a67c52'} />
+          <ClipboardList size={16} style={{ flexShrink: 0, color: isSelected ? 'white' : 'var(--accent-brown)' }} />
         ) : isQATable ? (
-          <Table size={18} color={isSelected ? 'white' : '#a67c52'} />
-        ) : item.type === 'text' ? (
-          <FileText size={18} color={isSelected ? 'white' : 'var(--accent-brown)'} />
+          <Table size={16} style={{ flexShrink: 0, color: isSelected ? 'white' : 'var(--accent-brown)' }} />
         ) : (
-          <File size={18} color={isSelected ? 'white' : 'var(--accent-brown)'} />
+          <FileText size={16} style={{ flexShrink: 0, color: isSelected ? 'white' : '#7f8c8d' }} />
         )}
 
-        {/* Name */}
         {isEditing ? (
           <input
+            type="text"
             value={editName}
-            onChange={e => setEditName(e.target.value)}
+            onChange={(e) => setEditName(e.target.value)}
             onBlur={handleSaveRename}
-            onKeyDown={e => {
-              if (e.key === 'Enter') handleSaveRename();
-              if (e.key === 'Escape') { setEditName(displayName); setIsEditing(false); }
-            }}
-            onClick={e => e.stopPropagation()}
+            onKeyDown={(e) => e.key === 'Enter' && handleSaveRename()}
+            onClick={(e) => e.stopPropagation()}
             autoFocus
             style={{
               flex: 1,
               fontSize: 14,
               padding: '2px 6px',
-              border: '1px solid var(--primary-brown)',
+              border: '1px solid var(--medium-brown)',
               borderRadius: 4,
-              color: 'black',
-              background: 'white'
+              outline: 'none',
+              color: 'var(--text-brown)'
             }}
           />
         ) : (
@@ -147,13 +190,16 @@ const FileExplorerItem = memo(({
           </span>
         )}
 
-        {/* Rename */}
-        {onRenameItem && !isEditing && (
+        {/* Actions Dropdown Trigger (3 dots) */}
+        {(onRenameItem || onMoveItem || onCopyItem || onConvertItemType || onDeleteItem) && (
           <button
-            onClick={(e) => { e.stopPropagation(); setIsEditing(true); setEditName(displayName); }}
-            title="Rename"
+            onClick={(e) => {
+              e.stopPropagation();
+              setMenuOpen(!menuOpen);
+            }}
+            title="Actions"
             style={{
-              opacity: hovered || isSelected ? 0.75 : 0,
+              opacity: hovered || isSelected || menuOpen ? 1 : 0,
               transition: 'opacity 0.15s',
               padding: 4,
               background: 'transparent',
@@ -162,55 +208,102 @@ const FileExplorerItem = memo(({
               color: isSelected ? 'white' : 'var(--text-brown)',
               display: 'flex',
               alignItems: 'center',
-              borderRadius: 4
+              borderRadius: '50%',
+              marginLeft: 2
             }}
           >
-            <Edit2 size={14} />
+            <MoreVertical size={15} />
           </button>
         )}
 
-        {/* Add child (folders only) */}
-        {isFolder && onAddItem && (
-          <button
-            onClick={(e) => { e.stopPropagation(); onAddItem(currentPath); }}
-            title="Add folder or file inside"
+        {/* Pop-up dropdown menu for options */}
+        {menuOpen && (
+          <div
+            onClick={(e) => e.stopPropagation()}
             style={{
-              opacity: 0.55,
-              transition: 'opacity 0.15s',
-              padding: 4,
-              background: 'transparent',
-              border: 'none',
-              cursor: 'pointer',
-              color: isSelected ? 'white' : 'var(--text-brown)',
-              display: 'flex',
-              alignItems: 'center',
-              borderRadius: 4
+              position: 'absolute',
+              top: '100%',
+              right: 8,
+              background: 'white',
+              border: '1px solid var(--medium-brown)',
+              borderRadius: 6,
+              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.12)',
+              padding: '4px 0',
+              zIndex: 1001,
+              minWidth: 155,
+              textAlign: 'left'
             }}
           >
-            <Plus size={14} />
-          </button>
-        )}
+            {onRenameItem && (
+              <button
+                onClick={() => {
+                  setMenuOpen(false);
+                  setIsEditing(true);
+                  setEditName(displayName);
+                }}
+                style={menuItemStyle}
+                className="menu-item-hover"
+              >
+                <Edit2 size={13} /> Rename
+              </button>
+            )}
 
-        {/* Delete */}
-        {onDeleteItem && (
-          <button
-            onClick={(e) => { e.stopPropagation(); onDeleteItem(currentPath, item); }}
-            title="Delete"
-            style={{
-              opacity: 1,
-              transition: 'opacity 0.15s',
-              padding: 4,
-              background: 'transparent',
-              border: 'none',
-              cursor: 'pointer',
-              color: isSelected ? 'white' : '#c53030',
-              display: 'flex',
-              alignItems: 'center',
-              borderRadius: 4
-            }}
-          >
-            <Trash2 size={14} />
-          </button>
+            {onMoveItem && (
+              <button
+                onClick={() => {
+                  setMenuOpen(false);
+                  onMoveItem(currentPath, item);
+                }}
+                style={menuItemStyle}
+                className="menu-item-hover"
+              >
+                <FolderInput size={13} /> Move
+              </button>
+            )}
+
+            {onCopyItem && (
+              <button
+                onClick={() => {
+                  setMenuOpen(false);
+                  onCopyItem(currentPath, item);
+                }}
+                style={menuItemStyle}
+                className="menu-item-hover"
+              >
+                <Copy size={13} /> Copy
+              </button>
+            )}
+
+            {onConvertItemType && item.type !== 'folder' && (
+              <button
+                onClick={() => {
+                  setMenuOpen(false);
+                  const targetType = 'folder';
+                  onConvertItemType(currentPath, targetType);
+                }}
+                style={menuItemStyle}
+                className="menu-item-hover"
+              >
+                <RefreshCw size={12} /> Convert to Folder
+              </button>
+            )}
+
+            {onDeleteItem && (
+              <button
+                onClick={() => {
+                  setMenuOpen(false);
+                  onDeleteItem(currentPath, item);
+                }}
+                style={{
+                  ...menuItemStyle,
+                  color: '#c53030'
+                }}
+                className="menu-item-hover"
+              >
+                <Trash2 size={13} /> Delete
+              </button>
+            )}
+          </div>
         )}
 
         {/* Pulsing activity dot for new sprint items in QA Master Table or folders */}
@@ -280,6 +373,9 @@ const FileExplorerItem = memo(({
                   onAddItem={onAddItem}
                   onDeleteItem={onDeleteItem}
                   onRenameItem={onRenameItem}
+                  onMoveItem={onMoveItem}
+                  onCopyItem={onCopyItem}
+                  onConvertItemType={onConvertItemType}
                   contentStatus={contentStatus}
                   activityDots={activityDots}
                 />
@@ -300,6 +396,9 @@ export const FileExplorer = memo(({
   onAddItem,
   onDeleteItem,
   onRenameItem,
+  onMoveItem,
+  onCopyItem,
+  onConvertItemType,
   contentStatus = {},
   explorerState = 'normal',
   onToggleState,
@@ -362,6 +461,12 @@ export const FileExplorer = memo(({
       overflow: 'auto',
       maxHeight: 'calc(100vh - 200px)'
     }}>
+      <style>{`
+        .menu-item-hover:hover {
+          background-color: var(--pale-brown) !important;
+        }
+      `}</style>
+
       <div style={{
         padding: '12px 16px',
         background: 'var(--pale-brown)',
@@ -459,6 +564,9 @@ export const FileExplorer = memo(({
             onAddItem={onAddItem}
             onDeleteItem={onDeleteItem}
             onRenameItem={onRenameItem}
+            onMoveItem={onMoveItem}
+            onCopyItem={onCopyItem}
+            onConvertItemType={onConvertItemType}
             contentStatus={contentStatus}
             activityDots={activityDots}
           />

@@ -18,6 +18,7 @@ import {
   loadUserStructure,
   saveUserStructure,
   renameContent as renameProductContent,
+  copyContent as copyProductContent,
   renameFile as renameProductFile
 } from './services/product';
 import {
@@ -27,6 +28,7 @@ import {
   loadAllContent as loadAllTechContent,
   deleteContent as deleteTechContent,
   renameContent as renameTechContent,
+  copyContent as copyTechContent,
   renameFile as renameTechFile
 } from './services/tech';
 import {
@@ -36,11 +38,13 @@ import {
   loadAllContent as loadAllQAContent,
   deleteContent as deleteQAContent,
   renameContent as renameQAContent,
+  copyContent as copyQAContent,
   renameFile as renameQAFile
 } from './services/qa';
 import { loadDocChecklist, saveDocChecklist } from './services/docGovChecklist';
 import { loadQATable, saveQATable } from './services/qaMasterTable';
 import { addNotification } from './services/notifications';
+import { MoveCopyModal } from './shared/MoveCopyModal';
 import { useAuth } from '../../smses/hooks/useAuth';
 import { AlertCircle, ClipboardList, CheckCircle, X } from 'lucide-react';
 import AddTaskModal from './structure/AddTaskModal';
@@ -51,39 +55,39 @@ function debounce(fn, ms) {
 }
 
 const CHECKLIST_PATH_KEY = '5_Documentation & Governance Checklist';
-const TECH_PREFIX        = '2_Technical Architecture';
-const QA_PREFIX          = '3_QA & Testing';
-const QA_TABLE_PATH_KEY  = '3_QA & Testing > QA Master Table';
+const TECH_PREFIX = '2_Technical Architecture';
+const QA_PREFIX = '3_QA & Testing';
+const QA_TABLE_PATH_KEY = '3_QA & Testing > QA Master Table';
 
 const ProductPlatform = () => {
   const { user, loading: authLoading } = useAuth();
 
   // ── Shared navigation state ───────────────────────────────────────────────
   const [expandedFolders, setExpandedFolders] = useState({});
-  const [selectedPath, setSelectedPath]       = useState(null);
-  const [selectedItem, setSelectedItem]       = useState(null);
-  const [isLoading, setIsLoading]             = useState(true);
+  const [selectedPath, setSelectedPath] = useState(null);
+  const [selectedItem, setSelectedItem] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   // ── Per-service content state ─────────────────────────────────────────────
-  const [productContent, setProductContent]   = useState(null);
-  const [techContent, setTechContent]         = useState(null);
-  const [qaFileContent, setQaFileContent]     = useState(null);
-  const [contentStatus, setContentStatus]     = useState({});
-  const [isUploading, setIsUploading]         = useState(false);
+  const [productContent, setProductContent] = useState(null);
+  const [techContent, setTechContent] = useState(null);
+  const [qaFileContent, setQaFileContent] = useState(null);
+  const [contentStatus, setContentStatus] = useState({});
+  const [isUploading, setIsUploading] = useState(false);
 
   // ── Checklist state ───────────────────────────────────────────────────────
-  const [checklistItems, setChecklistItems]       = useState([]);
+  const [checklistItems, setChecklistItems] = useState([]);
   const [isSavingChecklist, setIsSavingChecklist] = useState(false);
 
   // ── QA table state ────────────────────────────────────────────────────────
-  const [qaTasks, setQaTasks]     = useState([]);
+  const [qaTasks, setQaTasks] = useState([]);
   const [isSavingQA, setIsSavingQA] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [toast, setToast] = useState(null);
 
   const debouncedChecklistRef = useRef(null);
-  const debouncedQARef        = useRef(null);
-  const selectedPathRef       = useRef(null);
+  const debouncedQARef = useRef(null);
+  const selectedPathRef = useRef(null);
 
   // Full static structure (Product + Tech overlay + QA overlay). User-custom
   // additions are merged into this by the hook below.
@@ -128,6 +132,17 @@ const ProductPlatform = () => {
     return renameProductContent(oldPath, newPath);
   }, []);
 
+  const routedCopyContent = useCallback(async (oldPath, newPath) => {
+    const key = oldPath.join(' > ');
+    if (key.startsWith(TECH_PREFIX + ' > ')) {
+      return copyTechContent(oldPath.slice(1), newPath.slice(1));
+    }
+    if (key.startsWith(QA_PREFIX + ' > ') && key !== QA_TABLE_PATH_KEY) {
+      return copyQAContent(oldPath.slice(1), newPath.slice(1));
+    }
+    return copyProductContent(oldPath, newPath);
+  }, []);
+
   // Custom structure (folders/file entries created on the frontend)
   const {
     mergedStructure,
@@ -138,6 +153,9 @@ const ProductPlatform = () => {
     createItem,
     deleteItem,
     renameItem,
+    moveItem,
+    copyItem,
+    convertItemType,
   } = useCustomStructure({
     user,
     staticStructure: fullStaticStructure,
@@ -145,14 +163,60 @@ const ProductPlatform = () => {
     saveUserStructure,
     deleteContent: routedDeleteContent,
     renameContent: routedRenameContent,
+    copyContent: routedCopyContent,
   });
 
-  // Keep selectedItem in sync with the merged structure so newly created
-  // entries stay valid and stale selections are cleared.
+  // Move / Copy dialog state
+  const [moveCopyState, setMoveCopyState] = useState({
+    isOpen: false,
+    action: 'move',
+    itemName: '',
+    itemPath: []
+  });
+
+  const handleOpenMove = useCallback((path, item) => {
+    setMoveCopyState({
+      isOpen: true,
+      action: 'move',
+      itemName: path[path.length - 1],
+      itemPath: path
+    });
+  }, []);
+
+  const handleOpenCopy = useCallback((path, item) => {
+    setMoveCopyState({
+      isOpen: true,
+      action: 'copy',
+      itemName: path[path.length - 1],
+      itemPath: path
+    });
+  }, []);
+
+  const handleMoveCopySubmit = useCallback(async (targetParentPath) => {
+    const { action, itemPath } = moveCopyState;
+    setMoveCopyState(prev => ({ ...prev, isOpen: false }));
+
+    if (action === 'move') {
+      const res = await moveItem(itemPath, targetParentPath);
+      if (res && res.handled) {
+        if (selectedPath) {
+          const isDescendantOrSelf = selectedPath.length >= itemPath.length &&
+            itemPath.every((seg, idx) => selectedPath[idx] === seg);
+          if (isDescendantOrSelf) {
+            const suffix = selectedPath.slice(itemPath.length);
+            setSelectedPath([...res.newPath, ...suffix]);
+          }
+        }
+      }
+    } else {
+      await copyItem(itemPath, targetParentPath);
+    }
+  }, [moveCopyState, moveItem, copyItem, selectedPath]);
+
   useEffect(() => {
     if (!selectedPath) { setSelectedItem(null); return; }
     const item = findItemAtPath(mergedStructure, selectedPath);
-    if (!item || item.type === 'folder') {
+    if (!item) {
       selectedPathRef.current = null;
       setSelectedPath(null); setSelectedItem(null);
       setProductContent(null); setTechContent(null); setQaFileContent(null);
@@ -162,11 +226,11 @@ const ProductPlatform = () => {
   }, [mergedStructure, selectedPath]);
 
   // ── Derived flags ─────────────────────────────────────────────────────────
-  const pathKey             = selectedPath?.join(' > ') ?? '';
+  const pathKey = selectedPath?.join(' > ') ?? '';
   const isChecklistSelected = pathKey === CHECKLIST_PATH_KEY;
-  const isQATableSelected   = pathKey === QA_TABLE_PATH_KEY;
-  const isTechSection       = pathKey.startsWith(TECH_PREFIX + ' > ');
-  const isQAFileSection     = pathKey.startsWith(QA_PREFIX + ' > ') && !isQATableSelected;
+  const isQATableSelected = pathKey === QA_TABLE_PATH_KEY;
+  const isTechSection = pathKey.startsWith(TECH_PREFIX + ' > ');
+  const isQAFileSection = pathKey.startsWith(QA_PREFIX + ' > ') && !isQATableSelected;
 
   // Current content for active section
   const currentContent = isTechSection ? techContent : isQAFileSection ? qaFileContent : productContent;
@@ -245,10 +309,10 @@ const ProductPlatform = () => {
 
   // ── Navigation handlers ───────────────────────────────────────────────────
   const handleToggleFolder = useCallback((path) => {
-    const key    = path.join(' > ');
+    const key = path.join(' > ');
     const isOpen = expandedFolders[key];
-    const level  = path.length - 1;
-    const next   = {};
+    const level = path.length - 1;
+    const next = {};
     if (!isOpen) {
       Object.keys(expandedFolders).forEach(k => {
         if (k.split(' > ').length - 1 !== level) next[k] = true;
@@ -279,9 +343,9 @@ const ProductPlatform = () => {
   const handleUploadFile = useCallback(async (file) => {
     const currentPath = selectedPathRef.current;
     if (!currentPath || !user) return;
-    const key    = currentPath.join(' > ');
+    const key = currentPath.join(' > ');
     const isTech = key.startsWith(TECH_PREFIX + ' > ');
-    const isQA   = key.startsWith(QA_PREFIX + ' > ') && key !== QA_TABLE_PATH_KEY;
+    const isQA = key.startsWith(QA_PREFIX + ' > ') && key !== QA_TABLE_PATH_KEY;
 
     try {
       setIsUploading(true);
@@ -311,9 +375,9 @@ const ProductPlatform = () => {
   const handleDeleteFile = useCallback(async (fileIndex) => {
     const currentPath = selectedPathRef.current;
     if (!currentPath || !user) return;
-    const key    = currentPath.join(' > ');
+    const key = currentPath.join(' > ');
     const isTech = key.startsWith(TECH_PREFIX + ' > ');
-    const isQA   = key.startsWith(QA_PREFIX + ' > ') && key !== QA_TABLE_PATH_KEY;
+    const isQA = key.startsWith(QA_PREFIX + ' > ') && key !== QA_TABLE_PATH_KEY;
 
     try {
       if (isTech) {
@@ -321,18 +385,18 @@ const ProductPlatform = () => {
         await deleteTechFile(subPath, fileIndex);
         const updated = await loadTechContent(subPath);
         setTechContent(updated);
-        if (!updated?.files?.length) setContentStatus(prev => { const n = {...prev}; delete n[key]; return n; });
+        if (!updated?.files?.length) setContentStatus(prev => { const n = { ...prev }; delete n[key]; return n; });
       } else if (isQA) {
         const subPath = currentPath.slice(1);
         await deleteQAFile(subPath, fileIndex);
         const updated = await loadQAContent(subPath);
         setQaFileContent(updated);
-        if (!updated?.files?.length) setContentStatus(prev => { const n = {...prev}; delete n[key]; return n; });
+        if (!updated?.files?.length) setContentStatus(prev => { const n = { ...prev }; delete n[key]; return n; });
       } else {
         await deleteProductFile(currentPath, fileIndex);
         const updated = await loadProductContent(currentPath);
         setProductContent(updated);
-        if (!updated?.files?.length) setContentStatus(prev => { const n = {...prev}; delete n[key]; return n; });
+        if (!updated?.files?.length) setContentStatus(prev => { const n = { ...prev }; delete n[key]; return n; });
       }
     } catch (err) {
       console.error(err);
@@ -398,9 +462,9 @@ const ProductPlatform = () => {
   const handleRenameFile = useCallback(async (fileIndex, newName) => {
     const currentPath = selectedPathRef.current;
     if (!currentPath || !user) return;
-    const key    = currentPath.join(' > ');
+    const key = currentPath.join(' > ');
     const isTech = key.startsWith(TECH_PREFIX + ' > ');
-    const isQA   = key.startsWith(QA_PREFIX + ' > ') && key !== QA_TABLE_PATH_KEY;
+    const isQA = key.startsWith(QA_PREFIX + ' > ') && key !== QA_TABLE_PATH_KEY;
 
     try {
       if (isTech) {
@@ -654,6 +718,9 @@ const ProductPlatform = () => {
                 onAddItem={handleAddItem}
                 onDeleteItem={handleDeleteItem}
                 onRenameItem={handleRenameItem}
+                onMoveItem={handleOpenMove}
+                onCopyItem={handleOpenCopy}
+                onConvertItemType={convertItemType}
                 contentStatus={contentStatus}
                 activityDots={activityDots}
               />
@@ -668,6 +735,7 @@ const ProductPlatform = () => {
                   onDelete={handleDeleteFile}
                   onRenameFile={handleRenameFile}
                   onClose={handleCloseEditor}
+                  onAddItem={openCreateDialog}
                   isUploading={isUploading}
                 />
               )}
@@ -715,6 +783,16 @@ const ProductPlatform = () => {
         existingNames={existingNamesAtParent}
         onClose={closeCreateDialog}
         onCreate={handleCreateItem}
+      />
+
+      <MoveCopyModal
+        isOpen={moveCopyState.isOpen}
+        onClose={() => setMoveCopyState(prev => ({ ...prev, isOpen: false }))}
+        action={moveCopyState.action}
+        itemName={moveCopyState.itemName}
+        itemPath={moveCopyState.itemPath}
+        structure={mergedStructure}
+        onSubmit={handleMoveCopySubmit}
       />
 
       <AddTaskModal

@@ -4,7 +4,7 @@ import { Upload, File, X, Download, Trash2, FileText, Image, Eye, Edit2, Grid, L
 
 const FileIcon = ({ mimeType, name, size = 24 }) => {
   const ext = name?.split('.').pop()?.toLowerCase();
-  
+
   if (mimeType?.startsWith('image/') || ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp'].includes(ext)) {
     return <Image size={size} color="#8a5a44" />;
   }
@@ -31,15 +31,16 @@ const formatFileSize = (bytes) => {
   return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
 };
 
-export const FileUploader = ({ 
-  path, 
+export const FileUploader = ({
+  path,
   itemConfig,
-  content, 
-  onUpload, 
+  content,
+  onUpload,
   onDelete,
   onRenameFile,
   onClose,
-  isUploading 
+  onAddItem,
+  isUploading
 }) => {
   const [dragActive, setDragActive] = useState(false);
   const [previewFile, setPreviewFile] = useState(null);
@@ -47,7 +48,7 @@ export const FileUploader = ({
   const [renamingName, setRenamingName] = useState('');
   const [viewMode, setViewMode] = useState('grid'); // 'grid' or 'list'
   const [activeMenuIndex, setActiveMenuIndex] = useState(null);
-  
+
   const files = content?.files || [];
 
   const handleDrag = useCallback((e) => {
@@ -64,7 +65,7 @@ export const FileUploader = ({
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
-    
+
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       handleFiles(e.dataTransfer.files);
     }
@@ -79,7 +80,7 @@ export const FileUploader = ({
 
   const handleFiles = (fileList) => {
     const file = fileList[0];
-    
+
     // Check file size if maxSize is specified
     if (itemConfig?.maxSize && file.size > itemConfig.maxSize) {
       const maxSizeMB = Math.round(itemConfig.maxSize / (1024 * 1024));
@@ -87,15 +88,15 @@ export const FileUploader = ({
       alert(`File size (${fileSizeMB}MB) exceeds the maximum allowed size (${maxSizeMB}MB). Please choose a smaller file.`);
       return;
     }
-    
+
     // Check file type if accept is specified
     if (itemConfig?.accept) {
       const acceptedTypes = itemConfig.accept.split(',').map(t => t.trim());
       const fileExt = '.' + file.name.split('.').pop();
-      const isAccepted = acceptedTypes.some(type => 
+      const isAccepted = acceptedTypes.some(type =>
         type === fileExt || file.type.startsWith(type.replace('*', ''))
       );
-      
+
       if (!isAccepted) {
         alert(`Please upload a file with one of these formats: ${itemConfig.accept}`);
         return;
@@ -118,7 +119,7 @@ export const FileUploader = ({
     }}>
       {/* Invisible backdrop to dismiss popup menu on click outside */}
       {activeMenuIndex !== null && (
-        <div 
+        <div
           onClick={() => setActiveMenuIndex(null)}
           style={{
             position: 'fixed',
@@ -193,18 +194,18 @@ export const FileUploader = ({
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <File size={18} color="var(--primary-brown)" />
           <div>
-            <h3 style={{ 
-              margin: 0, 
-              fontSize: 16, 
+            <h3 style={{
+              margin: 0,
+              fontSize: 16,
               fontWeight: 600,
               color: 'var(--text-brown)'
             }}>
               {path[path.length - 1]}
             </h3>
             {itemConfig?.description && (
-              <p style={{ 
-                margin: 0, 
-                fontSize: 12, 
+              <p style={{
+                margin: 0,
+                fontSize: 12,
                 color: '#666',
                 marginTop: 2
               }}>
@@ -277,14 +278,14 @@ export const FileUploader = ({
       </div>
 
       {/* Content Body acts as Dropzone */}
-      <div 
+      <div
         onDragEnter={handleDrag}
         onDragLeave={handleDrag}
         onDragOver={handleDrag}
         onDrop={handleDrop}
-        style={{ 
-          flex: 1, 
-          padding: 20, 
+        style={{
+          flex: 1,
+          padding: 20,
           overflow: 'auto',
           background: dragActive ? 'var(--pale-brown)' : 'white',
           border: dragActive ? '2px dashed var(--primary-brown)' : 'none',
@@ -317,41 +318,71 @@ export const FileUploader = ({
             padding: 4
           }}>
             {/* Boxed Plus Uploader Card */}
-            <label style={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              height: 160,
-              border: '2px dashed var(--medium-brown)',
-              borderRadius: 8,
-              background: 'var(--background-brown)',
-              cursor: 'pointer',
-              transition: 'all 0.2s',
-              padding: 12,
-              textAlign: 'center',
-              boxSizing: 'border-box'
-            }}>
-              <Plus size={32} color="var(--primary-brown)" style={{ marginBottom: 12 }} />
-              <span style={{
-                fontSize: 13,
-                fontWeight: 600,
-                color: 'var(--text-brown)'
+            {itemConfig?.type === 'folder' ? (
+              <div
+                onClick={() => onAddItem && onAddItem(path)}
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  height: 160,
+                  border: '2px dashed var(--medium-brown)',
+                  borderRadius: 8,
+                  background: 'var(--background-brown)',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                  padding: 12,
+                  textAlign: 'center',
+                  boxSizing: 'border-box'
+                }}
+              >
+                <Plus size={32} color="var(--primary-brown)" style={{ marginBottom: 12 }} />
+                <span style={{
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: 'var(--text-brown)'
+                }}>
+                  Add folder or file
+                </span>
+              </div>
+            ) : (
+              <label style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                height: 160,
+                border: '2px dashed var(--medium-brown)',
+                borderRadius: 8,
+                background: 'var(--background-brown)',
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                padding: 12,
+                textAlign: 'center',
+                boxSizing: 'border-box'
               }}>
-                Upload File
-              </span>
-              <input
-                type="file"
-                accept={itemConfig?.accept}
-                onChange={handleChange}
-                style={{ display: 'none' }}
-              />
-            </label>
+                <Plus size={32} color="var(--primary-brown)" style={{ marginBottom: 12 }} />
+                <span style={{
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: 'var(--text-brown)'
+                }}>
+                  Upload File
+                </span>
+                <input
+                  type="file"
+                  accept={itemConfig?.accept}
+                  onChange={handleChange}
+                  style={{ display: 'none' }}
+                />
+              </label>
+            )}
 
             {/* Grid File Cards */}
             {files.map((file, index) => (
-              <div 
-                key={index} 
+              <div
+                key={index}
                 className="file-item-card"
                 style={{
                   zIndex: activeMenuIndex === index ? 1000 : 'auto'
@@ -363,11 +394,11 @@ export const FileUploader = ({
                 }}
               >
                 {renamingIndex === index ? (
-                  <div style={{ 
-                    width: '100%', 
-                    height: '100%', 
-                    display: 'flex', 
-                    flexDirection: 'column', 
+                  <div style={{
+                    width: '100%',
+                    height: '100%',
+                    display: 'flex',
+                    flexDirection: 'column',
                     justifyContent: 'space-between',
                     alignItems: 'center',
                     padding: 4,
@@ -506,7 +537,7 @@ export const FileUploader = ({
                         >
                           <Eye size={14} /> View
                         </button>
-                        
+
                         {onRenameFile && (
                           <button
                             onClick={(e) => {
@@ -535,7 +566,7 @@ export const FileUploader = ({
                             <Edit2 size={14} /> Rename
                           </button>
                         )}
-                        
+
                         <a
                           href={file.url}
                           target="_blank"
@@ -592,7 +623,7 @@ export const FileUploader = ({
                     <div style={{ margin: "12px auto" }}>
                       <FileIcon mimeType={file.mimeType} name={file.name} size={40} />
                     </div>
-                    
+
                     <div style={{ width: '100%', padding: '0 4px', boxSizing: 'border-box' }}>
                       <span style={{
                         fontSize: 12,
@@ -629,39 +660,67 @@ export const FileUploader = ({
           /* List View Layout */
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {/* Dashed List Uploader Row */}
-            <label style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 8,
-              padding: '12px 16px',
-              border: '2px dashed var(--medium-brown)',
-              borderRadius: 6,
-              background: 'var(--background-brown)',
-              cursor: 'pointer',
-              transition: 'all 0.2s',
-              textAlign: 'center'
-            }}>
-              <Plus size={16} color="var(--primary-brown)" />
-              <span style={{
-                fontSize: 13,
-                fontWeight: 600,
-                color: 'var(--text-brown)'
+            {itemConfig?.type === 'folder' ? (
+              <div
+                onClick={() => onAddItem && onAddItem(path)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8,
+                  padding: '12px 16px',
+                  border: '2px dashed var(--medium-brown)',
+                  borderRadius: 6,
+                  background: 'var(--background-brown)',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                  textAlign: 'center'
+                }}
+              >
+                <Plus size={16} color="var(--primary-brown)" />
+                <span style={{
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: 'var(--text-brown)'
+                }}>
+                  Add folder or file
+                </span>
+              </div>
+            ) : (
+              <label style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
+                padding: '12px 16px',
+                border: '2px dashed var(--medium-brown)',
+                borderRadius: 6,
+                background: 'var(--background-brown)',
+                cursor: 'pointer',
+                transition: 'all 0.2s',
+                textAlign: 'center'
               }}>
-                Upload File
-              </span>
-              <input
-                type="file"
-                accept={itemConfig?.accept}
-                onChange={handleChange}
-                style={{ display: 'none' }}
-              />
-            </label>
+                <Plus size={16} color="var(--primary-brown)" />
+                <span style={{
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: 'var(--text-brown)'
+                }}>
+                  Upload File
+                </span>
+                <input
+                  type="file"
+                  accept={itemConfig?.accept}
+                  onChange={handleChange}
+                  style={{ display: 'none' }}
+                />
+              </label>
+            )}
 
             {/* List Rows */}
             {files.map((file, index) => (
-              <div 
-                key={index} 
+              <div
+                key={index}
                 className="file-item-row"
                 style={{
                   zIndex: activeMenuIndex === index ? 1000 : 'auto'
@@ -739,10 +798,10 @@ export const FileUploader = ({
                 ) : (
                   <>
                     <FileIcon mimeType={file.mimeType} name={file.name} size={20} />
-                    
+
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <p style={{ 
-                        margin: 0, 
+                      <p style={{
+                        margin: 0,
                         fontSize: 14,
                         fontWeight: 500,
                         color: 'var(--text-brown)',
@@ -752,8 +811,8 @@ export const FileUploader = ({
                       }}>
                         {file.name}
                       </p>
-                      <p style={{ 
-                        margin: 0, 
+                      <p style={{
+                        margin: 0,
                         fontSize: 12,
                         color: '#666',
                         marginTop: 2
@@ -822,7 +881,7 @@ export const FileUploader = ({
                           >
                             <Eye size={14} /> View
                           </button>
-                          
+
                           {onRenameFile && (
                             <button
                               onClick={(e) => {
@@ -851,7 +910,7 @@ export const FileUploader = ({
                               <Edit2 size={14} /> Rename
                             </button>
                           )}
-                          
+
                           <a
                             href={file.url}
                             target="_blank"
@@ -913,11 +972,11 @@ export const FileUploader = ({
         )}
 
         {files.length === 0 && !isUploading && (
-          <div style={{ 
-            textAlign: 'center', 
-            padding: '40px 20px', 
+          <div style={{
+            textAlign: 'center',
+            padding: '40px 20px',
             color: '#888',
-            fontSize: 14 
+            fontSize: 14
           }}>
             No files uploaded yet. Drag files here or click "Upload File" to add files.
           </div>
@@ -982,14 +1041,14 @@ export const FileUploader = ({
                 </button>
               </div>
             </div>
-            
+
             {/* Modal Body / Viewer */}
             <div style={{ flex: 1, background: '#f5f5f5', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
               {(() => {
                 const mime = previewFile.mimeType?.toLowerCase() || '';
                 const url = previewFile.url;
                 const ext = previewFile.name.split('.').pop()?.toLowerCase();
-                
+
                 if (mime.startsWith('image/') || ['png', 'jpg', 'jpeg', 'gif', 'svg', 'webp'].includes(ext)) {
                   return (
                     <img
@@ -999,7 +1058,7 @@ export const FileUploader = ({
                     />
                   );
                 }
-                
+
                 if (mime === 'application/pdf' || ext === 'pdf') {
                   return (
                     <iframe
@@ -1009,7 +1068,7 @@ export const FileUploader = ({
                     />
                   );
                 }
-                
+
                 if (['docx', 'doc', 'xlsx', 'xls', 'pptx', 'ppt'].includes(ext)) {
                   const officeUrl = `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(url)}`;
                   return (
@@ -1020,7 +1079,7 @@ export const FileUploader = ({
                     />
                   );
                 }
-                
+
                 if (['txt', 'csv', 'json', 'md'].includes(ext)) {
                   return (
                     <iframe

@@ -2,6 +2,7 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { FileExplorer } from './shared/FileExplorer';
 import { FileUploader } from './shared/FileUploader';
 import { CreateItemDialog } from './shared/CreateItemDialog';
+import { MoveCopyModal } from './shared/MoveCopyModal';
 import { useCustomStructure } from './shared/useCustomStructure';
 import { findItemAtPath } from './structure/growthStructure';
 import { USERS_STRUCTURE } from './structure/usersMpStructure';
@@ -14,6 +15,7 @@ import {
   saveUserStructure,
   deleteContent,
   renameContent,
+  copyContent,
   renameFile
 } from './services/usersMp';
 import { useAuth } from '../../smses/hooks/useAuth';
@@ -39,6 +41,9 @@ const UsersMarketplace = () => {
     createItem,
     deleteItem,
     renameItem,
+    moveItem,
+    copyItem,
+    convertItemType,
   } = useCustomStructure({
     user,
     staticStructure: USERS_STRUCTURE,
@@ -46,13 +51,61 @@ const UsersMarketplace = () => {
     saveUserStructure,
     deleteContent,
     renameContent,
+    copyContent,
   });
+
+  // Move / Copy dialog state
+  const [moveCopyState, setMoveCopyState] = useState({
+    isOpen: false,
+    action: 'move',
+    itemName: '',
+    itemPath: []
+  });
+
+  const handleOpenMove = useCallback((path, item) => {
+    setMoveCopyState({
+      isOpen: true,
+      action: 'move',
+      itemName: path[path.length - 1],
+      itemPath: path
+    });
+  }, []);
+
+  const handleOpenCopy = useCallback((path, item) => {
+    setMoveCopyState({
+      isOpen: true,
+      action: 'copy',
+      itemName: path[path.length - 1],
+      itemPath: path
+    });
+  }, []);
+
+  const handleMoveCopySubmit = useCallback(async (targetParentPath) => {
+    const { action, itemPath } = moveCopyState;
+    setMoveCopyState(prev => ({ ...prev, isOpen: false }));
+
+    if (action === 'move') {
+      const res = await moveItem(itemPath, targetParentPath);
+      if (res && res.handled) {
+        if (selectedPath) {
+          const isDescendantOrSelf = selectedPath.length >= itemPath.length &&
+            itemPath.every((seg, idx) => selectedPath[idx] === seg);
+          if (isDescendantOrSelf) {
+            const suffix = selectedPath.slice(itemPath.length);
+            setSelectedPath([...res.newPath, ...suffix]);
+          }
+        }
+      }
+    } else {
+      await copyItem(itemPath, targetParentPath);
+    }
+  }, [moveCopyState, moveItem, copyItem, selectedPath]);
 
   // Keep selectedItem in sync with the merged structure
   useEffect(() => {
     if (!selectedPath) { setSelectedItem(null); return; }
     const item = findItemAtPath(mergedStructure, selectedPath);
-    if (!item || item.type === 'folder') {
+    if (!item) {
       setSelectedPath(null); setSelectedItem(null); setCurrentContent(null);
       return;
     }
@@ -70,7 +123,7 @@ const UsersMarketplace = () => {
       try {
         setIsLoading(true);
         const allContent = await loadAllContent();
-        
+
         // Create status map
         const status = {};
         Object.keys(allContent).forEach(pathKey => {
@@ -155,7 +208,7 @@ const UsersMarketplace = () => {
 
     try {
       setIsUploading(true);
-      
+
       await uploadFile(selectedPath, file);
 
       // Update status
@@ -305,7 +358,8 @@ const UsersMarketplace = () => {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        minHeight: '100vh',      }}>
+        minHeight: '100vh',
+      }}>
         <div style={{ textAlign: 'center' }}>
           <div style={{
             width: 40,
@@ -331,7 +385,8 @@ const UsersMarketplace = () => {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        minHeight: '100vh',      }}>
+        minHeight: '100vh',
+      }}>
         <div style={{
           textAlign: 'center',
           padding: 40,
@@ -408,6 +463,9 @@ const UsersMarketplace = () => {
             onAddItem={handleAddItem}
             onDeleteItem={handleDeleteItem}
             onRenameItem={handleRenameItem}
+            onMoveItem={handleOpenMove}
+            onCopyItem={handleOpenCopy}
+            onConvertItemType={convertItemType}
             contentStatus={contentStatus}
           />
 
@@ -421,6 +479,7 @@ const UsersMarketplace = () => {
               onDelete={handleDeleteFile}
               onRenameFile={handleRenameFile}
               onClose={handleCloseEditor}
+              onAddItem={openCreateDialog}
               isUploading={isUploading}
             />
           )}
@@ -453,6 +512,16 @@ const UsersMarketplace = () => {
         existingNames={existingNamesAtParent}
         onClose={closeCreateDialog}
         onCreate={handleCreateItem}
+      />
+
+      <MoveCopyModal
+        isOpen={moveCopyState.isOpen}
+        onClose={() => setMoveCopyState(prev => ({ ...prev, isOpen: false }))}
+        action={moveCopyState.action}
+        itemName={moveCopyState.itemName}
+        itemPath={moveCopyState.itemPath}
+        structure={mergedStructure}
+        onSubmit={handleMoveCopySubmit}
       />
     </>
   );
